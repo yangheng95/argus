@@ -13,7 +13,7 @@ Frontend preview has been failing with terminal reasons such as:
 The failure is not a generic preview-route problem. It is a startup-chain design problem:
 
 1. The managed preview session only knows how to run `<packageManager> run dev` inside a specific workspace directory.
-2. Delivery tooling and orchestrator visual-render startup currently point that workspace at `Instance.directory` rather than the actual frontend package root.
+2. Acceptance tooling and orchestrator visual-render startup currently point that workspace at `Instance.directory` rather than the actual frontend package root.
 3. Runtime-flow evaluation already has a different code path that discovers the real project root first.
 4. The result is a dual-source startup model: one path resolves the correct runtime root, the other path guesses the repo root. That violates the single-source rule and makes preview failure appear random.
 
@@ -34,37 +34,37 @@ This inventory is required before any implementation change.
     - `preview_process_exited`
     - `preview_start_idle_timeout`
 
-### 1.2 Retired delivery tool path
+### 1.2 Retired acceptance tool path
 
 - Retired. Runtime screenshot capture is now build-owned via
   `packages/opencorvus/src/build/screenshot-tool.ts` and
   `packages/opencorvus/src/runtime/page-capture.ts`.
 
-### 1.3 Runtime-flow / delivery gate path
+### 1.3 Runtime-flow / acceptance gate path
 
-- `packages/opencorvus/src/delivery/checks/project-gate.ts`
-  - `buildDeliveryEvidenceManifest(...)`
+- `packages/opencorvus/src/acceptance/checks/project-gate.ts`
+  - `buildAcceptanceEvidenceManifest(...)`
   - `runRuntimeFlows(...)`
   - `resolveRuntimeFlowPreview(...)`
   - already uses `surfaceManifest.projectRoot`
 
 ### 1.4 Project root discovery / runtime readiness
 
-- `packages/opencorvus/src/delivery/checks/discovery.ts`
+- `packages/opencorvus/src/acceptance/checks/discovery.ts`
   - `discoverPackageRoot(...)`
-- `packages/opencorvus/src/delivery/checks/runtime-readiness.ts`
+- `packages/opencorvus/src/acceptance/checks/runtime-readiness.ts`
   - `ensureProjectReadyForRuntime(...)`
 
 ### 1.5 Orchestrator visual render path
 
 - `packages/opencorvus/src/orchestrator/tools.ts`
-  - merged-worktree render before delivery agent visual comparison
+  - merged-worktree render before acceptance review visual comparison
   - currently hardcodes `workspaceDir = Instance.directory`
 
 ### 1.6 Existing tests
 
 - `packages/opencorvus/test/preview-session.test.ts`
-- `packages/opencorvus/test/delivery/tools-readonly.test.ts`
+- `packages/opencorvus/test/acceptance/tools-readonly.test.ts`
 
 Current gap: tests only cover the trivial case where `Instance.directory` itself is the package root. They do not cover the real monorepo/subpackage case, which is exactly where preview repeatedly fails.
 
@@ -72,10 +72,10 @@ Current gap: tests only cover the trivial case where `Instance.directory` itself
 
 The root cause is dual-source preview startup resolution.
 
-- Delivery runtime gate path:
+- Acceptance runtime gate path:
   - discovers the actual frontend package root
   - starts preview from that root
-- Delivery tool path and orchestrator render path:
+- Acceptance tool path and orchestrator render path:
   - skip discovery
   - start preview from the repository root
 
@@ -108,7 +108,7 @@ No second startup algorithm is allowed.
 
 ### Phase A: Extract a shared preview target resolver
 
-Add a shared helper under delivery/runtime area that:
+Add a shared helper under acceptance/runtime area that:
 
 1. Accepts:
    - `taskID`
@@ -122,9 +122,9 @@ Add a shared helper under delivery/runtime area that:
    - readiness result
    - optionally the managed preview session if requested
 
-This helper becomes the only owner of preview-target resolution for delivery/orchestrator frontend preview.
+This helper becomes the only owner of preview-target resolution for acceptance/orchestrator frontend preview.
 
-### Phase B: Replace delivery tool startup path
+### Phase B: Replace acceptance tool startup path
 
 `start_frontend_preview` must stop using repo root directly.
 
@@ -162,10 +162,10 @@ Every code change must be covered by tests.
 
 ### Required new coverage
 
-1. Delivery tool resolves a frontend subpackage instead of repo root.
-2. Delivery tool surfaces runtime-readiness failure without attempting a bogus repo-root preview.
-3. Delivery tool failed-session payload contains the resolved project root.
-4. Orchestrator/runtime preview path and delivery tool path agree on the same root for the same changed-file set.
+1. Acceptance tool resolves a frontend subpackage instead of repo root.
+2. Acceptance tool surfaces runtime-readiness failure without attempting a bogus repo-root preview.
+3. Acceptance tool failed-session payload contains the resolved project root.
+4. Orchestrator/runtime preview path and acceptance tool path agree on the same root for the same changed-file set.
 
 ### Existing tests to retain
 
@@ -177,8 +177,8 @@ Every code change must be covered by tests.
 
 This repair is complete only when all items below are true:
 
-1. Delivery preview startup no longer guesses repo root when the frontend lives in a subpackage.
-2. Delivery tool path and runtime-flow path share one project-root resolution path.
+1. Acceptance preview startup no longer guesses repo root when the frontend lives in a subpackage.
+2. Acceptance tool path and runtime-flow path share one project-root resolution path.
 3. Orchestrator visual render uses the same root-resolution path.
 4. Failed preview output includes enough evidence to distinguish:
    - wrong root

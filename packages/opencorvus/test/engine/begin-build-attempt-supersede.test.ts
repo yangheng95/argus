@@ -182,15 +182,15 @@ describe("beginBuildAttempt — supersede_of population", () => {
     expect(goalStatusByID(goalID)).toBe("running")
   })
 
-  test("delivery_rework path: startNewAttempt patches tip first, beginBuildAttempt still threads supersede_of", () => {
+  test("acceptance_rework path: startNewAttempt patches tip first, beginBuildAttempt still threads supersede_of", () => {
     const oldRunID = `grun_oldrework_${Date.now()}`
     insertTerminalGoalRun({ id: oldRunID, status: "failed" })
 
-    // Step 1: orchestrator/delivery calls startNewAttempt → patches old row's
+    // Step 1: orchestrator/acceptance calls startNewAttempt → patches old row's
     // superseded_reason. Goal projects to pending.
-    const sna = startNewAttempt({ goalID, reason: "delivery_rework" })
+    const sna = startNewAttempt({ goalID, reason: "acceptance_rework" })
     expect(sna.supersededTipID).toBe(oldRunID)
-    expect(findGoalRun(oldRunID)?.superseded_reason).toBe("delivery_rework")
+    expect(findGoalRun(oldRunID)?.superseded_reason).toBe("acceptance_rework")
     expect(goalStatusByID(goalID)).toBe("pending")
 
     // Step 2: build tool runs beginBuildAttempt. openGoalImplementationVersion

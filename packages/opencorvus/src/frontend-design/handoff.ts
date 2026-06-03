@@ -26,7 +26,7 @@ export function frontendDesignArtifactPaths(projectDir: string, taskID: string) 
 const HANDOFF_KEYS = [
   "public_report",
   "frontend_template",
-  "final_delivery_mode",
+  "final_acceptance_mode",
   "fillable_modules",
   "component_reuse_plan",
   "baseline_replacement_plan",
@@ -63,12 +63,12 @@ function renderSourceRegionRefactorGuidance(entries: Map<string, DecisionEntry>)
   return [
     "## Source-Region Refactor Guidance",
     "",
-    "Dynamic interpretation from the frontend_design decision log: this webpage handoff starts from a source_baseline_input skeleton. Treat that project as captured rawproject evidence and the traceable source seed for extraction into the target delivery project.",
+    "Dynamic interpretation from the frontend_design decision log: this webpage handoff starts from a source_baseline_input skeleton. Treat that project as captured rawproject evidence and the traceable source seed for extraction into the target acceptance project.",
     "",
     "- Requirements: express maintainability as source-region traceability. Every new component, data module, style rule, and boundary cleanup must map to source nodes/regions/assets/reference screenshots. Maintainable mode should report measured webpage_evaluate evidence and zero-finding web_clone_source_audit evidence before claiming final maintainability.",
     "- Architect: keep ownership inside the frontend-design handoff and downstream implementation. Do not change other agent prompts or communication paths. Decompose work by named sourceDomReplacementPlan/source region only when that region is in scope.",
-    "- Build: start from the target delivery project populated by frontend_design. Only finish integration and precision fixes; do not treat frontend-design-skeleton as app source. Reuse project components or mature libraries for hard UI domains; do not hand-roll complex controls.",
-    "- Delivery/Integrity: verify source traceability, visual parity for unchanged reference surfaces, absence of screenshot/base64/iframe replay, and documented handling for every replaced/deferred source region.",
+    "- Build: start from the target acceptance project populated by frontend_design. Only finish integration and precision fixes; do not treat frontend-design-skeleton as app source. Reuse project components or mature libraries for hard UI domains; do not hand-roll complex controls.",
+    "- Acceptance/Integrity: verify source traceability, visual parity for unchanged reference surfaces, absence of screenshot/base64/iframe replay, and documented handling for every replaced/deferred source region.",
   ].join("\n")
 }
 
@@ -77,7 +77,7 @@ function renderSourceRegionRefactorGuidance(entries: Map<string, DecisionEntry>)
  * template source and evidence manifest.
  *
  * `pathMode` selects the path form for the consumer's file-tool resolution
- * model: "relative" (default — in-process build/delivery via OpenCorvus
+ * model: "relative" (default — in-process build/acceptance via OpenCorvus
  * `read`) or "absolute" (external codex/claude-code executors; `projectDir`
  * required). The `frontend_design` decision-log phase is canonical; the
  * files are a materialized read-only projection of it.

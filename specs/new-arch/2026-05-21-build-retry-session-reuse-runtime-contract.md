@@ -83,7 +83,7 @@ The contract must carry identity, not just tool objects:
 ```ts
 type SessionRuntimeContractIdentity = {
   sessionID: string
-  agentKind: "build" | "requirements" | "architect" | "integrity" | "delivery" | "prosecutor" | "orchestrator"
+  agentKind: "build" | "requirements" | "architect" | "integrity" | "acceptance" | "prosecutor" | "orchestrator"
   contractKind: "stage-attempt" | "orchestrator-wake"
   goalID?: string
   goalRunID?: string
@@ -140,7 +140,7 @@ All terminal-tool and structured-output contracts must enter through `SessionRun
 3. Open the initial artifact-backed logical `goal_run_id` only after the build session id exists.
 4. `beginBuildAttempt` for build sessions must receive `sessionID`; `payload.session_id=null` is invalid on the new build path.
 5. Persist the running `goal_run_attempt` artifact with `payload.session_id = buildSessionID` in its first write.
-6. Compose canonical build context from requirements, architect contract graph, collaboration state, fidelity, delivery feedback, and retry facts.
+6. Compose canonical build context from requirements, architect contract graph, collaboration state, fidelity, acceptance feedback, and retry facts.
 7. Store that canonical build context as a session-level build contract artifact, not only as first user-message text.
 8. Install runtime contract for the attempt.
 9. Send the first full build user message.
@@ -223,7 +223,7 @@ Build's upstream context must stop being only a large first user prompt.
 
 Single source:
 
-- `engine_artifact` keeps task/goal contracts: requirements, architect contract graph, fidelity, delivery/retry evidence.
+- `engine_artifact` keeps task/goal contracts: requirements, architect contract graph, fidelity, acceptance/retry evidence.
 - A build-session contract projection pins the exact context snapshot used for the attempt and exposes its source artifact ids.
 - Compaction handoff records the source ids and active build contract identity, not a paraphrased copy as the only truth.
 
@@ -274,7 +274,7 @@ payload: {
     assembly_owners: unknown[]
   }
   retry_evidence: Array<{ id: string; source: string; digest: string }>
-  delivery_feedback: Array<{ id: string; source: string; digest: string }>
+  acceptance_feedback: Array<{ id: string; source: string; digest: string }>
   retry_attachment_refs: Array<{ sha: string; url: string; mime: string; filename?: string }>
   rendered_context_digest: string
   workspace_dir: string

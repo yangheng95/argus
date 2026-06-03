@@ -628,11 +628,11 @@ CREATE INDEX IF NOT EXISTS engine_interaction_run_idx      ON engine_interaction
 CREATE INDEX IF NOT EXISTS engine_interaction_external_idx ON engine_interaction_request (external_id);
 CREATE INDEX IF NOT EXISTS engine_interaction_status_idx   ON engine_interaction_request (status);
 
--- Phase-6-c: engine_delivery was removed in favour of engine_artifact rows
--- with kind='delivery'. See engine/persist.ts for the writer and
--- engine/store.ts (DeliveryRow) for the read-model. delivery_id below is
--- now a plain text pointer (no FK) to the id of the latest delivery-kind
--- artifact row for the logical delivery.
+-- Phase-6-c: engine_acceptance was removed in favour of engine_artifact rows
+-- with kind='acceptance'. See engine/persist.ts for the writer and
+-- engine/store.ts (AcceptanceRow) for the read-model. acceptance_id below is
+-- now a plain text pointer (no FK) to the id of the latest acceptance-kind
+-- artifact row for the logical acceptance.
 
 CREATE TABLE IF NOT EXISTS engine_artifact (
   id           text PRIMARY KEY,
@@ -644,7 +644,7 @@ CREATE TABLE IF NOT EXISTS engine_artifact (
   -- orchestrator owns.
   run_id       text,
   goal_run_id  text,
-  delivery_id  text,
+  acceptance_id  text,
   kind         text NOT NULL,
   label        text NOT NULL,
   payload      text,
@@ -653,7 +653,7 @@ CREATE TABLE IF NOT EXISTS engine_artifact (
   FOREIGN KEY (task_id)     REFERENCES engine_task(id)     ON DELETE CASCADE
 );
 CREATE INDEX IF NOT EXISTS engine_artifact_run_idx      ON engine_artifact (run_id);
-CREATE INDEX IF NOT EXISTS engine_artifact_delivery_idx ON engine_artifact (delivery_id);
+CREATE INDEX IF NOT EXISTS engine_artifact_acceptance_idx ON engine_artifact (acceptance_id);
 CREATE INDEX IF NOT EXISTS engine_artifact_task_kind_latest_idx
   ON engine_artifact (task_id, kind, time_created DESC, id DESC);
 

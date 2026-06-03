@@ -1,6 +1,6 @@
 #!/usr/bin/env bun
 
-// Visual-diff CLI — thin wrapper around `src/delivery/checks/visual.ts`.
+// Visual-diff CLI — thin wrapper around `src/acceptance/checks/visual.ts`.
 //
 // Usage:
 //   --rendered <url>              live page URL to evaluate
@@ -22,7 +22,7 @@
 import path from "node:path"
 import fs from "node:fs/promises"
 import http from "node:http"
-import { runVisualDiff, summarizeVisualReport } from "../../src/delivery/checks/visual"
+import { runVisualDiff, summarizeVisualReport } from "../../src/acceptance/checks/visual"
 
 function flag(name: string): string | undefined {
   const prefix = `${name}=`

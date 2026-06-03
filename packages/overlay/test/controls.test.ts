@@ -263,9 +263,9 @@ test(
             },
           ],
         },
-        delivery: {
+        acceptance: {
           status: "candidate",
-          summary: "Candidate delivery is ready for review.",
+          summary: "Candidate acceptance is ready for review.",
           result: {
             summary: "One file changed.",
             changedFiles: ["src/app.js"],

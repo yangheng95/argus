@@ -329,7 +329,7 @@ describe("tool.web_clone_generate_source_project", () => {
         const audit = await auditTool.execute({
           projectDir: outputDir,
           sourcePackageDir: mirrorDir,
-          finalDeliveryMode: "visual_baseline_allowed",
+          finalAcceptanceMode: "visual_baseline_allowed",
         }, ctx)
         expect(audit.title).toBe("Source-skeleton consumption audit passed")
         expect(audit.metadata.audit.risk.generatedBaselineDetected).toBe(false)
@@ -412,7 +412,7 @@ describe("tool.web_clone_generate_source_project", () => {
         const audit = await auditTool.execute({
           projectDir: outputDir,
           sourcePackageDir: mirrorDir,
-          finalDeliveryMode: "visual_baseline_allowed",
+          finalAcceptanceMode: "visual_baseline_allowed",
         }, ctx)
         expect(audit.title).toBe("Source-skeleton consumption audit passed")
         expect(audit.metadata.audit.risk.generatedBaselineDetected).toBe(false)
@@ -495,7 +495,7 @@ describe("tool.web_clone_generate_source_project", () => {
         const audit = await auditTool.execute({
           projectDir: outputDir,
           sourcePackageDir: mirrorDir,
-          finalDeliveryMode: "visual_baseline_allowed",
+          finalAcceptanceMode: "visual_baseline_allowed",
         }, ctx)
         expect(audit.title).toBe("Source-skeleton consumption audit passed")
         expect(audit.metadata.audit.risk.generatedBaselineDetected).toBe(false)
@@ -541,7 +541,7 @@ describe("tool.web_clone_generate_source_project", () => {
         const audit = await auditTool.execute({
           projectDir: outputDir,
           sourcePackageDir: mirrorDir,
-          finalDeliveryMode: "visual_baseline_allowed",
+          finalAcceptanceMode: "visual_baseline_allowed",
         }, ctx)
         expect(audit.title).toBe("Source-skeleton consumption audit passed")
         expect(audit.metadata.audit.risk.generatedBaselineDetected).toBe(false)
@@ -652,7 +652,7 @@ describe("tool.web_clone_generate_source_project", () => {
         const audit = await auditTool.execute({
           projectDir: outputDir,
           sourcePackageDir: mirrorDir,
-          finalDeliveryMode: "visual_baseline_allowed",
+          finalAcceptanceMode: "visual_baseline_allowed",
         }, ctx)
         expect(audit.title).toBe("Source-skeleton consumption audit passed")
         expect(audit.metadata.audit.risk.generatedBaselineDetected).toBe(false)
@@ -712,7 +712,7 @@ describe("tool.web_clone_generate_source_project", () => {
         const audit = await auditTool.execute({
           projectDir: outputDir,
           sourcePackageDir: mirrorDir,
-          finalDeliveryMode: "visual_baseline_allowed",
+          finalAcceptanceMode: "visual_baseline_allowed",
         }, ctx)
         expect(audit.title).toBe("Source-skeleton consumption audit passed")
         expect(audit.metadata.audit.risk.generatedBaselineDetected).toBe(false)
@@ -797,7 +797,7 @@ describe("tool.web_clone_generate_source_project", () => {
         const audit = await auditTool.execute({
           projectDir: outputDir,
           sourcePackageDir: mirrorDir,
-          finalDeliveryMode: "visual_baseline_allowed",
+          finalAcceptanceMode: "visual_baseline_allowed",
         }, ctx)
         expect(audit.title).toBe("Source-skeleton consumption audit passed")
         expect(audit.metadata.audit.risk.generatedBaselineDetected).toBe(false)
@@ -842,7 +842,7 @@ describe("tool.web_clone_generate_source_project", () => {
         const audit = await auditTool.execute({
           projectDir: outputDir,
           sourcePackageDir: mirrorDir,
-          finalDeliveryMode: "visual_baseline_allowed",
+          finalAcceptanceMode: "visual_baseline_allowed",
         }, ctx)
         expect(audit.title).toBe("Source-skeleton consumption audit passed")
         expect(audit.metadata.audit.risk.generatedBaselineDetected).toBe(false)
@@ -893,7 +893,7 @@ describe("tool.web_clone_generate_source_project", () => {
         const audit = await auditTool.execute({
           projectDir: outputDir,
           sourcePackageDir: mirrorDir,
-          finalDeliveryMode: "visual_baseline_allowed",
+          finalAcceptanceMode: "visual_baseline_allowed",
         }, ctx)
         expect(audit.title).toBe("Source-skeleton consumption audit passed")
         expect(audit.metadata.audit.risk.generatedBaselineDetected).toBe(false)
@@ -938,7 +938,7 @@ describe("tool.web_clone_generate_source_project", () => {
         const audit = await auditTool.execute({
           projectDir: outputDir,
           sourcePackageDir: mirrorDir,
-          finalDeliveryMode: "visual_baseline_allowed",
+          finalAcceptanceMode: "visual_baseline_allowed",
         }, ctx)
         expect(audit.title).toBe("Source-skeleton consumption audit passed")
         expect(audit.metadata.audit.risk.generatedBaselineDetected).toBe(false)

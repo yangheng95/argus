@@ -5,7 +5,7 @@
  * It is NOT an AcceptanceSpec — no deterministic scorer runs at registration
  * time. The integrity acceptance reviewer reads the list during visual review and may
  * cite a spec id in `rejection_details.visual_spec_id` when a rejection traces
- * back to a violated constraint. That's the enforcement model: delivery
+ * back to a violated constraint. That's the enforcement model: acceptance
  * verifies the contract from rendered evidence.
  *
  * Kept deliberately flat and free-form on the value side (`requirement`,

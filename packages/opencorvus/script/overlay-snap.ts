@@ -4,7 +4,7 @@
 //   bun run script/overlay-snap.ts <out.png> [url] [w] [h]
 
 import puppeteer from "puppeteer-core"
-import { findBrowserExecutable } from "../src/delivery/checks/visual"
+import { findBrowserExecutable } from "../src/acceptance/checks/visual"
 import path from "node:path"
 
 const out = process.argv[2]

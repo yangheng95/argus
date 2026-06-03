@@ -2,7 +2,7 @@
 
 ## Trigger
 
-Task `tsk_e8bec4c750018Kcr5TWYo2AZka` showed goal #1 retrying after the first build attempt failed without delivery. The reported symptom was that the automatic compaction threshold did not protect the first G1 build from context pressure.
+Task `tsk_e8bec4c750018Kcr5TWYo2AZka` showed goal #1 retrying after the first build attempt failed without acceptance. The reported symptom was that the automatic compaction threshold did not protect the first G1 build from context pressure.
 
 Live board evidence at `2026-06-03`:
 

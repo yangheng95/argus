@@ -1,7 +1,7 @@
 {
   "_meta": {
     "language": "zh-CN",
-    "panel_revision": "481dc189f77f3296"
+    "panel_revision": "68dfba99f61b0615"
   },
   "about.author_name": "杨恒",
   "about.go_version": "Go 版本",
@@ -301,7 +301,7 @@
   "chat.role.architect": "架构师",
   "chat.role.assistant": "助手",
   "chat.role.build": "构建",
-  "chat.role.delivery": "交付",
+  "chat.role.acceptance": "交付",
   "chat.role.frontend-design": "前端设计",
   "chat.role.evaluator": "评审",
   "chat.role.executor": "执行器",
@@ -371,22 +371,22 @@
   "cwd.set_failed": "设置目录失败",
   "cwd.title": "工作目录",
   "cwd.unavailable": "工作目录不可用",
-  "delivery.checks": "必跑检查",
-  "delivery.inflight.hint": "交付验收正在运行。OpenCorvus 正在收集合并后的 diff、运行时证据和专家评审，然后才会给出接受或拒绝结论。",
-  "delivery.files_changed": {
+  "acceptance.checks": "必跑检查",
+  "acceptance.inflight.hint": "交付验收正在运行。OpenCorvus 正在收集合并后的 diff、运行时证据和专家评审，然后才会给出接受或拒绝结论。",
+  "acceptance.files_changed": {
     "one": "{{count}} 个文件变更",
     "other": "{{count}} 个文件变更"
   },
-  "delivery.group_count_all_pass": {
+  "acceptance.group_count_all_pass": {
     "one": "{{total}} 项全部通过",
     "other": "{{total}} 项全部通过"
   },
-  "delivery.group_count_failing": {
+  "acceptance.group_count_failing": {
     "one": "{{total}} 中 {{failed}} 项失败",
     "other": "{{total}} 中 {{failed}} 项失败"
   },
-  "delivery.iteration": "第 {{n}} 次交付",
-  "delivery.reviews": "专家评审",
+  "acceptance.iteration": "第 {{n}} 次交付",
+  "acceptance.reviews": "专家评审",
   "integrity.review.title": "完整性审查",
   "review.stream.step.manifest": "清单",
   "review.stream.step.runtime": "运行时",
@@ -394,13 +394,13 @@
   "review.stream.step.specialist": "专家",
   "review.stream.step.agent": "Agent",
   "review.stream.step.post_repair": "修复后复核",
-  "delivery.row_goal_pill_title": "在文件变更面板中打开此 goal",
-  "delivery.show_less": "收起",
-  "delivery.show_more": "展开",
-  "delivery.verdict.accepted": "已接受",
-  "delivery.verdict.empty": "暂无",
-  "delivery.verdict.inflight": "进行中",
-  "delivery.verdict.rejected": "已拒绝",
+  "acceptance.row_goal_pill_title": "在文件变更面板中打开此 goal",
+  "acceptance.show_less": "收起",
+  "acceptance.show_more": "展开",
+  "acceptance.verdict.accepted": "已接受",
+  "acceptance.verdict.empty": "暂无",
+  "acceptance.verdict.inflight": "进行中",
+  "acceptance.verdict.rejected": "已拒绝",
   "detail.pending_interactions": "待处理请求",
   "dialog.input": "输入",
   "dialog.notice": "提示",
@@ -622,7 +622,7 @@
   "prompt.status.inherits_core": "继承核心",
   "prompt.title": "提示词管理",
   "project.close": "关闭项目",
-  "section.delivery": "交付",
+  "section.acceptance": "交付",
   "section.criteria": "评估标准",
   "section.files": "文件变更",
   "explorer.title": "资源管理器",

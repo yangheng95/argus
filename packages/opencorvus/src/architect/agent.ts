@@ -3,7 +3,7 @@
  *
  * Position in the pipeline: after Requirements (REQ-N list + foundational
  * decisions), before Dispatch. Called on every task — both as the first
- * decomposition pass and as the re-run mechanism when delivery feedback
+ * decomposition pass and as the re-run mechanism when acceptance feedback
  * says the goal set needs to change.
  *
  * Authority:
@@ -63,7 +63,7 @@ export namespace ArchitectAgent {
   export interface CoordinateInput {
     /** Existing goals to seed the collector with. Empty list on the first
      *  pass (Architect decomposes from scratch); non-empty on a re-run
-     *  (Architect refines against delivery feedback). */
+     *  (Architect refines against acceptance feedback). */
     goals: ExistingGoalInput[]
     taskRequest: string
     taskTitle: string
@@ -77,7 +77,7 @@ export namespace ArchitectAgent {
     designSpecs?: VisualSpec[]
     /** Authoritative frontend template entries produced by frontend_design. */
     frontendDesign?: string
-    /** Delivery feedback that triggered this re-run. Absent on first pass. */
+    /** Acceptance feedback that triggered this re-run. Absent on first pass. */
     retryContext?: ArchitectRetryContext
     /** Goal Workload Analyst briefs for the active snapshot, passed when the
      *  orchestrator re-dispatches architect to act on sizing feedback. Advisory:
@@ -319,9 +319,9 @@ function buildUserPrompt(input: ArchitectAgent.CoordinateInput): string {
     const ctx = input.retryContext
     sections.push(
       [
-        "# Re-run Context — previous goal set failed delivery",
+        "# Re-run Context — previous goal set failed acceptance",
         "",
-        "The Architect is being re-invoked because delivery rejected the previous",
+        "The Architect is being re-invoked because acceptance rejected the previous",
         "goal set. Refine: add, modify, split, or remove goals to address the",
         "failure rather than starting over.",
         "",

@@ -128,10 +128,10 @@ export namespace AttachmentStore {
 
   /**
    * Convenience: read a file from absolute path and persist into the
-   * content-addressed store. Single source for tool producers (delivery
+   * content-addressed store. Single source for tool producers (acceptance
    * screenshot/verify, future MCP image migration) so callers never roll
    * their own readFile + base64 + data-URL pipeline (which was the OOM
-   * driver — see specs/delivery-attachment-store-single-source-2026-05-11.md).
+   * driver — see specs/acceptance-attachment-store-single-source-2026-05-11.md).
    */
   export async function writeFromPath(
     projectID: string,
@@ -155,7 +155,7 @@ export namespace AttachmentStore {
     return abs
   }
 
-  /** Read an attachment's raw bytes for LLM multimodal delivery. */
+  /** Read an attachment's raw bytes for LLM multimodal acceptance. */
   export async function read(projectID: string, name: string): Promise<Buffer> {
     const abs = resolveAbsolute(projectID, name)
     if (!abs) throw new Error(`attachment ${projectID}/${name} is not resolvable`)
@@ -194,7 +194,7 @@ export namespace AttachmentStore {
 
   // ── LLM-side packaging ─────────────────────────────────────────────────
   // Producer-agent code (orchestrator / requirements / frontend-design /
-  // delivery) historically had three near-identical copies of the
+  // acceptance) historically had three near-identical copies of the
   // "split attachments by mime, inline the multimodal ones, list the
   // text/* ones by URL" routine. The duplication kept drifting (e.g. one
   // copy filtered `image/*` only, dropping PDF — see C3 audit). The
@@ -332,7 +332,7 @@ export namespace AttachmentStore {
    * `PromptInput.parts` / `RunAgentSessionInput.buildUserParts` array.
    *
    * Single source of truth (rule 22): every producer-agent (orchestrator /
-   * frontend-design / requirements / delivery) used to roll its own
+   * frontend-design / requirements / acceptance) used to roll its own
    * partition+read+base64 pipeline AND mis-decoded the prior `loadFileParts`
    * result shape (`"image" in fp` / `"file" in fp` checks that never matched
    * the actual return value), silently dropping every multimodal attachment
@@ -349,7 +349,7 @@ export namespace AttachmentStore {
    * orchestrator to confabulate visual context it never saw. The skip is
    * logged with `agent` + `mime` + `filename` so operators can see when an
    * attachment is being dropped due to model incapability.
-   * Throws if any URL is unresolvable — partial attachment delivery would
+   * Throws if any URL is unresolvable — partial attachment acceptance would
    * mislead the agent (it would believe it saw all references).
    */
   export async function inlineFileParts(
@@ -552,7 +552,7 @@ export namespace AttachmentStore {
   // payloads dedupe to the same `<sha>.<ext>` file. Before the GC pass
   // added below, nothing ever deleted those files — every removed part /
   // session / task left its referenced bytes behind on disk. The first
-  // OOM forensic pass (specs/delivery-attachment-store-single-source-2026-05-11.md)
+  // OOM forensic pass (specs/acceptance-attachment-store-single-source-2026-05-11.md)
   // found that screenshot tools were bloating `part.data` with
   // inline base64 instead of using the store at all. As the migration
   // moves them onto the store, the on-disk directory becomes the single

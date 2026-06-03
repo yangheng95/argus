@@ -92,7 +92,7 @@ test("FrontendDesignAgent.analyze persists process and iteration artifacts from 
         await input.toolKit.tools.submit_frontend_template.execute({
           design_system: "source-region clone",
           tech_stack: ["React", "Vite"],
-          final_delivery_mode: "maintainable_replacement_required",
+          final_acceptance_mode: "maintainable_replacement_required",
           frontend_template: "Use the frontend-design-skeleton source project as the implementation target.",
           fillable_modules: "HeroSection owns the replaced HeroRegion vertical slice.",
           component_inventory: "HeroSection semantic component.",

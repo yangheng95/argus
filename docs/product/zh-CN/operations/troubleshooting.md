@@ -57,12 +57,12 @@ Overlay 用系统终端打开 worktree 的能力（替代旧嵌入 PTY，commit 
 
 ### 任务一直 replan / retry 不停
 
-根因通常是 delivery 的 `replan_guidance` 没有改善信息。检查：
+根因通常是 acceptance 的 `replan_guidance` 没有改善信息。检查：
 
 1. Requirements / SpecSnapshot 是否本身就缺 acceptance criteria（`check_selectors` 为空）
-2. `done_definition` 里的命令是否可执行（见 [Delivery 检查与判决](../opencorvus/evaluator.md)）
+2. `done_definition` 里的命令是否可执行（见 [Acceptance 检查与判决](../opencorvus/evaluator.md)）
 3. `assistant.max_executor_groups` 是否过大（默认 3，过大会同时启动更多 goal/build）
-4. `assistant.delivery.max_retries` 是否过大导致回修循环一直消耗预算
+4. `assistant.acceptance.max_retries` 是否过大导致回修循环一直消耗预算
 
 ### 权限审批无限等待
 
@@ -75,7 +75,7 @@ Overlay 用系统终端打开 worktree 的能力（替代旧嵌入 PTY，commit 
 
 ### Benchmark 显示 "accepted" 但产物跑不起来
 
-典型症状是 delivery worktree 合并失败但 delivery checks 没捕获。检查：
+典型症状是 acceptance worktree 合并失败但 acceptance checks 没捕获。检查：
 
 1. 合并日志里是否有 `EEXIST` / conflict
 2. spec 的 `check_selectors` 是否包含 `build` 与 `startup`

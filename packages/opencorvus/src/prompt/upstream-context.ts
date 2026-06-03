@@ -28,14 +28,14 @@ export function buildGoalUpstreamAgentContextSections(taskID: string, goalID: st
 }
 
 /**
- * Task-level upstream surfaces for the **delivery** agent — the final acceptance
+ * Task-level upstream surfaces for the **acceptance** agent — the final acceptance
  * gate. Two ground-truth catalogs (rendered from canonical DB tables, not
  * decision-log summaries) plus a narrative frontend-design section.
  *
  * Rationale: acceptance verdicts must trace every accept/reject to a concrete
  * contract. Decision-log phase summaries are LLM-written narrative — they drift,
  * truncate, and re-summarise across iterations. The catalogs go straight from
- * `engine_requirement` and `engine_goal` so the contract surface delivery
+ * `engine_requirement` and `engine_goal` so the contract surface acceptance
  * evaluates against is exactly what the writers persisted (rule 22 single
  * source: DB row, not phasePromptSection summary).
  */
@@ -46,11 +46,11 @@ export function buildTaskUpstreamAgentContextSections(taskID: string): string[] 
     // frontend_design is authoritative, but hot-path prompts should carry the
     // materialized frontend template source location instead of cloning the full template.
     renderFrontendDesignHandoffReference(taskID, { valueCap: 500 }),
-    // Delivery runs in-process with sessionDirectory = Instance.directory and
+    // Acceptance runs in-process with sessionDirectory = Instance.directory and
     // reads via the OpenCorvus `read` tool (resolves relative paths against
     // Instance.directory — tool/read.ts), so the RELATIVE bundle path is
     // reachable. The inline Decision Log summary is truncated; this points
-    // delivery at the complete on-disk projection for the full WHY.
+    // acceptance at the complete on-disk projection for the full WHY.
     DecisionLogBundle.reference({ projectDir: Instance.directory, taskID, mode: "relative" }),
   ].filter(hasContent)
 }
@@ -112,7 +112,7 @@ export function buildArchitectureContractCatalogSection(taskID: string): string 
   lines.push(
     `Authoritative per-goal interface contract pulled from \`engine_goal\`. ` +
       `Each goal advertises responsibility paths and dep ordering; cross-goal handoffs live in the Architect Contract Graph — these ` +
-      `are CROSS-GOAL gates. A delivery where every \`acceptance_spec\` PASSES but ` +
+      `are CROSS-GOAL gates. A acceptance where every \`acceptance_spec\` PASSES but ` +
       `a graph contract is missing, or a shared file edit contradicts ` +
       `another goal's declared responsibility, is still a reject (category="contract_violation"). Verify by reading ` +
       `the merged worktree, not by trusting goal-local self-reports. Cite the ` +
@@ -122,7 +122,7 @@ export function buildArchitectureContractCatalogSection(taskID: string): string 
   const graph = findLatestArchitectContractGraph(taskID)
   if (!graph) {
     throw new Error(
-      `Cannot build delivery architecture context for task ${taskID}: missing architect_contract_graph artifact.`,
+      `Cannot build acceptance architecture context for task ${taskID}: missing architect_contract_graph artifact.`,
     )
   }
   lines.push("")

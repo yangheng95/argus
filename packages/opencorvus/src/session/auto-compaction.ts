@@ -4,7 +4,7 @@ export namespace AutomaticCompaction {
   export const DISABLED_WORKFLOW_SESSION_KINDS = [
     "architect",
     "build",
-    "delivery",
+    "acceptance",
     "fact-check",
     "frontend-design",
     "frontend-research",

@@ -10,7 +10,7 @@ type EventEntry = Record<string, unknown>
 type ModuleBlock = { id: string; owned_paths?: string[] }
 
 type QualityFailure = {
-  category: "liveness" | "scope_drift" | "artifact_quality" | "verification_gap" | "delivery_gap"
+  category: "liveness" | "scope_drift" | "artifact_quality" | "verification_gap" | "acceptance_gap"
   message: string
   evidence: string
 }
@@ -168,7 +168,7 @@ export async function deriveRunMetrics(input: {
     feature_coverage_p0: totalChecks === 0 ? 0.5 : (passedChecks === totalChecks ? 1 : 0),
     scope_drift_score: scopeDriftScore,
     plan_to_change_traceability: traceability,
-    delivery_focus_score: files.length === 0 ? 0 : Math.max(0, 1 - verificationEvents.length / Math.max(1, commandSummaries.length)),
+    acceptance_focus_score: files.length === 0 ? 0 : Math.max(0, 1 - verificationEvents.length / Math.max(1, commandSummaries.length)),
   })
 }
 
@@ -200,7 +200,7 @@ export function evaluateQualityGates(input: {
   }
   if (input.artifactAudit.placeholder_count > 0) {
     failures.push({
-      category: "delivery_gap",
+      category: "acceptance_gap",
       message: "Placeholder implementation detected",
       evidence: input.artifactAudit.placeholder_hits.join(", "),
     })
@@ -208,7 +208,7 @@ export function evaluateQualityGates(input: {
   if (input.taskStatus !== "completed" || input.evaluationVerdict !== "accepted") {
     failures.push({
       category: "verification_gap",
-      message: "Core delivery acceptance checks did not all pass",
+      message: "Core acceptance acceptance checks did not all pass",
       evidence: `taskStatus=${input.taskStatus}, evaluationVerdict=${input.evaluationVerdict || ""}`,
     })
   }
@@ -238,7 +238,7 @@ export function evaluateQualityGates(input: {
     })
   }
 
-  const hardFailCategories = new Set(["liveness", "scope_drift", "artifact_quality", "verification_gap", "delivery_gap"])
+  const hardFailCategories = new Set(["liveness", "scope_drift", "artifact_quality", "verification_gap", "acceptance_gap"])
   const hardFailures = failures.filter((item) => hardFailCategories.has(item.category))
   const verdict = hardFailures.some((item) => item.category === "liveness")
     ? "blocked"

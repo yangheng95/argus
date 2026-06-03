@@ -9,7 +9,7 @@
  * Requires Chrome / Edge installed (auto-detected).
  */
 
-import { findBrowserExecutable } from "../../opencorvus/src/delivery/checks/visual"
+import { findBrowserExecutable } from "../../opencorvus/src/acceptance/checks/visual"
 import puppeteer from "puppeteer-core"
 import path from "node:path"
 

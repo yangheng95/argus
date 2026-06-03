@@ -46,7 +46,7 @@ Response: `202` with `{ "task_id": "tsk_..." }`.
 curl -N http://127.0.0.1:7878/task/<task_id>/events
 ```
 
-You'll see orchestrator and stage events such as `requirements`, `architect`, `goal.running`, `integrity`, `delivery_running`, and `done`.
+You'll see orchestrator and stage events such as `requirements`, `architect`, `goal.running`, `integrity`, `acceptance_running`, and `done`.
 
 On failure, `replan.triggered` or `retry.triggered` fire, then execution resumes.
 

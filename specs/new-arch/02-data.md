@@ -8,7 +8,7 @@
 
 所有表定义在 `src/engine/engine.sql.ts`，命名前缀 `engine_`（历史文档里的
 `orchestrator_*` 已全部重命名为 `engine_*`）。Phase 6 把 5 张过程表（`engine_run` /
-`engine_goal_run` / `engine_delivery` / `engine_evaluation` / `engine_goal_snapshot`）合并
+`engine_goal_run` / `engine_acceptance` / `engine_evaluation` / `engine_goal_snapshot`）合并
 为单一 `engine_artifact`，按 `kind` 区分语义。
 
 ### 顶层与规格
@@ -30,7 +30,7 @@
 ### 执行与交付（artifact-centric）
 | 表 | 关键字段 / 状态 |
 |---|---|
-| `engine_artifact` | **统一过程表**，`kind` 决定语义；替代旧的 `engine_run` / `engine_goal_run` / `engine_delivery` / `engine_evaluation` / `engine_goal_snapshot`。完整 `EngineArtifactKind` 取值（见 `engine.sql.ts:97`）：`run` · `goal_run_attempt` · `delivery` · `verification-evidence` · `evaluation` · `verdict` · `patch` · `changed_file` · `diff` · `log` · `report` · `image` · `link` · `git_ref` · `pr` · `integrity_attempt` · `prosecutor_attempt` · `delivery_evidence_manifest` · `delivery_surface_manifest` · `delivery_specialist_review` · `delivery_verification_threw` · `delivery_preview` · `orchestrator-stream-error` |
+| `engine_artifact` | **统一过程表**，`kind` 决定语义；替代旧的 `engine_run` / `engine_goal_run` / `engine_acceptance` / `engine_evaluation` / `engine_goal_snapshot`。完整 `EngineArtifactKind` 取值（见 `engine.sql.ts:97`）：`run` · `goal_run_attempt` · `acceptance` · `verification-evidence` · `evaluation` · `verdict` · `patch` · `changed_file` · `diff` · `log` · `report` · `image` · `link` · `git_ref` · `pr` · `integrity_attempt` · `prosecutor_attempt` · `acceptance_evidence_manifest` · `acceptance_surface_manifest` · `acceptance_specialist_review` · `acceptance_review_threw` · `acceptance_preview` · `orchestrator-stream-error` |
 | `engine_progress_snapshot` | 进度快照（旧名 `orchestrator_progress_snapshot` 已重命名） |
 | `engine_executor_session` | 执行器会话绑定 |
 
@@ -58,11 +58,11 @@
 
 **SessionKind**（固定在 creation time，见 `session.sql.ts:50-65`，按代码出现顺序）：
 `root` · `orchestrator` · `assistant` · `gateway` · `intent-analysis` · `requirements` ·
-`frontend-design` · `goal` · `architect` · `integrity` · `delivery` · `executor` · `build` ·
+`frontend-design` · `goal` · `architect` · `integrity` · `acceptance` · `executor` · `build` ·
 `evaluator` · `system` —— **共 15 种**。
 
 > 历史版本本文档曾写"16 种"且把 `planner` 列入，那是抄旧 `planner/` 包时代的草稿。
-> Planner agent 已随 `src/planner/` 整目录删除（见 [01-agents.md](01-agents.md)），
+> Planning tool role 已随 the removed planning package 整目录删除（见 [01-agents.md](01-agents.md)），
 > `planner` 不再是合法的 SessionKind。`goal` kind 仍保留——用于 historical task rows
 > 与早于 `requirements` / `frontend-design` 拆分前的 catch-all。
 

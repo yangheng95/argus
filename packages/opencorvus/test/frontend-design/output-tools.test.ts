@@ -9,7 +9,7 @@ test("submit_frontend_template defaults missing fact_check_items during direct e
     {
       design_system: "custom chart workspace",
       tech_stack: ["React", "mock API"],
-      final_delivery_mode: "visual_baseline_allowed",
+      final_acceptance_mode: "visual_baseline_allowed",
       frontend_template: "# Chart Page\nReplica page with chart, toolbar, and sidebar.",
       fillable_modules: "Implement chart layout, header controls, sidebars, and responsive states.",
       component_inventory: "Chart shell, toolbar, and sidebar components.",
@@ -42,14 +42,14 @@ test("submit_frontend_template defaults missing fact_check_items during direct e
 
   expect(out).toContain("OK")
   expect(kit.getCollector().final?.fact_check_items).toEqual([])
-  expect(kit.getCollector().final?.final_delivery_mode).toBe("visual_baseline_allowed")
+  expect(kit.getCollector().final?.final_acceptance_mode).toBe("visual_baseline_allowed")
 })
 
-test("submit_frontend_template provider schema requires explicit final_delivery_mode", () => {
+test("submit_frontend_template provider schema requires explicit final_acceptance_mode", () => {
   const schema = asSchema(createFrontendTemplateOutputTools().tools.submit_frontend_template.inputSchema).jsonSchema
 
-  expect(schema.required).toContain("final_delivery_mode")
-  expect(schema.properties?.final_delivery_mode).not.toHaveProperty("default")
+  expect(schema.required).toContain("final_acceptance_mode")
+  expect(schema.properties?.final_acceptance_mode).not.toHaveProperty("default")
 })
 
 test("submit_frontend_template tolerates missing review fields from provider tool calls", async () => {
@@ -59,7 +59,7 @@ test("submit_frontend_template tolerates missing review fields from provider too
   const out = await submit.execute({
     design_system: "custom financial page",
     tech_stack: ["React", "Vite"],
-    final_delivery_mode: "maintainable_replacement_required",
+    final_acceptance_mode: "maintainable_replacement_required",
     frontend_template: "frontend template",
     fillable_modules: "fillable modules",
     component_inventory: "component inventory",
@@ -110,7 +110,7 @@ test("submit_frontend_template normalizes markdown open questions", async () => 
   await submit.execute({
     design_system: "custom financial page",
     tech_stack: ["React", "Vite"],
-    final_delivery_mode: "maintainable_replacement_required",
+    final_acceptance_mode: "maintainable_replacement_required",
     frontend_template: "frontend template",
     fillable_modules: "fillable modules",
     component_inventory: "component inventory",
@@ -159,7 +159,7 @@ test("submit_frontend_template rebuilds flattened frontend_project provider args
   await submit.execute({
     design_system: "custom financial page",
     tech_stack: ["React", "Vite"],
-    final_delivery_mode: "visual_baseline_allowed",
+    final_acceptance_mode: "visual_baseline_allowed",
     frontend_template: "frontend template",
     fillable_modules: "fillable modules",
     component_inventory: "component inventory",
@@ -205,7 +205,7 @@ test("submit_frontend_template provider schema stays compact while preserving co
   const schemaText = JSON.stringify(schema)
 
   expect(schemaText.length).toBeLessThan(12_000)
-  expect(schema.properties?.final_delivery_mode).toBeDefined()
+  expect(schema.properties?.final_acceptance_mode).toBeDefined()
   expect(schema.properties?.component_reuse_plan).toBeDefined()
   expect(schema.properties?.frontend_project).toBeDefined()
   expect(schema.properties).not.toHaveProperty("fact_check_items")
@@ -218,7 +218,7 @@ test("submit_frontend_template renders compact structured fields into markdown h
   await submit.execute({
     design_system: "custom financial page",
     tech_stack: ["React", "Vite"],
-    final_delivery_mode: "maintainable_replacement_required",
+    final_acceptance_mode: "maintainable_replacement_required",
     frontend_template_sections: [
       {
         title: "Route",
@@ -305,7 +305,7 @@ test("submit_frontend_template renders compact structured fields into markdown h
   expect(report).toContain("## Implementation Problems And Agent Handoff")
   expect(report).toContain("## Reuse Constraints")
   expect(report).not.toContain("## Component Inventory")
-  expect(report).toContain("- delivery_root: .")
+  expect(report).toContain("- acceptance_root: .")
   expect(report).toContain("frontend-design-skeleton is source_baseline_input evidence only")
   expect(report).toContain("unfinished frontend_design work")
 })
@@ -315,7 +315,7 @@ test("component reuse plan accepts provider naming and incomplete library hints 
   const base = {
     design_system: "custom dashboard",
     tech_stack: ["React"],
-    final_delivery_mode: "visual_baseline_allowed",
+    final_acceptance_mode: "visual_baseline_allowed",
     frontend_template: "frontend template",
     fillable_modules: "fillable modules",
     component_inventory: "component inventory",
@@ -412,13 +412,13 @@ test("component reuse plan accepts provider naming and incomplete library hints 
   expect(secondOk).toContain("OK")
 })
 
-test("maintainable delivery does not synthesize a whole-page source baseline replacement plan", async () => {
+test("maintainable acceptance does not synthesize a whole-page source baseline replacement plan", async () => {
   const kit = createFrontendTemplateOutputTools()
   const submit = kit.tools.submit_frontend_template as any
   const base = {
     design_system: "custom dashboard",
     tech_stack: ["React"],
-    final_delivery_mode: "maintainable_replacement_required",
+    final_acceptance_mode: "maintainable_replacement_required",
     frontend_template: "frontend template",
     fillable_modules: "fillable modules",
     component_inventory: "component inventory",
@@ -493,7 +493,7 @@ test("baseline replacement custom fallback reason is optional provider detail", 
   const ok = await submit.execute({
     design_system: "custom dashboard",
     tech_stack: ["React"],
-    final_delivery_mode: "maintainable_replacement_required",
+    final_acceptance_mode: "maintainable_replacement_required",
     frontend_template: "frontend template",
     fillable_modules: "fillable modules",
     component_inventory: "component inventory",
@@ -544,7 +544,7 @@ test("submit_frontend_template closes collector against duplicate submit and lat
   const payload = {
     design_system: "custom dashboard",
     tech_stack: ["React"],
-    final_delivery_mode: "visual_baseline_allowed",
+    final_acceptance_mode: "visual_baseline_allowed",
     frontend_template: "frontend template",
     fillable_modules: "fillable modules",
     component_inventory: "component inventory",

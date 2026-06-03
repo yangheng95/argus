@@ -1,7 +1,7 @@
 // ── Board Panel Components ──
 // Solid.js components that mirror the board rendering logic
 // renderBoard, renderSpec, renderPlan, renderGoals, renderCriteria,
-// renderEvaluation, renderBudget, renderDeliverySection, renderTaskActions,
+// renderEvaluation, renderBudget, renderAcceptanceSection, renderTaskActions,
 // renderInteractions, statusIcon, statusLabel.
 // Data is read from boardStore (store/board.ts); no direct DOM manipulation.
 
@@ -11,7 +11,7 @@ import { boardStore } from "../store/board";
 import { cardTreeStore, type CardNode } from "../store/card-tree";
 import { t, tc } from "../utils/i18n";
 import { renderMarkdown } from "../utils/markdown";
-import { deliveryGoalProgress } from "../utils/goal-workflow";
+import { acceptanceGoalProgress } from "../utils/goal-workflow";
 import { orderedReachableCardIDs, cardMessageSegments } from "../utils/card-tree";
 import { statusIconName } from "../utils/status-mapping";
 import { activeTone, verdictTone } from "../utils/verdict-tone";
@@ -58,22 +58,22 @@ export function StatusBadge(props: StatusBadgeProps) {
   );
 }
 
-// ── DeliveryPanel ──
+// ── AcceptancePanel ──
 //
-// Surfaces every delivery activity reaching the board: deterministic gate
+// Surfaces every acceptance activity reaching the board: deterministic gate
 // (build/test/lint/typecheck), runtime flows (preview / SSE / golden-path),
 // and per-reviewer specialist reviews — split into three collapsible groups
 // because they have categorically different remediation paths (compile-time
 // vs. running-server vs. LLM judgement). The panel's left-edge accent comes
 // from `verdictTone` so verdict — not lifecycle status — drives the visual.
-// CCE = canonical click-through event; emits `delivery:focus-changes` on the
+// CCE = canonical click-through event; emits `acceptance:focus-changes` on the
 // `window` so the right-panel Files tab can focus the matching run.
 //
 // Visual primitive `.verdict-pill` is shared with IntegrityCard.
 
-type DeliveryEvidenceKind = "check" | "review";
+type AcceptanceEvidenceKind = "check" | "review";
 
-interface DeliveryEvidenceRow {
+interface AcceptanceEvidenceRow {
   id: string;
   label: string;
   status: string;
@@ -82,22 +82,22 @@ interface DeliveryEvidenceRow {
 
 type VerdictTone = "accepted" | "rejected" | "inflight" | "empty";
 
-function deriveVerdictTone(delivery: any): VerdictTone {
-  if (!delivery) return "empty";
-  if (delivery.verdict === "accepted") return "accepted";
-  if (delivery.verdict === "rejected") return "rejected";
+function deriveVerdictTone(acceptance: any): VerdictTone {
+  if (!acceptance) return "empty";
+  if (acceptance.verdict === "accepted") return "accepted";
+  if (acceptance.verdict === "rejected") return "rejected";
   return "inflight";
 }
 
 function verdictPillLabel(tone: VerdictTone): string {
-  return t(`delivery.verdict.${tone}`);
+  return t(`acceptance.verdict.${tone}`);
 }
 
-function deliveryEvidenceGroup(
-  delivery: any,
-  kind: DeliveryEvidenceKind,
-): DeliveryEvidenceRow[] {
-  const manifest = delivery?.evidenceManifest;
+function acceptanceEvidenceGroup(
+  acceptance: any,
+  kind: AcceptanceEvidenceKind,
+): AcceptanceEvidenceRow[] {
+  const manifest = acceptance?.evidenceManifest;
   if (!manifest) return [];
   const source: any[] | undefined =
     kind === "check" ? manifest.checkResults : manifest.reviewEvidence;
@@ -119,7 +119,7 @@ function deliveryEvidenceGroup(
   }));
 }
 
-function groupSummary(rows: DeliveryEvidenceRow[]): {
+function groupSummary(rows: AcceptanceEvidenceRow[]): {
   total: number;
   failed: number;
   defaultOpen: boolean;
@@ -141,55 +141,55 @@ function focusChangesPanel(goalRunID: string | undefined) {
   // CCE = canonical click-through event; the right-panel Files tab handles focus.
   if (typeof window === "undefined") return;
   window.dispatchEvent(
-    new CustomEvent("delivery:focus-changes", { detail: { goalRunID } }),
+    new CustomEvent("acceptance:focus-changes", { detail: { goalRunID } }),
   );
 }
 
-interface DeliveryEvidenceGroupProps {
+interface AcceptanceEvidenceGroupProps {
   label: string;
-  kind: DeliveryEvidenceKind;
-  rows: DeliveryEvidenceRow[];
+  kind: AcceptanceEvidenceKind;
+  rows: AcceptanceEvidenceRow[];
 }
 
-export function DeliveryEvidenceGroup(props: DeliveryEvidenceGroupProps) {
+export function AcceptanceEvidenceGroup(props: AcceptanceEvidenceGroupProps) {
   return (
     <Show when={props.rows.length > 0}>
       {(() => {
         const summary = groupSummary(props.rows);
         return (
           <details
-            class="delivery-evidence-group"
+            class="acceptance-evidence-group"
             data-kind={props.kind}
             open={summary.defaultOpen}
           >
-            <summary class="delivery-evidence-group-head">
-              <span class="delivery-evidence-group-label">{props.label}</span>
-              <span class="delivery-evidence-group-count">
+            <summary class="acceptance-evidence-group-head">
+              <span class="acceptance-evidence-group-label">{props.label}</span>
+              <span class="acceptance-evidence-group-count">
                 {summary.failed > 0
-                  ? tc("delivery.group_count_failing", summary.failed, {
+                  ? tc("acceptance.group_count_failing", summary.failed, {
                       failed: summary.failed,
                       total: summary.total,
                     })
-                  : tc("delivery.group_count_all_pass", summary.total, {
+                  : tc("acceptance.group_count_all_pass", summary.total, {
                       total: summary.total,
                     })}
               </span>
             </summary>
-            <ul class="delivery-evidence-list">
+            <ul class="acceptance-evidence-list">
               <For each={props.rows}>
                 {(row) => (
-                  <li class="delivery-evidence-row" data-status={row.status}>
+                  <li class="acceptance-evidence-row" data-status={row.status}>
                     <Show when={row.goalRunID}>
                       <button
-                        class="delivery-evidence-goal-pill"
+                        class="acceptance-evidence-goal-pill"
                         type="button"
-                        title={t("delivery.row_goal_pill_title")}
+                        title={t("acceptance.row_goal_pill_title")}
                         onClick={() => focusChangesPanel(row.goalRunID)}
                       >
                         {row.goalRunID ? row.goalRunID.slice(-6) : ""}
                       </button>
                     </Show>
-                    <span class="delivery-evidence-name">{row.label}</span>
+                    <span class="acceptance-evidence-name">{row.label}</span>
                     <span class="verdict-pill" data-verdict={rowVerdict(row.status)}>
                       {row.status}
                     </span>
@@ -204,32 +204,32 @@ export function DeliveryEvidenceGroup(props: DeliveryEvidenceGroupProps) {
   );
 }
 
-interface DeliveryPanelProps {
-  delivery: any;
+interface AcceptancePanelProps {
+  acceptance: any;
   phaseState?: "active" | "";
 }
 
 const LIVE_RUN_STATUSES = new Set(["queued", "accepted", "running", "blocked"]);
-const DELIVERY_PHASES = new Set(["deliver", "refine"]);
+const ACCEPTANCE_PHASES = new Set(["deliver", "refine"]);
 
-export function hasActiveDeliveryRun(board: any): boolean {
+export function hasActiveAcceptanceRun(board: any): boolean {
   const run = board?.run;
   const workflowSteps = Array.isArray(board?.workflow?.steps) ? board.workflow.steps : [];
-  const workflowDeliveryRunning = workflowSteps.some((step: any) =>
-    DELIVERY_PHASES.has(String(step?.id || "")) && step?.status === "running",
+  const workflowAcceptanceRunning = workflowSteps.some((step: any) =>
+    ACCEPTANCE_PHASES.has(String(step?.id || "")) && step?.status === "running",
   );
-  const runDeliveryActive =
-    DELIVERY_PHASES.has(String(run?.phase || "")) &&
+  const runAcceptanceActive =
+    ACCEPTANCE_PHASES.has(String(run?.phase || "")) &&
     LIVE_RUN_STATUSES.has(String(run?.status || ""));
-  return workflowDeliveryRunning || runDeliveryActive;
+  return workflowAcceptanceRunning || runAcceptanceActive;
 }
 
-export function deliveryPanelDelivery(board: any): any {
+export function acceptancePanelAcceptance(board: any): any {
   return (
-    board?.candidateDelivery ||
-    board?.acceptedDelivery ||
-    board?.delivery ||
-    (hasActiveDeliveryRun(board)
+    board?.candidateAcceptance ||
+    board?.acceptedAcceptance ||
+    board?.acceptance ||
+    (hasActiveAcceptanceRun(board)
       ? {
           pending: true,
           status: "publishing",
@@ -241,17 +241,17 @@ export function deliveryPanelDelivery(board: any): any {
 
 const DEFAULT_SUMMARY_LINES = 10;
 
-export function DeliveryPanel(props: DeliveryPanelProps) {
+export function AcceptancePanel(props: AcceptancePanelProps) {
   // Migrated to the shared disclosure primitive (Step 9.H of the
   // flat-redesign rollout). `summary` is the canonical open/close
-  // state for the delivery summary clamp affordance.
+  // state for the acceptance summary clamp affordance.
   const summary = useDisclosure(false);
 
-  const tone = createMemo<VerdictTone>(() => deriveVerdictTone(props.delivery));
+  const tone = createMemo<VerdictTone>(() => deriveVerdictTone(props.acceptance));
   const summaryText = createMemo(() => {
-    const d = props.delivery;
+    const d = props.acceptance;
     if (!d) return "";
-    if (d.pending === true) return t("delivery.inflight.hint");
+    if (d.pending === true) return t("acceptance.inflight.hint");
     return d.verdict === "rejected"
       ? d.verdictSummary || d.summary || d.result?.summary || ""
       : d.summary || d.result?.summary || "";
@@ -259,79 +259,79 @@ export function DeliveryPanel(props: DeliveryPanelProps) {
   const summaryNeedsClamp = createMemo(
     () => summaryText().split("\n").length > DEFAULT_SUMMARY_LINES,
   );
-  const checks = createMemo(() => deliveryEvidenceGroup(props.delivery, "check"));
-  const reviews = createMemo(() => deliveryEvidenceGroup(props.delivery, "review"));
+  const checks = createMemo(() => acceptanceEvidenceGroup(props.acceptance, "check"));
+  const reviews = createMemo(() => acceptanceEvidenceGroup(props.acceptance, "review"));
   const filesChanged = createMemo(
-    () => (props.delivery?.result?.changedFiles?.length as number | undefined) ?? 0,
+    () => (props.acceptance?.result?.changedFiles?.length as number | undefined) ?? 0,
   );
   const iteration = createMemo<number>(
-    () => Number(props.delivery?.evidenceManifest?.iteration ?? 0),
+    () => Number(props.acceptance?.evidenceManifest?.iteration ?? 0),
   );
 
   return (
     <Section
-      id="deliverySection"
-      bodyId="deliveryBody"
-      title={t("section.delivery")}
-      icon={<Icon name="delivery" />}
-      badge={props.delivery ? verdictPillLabel(tone()) : undefined}
+      id="acceptanceSection"
+      bodyId="acceptanceBody"
+      title={t("section.acceptance")}
+      icon={<Icon name="acceptance" />}
+      badge={props.acceptance ? verdictPillLabel(tone()) : undefined}
       badgeTone={
-        props.delivery?.verdict === "accepted"
+        props.acceptance?.verdict === "accepted"
           ? "good"
-          : props.delivery?.verdict === "rejected"
+          : props.acceptance?.verdict === "rejected"
             ? "bad"
-            : props.delivery
+            : props.acceptance
               ? "accent"
               : undefined
       }
       defaultOpen
       attr:data-phase-state={props.phaseState || undefined}
     >
-    <Show when={props.delivery}>
-      <section class="delivery-panel" data-verdict={tone()}>
+    <Show when={props.acceptance}>
+      <section class="acceptance-panel" data-verdict={tone()}>
         <Show when={iteration() > 0}>
-          <div class="delivery-panel-meta">
-            <span class="delivery-iteration">
-              {t("delivery.iteration", { n: String(iteration()) })}
+          <div class="acceptance-panel-meta">
+            <span class="acceptance-iteration">
+              {t("acceptance.iteration", { n: String(iteration()) })}
             </span>
           </div>
         </Show>
 
         <Show when={summaryText()}>
           <div
-            class="delivery-summary md-content"
+            class="acceptance-summary md-content"
             data-clamped={summaryNeedsClamp() && !summary.open() ? "true" : "false"}
             innerHTML={renderMarkdown(summaryText())}
           />
           <Show when={summaryNeedsClamp()}>
             <button
-              class="delivery-summary-toggle"
+              class="acceptance-summary-toggle"
               type="button"
               onClick={summary.toggle}
             >
-              {summary.open() ? t("delivery.show_less") : t("delivery.show_more")}
+              {summary.open() ? t("acceptance.show_less") : t("acceptance.show_more")}
             </button>
           </Show>
         </Show>
 
-        <DeliveryEvidenceGroup
-          label={t("delivery.checks")}
+        <AcceptanceEvidenceGroup
+          label={t("acceptance.checks")}
           kind="check"
           rows={checks()}
         />
-        <DeliveryEvidenceGroup
-          label={t("delivery.reviews")}
+        <AcceptanceEvidenceGroup
+          label={t("acceptance.reviews")}
           kind="review"
           rows={reviews()}
         />
 
         <Show when={filesChanged() > 0}>
           <button
-            class="delivery-files-link"
+            class="acceptance-files-link"
             type="button"
             onClick={() => focusChangesPanel(undefined)}
           >
-            {tc("delivery.files_changed", filesChanged(), { count: filesChanged() })}
+            {tc("acceptance.files_changed", filesChanged(), { count: filesChanged() })}
           </button>
         </Show>
       </section>
@@ -470,14 +470,14 @@ export function Board(props: BoardProps) {
   const board = () => boardStore.board;
 
   const spec = () => board()?.spec;
-  const delivery = () => deliveryPanelDelivery(board());
+  const acceptance = () => acceptancePanelAcceptance(board());
   const interactions = () => board()?.interactions || [];
   const overview = () => board()?.overview;
   // Task-level criteria rollup. Backend (workbench/board.ts) folds the
-  // delivery-agent verdict (deferred_checks + rejection_details + overall
+  // acceptance-agent verdict (deferred_checks + rejection_details + overall
   // verdict) and the in-process visual-diff gate into one list per task.
   // Hidden entirely for kind=build tasks since build self-verifies and does
-  // not produce delivery-stage criteria.
+  // not produce acceptance-stage criteria.
   const criteriaResults = () => board()?.criteriaResults as
     | Array<{ name: string; label?: string; family?: string; status: "passed" | "failed" | "skipped"; evidence?: string }>
     | undefined;
@@ -521,8 +521,8 @@ export function Board(props: BoardProps) {
     requirements: "requirements",
     architect: "architect",
     build: "goalWorkflows",
-    deliver: "delivery",
-    refine: "delivery",
+    deliver: "acceptance",
+    refine: "acceptance",
   };
   const activeSection = createMemo<string>(() => {
     const interactionsPending = interactions().some(
@@ -533,7 +533,7 @@ export function Board(props: BoardProps) {
     if (!wf || !Array.isArray(wf.steps)) return "";
     const running = wf.steps.find((s: any) => s.status === "running");
     if (running) return STEP_TO_SECTION[running.id] ?? "";
-    if (hasActiveDeliveryRun(board())) return "delivery";
+    if (hasActiveAcceptanceRun(board())) return "acceptance";
     let lastDone: any = null;
     for (const s of wf.steps) {
       if (s.status === "completed" || s.status === "failed") lastDone = s;
@@ -701,8 +701,8 @@ export function Board(props: BoardProps) {
           />
         </SectionFrame>
 
-        <Show when={delivery()}>
-          <DeliveryPanel delivery={delivery()} phaseState={phaseFor("delivery")} />
+        <Show when={acceptance()}>
+          <AcceptancePanel acceptance={acceptance()} phaseState={phaseFor("acceptance")} />
         </Show>
       </div>
 
@@ -741,19 +741,19 @@ export function Board(props: BoardProps) {
       </Show>
 
       <SectionFrame
-        id="deliverySection"
-        title={t("section.delivery")}
-        icon="delivery"
-        bodyId="deliveryBody"
-        badgeId="deliveryBadge"
-        phaseState={phaseFor("delivery")}
+        id="acceptanceSection"
+        title={t("section.acceptance")}
+        icon="acceptance"
+        bodyId="acceptanceBody"
+        badgeId="acceptanceBadge"
+        phaseState={phaseFor("acceptance")}
         badgeText={(() => {
           const gs = goalWorkflows();
           if (gs.length === 0) {
-            const d = delivery();
+            const d = acceptance();
             return d ? verdictPillLabel(deriveVerdictTone(d)) : "";
           }
-          const progress = deliveryGoalProgress(gs);
+          const progress = acceptanceGoalProgress(gs);
           return `${progress.completed}/${progress.total}`;
         })()}
         badgeVariant="metric"
@@ -764,7 +764,7 @@ export function Board(props: BoardProps) {
             // uses. Lifecycle status (publishing / candidate) deliberately
             // ignored here so a rejected verdict never paints the section
             // header green.
-            const tone = deriveVerdictTone(delivery());
+            const tone = deriveVerdictTone(acceptance());
             return tone === "accepted"
               ? "good"
               : tone === "rejected"
@@ -773,7 +773,7 @@ export function Board(props: BoardProps) {
                   ? "accent"
                   : "";
           }
-          const progress = deliveryGoalProgress(gs);
+          const progress = acceptanceGoalProgress(gs);
           if (progress.total === 0 && progress.completed === 0) return "";
           return verdictTone({
             passed: progress.completed,
@@ -782,7 +782,7 @@ export function Board(props: BoardProps) {
           });
         })()}
       >
-        <DeliveryPanel delivery={delivery()} />
+        <AcceptancePanel acceptance={acceptance()} />
       </SectionFrame>
 
       <SectionFrame

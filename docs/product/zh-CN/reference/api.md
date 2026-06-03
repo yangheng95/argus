@@ -59,16 +59,16 @@
 
 | Method | 路径 | 说明 | operationId |
 |---|---|---|---|
-| GET | `/goal-run/{goalRunID}/delivery` | Get goal-run delivery | `goalRun.delivery` |
+| GET | `/goal-run/{goalRunID}/acceptance` | Get goal-run acceptance | `goalRun.acceptance` |
 | DELETE | `/goal/{goalID}` | Delete goal | `goal.delete` |
 | PATCH | `/goal/{goalID}` | Update goal | `goal.update` |
 | POST | `/interaction/{interactionID}/reject` | Reject interaction | `interaction.reject` |
 | POST | `/interaction/{interactionID}/reply` | Reply to interaction | `interaction.reply` |
 | GET | `/run/{runID}` | Get run | `run.get` |
 | POST | `/run/{runID}/abort` | Abort run | `run.abort` |
+| GET | `/run/{runID}/acceptance` | Get run acceptance | `run.acceptance` |
 | GET | `/run/{runID}/artifacts` | List run artifacts | `run.artifacts` |
 | GET | `/run/{runID}/brief` | Get run brief | `run.brief` |
-| GET | `/run/{runID}/delivery` | Get run delivery | `run.delivery` |
 | GET | `/run/{runID}/evaluations` | List run evaluations | `run.evaluations` |
 | POST | `/task` | Create task | `task.create` |
 | PATCH | `/task-queue/reorder` | Reorder queued tasks in a directory | `task.queue.reorder` |

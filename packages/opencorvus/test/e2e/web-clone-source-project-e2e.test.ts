@@ -166,14 +166,14 @@ describe("web clone source project E2E", () => {
       kind: "tool",
       name: "web_clone_source_audit",
       status: "passed",
-      details: { finalDeliveryMode: "visual_baseline_allowed", passed: true },
+      details: { finalAcceptanceMode: "visual_baseline_allowed", passed: true },
     })
     recordTraceEvent(trace, {
       step: "audit-maintainable-replacement",
       kind: "tool",
       name: "web_clone_source_audit",
       status: "passed",
-      details: { finalDeliveryMode: "maintainable_replacement_required", passed: true },
+      details: { finalAcceptanceMode: "maintainable_replacement_required", passed: true },
     })
     recordTraceEvent(trace, {
       step: "compare-rendered-reference",
@@ -215,7 +215,7 @@ describe("web clone source project E2E", () => {
       kind: "tool",
       name: "web_clone_source_audit",
       status: "passed",
-      details: { finalDeliveryMode: "maintainable_replacement_required", passed: true },
+      details: { finalAcceptanceMode: "maintainable_replacement_required", passed: true },
     })
 
     const audit = evaluateBenchmarkProcessTrace(trace)
@@ -251,8 +251,8 @@ describe("web clone source project E2E", () => {
         { name: "frontend_design_replacement_result", status: "passed", timestamp: new Date().toISOString(), details: { replacementStatus: "completed", regionComponentName: "HeroRegion" } },
         { name: "bun install", status: "passed", timestamp: new Date().toISOString() },
         { name: "bun run build", status: "passed", timestamp: new Date().toISOString() },
-        { name: "web_clone_source_audit", status: "passed", timestamp: new Date().toISOString(), details: { finalDeliveryMode: "visual_baseline_allowed", passed: true } },
-        { name: "web_clone_source_audit", status: "passed", timestamp: new Date().toISOString(), details: { finalDeliveryMode: "maintainable_replacement_required", passed: true } },
+        { name: "web_clone_source_audit", status: "passed", timestamp: new Date().toISOString(), details: { finalAcceptanceMode: "visual_baseline_allowed", passed: true } },
+        { name: "web_clone_source_audit", status: "passed", timestamp: new Date().toISOString(), details: { finalAcceptanceMode: "maintainable_replacement_required", passed: true } },
       ],
     })
     recordTraceEvent(trace, {
@@ -338,9 +338,9 @@ describe("web clone source project E2E", () => {
     expect(request).toContain(".opencorvus/runtime/tasks/tsk_test/frontend-design/web-clone-source")
     expect(request).toContain(".opencorvus/runtime/tasks/tsk_test/frontend-design/frontend-design-skeleton")
     expect(request).toContain(".opencorvus/runtime/tasks/tsk_test/frontend-design/frontend-design-target")
-    expect(request).toContain("editing only the target delivery project, not frontend-design-skeleton")
+    expect(request).toContain("editing only the target acceptance project, not frontend-design-skeleton")
     expect(request).toContain("Do not run install/build/render/dev-server commands inside the skeleton evidence project")
-    expect(request).toContain("Create or populate the target delivery project before any runnable project command")
+    expect(request).toContain("Create or populate the target acceptance project before any runnable project command")
     expect(request).toContain("record_frontend_region_selection")
     expect(request).toContain("record_frontend_replacement_result")
     expect(request).toContain("frontend-design-process-trace.json")
@@ -502,7 +502,7 @@ describe("web clone source project E2E", () => {
           kind: "tool",
           name: "web_clone_source_audit",
           status: "passed",
-          details: { finalDeliveryMode: "visual_baseline_allowed", passed: audit.metadata.audit.passed },
+          details: { finalAcceptanceMode: "visual_baseline_allowed", passed: audit.metadata.audit.passed },
         })
 
         const acceptanceDir = path.join(targetProjectDir, "acceptance")
@@ -510,7 +510,7 @@ describe("web clone source project E2E", () => {
         const maintainableAudit = await auditTool.execute({
           projectDir: targetProjectDir,
           sourcePackageDir: context.metadata.sourcePackageDir,
-          finalDeliveryMode: "maintainable_replacement_required",
+          finalAcceptanceMode: "maintainable_replacement_required",
           outputPath: path.join(acceptanceDir, "web-clone-source-maintainable-audit.json"),
         }, ctx)
         trace.audits.maintainableReplacementRequired = maintainableAudit.metadata.audit
@@ -520,7 +520,7 @@ describe("web clone source project E2E", () => {
           name: "web_clone_source_audit",
           status: maintainableAudit.metadata.audit.passed ? "passed" : "failed",
           details: {
-            finalDeliveryMode: "maintainable_replacement_required",
+            finalAcceptanceMode: "maintainable_replacement_required",
             passed: maintainableAudit.metadata.audit.passed,
             findings: maintainableAudit.metadata.audit.findings,
           },
@@ -620,16 +620,16 @@ function buildFrontendDesignAgentBenchmarkRequest(input: {
     `Mirror evidence: ${input.mirrorDir}`,
     `Prepared web-clone-source package: ${input.sourcePackageDir}`,
     `Frontend-design skeleton evidence project: ${input.skeletonProjectDir}`,
-    `Frontend-design target delivery project: ${input.targetProjectDir}`,
+    `Frontend-design target acceptance project: ${input.targetProjectDir}`,
     "",
     "Call `create_frontend_skeleton_project` with that source package, the skeleton evidence project path, and overwrite=true.",
     "Then inspect skeleton sourceDomIterationState.ts, sourceDomReplacementPlan.ts, sourceDomRegions.ts, sourceData.ts, assets, and generated page/components as evidence only.",
     "Do not run install/build/render/dev-server commands inside the skeleton evidence project.",
-    "Create or populate the target delivery project before any runnable project command.",
-    "Use normal frontend-design source-edit tools to extract generated source-dom/rawcode evidence into the target delivery project as semantic project-owned components, extracted mock/API data modules, and scoped styles while preserving visual parity.",
+    "Create or populate the target acceptance project before any runnable project command.",
+    "Use normal frontend-design source-edit tools to extract generated source-dom/rawcode evidence into the target acceptance project as semantic project-owned components, extracted mock/API data modules, and scoped styles while preserving visual parity.",
     "Before each replacement, call `record_frontend_region_selection`; after each replacement attempt, call `record_frontend_replacement_result` with completed/blocked/deferred status and exact remaining source debt.",
-    "Run build plus web_clone_source_audit in maintainable_replacement_required mode on the target delivery project before claiming completion.",
-    "The benchmark consumes frontend-design-process-trace.json and frontend-design-iteration-state.json. These files are written by frontend-design tools from your normal tool calls; do not edit them directly. Make the normal agent work visible by calling the region-selection/replacement tools and editing only the target delivery project, not frontend-design-skeleton.",
+    "Run build plus web_clone_source_audit in maintainable_replacement_required mode on the target acceptance project before claiming completion.",
+    "The benchmark consumes frontend-design-process-trace.json and frontend-design-iteration-state.json. These files are written by frontend-design tools from your normal tool calls; do not edit them directly. Make the normal agent work visible by calling the region-selection/replacement tools and editing only the target acceptance project, not frontend-design-skeleton.",
   ].join("\n")
 }
 
@@ -754,8 +754,8 @@ function createCompletedFrontendDesignProcessTrace(): FrontendDesignProcessTrace
       { name: "frontend_design_replacement_result", status: "passed", timestamp: new Date().toISOString(), details: { replacementStatus: "completed", regionComponentName: "HeroRegion" } },
       { name: "bun install", status: "passed", timestamp: new Date().toISOString() },
       { name: "bun run build", status: "passed", timestamp: new Date().toISOString() },
-      { name: "web_clone_source_audit", status: "passed", timestamp: new Date().toISOString(), details: { finalDeliveryMode: "visual_baseline_allowed", passed: true } },
-      { name: "web_clone_source_audit", status: "passed", timestamp: new Date().toISOString(), details: { finalDeliveryMode: "maintainable_replacement_required", passed: true } },
+      { name: "web_clone_source_audit", status: "passed", timestamp: new Date().toISOString(), details: { finalAcceptanceMode: "visual_baseline_allowed", passed: true } },
+      { name: "web_clone_source_audit", status: "passed", timestamp: new Date().toISOString(), details: { finalAcceptanceMode: "maintainable_replacement_required", passed: true } },
     ],
   }
 }
@@ -863,14 +863,14 @@ function evaluateBenchmarkProcessTrace(trace: BenchmarkProcessTrace): BenchmarkP
 
   const visualBaselineAudit = trace.events.find((event) =>
     event.name === "web_clone_source_audit" &&
-    event.details?.finalDeliveryMode === "visual_baseline_allowed" &&
+    event.details?.finalAcceptanceMode === "visual_baseline_allowed" &&
     event.status === "passed"
   )
   if (!visualBaselineAudit) findings.push("Missing passing web_clone_source_audit event for visual_baseline_allowed.")
 
   const maintainableAudit = trace.events.find((event) =>
     event.name === "web_clone_source_audit" &&
-    event.details?.finalDeliveryMode === "maintainable_replacement_required"
+    event.details?.finalAcceptanceMode === "maintainable_replacement_required"
   )
   if (!maintainableAudit) findings.push("Missing web_clone_source_audit event for maintainable_replacement_required.")
 

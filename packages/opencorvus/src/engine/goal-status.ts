@@ -103,7 +103,7 @@ export function deriveGoalStatus(goalID: string): EngineGoalStatus | undefined {
   // creator of dispatchable goal_runs).
   //
   // Applies to all three terminal states:
-  //   - failed / aborted — retry intent (manual_retry, delivery_rework)
+  //   - failed / aborted — retry intent (manual_retry, acceptance_rework)
   //   - completed        — contract changed (modify_contract); the prior
   //     success record is preserved, but a new run under the new contract
   //     must prove acceptance. Without this projection the completed tip

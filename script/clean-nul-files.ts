@@ -5,7 +5,7 @@
  * creates a real file when an LLM-generated command uses a redirect like
  * `... 2>nul` from inside a bash shell — git then refuses to index it
  * with "short read while indexing nul" and aborts every subsequent
- * baseline/delivery commit.
+ * baseline/acceptance commit.
  *
  * Reserved names cannot be opened through normal Win32 paths, so
  * deletion goes through the `\\?\` long-path prefix.

@@ -35,9 +35,9 @@ import {
   EngineSpecItemTable,
   EngineSpecSnapshotTable,
   EngineTaskTable,
-  type DeliveryResult,
+  type AcceptanceResult,
   type EngineBudget,
-  type EngineDeliveryStatus,
+  type EngineAcceptanceStatus,
   type EngineExecutorRef,
   type EngineEvaluationCheck,
   type EngineEvaluationScope,
@@ -89,18 +89,18 @@ export type RunRow = {
   time_updated: number
 }
 export type InteractionRow = typeof EngineInteractionRequestTable.$inferSelect
-/** Phase-6-c artifact-backed delivery shape. Was `typeof EngineDeliveryTable.$inferSelect`
- *  until `engine_delivery` was deleted in favour of `engine_artifact` rows with
- *  kind="delivery". Field names stay snake_case so old consumers do not churn.
- *  Reconstructed via `artifactRowToDeliveryRow()` below. */
-export type DeliveryRow = {
+/** Phase-6-c artifact-backed acceptance shape. Was `typeof EngineAcceptanceTable.$inferSelect`
+ *  until `engine_acceptance` was deleted in favour of `engine_artifact` rows with
+ *  kind="acceptance". Field names stay snake_case so old consumers do not churn.
+ *  Reconstructed via `artifactRowToAcceptanceRow()` below. */
+export type AcceptanceRow = {
   id: string
   task_id: string
   run_id: string
   goal_run_id: string | null
-  status: EngineDeliveryStatus
+  status: EngineAcceptanceStatus
   summary: string
-  result: DeliveryResult | null
+  result: AcceptanceResult | null
   time_created: number
   time_updated: number
 }
@@ -115,7 +115,7 @@ export type EvaluationRow = {
   task_id: string
   run_id: string
   goal_run_id: string | null
-  delivery_id: string | null
+  acceptance_id: string | null
   scope: EngineEvaluationScope
   status: EngineEvaluationStatus
   verdict: EngineEvaluationVerdict
@@ -441,9 +441,9 @@ export function findInteractionByExternal(externalID: string) {
   )
 }
 
-/** Task-level delivery (goal_run_id IS NULL) for a run. Reads `engine_artifact`
- *  kind="delivery" rows — append-only, so latest row per delivery_id wins. */
-export function findDeliveryByRun(runID: string): DeliveryRow | undefined {
+/** Task-level acceptance (goal_run_id IS NULL) for a run. Reads `engine_artifact`
+ *  kind="acceptance" rows — append-only, so latest row per acceptance_id wins. */
+export function findAcceptanceByRun(runID: string): AcceptanceRow | undefined {
   const rows = Database.use((db) =>
     db
       .select()
@@ -451,67 +451,67 @@ export function findDeliveryByRun(runID: string): DeliveryRow | undefined {
       .where(
         and(
           eq(EngineArtifactTable.run_id, runID),
-          eq(EngineArtifactTable.kind, "delivery"),
+          eq(EngineArtifactTable.kind, "acceptance"),
           isNull(EngineArtifactTable.goal_run_id),
         ),
       )
       .orderBy(desc(EngineArtifactTable.time_created))
       .all(),
   )
-  const latest = latestPerDelivery(rows)[0]
-  return latest ? artifactRowToDeliveryRow(latest) : undefined
+  const latest = latestPerAcceptance(rows)[0]
+  return latest ? artifactRowToAcceptanceRow(latest) : undefined
 }
 
-/** Find the most recent delivery for a run, including goal-run deliveries. */
-export function findLatestDeliveryForRun(runID: string): DeliveryRow | undefined {
+/** Find the most recent acceptance for a run, including goal-run deliveries. */
+export function findLatestAcceptanceForRun(runID: string): AcceptanceRow | undefined {
   const rows = Database.use((db) =>
     db
       .select()
       .from(EngineArtifactTable)
-      .where(and(eq(EngineArtifactTable.run_id, runID), eq(EngineArtifactTable.kind, "delivery")))
+      .where(and(eq(EngineArtifactTable.run_id, runID), eq(EngineArtifactTable.kind, "acceptance")))
       .orderBy(desc(EngineArtifactTable.time_created))
       .all(),
   )
-  const latest = latestPerDelivery(rows)[0]
-  return latest ? artifactRowToDeliveryRow(latest) : undefined
+  const latest = latestPerAcceptance(rows)[0]
+  return latest ? artifactRowToAcceptanceRow(latest) : undefined
 }
 
-export function findDeliveriesForTask(taskID: string): DeliveryRow[] {
+export function findDeliveriesForTask(taskID: string): AcceptanceRow[] {
   const rows = Database.use((db) =>
     db
       .select()
       .from(EngineArtifactTable)
-      .where(and(eq(EngineArtifactTable.task_id, taskID), eq(EngineArtifactTable.kind, "delivery")))
+      .where(and(eq(EngineArtifactTable.task_id, taskID), eq(EngineArtifactTable.kind, "acceptance")))
       .orderBy(desc(EngineArtifactTable.time_created))
       .all(),
   )
-  return latestPerDelivery(rows).map(artifactRowToDeliveryRow)
+  return latestPerAcceptance(rows).map(artifactRowToAcceptanceRow)
 }
 
-export function findDeliveryByGoalRun(goalRunID: string): DeliveryRow | undefined {
+export function findAcceptanceByGoalRun(goalRunID: string): AcceptanceRow | undefined {
   const rows = Database.use((db) =>
     db
       .select()
       .from(EngineArtifactTable)
-      .where(and(eq(EngineArtifactTable.goal_run_id, goalRunID), eq(EngineArtifactTable.kind, "delivery")))
+      .where(and(eq(EngineArtifactTable.goal_run_id, goalRunID), eq(EngineArtifactTable.kind, "acceptance")))
       .orderBy(desc(EngineArtifactTable.time_created))
       .all(),
   )
-  const latest = latestPerDelivery(rows)[0]
-  return latest ? artifactRowToDeliveryRow(latest) : undefined
+  const latest = latestPerAcceptance(rows)[0]
+  return latest ? artifactRowToAcceptanceRow(latest) : undefined
 }
 
-/** Phase-6-c helper: collapse the append-only delivery artifact stream into
- *  one row per delivery_id (the newest, since input arrives `time_created desc`).
- *  Preserves input order so callers that want "latest delivery overall" just
+/** Phase-6-c helper: collapse the append-only acceptance artifact stream into
+ *  one row per acceptance_id (the newest, since input arrives `time_created desc`).
+ *  Preserves input order so callers that want "latest acceptance overall" just
  *  take [0]. */
-function latestPerDelivery(
+function latestPerAcceptance(
   rows: Array<typeof EngineArtifactTable.$inferSelect>,
 ): Array<typeof EngineArtifactTable.$inferSelect> {
   const seen = new Set<string>()
   const result: Array<typeof EngineArtifactTable.$inferSelect> = []
   for (const row of rows) {
-    const key = row.delivery_id ?? row.id
+    const key = row.acceptance_id ?? row.id
     if (seen.has(key)) continue
     seen.add(key)
     result.push(row)
@@ -519,16 +519,16 @@ function latestPerDelivery(
   return result
 }
 
-function artifactRowToDeliveryRow(row: typeof EngineArtifactTable.$inferSelect): DeliveryRow {
+function artifactRowToAcceptanceRow(row: typeof EngineArtifactTable.$inferSelect): AcceptanceRow {
   const payload = (row.payload ?? {}) as {
-    status?: EngineDeliveryStatus
+    status?: EngineAcceptanceStatus
     summary?: string
-    result?: DeliveryResult | null
+    result?: AcceptanceResult | null
   }
   return {
-    id: row.delivery_id ?? row.id,
+    id: row.acceptance_id ?? row.id,
     task_id: row.task_id,
-    // delivery-kind artifacts always have run_id set by writeDeliveryRow;
+    // acceptance-kind artifacts always have run_id set by writeAcceptanceRow;
     // nullable column only used for kind="orchestrator-stream-error".
     run_id: row.run_id!,
     goal_run_id: row.goal_run_id ?? null,
@@ -656,17 +656,17 @@ export function findLatestTipGoalRun(goalID: string): GoalRunRow | undefined {
 }
 
 /**
- * Most recent goal_run that produced a delivery artifact for the goal,
+ * Most recent goal_run that produced a acceptance artifact for the goal,
  * regardless of supersede status.
  *
  * Distinct semantic from {@link findLatestTipGoalRun}: the tip is "what is
  * the live attempt right now" (could be a fresh pending row created by
- * resetTaskGoalsToPending after a delivery rejection). This helper answers
+ * resetTaskGoalsToPending after a acceptance rejection). This helper answers
  * "what files have been merged / accepted into master for this goal so far"
- * — i.e. the most recent goal_run row whose delivery row is non-null. The
- * tip and the latest-delivered run can diverge: a delivery rejection
+ * — i.e. the most recent goal_run row whose acceptance row is non-null. The
+ * tip and the latest-delivered run can diverge: a acceptance rejection
  * supersedes the previous tip with a new pending row; that new pending row
- * has no delivery yet, but the prior superseded row's delivery (and the
+ * has no acceptance yet, but the prior superseded row's acceptance (and the
  * files it merged) are still the canonical "built" state.
  *
  * Overlay panels that show "files changed for this goal" must use this
@@ -676,21 +676,21 @@ export function findLatestTipGoalRun(goalID: string): GoalRunRow | undefined {
  * master.
  */
 export function findLatestDeliveredGoalRun(goalID: string): GoalRunRow | undefined {
-  return latestDeliveredGoalRunFromRows(listGoalRunsByGoal(goalID), (id) => findDeliveryByGoalRun(id) !== undefined)
+  return latestDeliveredGoalRunFromRows(listGoalRunsByGoal(goalID), (id) => findAcceptanceByGoalRun(id) !== undefined)
 }
 
 /**
  * Pure-function variant of {@link findLatestDeliveredGoalRun} for unit tests.
  * `rows` MUST be ordered newest-first (the same shape `listGoalRunsByGoal`
- * returns). `hasDelivery` is invoked at most once per row, in newest-first
+ * returns). `hasAcceptance` is invoked at most once per row, in newest-first
  * order, so callers can stub a small lookup map without a DB.
  */
 export function latestDeliveredGoalRunFromRows<T extends { id: string }>(
   rows: T[],
-  hasDelivery: (goalRunID: string) => boolean,
+  hasAcceptance: (goalRunID: string) => boolean,
 ): T | undefined {
   for (const row of rows) {
-    if (hasDelivery(row.id)) return row
+    if (hasAcceptance(row.id)) return row
   }
   return undefined
 }
@@ -728,20 +728,20 @@ export function findGoalRun(goalRunID: string): GoalRunRow | undefined {
 
 /**
  * Latest verdict artifact written by the deliver tool for `taskID`. The
- * payload is the full DeliveryVerdict (summary, issues_found, rejection_details,
+ * payload is the full AcceptanceVerdict (summary, issues_found, rejection_details,
  * startup_verification, frontend_check). Surfaced by `buildSystemParts` into
  * the orchestrator prompt so the LLM sees the most recent verdict on its
  * next decision turn — a snapshot read, not a workflow gate.
  */
-export function findLatestDeliveryVerdictArtifact(taskID: string) {
+export function findLatestAcceptanceVerdictArtifact(taskID: string) {
   return Database.use((db) =>
     db
       .select()
       .from(EngineArtifactTable)
-      .where(and(eq(EngineArtifactTable.task_id, taskID), eq(EngineArtifactTable.label, "delivery-agent-verdict")))
+      .where(and(eq(EngineArtifactTable.task_id, taskID), eq(EngineArtifactTable.label, "acceptance-review-verdict")))
       // id is a monotonic ascending id — the secondary key breaks same-ms ties
       // deterministically now that raw/host/final artifacts are written in the
-      // same Date.now() batch (specs/delivery-fresh-eyes-decoupling-2026-05-18.md §2.4).
+      // same Date.now() batch (specs/acceptance-fresh-eyes-decoupling-2026-05-18.md §2.4).
       .orderBy(desc(EngineArtifactTable.time_created), desc(EngineArtifactTable.id))
       .get(),
   )
@@ -751,7 +751,7 @@ export type IntegrityAttemptArtifactQuery = {
   taskID: string
   lineage: SpecSnapshotLineage
   /** Filter by recorded `phase` ("pre_build" | "post_build"). Omit to match
-   *  any phase. The delivery freshness gate uses `phase: "post_build"` so a
+   *  any phase. The acceptance freshness gate uses `phase: "post_build"` so a
    *  pre-build review cannot satisfy the post-build completion requirement. */
   phase?: "pre_build" | "post_build"
 }
@@ -890,17 +890,17 @@ function toIntegrityAttemptArtifactRow(row: ArtifactRow): IntegrityAttemptArtifa
   }
 }
 
-/** Latest delivery-agent-verdict artifact bound to a specific delivery row.
- *  Used by the board view to render delivery.status from the agent verdict
- *  rather than from the candidate-delivery row's lifecycle status (which
- *  can stay "candidate" until explicit post-delivery export, regardless of verdict). */
-export function findLatestDeliveryVerdictArtifactForDelivery(deliveryID: string) {
+/** Latest acceptance-review-verdict artifact bound to a specific acceptance row.
+ *  Used by the board view to render acceptance.status from the agent verdict
+ *  rather than from the candidate-acceptance row's lifecycle status (which
+ *  can stay "candidate" until explicit post-acceptance export, regardless of verdict). */
+export function findLatestAcceptanceVerdictArtifactForAcceptance(acceptanceID: string) {
   return Database.use((db) =>
     db
       .select()
       .from(EngineArtifactTable)
       .where(
-        and(eq(EngineArtifactTable.delivery_id, deliveryID), eq(EngineArtifactTable.label, "delivery-agent-verdict")),
+        and(eq(EngineArtifactTable.acceptance_id, acceptanceID), eq(EngineArtifactTable.label, "acceptance-review-verdict")),
       )
       .orderBy(desc(EngineArtifactTable.time_created), desc(EngineArtifactTable.id))
       .get(),
@@ -1671,7 +1671,7 @@ export function viewArtifact(row: ArtifactRow) {
     id: row.id,
     taskID: row.task_id,
     runID: row.run_id,
-    deliveryID: row.delivery_id ?? undefined,
+    acceptanceID: row.acceptance_id ?? undefined,
     kind: row.kind,
     label: row.label,
     payload: row.payload ?? undefined,
@@ -1682,7 +1682,7 @@ export function viewArtifact(row: ArtifactRow) {
   }
 }
 
-export function viewDelivery(row: DeliveryRow) {
+export function viewAcceptance(row: AcceptanceRow) {
   const result = (row.result ?? {}) as Record<string, unknown>
   return {
     id: row.id,
@@ -1718,7 +1718,7 @@ export function viewEvaluation(row: EvaluationRow) {
     id: row.id,
     taskID: row.task_id,
     runID: row.run_id,
-    deliveryID: row.delivery_id ?? undefined,
+    acceptanceID: row.acceptance_id ?? undefined,
     status: row.status,
     verdict: row.verdict,
     summary: row.summary,
@@ -1914,7 +1914,7 @@ function artifactRowToGoalRunRow(row: typeof EngineArtifactTable.$inferSelect): 
 /** Reconstruct an `EvaluationRow` (historical `engine_evaluation` shape) from an
  *  `engine_artifact` row whose `kind === "verification-evidence"`. The payload
  *  written by `verification/persist.ts` carries scope/status/verdict/summary/checks
- *  plus time_completed; everything else (task_id, run_id, goal_run_id, delivery_id,
+ *  plus time_completed; everything else (task_id, run_id, goal_run_id, acceptance_id,
  *  timestamps) comes from the artifact columns. */
 function artifactRowToEvaluationRow(row: typeof EngineArtifactTable.$inferSelect): EvaluationRow {
   const payload = (row.payload ?? {}) as {
@@ -1931,8 +1931,8 @@ function artifactRowToEvaluationRow(row: typeof EngineArtifactTable.$inferSelect
     // verification-evidence artifacts always carry run_id (writer enforces it).
     run_id: row.run_id!,
     goal_run_id: row.goal_run_id ?? null,
-    delivery_id: row.delivery_id ?? null,
-    scope: payload.scope ?? "delivery",
+    acceptance_id: row.acceptance_id ?? null,
+    scope: payload.scope ?? "acceptance",
     status: payload.status ?? "pending",
     verdict: payload.verdict ?? "inconclusive",
     summary: payload.summary ?? "",

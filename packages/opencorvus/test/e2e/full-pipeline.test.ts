@@ -398,9 +398,9 @@ describe("Full E2E: NoteStore Minimal — real Planner + Executor + Checks + Eva
             console.log(`[E2E]   interaction=${item.id}  type=${item.type}  status=${item.status}  title=${item.title ?? "(无标题)"}`)
           }
 
-          if (progress.delivery) {
-            console.log(`[E2E] 交付摘要: ${progress.delivery.result?.summary ?? "(无)"}`)
-            const files = progress.delivery.result?.changedFiles ?? []
+          if (progress.acceptance) {
+            console.log(`[E2E] 交付摘要: ${progress.acceptance.result?.summary ?? "(无)"}`)
+            const files = progress.acceptance.result?.changedFiles ?? []
             console.log(`[E2E] 变更文件: ${files.length > 0 ? files.join(", ") : "(无)"}`)
           }
 
@@ -417,7 +417,7 @@ describe("Full E2E: NoteStore Minimal — real Planner + Executor + Checks + Eva
           }
 
           // Slack 最终汇报
-          const files = progress.delivery?.result?.changedFiles ?? []
+          const files = progress.acceptance?.result?.changedFiles ?? []
           await slackPost(
             progress.task.status === "completed"
               ? `🎉 E2E 测试通过！\n状态: *${progress.task.status}*\n变更文件: ${files.join(", ")}`
@@ -459,7 +459,7 @@ describe("Full E2E: NoteStore Minimal — real Planner + Executor + Checks + Eva
 
           // ── 断言 ─────────────────────────────────────────────────────────
           expect(progress.task.status, progress.task.error ?? "task should complete").toBe("completed")
-          expect(progress.delivery, "应生成交付物").toBeDefined()
+          expect(progress.acceptance, "应生成交付物").toBeDefined()
           expect(progress.evaluation?.verdict, "评估应通过").toBe("accepted")
 
           expect(prdDocs.length, "prds/ 应有至少 1 个文档").toBeGreaterThan(0)
@@ -476,7 +476,7 @@ describe("Full E2E: NoteStore Minimal — real Planner + Executor + Checks + Eva
             expect(content, "文档应包含 taskID").toContain(taskID)
           }
 
-          const changedFiles = progress.delivery?.result?.changedFiles ?? []
+          const changedFiles = progress.acceptance?.result?.changedFiles ?? []
           expect(changedFiles, "应修改 note-store 源文件").toContain("src/note-store.ts")
           expect(changedFiles, "应修改 note-store 测试文件").toContain("src/note-store.test.ts")
 

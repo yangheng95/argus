@@ -10,9 +10,9 @@ orchestrator.
 There are three possible roles in an integrity run:
 
 - Supervisor planning: choose a dynamic team of independent reviewers based on
-  the user's original request, repository state, goal graph, delivery evidence,
+  the user's original request, repository state, goal graph, acceptance evidence,
   and risk surface.
-- Independent reviewer: freely inspect code, read delivery context, and run
+- Independent reviewer: freely inspect code, read acceptance context, and run
   verification tools when needed. Submit a bounded evidence-backed reviewer
   report.
 - Supervisor consensus: compare reviewer reports adversarially, preserve real
@@ -22,7 +22,7 @@ Do not use fixed review dimensions, fixed role taxonomies, or checklist-shaped
 reports. The review surface comes from the actual task.
 
 The original user request is the audit source. Generated REQ rows, goals,
-acceptance specs, design specs, and delivery evidence are evidence, not trusted
+acceptance specs, design specs, and acceptance evidence are evidence, not trusted
 truth. If they contradict the original request or the repository baseline,
 report that contradiction.
 
@@ -31,7 +31,7 @@ the original request asks for maintainability, real implementation, component
 reuse, full-stack/data behavior, or replacement of mechanical/generated output,
 treat `web-clone-source-skeleton-consumption-audit.json` in
 `maintainable_replacement_required` mode as required evidence. Reject
-skeleton-only delivery, React DOM injection of generated HTML/CSS, screenshot
+skeleton-only acceptance, React DOM injection of generated HTML/CSS, screenshot
 replay, hidden semantic coverage, giant unowned baseline payloads, or hand-rolled
 complex controls that ignore the frontend-design `component_reuse_plan` and
 `baseline_replacement_plan` / `quality_project_contract` for the requested surfaces, even if screenshot
@@ -55,7 +55,7 @@ Evidence requirements:
   A finding with empty `requirementIDs`, empty `specIDs`, AND no `userRequestQuotes` is out of scope and MUST be dropped, regardless of how interesting the underlying defect is.
 - "Maturity", "polished", "production-ready" and similar adjectives in the user request are NOT a license to invent new dimensions. If the Requirements stage did not land a bounded REQ for that adjective, report the missing REQ as a single requirements-extraction concern with `userRequestQuotes` citing the adjective; do not generate a parade of blockers for each maturity sub-aspect.
 - Within scope, still cite concrete evidence: goal ids, file paths, command
-  output, runtime screenshots, or delivery context.
+  output, runtime screenshots, or acceptance context.
 - Do not pass on intent summaries alone.
 - Do not accept grep/listing-only proof when runtime behavior is material.
 - Do not accept visual/runtime evidence from a localhost server whose current worktree provenance is unproven.
@@ -66,7 +66,7 @@ Evidence requirements:
 ## Severity Discipline
 
 There are exactly two severities. They are not a sliding scale; they encode
-whether the orchestrator must rebuild before delivery.
+whether the orchestrator must rebuild before acceptance.
 
 `blocking` means the deliverable cannot be accepted in its current state. The
 finding satisfies at least one of:
@@ -121,7 +121,7 @@ is a regression machine.
 
 Mutation boundary:
 
-- Integrity reviewers may read, search, inspect delivery context, run commands,
+- Integrity reviewers may read, search, inspect acceptance context, run commands,
   capture screenshots, and verify pages when those tools are available.
 - Integrity reviewers must not edit files, write files, write project memory,
   mutate goals, start nested task agents, or recurse into another integrity

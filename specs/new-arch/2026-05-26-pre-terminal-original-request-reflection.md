@@ -35,7 +35,7 @@ Fragment single source: `src/prompt/fragments/pre-terminal-reflection.ts`.
 The fragment must require the agent to:
 
 1. Re-check the prompt-visible original user request and system-provided authoritative request bundle from task context.
-2. Re-check upstream requirements, architect contracts, retry / integrity / delivery feedback when present.
+2. Re-check upstream requirements, architect contracts, retry / integrity / acceptance feedback when present.
 3. Fix omissions or contradictions before finalization.
 4. Avoid adding a prose checklist unless the terminal schema explicitly asks for it.
 

@@ -112,7 +112,7 @@ export interface GoalWorkflowState {
  *  历史上这里还有 `currentStepID` 和 `taskSteps[]` 两个字段，被 trackStep*
  *  在每次 tool 执行时翻字段值并把指针往前挪 —— 经典 FSM。后来步骤投影
  *  方式补齐了（projectTaskSteps 从 decision_log / spec / goals / runs /
- *  delivery 现算），那两个字段就是纯重复来源。删掉。 */
+ *  acceptance 现算），那两个字段就是纯重复来源。删掉。 */
 export interface WorkflowState {
   /** 当前使用的 workflow ID */
   workflowID: string

@@ -10,7 +10,7 @@
  *
  * Per rule 23 (no state machines): the loop does NOT inspect artifacts and
  * synthesise wake notes to push the LLM through a fixed pipeline. Past
- * iterations grew three such gates (delivery-rejection rewake,
+ * iterations grew three such gates (acceptance-rejection rewake,
  * build-settled-without-deliver rewake, orchestrator-stream-error rewake);
  * all three were FSM in disguise and have been deleted.
  *
@@ -21,7 +21,7 @@
  * What this does NOT own:
  *   - Deciding what the orchestrator does on wake (LLM reads describe).
  *   - Dispatching goals (the `build` tool body handles that).
- *   - Reacting to delivery rejection / build settlement / stream error —
+ *   - Reacting to acceptance rejection / build settlement / stream error —
  *     those are facts the LLM reads via describe on its next decision turn.
  */
 
@@ -149,7 +149,7 @@ export async function runTaskLoop(input: {
  *
  * Single-pass: enter, mark active if queued, run `Orchestrator.processTask`
  * once with the caller event, exit. There is no internal rewake. If the
- * LLM stops mid-task (delivery rejection, build settled, stream error,
+ * LLM stops mid-task (acceptance rejection, build settled, stream error,
  * pending question), the next external trigger re-enters this function.
  * Concurrent entries for the same task are serialised by `runTaskLoop`.
  */
@@ -198,7 +198,7 @@ async function runTaskLoopInner(input: {
   // already exists), so wakes after the first one are no-ops. Without this
   // call, task.metadata.git.baseline.commit stays unset for the task's whole
   // lifetime; the publisher's workspace_export adapter then throws on every
-  // delivery attempt and the orchestrator loops on the rework signal.
+  // acceptance attempt and the orchestrator loops on the rework signal.
   {
     const { EngineGit } = await import("@/engine/git")
     const result = await EngineGit.prepare(task)

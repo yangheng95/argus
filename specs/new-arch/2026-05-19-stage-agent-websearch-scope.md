@@ -42,7 +42,7 @@ orchestrator（agent.ts diff: include 新增 `explore`）现在会主动派 expl
 | `test/agent/runner-tool-scope.test.ts` | 现有 tool-scope 断言 | 扩：explore + 4 stage agent 解析后工具集含 `websearch` |
 | `orchestrator` (agent.ts:274) | include 无 webfetch/websearch | 不动（scheduler，故意，agent.ts 注释明确） |
 | integrity/prosecutor/compaction/title/summary/control | include:[] / [panel] | 不动（注入式/无工具，故意） |
-| ~~delivery~~ | pull 已删（deliver 退役） | N/A |
+| ~~acceptance~~ | pull 已删（deliver 退役） | N/A |
 
 ## 3. 设计决策
 

@@ -6,7 +6,7 @@ import path from "node:path"
  * Regression for the publisher-rework loop observed in
  * `overlay-web-benchmark-report-1777828097445` and `b6d21ddh2`:
  *
- *   WARN service=engine-delivery adapter=workspace_export
+ *   WARN service=engine-acceptance adapter=workspace_export
  *   error=Error: workspace_export requires task.metadata.git.baseline.commit
  *   ...
  *   publish_gate_rework_<ts>: This is a rework signal, not a terminal
@@ -17,7 +17,7 @@ import path from "node:path"
  * of `task.metadata.git.baseline.commit`, and a full-repo grep shows it
  * had ZERO callers. So baseline was unset for every task, the
  * `workspaceExportAdapter` (engine/publisher.ts) threw on every
- * delivery, and the orchestrator's "deliver" tool fed the rework
+ * acceptance, and the orchestrator's "deliver" tool fed the rework
  * signal back into the loop forever.
  *
  * Fix: call `EngineGit.prepare(task)` in `runTaskLoopInner`, after the

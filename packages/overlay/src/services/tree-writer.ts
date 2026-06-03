@@ -197,7 +197,7 @@ const messages = new Map<string, MessageInfo>();
 const knownGoalIDs = new Set<string>();
 /** goalID → the current attempt's goal_run id. Refreshed from
  *  board.goalWorkflows on every rebuild. Used to scope step/phase card
- *  ids so each attempt (retry / delivery_rework / modify_contract /
+ *  ids so each attempt (retry / acceptance_rework / modify_contract /
  *  restart_stage) gets its own cards instead of mutating the prior
  *  attempt's cards in-place. A missing entry means the goal has no
  *  dispatched run yet — we fall back to the pseudo-id `"pre"` so the
@@ -465,7 +465,7 @@ export function applyEvent(event: any): void {
   // `{sessionID, status:{type:"streaming"|"idle"|"retry"|"terminal", ...}}`.
   // Applies to every session — orchestrator root, requirements / architect /
   // frontend-design / integrity / build / deliver / refine /
-  // analyze_intent / modify_goal / publish_delivery, future phases. See
+  // analyze_intent / modify_goal / publish_acceptance, future phases. See
   // specs/new-arch/07-panel-reactivity.md §session 终态信号源.
   if (type === "session.status") {
     return applyVisibleCardTreeEvent(() => handleSessionStatus(event));
@@ -596,7 +596,7 @@ function createSessionCardNode(
 /** Per-goal executor step card. Each goal has exactly one goal-scope step
  *  per attempt (see workflow.ts — the `build` step, labelled "Executor",
  *  is the only `scope: "goal"` entry in the pipeline). Every new attempt
- *  (retry / delivery_rework / modify_contract / restart_stage) creates
+ *  (retry / acceptance_rework / modify_contract / restart_stage) creates
  *  a fresh goal_run; the run id is baked into the card id so the prior
  *  attempt's cards survive as frozen history rather than being mutated
  *  by new messages. Goal title, decomposition index (#N), and description
@@ -1699,7 +1699,10 @@ function ensureSessionProjection(sessionID: string, opts: EnsureSessionOpts): Se
   const existing = sessions.get(sessionID);
   if (existing) {
     if (!existing.stage && opts.stage) existing.stage = opts.stage;
-    if (!existing.parentSessionID && opts.parentSessionID) existing.parentSessionID = opts.parentSessionID;
+    if (!existing.parentSessionID && opts.parentSessionID) {
+      existing.parentSessionID = opts.parentSessionID;
+      rebuildCardHierarchy();
+    }
     if (!existing.goalID && opts.goalID) existing.goalID = opts.goalID;
     return existing;
   }

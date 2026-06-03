@@ -9,7 +9,7 @@ const DIRECT_REPLY_AGENT_KIND_VALUES = [
   "goal",
   "architect",
   "integrity",
-  "delivery",
+  "acceptance",
   "evaluator",
 ]
 

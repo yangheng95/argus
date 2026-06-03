@@ -38,10 +38,10 @@ User request
 ┌──────────────┐
 │ Executor     │  OpenCorvus / Codex / Claude Code
 └──────┬───────┘  packages/opencorvus/src/executor/opencode.ts
-       ↓  delivery
+       ↓  acceptance
 ┌──────────────┐
 │ Evaluator    │  build/test/lint/… + LLM-judge fallback
-└──────┬───────┘  packages/opencorvus/src/evaluator/per-goal.ts
+└──────┬───────┘  packages/opencorvus/src/acceptance/checks/per-goal.ts
        ↓
  accepted / rejected
        ↓
@@ -55,10 +55,10 @@ User request
 | **Channel** | Protocol adapter (Slack/HTTP/TUI/…), converts inbound messages to `CreateTask` | `src/channel/ingress.ts:39` |
 | **Orchestrator** | Task/Run/Goal lifecycle, retry, replan, budget | `src/orchestrator/task-loop.ts:59` |
 | **Task Agent** | Main LLM decision-maker; coordinates spec/goal/plan sub-agents | `src/task-agent/agent.ts:60` |
-| **Planner** | Produces PlanSteps per Goal | `src/planner/per-goal.ts:45` |
+| **Planner** | Produces PlanSteps per Goal | `removed-planning-package/per-goal.ts:45` |
 | **GoalPool** | Topological scheduling of goals by `depends_on` | `src/orchestrator/goal-pool.ts` |
 | **Executor** | Injects prompt into coding agent, runs agentic loop | `src/executor/opencode.ts:36` |
-| **Evaluator** | Runs deterministic checks + LLM judge for verdict | `src/evaluator/per-goal.ts` |
+| **Evaluator** | Runs deterministic checks + LLM judge for verdict | `src/acceptance/checks/per-goal.ts` |
 
 ## Two nested loops
 
@@ -99,7 +99,7 @@ Common question: "Why not let one big LLM prompt do everything?"
 
 ## Worktree parallelism
 
-Each Goal gets its own Git worktree (`src/orchestrator/goal-pool.ts`); they don't interfere. Delivery agent handles the final merge.
+Each Goal gets its own Git worktree (`src/orchestrator/goal-pool.ts`); they don't interfere. Acceptance review handles the final merge.
 
 This means: one Task may have multiple Goals running in different worktrees concurrently; retrying a failed Goal doesn't affect others.
 

@@ -2,7 +2,7 @@
 
 OpenCorvus 的职责是：**把一条自然语言需求，稳定地变成已验证的代码变更**。这件事单个 LLM 做不到稳定，所以系统由一个**唯一决策者**（Orchestrator）和一组**专职 sub-agent** 组成；每个 agent 自带 LLM + tools，独立推理，由 Orchestrator 视情况调用。
 
-> 重要变化（2026-05）：旧 `Task Agent / Planner / GoalPool / Evaluator agent` 已整体下线，pipeline 不再是硬编码的六层流水线；执行过程数据合并到 `engine_artifact` 单表（按 `kind` 区分）。详见 [Goal / Run / Task](./goal-run-task.md)。
+> 重要变化（2026-05）：旧 `Task Agent / Planner / GoalPool / Acceptance review` 已整体下线，pipeline 不再是硬编码的六层流水线；执行过程数据合并到 `engine_artifact` 单表（按 `kind` 区分）。详见 [Goal / Run / Task](./goal-run-task.md)。
 
 ## HTTP API 运行时分层
 
@@ -53,10 +53,10 @@ orchestrator/loop.ts — runTaskLoop()  (line 117)
     │ Executor（外部进程，worktree 隔离）  │
     │  claude-code / codex / opencode     │
     └────────────┬────────────────────────┘
-                 │ delivery diff
+                 │ acceptance diff
                  ▼
     ┌─────────────────────────────────────┐
-    │ delivery/checks/  确定性 + LLM judge │
+    │ acceptance/checks/  确定性 + LLM judge │
     └────────────┬────────────────────────┘
                  ▼
           回到 Decision Point
@@ -95,9 +95,9 @@ orchestrator/loop.ts — runTaskLoop()  (line 117)
 
 Task 生命周期的 agent-side 权限只属于 **Orchestrator**：启动 / 停止 / retry / cancel / fail 当前 task，以及发布新的 follow-up task，都必须通过 Orchestrator 的显式 lifecycle tools（例如 `propose_task`）。Integrity review 产出最终验收 verdict；Build 产出实现和运行时证据。
 
-> **Planner agent 已删**。session 级的 `src/tool/planner.ts` 是 working-memory 工具（`add_task / update_task / scratchpad_*`），任何 agent 均可挂载来管自己的子任务树；它**不是**旧 per-goal planner 的替代。
+> **Planning tool role 已删**。session 级的 `src/tool/planner.ts` 是 working-memory 工具（`add_task / update_task / scratchpad_*`），任何 agent 均可挂载来管自己的子任务树；它**不是**旧 per-goal planner 的替代。
 >
-> **Delivery agent 已删**。workflow 验收归属 `integrity`；运行时截图证据归属 Build。
+> **Acceptance review 已删**。workflow 验收归属 `integrity`；运行时截图证据归属 Build。
 
 ## 两层循环
 
@@ -113,7 +113,7 @@ while (!aborted) {
 }
 ```
 
-触发事件无白名单：早期 `trigger.kind ∈ {created, batch_complete, delivery_rejected, retry}` 已在 Phase 2 移除，由 LLM 自己看 `engine_*` + decision-log 判断。
+触发事件无白名单：早期 `trigger.kind ∈ {created, batch_complete, acceptance_rejected, retry}` 已在 Phase 2 移除，由 LLM 自己看 `engine_*` + decision-log 判断。
 
 ### 内层：Session agentic loop
 
@@ -131,18 +131,18 @@ while (session 活跃) {
 
 ## 为什么不是单体 agent
 
-1. **各阶段的输入/输出契约不同**：requirements 产 Goal + 追溯矩阵；architect 产契约 IR；delivery checks 产 verdict + 证据。混在一起会遗漏检查。
-2. **失败要能精确归因**：requirements 错→重 requirements；architect 错→重 architect；build 错→retry build；delivery 错→回修。这种分级处理在"单体 agent"里做不到。
+1. **各阶段的输入/输出契约不同**：requirements 产 Goal + 追溯矩阵；architect 产契约 IR；acceptance checks 产 verdict + 证据。混在一起会遗漏检查。
+2. **失败要能精确归因**：requirements 错→重 requirements；architect 错→重 architect；build 错→retry build；acceptance 错→回修。这种分级处理在"单体 agent"里做不到。
 3. **可并行 / 可隔离**：每个 build 在独立 git worktree 跑（见 [Worktree 生命周期](../../../specs/new-arch/10-worktree-lifecycle.md)），互不污染；同任务多 goal 并行上限由 `assistant.max_executor_groups` 控制（默认 3）。
 4. **人机协作粒度**：permission 审批、follow-up 消息、`question` tool 都发生在 Task 循环里，不会污染单次 LLM 上下文。
 
 ## Worktree 并行
 
-每个 build attempt 独立 worktree（路径写入 `engine_artifact[kind="goal_run_attempt"].payload`，读取经 `engine/store.ts:findGoalLatestWorkspace`）。失败的 attempt 重试时不影响其他 goal；最终合并由 `delivery` agent 负责。
+每个 build attempt 独立 worktree（路径写入 `engine_artifact[kind="goal_run_attempt"].payload`，读取经 `engine/store.ts:findGoalLatestWorkspace`）。失败的 attempt 重试时不影响其他 goal；最终合并由 `acceptance` agent 负责。
 
 ## 数据流与数据模型
 
-执行过程合并到 `engine_artifact` 单表（13 张表中的一张），用 `kind` 区分语义：`run` · `goal_run_attempt` · `delivery` · `verification-evidence` · `evaluation` · `verdict` · `patch` · `changed_file` · `diff` · `log` · `report` · `image` · `link` · `git_ref` · `pr` · `integrity_attempt` · `prosecutor_attempt` · `delivery_evidence_manifest` · `delivery_surface_manifest` · `delivery_specialist_review` · `delivery_verification_threw` · `architect_contract_graph` · `orchestrator-stream-error`。
+执行过程合并到 `engine_artifact` 单表（13 张表中的一张），用 `kind` 区分语义：`run` · `goal_run_attempt` · `acceptance` · `verification-evidence` · `evaluation` · `verdict` · `patch` · `changed_file` · `diff` · `log` · `report` · `image` · `link` · `git_ref` · `pr` · `integrity_attempt` · `prosecutor_attempt` · `acceptance_evidence_manifest` · `acceptance_surface_manifest` · `acceptance_specialist_review` · `acceptance_review_threw` · `architect_contract_graph` · `orchestrator-stream-error`。
 
 详见 [Goal / Run / Task](./goal-run-task.md)。
 
@@ -151,4 +151,4 @@ while (session 活跃) {
 - [Goal / Run / Task 数据模型](./goal-run-task.md)
 - [Agentic Loop 内循环](./agent-loop.md)
 - [OpenCorvus 配置](../opencorvus/configuration.md)
-- [Delivery 检查与判决](../opencorvus/evaluator.md)
+- [Acceptance 检查与判决](../opencorvus/evaluator.md)

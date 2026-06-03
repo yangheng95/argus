@@ -14,7 +14,7 @@ Task (kind: "workflow" | "build")
  │   │   └─ Goal[] (深度分解的目标)
  │   └─ GoalRun[] (每次 Goal 被执行均 1 条)
  │       └─ Evaluation (verdict: accepted | rejected | inconclusive)
- └─ Delivery (status: candidate → publishing → delivered)
+ └─ Acceptance (status: candidate → publishing → delivered)
 SpecSnapshot (独立，被 PlanVersion 引用)
 ```
 
@@ -74,7 +74,7 @@ Goal 是最小可并行、可独立验收的实现单元。
 
 `inconclusive` 语义为"无法判决"——不是通过也不是失败，触发 replan 而非 retry。
 
-### Delivery（`orchestrator.sql.ts:423`）
+### Acceptance（`orchestrator.sql.ts:423`）
 
 - `candidate`：评估通过，等待交付
 - `publishing`：正在合并/推送

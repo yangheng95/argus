@@ -2,7 +2,7 @@
 
 OpenCorvus's job: **turn a natural-language request into verified code changes, reliably**. A single LLM cannot do this reliably alone, so the system consists of a **single decision-maker** (Orchestrator) and a set of **specialist sub-agents**; each agent has its own LLM + tools and reasons independently, invoked by the Orchestrator as needed.
 
-> Important change (2026-05): The old `Task Agent / Planner / GoalPool / Evaluator agent` have been removed entirely. The pipeline is no longer a hardcoded six-layer waterfall; execution-process data is merged into a single `engine_artifact` table (differentiated by `kind`). See [Goal / Run / Task](./goal-run-task.md).
+> Important change (2026-05): The old `Task Agent / Planner / GoalPool / Acceptance review` have been removed entirely. The pipeline is no longer a hardcoded six-layer waterfall; execution-process data is merged into a single `engine_artifact` table (differentiated by `kind`). See [Goal / Run / Task](./goal-run-task.md).
 
 ## HTTP API runtime layering
 
@@ -56,10 +56,10 @@ orchestrator/loop.ts — runTaskLoop()  (line 117)
     │  worktree-isolated)                 │
     │  claude-code / codex / opencorvus   │
     └────────────┬────────────────────────┘
-                 │ delivery diff
+                 │ acceptance diff
                  ▼
     ┌─────────────────────────────────────┐
-    │ delivery/checks/  deterministic +   │
+    │ acceptance/checks/  deterministic +   │
     │  LLM judge                          │
     └────────────┬────────────────────────┘
                  ▼
@@ -95,13 +95,13 @@ Defined in `engine/workflow.ts`; users can customize via `opencorvus.jsonc`. The
 | **Frontend Design**    | `frontend-design/agent.ts`                                                                                                                                 | Visual references (Figma / images / URL) → frontend template / fillable modules / component and material inventories                                                                                    |
 | **Build**              | `build/agent.ts` + `build/index.ts` + `build/report.ts` + `build/types.ts` + `build/screenshot-tool.ts` + `goal/runner.ts` + `agent/sub-agent-protocol.ts` | Actually writes code in the worktree; invoked by the Orchestrator via the `build` tool; owns runtime screenshot capture evidence                                                                        |
 | **Integrity Reviewer** | `integrity/agent.ts`                                                                                                                                       | Multi-dimension integrity review (requirement_fidelity / technical_feasibility / hallucination / solution_quality); final workflow acceptance gate                                                      |
-| **Prosecutor**         | `prosecutor/agent.ts`                                                                                                                                      | Adversarial review of delivery candidates                                                                                                                                                               |
+| **Prosecutor**         | `prosecutor/agent.ts`                                                                                                                                      | Adversarial review of acceptance candidates                                                                                                                                                               |
 
 Task lifecycle agent-side authority belongs exclusively to the **Orchestrator**: starting / stopping / retrying / cancelling / failing the current task, and publishing new follow-up tasks, must all go through Orchestrator explicit lifecycle tools (e.g. `propose_task`). Integrity review produces the terminal acceptance verdict; Build produces implementation and runtime evidence.
 
-> **Planner agent removed.** The session-level `src/tool/planner.ts` is a working-memory tool (`add_task / update_task / scratchpad_*`) that any agent can mount to manage its own subtask tree; it is **not** a replacement for the old per-goal planner.
+> **Planning tool role removed.** The session-level `src/tool/planner.ts` is a working-memory tool (`add_task / update_task / scratchpad_*`) that any agent can mount to manage its own subtask tree; it is **not** a replacement for the old per-goal planner.
 >
-> **Delivery agent removed.** Workflow acceptance now runs through `integrity`; runtime screenshot evidence belongs to Build.
+> **Acceptance review removed.** Workflow acceptance now runs through `integrity`; runtime screenshot evidence belongs to Build.
 
 ## Two nested loops
 
@@ -117,7 +117,7 @@ while (!aborted) {
 }
 ```
 
-No event allowlist: the early `trigger.kind ∈ {created, batch_complete, delivery_rejected, retry}` filter was removed in Phase 2; the LLM reads `engine_*` + decision-log directly to determine its next action.
+No event allowlist: the early `trigger.kind ∈ {created, batch_complete, acceptance_rejected, retry}` filter was removed in Phase 2; the LLM reads `engine_*` + decision-log directly to determine its next action.
 
 ### Inner: session agentic loop
 
@@ -135,18 +135,18 @@ See [Agentic Loop](./agent-loop.md).
 
 ## Why not a monolithic agent
 
-1. **Each stage has a different I/O contract** — requirements produces Goals + a traceability matrix; architect produces a contract IR; delivery checks produce a verdict + evidence. Mixing them causes checks to be skipped.
-2. **Failures need precise attribution** — requirements wrong → redo requirements; architect wrong → redo architect; build wrong → retry build; delivery wrong → remediate. This graduated handling is impossible in a monolithic agent.
+1. **Each stage has a different I/O contract** — requirements produces Goals + a traceability matrix; architect produces a contract IR; acceptance checks produce a verdict + evidence. Mixing them causes checks to be skipped.
+2. **Failures need precise attribution** — requirements wrong → redo requirements; architect wrong → redo architect; build wrong → retry build; acceptance wrong → remediate. This graduated handling is impossible in a monolithic agent.
 3. **Parallelism and isolation** — each build runs in an independent git worktree (see [Worktree lifecycle](../../../specs/new-arch/10-worktree-lifecycle.md)), with no cross-contamination; per-task goal parallelism is bounded by `assistant.max_executor_groups` (default 3).
 4. **Human-machine interaction granularity** — permission approvals, follow-up messages, and the `question` tool all live in the task loop, not polluting a single LLM context.
 
 ## Worktree parallelism
 
-Each build attempt gets its own worktree (path written to `engine_artifact[kind="goal_run_attempt"].payload`, read via `engine/store.ts:findGoalLatestWorkspace`). A failed attempt can be retried without affecting other goals; the final merge is handled by the `delivery` agent.
+Each build attempt gets its own worktree (path written to `engine_artifact[kind="goal_run_attempt"].payload`, read via `engine/store.ts:findGoalLatestWorkspace`). A failed attempt can be retried without affecting other goals; the final merge is handled by the `acceptance` agent.
 
 ## Data flow and model
 
-Execution process data is merged into the single `engine_artifact` table (one of 13 tables), with `kind` distinguishing semantics: `run` · `goal_run_attempt` · `delivery` · `verification-evidence` · `evaluation` · `verdict` · `patch` · `changed_file` · `diff` · `log` · `report` · `image` · `link` · `git_ref` · `pr` · `integrity_attempt` · `prosecutor_attempt` · `delivery_evidence_manifest` · `delivery_surface_manifest` · `delivery_specialist_review` · `delivery_verification_threw` · `architect_contract_graph` · `orchestrator-stream-error`.
+Execution process data is merged into the single `engine_artifact` table (one of 13 tables), with `kind` distinguishing semantics: `run` · `goal_run_attempt` · `acceptance` · `verification-evidence` · `evaluation` · `verdict` · `patch` · `changed_file` · `diff` · `log` · `report` · `image` · `link` · `git_ref` · `pr` · `integrity_attempt` · `prosecutor_attempt` · `acceptance_evidence_manifest` · `acceptance_surface_manifest` · `acceptance_specialist_review` · `acceptance_review_threw` · `architect_contract_graph` · `orchestrator-stream-error`.
 
 See [Goal / Run / Task](./goal-run-task.md).
 
@@ -155,4 +155,4 @@ See [Goal / Run / Task](./goal-run-task.md).
 - [Goal / Run / Task data model](./goal-run-task.md)
 - [Agentic loop](./agent-loop.md)
 - [OpenCorvus configuration](../opencorvus/configuration.md)
-- [Delivery checks and verdict](../opencorvus/evaluator.md)
+- [Acceptance checks and verdict](../opencorvus/evaluator.md)

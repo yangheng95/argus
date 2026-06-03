@@ -42,7 +42,7 @@ import { Timestamps } from "@/storage/schema.sql"
  *   integrity      multi-dimension integrity reviewer (child of architect) —
  *                  requirement_fidelity / technical_feasibility / hallucination /
  *                  solution_quality. Successor to the legacy `fidelity` kind.
- *   delivery       delivery sub-agent
+ *   acceptance       acceptance sub-agent
  *   executor       per-goal container session — empty parent that groups
  *                  build + evaluator children for permission
  *                  inheritance and overlay step-card nesting. No LLM.
@@ -82,7 +82,7 @@ export const SESSION_KINDS = [
   "goal-workload-analyst",
   "integrity",
   "fact-check",
-  "delivery",
+  "acceptance",
   "executor",
   "build",
   "explore",
@@ -114,7 +114,7 @@ export const SessionTable = sqliteTable(
     /** Optional goal this session belongs to (kind="executor"|"build"|"evaluator"
      *  when goal-scoped). Used by overlay to nest the session's messages under
      *  the goal card. Null for root/assistant/requirements/frontend-design/goal/
-     *  architect/delivery/system sessions. */
+     *  architect/acceptance/system sessions. */
     goal_id: text(),
     share_url: text(),
     summary_additions: integer(),

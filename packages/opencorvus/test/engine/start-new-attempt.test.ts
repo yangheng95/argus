@@ -14,14 +14,14 @@ import {
   updateGoalWorkspace,
 } from "../../src/engine/persist"
 import { goalStatusByID } from "../../src/engine/describe"
-import { findDeliveryByGoalRun, findGoalLatestWorkspace, findGoalRun, getGoalRetryCount } from "../../src/engine/store"
+import { findAcceptanceByGoalRun, findGoalLatestWorkspace, findGoalRun, getGoalRetryCount } from "../../src/engine/store"
 import { createDecisionLog } from "../../src/decision-log"
 import { resetDatabase } from "../fixture/db"
 
 /**
  * Contract tests for Goal.startNewAttempt — the single atomic entry-point
  * that flips a goal back to `pending` when its tip is terminal. These are
- * load-bearing: every retry path (manual_retry, delivery_rework,
+ * load-bearing: every retry path (manual_retry, acceptance_rework,
  * modify_contract, restart_stage) funnels through this one function, and
  * its mechanism decoupling from LLM decisions is the core of the attempt
  * redesign. A regression here reopens the "status carousel deadlock" bug.
@@ -166,13 +166,13 @@ describe("Goal.startNewAttempt — terminal-tip supersede", () => {
     // Sanity: starting status is the seeded passed.
     expect(goalStatusByID(goalID)).toBe("passed")
 
-    const result = startNewAttempt({ goalID, reason: "delivery_rework" })
+    const result = startNewAttempt({ goalID, reason: "acceptance_rework" })
 
     expect(result.supersededTipID).toBe(gr)
     expect(result.retryCount).toBe(1)
     expect(getGoalRetryCount(goalID)).toBe(1)
     const tip = findGoalRun(gr)
-    expect(tip?.superseded_reason).toBe("delivery_rework")
+    expect(tip?.superseded_reason).toBe("acceptance_rework")
     expect(tip?.superseded_at).toBeGreaterThan(0)
     // FSM state is immutable — supersede never mutates the terminal status.
     expect(tip?.status).toBe("completed")
@@ -216,7 +216,7 @@ describe("Goal.startNewAttempt — no-op branches", () => {
   test("no goal_run at all → no supersede, status unchanged", () => {
     // No insertGoalRun call — goal has zero runs in history.
     const before = goalStatusByID(goalID)
-    const result = startNewAttempt({ goalID, reason: "delivery_rework" })
+    const result = startNewAttempt({ goalID, reason: "acceptance_rework" })
     expect(result.supersededTipID).toBeUndefined()
     expect(result.retryCount).toBe(0)
     expect(getGoalRetryCount(goalID)).toBe(0)
@@ -232,7 +232,7 @@ describe("Goal.startNewAttempt — no-op branches", () => {
       db.update(EngineGoalTable).set({ status: "running" }).where(eq(EngineGoalTable.id, goalID)).run(),
     )
 
-    const result = startNewAttempt({ goalID, reason: "delivery_rework" })
+    const result = startNewAttempt({ goalID, reason: "acceptance_rework" })
 
     expect(result.supersededTipID).toBeUndefined()
     expect(result.retryCount).toBe(0)
@@ -249,7 +249,7 @@ describe("Goal.startNewAttempt — idempotence", () => {
     const gr = `grun_idemp_${Date.now()}`
     insertGoalRun({ id: gr, status: "completed" })
 
-    const first = startNewAttempt({ goalID, reason: "delivery_rework" })
+    const first = startNewAttempt({ goalID, reason: "acceptance_rework" })
     expect(first.supersededTipID).toBe(gr)
     const firstReasonAt = findGoalRun(gr)?.superseded_at
 
@@ -261,7 +261,7 @@ describe("Goal.startNewAttempt — idempotence", () => {
     expect(second.retryCount).toBe(1)
     expect(getGoalRetryCount(goalID)).toBe(1)
     const row = findGoalRun(gr)
-    expect(row?.superseded_reason).toBe("delivery_rework") // NOT overwritten
+    expect(row?.superseded_reason).toBe("acceptance_rework") // NOT overwritten
     expect(row?.superseded_at).toBe(firstReasonAt!)
   })
 })
@@ -395,12 +395,12 @@ describe("Goal.startNewAttempt — options", () => {
     expect(row?.workspace_base_ref).toBe("abc123")
   })
 
-  test("finalizeBuildAttempt does not write goal delivery from reported files when host commit diff is empty", () => {
+  test("finalizeBuildAttempt does not write goal acceptance from reported files when host commit diff is empty", () => {
     const nextRunID = beginBuildAttempt({
       taskID,
       goalID,
       runID,
-      sessionID: "ses_start_new_reported_files_delivery",
+      sessionID: "ses_start_new_reported_files_acceptance",
       workspaceDir: "C:/tmp/ws-reported-files",
       workspaceBranch: "opencorvus/ws-reported-files",
       workspaceBaseRef: "base123",
@@ -427,11 +427,11 @@ describe("Goal.startNewAttempt — options", () => {
       diffs: [],
     })
 
-    const delivery = findDeliveryByGoalRun(nextRunID)
-    expect(delivery).toBeUndefined()
+    const acceptance = findAcceptanceByGoalRun(nextRunID)
+    expect(acceptance).toBeUndefined()
   })
 
-  test("finalizeBuildAttempt filters runtime worktree paths from goal delivery diffs", () => {
+  test("finalizeBuildAttempt filters runtime worktree paths from goal acceptance diffs", () => {
     const nextRunID = beginBuildAttempt({
       taskID,
       goalID,
@@ -473,9 +473,9 @@ describe("Goal.startNewAttempt — options", () => {
       ],
     })
 
-    const delivery = findDeliveryByGoalRun(nextRunID)
-    expect(delivery?.result?.commit_ref).toBe("def5678")
-    expect(delivery?.result?.changed_files).toEqual(["src/index.ts"])
-    expect(delivery?.result?.diffs).toMatchObject([{ file: "src/index.ts" }])
+    const acceptance = findAcceptanceByGoalRun(nextRunID)
+    expect(acceptance?.result?.commit_ref).toBe("def5678")
+    expect(acceptance?.result?.changed_files).toEqual(["src/index.ts"])
+    expect(acceptance?.result?.diffs).toMatchObject([{ file: "src/index.ts" }])
   })
 })

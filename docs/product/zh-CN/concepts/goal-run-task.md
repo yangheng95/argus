@@ -2,7 +2,7 @@
 
 所有 engine 域表定义集中在 `packages/opencorvus/src/engine/engine.sql.ts`，命名前缀统一为 `engine_*`（历史上的 `orchestrator_*` 已全部重命名）。
 
-> **2026-05 关键变更**：Phase 6 把 5 张过程表（`engine_run` / `engine_goal_run` / `engine_delivery` / `engine_evaluation` / `engine_goal_snapshot`）**合并为单一 `engine_artifact` 表**，按 `kind` 字段区分语义。如果你来自旧文档对 "Run / GoalRun / Evaluation / Delivery 是独立表" 的认知，这里全部失效。
+> **2026-05 关键变更**：Phase 6 把 5 张过程表（`engine_run` / `engine_goal_run` / `engine_acceptance` / `engine_evaluation` / `engine_goal_snapshot`）**合并为单一 `engine_artifact` 表**，按 `kind` 字段区分语义。如果你来自旧文档对 "Run / GoalRun / Evaluation / Acceptance 是独立表" 的认知，这里全部失效。
 
 ## 概念关系
 
@@ -14,7 +14,7 @@ Task (kind: "workflow" | "build")
      ├─ Requirement[]         ← 需求追溯
      └─ PlanNode[]            ← 计划步骤
 
-Artifact[]   (run / goal_run_attempt / delivery / verification-evidence / verdict / patch / …)
+Artifact[]   (run / goal_run_attempt / acceptance / verification-evidence / verdict / patch / …)
 SpecSnapshot · SpecItem        ← requirements 输出
 InteractionRequest             ← permission / question
 ChannelBinding                 ← 外部 channel ↔ task 绑定
@@ -64,7 +64,7 @@ Architect 分解必须先分析需求表面、实现责任、验证责任、依�
 
 ### Milestone（`EngineMilestoneTable`）
 
-按 `status ∈ {pending, active, passed, failed}` 推进。Requirements / Architect / Delivery 之间用 milestone 串联交付节点。
+按 `status ∈ {pending, active, passed, failed}` 推进。Requirements / Architect / Acceptance 之间用 milestone 串联交付节点。
 
 ### Requirement（`EngineRequirementTable`） / SpecItem（`EngineSpecItemTable`）
 
@@ -75,11 +75,11 @@ Architect 分解必须先分析需求表面、实现责任、验证责任、依�
 `kind` 决定语义。完整 `EngineArtifactKind` 取值（`engine.sql.ts:97`）：
 
 ```
-run · goal_run_attempt · delivery · verification-evidence · evaluation ·
+run · goal_run_attempt · acceptance · verification-evidence · evaluation ·
 verdict · patch · changed_file · diff · log · report · image · link ·
 git_ref · pr · integrity_attempt · prosecutor_attempt ·
-delivery_evidence_manifest · delivery_surface_manifest ·
-delivery_specialist_review · delivery_verification_threw ·
+acceptance_evidence_manifest · acceptance_surface_manifest ·
+acceptance_specialist_review · acceptance_review_threw ·
 orchestrator-stream-error
 ```
 
@@ -89,11 +89,11 @@ orchestrator-stream-error
 | ----------------------------------------------------------------------- | ------------------------------------------------------------------------------- |
 | `run`                                                                   | 一次 Task 执行尝试的根节点（取代旧 `engine_run` 表）                            |
 | `goal_run_attempt`                                                      | 单个 Goal 的一次 worktree 尝试，`payload.workspace_*` 为单源 worktree 信息      |
-| `delivery`                                                              | 一次交付候选（取代旧 `engine_delivery` 表）                                     |
+| `acceptance`                                                              | 一次交付候选（取代旧 `engine_acceptance` 表）                                     |
 | `evaluation` / `verdict`                                                | 评估判决（`accepted / rejected / inconclusive`；取代旧 `engine_evaluation` 表） |
-| `verification-evidence`                                                 | delivery 检查证据（含 scope = `goal_run` / `delivery`）                         |
+| `verification-evidence`                                                 | acceptance 检查证据（含 scope = `goal_run` / `acceptance`）                         |
 | `patch` / `changed_file` / `diff`                                       | 代码变更产物                                                                    |
-| `delivery_evidence_manifest` / `surface_manifest` / `specialist_review` | delivery 阶段产物                                                               |
+| `acceptance_evidence_manifest` / `surface_manifest` / `specialist_review` | acceptance 阶段产物                                                               |
 | `integrity_attempt` / `prosecutor_attempt`                              | integrity / prosecutor agent 输出                                               |
 
 `inconclusive` verdict 语义为"无法判决"——不是通过也不是失败，触发 replan 而非 retry。
@@ -124,7 +124,7 @@ orchestrator-stream-error
 ```
 root · orchestrator · assistant · mission · intent-analysis ·
 requirements · frontend-design · goal · architect · integrity ·
-delivery · executor · build · evaluator · system
+acceptance · executor · build · evaluator · system
 ```
 
 共 **15 种**。`planner` 已删除，**不再是合法的 SessionKind**。
@@ -148,5 +148,5 @@ delivery · executor · build · evaluator · system
 
 - [架构总览](./architecture.md)
 - [Agentic Loop](./agent-loop.md)
-- [Delivery 检查与判决](../opencorvus/evaluator.md)
+- [Acceptance 检查与判决](../opencorvus/evaluator.md)
 - 完整数据面规范：[specs/new-arch/02-data.md](../../../specs/new-arch/02-data.md)

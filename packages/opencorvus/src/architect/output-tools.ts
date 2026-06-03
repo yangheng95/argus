@@ -186,7 +186,7 @@ function formatOwnedPathNormalizationNotice(changes: Array<{ from: string; to: s
   if (changes.length === 0) return ""
   const pairs = changes.map((change) => `${change.from} -> ${change.to}`).join(", ")
   return (
-    "\nNotice: normalized source-baseline owned_paths to delivery-root paths: " +
+    "\nNotice: normalized source-baseline owned_paths to acceptance-root paths: " +
     `${pairs}. frontend-design-skeleton remains a source input, not an implementation target.`
   )
 }
@@ -532,7 +532,7 @@ export function architectValidationFindings(
       (goal) =>
         goal.priority === "blocking" &&
         (goal.kind === "verification" || goal.kind === "integration") &&
-        goal.acceptance_specs.some(isEssentialDeliveryJudgeSpec),
+        goal.acceptance_specs.some(isEssentialAcceptanceJudgeSpec),
     )
     if (visualAcceptanceOwners.length === 0) {
       concern(
@@ -578,7 +578,7 @@ function formatGoalSnapshot(goal: RegisteredGoal): string {
   const finalReferenceAcceptance =
     goal.priority === "blocking" &&
     (goal.kind === "verification" || goal.kind === "integration") &&
-    goal.acceptance_specs.some(isEssentialDeliveryJudgeSpec)
+    goal.acceptance_specs.some(isEssentialAcceptanceJudgeSpec)
       ? "yes"
       : "no"
   return `${goal.id} kind=${goal.kind} priority=${goal.priority} depends_on=[${deps}] acceptance_specs=[${specs}] final_reference_acceptance=${finalReferenceAcceptance}`
@@ -589,10 +589,10 @@ function formatAcceptanceSpecSnapshot(spec: AcceptanceSpec): string {
   return `${spec.id}:${spec.severity}:${spec.trigger ?? "default"}:${scorerTypes}`
 }
 
-function isEssentialDeliveryJudgeSpec(spec: AcceptanceSpec): boolean {
+function isEssentialAcceptanceJudgeSpec(spec: AcceptanceSpec): boolean {
   return (
     spec.severity === "essential" &&
-    (spec.trigger === "on_integrity" || spec.trigger === "on_delivery") &&
+    (spec.trigger === "on_integrity" || spec.trigger === "on_acceptance") &&
     spec.scorers.some((scorer) => scorer.type === "llm_judge")
   )
 }
@@ -772,7 +772,7 @@ export function createArchitectOutputTools(input: {
     remove_goal: tool({
       description:
         "Remove a previously-registered goal (typically during a re-run when " +
-        "delivery feedback showed the goal was redundant or wrong). The goal " +
+        "acceptance feedback showed the goal was redundant or wrong). The goal " +
         "id is recorded so the orchestrator can delete the DB row on finalize. " +
         "Cascades to every dependent registration: traceability rows referencing " +
         "it, fidelity coverage, assembly ownership, and cross-goal contracts " +

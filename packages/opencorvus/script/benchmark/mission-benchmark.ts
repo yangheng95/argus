@@ -18,7 +18,7 @@ import {
 type Executor = "opencorvus" | "codex" | "claude-code"
 
 const KNOWN_FLAGS = new Set([
-  "--delivery-verify-cmd",
+  "--acceptance-verify-cmd",
   "--executor",
   "--max-wait-ms",
   "--mission-id",
@@ -93,7 +93,7 @@ const maxWaitMs = parsePositiveInt("--max-wait-ms", 45 * 60 * 1000)
 const pollMs = parsePositiveInt("--poll-ms", 2_000)
 const skipLocalVerify = process.argv.includes("--skip-local-verify")
 const keep = !process.argv.includes("--no-keep")
-const deliveryVerifyCmd = stripWrappingQuotes(flag("--delivery-verify-cmd")) ?? DEFAULT_MISSION_VERIFY_CMD
+const acceptanceVerifyCmd = stripWrappingQuotes(flag("--acceptance-verify-cmd")) ?? DEFAULT_MISSION_VERIFY_CMD
 
 const temp = {
   home: await fs.mkdtemp(path.join(os.tmpdir(), "opencorvus-mission-benchmark-home-")),
@@ -217,8 +217,8 @@ try {
   const latestBoard = await apiJson("/tasks?limit=50")
   const missionTasks = missionTaskRows(latestBoard, missionID)
   const localVerify = skipLocalVerify
-    ? skippedVerify(deliveryVerifyCmd)
-    : await runLocalVerify(temp.dir, deliveryVerifyCmd)
+    ? skippedVerify(acceptanceVerifyCmd)
+    : await runLocalVerify(temp.dir, acceptanceVerifyCmd)
 
   const verdict = evaluateMissionBenchmarkReport({
     missionID,

@@ -12,7 +12,7 @@ mock.module("../src/services/api", () => ({
   onAuthChange: () => () => {},
   queryWithDirectory: () => undefined,
   apiJson: async (path: string) => {
-    expect(path).toBe("goal-run/gr_inflight_cache/delivery");
+    expect(path).toBe("goal-run/gr_inflight_cache/acceptance");
     calls += 1;
     if (calls === 1) return null;
     return {
@@ -64,7 +64,7 @@ beforeEach(() => {
   });
 });
 
-test("resolveDiff does not cache an in-flight empty delivery over added-file content", async () => {
+test("resolveDiff does not cache an in-flight empty acceptance over added-file content", async () => {
   const target = { goalRunID: "gr_inflight_cache", filePath: "src/new-file.ts" };
 
   const first = await resolveDiff(target);

@@ -9,7 +9,7 @@ export type EngineBudget = {
 
 export type EngineMetadata = Record<string, unknown>
 
-export type DeliveryResult = {
+export type AcceptanceResult = {
   diffs?: Array<{ file: string; status?: string; before?: string; after?: string; diff?: string }>
   changed_files?: string[]
   commit_ref?: string
@@ -41,7 +41,7 @@ export type EngineRunPhase = "plan" | "execute" | "evaluate" | "deliver" | "disp
 // reads the rendered semantic hint on its next decision turn and decides
 // what to do — there is no loop-side watermark / auto-rewake on this column.
 // Conventional labels callers write (documentation only, not enforced):
-//   manual_retry, delivery_rework, modify_contract, restart_stage
+//   manual_retry, acceptance_rework, modify_contract, restart_stage
 export type EngineInteractionType = "permission" | "question"
 export type EngineInteractionStatus = "pending" | "answered" | "rejected" | "expired"
 
@@ -99,11 +99,11 @@ export type EngineArtifactKind =
   | "evaluation"
   | "pr"
   | "verification-evidence"
-  | "delivery_evidence_manifest"
-  | "delivery_surface_manifest"
-  | "delivery_specialist_review"
-  | "delivery_verification_threw"
-  | "delivery"
+  | "acceptance_evidence_manifest"
+  | "acceptance_surface_manifest"
+  | "acceptance_specialist_review"
+  | "acceptance_review_threw"
+  | "acceptance"
   | "goal_run_attempt"
   | "integrity_attempt"
   | "fact_check_attempt"
@@ -117,7 +117,7 @@ export type EngineArtifactKind =
   | "exploration"
   | "orchestrator-stream-error"
   | "tool-execute-error"
-export type EngineDeliveryStatus = "candidate" | "publishing" | "delivered" | "failed"
+export type EngineAcceptanceStatus = "candidate" | "publishing" | "delivered" | "failed"
 export type EngineEvaluationStatus = "pending" | "passed" | "failed" | "inconclusive"
 export type EngineEvaluationVerdict = "accepted" | "rejected" | "inconclusive"
 export type EngineProgressStatus = "created" | "active" | "completed" | "failed" | "cancelled"
@@ -129,7 +129,7 @@ export type EngineEvaluationCheckScorerKind =
   | "llm_judge"
   | "prebuilt"
   | "visual_diff"
-  | "delivery_verdict"
+  | "acceptance_verdict"
 
 /**
  * Structured row inside engine_evaluation.checks[]. This is audit/drill-down
@@ -153,8 +153,8 @@ export type EngineEvaluationCheck = {
 
 /** Scope marker for an evaluation row (invariant enforced at app layer):
  *  - scope="goal_run" ⇒ goal_run_id NOT NULL
- *  - scope="delivery" ⇒ delivery_id NOT NULL */
-export type EngineEvaluationScope = "goal_run" | "delivery"
+ *  - scope="acceptance" ⇒ acceptance_id NOT NULL */
+export type EngineEvaluationScope = "goal_run" | "acceptance"
 
 export type EngineExecutorRef = {
   session_id?: string
@@ -186,7 +186,7 @@ export const EngineTaskTable = sqliteTable(
      *    `source: "user-upload"` — files the user uploaded with the request
      *    `source: "figma"`       — frames fetched from a user-provided Figma URL
      *  Read by requirements / frontend-design as the user's intent (multimodal
-     *  prompt content). Read by delivery alongside system_artifacts for visual
+     *  prompt content). Read by acceptance alongside system_artifacts for visual
      *  comparison. Shown in the overlay as user-attached files.
      *  System-generated visual evidence (URL screenshots, rendered.png, local
      *  material reads) lives in `system_artifacts` instead — see that column
@@ -210,8 +210,8 @@ export const EngineTaskTable = sqliteTable(
      *  user's behalf — never part of the user's contract:
      *    `source: "url-screenshot"`  — frontend_design URL captures
      *    `source: "material"`        — frontend_design local file reads
-     *    `source: "puppeteer"`       — delivery rendered.png captures
-     *  Read ONLY by delivery (visual diff against user attachments). Never
+     *    `source: "puppeteer"`       — acceptance rendered.png captures
+     *  Read ONLY by acceptance (visual diff against user attachments). Never
      *  fed to requirements/frontend-design as user intent. Losing one of these
      *  on disk is a soft failure: the consuming agent skips it; it does NOT
      *  kill the whole task the way a user-contract attachment loss would. */
@@ -229,18 +229,18 @@ export const EngineTaskTable = sqliteTable(
       >()
       .notNull()
       .default([]),
-    /** Frontend-design visual constraints (advisory only — delivery reads them as
+    /** Frontend-design visual constraints (advisory only — acceptance reads them as
      *  checklist guidance for its own visual review, they are NOT auto-scored
      *  and do NOT gate any phase). See `src/frontend-design/types.ts` for the
      *  shape. Written by the orchestrator `frontend_design` tool, consumed by
-     *  delivery prompt rendering. */
+     *  acceptance prompt rendering. */
     design_specs: text({ mode: "json" }).$type<import("@/frontend-design/types").VisualSpec[]>().notNull().default([]),
     /** Executor that runs this task's goal runs — "opencorvus" / "codex" /
      *  "claude-code". Promoted from task.metadata._pipeline.executor (which
      *  carried several other fields that turned out to be dead). Read by the
      *  dispatch tool when creating runs. */
     executor: text().notNull().$type<EngineExecutor>().default("opencorvus"),
-    /** Delivery verdict criteria rollup — unified stream of
+    /** Acceptance verdict criteria rollup — unified stream of
      *  deferred_checks + rejection_details + startup/frontend checks, used
      *  by the overlay Quality Gates panel. Promoted from
      *  task.metadata.criteria_results. Written by state.ts::upsertTaskCriteria,
@@ -524,13 +524,13 @@ export const EngineInteractionRequestTable = sqliteTable(
   ],
 )
 
-// Phase-6-c: `engine_delivery` was removed in favour of `engine_artifact` rows
-// with kind="delivery". See engine/persist.ts (writeDeliveryRow /
-// markDeliveryPublishing / finalizeDeliveryResult) for the writer and
-// engine/store.ts (DeliveryRow) for the read-model that reconstructs the
+// Phase-6-c: `engine_acceptance` was removed in favour of `engine_artifact` rows
+// with kind="acceptance". See engine/persist.ts (writeAcceptanceRow /
+// markAcceptancePublishing / finalizeAcceptanceResult) for the writer and
+// engine/store.ts (AcceptanceRow) for the read-model that reconstructs the
 // historical shape from the artifact payload. Append-only — status
 // transitions (candidate → publishing → delivered/failed) are new rows per
-// delivery_id and `findDelivery*` take the newest via `time_created desc`.
+// acceptance_id and `findAcceptance*` take the newest via `time_created desc`.
 
 export const EngineArtifactTable = sqliteTable(
   "engine_artifact",
@@ -551,12 +551,12 @@ export const EngineArtifactTable = sqliteTable(
      *  engine_goal_run which is now deleted). See persist.ts / store.ts for
      *  the artifact-backed goal_run semantics. */
     goal_run_id: text(),
-    /** Phase-6-c: delivery_id used to FK onto engine_delivery(id). With that
+    /** Phase-6-c: acceptance_id used to FK onto engine_acceptance(id). With that
      *  table deleted, the column is a plain text pointer to the id of the
-     *  latest delivery-kind artifact row for the logical delivery. Still set
+     *  latest acceptance-kind artifact row for the logical acceptance. Still set
      *  to that id by writers so downstream consumers can group artifact
-     *  rows by delivery without a FK constraint. */
-    delivery_id: text(),
+     *  rows by acceptance without a FK constraint. */
+    acceptance_id: text(),
     kind: text().notNull().$type<EngineArtifactKind>(),
     label: text().notNull(),
     payload: text({ mode: "json" }).$type<EngineMetadata>(),
@@ -564,7 +564,7 @@ export const EngineArtifactTable = sqliteTable(
   },
   (table) => [
     index("engine_artifact_run_idx").on(table.run_id),
-    index("engine_artifact_delivery_idx").on(table.delivery_id),
+    index("engine_artifact_acceptance_idx").on(table.acceptance_id),
     index("engine_artifact_task_kind_latest_idx").on(table.task_id, table.kind, table.time_created, table.id),
   ],
 )

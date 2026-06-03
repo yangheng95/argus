@@ -26,7 +26,7 @@ also narrow the tool surface once the collector is ready to finalize.
 Commands run before design:
 
 - `rg -n "submit_requirements|submit_integrity_review|report_build_result|BuildResultSchema|BuildTestResult|terminalTool|isReadyToFinalize|inputSchema: z\\.object\\(\\{\\}\\)|z\\.object\\(\\{\\}\\)" packages/opencorvus/src packages/opencorvus/test specs -g "*.ts" -g "*.md" -g "*.txt"`
-- `rg -n "create.*OutputTools|terminalTool|inputSchema: z\\.object|status: z\\.enum|z\\.discriminatedUnion|safeParse\\(|collector\\.|finalized" packages/opencorvus/src/requirements packages/opencorvus/src/architect packages/opencorvus/src/integrity packages/opencorvus/src/build packages/opencorvus/src/intent-analysis packages/opencorvus/src/frontend-design packages/opencorvus/src/delivery packages/opencorvus/src/prosecutor packages/opencorvus/src/orchestrator packages/opencorvus/src/session -g "*.ts"`
+- `rg -n "create.*OutputTools|terminalTool|inputSchema: z\\.object|status: z\\.enum|z\\.discriminatedUnion|safeParse\\(|collector\\.|finalized" packages/opencorvus/src/requirements packages/opencorvus/src/architect packages/opencorvus/src/integrity packages/opencorvus/src/build packages/opencorvus/src/intent-analysis packages/opencorvus/src/frontend-design packages/opencorvus/src/acceptance packages/opencorvus/src/prosecutor packages/opencorvus/src/orchestrator packages/opencorvus/src/session -g "*.ts"`
 
 | Call point | Finding | Decision |
 | --- | --- | --- |
@@ -47,7 +47,7 @@ Commands run before design:
 | Architect | `submit_architect` | `summary`; validation reads collector | keep existing schema; terminal-ready turns expose only this tool |
 | Integrity | `submit_integrity_review` | no, collector already has dimensions | require explicit `{ final: true }`; terminal-ready turns expose only this tool |
 | Build | `report_build_result` | yes, `status`/summary/tests/error | reuse the shared discriminated `BuildResultSchema`; terminal-ready turns expose only this tool |
-| Delivery | `submit_verdict` | yes, accepted/rejected verdict | already uses the shared discriminated `DeliveryVerdict`; keep as-is |
+| Acceptance | `submit_verdict` | yes, accepted/rejected verdict | already uses the shared discriminated `AcceptanceVerdict`; keep as-is |
 
 ## Design
 

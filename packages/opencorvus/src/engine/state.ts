@@ -202,7 +202,7 @@ async function finalizeLiveRunForTerminalTask(
   // Terminal final-write of the complete decision-log projection. This seam
   // is reached on BOTH updateTask exit paths (the no-op / already-terminal
   // guard AND the main write path) for every terminal intent, so the on-disk
-  // `.opencorvus/decision-log.md` reflects the last delivery / abort /
+  // `.opencorvus/decision-log.md` reflects the last acceptance / abort /
   // agent_error decisions even when a retry re-enters a row that was already
   // terminal (codex Q-TERM). Best-effort + loud: a failed audit-projection
   // write must NOT cascade-break task termination or the live-run

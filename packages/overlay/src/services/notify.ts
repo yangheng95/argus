@@ -14,7 +14,7 @@
 //   * Tier 2 always shows an in-app toast; OS notification fires only when
 //     the overlay window is unfocused.
 //   * Tier 3 stays in the existing in-app event feed only.
-//   * Tauri host attempts native delivery directly after focus/settings
+//   * Tauri host attempts native acceptance directly after focus/settings
 //     checks; browser host still requires a granted Web Notification
 //     permission before dispatch.
 //

@@ -144,8 +144,8 @@
   <text class="body" x="900" y="610">确定性 · no LLM</text>
 
   <rect class="sub" x="980" y="560" width="140" height="60"/>
-  <text class="h3" x="1050" y="580">Delivery</text>
-  <text class="code" x="1050" y="594">delivery/</text>
+  <text class="h3" x="1050" y="580">Acceptance</text>
+  <text class="code" x="1050" y="594">acceptance/</text>
   <text class="body" x="1050" y="610">diff 验收 + 回修</text>
 
   <!-- Decision Log -->

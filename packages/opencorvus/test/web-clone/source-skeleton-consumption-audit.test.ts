@@ -5,7 +5,7 @@ import { tmpdir } from "../fixture/fixture"
 import {
   auditWebCloneSourceSkeletonConsumption,
   generateWebCloneSkeletonProject,
-  inferWebCloneFinalDeliveryMode,
+  inferWebCloneFinalAcceptanceMode,
   inspectWebCloneSourceSkeletonConsumptionEvidence,
   writeWebCloneSourceSkeletonConsumptionAudit,
 } from "../../src/web-clone"
@@ -225,11 +225,11 @@ describe("web-clone source skeleton consumption audit", () => {
     const audit = await auditWebCloneSourceSkeletonConsumption({
       projectDir,
       sourcePackageDir,
-      finalDeliveryMode: "maintainable_replacement_required",
+      finalAcceptanceMode: "maintainable_replacement_required",
     })
 
     expect(audit.passed).toBe(false)
-    expect(audit.finalDeliveryMode).toBe("maintainable_replacement_required")
+    expect(audit.finalAcceptanceMode).toBe("maintainable_replacement_required")
     expect(audit.risk.generatedBaselineDetected).toBe(true)
     expect(audit.risk.finalBaselineOnlyDetected).toBe(true)
     expect(audit.findings.join("\n")).toContain("generated DOM/CSS baseline")
@@ -251,7 +251,7 @@ describe("web-clone source skeleton consumption audit", () => {
     const audit = await auditWebCloneSourceSkeletonConsumption({
       projectDir,
       sourcePackageDir,
-      finalDeliveryMode: "maintainable_replacement_required",
+      finalAcceptanceMode: "maintainable_replacement_required",
     })
 
     expect(audit.passed).toBe(false)
@@ -436,7 +436,7 @@ describe("web-clone source skeleton consumption audit", () => {
   })
 
   test("infers maintainable replacement mode from Chinese maintainability requests", () => {
-    expect(inferWebCloneFinalDeliveryMode("需要一个可维护的真实实现，尽量复用现有组件或者成熟组件")).toBe("maintainable_replacement_required")
+    expect(inferWebCloneFinalAcceptanceMode("需要一个可维护的真实实现，尽量复用现有组件或者成熟组件")).toBe("maintainable_replacement_required")
   })
 
   test("consumption evidence reports a missing or stale audit when source-skeleton is cited", async () => {
@@ -462,7 +462,7 @@ describe("web-clone source skeleton consumption audit", () => {
       originalRequest: "需要一个可维护的真实实现，尽量复用现有组件或者成熟组件",
     })
     expect(wrongMode.ok).toBe(false)
-    expect(wrongMode.findings.join("\n")).toContain("finalDeliveryMode must be maintainable_replacement_required")
+    expect(wrongMode.findings.join("\n")).toContain("finalAcceptanceMode must be maintainable_replacement_required")
 
     const staleAudit = JSON.parse(await Bun.file(auditPath).text())
     staleAudit.projectStats.sourceFileCount = 999
@@ -490,7 +490,7 @@ describe("web-clone source skeleton consumption audit", () => {
     }
   })
 
-  test("consumption evidence ignores unrelated passing audits outside the delivery root", async () => {
+  test("consumption evidence ignores unrelated passing audits outside the acceptance root", async () => {
     await using tmp = await tmpdir()
     const sourcePackageDir = await writeFixtureMirror(tmp.path)
     await writePassingProject(path.join(tmp.path, "toy-app"))
@@ -528,7 +528,7 @@ describe("web-clone source skeleton consumption audit", () => {
 
     expect(result.referenced).toBe(true)
     expect(result.ok).toBe(false)
-    expect(result.findings.join("\n")).toContain("audit projectDir must be the current delivery root")
+    expect(result.findings.join("\n")).toContain("audit projectDir must be the current acceptance root")
   })
 })
 

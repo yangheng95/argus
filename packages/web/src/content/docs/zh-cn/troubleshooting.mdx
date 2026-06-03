@@ -71,7 +71,7 @@ description: 按症状定位 OpenCorvus 问题——启动、Provider、orchestr
 
 ### Benchmark 显示 "accepted" 但产物跑不起来
 
-典型症状是 delivery worktree 合并失败但 evaluator 没捕获。检查：
+典型症状是 acceptance worktree 合并失败但 evaluator 没捕获。检查：
 
 1. 合并日志里是否有 `EEXIST` / conflict
 2. Evaluator 的 `qa_rule_selectors` 是否包含 `build` 与 `startup`

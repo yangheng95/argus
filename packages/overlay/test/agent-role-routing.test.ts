@@ -22,7 +22,7 @@ const SESSION_CARD_STAGES = [
   "goal",
   "architect",
   "integrity",
-  "delivery",
+  "acceptance",
   "executor",
   "build",
   "explore",

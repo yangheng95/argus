@@ -14,10 +14,10 @@
 ## 先看结论
 
 - 当前运行时的真源不是 [11-agent-oop-protocol.md](11-agent-oop-protocol.md) 里的 mailbox/registry 协议，而是 `ChannelIngress / ControlMessage / EngineService / Orchestrator tools / build tool / task subagent` 的混合路径。
-- **Planner agent 已删除**：`src/planner/` 整目录、`src/engine/goal-pool.ts`、`planGoal()` 全部移除。Orchestrator 没有 `planner` tool；pipeline build 路径里 "per-goal 实现步骤" 现由 build agent 直接基于 architect contract + decision-log 推进。`src/tool/planner.ts` 是 session 级 working-memory 工具（task tree / scratchpad），**不是** planner agent 的替代。
+- **Planning tool role 已删除**：the removed planning package 整目录、`src/engine/goal-pool.ts`、`planGoal()` 全部移除。Orchestrator 没有 `planner` tool；pipeline build 路径里 "per-goal 实现步骤" 现由 build agent 直接基于 architect contract + decision-log 推进。`src/tool/planner.ts` 是 session 级 working-memory 工具（task tree / scratchpad），**不是** planning tool role 的替代。
 - **`intent-analysis` 已接线**：orchestrator 通过 `analyze_intent` tool 调 `IntentAnalysisAgent.analyze`，落 `intent-analysis` SessionKind。13 号文档此前的"not wired yet"已过期。
 - **`integrity` 与 `prosecute` 是 orchestrator tools**：分别对应 `IntegrityAgent`（多维 review：requirement_fidelity / technical_feasibility / hallucination / solution_quality）与 `ProsecutorAgent`（对抗性复核）。
-- `build -> general/explore`、`general -> explore` 是当前真实存在的 direct 子代理路径；delivery direct 子代理路径已删除；`general -> general` 自递归被权限拒绝。
+- `build -> general/explore`、`general -> explore` 是当前真实存在的 direct 子代理路径；acceptance direct 子代理路径已删除；`general -> general` 自递归被权限拒绝。
 - `orchestrator -> EngineService.createTask` 只通过 `propose_task` 间接发生：先向用户展示"完善上一个 request 的新任务"候选，用户确认后才创建新 task；这不是 `panel` control-plane action，也不是 generic `task` subagent dispatch。
 - [11-agent-oop-protocol.md](11-agent-oop-protocol.md) 的白名单表存在一个闭环不完整点：`explore.receiveWhitelist` 包含 `general`，但 `general.sendWhitelist` 没有 `explore`。按该文自己的"双向都要声明"规则，`general -> explore` 在 spec 文本上并不成立。
 
@@ -30,15 +30,15 @@
 | `R`   | `requirements`    | 需求分解                                                            |
 | `X`   | `frontend-design` | 视觉分析；代码里的 tool 名是 `frontend_design`                      |
 | `A`   | `architect`       | 跨目标契约                                                          |
-| `B`   | `build`           | 实际写代码的执行 agent（自己读 contract，不再有外置 planner agent） |
+| `B`   | `build`           | 实际写代码的执行 agent（自己读 contract，不再有外置 planning tool role） |
 | `IT`  | `integrity`       | 多维 integrity review（orchestrator tool: `integrity`）             |
 | `PR`  | `prosecutor`      | 对抗性复核（orchestrator tool: `prosecute`）                        |
 | `G`   | `general`         | 通用 subagent                                                       |
 | `E`   | `explore`         | 只读探索 subagent                                                   |
 | `I`   | `intent-analysis` | 已接线（orchestrator tool: `analyze_intent`）                       |
 
-> 历史草稿曾保留 `P = planner` 和 `D = delivery` 节点；当前 runtime 已无独立 planner
-> agent 或 delivery agent，相关行被整列移除（不是"代码里没接"，是 agent 本身不存在）。
+> 历史草稿曾保留 `P = planner` 和 `D = acceptance` 节点；当前 runtime 已无独立 planner
+> agent 或 acceptance review，相关行被整列移除（不是"代码里没接"，是 agent 本身不存在）。
 
 ## 入口层（不算 agent，但经常是故障起点）
 
@@ -135,7 +135,7 @@ flowchart LR
 
 - `O -> I` (intent-analysis) 现在已是 direct tool（`analyze_intent`）；`I -> O` 由 tool result 回写到 orchestrator session。
 - `O -> IT` (`integrity`) 与 `O -> PR` (`prosecute`) 是新加的 review 路径。
-- Delivery direct tool surface is removed; post-build semantic review enters through `O -> IT`.
+- Acceptance direct tool surface is removed; post-build semantic review enters through `O -> IT`.
 - `G -> G` 被显式拒绝，避免 `general` 自递归；`general -> explore` 仍是当前实现真实存在的二级探索路径。
 - Planner 节点已从代码与本矩阵双向删除；旧的 "build 里通过 plan_node.brief 收到 planner 输出" 这条间接路径不再存在。
 
@@ -220,10 +220,10 @@ flowchart LR
 
 ## 用这张表排障
 
-1. 看不到独立 "planner" session / agent 时，结论应该是 **"planner 已下线"**，而不是 "在 pipeline 里隐式起着"。`src/planner/` 目录、`engine/goal-pool.ts`、`planGoal()` 全部不存在；旧文档里的 "O -> GP -> P -> B" 链路已失效。
+1. 看不到独立 "planner" session / agent 时，结论应该是 **"planner 已下线"**，而不是 "在 pipeline 里隐式起着"。the removed planning package 目录、`engine/goal-pool.ts`、`planGoal()` 全部不存在；旧文档里的 "O -> GP -> P -> B" 链路已失效。
 2. `intent-analysis` 没有任何消息时，先查 orchestrator 是否调了 `analyze_intent` tool（`engine_artifact` kind=`intent-analysis`），再查 `IntentAnalysisAgent.analyze` 的 session 是否成功建出。**不要**再援引"not wired yet"。
-3. `frontend-design` 的结果如果 `build` 看得到、`delivery` 看不到，先查 `task.design_specs` 和 `system_artifacts` 是否都已写入，而不是查 agent prompt。
-4. `delivery` 拒绝后没有进入回修时，先查 `deliver` 是否写出了 `affected_goal_ids`，以及 reopen attempt 后下一轮 Orchestrator 是否真的再次调了 `build`。
+3. `frontend-design` 的结果如果 `build` 看得到、`acceptance` 看不到，先查 `task.design_specs` 和 `system_artifacts` 是否都已写入，而不是查 agent prompt。
+4. `acceptance` 拒绝后没有进入回修时，先查 `deliver` 是否写出了 `affected_goal_ids`，以及 reopen attempt 后下一轮 Orchestrator 是否真的再次调了 `build`。
 5. integrity / prosecute 结果没出现时，确认 orchestrator 是否真的调了对应 tool 而不是直接 deliver；这两个 tool 是 review 路径，不会被 build 自动触发。
 6. 如果未来切到 [11-agent-oop-protocol.md](11-agent-oop-protocol.md) 的 mailbox 协议，`general -> explore` 这条当前真实可用的链路会先卡在 whitelist 定义不闭合的问题上。
 

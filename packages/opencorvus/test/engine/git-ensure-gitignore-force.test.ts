@@ -3,7 +3,7 @@ import fs from "node:fs/promises"
 import path from "node:path"
 
 /**
- * Regression for the publish_delivery deterministic failure observed in
+ * Regression for the publish_acceptance deterministic failure observed in
  * r11 bench (`_session-r11-glm5cn.out` line 91025, 2026-04-30T19:34:37):
  *
  *   ensureGitignore: stage .gitignore failed: The following paths are

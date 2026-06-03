@@ -26,7 +26,7 @@ CLAUDE.md rules that govern this change:
 | TRM | Integrity `team_report_markdown` — full reviewer/consensus output. |
 | `request` | Argument string on the `build` tool. |
 | `retryGuidance` | `BuildContext.retryGuidance` — renders as `## Retry Guidance From Orchestrator` in the build prompt. |
-| `retryFeedback` | `BuildContext.retryFeedback` — renders as `## Prior Attempt Failed`; pulled from `decision_log phase="retry"` entries by `latestBuildReportForGoal` / `composeLatestDeliveryFeedbackForBuild`. |
+| `retryFeedback` | `BuildContext.retryFeedback` — renders as `## Prior Attempt Failed`; pulled from `decision_log phase="retry"` entries by `latestBuildReportForGoal` / `composeLatestAcceptanceFeedbackForBuild`. |
 
 ## User Concern
 
@@ -126,10 +126,10 @@ subset of the 18-27 KB review markdown into the `request` text.
 orchestrator's build tool execute path (orchestrator/tools.ts:4624 onwards):
 
 - Goal builds (orchestrator/tools.ts:4877-4998) compose `BuildContext.retryFeedback`
-  from `decision_log phase="retry"` and `BuildContext.deliveryFeedback` from
-  `composeLatestDeliveryFeedbackForBuild`. Neither is populated by integrity.
+  from `decision_log phase="retry"` and `BuildContext.acceptanceFeedback` from
+  `composeLatestAcceptanceFeedbackForBuild`. Neither is populated by integrity.
 - Task-level direct builds (orchestrator/tools.ts:5000-5021) compose
-  `BuildContext.deliveryFeedback` only. `retryGuidance` does not exist on this
+  `BuildContext.acceptanceFeedback` only. `retryGuidance` does not exist on this
   branch (`target.text = requestText` consumes the orchestrator's request
   verbatim).
 
@@ -159,7 +159,7 @@ the review text. It is an orchestrator → build forwarding gap:
 | ---------- | -------- | ------- |
 | Build agent ignores review section it can see | No section exists in any inspected build prompt. | Refuted. |
 | Build prompt is truncated and review tail is cut | `renderUserRequestSection` truncates `request` text. R5 prompt shows `... (228 word(s) omitted)`. | Real, but secondary — orchestrator's hand-typed summary fits, the full TRM was never on this side anyway. |
-| `BuildContext` schema is missing the field | `BuildContext` (build/agent.ts:103-176) has `retryFeedback`, `retryGuidance`, `deliveryFeedback`, no `integrityFeedback`. | Confirmed. |
+| `BuildContext` schema is missing the field | `BuildContext` (build/agent.ts:103-176) has `retryFeedback`, `retryGuidance`, `acceptanceFeedback`, no `integrityFeedback`. | Confirmed. |
 | Orchestrator LLM forgets / summarizes review | R5 `request` literally says "Review the full integrity report for any second blocking finding ... might be about ..." — the LLM told the build agent to guess. | Confirmed. Primary root cause. |
 | Build prompt doesn't tell build to treat persistence as must-fix | build-core.txt mentions "Integrity owns the final workflow gate inside its own review session" once; nothing about persistent rejection across rounds. | Confirmed contributing factor: even if the markdown reached build, the build prompt has no language framing "this is the Nth review attempt, prior rounds rejected X". |
 
@@ -168,10 +168,10 @@ the review text. It is an orchestrator → build forwarding gap:
 Commands run before landing this plan:
 
 ```powershell
-rg -n "BuildContext|retryFeedback|retryGuidance|deliveryFeedback|integrityFeedback" packages\opencorvus\src
+rg -n "BuildContext|retryFeedback|retryGuidance|acceptanceFeedback|integrityFeedback" packages\opencorvus\src
 rg -n "team_report_markdown|integrity_attempt|listIntegrityAttemptArtifacts|findLatestIntegrityAttemptArtifact" packages\opencorvus\src packages\opencorvus\test
 rg -n "rootHistory|root-history|persistent root|SpecSnapshotLineage" packages\opencorvus\src packages\opencorvus\test packages\opencorvus\specs
-rg -n "renderIntegrityOutcome|composeLatestDeliveryFeedbackForBuild|ensureBuildRetryFeedbackForGoal" packages\opencorvus\src
+rg -n "renderIntegrityOutcome|composeLatestAcceptanceFeedbackForBuild|ensureBuildRetryFeedbackForGoal" packages\opencorvus\src
 rg -n "buildUserPrompt|buildRetryFeedbackPrompt|renderUserRequestSection" packages\opencorvus\src
 rg -n "decisionLog.append|phase=\"retry\"|phase=\"review\"" packages\opencorvus\src
 ```
@@ -180,12 +180,12 @@ rg -n "decisionLog.append|phase=\"retry\"|phase=\"review\"" packages\opencorvus\
 
 | Location | Current behavior | Required change |
 | -------- | ---------------- | --------------- |
-| `packages/opencorvus/src/build/agent.ts:103` `BuildContext` interface | Carries `requirements`, `frontendDesign`, `contractGraph`, `dependencies`, `retryGuidance`, `retryFeedback`, `deliveryFeedback`, `fidelity`, `collaborationGoals`, `retryAttachments`. No integrity field. | Add `integrityFeedback?: string` typed as pre-rendered markdown. |
-| `packages/opencorvus/src/build/agent.ts:2206` `buildUserPrompt` (goal target) | Renders sections from context in order: requirements → contractGraph → collaborationGoals → dependencies → frontendDesign → designSpecs → fidelity → retryGuidance → retryFeedback → deliveryFeedback → goal contract. | Add `integrityFeedback` rendering BEFORE `retryGuidance` so it ranks above the orchestrator's hand-typed request. Placement is deliberate: integrity is the workflow gate; its findings outrank the orchestrator's just-now turn. |
-| `packages/opencorvus/src/build/agent.ts:2388` `buildUserPrompt` (request target) | Renders `retryGuidance` (skipped on this branch), `retryFeedback`, `deliveryFeedback`, `frontendDesign`, `designSpecs`, then `# Delegation` + `# Request` excerpt. | Add `integrityFeedback` rendering BEFORE the existing `retryFeedback` block on this branch as well. |
-| `packages/opencorvus/src/build/agent.ts:2440` `buildRetryFeedbackPrompt` (continue-session path) | Used when `existingSessionID` is set; renders `## Current Orchestrator Feedback`, `## Prior Attempt Failure Facts`, `## Delivery Rejection Feedback`. | Add `## Persistent Integrity Findings` from `integrityFeedback`. |
-| `packages/opencorvus/src/orchestrator/tools.ts:4904-4998` (goal build context composition) | Builds `context.requirements`, `context.retryFeedback`, `context.deliveryFeedback`, `context.retryGuidance`. | Compose `context.integrityFeedback` from `listIntegrityAttemptArtifacts` plus the shared root-history helper. Pass spec snapshot lineage and render every latest blocking finding as bounded complete text or a build-readable runtime markdown path. |
-| `packages/opencorvus/src/orchestrator/tools.ts:5000-5021` (task-level direct build context composition) | Builds `context.deliveryFeedback` only. | Compose `context.integrityFeedback` the same way. This branch is the one all 9 correction-round builds in the bug case go through. |
+| `packages/opencorvus/src/build/agent.ts:103` `BuildContext` interface | Carries `requirements`, `frontendDesign`, `contractGraph`, `dependencies`, `retryGuidance`, `retryFeedback`, `acceptanceFeedback`, `fidelity`, `collaborationGoals`, `retryAttachments`. No integrity field. | Add `integrityFeedback?: string` typed as pre-rendered markdown. |
+| `packages/opencorvus/src/build/agent.ts:2206` `buildUserPrompt` (goal target) | Renders sections from context in order: requirements → contractGraph → collaborationGoals → dependencies → frontendDesign → designSpecs → fidelity → retryGuidance → retryFeedback → acceptanceFeedback → goal contract. | Add `integrityFeedback` rendering BEFORE `retryGuidance` so it ranks above the orchestrator's hand-typed request. Placement is deliberate: integrity is the workflow gate; its findings outrank the orchestrator's just-now turn. |
+| `packages/opencorvus/src/build/agent.ts:2388` `buildUserPrompt` (request target) | Renders `retryGuidance` (skipped on this branch), `retryFeedback`, `acceptanceFeedback`, `frontendDesign`, `designSpecs`, then `# Delegation` + `# Request` excerpt. | Add `integrityFeedback` rendering BEFORE the existing `retryFeedback` block on this branch as well. |
+| `packages/opencorvus/src/build/agent.ts:2440` `buildRetryFeedbackPrompt` (continue-session path) | Used when `existingSessionID` is set; renders `## Current Orchestrator Feedback`, `## Prior Attempt Failure Facts`, `## Acceptance Rejection Feedback`. | Add `## Persistent Integrity Findings` from `integrityFeedback`. |
+| `packages/opencorvus/src/orchestrator/tools.ts:4904-4998` (goal build context composition) | Builds `context.requirements`, `context.retryFeedback`, `context.acceptanceFeedback`, `context.retryGuidance`. | Compose `context.integrityFeedback` from `listIntegrityAttemptArtifacts` plus the shared root-history helper. Pass spec snapshot lineage and render every latest blocking finding as bounded complete text or a build-readable runtime markdown path. |
+| `packages/opencorvus/src/orchestrator/tools.ts:5000-5021` (task-level direct build context composition) | Builds `context.acceptanceFeedback` only. | Compose `context.integrityFeedback` the same way. This branch is the one all 9 correction-round builds in the bug case go through. |
 | `packages/opencorvus/src/integrity/replay-context.ts` (proposed in companion spec) | Builds replay context for integrity reviewers. | This spec REUSES the same `listIntegrityAttemptArtifacts` + `IntegrityPriorAttemptSummary` shape. Single source — do not duplicate the attempt parser. |
 
 ### Same-name / sibling functions that must not silently diverge
@@ -193,14 +193,14 @@ rg -n "decisionLog.append|phase=\"retry\"|phase=\"review\"" packages\opencorvus\
 | Location | Current behavior | Required change |
 | -------- | ---------------- | --------------- |
 | `packages/opencorvus/src/integrity/agent.ts` (legacy single-agent path) | Not exported by `integrity/index.ts`. | No change. Confirmed not on the live path during rule-35 grep. |
-| `packages/opencorvus/src/delivery/tools.ts:144,156` (delivery-triggered integrity) | Same `reviewIntegrity` entrypoint; persisted attempt rows are read by the same `listIntegrityAttemptArtifacts`. | No call-site change needed for delivery — build context composition lives in orchestrator/tools.ts and runs irrespective of which actor invoked the prior integrity review. |
+| `packages/opencorvus/src/acceptance/tools.ts:144,156` (acceptance-triggered integrity) | Same `reviewIntegrity` entrypoint; persisted attempt rows are read by the same `listIntegrityAttemptArtifacts`. | No call-site change needed for acceptance — build context composition lives in orchestrator/tools.ts and runs irrespective of which actor invoked the prior integrity review. |
 | `packages/opencorvus/src/build/types.ts` `BuildContractGraphContext` | Unrelated context type. | No change. |
 | `packages/opencorvus/src/decision-log/index.ts` `readByPhase("retry")` | Used by `latestBuildReportForGoal` and the orchestrator `retryEntries` aggregator. | No change. Integrity does NOT write `phase="retry"`; rule 8 stays clean. We do not "smuggle" integrity into the retry channel because doing so collides with the goal-scoped semantics of retry feedback (goal_run terminal status, build_agent_contract_violation). |
 
 ### Existing decision_log phases (rule 8 audit)
 
 Listed all `phase=` writers in source. Current phases written: `frontend_design`,
-`build`, `review`, `retry`, `delivery`, `verification`, `decision`,
+`build`, `review`, `retry`, `acceptance`, `verification`, `decision`,
 `exploration`, etc. The integrity verdict already lands in `phase="review"`
 (orchestrator/tools.ts:1782). This spec does NOT introduce a new phase or
 duplicate the row — `integrityFeedback` reads `engine_artifact` integrity_attempt
@@ -219,7 +219,7 @@ verbatim.
 ```ts
 // build/agent.ts BuildContext
 /** Pre-rendered "Persistent Integrity Findings" section. Composed by the
- *  caller (orchestrator/delivery) from engine_artifact integrity_attempt
+ *  caller (orchestrator/acceptance) from engine_artifact integrity_attempt
  *  rows for this task's spec snapshot lineage and the shared root-history
  *  helper. Empty / undefined when no integrity attempt exists. Rule 8 single
  *  source: the orchestrator owns composition; the build agent reads it. */
@@ -410,7 +410,7 @@ findings to fix).
 
 ### `orchestrator/tools.ts` build tool — goal branch
 
-After the existing `retryFeedback` / `deliveryFeedback` composition (current
+After the existing `retryFeedback` / `acceptanceFeedback` composition (current
 4945-4979), add:
 
 ```ts
@@ -437,7 +437,7 @@ the bug case go through this branch.
 Render a `## Persistent Integrity Findings` block (the helper-supplied
 markdown is already pre-headed; the renderer just inserts the string and
 a trailing blank line) before `retryGuidance` / `retryFeedback` /
-`deliveryFeedback`. Same call in `buildRetryFeedbackPrompt` for the
+`acceptanceFeedback`. Same call in `buildRetryFeedbackPrompt` for the
 continue-session path.
 
 ### Delete dead intermediate aggregator (rule 17 check)

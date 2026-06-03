@@ -3,7 +3,7 @@
  *
  *  Returns `{ stepID, phaseID }` when the stage is a goal-scope phase
  *  session kind; returns `null` for task-scope stages (requirements /
- *  architect / frontend-design / assistant / delivery / ...) and for the
+ *  architect / frontend-design / assistant / acceptance / ...) and for the
  *  `executor` container kind — the executor container does NOT render as
  *  its own card; the overlay's step card represents it visually, and the
  *  container's only role is to be a parentID anchor for the phase sessions.
@@ -14,8 +14,8 @@
  *  fails closed (phase claim returns null, session card floats top-level).
  *
  *  Per 2026-04-20 per-goal evaluator removal: `evaluator` session kind is
- *  gone. The build step now has two phases (plan + build); delivery-time
- *  adversarial review happens inside the (task-scope) delivery session,
+ *  gone. The build step now has two phases (plan + build); acceptance-time
+ *  adversarial review happens inside the (task-scope) acceptance session,
  *  not inside a goal-scope phase card. */
 export interface GoalPhaseLocation {
   stepID: string;

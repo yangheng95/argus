@@ -31,7 +31,7 @@ const PROMPT = [
   "This is an end-to-end SMOKE TEST of the Mission agent. Scope for THIS wake only:",
   "1. Read `site-prd.md` in the project root to understand the goal.",
   "2. Write a concise mission contract to frontier.md: objective (one sentence), in-scope, out-of-scope, hard constraints, and the acceptance bar.",
-  "3. Write a 3-5 phase high-level delivery roadmap to notes.md.",
+  "3. Write a 3-5 phase high-level acceptance roadmap to notes.md.",
   "4. Write handoff.md for the next wake.",
   "Do NOT dispatch any engine_tasks this wake. Do NOT ask clarifying questions — make reasonable assumptions and record them in notes.md.",
   "When done, reply to me in plain language with the objective and the numbered phase list.",

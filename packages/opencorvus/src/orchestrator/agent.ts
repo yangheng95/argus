@@ -3,7 +3,7 @@
  *
  * Per spec/new-arch/16-unified-teardown.md §3, the orchestrator has no typed
  * trigger enum — it is woken by *events* (task creation, goal batch finish,
- * delivery verdict, operator message) carried as a free-form note. On every
+ * acceptance verdict, operator message) carried as a free-form note. On every
  * wake it reads its full state from the describe layer + the artifact stream
  * and decides what to do next. Callers may pass an optional `event.note`
  * string to hint WHY they just woke the orchestrator; every decision derives
@@ -12,7 +12,7 @@
  * The orchestrator is the only task-level decision maker. It reads the
  * describe/artifact snapshot on every wake and chooses which specialist tool
  * to invoke next: intent analysis, frontend design, requirements, architect,
- * build, integrity, delivery, or lifecycle controls. MiniWorkflow
+ * build, integrity, acceptance, or lifecycle controls. MiniWorkflow
  * renders an advisory path; it is not a fixed pipeline or hidden state
  * machine. Specialist agents own their structured artifacts, but task
  * lifecycle stays here.
@@ -21,7 +21,7 @@
  *
  * The orchestrator is the HOST of the worker-session pattern that
  * `src/agent/runner.ts` abstracts — not a user of that pattern. Worker
- * agents (build, delivery, integrity, requirements, architect,
+ * agents (build, acceptance, integrity, requirements, architect,
  * frontend-design, intent-analysis) collapse into the runner's shape because
  * they all share: single composed system prompt, terminal collector contract,
  * thrown AgentRunError on stream / abort failure, no step-level coordination.
@@ -74,7 +74,7 @@ import { renderUserRequestSection } from "@/intent/request-prompt"
 import { readIterationHistory as readHistForPrompt } from "@/metrics/store"
 import {
   findActiveRunForTask,
-  findDeliveryByRun,
+  findAcceptanceByRun,
   findEvaluationByRun,
   requireTask,
   blockActiveRunForTask,
@@ -376,7 +376,7 @@ export namespace Orchestrator {
       //    invented re-read instruction.
       const system = await buildSystemParts(task, event, workflow, workflowState)
       // INFORMATION MISSING fallback — single source per rule 8. The runner.ts
-      // path injects this for every worker agent (build / architect / delivery
+      // path injects this for every worker agent (build / architect / acceptance
       // / ...); the orchestrator uses its own SessionPrompt.prompt path
       // (see file header for why) and so must inject here. Without this, a
       // toggle flipped ON would silently leave the orchestrator without
@@ -890,9 +890,9 @@ export const OrchestratorEventNote = {
     return `User requested retry.${previousError ? ` Previous error: ${previousError}` : ""}\nDecide how to proceed.`
   },
 
-  deliveryRework(input: { reason: string; iteration: number; summary?: string; affectedGoalCount?: number }): string {
+  acceptanceRework(input: { reason: string; iteration: number; summary?: string; affectedGoalCount?: number }): string {
     const lines = [
-      `Auto iteration is enabled; delivery iteration ${input.iteration} rejected (reason=${input.reason}).`,
+      `Auto iteration is enabled; acceptance iteration ${input.iteration} rejected (reason=${input.reason}).`,
     ]
     if (typeof input.affectedGoalCount === "number") {
       lines.push(
@@ -935,7 +935,7 @@ const ORCHESTRATOR_INSTRUCTIONS = ORCHESTRATOR_CORE
 /**
  * Build the orchestrator system prompt as a two-part array:
  *   [0] = static instructions (stable, benefits from 1h cache TTL)
- *   [1] = dynamic context — task state, goals, budget, latest delivery
+ *   [1] = dynamic context — task state, goals, budget, latest acceptance
  *         feedback, latest run result. All derived from DB state; no trigger
  *         enum branching. The optional `event.note` is the USER MESSAGE,
  *         not a prompt segment — do not thread it through here.
@@ -980,38 +980,38 @@ async function buildSystemParts(task: TaskRow, _event: OrchestratorEvent | undef
     ctx.push("")
   }
 
-  // ── Delivery trajectory ──
+  // ── Acceptance trajectory ──
   // Source of truth for iteration history is engine_iteration (Arbiter-owned).
   // We render the last few iterations' snapshots + the latest rework signal
   // (verdict summary + issues) so the assistant sees both the aggregated
-  // signal AND the concrete delivery-agent feedback for the most recent round.
+  // signal AND the concrete acceptance-agent feedback for the most recent round.
   // The orchestrator decides next steps from this rendered snapshot directly;
-  // per-metric details live on the delivery sub-agent session, not in an
+  // per-metric details live on the acceptance sub-agent session, not in an
   // orchestrator tool surface.
   const iterationHistory = readHistForPrompt(task.id)
   if (iterationHistory.length > 0) {
     const RENDER_RECENT = 3
     const tail = iterationHistory.slice(-RENDER_RECENT)
-    ctx.push("## Delivery Trajectory")
+    ctx.push("## Acceptance Trajectory")
     ctx.push(`${iterationHistory.length} prior iteration(s). Last ${tail.length}:`)
     for (const it of tail) {
       ctx.push(
         `  - iter ${it.iteration}: arbiter=${it.arbiter_verdict}, S_k=${it.aggregate_score.toFixed(3)} (Δ=${it.delta_vs_prev.toFixed(3)}), blocking_unmet=${it.blocking_unmet_count}, open_ce=${it.open_counterexamples}, novelty=${it.novelty_score}`,
       )
     }
-    // Latest delivery feedback comes from the most recent
-    // delivery-agent-verdict artifact on the task. Shown only when the
+    // Latest acceptance feedback comes from the most recent
+    // acceptance-review-verdict artifact on the task. Shown only when the
     // most recent verdict was a rejection — per spec there is no trigger
     // enum steering this block, it is derived from persistent artifacts.
-    const { findLatestDeliveryVerdictArtifact } = await import("@/engine/store")
-    const latestVerdictArt = findLatestDeliveryVerdictArtifact(task.id)
+    const { findLatestAcceptanceVerdictArtifact } = await import("@/engine/store")
+    const latestVerdictArt = findLatestAcceptanceVerdictArtifact(task.id)
     const latestVerdictPayload = (latestVerdictArt?.payload ?? {}) as Record<string, unknown>
     const latest = latestVerdictPayload.verdict === "rejected"
       ? latestVerdictPayload
       : undefined
     if (latest) {
       ctx.push("")
-      ctx.push("### Latest delivery-agent feedback")
+      ctx.push("### Latest acceptance-agent feedback")
       const summary = typeof latest.summary === "string" ? latest.summary : ""
       if (summary) ctx.push(`Summary: ${summary}`)
       const details = Array.isArray(latest.rejection_details)
@@ -1038,7 +1038,7 @@ async function buildSystemParts(task: TaskRow, _event: OrchestratorEvent | undef
     }
     ctx.push("")
     ctx.push(
-      "You decide what to do next from the trajectory + latest delivery feedback above: " +
+      "You decide what to do next from the trajectory + latest acceptance feedback above: " +
       "patch code, modify/add goals, adjust scope — based on where the loop is stuck.",
     )
     ctx.push("")
@@ -1062,21 +1062,21 @@ async function buildSystemParts(task: TaskRow, _event: OrchestratorEvent | undef
     ctx.push(renderWorkflowPrompt(workflow, workflowState))
   }
 
-  // Run context — delivery + eval results for the current active run (if
+  // Run context — acceptance + eval results for the current active run (if
   // any). Rendered on every wake from persistent DB state so the orchestrator
   // sees latest results without depending on a trigger enum to deliver them.
   // The yielded summary is framed as a sub-agent-protocol message with the
   // same per-message ceiling as a tool return; full content stays in the
-  // delivery / evaluation rows referenced via the pointer.
+  // acceptance / evaluation rows referenced via the pointer.
   const activeRunID = findActiveRunForTask(task.id)?.id
   if (activeRunID) {
-    const delivery = findDeliveryByRun(activeRunID)
+    const acceptance = findAcceptanceByRun(activeRunID)
     const evaluation = findEvaluationByRun(activeRunID)
-    if (delivery || evaluation) {
+    if (acceptance || evaluation) {
       const fields: Array<[string, string | string[]]> = []
-      if (delivery) {
-        fields.push(["delivery_summary", delivery.summary])
-        const changedFiles = delivery.result?.changed_files
+      if (acceptance) {
+        fields.push(["acceptance_summary", acceptance.summary])
+        const changedFiles = acceptance.result?.changed_files
         if (changedFiles?.length) fields.push(["changed_files", changedFiles])
       }
       if (evaluation) {
@@ -1089,7 +1089,7 @@ async function buildSystemParts(task: TaskRow, _event: OrchestratorEvent | undef
       }
 
       const pointerHints: string[] = []
-      if (delivery) pointerHints.push(`read_context scope=deliveries (delivery row ${delivery.id})`)
+      if (acceptance) pointerHints.push(`read_context scope=deliveries (acceptance row ${acceptance.id})`)
       if (evaluation) pointerHints.push(`read_context scope=evaluations (evaluation row ${evaluation.id})`)
       const pointer = pointerHints.length > 0 ? pointerHints.join("; ") : "read_context"
 

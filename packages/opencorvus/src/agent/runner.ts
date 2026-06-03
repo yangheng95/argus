@@ -686,7 +686,7 @@ export async function runAgentSession<C>(
   }
   // Capability gate — drop multimodal file parts the resolved model cannot
   // accept on input. Without this, every agent that calls
-  // AttachmentStore.inlineFileParts (build / delivery / architect /
+  // AttachmentStore.inlineFileParts (build / acceptance / architect /
   // intent-analysis / integrity / requirements / frontend-design) would
   // forward image / pdf / audio / video bytes to a
   // text-only coding endpoint (e.g. dashscope coding) where the provider
@@ -1098,7 +1098,7 @@ export async function runAgentSession<C>(
 //
 // Per rule 22 / rule 24: any agent that needs retry MUST go through this
 // helper. The retry logic does not live inside individual agent modules —
-// previously the retired delivery path owned its own copy of this loop, which was the only
+// previously the retired acceptance path owned its own copy of this loop, which was the only
 // blocker preventing other stage agents from gaining bounded retry without
 // duplicating that loop verbatim.
 //

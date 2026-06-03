@@ -8,7 +8,7 @@ import { Log } from "@/util/log"
 import { Identifier } from "@/id/id"
 import { EngineProgressSnapshotTable, EngineTaskTable } from "./engine.sql"
 import { ACTIVE_GOAL_RUN_STATUSES } from "./catalog"
-import { listGoalRunsForTask, requireTask, type DeliveryRow, type PlanRow, type TaskRow } from "./store"
+import { listGoalRunsForTask, requireTask, type AcceptanceRow, type PlanRow, type TaskRow } from "./store"
 import fs from "node:fs/promises"
 import path from "node:path"
 
@@ -45,20 +45,20 @@ function steps(plan?: PlanRow) {
   })
 }
 
-function body(task: TaskRow, plan?: PlanRow, delivery?: DeliveryRow) {
+function body(task: TaskRow, plan?: PlanRow, acceptance?: AcceptanceRow) {
   const out = [`Task request: ${clean(task.request)}`]
   if (plan?.summary) out.push("", `Plan summary: ${clean(plan.summary)}`)
   const list = steps(plan).slice(0, 5)
   if (list.length > 0) out.push("", "Plan steps:", ...list.map((item) => `- ${item}`))
-  if (delivery?.summary) out.push("", `Delivery: ${clean(delivery.summary)}`)
+  if (acceptance?.summary) out.push("", `Acceptance: ${clean(acceptance.summary)}`)
   return out.join("\n")
 }
 
-function message(task: TaskRow, mode: "baseline" | "result", plan?: PlanRow, delivery?: DeliveryRow) {
+function message(task: TaskRow, mode: "baseline" | "result", plan?: PlanRow, acceptance?: AcceptanceRow) {
   const base = clip(task.title || task.request, mode === "baseline" ? 54 : 72)
   return {
     subject: mode === "baseline" ? clip(`Checkpoint before ${base}`) : base,
-    body: body(task, plan, delivery),
+    body: body(task, plan, acceptance),
   }
 }
 
@@ -137,14 +137,14 @@ function save(task: TaskRow, patch: Record<string, unknown>, time = Date.now()) 
   return requireTask(task.id)
 }
 
-async function commit(input: { task: TaskRow; plan?: PlanRow; delivery?: DeliveryRow; mode: "baseline" | "result"; allowEmpty: boolean }) {
+async function commit(input: { task: TaskRow; plan?: PlanRow; acceptance?: AcceptanceRow; mode: "baseline" | "result"; allowEmpty: boolean }) {
   const added = await git(evidenceExcludedAddAllArgs(), { cwd: Instance.directory })
   if (added.exitCode !== 0) {
     return {
       error: added.stderr.toString().trim() || added.stdout.toString().trim() || "git add failed",
     }
   }
-  const msg = message(input.task, input.mode, input.plan, input.delivery)
+  const msg = message(input.task, input.mode, input.plan, input.acceptance)
   const args = ["commit", "--no-gpg-sign", ...(input.allowEmpty ? ["--allow-empty"] : []), "-m", msg.subject, "-m", msg.body]
   const result = await git(args, {
     cwd: Instance.directory,
@@ -205,7 +205,7 @@ Thumbs.db
 # 'taskkill ... 2>nul' or '... > nul' from inside a bash shell, which
 # (unlike cmd.exe) happily creates a real file literally named 'nul'.
 # Git then refuses to index it ('short read while indexing nul') and
-# the whole baseline / delivery commit aborts. Same trap for the other
+# the whole baseline / acceptance commit aborts. Same trap for the other
 # DOS devices (CON, PRN, AUX, COM1-9, LPT1-9). Case variants covered
 # because the file might land as 'nul', 'NUL', or mixed.
 nul
@@ -303,7 +303,7 @@ export async function ensureGitignore() {
   // `.gitignore` (which the worktree shares via the parent repo) lists
   // `.opencorvus/runtime/`. Without `-f`, `git add .gitignore` from inside the
   // worktree fails with "The following paths are ignored by one of your
-  // .gitignore files: .opencorvus/runtime" and publish_delivery aborts at goal
+  // .gitignore files: .opencorvus/runtime" and publish_acceptance aborts at goal
   // workspace terminal cleanup (r11 bench evidence
   // `_session-r11-glm5cn.out` line 91025, 2026-04-30T19:34:37). The
   // semantic match: we explicitly want to seed/refresh `.gitignore`
@@ -362,7 +362,7 @@ async function untrackOpencorvusGitExcludedPaths(dir: string) {
   // lock, AV scan, index.lock contention) would block the bun event
   // loop indefinitely — observed in the 2026-04-27 V2 benchmark as a
   // 15+ minute freeze of every scheduler.poll, since `ensureGitignore`
-  // is awaited inline before `commitDeliveryRound`'s main commit.
+  // is awaited inline before `commitAcceptanceRound`'s main commit.
   let anyStaged = false
   for (const target of OPENCORVUS_GIT_EXCLUDED_PATHS) {
     // `git ls-files --error-unmatch` only exits 0 when at least one tracked
@@ -400,70 +400,70 @@ function result(task: TaskRow) {
 }
 
 /**
- * P0-C.1 — anchor each delivery picky-loop iteration in git.
+ * P0-C.1 — anchor each acceptance picky-loop iteration in git.
  *
- * Delivery can make bounded final repairs, and each picky-loop iteration needs
- * a git anchor. Rejected rounds identify the exact merged state that delivery
+ * Acceptance can make bounded final repairs, and each picky-loop iteration needs
+ * a git anchor. Rejected rounds identify the exact merged state that acceptance
  * reviewed or repaired; accepted rounds anchor the final state before publishing. Without
  * this helper the loop has no per-round LKG (Last Known Good) anchor and no
  * historical record of which round produced which verdict.
  *
  * Always commits — `--allow-empty` plus `--no-gpg-sign` keep this a
- * pure time anchor when delivery made no code edits. Best-effort: any
+ * pure time anchor when acceptance made no code edits. Best-effort: any
  * git failure is logged and reported back, never thrown, so a broken
  * commit never blocks the surrounding deliver tool.
  */
-async function commitDeliveryRound(input: {
+async function commitAcceptanceRound(input: {
   task: TaskRow
   iteration: number
   /** Caller passes the rejection_details length (or 0 for accepted) so this
-   *  helper does not need to import the full DeliveryVerdict type. */
+   *  helper does not need to import the full AcceptanceVerdict type. */
   verdict: { verdict: string; summary?: string; rejection_count?: number }
   declaredChangedFiles?: string[]
 }): Promise<{ commit?: string; mode: "created_commit" | "skipped"; error?: string }> {
   const cwd = Instance.directory
-  log.info("commitDeliveryRound: ensureGitignore start", { cwd, iteration: input.iteration })
+  log.info("commitAcceptanceRound: ensureGitignore start", { cwd, iteration: input.iteration })
   await ensureGitignore()
-  log.info("commitDeliveryRound: ensureGitignore done; git add -A start", { cwd })
+  log.info("commitAcceptanceRound: ensureGitignore done; git add -A start", { cwd })
   const added = await git(evidenceExcludedAddAllArgs(), { cwd })
-  log.info("commitDeliveryRound: git add -A done", { exitCode: added.exitCode })
+  log.info("commitAcceptanceRound: git add -A done", { exitCode: added.exitCode })
   if (added.exitCode !== 0) {
     const err = added.stderr.toString().trim() || added.stdout.toString().trim() || "git add -A failed"
     return { mode: "skipped", error: err }
   }
-  const forceAdd = await forceAddDeclaredDeliveryFiles(input.declaredChangedFiles ?? [], cwd)
+  const forceAdd = await forceAddDeclaredAcceptanceFiles(input.declaredChangedFiles ?? [], cwd)
   if (forceAdd.error) return { mode: "skipped", error: forceAdd.error }
   const issues = input.verdict.rejection_count ?? 0
-  const subject = clip(`delivery round ${input.iteration} | verdict=${input.verdict.verdict} | issues=${issues}`)
+  const subject = clip(`acceptance round ${input.iteration} | verdict=${input.verdict.verdict} | issues=${issues}`)
   const body = (input.verdict.summary ?? "").trim()
   const args = ["commit", "--no-gpg-sign", "--allow-empty", "-m", subject]
   if (body) args.push("-m", body)
-  log.info("commitDeliveryRound: git commit start")
+  log.info("commitAcceptanceRound: git commit start")
   const result = await git(args, { cwd, env: env() })
-  log.info("commitDeliveryRound: git commit done", { exitCode: result.exitCode })
+  log.info("commitAcceptanceRound: git commit done", { exitCode: result.exitCode })
   if (result.exitCode !== 0) {
     const err = result.stderr.toString().trim() || result.stdout.toString().trim() || "git commit failed"
     return { mode: "skipped", error: err }
   }
-  log.info("commitDeliveryRound: head() start")
+  log.info("commitAcceptanceRound: head() start")
   const sha = await head()
-  log.info("commitDeliveryRound: head() done", { sha })
+  log.info("commitAcceptanceRound: head() done", { sha })
   return { mode: "created_commit", commit: sha }
 }
 
-async function forceAddDeclaredDeliveryFiles(files: string[], cwd: string): Promise<{ error?: string }> {
+async function forceAddDeclaredAcceptanceFiles(files: string[], cwd: string): Promise<{ error?: string }> {
   const paths = await declaredFilesPresentInWorktree(files, cwd)
   if (paths.length === 0) return {}
   const result = await git(["add", "--force", "--", ...paths], { cwd })
   if (result.exitCode === 0) return {}
   const detail = result.stderr.toString().trim() || result.stdout.toString().trim() || "git add --force failed"
-  return { error: `commitDeliveryRound: force-add declared delivery files failed: ${detail}` }
+  return { error: `commitAcceptanceRound: force-add declared acceptance files failed: ${detail}` }
 }
 
 async function declaredFilesPresentInWorktree(files: string[], cwd: string) {
   const unique = new Set<string>()
   for (const file of files) {
-    const normalized = normalizeDeliveryPath(file)
+    const normalized = normalizeAcceptancePath(file)
     if (!normalized) continue
     const absolute = path.join(cwd, normalized)
     try {
@@ -477,7 +477,7 @@ async function declaredFilesPresentInWorktree(files: string[], cwd: string) {
   return [...unique]
 }
 
-function normalizeDeliveryPath(file: string) {
+function normalizeAcceptancePath(file: string) {
   const trimmed = file.trim()
   if (!trimmed || path.isAbsolute(trimmed)) return undefined
   const normalized = path.normalize(trimmed).replaceAll("\\", "/")
@@ -502,12 +502,12 @@ function evidenceExcludedAddAllArgs(): string[] {
 }
 
 /**
- * P0-C.4 LKG state lives in `task.metadata.git.delivery_lkg`.
- * One slot per task — the task-level delivery picky loop is the only
+ * P0-C.4 LKG state lives in `task.metadata.git.acceptance_lkg`.
+ * One slot per task — the task-level acceptance picky loop is the only
  * writer; per-goal worktrees do not own LKG (only the merged worktree
  * has a meaningful visual score).
  */
-interface DeliveryLKG {
+interface AcceptanceLKG {
   best_score: number
   best_commit_sha: string
   best_round: number
@@ -515,8 +515,8 @@ interface DeliveryLKG {
   recorded_at: number
 }
 
-function readDeliveryLKG(task: TaskRow): DeliveryLKG | undefined {
-  const value = dict(dict(task.metadata).git).delivery_lkg
+function readAcceptanceLKG(task: TaskRow): AcceptanceLKG | undefined {
+  const value = dict(dict(task.metadata).git).acceptance_lkg
   if (!value || typeof value !== "object" || Array.isArray(value)) return
   const v = value as Record<string, unknown>
   if (
@@ -533,8 +533,8 @@ function readDeliveryLKG(task: TaskRow): DeliveryLKG | undefined {
   }
 }
 
-function writeDeliveryLKG(task: TaskRow, lkg: DeliveryLKG): TaskRow {
-  return save(task, { delivery_lkg: lkg })
+function writeAcceptanceLKG(task: TaskRow, lkg: AcceptanceLKG): TaskRow {
+  return save(task, { acceptance_lkg: lkg })
 }
 
 /**
@@ -554,11 +554,11 @@ function writeDeliveryLKG(task: TaskRow, lkg: DeliveryLKG): TaskRow {
  *  - git reset fails ⇒ propagate so the orchestrator can fail the task
  */
 export type LKGOutcome =
-  | { kind: "first_round"; score: number; updated: DeliveryLKG }
-  | { kind: "improved"; score: number; previous: DeliveryLKG; updated: DeliveryLKG }
-  | { kind: "held"; score: number; previous: DeliveryLKG }
-  | { kind: "blocked_by_siblings"; score: number; previous: DeliveryLKG; activeSiblings: string[] }
-  | { kind: "regressed"; score: number; previous: DeliveryLKG; rolledBackTo: string }
+  | { kind: "first_round"; score: number; updated: AcceptanceLKG }
+  | { kind: "improved"; score: number; previous: AcceptanceLKG; updated: AcceptanceLKG }
+  | { kind: "held"; score: number; previous: AcceptanceLKG }
+  | { kind: "blocked_by_siblings"; score: number; previous: AcceptanceLKG; activeSiblings: string[] }
+  | { kind: "regressed"; score: number; previous: AcceptanceLKG; rolledBackTo: string }
 
 async function detectActiveSiblingGoals(taskID: string): Promise<string[]> {
   const active = new Set(ACTIVE_GOAL_RUN_STATUSES as readonly string[])
@@ -573,7 +573,7 @@ async function evaluateAndApplyLKG(input: {
   iteration: number
   score: number
   roundCommitSha: string | undefined
-  /** Override the git worktree affected by rollback. Delivery isolation
+  /** Override the git worktree affected by rollback. Acceptance isolation
    *  passes a detached eval worktree here so reset never touches primary. */
   worktreeDirectory?: string
   /** Symmetric tolerance — score difference within ±epsilon is treated as
@@ -581,7 +581,7 @@ async function evaluateAndApplyLKG(input: {
   epsilon?: number
 }): Promise<{ outcome: LKGOutcome; task: TaskRow }> {
   const epsilon = input.epsilon ?? 0.01
-  const previous = readDeliveryLKG(input.task)
+  const previous = readAcceptanceLKG(input.task)
 
   if (!previous) {
     if (!input.roundCommitSha) {
@@ -597,13 +597,13 @@ async function evaluateAndApplyLKG(input: {
         },
       }
     }
-    const updated: DeliveryLKG = {
+    const updated: AcceptanceLKG = {
       best_score: input.score,
       best_commit_sha: input.roundCommitSha,
       best_round: input.iteration,
       recorded_at: Date.now(),
     }
-    return { task: writeDeliveryLKG(input.task, updated), outcome: { kind: "first_round", score: input.score, updated } }
+    return { task: writeAcceptanceLKG(input.task, updated), outcome: { kind: "first_round", score: input.score, updated } }
   }
 
   const delta = input.score - previous.best_score
@@ -613,13 +613,13 @@ async function evaluateAndApplyLKG(input: {
       // we never advance to a sha-less best (rollback target would be empty).
       return { task: input.task, outcome: { kind: "held", score: input.score, previous } }
     }
-    const updated: DeliveryLKG = {
+    const updated: AcceptanceLKG = {
       best_score: input.score,
       best_commit_sha: input.roundCommitSha,
       best_round: input.iteration,
       recorded_at: Date.now(),
     }
-    return { task: writeDeliveryLKG(input.task, updated), outcome: { kind: "improved", score: input.score, previous, updated } }
+    return { task: writeAcceptanceLKG(input.task, updated), outcome: { kind: "improved", score: input.score, previous, updated } }
   }
   if (delta >= -epsilon) {
     return { task: input.task, outcome: { kind: "held", score: input.score, previous } }
@@ -671,21 +671,21 @@ async function evaluateAndApplyLKG(input: {
 
 // Stash the outer-scope function references so the namespace re-exports
 // below don't shadow themselves into an infinite recursion. `export const
-// commitDeliveryRound = (...) => commitDeliveryRound(...)` inside `namespace
-// EngineGit` makes the arrow body's `commitDeliveryRound` resolve to the
+// commitAcceptanceRound = (...) => commitAcceptanceRound(...)` inside `namespace
+// EngineGit` makes the arrow body's `commitAcceptanceRound` resolve to the
 // namespace member itself (TypeScript namespace shadowing), so each call
-// dispatched through `EngineGit.commitDeliveryRound` recursed into itself
-// until the stack overflowed — observed as the post-delivery CPU-spin hang
+// dispatched through `EngineGit.commitAcceptanceRound` recursed into itself
+// until the stack overflowed — observed as the post-acceptance CPU-spin hang
 // in tools.ts:2851 (verdict recorded → no `ensureGitignore start` log).
-const _commitDeliveryRound = commitDeliveryRound
+const _commitAcceptanceRound = commitAcceptanceRound
 const _evaluateAndApplyLKG = evaluateAndApplyLKG
 
 export namespace EngineGit {
-  export const commitDeliveryRound = (input: Parameters<typeof _commitDeliveryRound>[0]) =>
-    _commitDeliveryRound(input)
+  export const commitAcceptanceRound = (input: Parameters<typeof _commitAcceptanceRound>[0]) =>
+    _commitAcceptanceRound(input)
   export const evaluateAndApplyLKG = (input: Parameters<typeof _evaluateAndApplyLKG>[0]) =>
     _evaluateAndApplyLKG(input)
-  export const readLKG = (task: TaskRow) => readDeliveryLKG(task)
+  export const readLKG = (task: TaskRow) => readAcceptanceLKG(task)
 
   export async function prepare(task: TaskRow, plan?: PlanRow) {
     if (baseline(task)) return { task }
@@ -764,7 +764,7 @@ export namespace EngineGit {
     return { task: row }
   }
 
-  export async function complete(task: TaskRow, plan: PlanRow | undefined, delivery: DeliveryRow) {
+  export async function complete(task: TaskRow, plan: PlanRow | undefined, acceptance: AcceptanceRow) {
     if (result(task)) return { task }
 
     const info = await state()
@@ -789,7 +789,7 @@ export namespace EngineGit {
         ? await commit({
             task,
             plan,
-            delivery,
+            acceptance,
             mode: "result",
             allowEmpty: !before,
           })
@@ -819,8 +819,8 @@ export namespace EngineGit {
         commit: next.commit,
         message: next.message,
         head_before: before,
-        delivery_id: delivery.id,
-        delivery_summary: delivery.summary,
+        acceptance_id: acceptance.id,
+        acceptance_summary: acceptance.summary,
         dirty: info.dirty,
         staged: info.staged,
         modified: info.modified,
@@ -838,7 +838,7 @@ export namespace EngineGit {
       branch: after ?? info.branch,
       commit: next.commit,
       message: next.message,
-      deliveryID: delivery.id,
+      acceptanceID: acceptance.id,
     }, time)
     return { task: row }
   }

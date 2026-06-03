@@ -10,7 +10,7 @@
  */
 export {
   persistEvidence,
-  findLatestDeliveryEvidence,
+  findLatestAcceptanceEvidence,
   type VerificationEvidence,
   type PersistEvidenceInput,
 } from "./persist"

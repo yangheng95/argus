@@ -93,7 +93,7 @@ export function ChangesPanel(props: ChangesPanelProps) {
     <FileChangesView
       groups={groups()}
       hasSelectedTask={props.hasSelectedTask}
-      focusEvent="delivery:focus-changes"
+      focusEvent="acceptance:focus-changes"
       onRowClick={handleRowClick}
     />
   );

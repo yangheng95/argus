@@ -5,7 +5,7 @@
  * requirement list + foundational decisions, explores the codebase, and
  * produces the final goal set along with traceability, fidelity coverage,
  * assembly ownership, and cross-goal interface contracts. On a re-run (triggered
- * by delivery/evaluation feedback) it also refines the existing goal set.
+ * by acceptance/evaluation feedback) it also refines the existing goal set.
  */
 import type { GoalContractFields } from "@/pipeline/types"
 import type { ParsedRequirement, RequirementsDecision } from "@/requirements/types"
@@ -45,12 +45,12 @@ export interface ArchitectFidelityCoverage {
 }
 
 // ---------------------------------------------------------------------------
-// Re-run inputs — delivery/evaluation feedback that triggers refinement
+// Re-run inputs — acceptance/evaluation feedback that triggers refinement
 // ---------------------------------------------------------------------------
 
 /**
  * Context supplied by the Orchestrator when asking the Architect to refine
- * an existing goal set after delivery rejection. The Architect may add,
+ * an existing goal set after acceptance rejection. The Architect may add,
  * modify, split, or remove goals in response.
  */
 export interface ArchitectRetryContext {

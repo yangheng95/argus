@@ -34,7 +34,7 @@
 
 | 问题 | 当前后果 |
 | --- | --- |
-| 把执行方式抬成 agent 身份 | `delivery` / `architect` / `requirements` 被当作另一类 agent，而不是同一种 agent 的另一种运行模式 |
+| 把执行方式抬成 agent 身份 | `acceptance` / `architect` / `requirements` 被当作另一类 agent，而不是同一种 agent 的另一种运行模式 |
 | `Agent.Info` 混入 runtime 细节 | `permission`、`steps`、`compaction` 可读性下降，配置边界不清晰 |
 | 上下文来源与 agent 概念耦合 | transcript 累积与 DB 派生状态被误解为“不同 agent”而不是“不同 context strategy” |
 | compaction 语义失真 | session checkpoint summary 与 episodic pre-run budget control 被混称为 compact |
@@ -130,7 +130,7 @@ type ContextStrategy =
 - `transcript`
   从消息链累积上下文。适用于 build/general/explore 这类真实会话。
 - `derived-state`
-  每次从 DB/engine state 渲染上下文。适用于 orchestrator、requirements、architect、delivery。
+  每次从 DB/engine state 渲染上下文。适用于 orchestrator、requirements、architect、acceptance。
 - `hybrid`
   保留扩展位，供未来“有派生状态，也允许 operator 追问继续”的 agent 使用。
 
@@ -204,10 +204,10 @@ interface AgentExecutionPlan {
 | `intent-analysis` | `AgentSpec + episodic + derived-state + pre-run-reduction` |
 | `integrity` | `AgentSpec + episodic + derived-state + pre-run-reduction` |
 | `prosecutor` | `AgentSpec + episodic + derived-state + pre-run-reduction` |
-| `delivery` | `AgentSpec + episodic + derived-state + pre-run-reduction` |
+| `acceptance` | `AgentSpec + episodic + derived-state + pre-run-reduction` |
 | `summary` | `AgentSpec + episodic + derived-state + pre-run-reduction` |
 
-> 注：`planner` 已不在表中——`src/planner/` 整目录已删除，相关 episodic 调用并入
+> 注：`planner` 已不在表中——the removed planning package 整目录已删除，相关 episodic 调用并入
 > orchestrator 自身的 LLM 推理（详见 [01-agents.md](01-agents.md) 与
 > [11-agent-oop-protocol.md](11-agent-oop-protocol.md)）。
 
@@ -284,7 +284,7 @@ interface AgentExecutionPlan {
 
 ### 阶段 3：episodic 预算控制
 
-目标：给 requirements / architect / delivery / orchestrator 一套正确的自动预算策略。
+目标：给 requirements / architect / acceptance / orchestrator 一套正确的自动预算策略。
 
 变更：
 

@@ -246,7 +246,7 @@ export namespace Session {
       if (!original) throw new Error("session not found")
       const title = getForkedTitle(original.title)
       // fork = clone: inherits the original session's kind and goal. This
-      // is the session's identity, not a default — forking a "delivery"
+      // is the session's identity, not a default — forking a "acceptance"
       // session into an "executor" container would be semantically broken.
       const session = await createNext({
         directory: Instance.directory,
@@ -938,7 +938,7 @@ export namespace Session {
 
   /** Detector for inline base64 image / pdf / audio / video data URLs inside
    *  a part's serialized data. Single source for the write-boundary guard
-   *  (see specs/delivery-attachment-store-single-source-2026-05-11.md):
+   *  (see specs/acceptance-attachment-store-single-source-2026-05-11.md):
    *
    *  - This is the inverse pattern of `AttachmentStore` refs
    *    (`/attachment/<projectID>/<sha>.<ext>`). Every inline-base64 producer
@@ -957,7 +957,7 @@ export namespace Session {
         `Session.updatePart: refusing inline base64 data URL in part ${partID}. ` +
           `Route the producer through AttachmentStore.write so part.data stores a ` +
           `/attachment/<sha>.<ext> ref instead of MB of inline bytes. ` +
-          `(specs/delivery-attachment-store-single-source-2026-05-11.md). ` +
+          `(specs/acceptance-attachment-store-single-source-2026-05-11.md). ` +
           `Offending snippet: ${snippet}`,
       )
       this.name = "InlineBase64InPartError"

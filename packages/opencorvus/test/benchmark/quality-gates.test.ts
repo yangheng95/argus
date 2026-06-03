@@ -143,7 +143,7 @@ describe("benchmark quality gates", () => {
 
     expect(audit.placeholder_count).toBe(1)
     expect(verdict.verdict).toBe("rejected")
-    expect(verdict.primary_failure).toBe("delivery_gap")
+    expect(verdict.primary_failure).toBe("acceptance_gap")
   })
 
   test("request-scoped module blocks reject package manifest churn outside allowed files", async () => {

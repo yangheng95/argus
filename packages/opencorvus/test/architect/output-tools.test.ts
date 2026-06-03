@@ -218,7 +218,7 @@ test("remove_goal cascades depends_on references from remaining goals", async ()
   ).toBe(false)
 })
 
-test("architect normalizes frontend-design source baseline owned paths to delivery root", async () => {
+test("architect normalizes frontend-design source baseline owned paths to acceptance root", async () => {
   const kit = createArchitectOutputTools({ existingGoals: [], workDir: process.cwd() })
 
   const result = await kit.tools.register_goal.execute!(
@@ -226,7 +226,7 @@ test("architect normalizes frontend-design source baseline owned paths to delive
       id: "goal_frontend_api",
       title: "Frontend API",
       objective:
-        "Adopt the frontend source baseline into the delivery root and implement API client code used by the app.",
+        "Adopt the frontend source baseline into the acceptance root and implement API client code used by the app.",
       acceptance_specs: [acceptance("goal_frontend_api")],
       owned_paths: [
         "frontend-design-skeleton/package.json",
@@ -241,7 +241,7 @@ test("architect normalizes frontend-design source baseline owned paths to delive
     {} as any,
   )
 
-  expect(result).toContain("normalized source-baseline owned_paths to delivery-root paths")
+  expect(result).toContain("normalized source-baseline owned_paths to acceptance-root paths")
   expect(kit.getCollector().goals[0]?.owned_paths).toEqual([
     "package.json",
     "src/types/api.ts",

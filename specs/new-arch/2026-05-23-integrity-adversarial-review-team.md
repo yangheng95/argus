@@ -65,7 +65,7 @@ The old contract is not isolated. It is hard-coded through:
 
 - `orchestrator/tools.ts`: integrity tool description, `perDimension`
   labels, decision-log text, completion/blocked summaries, read_context output.
-- Delivery-triggered review dispatch has been removed; post-build semantic
+- Acceptance-triggered review dispatch has been removed; post-build semantic
   review enters through the orchestrator `integrity` tool.
 - `engine/persist.ts`: `recordIntegrityAttempt` stores `per_dimension`,
   counts, corrections, graph corrections, missing goals, acceptance, and
@@ -146,7 +146,7 @@ Reviewers receive:
 - architect contract graph and decision log;
 - requirement status snapshot when present;
 - changed files and representative diffs;
-- delivery or goal-run evidence;
+- acceptance or goal-run evidence;
 - attachments and visual artifacts;
 - prior integrity attempts;
 - the concrete review question assigned by the supervisor.
@@ -344,7 +344,7 @@ Tests:
 - `packages/opencorvus/test/integrity/*`
 - `packages/opencorvus/test/orchestrator/tools.test.ts`
 - `packages/opencorvus/test/engine/workflow-integrity-step.test.ts`
-- `packages/opencorvus/test/delivery/project-gate.test.ts`
+- `packages/opencorvus/test/acceptance/project-gate.test.ts`
 - `packages/opencorvus/test/server/task-conversation-routes.test.ts`
 - overlay tree-writer/card tests
 - prompt hygiene tests that mention old dimensions
@@ -384,7 +384,7 @@ Tests:
 - Add tests proving reviewer command evidence can be recorded.
 - Add tests proving reviewer mutation tools are absent.
 
-### Batch 4 - Review Stream, Orchestrator, and Delivery Entrypoints
+### Batch 4 - Review Stream, Orchestrator, and Acceptance Entrypoints
 
 - Replace fixed `review.stream.currentStep` coupling for integrity with a
   dynamic activity model, such as `activity`, `scope`, `reviewerID`, and
@@ -394,7 +394,7 @@ Tests:
 
 - Update `runIntegrityReviewOnce`, `renderIntegrityOutcome`, decision-log
   summaries, and post-build completion gating.
-- Remove delivery-triggered review paths; semantic review enters through
+- Remove acceptance-triggered review paths; semantic review enters through
   orchestrator `integrity`.
 - Remove old `perDimension` strings from orchestrator output.
 - Update `orchestrator-core.txt` to remove mandatory separate final acceptance
@@ -448,7 +448,7 @@ Tests:
 Agent A findings applied:
 
 - The old dimension model is coupled through prompt, tools, result ordering,
-  persistence, events, overlay, SDK, and delivery-triggered review.
+  persistence, events, overlay, SDK, and acceptance-triggered review.
 - `integrityReviewSingleflight` must wrap one team review, not member reviews.
 - Workflow/read_context must understand team completeness and phase.
 

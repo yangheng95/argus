@@ -1331,7 +1331,7 @@ export namespace Config {
             .describe(
               "Architect agent configuration — cross-goal coordination, interface contracts. Model is configured via agent.architect.model.",
             ),
-          delivery_visual: z
+          acceptance_visual: z
             .object({
               phash_hamming_max: z
                 .number()

@@ -57,7 +57,7 @@ export const GoalContractFieldsSchema = z.object({
     .describe(
       "Primary responsibility paths for this goal. These guide collaboration and review; " +
         "they are not a file sandbox. Must be discovered via tool exploration — do not guess. " +
-        "For frontend-design-skeleton source baselines, write delivery-root paths such as src/**, public/**, index.html, package.json, and vite.config.ts; do not use frontend-design-skeleton/** as an implementation target.",
+        "For frontend-design-skeleton source baselines, write acceptance-root paths such as src/**, public/**, index.html, package.json, and vite.config.ts; do not use frontend-design-skeleton/** as an implementation target.",
     ),
   depends_on: z.array(z.string()).default([]).describe("Goal IDs this depends on (execution order)"),
   priority: z.enum(GOAL_PRIORITIES).default("blocking"),
@@ -101,7 +101,7 @@ export const GoalContractUpdateSchema = z.object({
   owned_paths: z
     .array(z.string().min(1))
     .min(1)
-    .describe("Primary responsibility paths for this goal. Replaces the prior path list when present. For source baselines, use delivery-root paths, not frontend-design-skeleton/**.")
+    .describe("Primary responsibility paths for this goal. Replaces the prior path list when present. For source baselines, use acceptance-root paths, not frontend-design-skeleton/**.")
     .optional(),
   depends_on: z
     .array(z.string())

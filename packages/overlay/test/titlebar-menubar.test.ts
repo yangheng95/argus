@@ -970,7 +970,7 @@ test(
             max: 7,
           },
           {
-            selector: ".delivery-panel",
+            selector: ".acceptance-panel",
             props: ["rowGap", "paddingTop", "paddingRight", "paddingBottom", "paddingLeft"],
             max: 7,
           },
@@ -1006,7 +1006,7 @@ test(
           ".section",
           ".section-head",
           ".section-body > .empty-hint",
-          ".delivery-panel",
+          ".acceptance-panel",
           ".criteria-group",
         ]
         const props = ["borderTopWidth", "borderRightWidth", "borderBottomWidth", "borderLeftWidth"] as const

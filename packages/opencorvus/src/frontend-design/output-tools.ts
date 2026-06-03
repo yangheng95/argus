@@ -248,7 +248,7 @@ export function buildFrontendTemplateReport(collector: FrontendTemplateOutputCol
       `## Design System\n${collector.final.design_system}`,
       `## Recommended Stack\n${collector.final.tech_stack.length ? markdownList(collector.final.tech_stack) : "- not specified"}`,
       `## Frontend Template\n${requireReportString(collector.final.frontend_template, "frontend_template")}`,
-      `## Final Delivery Mode\n${collector.final.final_delivery_mode}`,
+      `## Final Acceptance Mode\n${collector.final.final_acceptance_mode}`,
       `## Fillable Modules\n${collector.final.fillable_modules}`,
       `## Implementation Problems And Agent Handoff\n${collector.final.completeness_review}`,
       `## Reuse Constraints\n${renderComponentReusePlan(collector.final.component_reuse_plan)}`,
@@ -396,10 +396,10 @@ export const FrontendTemplateFinalSchema = z.object({
       "prefer existing repo stack plus local static/mock API data unless the artifacts expose real API needs. " +
       "Do not name backend infrastructure, storage, queues, caches, or realtime systems unless directly observed.",
     ),
-  final_delivery_mode: z
+  final_acceptance_mode: z
     .enum(["visual_baseline_allowed", "maintainable_replacement_required"])
     .describe(
-      "Explicit delivery mode. Use maintainable_replacement_required whenever the user asks for maintainability, real implementation, component reuse, or replacement of mechanical output; otherwise use visual_baseline_allowed. This field selects implementation expectations; it is not a standalone pass/fail mechanism.",
+      "Explicit acceptance mode. Use maintainable_replacement_required whenever the user asks for maintainability, real implementation, component reuse, or replacement of mechanical output; otherwise use visual_baseline_allowed. This field selects implementation expectations; it is not a standalone pass/fail mechanism.",
     ),
   frontend_template: OptionalMarkdownField(
     "Authoritative frontend template for the frontend_design-delivered target project and downstream fine-tuning: routes, layout slots, source-package entrypoints, semantic containers, states, and acceptance anchors.",
@@ -431,7 +431,7 @@ export const FrontendTemplateFinalSchema = z.object({
       "Optional source-region evolution plan. Use it only when a specific raw/generated skeleton region should be replaced, deleted, or deferred during in-place refinement. It is diagnostic/planning evidence, not a schema requirement and not a requirement to delete the whole skeleton.",
     ),
   quality_project_contract: OptionalMarkdownField(
-      "The high-quality project contract for the target delivery project frontend_design is delivering before Build fine-tuning. It defines the maintainable target app shape, source ownership, semantic component tree, data modules, styling system, library use, runtime entrypoints, verification commands, measured webpage_evaluate visual evidence, and zero-finding web_clone_source_audit evidence needed before claiming final maintainability. The skeleton project is source evidence only.",
+      "The high-quality project contract for the target acceptance project frontend_design is delivering before Build fine-tuning. It defines the maintainable target app shape, source ownership, semantic component tree, data modules, styling system, library use, runtime entrypoints, verification commands, measured webpage_evaluate visual evidence, and zero-finding web_clone_source_audit evidence needed before claiming final maintainability. The skeleton project is source evidence only.",
   ),
   quality_project_items: z
     .array(CompactTemplateItemSchema)
@@ -464,7 +464,7 @@ export const FrontendTemplateFinalSchema = z.object({
       notes: [],
     })
     .describe(
-      "Concrete frontend-design project output. For webpage replicas, this should identify the target delivery project root when role=implementation_target, " +
+      "Concrete frontend-design project output. For webpage replicas, this should identify the target acceptance project root when role=implementation_target, " +
       "its role, entrypoints, source package, generation tool, completed replacements, unfinished source debt, and any materialization defects. frontend-design-skeleton is source_baseline_input evidence only and must never be the implementation_target. Build starts from the target project for integration and precision fixes.",
     ),
   visual_consistency_contract: OptionalMarkdownField(
@@ -556,7 +556,7 @@ const ToolBaselineReplacementPlanItemSchema = z.object({
 const FrontendTemplateToolInputSchema = z.object({
   design_system: z.string().min(1),
   tech_stack: z.array(z.string().min(1)).min(1),
-  final_delivery_mode: z.enum(["visual_baseline_allowed", "maintainable_replacement_required"]),
+  final_acceptance_mode: z.enum(["visual_baseline_allowed", "maintainable_replacement_required"]),
   frontend_template: z.string().default(""),
   frontend_template_sections: z.array(ToolCompactTemplateItemSchema).default([]),
   fillable_modules: z.string().default(""),
@@ -616,12 +616,12 @@ function renderFrontendProjectReport(project: FrontendTemplateFinal["frontend_pr
     `- status: ${project.status}`,
     `- role: ${project.role}`,
     `- project_root: ${project.project_root || "(not created)"}`,
-    `- delivery_root: ${isFrontendDesignSkeleton ? "." : project.role === "implementation_target" ? project.project_root || "." : "."}`,
+    `- acceptance_root: ${isFrontendDesignSkeleton ? "." : project.role === "implementation_target" ? project.project_root || "." : "."}`,
     `- source_package: ${project.source_package || "(not specified)"}`,
     `- generation_tool: ${project.generation_tool || "(not specified)"}`,
   ]
   if (isFrontendDesignSkeleton) {
-    lines.push("- adoption_rule: frontend-design-skeleton is source_baseline_input evidence only. frontend_design must extract from it into the target delivery project; if this remains the named project in maintainable mode, the named source debt is unfinished frontend_design work.")
+    lines.push("- adoption_rule: frontend-design-skeleton is source_baseline_input evidence only. frontend_design must extract from it into the target acceptance project; if this remains the named project in maintainable mode, the named source debt is unfinished frontend_design work.")
   }
   if (project.entrypoints.length > 0) {
     lines.push("- entrypoints:")
@@ -651,7 +651,7 @@ const AppliesToField = z
 
 const SeverityField = z
   .enum(["must", "should"])
-  .describe("'must' for exact visual contracts; 'should' for lower-specificity constraints delivery still verifies")
+  .describe("'must' for exact visual contracts; 'should' for lower-specificity constraints acceptance still verifies")
 
 const RationaleField = z
   .string()

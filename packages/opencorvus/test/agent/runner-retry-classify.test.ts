@@ -90,7 +90,7 @@ describe("classifyAttemptOutcome", () => {
 
   test("isComplete ok=false terminal=false → retry (default)", () => {
     // Existing behaviour preserved: callers that don't opt into terminal
-    // (e.g. delivery, whose retries genuinely give the model another shot
+    // (e.g. acceptance, whose retries genuinely give the model another shot
     // at code generation) get the same retry loop they had before Phase F.
     const out = classifyAttemptOutcome({
       decision: { ok: false, reason: "missing dimension verdicts" },

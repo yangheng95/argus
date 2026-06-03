@@ -100,7 +100,7 @@ describe("renderVisualContractPreamble", () => {
   })
 
   /**
-   * Spec: delivery-attachment-store-single-source-2026-05-11.md (companion
+   * Spec: acceptance-attachment-store-single-source-2026-05-11.md (companion
    * to the `InlineBase64InPartError` session.updatePart guard). The host
    * gate is rule-6.1 second branch (data integrity) and is permanent; the
    * preamble carries rule-6.1 first branch (prompt-side correction) so the

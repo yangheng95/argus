@@ -985,7 +985,7 @@ export function TaskList(props: TaskListProps) {
                           onClick={() => expandDirectoryGroup(group.directory)}
                           aria-label={t("progress.expand_more", { count: String(hiddenCount()) })}
                         >
-                          {t("delivery.show_more")}
+                          {t("acceptance.show_more")}
                         </Button>
                       </span>
                     </Show>

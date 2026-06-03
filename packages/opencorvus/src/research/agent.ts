@@ -225,7 +225,7 @@ function buildUserPrompt(
   sections.push(
     "# Output Boundary\n\n" +
       "Call `submit_research_brief` exactly once. The tool result is an evidence artifact, not a process pointer. " +
-      "Never write `NEXT: call ...`, never recommend `publish_delivery`, and never tell the orchestrator which tool must run next.",
+      "Never write `NEXT: call ...`, never recommend `publish_acceptance`, and never tell the orchestrator which tool must run next.",
   )
   return sections.join("\n\n")
 }

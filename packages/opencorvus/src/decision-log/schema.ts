@@ -15,7 +15,7 @@ export const DecisionLogTable = sqliteTable(
     task_id: text().notNull(),
     /** Which goal produced this entry (null = requirements phase / global). */
     goal_id: text(),
-    /** Lifecycle phase: requirements | plan | execute | eval | delivery */
+    /** Lifecycle phase: requirements | plan | execute | eval | acceptance */
     phase: text().notNull(),
     /** Decision category key. Examples: "runtime", "backend_framework", "test_runner", "api_contract" */
     key: text().notNull(),

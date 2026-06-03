@@ -79,7 +79,7 @@ body {
   --card-stage-build:          color-mix(in oklch, var(--warn) 55%, var(--bad) 45%);
   --card-stage-explore:        color-mix(in oklch, var(--accent) 68%, var(--warn) 32%);
   --card-stage-evaluator:      color-mix(in oklch, var(--good) 70%, var(--accent) 30%);
-  --card-stage-delivery:       color-mix(in oklch, var(--good) 82%, var(--accent) 18%);
+  --card-stage-acceptance:       color-mix(in oklch, var(--good) 82%, var(--accent) 18%);
   --card-stage-integrity:      color-mix(in oklch, var(--good) 45%, var(--bad) 55%);
   --card-stage-tool:           color-mix(in srgb, var(--text-soft) 70%, transparent);
 

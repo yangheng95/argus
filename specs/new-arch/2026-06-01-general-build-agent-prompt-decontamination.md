@@ -21,7 +21,7 @@ scenario-specific instruction bypasses it.
 | `src/build/agent.ts::externalBuildSystemContract` | External Codex/Claude build executors receive hard-coded webpage clone rules even when the task is report/PRD/debug/test work. |
 | `test/agent/core-prompt-hygiene.test.ts` | Tests currently lock webpage-clone behavior into build-core, so prompt bloat is protected as expected behavior. |
 | `test/build-agent/external-system.test.ts` | Current worktree already expects new `source_baseline_input` wording, while `src/build/agent.ts` still has older visual-baseline wording. This proves prompt migration is partially applied and inconsistent. |
-| `src/build/agent.ts::buildUserPrompt` | Context-specific sections exist (`frontendDesign`, `integrityFeedback`, `retryGuidance`, `deliveryFeedback`, design specs, contract graph), but scenario policy is not isolated behind them. |
+| `src/build/agent.ts::buildUserPrompt` | Context-specific sections exist (`frontendDesign`, `integrityFeedback`, `retryGuidance`, `acceptanceFeedback`, design specs, contract graph), but scenario policy is not isolated behind them. |
 | `src/decision-log/bundle.ts` | A full decision-log projection exists specifically so downstream agents can read task-specific context instead of requiring every policy in the core prompt. |
 
 ## Root Cause
@@ -52,7 +52,7 @@ Build prompt composition must have three explicit layers:
      verification, do not leave dirty/staged work, do not leak prompt/rule
      details.
    - No frontend-design, web-clone, mirror, skeleton, source audit, browser
-     package, database-page-replica, integrity-review internals, or delivery
+     package, database-page-replica, integrity-review internals, or acceptance
      taxonomy except as generic "use supplied upstream feedback".
 
 2. **Capability Overlay Compiler**
@@ -63,7 +63,7 @@ Build prompt composition must have three explicit layers:
        clone source-baseline overlay.
      - visual attachments/design specs present -> visual-reference overlay.
      - integrity feedback present -> integrity-rework overlay.
-     - delivery feedback present -> acceptance-repair overlay.
+     - acceptance feedback present -> acceptance-repair overlay.
      - direct report/PRD request -> document-deliverable overlay.
      - debug/test request -> debugging/testing overlay.
    - The overlay must render only when the corresponding context is present.

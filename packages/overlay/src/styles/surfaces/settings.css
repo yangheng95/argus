@@ -2626,7 +2626,7 @@
 
 /* ─────────────────────────────────────────────────────────────
    Extracted from styles.css 2026-05-04 (continuation slice).
-   Settings / channel-config / delivery / detail / opacity / llm
+   Settings / channel-config / acceptance / detail / opacity / llm
    surface chrome.
    ───────────────────────────────────────────────────────────── */
 
@@ -2692,7 +2692,7 @@
   flex: 1;
 }
 
-.delivery-panel-meta {
+.acceptance-panel-meta {
   display: flex;
   min-height: calc(26px * var(--ui-scale));
   gap: calc(4px * var(--ui-scale));
@@ -2700,25 +2700,25 @@
   align-items: baseline;
 }
 
-.delivery-iteration {
+.acceptance-iteration {
   font-size: var(--ui-font-tiny);
   color: var(--text-muted);
   font-variant-numeric: tabular-nums;
 }
 
-.delivery-summary {
+.acceptance-summary {
   font-size: var(--ui-font-title);
   color: var(--text);
   line-height: 1.65;
 }
-.delivery-summary[data-clamped="true"] {
+.acceptance-summary[data-clamped="true"] {
   display: -webkit-box;
   -webkit-line-clamp: 10;
   -webkit-box-orient: vertical;
   overflow: hidden;
 }
 
-.delivery-summary-toggle {
+.acceptance-summary-toggle {
   align-self: flex-start;
   background: none;
   border: none;
@@ -2727,11 +2727,11 @@
   color: var(--accent);
   cursor: pointer;
 }
-.delivery-summary-toggle:hover {
+.acceptance-summary-toggle:hover {
   text-decoration: underline;
 }
 
-.delivery-files-link {
+.acceptance-files-link {
   align-self: flex-start;
   background: none;
   border: var(--oc-border-width) solid var(--border);
@@ -2742,7 +2742,7 @@
   font-family: var(--mono);
   cursor: pointer;
 }
-.delivery-files-link:hover {
+.acceptance-files-link:hover {
   border-color: var(--accent);
   color: var(--text);
 }

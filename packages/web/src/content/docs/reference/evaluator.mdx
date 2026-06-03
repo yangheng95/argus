@@ -1,15 +1,15 @@
 ---
 title: Evaluator
-description: The evaluator decides whether a delivery is acceptable — deterministic checks first, LLM judge as fallback.
+description: The evaluator decides whether a acceptance is acceptable — deterministic checks first, LLM judge as fallback.
 ---
 
-Evaluator decides whether a delivery is acceptable. It runs **deterministic checks** (real commands) first, then falls back to **LLM judge** for the final verdict.
+Evaluator decides whether a acceptance is acceptable. It runs **deterministic checks** (real commands) first, then falls back to **LLM judge** for the final verdict.
 
 ## Two-stage evaluation
 
 ### Stage 1: deterministic checks
 
-`evaluateGoal` (`packages/opencorvus/src/evaluator/per-goal.ts`), in priority order:
+`evaluateGoal` (`packages/opencorvus/src/acceptance/checks/per-goal.ts`), in priority order:
 
 1. **Extract commands from `done_definition`** — parse executable commands (`pnpm test`, `cargo build`, `pytest`, …) from acceptance text; run them; trust exit codes.
 2. **Project discovery** — walk up from `owned_paths` to find the nearest `package.json` / `pyproject.toml` / `Cargo.toml` / `go.mod`; auto-detect build/test/lint commands.
@@ -17,7 +17,7 @@ Evaluator decides whether a delivery is acceptable. It runs **deterministic chec
 
 ### Stage 2: LLM judge
 
-Engaged only when deterministic checks **can't decide** (e.g., no executable tests). Produces `EvaluatorAnalysis` (`src/evaluator/types.ts:37`):
+Engaged only when deterministic checks **can't decide** (e.g., no executable tests). Produces `EvaluatorAnalysis` (`src/acceptance/checks/types.ts:37`):
 
 ```typescript
 interface EvaluatorAnalysis {
@@ -65,7 +65,7 @@ Set via `assistant.evaluator.tier`:
 
 | verdict | next action |
 |---|---|
-| `accepted` | proceed to Delivery |
+| `accepted` | proceed to Acceptance |
 | `rejected` | retry (same plan) or replan (new plan) — `replan_guidance` decides |
 | `inconclusive` | treated as rejected but prefers replan (missing info) |
 

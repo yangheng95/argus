@@ -61,7 +61,7 @@ describe("flat-redesign Icon primitive registry", () => {
     expect(registered.length).toBeGreaterThanOrEqual(14)
     expect(registered).toContain("close")
     expect(registered).toContain("folder")
-    expect(registered).toContain("delivery")
+    expect(registered).toContain("acceptance")
   })
 
   test("every IconName declared in the union has an ICON_PATHS entry", () => {

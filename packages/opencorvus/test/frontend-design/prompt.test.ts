@@ -55,7 +55,7 @@ describe("frontend-design prompt assembly", () => {
     expect(prompt).toContain("Component-kind fidelity is mandatory")
     expect(prompt).toContain("chart, map, heatmap, geographic visualization")
     expect(prompt).toContain("must not be delivered as a flat copied SVG, image, or decorative vector")
-    expect(prompt).toContain("All visible content in maintainable UI/webpage delivery must be componentized")
+    expect(prompt).toContain("All visible content in maintainable UI/webpage acceptance must be componentized")
     expect(prompt).toContain("fed by props/data modules/fixtures/API adapters")
     expect(prompt).toContain("data modules, mock fixtures, and API adapters are region-owned source slices")
     expect(prompt).toContain("must contain only records proven by the currently selected replacement-plan row")
@@ -91,7 +91,7 @@ describe("frontend-design prompt assembly", () => {
     expect(prompt).toContain("about 70% of reconstruction authority")
     expect(prompt).toContain("Skeleton/source-dom/source-skeleton evidence carries the remaining 30%")
     expect(prompt).toContain("the PRD/component contract wins")
-    expect(prompt).toContain("edit the target delivery project")
+    expect(prompt).toContain("edit the target acceptance project")
     expect(prompt).toContain("Build is not the primary rawproject-to-maintainable-code worker")
     expect(prompt).toContain("The target project plus the frontend_design iteration-state artifact are part of the deliverable surface")
     expect(prompt).toContain("Do not move, rename, install, build, render, or start a dev/preview server inside `frontend-design-skeleton`")
@@ -158,16 +158,16 @@ describe("frontend-design prompt assembly", () => {
     expect(prompt).toContain(".opencorvus/runtime/tasks/tsk_web_clone/frontend-design/web-clone-source/")
     expect(prompt).toContain(".opencorvus/runtime/tasks/tsk_web_clone/frontend-design/frontend-design-skeleton/")
     expect(prompt).toContain("After the source project tool returns")
-    expect(prompt).toContain("extract only that selected source region's source-dom/rawcode evidence into the target delivery project")
+    expect(prompt).toContain("extract only that selected source region's source-dom/rawcode evidence into the target acceptance project")
     expect(prompt).toContain("Build should receive the target project that frontend_design already populated")
-    expect(prompt).toContain("Default target delivery project root: `web-clone-target`")
+    expect(prompt).toContain("Default target acceptance project root: `web-clone-target`")
     expect(prompt).toContain("React + Vite + TypeScript")
     expect(prompt).toContain("Default scoped styling approach: CSS Modules")
     expect(prompt).toContain("Root files alone are not a real frontend app")
     expect(prompt).toContain("benchmark workspaces often contain minimal `package.json`, `tsconfig.json`, `data/`, `.git/`, and `.opencorvus/` shell files")
-    expect(prompt).toContain("those shell files should not become the delivery project")
+    expect(prompt).toContain("those shell files should not become the acceptance project")
     expect(prompt).toContain("create the runnable target app in the default target directory")
-    expect(prompt).toContain("Populate the target delivery project directly with file-edit tools by copying/adapting the runnable baseline from `frontend-design-skeleton` first")
+    expect(prompt).toContain("Populate the target acceptance project directly with file-edit tools by copying/adapting the runnable baseline from `frontend-design-skeleton` first")
     expect(prompt).toContain("the first target-project editing pass is skeleton-baseline adoption")
     expect(prompt).toContain("create/adapt `package.json`, `index.html`, `tsconfig.json`, `vite.config.ts`, `src/main.tsx`")
     expect(prompt).toContain("Do not begin a new target with only isolated `src/components/*` and `src/data/*` files while package/config/entrypoints are missing")
@@ -203,7 +203,7 @@ describe("frontend-design prompt assembly", () => {
     expect(prompt).not.toContain("Do not call `write`, `edit`, or `apply_patch` for `package.json`, `tsconfig.json`, or bundler config during that source-coverage pass")
     expect(prompt).toContain("When a target-root file already exists, read that exact file first with `read_file`")
     expect(prompt).toContain("use direct `write` only for genuinely new target-project source files and assets")
-    expect(prompt).toContain("Before any install/build/render/server command, create or populate that target delivery project and perform all runnable commands there")
+    expect(prompt).toContain("Before any install/build/render/server command, create or populate that target acceptance project and perform all runnable commands there")
     expect(prompt).toContain("frontend_project.project_root` should be `web-clone-target`")
     expect(prompt).not.toContain("Source coverage comes before manifest/config tuning and package installation")
     expect(prompt).toContain("Run the baseline build/render/visual comparison first")
@@ -260,7 +260,7 @@ describe("frontend-design prompt assembly", () => {
         }, {})
 
         expect(result.output).toContain("Bounded next action for frontend_design")
-        expect(result.output).toContain("Do not move, rename, or repurpose this skeleton output as the target delivery project")
+        expect(result.output).toContain("Do not move, rename, or repurpose this skeleton output as the target acceptance project")
         expect(result.output).toContain("sourceProjectManifest.json")
         expect(result.output).toContain("sourceDomIterationState.ts")
         expect(result.output).toContain("sourceDomReplacementPlan.ts")
@@ -272,7 +272,7 @@ describe("frontend-design prompt assembly", () => {
         expect(result.output).toContain("If the candidate is `HeaderNavigation`, do not read `FooterNavigation`, `App.tsx`, `package.json`, `tsconfig.json`, or full source-IR/style catalogs before recording the header selection")
         expect(result.output).not.toContain("target root `package.json`")
         expect(result.output).toContain("Do not read `src/data/sourceData.ts`, `src/data/svgPaths.ts`, raw HTML, or generated CSS in full")
-        expect(result.output).toContain("First populate the target delivery project with a runnable skeleton-baseline app copied/adapted")
+        expect(result.output).toContain("First populate the target acceptance project with a runnable skeleton-baseline app copied/adapted")
         expect(result.output).toContain("package.json`, `index.html`, `tsconfig.json`, `vite.config.ts`, `src/main.tsx")
         expect(result.output).toContain("skeleton `src/App.tsx` entry wiring")
         expect(result.output).toContain("This is the only allowed pre-region target write sequence")
@@ -487,7 +487,7 @@ describe("frontend-design prompt assembly", () => {
     await submit.execute({
       design_system: "custom financial dashboard",
       tech_stack: ["React", "mock API"],
-      final_delivery_mode: "visual_baseline_allowed",
+      final_acceptance_mode: "visual_baseline_allowed",
       frontend_template: "frontend replica scope",
       fillable_modules: "frontend implementation source handoff",
       component_inventory: "component inventory",
@@ -527,7 +527,7 @@ describe("frontend-design prompt assembly", () => {
     const payload = {
       design_system: "custom financial dashboard",
       tech_stack: ["React", "mock API"],
-      final_delivery_mode: "visual_baseline_allowed",
+      final_acceptance_mode: "visual_baseline_allowed",
       frontend_template: "frontend replica scope",
       fillable_modules: "frontend implementation source handoff",
       component_inventory: "component inventory",
@@ -652,7 +652,7 @@ describe("frontend-design prompt assembly", () => {
     expect(prompt).toContain("Do not instruct downstream agents to move or clean `web-clone-source/`")
     expect(prompt).toContain("reuse existing repository components/design-system primitives")
     expect(prompt).toContain("mature maintained libraries for hard UI domains")
-    expect(prompt).toContain("Host-prepared webpage rawproject refinement stays in `final_delivery_mode=maintainable_replacement_required`")
+    expect(prompt).toContain("Host-prepared webpage rawproject refinement stays in `final_acceptance_mode=maintainable_replacement_required`")
     expect(prompt).toContain("deferred regions must be reported as unfinished source debt")
     expect(prompt).not.toContain("use `visual_baseline_allowed` only when the operator explicitly accepts captured source regions")
     expect(prompt).toContain("sourceDomIterationState.ts")

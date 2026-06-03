@@ -21,8 +21,8 @@
 > 5. 实际 explore agent 的 `include`（`agent.ts:157`）是
 >    `["read", "glob", "search_code", "bash", "external_code_search", "lsp", "webfetch", "memory"]`
 >    ——下文里写的 `grep` / `codesearch` 都已重命名为 `search_code` / `external_code_search`。
-> 6. 实际 delivery agent（`agent.ts:233`）用 `tools: { include: [] }` 空白名单，
->    review/output tools 由 `DeliveryAgent.verify` 通过 SessionLoop extra tools 在运行时注入。
+> 6. 实际 acceptance review（`agent.ts:233`）用 `tools: { include: [] }` 空白名单，
+>    review/output tools 由 `AcceptanceReview.verify` 通过 SessionLoop extra tools 在运行时注入。
 > 7. `requirements` / `architect` / `frontend-design` / `intent-analysis` / `integrity`
 >    / `prosecutor` 等 stage agent **走** ToolRegistry（在 `agent.ts:316+` 注册，全部是
 >    `mode: "primary" + hidden: true` 的 native），不属于"不走 ToolRegistry"那一类。
@@ -31,7 +31,7 @@
 >    "不走 ToolRegistry"的只有 orchestrator tools 内部自建工具集（`build` / `deliver` 等
 >    tool 内部创建子 session 时手动组装）。
 > 8. `task` / `planner` agent 不存在——`task` 是个 tool（`src/tool/task.ts`），
->    `planner` agent 已随 `src/planner/` 删除。
+>    `planner` agent 已随 the removed planning package 删除。
 > 9. `orchestrator` 自己也走 ToolRegistry（`agent.ts:243`，`tools.include` 列出 dispatch /
 >    observation / bookkeeping 三类约 30 个 tool id；见 §6 通信白名单与 11 spec 第五章）。
 > 10. frontend-design 是 mirror 工具的**唯一**消费者（`tool/registry.ts:181` 显式跳过
@@ -100,7 +100,7 @@ export async function tools(model, agent?) {
 | title | include | `[]` | 无工具 |
 | summary | include | `[]` | 无工具 |
 | control | include | `["panel"]` | 仅 panel capability（`agent.ts:227`） |
-| delivery | include | `[]` | adversarial evaluator；工具集经 orchestrator `deliver` tool 的 session 注入（`agent.ts:242`） |
+| acceptance | include | `[]` | adversarial evaluator；工具集经 orchestrator `deliver` tool 的 session 注入（`agent.ts:242`） |
 | orchestrator | include | dispatch/observation/interaction/bookkeeping 共一组（含 `cancel_subagent`，见 `agent.ts:299-332`） | **走** ToolRegistry（`agent.ts:267+`） |
 | requirements | include | `["read_file", "find_files", "search_code", "list_directory", "memory_search", "memory_get", "todoread", "todowrite"]` | **走** ToolRegistry（`agent.ts:340+`，`mode:"primary"` + `hidden` native） |
 | architect | include | `["read_file", "find_files", "search_code", "list_directory", "memory_search", "memory_get", "todoread", "todowrite"]` | **走** ToolRegistry（`agent.ts:355+`） |
@@ -187,7 +187,7 @@ tools: z.union([
 
 ## 不动的
 
-- `orchestrator/tools.ts` 的 orchestrator **自建工具**（`build` / `deliver` / `prosecute` / `publish_delivery` 等 dispatch/observation tool）—— 这些不走 ToolRegistry，由 orchestrator tool 工厂独立构建。注意：`requirements` / `architect` / `frontend-design` / `intent-analysis` / `integrity` / `prosecutor` 是 **native agent，走 ToolRegistry**（见上表），不属于此类；`planner` agent 已删除
+- `orchestrator/tools.ts` 的 orchestrator **自建工具**（`build` / `deliver` / `prosecute` / `publish_acceptance` 等 dispatch/observation tool）—— 这些不走 ToolRegistry，由 orchestrator tool 工厂独立构建。注意：`requirements` / `architect` / `frontend-design` / `intent-analysis` / `integrity` / `prosecutor` 是 **native agent，走 ToolRegistry**（见上表），不属于此类；`planner` agent 已删除
 - `PermissionNext` 基础设施 —— 复用现有 deny/allow/ask 语义
 - agent prompt 内容 —— 工具不可见后，prompt 中 "use the Task tool" 之类的指示自然失效，无需改 prompt
 

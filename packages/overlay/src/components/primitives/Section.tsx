@@ -8,8 +8,8 @@
 //   </Section>
 //
 //   Controlled open state — hold a ref and set detailsEl.open imperatively,
-//   or pass `id` so DOM accessors (like board's deliverySection) resolve:
-//   <Section id="deliverySection" ref={el => detailsEl = el} ...>
+//   or pass `id` so DOM accessors (like board's acceptanceSection) resolve:
+//   <Section id="acceptanceSection" ref={el => detailsEl = el} ...>
 //
 // CSS: src/styles/primitives/section.css
 // Migration target: Step 9.E — Board / FilesSection / GoalWorkflowGroup sections.

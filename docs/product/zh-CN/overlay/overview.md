@@ -40,7 +40,7 @@ bun run build:overlay   # 生成平台安装包（.msi / .dmg / .deb）
 
 | 面板 | 作用 | 文件 |
 |---|---|---|
-| **Board** | 任务总览：requirements / architect / build / delivery 各阶段卡片 | `src/components/Board.tsx` |
+| **Board** | 任务总览：requirements / architect / build / acceptance 各阶段卡片 | `src/components/Board.tsx` |
 | **TaskList** | 左侧任务列表，实时状态 | `src/components/TaskList.tsx` |
 | **Conversation** | Agent 对话 / 工具调用 / 推理过程 | `src/components/Conversation.tsx` |
 | **ChatComposer** | 输入框，支持发消息 / 附件 | `src/components/ChatComposer.tsx` |
@@ -53,7 +53,7 @@ bun run build:overlay   # 生成平台安装包（.msi / .dmg / .deb）
 | **WorkspacePanel** + **Workspace\*Launcher** | 工作区控制、外部 IDE / 终端 / coding CLI 启动 | `src/components/Workspace*.tsx` |
 | **RequirementsPanel** / **ArchitectPanel** | requirements / architect agent 输出展示 | `src/components/*.tsx` |
 | **IntegrityCard** | Integrity reviewer 输出 | `src/components/IntegrityCard.tsx` |
-| **EvaluationCriteriaPanel** | Delivery 验收准则与证据 | `src/components/EvaluationCriteriaPanel.tsx` |
+| **EvaluationCriteriaPanel** | Acceptance 验收准则与证据 | `src/components/EvaluationCriteriaPanel.tsx` |
 | **NotificationCenter** | 通知 / 系统提示 | `src/components/NotificationCenter.tsx` |
 
 设置面板（侧边栏，`src/components/settings/`）：
@@ -87,7 +87,7 @@ bun run build:overlay   # 生成平台安装包（.msi / .dmg / .deb）
 | `task.rewound` / `task.message` | message 流处理 |
 | `goal.progress` / `goal.passed` / `goal.failed` | GoalWorkflowGroup 行 |
 | `workflow.selected` / `workflow.step.updated` / `goal.workflow.progress` | Board 阶段卡片 |
-| `delivery.ready` / `delivery.gate.rejected` / `delivery.evidence.updated` | 交付阶段 |
+| `acceptance.ready` / `acceptance.gate.rejected` / `acceptance.evidence.updated` | 交付阶段 |
 | `message.updated` / `part.updated` / `part.delta` | messageStore 批处理 |
 | `agent.updated` | agentEvents |
 | `config.changed` | 触发 `loadConfigInfo()`（partial diff 模式） |

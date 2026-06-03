@@ -543,14 +543,14 @@ describe("task message routes", () => {
             submit: true,
             status: true,
             abort: true,
-            delivery: true,
+            acceptance: true,
             resume: true,
             events: false,
           }),
           submit: async () => { throw new Error("submit should not be called") },
           status: async () => { throw new Error("status should not be called") },
           abort: async () => { throw new Error("abort should not be called") },
-          delivery: async () => { throw new Error("delivery should not be called") },
+          acceptance: async () => { throw new Error("acceptance should not be called") },
           resume: async () => {
             resumeCalls += 1
             throw new Error("task inject must not resume the active executor")

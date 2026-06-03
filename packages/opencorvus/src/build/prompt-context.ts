@@ -2,7 +2,7 @@ export interface BuildPromptOverlayContext {
   frontendResearch?: string
   frontendDesign?: string
   integrityFeedback?: string
-  deliveryFeedback?: string
+  acceptanceFeedback?: string
   designSpecs?: readonly unknown[]
 }
 
@@ -50,10 +50,10 @@ function renderWebCloneSourceOverlay(): string {
     "",
     "This overlay applies because the frontend_design handoff names a webpage-clone source package or source baseline. Use the named handoff fields and artifact paths as the source of truth.",
     "",
-    "- Build starts from the frontend-design source project named by `frontend_project` when that field is present. If `role=implementation_target`, adopt/copy/adapt that refined project into the delivery root and perform only integration, precision visual repair, and acceptance fixes. If `role=source_baseline_input`, treat the named source debt as unfinished frontend_design work and do not hide it by starting a freehand rebuild.",
+    "- Build starts from the frontend-design source project named by `frontend_project` when that field is present. If `role=implementation_target`, adopt/copy/adapt that refined project into the acceptance root and perform only integration, precision visual repair, and acceptance fixes. If `role=source_baseline_input`, treat the named source debt as unfinished frontend_design work and do not hide it by starting a freehand rebuild.",
     "- `web-clone-source/` is evidence and implementation input. Read the compact package paths named by the handoff before editing; do not search sibling worktrees, primary project directories, absolute paths, or raw `mirror/` to repair missing source evidence.",
-    "- Treat `.opencorvus/runtime/tasks/<taskID>/frontend-design/` as read-only input. Do not delete, move, rewrite, or clean runtime evidence directories; copy only the delivery app files/assets you need into the root implementation.",
-    "- Do not copy `web-clone-source/`, `frontend-design-skeleton/`, `mirror/`, `references/`, or top-level `reference.png` into the delivery root as deliverables. Reference images and source packages are verification/evidence inputs, not app-owned source.",
+    "- Treat `.opencorvus/runtime/tasks/<taskID>/frontend-design/` as read-only input. Do not delete, move, rewrite, or clean runtime evidence directories; copy only the acceptance app files/assets you need into the root implementation.",
+    "- Do not copy `web-clone-source/`, `frontend-design-skeleton/`, `mirror/`, `references/`, or top-level `reference.png` into the acceptance root as deliverables. Reference images and source packages are verification/evidence inputs, not app-owned source.",
     "- If required source package files named by the handoff are missing, empty, corrupt, or unreadable, fail through `report_build_result` with a concrete blocker naming the missing files instead of inventing behavior.",
     "- For clone replicas, work from the frontend_design refined source first. Measure it against the reference/overlay and use the mismatch report for source-backed precision repair; do not restart the rawproject-to-maintainable conversion unless the handoff explicitly names remaining source debt.",
     "- CSS repair must be source-backed. Inspect `web-clone-source/source-skeleton/critical.css`, `web-clone-source/source-skeleton/full-source.css`, `web-clone-source/source-skeleton/used-selectors.json`, source IR/layout evidence, and `frontend-design-skeleton/src/styles/**`; if runtime-generated classes are absent from those artifacts, report an extraction/frontend_design blocker instead of broad handwritten CSS reconstruction.",
@@ -86,13 +86,13 @@ function renderIntegrityReworkOverlay(integrityFeedback: string): string {
   ].join("\n")
 }
 
-function renderAcceptanceRepairOverlay(deliveryFeedback: string): string {
+function renderAcceptanceRepairOverlay(acceptanceFeedback: string): string {
   return [
     "## Acceptance Repair Overlay",
     "",
     "The persisted acceptance review supplied the following rejection packet. Use it as task-specific repair evidence; do not replace the goal/request contract with a generic summary.",
     "",
-    deliveryFeedback.trim(),
+    acceptanceFeedback.trim(),
   ].join("\n")
 }
 
@@ -127,9 +127,9 @@ export function renderBuildPromptOverlays(context: BuildPromptOverlayContext | u
     sections.push(renderIntegrityReworkOverlay(context.integrityFeedback))
   }
 
-  if (hasText(context?.deliveryFeedback)) {
+  if (hasText(context?.acceptanceFeedback)) {
     ids.push("acceptance-repair")
-    sections.push(renderAcceptanceRepairOverlay(context.deliveryFeedback))
+    sections.push(renderAcceptanceRepairOverlay(context.acceptanceFeedback))
   }
 
   return { ids, sections }

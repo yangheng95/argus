@@ -37,9 +37,9 @@ rg -n "runtimeRoot|taskRoot|traceDir\(\)|worktreesRoot|ownershipRoot|taskRootFro
 ```
 
 The single write-side path source is `packages/opencorvus/src/project/runtime-paths.ts`.
-Direct callers route through `ProjectRuntimePaths`, with one extra delivery
+Direct callers route through `ProjectRuntimePaths`, with one extra acceptance
 patch filename under `engine/publisher.ts` that already uses
-`ProjectRuntimePaths.deliveryPaths(...)`.
+`ProjectRuntimePaths.acceptancePaths(...)`.
 
 ## Legacy Reader
 

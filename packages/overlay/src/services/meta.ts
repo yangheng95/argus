@@ -116,7 +116,7 @@ export function diffStatus(item: any): DiffStatus {
 // ── loadChanges ──
 
 /**
- * Derives the current changes from the board store's delivery result diffs and
+ * Derives the current changes from the board store's acceptance result diffs and
  * returns the normalised DiffItem list.
  * NOTE: The original loadChanges.changes and called
  * renderChanges(). This function returns the data instead, so callers can
@@ -126,10 +126,10 @@ export function diffStatus(item: any): DiffStatus {
 export function deriveChanges(): DiffItem[] {
   if (!activeTaskID()) return [];
   const board = boardStore.board as any;
-  const delivery =
-    board?.acceptedDelivery?.result?.diffs ||
-    board?.delivery?.result?.diffs ||
-    board?.candidateDelivery?.result?.diffs ||
+  const acceptance =
+    board?.acceptedAcceptance?.result?.diffs ||
+    board?.acceptance?.result?.diffs ||
+    board?.candidateAcceptance?.result?.diffs ||
     [];
-  return normalizeDiffs(delivery);
+  return normalizeDiffs(acceptance);
 }

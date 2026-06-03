@@ -1,8 +1,8 @@
 /**
  * AttachmentStore.writeFromPath — single-source convenience for tool
- * producers (delivery screenshot, future MCP image migration).
+ * producers (acceptance screenshot, future MCP image migration).
  *
- * Specs: specs/delivery-attachment-store-single-source-2026-05-11.md.
+ * Specs: specs/acceptance-attachment-store-single-source-2026-05-11.md.
  *
  * The point of writeFromPath is to eliminate every ad-hoc
  * `fs.readFile + base64 + data URL` pipeline. These tests pin the

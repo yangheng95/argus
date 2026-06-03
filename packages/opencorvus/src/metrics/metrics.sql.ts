@@ -85,8 +85,8 @@ export const EngineMetricResultTable = sqliteTable(
 )
 
 /**
- * Counterexample evidence (read-only after legacy delivery hardening was
- * retired; the table is preserved for legacy delivery reads, but no production
+ * Counterexample evidence (read-only after legacy acceptance hardening was
+ * retired; the table is preserved for legacy acceptance reads, but no production
  * writer exists today). iteration_resolved NULL ⇔ still open. novelty_hash
  * dedups re-surfacing of the same reproducer.
  */

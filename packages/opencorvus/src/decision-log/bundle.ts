@@ -1,7 +1,7 @@
 // ── DecisionLogBundle ──
 //
 // Materializes the COMPLETE decision log for a task as a stable, on-disk file
-// that downstream agents (in-process build / delivery; external codex /
+// that downstream agents (in-process build / acceptance; external codex /
 // claude-code build executors) can reference by path.
 //
 // Why this exists:
@@ -21,7 +21,7 @@
 //
 // Path resolution invariant (see artifacts/2026-05-18-decision-log-
 // materialization §8): the OpenCorvus `read` tool resolves a relative path
-// against `Instance.directory` (tool/read.ts), so in-process build / delivery
+// against `Instance.directory` (tool/read.ts), so in-process build / acceptance
 // agents reach the task-scoped runtime decision-log projection by RELATIVE path even though
 // their session cwd is a goal worktree. External executors (codex /
 // claude-code) run with cwd = goal worktree and use their own native file

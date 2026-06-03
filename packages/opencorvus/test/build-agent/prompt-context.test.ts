@@ -2,16 +2,16 @@ import { describe, expect, test } from "bun:test"
 import { buildRetryFeedbackPrompt, buildUserPrompt } from "../../src/build/agent"
 
 describe("build agent prompt context", () => {
-  test("request-path build receives canonical delivery feedback", () => {
+  test("request-path build receives canonical acceptance feedback", () => {
     const prompt = buildUserPrompt(
       {
         kind: "request",
         text: "Fix the integrated calculator deliverable.",
       },
       {
-        deliveryFeedback:
+        acceptanceFeedback:
           "Acceptance review rejected the integrated deliverable.\n" +
-          "Canonical delivery feedback packet (JSON, copied from persisted artifacts):\n" +
+          "Canonical acceptance feedback packet (JSON, copied from persisted artifacts):\n" +
           "```json\n{\"manifest\":{\"finalGate\":{\"failedReviewIds\":[\"review:contract_audit\"]}}}\n```",
       },
     )
@@ -21,7 +21,7 @@ describe("build agent prompt context", () => {
     expect(prompt.indexOf("## Acceptance Repair Overlay")).toBeLessThan(prompt.indexOf("# Request"))
   })
 
-  test("goal-path build receives canonical delivery feedback separately from retry summary", () => {
+  test("goal-path build receives canonical acceptance feedback separately from retry summary", () => {
     const prompt = buildUserPrompt(
       {
         kind: "goal",
@@ -34,7 +34,7 @@ describe("build agent prompt context", () => {
       },
       {
         retryFeedback: "Old coordinator summary.",
-        deliveryFeedback: "Raw verdict artifact JSON with contract_audit_failure.",
+        acceptanceFeedback: "Raw verdict artifact JSON with contract_audit_failure.",
       },
     )
 
@@ -194,7 +194,7 @@ describe("build agent prompt context", () => {
       },
       {
         retryGuidance: "Re-run after fixing the missing terminal tool call.",
-        deliveryFeedback: "Raw verdict JSON.",
+        acceptanceFeedback: "Raw verdict JSON.",
       },
     )
 
@@ -239,7 +239,7 @@ describe("build agent prompt context", () => {
           "## Persistent Integrity Findings (Treat Blocking Items As Must-Fix)\n\n" +
           "- **BF-retry**: retry still lacks storage validation.",
         retryFeedback: "Prior attempt failed.",
-        deliveryFeedback: "Delivery rejected.",
+        acceptanceFeedback: "Acceptance rejected.",
       },
     )
 
@@ -552,7 +552,7 @@ describe("build agent prompt context", () => {
           "# Frontend Design Public Report\n\n" +
           "- key=frontend_template value=AMD dashboard\n" +
           "- key=quality_project_contract value=Build readable React source from the source skeleton, semantic components/data/style modules, and preserved CSS sidecars\n" +
-          "- key=frontend_project value=status: created\nrole: source_baseline_input\nproject_root: frontend-design-skeleton\ndelivery_root: .\nadoption_rule: copy/adapt into root app before build pass\n" +
+          "- key=frontend_project value=status: created\nrole: source_baseline_input\nproject_root: frontend-design-skeleton\nacceptance_root: .\nadoption_rule: copy/adapt into root app before build pass\n" +
           "- key=visual_consistency_contract value=Match AMD page geometry and chart/table styling\n" +
           "- key=evidence_source_manifest value=references/url-amd.png\n" +
           "- key=fillable_modules value=Use web-clone-source/README.md, web-clone-source/implementation-blueprint.md, web-clone-source/source-ir/component-tree.json, web-clone-source/source-ir/content-model.json, web-clone-source/source-skeleton/critical.css, and source-skeleton evidence only for targeted gaps; web-clone-source-skeleton-consumption-audit.json passed",

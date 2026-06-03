@@ -239,7 +239,7 @@ test("collectAgentFileChangeGroupsFromNodes aggregates all agent roots once", ()
   expect(groups[1]?.changes.map((item) => item.file)).toEqual(["src/b.ts"])
 })
 
-test("mergeChangeGroups keeps agent rows and delivery diff rows in one scoped group", () => {
+test("mergeChangeGroups keeps agent rows and acceptance diff rows in one scoped group", () => {
   const groups = mergeChangeGroups([
     {
       id: "goal:goal-a:run-a",
@@ -257,13 +257,13 @@ test("mergeChangeGroups keeps agent rows and delivery diff rows in one scoped gr
       goalID: "goal-a",
       goalRunID: "run-a",
       goalLabel: "#G1V1",
-      goalTitle: "Delivery",
+      goalTitle: "Acceptance",
       commitRef: "abc123def456",
       additions: 7,
       deletions: 1,
       changes: [
         { file: "src/a.ts", status: "added", additions: 5, deletions: 0, before: "", after: "export const a = 1" },
-        { file: "src/delivery-only.ts", status: "modified", additions: 2, deletions: 1 },
+        { file: "src/acceptance-only.ts", status: "modified", additions: 2, deletions: 1 },
       ],
     },
   ])
@@ -274,14 +274,14 @@ test("mergeChangeGroups keeps agent rows and delivery diff rows in one scoped gr
     goalID: "goal-a",
     goalRunID: "run-a",
     goalLabel: "#G1V1",
-    goalTitle: "Delivery",
+    goalTitle: "Acceptance",
     commitRef: "abc123def456",
     additions: 7,
     deletions: 1,
   })
   expect(groups[0]?.changes.map((item) => item.file)).toEqual([
     "src/a.ts",
-    "src/delivery-only.ts",
+    "src/acceptance-only.ts",
     "src/tool-only.ts",
   ])
   expect(groups[0]?.changes.find((item) => item.file === "src/a.ts")).toMatchObject({
@@ -306,7 +306,7 @@ test("agent file changes render only through the right-panel Files workbench", (
   expect(changesPanel).toContain("mergeChangeGroups(")
   expect(changesPanel).toContain("cardTreeStore.order")
   expect(changesPanel).toContain("<FileChangesView")
-  expect(changesPanel).toContain('focusEvent="delivery:focus-changes"')
+  expect(changesPanel).toContain('focusEvent="acceptance:focus-changes"')
   expect(sharedView).toContain("changes-summary")
   expect(sharedView).toContain("changes-commit")
   expect(sharedView).not.toContain("changes-goal-picker")

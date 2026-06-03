@@ -57,10 +57,10 @@ opencorvus 长出 5 张状态表 + AgentRuntime + Orchestrator trigger 枚举 + 
 持久层只有两张已有表：session（对话日志）+ artifact（不可变事实）
 ```
 
-- **没有** `engine_run / engine_goal_run / engine_delivery / engine_evaluation`
+- **没有** `engine_run / engine_goal_run / engine_acceptance / engine_evaluation`
 - **没有** `task.status / run.status / run.phase / blocking_reason / verdict` 等状态列
 - **没有** `AgentRuntime`；所有 agent 用同一个 `SessionLoop / SessionPrompt.prompt()`
-- **没有** Orchestrator 的 `OrchestratorTrigger` 枚举（`batch_complete / delivery_rejected / operator_message`）；触发方式就是"往 orchestrator session 追加一条消息"
+- **没有** Orchestrator 的 `OrchestratorTrigger` 枚举（`batch_complete / acceptance_rejected / operator_message`）；触发方式就是"往 orchestrator session 追加一条消息"
 - **没有** `recoverOrphanRuns / abortRuns`；进程死了就是 session 结尾，下一次 orchestrator 读对话自己决定重跑/放弃
 - **唯一入口 agent 只有 orchestrator**；用户请求、operator message、恢复信号都先进入 orchestrator session
 - **其余 agent 全部工具化**；`requirements / frontend_design / architect / build / deliver / question` 都只能作为 orchestrator 的 tool 调用存在
@@ -78,7 +78,7 @@ opencorvus 长出 5 张状态表 + AgentRuntime + Orchestrator trigger 枚举 + 
   - `engine/runtime.ts` 仍按 live `engine_run.status` 轮询 / sync
   - `orchestrator/tools.ts` 里的 `create_run / submit_execution / retry_goal / restart_from_stage` 仍把 `active_run_id` 当真
 - **读模型仍直接消费旧表**：
-  - `workbench/board.ts` / `task-api` / overlay 调试面仍读取 `engine_run / engine_delivery / engine_evaluation / workflow_state`
+  - `workbench/board.ts` / `task-api` / overlay 调试面仍读取 `engine_run / engine_acceptance / engine_evaluation / workflow_state`
   - `verification/` 仍把 `engine_evaluation` 当正式证据存储
 - **迁移约束必须入文档**：
   - `SessionLoop` 已有 `StructuredOutput`，因此阶段 3 的统一输出方向成立
@@ -102,7 +102,7 @@ opencorvus 长出 5 张状态表 + AgentRuntime + Orchestrator trigger 枚举 + 
 | `engine/queue.ts` / `engine/runtime.ts` / `orchestrator/tools.ts` 直接依赖 `active_run_id`            | queue / runtime / tool gate 全部从 session + artifact / in-flight tool context 推导          | 先拆 gate，再删 `active_run_id`                      |
 | GoalPool 跨进程 dispatch + 持久登记                                                                   | `build(goal, cwd)` = 一个 tool，内部 await 子 session；多 goal 并行 = parallel tool call     | 删 GoalPool 的 dispatch 调度 + 相关表                |
 | `task.active_run_id / active_plan_version_id / workflow_state`                                        | 不存在；orchestrator 读 session + artifact 自知                                              | 删列                                                 |
-| `workbench/board.ts` / overlay / verification 直读 `engine_run / engine_delivery / engine_evaluation` | 单一 projection 入口，从 session + artifact 现算 UI/API 视图                                 | 先换读路径，再删表                                   |
+| `workbench/board.ts` / overlay / verification 直读 `engine_run / engine_acceptance / engine_evaluation` | 单一 projection 入口，从 session + artifact 现算 UI/API 视图                                 | 先换读路径，再删表                                   |
 | DB 行上反查 worktree / executor 存活性                                                                | worktree ownership marker + child-process registry                                           | 先建 registry，再切纯 OS 清理                        |
 | "batch_complete re-trigger" 这种伪事件                                                                | build tool 返回后 orchestrator 继续下一步，不需要"再被触发一次"                              | 删                                                   |
 
@@ -170,14 +170,14 @@ opencorvus 长出 5 张状态表 + AgentRuntime + Orchestrator trigger 枚举 + 
 
 - `task_pointer`（替代 `engine_task`）：仅 `id, session_id, title, request, time_created, time_completed, error`
 
-**全表删除**：`engine_run / engine_goal_run / engine_delivery / engine_evaluation`
+**全表删除**：`engine_run / engine_goal_run / engine_acceptance / engine_evaluation`
 
 需要"某 task 过去 deliver 了几次 / 最后 verdict 是什么"？`describe.ts` 读该 session 的 tool_result 消息 + 对应 artifact 现算，不从 status 列读。
 
 **删除顺序约束（按现状新增）**：
 
 - 先替换**控制面门闩**：`active_run_id` / `workflow_state` / queue/runtime gating 先退场，再删列
-- 先替换**读路径**：`describe.ts` / `task-api` / `workbench/board.ts` / overlay / verification 先改读 session + artifact projection，再删 `engine_run / engine_delivery / engine_evaluation`
+- 先替换**读路径**：`describe.ts` / `task-api` / `workbench/board.ts` / overlay / verification 先改读 session + artifact projection，再删 `engine_run / engine_acceptance / engine_evaluation`
 - 禁止出现“旧表已删，但 board / overlay 只能返回空壳或消失”的中间态
 
 ---
@@ -241,7 +241,7 @@ Claude Code 的答案：重启 = 新会话。opencorvus 采用相同语义：
 - `describe.ts`：task snapshot 增派生字段 `run_orphan: boolean`
 - `orchestrator/agent.ts` prompt：**只能引用现存工具**。若当前架构下没有真实的“从 orphan 恢复”入口，就不得写“起新 run”指引；必要时补一个最小工具，或明确要求阶段 4 前继续沿用旧刹车
 - 审计 `engine/queue.ts` / `engine/runtime.ts` / `orchestrator/tools.ts` 中所有基于 `active_run_id` / live run 的 gate；若当期未拆完，阶段 1 必须**保留现有 abort 刹车**，只把 orphan 暴露为事实，禁止把 observe-only 上线
-- regression test：process restart + 前序 delivery 未通过场景下 task 仍能推进（必须验证不会卡在 stale `active_run_id`）
+- regression test：process restart + 前序 acceptance 未通过场景下 task 仍能推进（必须验证不会卡在 stale `active_run_id`）
 - **交付验收**：
   - 本次 `tsk_dbe77dfce001Lh8rA66fISdbGF` 同形状 fixture 重启后能自行推进
   - `run_orphan` 可在 describe snapshot 中读到
@@ -251,15 +251,15 @@ Claude Code 的答案：重启 = 新会话。opencorvus 采用相同语义：
 
 ### 阶段 2（Orchestrator trigger 枚举 + loop 重入模型拆除）— ✅ 2026-04-24
 
-- [x] 删 `OrchestratorTrigger` 的 `batch_complete / delivery_rejected / operator_message / retry` 分支；替换为 `OrchestratorEvent = { note?, operatorMessage? }`
+- [x] 删 `OrchestratorTrigger` 的 `batch_complete / acceptance_rejected / operator_message / retry` 分支；替换为 `OrchestratorEvent = { note?, operatorMessage? }`
 - [x] `Orchestrator.processTask(taskID, event?)` 不再接受 trigger；首次唤醒（`!task.workflow_state`）用 `task.request`，后续唤醒使用 `event.note` 或通用“re-read context and decide”提示
-- [x] `describeTrigger` 函数整体删除，改为导出 `OrchestratorEventNote.{batchComplete, deliveryRejected, operatorMessage, retry}` 纯字符串合成器（供 loop / task-api 同源调用）
-- [x] `buildSystemParts` 不再读 trigger：最近一次 delivery 反馈直接读 `findLatestDeliveryVerdictArtifact`；当前 run 的 delivery / evaluation 直接读 `task.active_run_id`
-- [x] `runTaskLoop` 重写：`trigger: TaskLoopTrigger` → `event?: OrchestratorEvent`；内部不再用 `trigger.kind === "batch_complete"` 作为等待判据，改为 state-only（`listActiveGoalRunsForRun`）；delivery-rejected 水印 / pool drain / pending redispatch 均只合成 `event = { note }` 注入下轮唤醒
+- [x] `describeTrigger` 函数整体删除，改为导出 `OrchestratorEventNote.{batchComplete, acceptanceRejected, operatorMessage, retry}` 纯字符串合成器（供 loop / task-api 同源调用）
+- [x] `buildSystemParts` 不再读 trigger：最近一次 acceptance 反馈直接读 `findLatestAcceptanceVerdictArtifact`；当前 run 的 acceptance / evaluation 直接读 `task.active_run_id`
+- [x] `runTaskLoop` 重写：`trigger: TaskLoopTrigger` → `event?: OrchestratorEvent`；内部不再用 `trigger.kind === "batch_complete"` 作为等待判据，改为 state-only（`listActiveGoalRunsForRun`）；acceptance-rejected 水印 / pool drain / pending redispatch 均只合成 `event = { note }` 注入下轮唤醒
 - [x] `engine/queue.ts` 删除 `deriveQueuedTrigger` / `deriveResumeTrigger`；`dispatchTaskLoop({ taskID, event? })` 仅透传调用者提供的 event
 - [x] task-api 的 `createTask / retryTask / recordOperatorNote / ... message` 改用 `event: { note: OrchestratorEventNote.X(...) }` 或 `event: undefined`
 - [x] 长跑 session 生命周期约束写入 `loop.ts` 顶部注释：唤醒→single decision→释放；idle 不持 provider；崩溃就是 session 尾部；orchestrator 外没有任何入口可以外部唤醒
-- [x] **交付校验**：`rg "OrchestratorTrigger|batch_complete|delivery_rejected" packages/opencorvus/src/orchestrator` = 0；`rg "TaskLoopTrigger" packages/opencorvus/src` = 0；queue.test.ts 断言“advanceQueue 不再合成 event”
+- [x] **交付校验**：`rg "OrchestratorTrigger|batch_complete|acceptance_rejected" packages/opencorvus/src/orchestrator` = 0；`rg "TaskLoopTrigger" packages/opencorvus/src` = 0；queue.test.ts 断言“advanceQueue 不再合成 event”
 - [x] 全量 engine 测试（85 pass / 0 fail）确认无退化
 
 **阶段 2 后续收口**：
@@ -319,7 +319,7 @@ await SessionPrompt.prompt({
   - [x] `frontend-design`（2026-04-24）：删 `finalize_design_requirements` + 跨字段校验（从工具层移走，LLM 自判），新增 `FrontendTemplateFinalSchema`（design_system + tech_stack）；multimodal parts 走 `SessionPrompt.prompt.parts`；orchestrator/tools.ts FrontendDesignAgent.analyze 的 `sessionID` 参数改名为 `parentSessionID`；prompt core 更新提示 StructuredOutput 替代 finalize；smoke test 通过 kimi-k2.5 验证 16 specs 提取 + structuredMissing=false
   - [x] `requirements`（2026-04-24）：删 `finalize_requirements` + 其嵌入校验（≥1 requirement、≥2 decisions 下放到调用方检查），新增 `RequirementsFinalSchema`（summary）；RequirementsService + orchestrator/tools.ts `sessionID` → `parentSessionID`；prompt core 替换 finalize_requirements 引用；smoke test 通过 kimi-k2.5 验证 7 requirements / 5 decisions / structuredMissing=false
   - [x] `planner`（2026-04-24）：删 `submit_plan` tool + PlannerCollector（已删 submit_plan.execute 内的 re-emit 校验）；PlannerReportSchema 直接驱动 StructuredOutput，新增 `plannerReportFromStructured` 替代 collector 通道；agent.ts 用 SessionPrompt + child session(kind=planner) + withExtraTools；engine/goal-pool.ts `sessionID` → `parentSessionID`；prompt core `submit_plan` → `StructuredOutput`；typecheck + 85 engine 测试通过。smoke test 跳过（planner 需要真 GoalContract 构造，模式已由前 3 agent 验证）
-  - [x] **deliver**（2026-04-24 commit 待定）：保留 `submit_verdict` 作为 extraTool（其 180 行跨字段 self-correction 契约值得保留，且 tool 名不含 `finalize_` 子串 → grep deliverable 满足）。agent.ts 把 `AgentRuntime.run` 换成 `SessionPrompt.withExtraTools(guard.tools) + SessionPrompt.prompt({ system, parts, tools: enableMap })`，**不用 json_schema**（终态通过 submit_verdict.execute 写 collector）。MAX_RETRIES 循环围在外层重试 SessionPrompt.prompt，每次 attempt 开 child session(kind=delivery)，通过 `Bus.subscribe(Session.Event.Error)` 过滤 sessionID 做 stream-error 检测。`agent.delivery.steps = 160` 写入 agent config 以替代 `stopWhen=stepCountIs(max_steps)`。typecheck + 216 tests 通过。DeliveryVerdictSchema 的 .refine 迁移**不需要** —— submit_verdict 的 execute 内部保持全部跨字段校验，比拆到 zod 更易维护。
+  - [x] **deliver**（2026-04-24 commit 待定）：保留 `submit_verdict` 作为 extraTool（其 180 行跨字段 self-correction 契约值得保留，且 tool 名不含 `finalize_` 子串 → grep deliverable 满足）。agent.ts 把 `AgentRuntime.run` 换成 `SessionPrompt.withExtraTools(guard.tools) + SessionPrompt.prompt({ system, parts, tools: enableMap })`，**不用 json_schema**（终态通过 submit_verdict.execute 写 collector）。MAX_RETRIES 循环围在外层重试 SessionPrompt.prompt，每次 attempt 开 child session(kind=acceptance)，通过 `Bus.subscribe(Session.Event.Error)` 过滤 sessionID 做 stream-error 检测。`agent.acceptance.steps = 160` 写入 agent config 以替代 `stopWhen=stepCountIs(max_steps)`。typecheck + 216 tests 通过。AcceptanceVerdictSchema 的 .refine 迁移**不需要** —— submit_verdict 的 execute 内部保持全部跨字段校验，比拆到 zod 更易维护。
   - [x] **orchestrator**（2026-04-24 commit 待定）：agent.ts 的 `AgentRuntime.run` 替换为 `SessionPrompt.withExtraTools(guard.tools) + SessionPrompt.withStepHook(finalizeDeferredStop) + SessionPrompt.prompt({ system, parts, tools: enableMap })`。所有先前描述的 4 个阻塞都已实装：
     - ① `finalizeDeferredStop`：由新增的 `SessionLoop.withStepHook` 驱动（commit `a103f6488`, 3-a-4）
     - ② `MAX_STEPS=20`：`agent.orchestrator.steps = 20` 写进 `src/agent/agent.ts`
@@ -333,9 +333,9 @@ await SessionPrompt.prompt({
 - orchestrator 仍是唯一入口 agent；迁移后的 `requirements / architect / frontend_design / build / deliver` 只允许作为 tool-opened child session 存在。
 - **阶段 3-c**：`architect` 与 **fidelity reviewer** 单独迁移；`submit_fidelity_verdict` 及其 session/event 语义必须在新运行时下逐项复核，禁止和普通 `finalize_*` 一锅端。
 - **阶段 3-d**（✅ 2026-04-24）：`packages/opencorvus/src/agent/runtime/` 目录整体删除
-  - orchestrator/tools.ts 去掉 requirements/design/architect/delivery 四处 dead sessionStreamHooks 调用（对应 agent 已不消费 stream 参数）
+  - orchestrator/tools.ts 去掉 requirements/design/architect/acceptance 四处 dead sessionStreamHooks 调用（对应 agent 已不消费 stream 参数）
   - orchestrator/tools.ts 里 refine tool 从 `ProviderLLM.stream` 直接驱动迁到 `SessionPrompt.prompt`
-  - delivery/service.ts 去 `stream: TextHooks` 参数
+  - acceptance/service.ts 去 `stream: TextHooks` 参数
   - session/message.ts 的 `normalizeToolInput` 依赖从 `@/agent/runtime/protocol-norm` 迁到本地 `./tool-input-norm`
   - `rg "AgentRuntime|@/agent/runtime|agent/runtime/" packages/opencorvus/src` = 0 ✓
   - typecheck clean，216 session+engine 测试通过
@@ -343,7 +343,7 @@ await SessionPrompt.prompt({
 **交付**：
 
 - `rg "AgentRuntime|agent/runtime/" packages/opencorvus/src/` = 0
-- `rg "finalize_" packages/opencorvus/src/(agent|orchestrator|delivery|requirements|architect|planner|design)` = 0
+- `rg "finalize_" packages/opencorvus/src/(agent|orchestrator|acceptance|requirements|architect|planner|design)` = 0
 - 新增 stage agent 的模板 / 脚手架 / 文档只指向 session agent 基建 + `extraTools` 通道，不再示范专用 runtime
 - fidelity session 仍能正确产出 verdict，并被 overlay / event 流消费
 - 每次 stage agent 迁移前后，该 agent 的单测（以及其在 integration test / benchmark 中的下游行为）都必须 pass
@@ -381,29 +381,29 @@ await SessionPrompt.prompt({
     - gated by `OPENCORVUS_RUN_BUILD_SMOKE=1`；`BuildAgent.run` API 契约由真实 LLM 调用验证通过
 - **5-c**（✅ 2026-04-24）：orchestrator prompt 重写 + build 工具重接
   - `orchestrator/tools.ts` 既有 `build` tool 的 execute 体改写为 `await BuildAgent.run(...)`：pipeline 路径从 DB 加载 goal（acceptance_specs / owned_paths / exports / imports / depends_on）构造 `BuildTarget`；direct 路径走 request-shape。worktree 生命周期 100% 由 BuildAgent.run 的 try/finally 管理，每次 build 自动隔离
-  - 返回给 orchestrator 的 tool_result 改为富结构化报告（status / summary / patch_summary / commit_ref / tests[] / error / worktreeDir），LLM 可直接判断 build 是否真的修了前轮 delivery 拒因
+  - 返回给 orchestrator 的 tool_result 改为富结构化报告（status / summary / patch_summary / commit_ref / tests[] / error / worktreeDir），LLM 可直接判断 build 是否真的修了前轮 acceptance 拒因
   - `createOrchestratorTools` 末尾新增 `DEPRECATED_TOOL_NAMES` 过滤器：`dispatch_goal / exec_goal / submit_execution / retry_goal / create_run` 从 AI SDK 广告的工具列表移除（实现 280+ 行代码仍在 tools.ts 内，改回滚只需删过滤 Set）
   - `agent.ts` 的 `ORCHESTRATOR_INSTRUCTIONS` 重写：
     - `## Tools` 段：build 描述扩展为双 shape（direct 无 goalID / pipeline 带 goalID），明确 "multi-goal parallel = 同一 step 多个 build tool_call"
     - `## New task — execution` 段：pipeline 流程 `create_run → submit_execution → wait` → `build({ goalID })` 批量 + `deliver`
     - `## After a goal batch completes` 段：所有 retry_goal / dispatch_goal 指引改为 `build({ goalID, request })`
-    - `## After a delivery rejection` 段：rung 5 从 retry_goal 切换到 `build({ goalID })`；rung 8 "shared-state obstacle" 依然用 `build`
+    - `## After a acceptance rejection` 段：rung 5 从 retry_goal 切换到 `build({ goalID })`；rung 8 "shared-state obstacle" 依然用 `build`
   - typecheck clean；232 session+engine+build-agent 测试通过（5 pre-existing flaky 无回归）
 - **5-d**（✅ 2026-04-24）：`orchestrator/loop.ts` 完整重写
-  - 删除：`GoalPool` 导入、`PoolHooks`、旧 build-only executor-group helper 命名、`mergeGoalDelivery`、`findRun` / `findPlan`、`isRunReadyForGoalDispatch`、`dispatch-queue` 动态引用、`describeTaskFromRow` 全部从 loop 消失
+  - 删除：`GoalPool` 导入、`PoolHooks`、旧 build-only executor-group helper 命名、`mergeGoalAcceptance`、`findRun` / `findPlan`、`isRunReadyForGoalDispatch`、`dispatch-queue` 动态引用、`describeTaskFromRow` 全部从 loop 消失
   - 删除：`waitForGoalCompletion` 函数（70 行 goal_run polling）
   - 删除：`GoalDesc` / `RunRow` / `PlanRow` import，`decisionTurn` 之后的 "is goal-pool driving" 200+ 行
-  - 保留：serial per-task 链、MAX_TASK_ITERATIONS 上限、delivery rejection artifact 监测 + auto-rewake with note、terminal-status 退出、combineSignals / interruptTaskLoop
+  - 保留：serial per-task 链、MAX_TASK_ITERATIONS 上限、acceptance rejection artifact 监测 + auto-rewake with note、terminal-status 退出、combineSignals / interruptTaskLoop
   - 新模型：build tool 在 orchestrator 单 step 内**同步**执行（SessionPrompt + parallel tool_calls），所以 loop 不再需要"调度 → poll → 唤醒"三段结构——orchestrator 一次决策跑完就 return，loop 根据 artifact 水位做一次 auto-rewake 或退出
   - 文件从 597 行减到 290 行（-307 lines，约 -51%）；依然 typecheck 通过 + 232 测试全过
   - `waitForGoalCompletion` / `DECISION_INACTIVITY_MS` / `listActiveGoalRunsForRun` 从此文件 100% 消失（phase 5-g 时可从整个 src 搜 `GoalPool` 确认最后清零）
-- **5-e**（✅ 2026-04-24）：`workbench/board.ts` 的 4 处直查 `EngineDeliveryTable` / `EngineEvaluationTable` 全部改走 `engine/store` projection helpers：
+- **5-e**（✅ 2026-04-24）：`workbench/board.ts` 的 4 处直查 `EngineAcceptanceTable` / `EngineEvaluationTable` 全部改走 `engine/store` projection helpers：
   - 新增 `findLatestEvaluationForGoalRun` 到 `engine/store.ts`（补齐 goal_run → evaluation 的查询 API）
   - board.ts 的 `allDeliveries` / `allEvaluations` full-row 拉取改用 `findDeliveriesForTask` + `findEvaluationsByTask`（需 `.reverse()` 因为 helpers 是 newest-first，board 原语义是 oldest-first + `.at(-1)`）
   - board.ts 的 `deliveries.count` / `updated` 聚合 SQL 改为拉全行 reduce 计算（小表代价可忽略）
-  - `buildStepSummary` + `compileGoalStep` 两处 per-goal-run delivery 查询改用 `findDeliveryByGoalRun`
+  - `buildStepSummary` + `compileGoalStep` 两处 per-goal-run acceptance 查询改用 `findAcceptanceByGoalRun`
   - `latestEvaluationForGoalRun` 本地函数变为 `const latestEvaluationForGoalRun = findLatestEvaluationForGoalRun`（单一 projection 入口）
-  - 剩余 `EngineDeliveryTable / EngineEvaluationTable` 引用均为 `typeof ...$inferSelect` 类型注解（只读类型，不是 SQL 查询），这部分在 phase 6 reset DB 后可自然替换为 store 层返回类型
+  - 剩余 `EngineAcceptanceTable / EngineEvaluationTable` 引用均为 `typeof ...$inferSelect` 类型注解（只读类型，不是 SQL 查询），这部分在 phase 6 reset DB 后可自然替换为 store 层返回类型
   - typecheck clean，232 session+engine+build-agent 测试通过；0 regression
 - **5-f**（✅ 2026-04-24 cutover 标注）：verification 模块的长期证据读写语义已由前置 DAM Phase 5 移出 `engine_evaluation`（convergence → `metrics/arbiter.ts`；`engine_evaluation` 仅剩 "verdict wrapper" 角色）。phase 5-f 做了三件事：
   - `verification/persist.ts` + `verification/index.ts` 头部注释明示 `engine_evaluation` 下 phase 6 删表、evidence 将切到 artifact stream；public API（`persistEvidence / queryEvidence / findLatestGoalRunEvidence / ...`）承诺签名不变，旧 callers 不需要改
@@ -436,19 +436,19 @@ await SessionPrompt.prompt({
 
 **规模审计**（2026-04-24）：
 
-- `EngineRunTable / EngineGoalRunTable / EngineDeliveryTable / EngineEvaluationTable` 引用分布：store.ts (79 refs) / persist.ts (38) / verification/persist.ts (33) / workbench/board.ts (20) / engine.sql.ts (16) / runtime.ts (10) / writer.ts (6) / state.ts (6)，其他 ≤ 5
-- `engine_evaluation` 3 处写：engine/persist.ts::persistFailedRunEvaluation / engine/persist.ts::persistGoalDelivery / verification/persist.ts::persistEvidence
-- 跨越 engine/storage/verification/workbench/task-api/delivery/metrics/protocol 八个模块。单 PR 全删不可行
+- `EngineRunTable / EngineGoalRunTable / EngineAcceptanceTable / EngineEvaluationTable` 引用分布：store.ts (79 refs) / persist.ts (38) / verification/persist.ts (33) / workbench/board.ts (20) / engine.sql.ts (16) / runtime.ts (10) / writer.ts (6) / state.ts (6)，其他 ≤ 5
+- `engine_evaluation` 3 处写：engine/persist.ts::persistFailedRunEvaluation / engine/persist.ts::persistGoalAcceptance / verification/persist.ts::persistEvidence
+- 跨越 engine/storage/verification/workbench/task-api/acceptance/metrics/protocol 八个模块。单 PR 全删不可行
 
 **子阶段分解**（顺序执行，每步独立 PR）：
 
 - **6-a**（✅ 2026-04-24）：`opencorvus db reset [--force]` CLI 命令（`src/cli/cmd/db.ts`）— 按 rule 13 原子清零 SQLite（db + WAL + SHM）+ 磁盘 scratch（`<cwd>/.opencorvus/worktrees/` + `<cwd>/.opencorvus/ownership/`）+ `snapshot/` 目录；`Instance.disposeAll` + `Database.close` 前置以保证 WAL flush 干净；无 `--force` 打印 warning 并退出非零码防误触
-- **6-b**（✅ 2026-04-24）：`verification/persist.ts` 重写为 artifact-backed — `persistEvidence` 写 `engine_artifact`（`kind="verification-evidence"` + `label="evidence-<scope>"`），payload 承载 `{scope,status,verdict,summary,checks,time_completed}`；5 个 `find*Evidence` helper 全部从 `EngineArtifactTable` 读 + `rowToEvidence` 重建；`EngineEvaluationTable` 定义删除（`engine/engine.sql.ts` + DDL `engine_evaluation` CREATE），9 处 import 清理（`storage/schema.ts`、`engine/index.ts`、`workbench/board.ts`、`task-api/index.ts`、`tool/analytics.ts`、`test/engine/state-invariants.test.ts`、`test/server/export-routes.test.ts` 全改读 artifact；3 个 test fixture insert 改写 artifact shape）；`engine/persist.ts::persistTaskDelivery` / `updateEvaluationFromDeliveryVerdict` 改为 append-only（`persistEvidence` 再插一行，`time_created desc` 自动 pick latest）；`persistFailedRunEvaluation` 不再写 DB 行（`run.error` + snapshot doc 已覆盖）；`store.ts::EvaluationRow` 改为手写类型（保留 snake_case 字段给老消费者），`artifactRowToEvaluationRow` 做 payload→row 映射；`findLatestFailedEvalForGoal` 死代码删除；旧 delivery tool 签名不变（无 churn）；`EngineArtifactKind` 加 `"verification-evidence"`；typecheck + `test/engine/` (92 pass) + `test/server/export-routes.test.ts` 全绿
-- **6-c**（✅ 2026-04-24）：`EngineDeliveryTable` + `EngineDeliveryRoundTable` 双表删除。拆成 2 个 commit：
-  - **6-c-1**（`330fffebd`）：`engine_delivery_round` + `delivery/round-store.ts` + `script/delivery/replay.ts` + `delivery/delivery.sql.ts` 四处一齐删 — 该表是 P2 观测侧信道（写入方仅 `orchestrator/tools.ts:2427` 一点，读取方仅 replay script），rule 22 禁双源；picky-loop verdict signal 已由 `decision_log` + artifact stream 承载。orchestrator 调用点 + schema export + 相关注释清理同步完成
-  - **6-c-2**（本 commit）：`EngineDeliveryTable` → `engine_artifact` kind="delivery"。`writeDeliveryRow` 写单行 artifact（id=deliveryID, label="delivery-task"/"delivery-goal_run"），payload 承载 status/summary/result；`markDeliveryPublishing` + `finalizeDeliveryResult` 改为 append-only（新写一行，`time_created desc` 取最新），引入 `findLatestDeliveryArtifact` 内部 helper；`DeliveryRow` 改手写类型 + `artifactRowToDeliveryRow` / `latestPerDelivery` 读模型 helper；4 个 `findDelivery*` 全部 artifact-derived；`EngineArtifactTable.delivery_id` FK 解耦为普通 text 列；`EngineDeliveryTable` 定义 + DDL `engine_delivery` CREATE + 5 处 import 清理（`engine/index.ts`、`storage/schema.ts`、`task-api/index.ts`、`workbench/board.ts`、2 个 test）；`workbench/board.ts::viewBoardDelivery` + `boardOverview` typeof 切到 `DeliveryRow`；`script/benchmark/inspect-db.sh` SQL 改读 artifact；test fixture insert 改写 artifact shape。typecheck 绿；`test/engine/` (92 pass) + `test/server/export-routes.test.ts` 绿
+- **6-b**（✅ 2026-04-24）：`verification/persist.ts` 重写为 artifact-backed — `persistEvidence` 写 `engine_artifact`（`kind="verification-evidence"` + `label="evidence-<scope>"`），payload 承载 `{scope,status,verdict,summary,checks,time_completed}`；5 个 `find*Evidence` helper 全部从 `EngineArtifactTable` 读 + `rowToEvidence` 重建；`EngineEvaluationTable` 定义删除（`engine/engine.sql.ts` + DDL `engine_evaluation` CREATE），9 处 import 清理（`storage/schema.ts`、`engine/index.ts`、`workbench/board.ts`、`task-api/index.ts`、`tool/analytics.ts`、`test/engine/state-invariants.test.ts`、`test/server/export-routes.test.ts` 全改读 artifact；3 个 test fixture insert 改写 artifact shape）；`engine/persist.ts::persistTaskAcceptance` / `updateEvaluationFromAcceptanceVerdict` 改为 append-only（`persistEvidence` 再插一行，`time_created desc` 自动 pick latest）；`persistFailedRunEvaluation` 不再写 DB 行（`run.error` + snapshot doc 已覆盖）；`store.ts::EvaluationRow` 改为手写类型（保留 snake_case 字段给老消费者），`artifactRowToEvaluationRow` 做 payload→row 映射；`findLatestFailedEvalForGoal` 死代码删除；旧 acceptance tool 签名不变（无 churn）；`EngineArtifactKind` 加 `"verification-evidence"`；typecheck + `test/engine/` (92 pass) + `test/server/export-routes.test.ts` 全绿
+- **6-c**（✅ 2026-04-24）：`EngineAcceptanceTable` + `EngineAcceptanceRoundTable` 双表删除。拆成 2 个 commit：
+  - **6-c-1**（`330fffebd`）：`engine_acceptance_round` + `acceptance/round-store.ts` + `script/acceptance/replay.ts` + `acceptance/acceptance.sql.ts` 四处一齐删 — 该表是 P2 观测侧信道（写入方仅 `orchestrator/tools.ts:2427` 一点，读取方仅 replay script），rule 22 禁双源；picky-loop verdict signal 已由 `decision_log` + artifact stream 承载。orchestrator 调用点 + schema export + 相关注释清理同步完成
+  - **6-c-2**（本 commit）：`EngineAcceptanceTable` → `engine_artifact` kind="acceptance"。`writeAcceptanceRow` 写单行 artifact（id=acceptanceID, label="acceptance-task"/"acceptance-goal_run"），payload 承载 status/summary/result；`markAcceptancePublishing` + `finalizeAcceptanceResult` 改为 append-only（新写一行，`time_created desc` 取最新），引入 `findLatestAcceptanceArtifact` 内部 helper；`AcceptanceRow` 改手写类型 + `artifactRowToAcceptanceRow` / `latestPerAcceptance` 读模型 helper；4 个 `findAcceptance*` 全部 artifact-derived；`EngineArtifactTable.acceptance_id` FK 解耦为普通 text 列；`EngineAcceptanceTable` 定义 + DDL `engine_acceptance` CREATE + 5 处 import 清理（`engine/index.ts`、`storage/schema.ts`、`task-api/index.ts`、`workbench/board.ts`、2 个 test）；`workbench/board.ts::viewBoardAcceptance` + `boardOverview` typeof 切到 `AcceptanceRow`；`script/benchmark/inspect-db.sh` SQL 改读 artifact；test fixture insert 改写 artifact shape。typecheck 绿；`test/engine/` (92 pass) + `test/server/export-routes.test.ts` 绿
 - **6-d**：`EngineGoalRunTable` 删除 — 这是最深的依赖（98 处引用 × 18 个文件）。必须先把读者搬到 artifact-based 推导再删表。拆 sub-step：
-  - **6-d-0**（scoping，本 commit）：策略确定 — goal_run chain 迁到 `engine_artifact` kind="goal_run_attempt"，payload 承载 `{status, retry_count, error, supersede_of, superseded_reason, last_progress_at, time_started, time_completed, executor, plan_node_id, coordinator_run_id, executor_session_id, executor_ref}`。第一次写：`id = goalRunID, goal_run_id = goalRunID` 指向自身；update append：`id = Identifier.ascending("artifact"), goal_run_id = goalRunID` 指向 logical goal_run。`goalStatusByID` 变成"找最新 attempt artifact + 映射 status 字段"，与 6-b/6-c 同模式。`EngineArtifactTable.goal_run_id` / `EngineEvaluationTable.goal_run_id`（已删）/ `EngineMetricResult.goal_run_id` / `ProtocolEvent.goal_run_id` 的 FK 同步解耦为 plain text（与 delivery_id 同）
+  - **6-d-0**（scoping，本 commit）：策略确定 — goal_run chain 迁到 `engine_artifact` kind="goal_run_attempt"，payload 承载 `{status, retry_count, error, supersede_of, superseded_reason, last_progress_at, time_started, time_completed, executor, plan_node_id, coordinator_run_id, executor_session_id, executor_ref}`。第一次写：`id = goalRunID, goal_run_id = goalRunID` 指向自身；update append：`id = Identifier.ascending("artifact"), goal_run_id = goalRunID` 指向 logical goal_run。`goalStatusByID` 变成"找最新 attempt artifact + 映射 status 字段"，与 6-b/6-c 同模式。`EngineArtifactTable.goal_run_id` / `EngineEvaluationTable.goal_run_id`（已删）/ `EngineMetricResult.goal_run_id` / `ProtocolEvent.goal_run_id` 的 FK 同步解耦为 plain text（与 acceptance_id 同）
   - **6-d-prep**（`2cc6c42c1`）：`goal-run-watchdog.ts` 删除（rule 23 wall-clock FSM 驱动，与 session-llm + executor-events gate 重复）；`stampGoalRunProgress` + `activity.goal_run_idle_ms` 配置面同步去除；`last_progress_at` 列的唯一读者消失，写入点在 `pipeline/executor.ts` 也删掉（6-d-3 随表一起清列）。shrinks 6-d 写入面 5→4 / 读入面 8→7
   - **6-d-1**（atomic commit，本次）：`EngineGoalRunTable` 删除 — 一次性完成 writer + reader + join + FK 解耦 + test fixture migrate（rule 22 禁中间双源）。`persist.ts`：`createGoalRun` 首写 `engine_artifact` kind=`goal_run_attempt` 且 `id = goal_run_id`，`supersedeGoalRun` / `updateGoalRun` 走共享 `appendGoalRunArtifact` 追加新行（payload 全字段复刻老 schema：`goal_id`/`plan_node_id`/`session_id`/`status`/`retry_count`/`blocking_reason`/`error`/`workspace_dir`/`base_ref`/`merge_ref`/`supersede_of`/`superseded_reason`/`superseded_at`/`metadata`/`time_started`/`time_completed`），`Identifier.ascending("goal_run")` 统一前缀使同一逻辑 goal_run 的追加序列按 id 单调递增；`appendGoalRunArtifact` 用 `Math.max(existing.time_updated + 1, now)` 保证 time_created 严格单调（修掉 supersede 幂等性测试在同 ms tie 时翻车）。`store.ts`：7 个 reader 全部切 artifact + `latestPerGoalRun` collapse + `artifactRowToGoalRunRow` 还原为老 `GoalRunRow` 形状；`listGoalRunsByGoal` 使用 `json_extract(payload, '$.goal_id') = ?` 因 artifact 表无 goal_id 列。`verification/persist.ts::findLatestGoalRunEvidence` + `workbench/board.ts` goalRun join 改为 artifact→artifact 经由 `goal_run_id` 列；`workbench/board.ts::currentGoalRun` 用 `listGoalRunsByGoal`。FK 解耦：`EngineArtifactTable.goal_run_id` / `EngineExecutorSessionTable.goal_run_id` / `EngineMetricResultTable.goal_run_id` / `ProtocolEventTable.goal_run_id` 全改普通 text 列（DDL + drizzle 同步）；`engine/index.ts`、`storage/schema.ts` import 清理。`startNewAttempt` 幂等性：第二次调用时 tip.superseded_reason 非空所以 no-op（test/engine/start-new-attempt.test.ts 7/7 pass）。Test fixtures 迁移：`start-new-attempt.test.ts` / `recovery.test.ts` / `retry-feedback.test.ts` / `state-invariants.test.ts` / `server/export-routes.test.ts` 的 `db.insert(EngineGoalRunTable)` 改为 `db.insert(EngineArtifactTable)` + artifact shape；state-invariants 的 supersede 链检查改为读 artifact distinct + goal-by-goal 现算。`orchestrator/agent.test.ts` / `loop.test.ts` / `dispatch-queue.test.ts` 保持为预存红（pre-6-d 的 phase-3/4/5 死模块引用，非 6-d 回归）。typecheck 绿；`test/engine/` 92 pass；`test/goal/` 绿；`test/server/export-routes.test.ts` 绿
   - **6-d-2**（下一 commit）：`EngineGoalRunStatus` 枚举可能的收缩（`accepted`/`planning`/`evaluating`/`blocked` 在 rule 23 自驱模型下是否 LLM 自己决定 — 审视后再决定是否删）；`engine_artifact.label` 统一规则（`attempt-<status>` 是否保留）；死代码清理（`LIVE_GOAL_RUN_STATUSES` / `ACTIVE_GOAL_RUN_STATUSES` 若 LLM 读 status 文本即可决定，就删 catalog）
@@ -462,11 +462,11 @@ await SessionPrompt.prompt({
   - **6-f-4**（✅ 2026-04-24）：删 `task.blocking_reason` 缓存列 — blocking 是 run-scoped 信号（run.blocking_reason + pending interactions）。`runtime.ts` 3 处双写（auto-reject / block / resume）简化为只写 run；`updateTask` 调用处 8 处（orchestrator/tools ×5 + task-api ×3）去掉 key；`viewTask` 改从 `findActiveRunForTask(row.id)?.blocking_reason` 派生；`board.ts` blocking 合并只读 run；`describe.ts::progressStatus` payload 去掉 blockingReason；`state.ts::updateTask` guardedKeys 同步收缩。typecheck 绿 + 90 tests pass
   - **6-f-3**（✅ 2026-04-24）：删 `task.active_run_id` 缓存列 — 新 helper `findActiveRunForTask(taskID)` 返回 `findRuns(taskID)[0]`（最新 run artifact）。30+ 处读者全部迁移（`describe.ts` / `runtime.ts` 2 处 / `orchestrator/tools.ts` 6 处 / `orchestrator/agent.ts` / `task-api/index.ts` 8 处 / `workbench/board.ts` 2 处 / `build-agent/agent.ts` / `store.ts::viewTask`）；写入点 5 处去除该 key（`state.ts::updateRun` / `writer.ts::createRun linkAsActive` / `runtime.ts::createOperatorRun` / `orchestrator/tools.ts::create_run` / `restart_from_stage`）；schema + DDL + 5 个 test fixture 同步。typecheck 绿 + 90 engine/goal/export tests pass
   - **6-f-cleanup-sweep**（✅ 2026-04-25）：GoalPool / per-goal-dispatch 时代遗产清扫 — 5 个 commit, 共 ~1880 行 net deletion:
-    - `23e014d7e` cleanup-19：`engine/merge-resolver.ts`（整文件） + `runtime.ts::mergeGoalDelivery` + `serializedMerge` + `requirementIDsFromMetadata` + `goal/runner.ts` 精简到只剩 `cleanupGoalWorkspace`（删 `createBuildSession` / `removeGoalRunSession` / `archiveGoalRunTranscript` / `goalRunLocalSessionID` / `goalRunExpired` / `EVALUATOR_MANAGED_SELECTORS` / `goalSelectors` 三胞胎）+ `per-run-state::serializedMerge` + `DeliveryConfig.merge_conflict_max_retries`（config + zod schema）；`test/engine/merge-resolver-state.test.ts` 删；typecheck 绿。−988 行
-    - `26eeb82fc` cleanup-20：`goal/merge.ts`（整文件 302 行）+ `test/goal/merge.test.ts` — 所有 export（`filesChangedByCommit` / `validateOwnedPaths[Detailed]` / `isSharedFile` / `mergePackageJson` / `mergeTsConfig` / `getMerger` / `MergeResult`）的 consumer 唯一在 mergeGoalDelivery 里。−302 行
-    - `2b574aed5` cleanup-21：`pipeline/types.ts` 精简到仅 `GoalContractFields`（删 `GoalContract` / `PipelineEvent` / `PipelineDelivery` / `FailureClass` / `PipelineDeps` — 均为 GoalPipeline → Orchestrator 时代的契约，无外部 consumer；顺带删 stale "goal/merge.ts → filesChangedByCommit" doc 引用）。−135 行
+    - `23e014d7e` cleanup-19：`engine/merge-resolver.ts`（整文件） + `runtime.ts::mergeGoalAcceptance` + `serializedMerge` + `requirementIDsFromMetadata` + `goal/runner.ts` 精简到只剩 `cleanupGoalWorkspace`（删 `createBuildSession` / `removeGoalRunSession` / `archiveGoalRunTranscript` / `goalRunLocalSessionID` / `goalRunExpired` / `EVALUATOR_MANAGED_SELECTORS` / `goalSelectors` 三胞胎）+ `per-run-state::serializedMerge` + `AcceptanceConfig.merge_conflict_max_retries`（config + zod schema）；`test/engine/merge-resolver-state.test.ts` 删；typecheck 绿。−988 行
+    - `26eeb82fc` cleanup-20：`goal/merge.ts`（整文件 302 行）+ `test/goal/merge.test.ts` — 所有 export（`filesChangedByCommit` / `validateOwnedPaths[Detailed]` / `isSharedFile` / `mergePackageJson` / `mergeTsConfig` / `getMerger` / `MergeResult`）的 consumer 唯一在 mergeGoalAcceptance 里。−302 行
+    - `2b574aed5` cleanup-21：`pipeline/types.ts` 精简到仅 `GoalContractFields`（删 `GoalContract` / `PipelineEvent` / `PipelineAcceptance` / `FailureClass` / `PipelineDeps` — 均为 GoalPipeline → Orchestrator 时代的契约，无外部 consumer；顺带删 stale "goal/merge.ts → filesChangedByCommit" doc 引用）。−135 行
     - `ac81987c1` cleanup-22：`goal/intent-bundle.ts` + `goal/readiness.ts` 两个整文件（及测试）— 均为 GoalPool 调度器 predicate（`writeIntentBundle` / `isGoalDispatchable` / `supersedeTips` / `isQueuedGoalRunStartable` / `unsatisfiedDependencyGoalIDs` / `isGoalAlreadyDispatched`），LLM 自驱后无 consumer；`test/goal/` 目录空。−444 行
-    - `37e67e5cd` cleanup-23：`Worktree.lock` public export（唯一 caller 是 mergeGoalDelivery） — 内部 worktree create/remove 已直接用 private `withGitLock`。−9 行
+    - `37e67e5cd` cleanup-23：`Worktree.lock` public export（唯一 caller 是 mergeGoalAcceptance） — 内部 worktree create/remove 已直接用 private `withGitLock`。−9 行
   - **6-f-3-bis-a**（✅ 2026-04-25, `cd305b81f`）：删 `task.time_status_changed` 缓存列 — 该列是 `time_updated` 的重复 tiebreaker（每处 write 都同 ms 同步两者），collapse 到 `time_updated` 一个源。`state.ts::updateTask` / `queue.ts::claimNext` 删 write；`recovery.ts` 两处 orphan-sort / `queue.ts::listActiveForCwd` orderBy 改 `time_updated`；`pipeline.ts::persistQueuedTask` 删 insert value；`engine.sql.ts` + `ddl.ts` 删列定义。typecheck 绿；test/ 无 reader。
   - **6-f-3-bis-b**（✅ 2026-04-25, `c22ffe49f`）：删 `task.workflow_state` — workflow 选择每次唤醒 re-resolve default（pipeline），`switchToDirectWorkflowIfEligible` 基于 DB row 幂等决定是否 in-memory 切到 direct。`isFirstWake` 改读 `task.time_started`（queue 首次 pickup 时 stamp）。Task-scope step 状态现算：`engine/workflow.ts::projectTaskSteps` 根据 `findActiveSpecForTask / listGoals / findRuns / findDeliveriesForTask / task.design_specs` 存在性映射 completed / pending；transient running 状态通过 `EngineEvent.WorkflowStepUpdated` 事件流推到 overlay，reload 时在飞步骤显示 pending 一帧直到下个事件。orchestrator/tools.ts 的 `trackStepStart/Complete` 只保留 in-memory mutation + 事件 emit，不再 `updateTask({workflow_state})`。DDL + engine.sql + pipeline.ts + task-api + board.ts + test 9 个文件 138 insert / 107 delete，typecheck 绿。
   - **保留**：`id / project_id / session_id / title / request / attachments / system_artifacts / design_specs / executor / kind / priority / budget / error / metadata / time_created / time_completed / time_updated / source_requirement_ids / rewind_cursor_*`（非 FSM / 内容类）
@@ -533,7 +533,7 @@ await SessionPrompt.prompt({
 
 **Schema**：
 
-- 不存在表 `engine_run / engine_goal_run / engine_delivery / engine_evaluation`
+- 不存在表 `engine_run / engine_goal_run / engine_acceptance / engine_evaluation`
 - `engine_task`（或 `task_pointer`）只有指针 + 时间戳 + error，无 status / phase / verdict / blocking_reason
 - `rg "status:|phase:|verdict:|blocking_reason:" packages/opencorvus/src/engine/*.sql.ts` = 0
 
@@ -541,14 +541,14 @@ await SessionPrompt.prompt({
 
 - 不存在目录 `packages/opencorvus/src/agent/runtime/`
 - 不存在文件 `packages/opencorvus/src/engine/recovery.ts`（或仅保留 OS 级清理函数）
-- 不存在 `OrchestratorTrigger` 类型 / `batch_complete / delivery_rejected / operator_message` 分支
+- 不存在 `OrchestratorTrigger` 类型 / `batch_complete / acceptance_rejected / operator_message` 分支
 - `rg "\.status\s*===\s*['\"]" packages/opencorvus/src/` = 0
 - `rg "AgentRuntime" packages/opencorvus/src/` = 0
-- `rg "finalize_" packages/opencorvus/src/(agent|orchestrator|delivery|requirements|architect|planner|design)` = 0
+- `rg "finalize_" packages/opencorvus/src/(agent|orchestrator|acceptance|requirements|architect|planner|design)` = 0
 - orchestrator 之外不存在可被外部直接触发的 stage agent 入口
 - 新 stage agent 的创建路径全部复用 session agent 基建
-- `workbench/board.ts` / `task-api` / `verification` 不再直接读取 `EngineRunTable / EngineDeliveryTable / EngineEvaluationTable`
-- overlay 不再直接 SQL 查 `engine_delivery / engine_evaluation`
+- `workbench/board.ts` / `task-api` / `verification` 不再直接读取 `EngineRunTable / EngineAcceptanceTable / EngineEvaluationTable`
+- overlay 不再直接 SQL 查 `engine_acceptance / engine_evaluation`
 
 **行为**：
 

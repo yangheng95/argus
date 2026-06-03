@@ -41,7 +41,7 @@ const GOAL_RUN_STATUS_CATALOG = {
   evaluating: { liveness: "live", satisfiesGoal: false, resettable: true },
   blocked: { liveness: "live", satisfiesGoal: false, resettable: true },
   // `completed` is truly terminal: the goal_run succeeded under its contract
-  // and its verification evidence is load-bearing for delivery replay + the
+  // and its verification evidence is load-bearing for acceptance replay + the
   // overlay timeline. Retry under a new contract (modify_goal) or a full
   // restart (restart_from_stage) must create a NEW goal_run and supersede
   // the old one via metadata — never mutate the completed row into aborted,

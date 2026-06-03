@@ -17,7 +17,7 @@
 > - `goal/runner.ts` 现在只剩 121 行的 `cleanupGoalWorkspace`；retry-feedback prompt
 >   section 由 build tool 在 `orchestrator/tools.ts`（≈L5436-5453，读 `decision_log.phase="retry"`
 >   后 inline 拼装 markdown，结果以 `context.retryFeedback` 透传给 build agent）。**单写
->   入口**是 `engine/persist.ts:startNewAttempt`——所有 reopen 路径（delivery_rework /
+>   入口**是 `engine/persist.ts:startNewAttempt`——所有 reopen 路径（acceptance_rework /
 >   manual_retry / modify_contract）都经此写入 `decision_log.phase="retry"`，再由前述读取
 >   方拼装。**没有**名为 `buildRetryFeedbackSection` 的函数；persist.ts 注释里出现该名称
 >   是历史命名遗存。
@@ -45,7 +45,7 @@ executor 根本没收敛——每次以"空 worktree"起步，没看到前次自
 ### 根因
 1. `goal-pool.ts` 三个失败路径（pipeline-error / conformance gate / per-goal evaluator）都调用 `cleanupGoalWorkspace(worktreeDir)` → `Worktree.remove` → **删 dir + 删 branch**
 2. `goal_run` supersede 创建新 goal_run → `dispatchGoal` 调 `Worktree.create` → **全新 worktree 从 baseRef branch out**
-3. `goal/runner.ts:491` retry prompt 声称 "previous delivery files have already been restored into this worktree" —— **这一直是谎话**，文件没有被 restore
+3. `goal/runner.ts:491` retry prompt 声称 "previous acceptance files have already been restored into this worktree" —— **这一直是谎话**，文件没有被 restore
 4. executor 看到：空 worktree + retry feedback 描述前次违规的文件（这些文件不存在）→ 无法 "modify them"，只能从零重写 → 每次新 LLM 盲猜新路径 → 不收敛
 
 ### 行业对照
@@ -214,7 +214,7 @@ listLiveGoalRunsForProject → 每个关联的 goal.workspace_dir：
 - 只被 per-goal-terminal 路径调用
 
 ### 5.5 goal/runner.ts::buildRetryFeedbackSection
-- prompt 改 "previous delivery files have already been restored into this worktree" 为实话：
+- prompt 改 "previous acceptance files have already been restored into this worktree" 为实话：
   ```
   "This worktree contains your prior attempt(s). The files you wrote before are 
    present — read them, compare to the failures below, and edit in place. Do NOT 
@@ -288,7 +288,7 @@ supersedeGoalRun → dispatchGoal 之间有 gap，期间同 goal 不会有第二
 1. §4.3 worktree 磁盘缺失（process crash 后）：抛错 vs 自动重建？我倾向抛错（rule 1 no fallback）。
 2. §5.6 abortLiveExecutionForTask 默认 cleanup 所有 goals 还是 opt-in？
 3. §8.5 branch 复用是否需要在 retry 间 reset base（`git reset --hard baseRef` 再让 executor 重写）？还是完全累积？
-4. orchestrator 显式终止后的清理和 delivery 成功清理是否需要不同延迟（例如保留最后一次失败的 worktree 几分钟供 debug）？
+4. orchestrator 显式终止后的清理和 acceptance 成功清理是否需要不同延迟（例如保留最后一次失败的 worktree 几分钟供 debug）？
 5. 是否要暴露 Config 选项给用户（`experimental.preserve_worktree_on_retry` 默认 true）以便紧急关闭？我倾向不加（rule 2）。
 
 ## 11 · 验收标准

@@ -15,32 +15,32 @@ import { listGoalRunsByGoal, listGoalRunsForTask } from "../../src/engine/store"
 /**
  * Cross-table state invariants. These are the properties the Phase 1-6
  * refactor is meant to hold permanently. Violations have shipped real bugs:
- *   - delivery without evaluation row (benchmark 006/007 stall)
+ *   - acceptance without evaluation row (benchmark 006/007 stall)
  *   - engine_goal.status diverging from goal_run chain tip (retry deadlock)
  *   - more than one live tip per goal (concurrent dispatch bug)
- *   - delivery stuck in `candidate` long after the run finished
+ *   - acceptance stuck in `candidate` long after the run finished
  *
  * Run after any benchmark that exercises the full pipeline. A failure here
  * names the specific rows that violate the invariant, not just "something
  * is off".
  */
 describe("engine state invariants", () => {
-  test("every delivery has at least one evidence artifact row", () => {
-    // Post-phase-6-c: deliveries live in engine_artifact (kind='delivery') and
+  test("every acceptance has at least one evidence artifact row", () => {
+    // Post-phase-6-c: deliveries live in engine_artifact (kind='acceptance') and
     // evidence too (kind='verification-evidence'). Evidence is append-only so
-    // the 1:1 invariant was relaxed to "at least one" — persistTaskDelivery
-    // writes a pending row and updateEvaluationFromDeliveryVerdict appends a
-    // settled row. A delivery with zero evidence rows means persistTaskDelivery
+    // the 1:1 invariant was relaxed to "at least one" — persistTaskAcceptance
+    // writes a pending row and updateEvaluationFromAcceptanceVerdict appends a
+    // settled row. A acceptance with zero evidence rows means persistTaskAcceptance
     // was bypassed.
     const deliveries = Database.use((db) =>
       db
         .select({ id: EngineArtifactTable.id })
         .from(EngineArtifactTable)
-        .where(eq(EngineArtifactTable.kind, "delivery"))
+        .where(eq(EngineArtifactTable.kind, "acceptance"))
         .all(),
     )
     if (deliveries.length === 0) return
-    const violations: Array<{ deliveryID: string; evidenceCount: number }> = []
+    const violations: Array<{ acceptanceID: string; evidenceCount: number }> = []
     for (const d of deliveries) {
       const rows = Database.use((db) =>
         db
@@ -48,14 +48,14 @@ describe("engine state invariants", () => {
           .from(EngineArtifactTable)
           .where(
             and(
-              eq(EngineArtifactTable.delivery_id, d.id),
+              eq(EngineArtifactTable.acceptance_id, d.id),
               eq(EngineArtifactTable.kind, "verification-evidence"),
             ),
           )
           .all(),
       )
       if (rows.length < 1) {
-        violations.push({ deliveryID: d.id, evidenceCount: rows.length })
+        violations.push({ acceptanceID: d.id, evidenceCount: rows.length })
       }
     }
     expect(violations).toEqual([])

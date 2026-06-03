@@ -27,5 +27,5 @@ export function renderPreTerminalReflectionReminder(toolName: string): string {
 }
 
 function renderPreTerminalReflectionContractLine(): string {
-  return "Also re-check every upstream contract present in the prompt: generated REQ rows, foundational decisions, architect goals, contract graph, visual/reference specs, retry guidance, integrity feedback, and delivery feedback. For UI/webpage work, re-check that visible content is componentized and data-fed where required, and that charts/maps/heatmaps/tables/tabs/components were not flattened into fixed-coded SVG/image/JSX content unless the evidence says they are static decoration."
+  return "Also re-check every upstream contract present in the prompt: generated REQ rows, foundational decisions, architect goals, contract graph, visual/reference specs, retry guidance, integrity feedback, and acceptance feedback. For UI/webpage work, re-check that visible content is componentized and data-fed where required, and that charts/maps/heatmaps/tables/tabs/components were not flattened into fixed-coded SVG/image/JSX content unless the evidence says they are static decoration."
 }

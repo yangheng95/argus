@@ -21,7 +21,7 @@ const KNOWN_STAGES = new Set([
   "build",
   "explore",
   "evaluator",
-  "delivery",
+  "acceptance",
   "integrity",
   "fact-check",
   "tool",

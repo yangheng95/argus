@@ -153,7 +153,7 @@ describe("response language system prompt", () => {
     })
 
     expect(capturedSystem).toEndWith(
-      "Please respond in English. Unless the user explicitly asks for another language, user-facing summaries, questions, status updates, plans, and delivery notes should be written in English; keep code, commands, file paths, API names, and required source text unchanged.",
+      "Please respond in English. Unless the user explicitly asks for another language, user-facing summaries, questions, status updates, plans, and acceptance notes should be written in English; keep code, commands, file paths, API names, and required source text unchanged.",
     )
   })
 })

@@ -3,7 +3,7 @@ import { architectValidationFindings, architectValidationIssues, type ArchitectC
 import { validatePersistedArchitectFidelity } from "../../src/orchestrator/tools"
 import type { AcceptanceSpec } from "../../src/acceptance/types"
 
-const essentialDeliveryVisualSpec: AcceptanceSpec = {
+const essentialAcceptanceVisualSpec: AcceptanceSpec = {
   id: "acc-final-visual-fidelity",
   source_requirement_id: "REQ-visual",
   goal_id: "goal_verify",
@@ -194,9 +194,9 @@ describe("orchestrator architect fidelity diagnostics", () => {
     expect(issues).toContain("Missing reference coverage for visual specs: vis-hero")
   })
 
-  test("reports reference-driven architecture without essential delivery visual acceptance as concern", () => {
+  test("reports reference-driven architecture without essential acceptance visual acceptance as concern", () => {
     const weakVisualSpec: AcceptanceSpec = {
-      ...essentialDeliveryVisualSpec,
+      ...essentialAcceptanceVisualSpec,
       severity: "important",
     }
     const findings = architectValidationFindings(collectorForReferenceTask([weakVisualSpec]), {
@@ -212,8 +212,8 @@ describe("orchestrator architect fidelity diagnostics", () => {
     ).toBe(true)
   })
 
-  test("allows reference-driven architecture with essential delivery visual acceptance", () => {
-    const issues = architectValidationIssues(collectorForReferenceTask([essentialDeliveryVisualSpec]), {
+  test("allows reference-driven architecture with essential acceptance visual acceptance", () => {
+    const issues = architectValidationIssues(collectorForReferenceTask([essentialAcceptanceVisualSpec]), {
       requireReferenceCoverage: true,
     })
 

@@ -1,6 +1,6 @@
 // ── Diff service ──
 // Module-level cache + lazy-loader for full file diffs fetched from the
-// delivery API. Shared by ChangesPanel and DiffPreviewPanel so the first
+// acceptance API. Shared by ChangesPanel and DiffPreviewPanel so the first
 // fetch for a given run is reused across all consumers.
 
 import { apiJson } from "./api";
@@ -53,7 +53,7 @@ export function changeGroupsRevisionKey(groups: ChangeGroup[]): string {
     .join("|");
 }
 
-function normalizeDeliveryDiffs(rawDiffs: unknown): FileChange[] {
+function normalizeAcceptanceDiffs(rawDiffs: unknown): FileChange[] {
   return normalizeDiffs(Array.isArray(rawDiffs) ? rawDiffs : []) as FileChange[];
 }
 
@@ -85,7 +85,7 @@ function goalWorkflowStubs(workflows: any[]): ChangeGroup[] {
       const seen = new Set<string>();
       const changes: FileChange[] = [];
       // Prefer payload.changedFileDiffs (carries per-file additions/deletions
-      // from the persisted goal_run delivery row, populated by board.ts)
+      // from the persisted goal_run acceptance row, populated by board.ts)
       // over the bare `changedFiles` string list, which has no stat numbers
       // and would render as +0/-0 on every row. The diff fetch below is the
       // fallback for older payloads written before changedFileDiffs landed.
@@ -135,13 +135,13 @@ function goalWorkflowStubs(workflows: any[]): ChangeGroup[] {
     .sort((left, right) => (left.goalOrderIndex ?? Number.MAX_SAFE_INTEGER) - (right.goalOrderIndex ?? Number.MAX_SAFE_INTEGER));
 }
 
-function taskDeliveryGroup(): ChangeGroup[] {
+function taskAcceptanceGroup(): ChangeGroup[] {
   const changes = deriveChanges() as FileChange[];
   if (changes.length === 0) return [];
   return [
     {
-      id: "task-delivery",
-      runID: deliveryRunID(),
+      id: "task-acceptance",
+      runID: acceptanceRunID(),
       additions: sumAdditions(changes),
       deletions: sumDeletions(changes),
       changes,
@@ -149,12 +149,12 @@ function taskDeliveryGroup(): ChangeGroup[] {
   ];
 }
 
-/** Find the delivery runID for the currently selected task's delivery. */
-export function deliveryRunID(): string {
+/** Find the acceptance runID for the currently selected task's acceptance. */
+export function acceptanceRunID(): string {
   const board = boardStore.board as any;
-  const delivery =
-    board?.acceptedDelivery || board?.delivery || board?.candidateDelivery;
-  return typeof delivery?.runID === "string" ? delivery.runID : "";
+  const acceptance =
+    board?.acceptedAcceptance || board?.acceptance || board?.candidateAcceptance;
+  return typeof acceptance?.runID === "string" ? acceptance.runID : "";
 }
 
 /** Goal-aware change groups for the currently selected task. */
@@ -163,7 +163,7 @@ export function currentChangeGroups(): ChangeGroup[] {
     ? ((boardStore.board as any).goalWorkflows as any[])
     : [];
   if (workflows.length > 0) return goalWorkflowStubs(workflows);
-  const taskGroups = taskDeliveryGroup();
+  const taskGroups = taskAcceptanceGroup();
   if (taskGroups.length > 0) return taskGroups;
   if (Array.isArray(boardStore.changes) && boardStore.changes.length > 0) {
     const changes = boardStore.changes as FileChange[];
@@ -200,15 +200,15 @@ async function fetchScopedDiffs(scope: { goalRunID?: string; runID?: string }): 
   const cached = diffCache.get(key);
   if (cached) return cached;
   const data = scope.goalRunID
-    ? await apiJson(`goal-run/${encodeURIComponent(scope.goalRunID)}/delivery`)
-    : await apiJson(`run/${encodeURIComponent(String(scope.runID))}/delivery`);
-  const diffs = normalizeDeliveryDiffs((data as any)?.result?.diffs);
+    ? await apiJson(`goal-run/${encodeURIComponent(scope.goalRunID)}/acceptance`)
+    : await apiJson(`run/${encodeURIComponent(String(scope.runID))}/acceptance`);
+  const diffs = normalizeAcceptanceDiffs((data as any)?.result?.diffs);
   if (diffs.length > 0) diffCache.set(key, diffs);
   return diffs;
 }
 
 /**
- * Fetch full diffs for the given delivery run. Returns cached result if the
+ * Fetch full diffs for the given acceptance run. Returns cached result if the
  * runID matches the last fetch. Throws on network failure; callers decide
  * whether to fall back to a stub FileChange.
  */
@@ -264,7 +264,7 @@ export async function resolveDiff(target: DiffTarget): Promise<FileChange | null
     return stub;
   }
   const goalRunID = target.goalRunID || group?.goalRunID;
-  const runID = goalRunID ? group?.runID : group?.runID || deliveryRunID();
+  const runID = goalRunID ? group?.runID : group?.runID || acceptanceRunID();
   if (!goalRunID && !runID) return stub;
   try {
     const full = goalRunID ? await fetchGoalRunDiffs(goalRunID) : await fetchFullDiffs(runID);

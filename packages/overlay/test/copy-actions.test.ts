@@ -53,7 +53,7 @@ test("copying logs does not open the dialog", async () => {
       plan: null,
       spec: null,
       evaluation: null,
-      delivery: null,
+      acceptance: null,
       interactions: [],
     },
     timeline: {

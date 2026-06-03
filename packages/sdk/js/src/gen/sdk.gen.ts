@@ -85,8 +85,8 @@ import type {
   GlobalHealthResponses,
   GoalDeleteErrors,
   GoalDeleteResponses,
-  GoalRunDeliveryErrors,
-  GoalRunDeliveryResponses,
+  GoalRunAcceptanceErrors,
+  GoalRunAcceptanceResponses,
   GoalUpdateErrors,
   GoalUpdateResponses,
   InstanceDisposeResponses,
@@ -166,8 +166,8 @@ import type {
   RunArtifactsResponses,
   RunBriefErrors,
   RunBriefResponses,
-  RunDeliveryErrors,
-  RunDeliveryResponses,
+  RunAcceptanceErrors,
+  RunAcceptanceResponses,
   RunEvaluationsErrors,
   RunEvaluationsResponses,
   RunGetErrors,
@@ -1885,7 +1885,7 @@ export class Session extends HeyApiClient {
         | "goal-workload-analyst"
         | "integrity"
         | "fact-check"
-        | "delivery"
+        | "acceptance"
         | "executor"
         | "build"
         | "explore"
@@ -5473,9 +5473,9 @@ export class Task extends HeyApiClient {
                   passes: boolean
                 }>
                 /**
-                 * Which parts of the delivery to feed the judge. Default: delivery_summary.
+                 * Which parts of the acceptance to feed the judge. Default: acceptance_summary.
                  */
-                inputs?: Array<"delivery_summary" | "changed_files" | "requirement_text">
+                inputs?: Array<"acceptance_summary" | "changed_files" | "requirement_text">
               }
             | {
                 /**
@@ -5504,9 +5504,9 @@ export class Task extends HeyApiClient {
           >
           severity: "essential" | "important" | "optional" | "pitfall"
           /**
-           * Override default trigger. Defaults: heuristic/prebuilt=on_goal; llm_judge essential=on_goal; other=on_integrity. on_delivery is legacy and maps to on_integrity.
+           * Override default trigger. Defaults: heuristic/prebuilt=on_goal; llm_judge essential=on_goal; other=on_integrity. on_acceptance is legacy and maps to on_integrity.
            */
-          trigger?: "on_goal" | "on_integrity" | "on_delivery"
+          trigger?: "on_goal" | "on_integrity" | "on_acceptance"
         }>
         kind?: "bootstrap" | "feature" | "verification" | "integration" | "system"
         metadata?: {
@@ -5618,9 +5618,9 @@ export class Task extends HeyApiClient {
                     passes: boolean
                   }>
                   /**
-                   * Which parts of the delivery to feed the judge. Default: delivery_summary.
+                   * Which parts of the acceptance to feed the judge. Default: acceptance_summary.
                    */
-                  inputs?: Array<"delivery_summary" | "changed_files" | "requirement_text">
+                  inputs?: Array<"acceptance_summary" | "changed_files" | "requirement_text">
                 }
               | {
                   /**
@@ -5649,9 +5649,9 @@ export class Task extends HeyApiClient {
             >
             severity: "essential" | "important" | "optional" | "pitfall"
             /**
-             * Override default trigger. Defaults: heuristic/prebuilt=on_goal; llm_judge essential=on_goal; other=on_integrity. on_delivery is legacy and maps to on_integrity.
+             * Override default trigger. Defaults: heuristic/prebuilt=on_goal; llm_judge essential=on_goal; other=on_integrity. on_acceptance is legacy and maps to on_integrity.
              */
-            trigger?: "on_goal" | "on_integrity" | "on_delivery"
+            trigger?: "on_goal" | "on_integrity" | "on_acceptance"
           }>
           kind?: "bootstrap" | "feature" | "verification" | "integration" | "system"
           metadata?: {
@@ -6507,9 +6507,9 @@ export class Run extends HeyApiClient {
   }
 
   /**
-   * Get run delivery
+   * Get run acceptance
    */
-  public delivery<ThrowOnError extends boolean = false>(
+  public acceptance<ThrowOnError extends boolean = false>(
     parameters: {
       runID: string
       directory?: string
@@ -6527,8 +6527,8 @@ export class Run extends HeyApiClient {
         },
       ],
     )
-    return (options?.client ?? this.client).get<RunDeliveryResponses, RunDeliveryErrors, ThrowOnError>({
-      url: "/run/{runID}/delivery",
+    return (options?.client ?? this.client).get<RunAcceptanceResponses, RunAcceptanceErrors, ThrowOnError>({
+      url: "/run/{runID}/acceptance",
       ...options,
       ...params,
     })
@@ -6593,9 +6593,9 @@ export class Run extends HeyApiClient {
 
 export class GoalRun extends HeyApiClient {
   /**
-   * Get goal-run delivery
+   * Get goal-run acceptance
    */
-  public delivery<ThrowOnError extends boolean = false>(
+  public acceptance<ThrowOnError extends boolean = false>(
     parameters: {
       goalRunID: string
       directory?: string
@@ -6613,8 +6613,8 @@ export class GoalRun extends HeyApiClient {
         },
       ],
     )
-    return (options?.client ?? this.client).get<GoalRunDeliveryResponses, GoalRunDeliveryErrors, ThrowOnError>({
-      url: "/goal-run/{goalRunID}/delivery",
+    return (options?.client ?? this.client).get<GoalRunAcceptanceResponses, GoalRunAcceptanceErrors, ThrowOnError>({
+      url: "/goal-run/{goalRunID}/acceptance",
       ...options,
       ...params,
     })
@@ -6829,9 +6829,9 @@ export class Goal extends HeyApiClient {
                 passes: boolean
               }>
               /**
-               * Which parts of the delivery to feed the judge. Default: delivery_summary.
+               * Which parts of the acceptance to feed the judge. Default: acceptance_summary.
                */
-              inputs?: Array<"delivery_summary" | "changed_files" | "requirement_text">
+              inputs?: Array<"acceptance_summary" | "changed_files" | "requirement_text">
             }
           | {
               /**
@@ -6860,9 +6860,9 @@ export class Goal extends HeyApiClient {
         >
         severity: "essential" | "important" | "optional" | "pitfall"
         /**
-         * Override default trigger. Defaults: heuristic/prebuilt=on_goal; llm_judge essential=on_goal; other=on_integrity. on_delivery is legacy and maps to on_integrity.
+         * Override default trigger. Defaults: heuristic/prebuilt=on_goal; llm_judge essential=on_goal; other=on_integrity. on_acceptance is legacy and maps to on_integrity.
          */
-        trigger?: "on_goal" | "on_integrity" | "on_delivery"
+        trigger?: "on_goal" | "on_integrity" | "on_acceptance"
       }>
     },
     options?: Options<never, ThrowOnError>,

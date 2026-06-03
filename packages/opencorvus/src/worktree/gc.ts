@@ -35,7 +35,7 @@ import { Worktree } from "./index"
  * lifecycle §8.1.
  *
  * Any uncertainty (a git probe fails while `.git` is present) → PRESERVE.
- * We never trade a false delete of in-transit delivery work for tidiness.
+ * We never trade a false delete of in-transit acceptance work for tidiness.
  */
 export namespace WorktreeGC {
   const log = Log.create({ service: "worktree.gc" })

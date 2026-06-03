@@ -26,7 +26,7 @@ Keep Integrity focused on task semantic integrity:
 Repository baseline is an evidence source, not a separate review surface.
 Integrity may cite existing tests, behavior, design docs, historical plans, and
 source contracts when judging pass / issue, but it must not become a full
-regression-review replacement for Delivery.
+regression-review replacement for Acceptance.
 
 Standalone integrity is task-end or suspicion-triggered. Build results must not
 instruct the orchestrator to call standalone integrity after every build wave.

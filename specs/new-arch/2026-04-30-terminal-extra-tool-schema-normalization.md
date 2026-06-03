@@ -73,7 +73,7 @@ Before this fix, the session loop had four provider-bound tool sources:
    - did not pass through the provider schema normalization boundary
 
 All terminal submit tools used by requirements, architect, integrity, build,
-and delivery are stage-scoped extra tools. StructuredOutput uses a different
+and acceptance are stage-scoped extra tools. StructuredOutput uses a different
 injection point but had the same class of bypass. Therefore the impacted
 surface is every late-injected provider-bound tool source, not only extra
 tools.
@@ -392,11 +392,11 @@ Failed path remains valid without terminal-only scoping:
 If build later records a collector-level fatal blocker, e.g.
 `collector.fatalBlocker`, that can also make terminal-only scoping safe.
 
-### Delivery
+### Acceptance
 
-Delivery already has a terminal submit tool with a rich payload. It should be
+Acceptance already has a terminal submit tool with a rich payload. It should be
 audited under the same extra-tool schema normalization fix. Do not add a
-delivery-specific schema workaround.
+acceptance-specific schema workaround.
 
 ## Implementation Plan
 
@@ -682,7 +682,7 @@ is that extra tools bypass it.
 ### Restore two build terminal tools
 
 Rejected. That reintroduces dual terminal schema sources. The single
-`report_build_result` tool is the correct protocol once schema delivery is
+`report_build_result` tool is the correct protocol once schema acceptance is
 fixed.
 
 ### Replace `ProviderToolSource` enum with a single registry

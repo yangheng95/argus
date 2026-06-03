@@ -51,7 +51,7 @@ describe("build-artifact", () => {
   test("overlay browser automation modules do not statically import browser drivers", () => {
     const files = [
       "src/runtime/visual-page.ts",
-      "src/delivery/checks/walkthrough/run.ts",
+      "src/acceptance/checks/walkthrough/run.ts",
       "src/mcp/browser/guard.ts",
       "src/mcp/browser/perf.ts",
       "src/mcp/browser/sessions.ts",

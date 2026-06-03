@@ -67,7 +67,7 @@ export namespace GoalReport {
 export const GoalReportTool = Tool.define("goal_report", {
   description: `Emit the structured implementation report for this goal. You MUST call this tool exactly once, at the end of the goal, after all deliverables and checks are complete.
 
-Fields are adversarially cross-checked against the diff by the delivery evaluator:
+Fields are adversarially cross-checked against the diff by the acceptance evaluator:
 - implementation_approach is matched against the actual code written — a claim the diff does not support is a rejection.
 - design_decisions[].reason is challenged — a restated choice or a reason the code contradicts is a rejection.
 
@@ -112,7 +112,7 @@ export function buildGoalReport(report: GoalReport.ReportInput) {
  *
  * Each failure mode maps to a real executor contract violation — surfacing
  * them as hard errors is what lets the evaluator replan instead of silently
- * accepting an undocumented delivery.
+ * accepting an undocumented acceptance.
  */
 export async function extractGoalReport(sessionID: string): Promise<GoalReport.ReportInput> {
   const messages = await Session.messages({ sessionID })

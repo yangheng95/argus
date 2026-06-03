@@ -78,15 +78,15 @@ export async function summarizeHostPreparedSourceAudit(input: { sourcePackage: s
     "Host-prepared source audit supervision.",
     "This is current-state evidence for the captured source project, not a final acceptance decision.",
   ]
-  for (const finalDeliveryMode of ["visual_baseline_allowed", "maintainable_replacement_required"] as const) {
+  for (const finalAcceptanceMode of ["visual_baseline_allowed", "maintainable_replacement_required"] as const) {
     try {
       const audit = await auditWebCloneSourceSkeletonConsumption({
         projectDir: input.projectRoot,
         sourcePackageDir: input.sourcePackage,
-        finalDeliveryMode,
+        finalAcceptanceMode,
       })
       lines.push(
-        `- ${finalDeliveryMode}: passed=${audit.passed}; generatedBaseline=${audit.risk.generatedBaselineDetected}; ` +
+        `- ${finalAcceptanceMode}: passed=${audit.passed}; generatedBaseline=${audit.risk.generatedBaselineDetected}; ` +
         `finalBaselineOnly=${audit.risk.finalBaselineOnlyDetected}; sourceDomResidue=${audit.risk.finalSourceDomModuleResidueDetected}; ` +
         `sourceDomModules=${audit.projectStats.sourceDomBaselineModuleCount}; sourceDomRegions=${audit.projectStats.sourceDomRegionFileCount}; ` +
         `largestSourceDomRegionBytes=${audit.projectStats.largestSourceDomRegionBytes}; oversizedGeneratedRegions=${audit.projectStats.oversizedSourceDomRegionCount}`,
@@ -95,7 +95,7 @@ export async function summarizeHostPreparedSourceAudit(input: { sourcePackage: s
         lines.push(`  finding: ${finding}`)
       }
     } catch (err) {
-      lines.push(`- ${finalDeliveryMode}: audit_error=${err instanceof Error ? err.message : String(err)}`)
+      lines.push(`- ${finalAcceptanceMode}: audit_error=${err instanceof Error ? err.message : String(err)}`)
     }
   }
   lines.push(
@@ -578,13 +578,13 @@ export function renderHostPreparedFrontendProjectSection(project: HostPreparedFr
     "",
     "The host already prepared the frontend-design high-fidelity skeleton evidence project before this model turn. Do not call `create_frontend_skeleton_project` again unless status is blocked and you can name a different output path.",
     "Host-prepared means source evidence exists; it does not mean the frontend template is already designed. Use `read_file`, `list_directory`, `find_files`, and `search_code` to inspect the bounded task-runtime evidence and obvious target project/package/component structure before finalizing. Do not call mirror acquisition tools again unless the host-prepared status is blocked and you can name the exact missing evidence.",
-    "Register `frontend-design-skeleton` only as source_baseline_input evidence. Register role=implementation_target only for the target delivery project after frontend_design has extracted the requested surface into maintainable target-project source; otherwise use role=source_baseline_input and name the unfinished source debt. Build receives the target project for integration and precision fixes, not for primary rawproject-to-maintainable conversion.",
-    "Do not install, build, render, or start a dev/preview server inside `frontend-design-skeleton` during maintainable delivery. Create or populate the target delivery project first; all build, render, visual comparison, and maintainable audit commands must run against that target project.",
+    "Register `frontend-design-skeleton` only as source_baseline_input evidence. Register role=implementation_target only for the target acceptance project after frontend_design has extracted the requested surface into maintainable target-project source; otherwise use role=source_baseline_input and name the unfinished source debt. Build receives the target project for integration and precision fixes, not for primary rawproject-to-maintainable conversion.",
+    "Do not install, build, render, or start a dev/preview server inside `frontend-design-skeleton` during maintainable acceptance. Create or populate the target acceptance project first; all build, render, visual comparison, and maintainable audit commands must run against that target project.",
     "Use the maintainable rawproject refactor algorithm inside the normal frontend-design agent flow: source map, region map, one replacement decision per region, then vertical-slice extraction into the target project with source data extraction, semantic component boundary, scoped style ownership, no generated fixed-layout boundary in target source, asset ownership, interaction wiring, screenshot comparison, and audit evidence. Do not replace this judgment with host-side deterministic selector/card/table/map extraction rules.",
     `Visual iteration viewport matrix: ${visualIterationMatrix}`,
     "For webpage clones, perform and describe source-region traceable refactoring: every new component, data module, scoped style, and boundary cleanup must map back to rawproject source nodes/regions/assets/reference screenshots. A region replacement is complete only after source data extraction, semantic component rendering, scoped CSS, generated boundary cleanup, screenshot comparison for that region, measured webpage_evaluate evidence for the visual iteration viewport matrix, and zero-finding web_clone_source_audit evidence before any final maintainability claim. If a region is deferred, frontend_design must label it as unfinished source debt.",
     "Do not alter evaluators, other agent prompts, communication paths, generated outputs, or runtime source packages to satisfy the report.",
-    "Mirror/source evidence stays in task runtime paths. Do not instruct downstream agents to move or clean `web-clone-source/`, `frontend-design-skeleton/`, raw `mirror/`, `references/`, or `reference.png` into the delivery root as app-owned deliverables; extract only the observed source structure, data, styles, and assets needed by the target project.",
+    "Mirror/source evidence stays in task runtime paths. Do not instruct downstream agents to move or clean `web-clone-source/`, `frontend-design-skeleton/`, raw `mirror/`, `references/`, or `reference.png` into the acceptance root as app-owned deliverables; extract only the observed source structure, data, styles, and assets needed by the target project.",
     "Do not output a standalone component checklist or advice-only report. Use the full `submit_frontend_template` schema to identify the source baseline, replacement plan, quality project contract, visual/data contracts, completeness review, and open questions needed to produce the maintainable project source.",
     "Principle for frontend_design source work: inspect the target app structure first; reuse existing repository components/design-system primitives; use mature maintained libraries for hard UI domains; custom-code only simple glue and micro-adjustments needed for parity. Use the embedded source-project-handoff summary and the referenced sourceDomIterationState.ts/sourceDomReplacementPlan.ts as static progress metadata and the known-problem map.",
     "",
@@ -610,7 +610,7 @@ export function renderHostPreparedFrontendProjectSection(project: HostPreparedFr
   }
   lines.push("")
   lines.push("# Finalization")
-  lines.push("After bounded evidence read/review plus target-project source-region extraction you can complete with the exposed tools, call `submit_frontend_template` with the full frontend-design contract. The report must identify the target delivery project as `implementation_target` only when it contains the maintainable extracted source, describe completed source-region replacements, and name any unfinished source debt as frontend_design incomplete/blocked work rather than Build follow-up work.")
-  lines.push("Host-prepared webpage rawproject refinement stays in `final_delivery_mode=maintainable_replacement_required`; deferred regions must be reported as unfinished source debt. If compact evidence leaves a named uncertainty, resolve it by reading the smallest relevant source file excerpt instead of replacing agent reasoning with a host-generated generic report.")
+  lines.push("After bounded evidence read/review plus target-project source-region extraction you can complete with the exposed tools, call `submit_frontend_template` with the full frontend-design contract. The report must identify the target acceptance project as `implementation_target` only when it contains the maintainable extracted source, describe completed source-region replacements, and name any unfinished source debt as frontend_design incomplete/blocked work rather than Build follow-up work.")
+  lines.push("Host-prepared webpage rawproject refinement stays in `final_acceptance_mode=maintainable_replacement_required`; deferred regions must be reported as unfinished source debt. If compact evidence leaves a named uncertainty, resolve it by reading the smallest relevant source file excerpt instead of replacing agent reasoning with a host-generated generic report.")
   return lines.join("\n")
 }

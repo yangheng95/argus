@@ -2,7 +2,7 @@
 
 - Date: 2026-05-29
 - Status: Draft, must be implemented before treating browser MCP as a finished built-in capability.
-- Related work: built-in `mcp.browser` registration, `opencorvus mcp browser`, existing delivery and mirror browser capture paths.
+- Related work: built-in `mcp.browser` registration, `opencorvus mcp browser`, existing acceptance and mirror browser capture paths.
 - Decision source: user requested browser MCP to become built-in, then requested independent agent discussion before implementation.
 
 ---
@@ -13,7 +13,7 @@ The surface request is simple: make `browser-mcp.zip` an OpenCorvus built-in Mod
 
 The real engineering problem is broader:
 
-1. OpenCorvus already has browser usage in delivery checks, design capture, mirror rendering, and URL extraction.
+1. OpenCorvus already has browser usage in acceptance checks, design capture, mirror rendering, and URL extraction.
 2. The imported browser MCP code starts its own Playwright Chromium runtime directly.
 3. That creates two browser runtime sources: existing `puppeteer-core` plus Chrome discovery, and new Playwright browser cache semantics.
 4. A built-in capability must work on a clean machine, in source mode, and in packaged binary mode.
@@ -54,14 +54,14 @@ Create a single browser execution layer, tentatively named `BrowserRuntime`, and
 4. OpenCorvus workflow layer
    - Decides when to use browser observation.
    - Persists screenshot and trace evidence through attachment storage.
-   - Presents browser evidence in overlay and delivery results.
-   - Keeps final visual judgment in delivery or integrity, not inside browser MCP.
+   - Presents browser evidence in overlay and acceptance results.
+   - Keeps final visual judgment in acceptance or integrity, not inside browser MCP.
 
 ### Runtime engine choice
 
-The short-term single source must be the existing `puppeteer-core` plus Chrome discovery path, promoted into a real runtime module. The repository already uses this path in delivery, mirror, and design capture. Keeping Playwright as a second browser stack creates install, packaging, and behavior drift.
+The short-term single source must be the existing `puppeteer-core` plus Chrome discovery path, promoted into a real runtime module. The repository already uses this path in acceptance, mirror, and design capture. Keeping Playwright as a second browser stack creates install, packaging, and behavior drift.
 
-Long-term Playwright is allowed only if delivery, mirror, design capture, and browser MCP move together to the same runtime. Parallel browser stacks are forbidden.
+Long-term Playwright is allowed only if acceptance, mirror, design capture, and browser MCP move together to the same runtime. Parallel browser stacks are forbidden.
 
 ---
 
@@ -103,7 +103,7 @@ Required semantics:
 
 ### Risk 4: screenshot evidence is not first-class OpenCorvus evidence
 
-Browser MCP screenshots currently return image content and base64 structured content. OpenCorvus already has attachment storage and MCP materialization support. Browser observations must become attachments and delivery evidence, not long-lived inline base64 payloads.
+Browser MCP screenshots currently return image content and base64 structured content. OpenCorvus already has attachment storage and MCP materialization support. Browser observations must become attachments and acceptance evidence, not long-lived inline base64 payloads.
 
 ### Risk 5: high-risk browser actions bypass OpenCorvus permission semantics
 
@@ -235,7 +235,7 @@ Add higher-level observation tools before adding more Playwright-like wrappers.
 
 3. `viewport_set`
    - Supports named device presets and explicit dimensions.
-   - Presets must be shared with delivery checks.
+   - Presets must be shared with acceptance checks.
 
 4. `storage_state_export` and `storage_state_import`
    - Explicit login state management.
@@ -280,7 +280,7 @@ Do not mix runtime captures with user-provided visual references.
 
 ### Overlay
 
-Overlay should show browser MCP evidence inside existing tool call or delivery evidence surfaces:
+Overlay should show browser MCP evidence inside existing tool call or acceptance evidence surfaces:
 
 - screenshot thumbnail;
 - URL;
@@ -291,11 +291,11 @@ Overlay should show browser MCP evidence inside existing tool call or delivery e
 
 The existing browser monitor page may remain a debug utility, but it is not the product overlay.
 
-### Delivery
+### Acceptance
 
-Delivery visual checks should use `BrowserRuntime`, not their own browser launcher.
+Acceptance visual checks should use `BrowserRuntime`, not their own browser launcher.
 
-Delivery evidence should include:
+Acceptance evidence should include:
 
 - screenshot attachment;
 - URL;
@@ -305,7 +305,7 @@ Delivery evidence should include:
 - diagnostic summary;
 - browser executable diagnostics when capture fails.
 
-Browser MCP supplies evidence. Delivery and integrity decide pass or fail.
+Browser MCP supplies evidence. Acceptance and integrity decide pass or fail.
 
 ### Orchestrator and build prompts
 
@@ -391,9 +391,9 @@ Rules:
 
 ### Phase 2: create Browser Runtime
 
-1. Move browser discovery out of delivery-specific modules.
+1. Move browser discovery out of acceptance-specific modules.
 2. Introduce `BrowserRuntime` browser check, launch, diagnostics, and session APIs.
-3. Rewire delivery checks to use `BrowserRuntime`.
+3. Rewire acceptance checks to use `BrowserRuntime`.
 4. Rewire mirror visual rendering and URL extraction to use `BrowserRuntime`.
 5. Rewire browser MCP tools to call `BrowserRuntime`.
 6. Remove direct `playwright.chromium.launch()` from browser MCP.
@@ -403,7 +403,7 @@ Rules:
 1. Materialize browser MCP image results into attachments.
 2. Add browser observation metadata to tool call results.
 3. Show browser evidence in overlay.
-4. Add delivery manifest browser evidence fields.
+4. Add acceptance manifest browser evidence fields.
 
 ### Phase 4: product tools and permissions
 
@@ -434,7 +434,7 @@ These are the known browser-related call points that must be unified or reviewed
 ### Existing browser execution users
 
 - `packages/opencorvus/src/runtime/visual-page.ts`
-- `packages/opencorvus/src/delivery/checks/walkthrough/run.ts`
+- `packages/opencorvus/src/acceptance/checks/walkthrough/run.ts`
 - `packages/opencorvus/src/frontend-design/capture-gate.ts`
 - `packages/opencorvus/src/mirror/visual/render.ts`
 - `packages/opencorvus/src/mirror/url/extract.ts`
@@ -484,7 +484,7 @@ Required tests before browser MCP is considered complete:
    - `session_destroy`.
 
 5. Integration tests
-   - delivery visual capture uses `BrowserRuntime`;
+   - acceptance visual capture uses `BrowserRuntime`;
    - mirror rendering uses `BrowserRuntime`;
    - MCP image result materializes to attachment;
    - overlay can render browser evidence metadata.
@@ -513,7 +513,7 @@ The migration is complete only when all of these are true:
 3. Browser MCP can be disabled through a documented config marker.
 4. Browser MCP does not directly own browser executable discovery.
 5. Browser MCP does not directly launch Playwright Chromium as a separate source.
-6. Delivery, mirror, design capture, and browser MCP use the same Browser Runtime.
+6. Acceptance, mirror, design capture, and browser MCP use the same Browser Runtime.
 7. Source mode and packaged mode use the same runtime behavior.
 8. Missing browser executable produces actionable diagnostics.
 9. Browser screenshots and observations become attachment-backed evidence.

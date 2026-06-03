@@ -3,10 +3,10 @@ import { ProjectTable } from "../../src/project/project.sql"
 import { Instance } from "../../src/project/instance"
 import { Database } from "../../src/storage/db"
 import { EngineArtifactTable, EngineTaskTable } from "../../src/engine/engine.sql"
-import { composeLatestDeliveryFeedbackForBuild } from "../../src/orchestrator/tools"
+import { composeLatestAcceptanceFeedbackForBuild } from "../../src/orchestrator/tools"
 import { resetDatabase } from "../fixture/db"
 import { tmpdir } from "../fixture/fixture"
-import type { DeliveryEvidenceManifest } from "../../src/delivery/manifest"
+import type { AcceptanceEvidenceManifest } from "../../src/acceptance/manifest"
 
 describe("orchestrator build feedback context", () => {
   let tmp: Awaited<ReturnType<typeof tmpdir>>
@@ -21,7 +21,7 @@ describe("orchestrator build feedback context", () => {
     await tmp?.[Symbol.asyncDispose]?.()
   })
 
-  test("hydrates build retry feedback directly from persisted delivery artifacts", async () => {
+  test("hydrates build retry feedback directly from persisted acceptance artifacts", async () => {
     await Instance.provide({
       directory: tmp.path,
       fn: async () => {
@@ -30,16 +30,16 @@ describe("orchestrator build feedback context", () => {
         const projectID = `proj_feedback_${suffix}`
         const taskID = `tsk_feedback_${suffix}`
         const runID = `run_feedback_${suffix}`
-        const deliveryID = `del_feedback_${suffix}`
+        const acceptanceID = `del_feedback_${suffix}`
         const verdictID = `art_verdict_${suffix}`
         const manifestID = `art_manifest_${suffix}`
         const goalID = `gol_feedback_${suffix}`
 
-        const manifest: DeliveryEvidenceManifest = {
+        const manifest: AcceptanceEvidenceManifest = {
           id: manifestID,
           taskId: taskID,
           runId: runID,
-          deliveryId: deliveryID,
+          acceptanceId: acceptanceID,
           iteration: 2,
           requiredChecks: [],
           checkResults: [],
@@ -57,7 +57,7 @@ describe("orchestrator build feedback context", () => {
           changedFiles: ["src/index.html"],
           finalGate: {
             status: "failed",
-            summary: "Delivery evidence gate failed.",
+            summary: "Acceptance evidence gate failed.",
             failedCheckIds: [],
             failedCoverageIds: [],
             failedReviewIds: ["review:contract_audit"],
@@ -82,7 +82,7 @@ describe("orchestrator build feedback context", () => {
               project_id: projectID,
               source: "test",
               title: "Feedback context",
-              request: "fix rejected delivery",
+              request: "fix rejected acceptance",
               kind: "workflow",
               priority: "normal",
               time_created: now,
@@ -95,9 +95,9 @@ describe("orchestrator build feedback context", () => {
               id: manifestID,
               task_id: taskID,
               run_id: runID,
-              delivery_id: deliveryID,
-              kind: "delivery_evidence_manifest",
-              label: "delivery-evidence-manifest",
+              acceptance_id: acceptanceID,
+              kind: "acceptance_evidence_manifest",
+              label: "acceptance-evidence-manifest",
               payload: manifest,
               time_created: now,
               time_updated: now,
@@ -108,9 +108,9 @@ describe("orchestrator build feedback context", () => {
               id: verdictID,
               task_id: taskID,
               run_id: runID,
-              delivery_id: deliveryID,
+              acceptance_id: acceptanceID,
               kind: "verdict",
-              label: "delivery-agent-verdict",
+              label: "acceptance-review-verdict",
               payload: {
                 verdict: "rejected",
                 summary: "Calculator render rejected by acceptance evidence.",
@@ -125,7 +125,7 @@ describe("orchestrator build feedback context", () => {
                   {
                     category: "review",
                     error: "contract audit found a missing exported surface",
-                    suggestion: "Route the delivery contract failure directly into build feedback.",
+                    suggestion: "Route the acceptance contract failure directly into build feedback.",
                   },
                 ],
               },
@@ -135,14 +135,14 @@ describe("orchestrator build feedback context", () => {
             .run()
         })
 
-        const taskScopeFeedback = await composeLatestDeliveryFeedbackForBuild({ taskID })
+        const taskScopeFeedback = await composeLatestAcceptanceFeedbackForBuild({ taskID })
         expect(taskScopeFeedback).toContain("Acceptance review rejected the integrated deliverable")
-        expect(taskScopeFeedback).toContain("Canonical delivery feedback packet")
+        expect(taskScopeFeedback).toContain("Canonical acceptance feedback packet")
         expect(taskScopeFeedback).toContain("review:contract_audit")
         expect(taskScopeFeedback).toContain("missing exported contract consumed by the calculator surface")
         expect(taskScopeFeedback).toContain('all_rejection_detail_count": 2')
 
-        const goalScopeFeedback = await composeLatestDeliveryFeedbackForBuild({ taskID, goalID })
+        const goalScopeFeedback = await composeLatestAcceptanceFeedbackForBuild({ taskID, goalID })
         expect(goalScopeFeedback).toContain(`"goal_id": "${goalID}"`)
         expect(goalScopeFeedback).toContain("missing exported contract consumed by the calculator surface")
         expect(goalScopeFeedback).not.toContain("contract audit found a missing exported surface")

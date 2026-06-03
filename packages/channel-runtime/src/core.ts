@@ -1157,7 +1157,7 @@ export class ChannelRuntime {
   }
 
   private async handleEvent(event: Event): Promise<void> {
-    // Engine emits evaluation.completed when delivery's adversarial verification
+    // Engine emits evaluation.completed when acceptance's adversarial verification
     // finishes. Push the verdict back to every channel thread bound to the task
     // so chat operators see acceptance/rejection without polling.
     // (Earlier code checked "engine.evaluation.completed" — that prefix is

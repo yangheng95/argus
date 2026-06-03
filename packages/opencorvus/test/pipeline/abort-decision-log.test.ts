@@ -28,7 +28,7 @@ import { tmpdir } from "../fixture/fixture"
  *   - TaskContext.snapshot (orchestrator wake context)
  *   - phasePromptSection("frontend_design" / "intent_analysis")
  *     (used by upstream-context.ts when building prompts for architect /
- *     build / delivery sub-agents).
+ *     build / acceptance sub-agents).
  *
  * The orchestrator/tools.ts abort writers themselves are simple
  * `decisionLog.append({...})` calls; this test asserts that pattern
@@ -101,7 +101,7 @@ describe("P4 abort decision-log writers — read/write contract", () => {
         expect(snapshot).toContain("no visual reference")
 
         // Read side 2: phasePromptSection (upstream-context.ts injects
-        // this into architect / build / delivery prompts).
+        // this into architect / build / acceptance prompts).
         const section = log.phasePromptSection("frontend_design", "Frontend Design Summary")
         expect(section).toContain("Frontend Design Summary")
         expect(section).toContain("abort_no_visual_input")

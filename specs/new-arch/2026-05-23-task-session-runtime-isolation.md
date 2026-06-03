@@ -17,7 +17,7 @@ tasks and sessions can overwrite each other:
 - `.opencorvus/worktrees/<name>`
 - `.opencorvus/ownership/*`
 - `.opencorvus/trace/*`
-- delivery screenshots and check workspaces
+- acceptance screenshots and check workspaces
 
 SQLite is not the root cause. The database is already the control-plane source
 of truth for tasks, sessions, protocol events, and artifacts. The bug is that
@@ -128,7 +128,7 @@ runtime namespace. Static config remains user-authored control-plane input.
           plans/
           goals/
           evaluations/
-        delivery/
+        acceptance/
           screenshots/
             <captureID>/
           check-workspaces/
@@ -198,7 +198,7 @@ Add `packages/opencorvus/src/project/runtime-paths.ts` with at least:
 - `intentPaths(projectDir, taskID)`
 - `decisionLogPaths(projectDir, taskID)`
 - `frontendDesignPaths(projectDir, taskID)`
-- `deliveryPaths(projectDir, taskID)`
+- `acceptancePaths(projectDir, taskID)`
 - `docsPaths(projectDir, taskID)`
 - `eventLogPath(projectDir, taskID)`
 - `attachmentBlobRoot(projectDir)`
@@ -370,8 +370,8 @@ Before implementation, grep these symbols and update every call site:
 - `gitCeilingEnvForWorktree`
 - `Ownership.Worktree.record`
 - `Ownership.Process.record`
-- `delivery-screenshots`
-- `delivery-check-workspaces`
+- `acceptance-screenshots`
+- `acceptance-check-workspaces`
 - `AgentTrace.getTraceDir`
 - `MCPServe.command`
 - `opencorvusMcpServers`
@@ -381,7 +381,7 @@ Before implementation, grep these symbols and update every call site:
 - `USER_REQUEST_BUNDLE_PATH`
 - `AttachmentStore.storageDir`
 - `engine/event-log`
-- `delivery/checks/discovery`
+- `acceptance/checks/discovery`
 - `tool/truncation`
 - `Snapshot.gitdir`
 - `Global.Path.data, "snapshot"`

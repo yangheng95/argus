@@ -21,7 +21,7 @@ async function readSrc(rel: string): Promise<string> {
 //      content from the operator.
 //   2. A reactive `createEffect` on `phaseState` that re-opens the section
 //      every time it transitions to "active" so re-entry (rewind, rework,
-//      delivery rejection that pushes the workflow back) re-surfaces the
+//      acceptance rejection that pushes the workflow back) re-surfaces the
 //      live agent's content.
 //
 // Both behaviours must NEVER force-close the panel — once the user

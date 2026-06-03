@@ -112,8 +112,8 @@ async function runLiveSmoke(executorName: "codex" | "claude-code") {
         throw new Error(`executor ${executorName} failed: ${status.error ?? status.status}`)
       }
 
-      const delivery = await executor.delivery({ sessionID })
-      expect(delivery.summary).toContain(marker)
+      const acceptance = await executor.acceptance({ sessionID })
+      expect(acceptance.summary).toContain(marker)
     },
   })
 }

@@ -10,13 +10,13 @@ import {
   findLatestDeliveredGoalRun,
   findDeliveriesForTask,
   findEvaluationsByTask,
-  findDeliveryByGoalRun,
-  findLatestDeliveryVerdictArtifactForDelivery,
+  findAcceptanceByGoalRun,
+  findLatestAcceptanceVerdictArtifactForAcceptance,
   findLatestEvaluationForGoalRun,
   findLatestArchitectContractGraph,
   getGoalRetryCount,
   listGoalRunsByGoal,
-  type DeliveryRow,
+  type AcceptanceRow,
   type EvaluationRow,
   type RunRow,
 } from "@/engine/store"
@@ -42,7 +42,7 @@ import { ProtocolEventTable } from "@/protocol/protocol.sql"
 import { Database, and, desc, eq, sql } from "@/storage/db"
 import { WorkbenchTaskNoteTable } from "./workbench.sql"
 import { compileBrief } from "./brief"
-import { findLatestDeliveryEvidenceManifest } from "@/delivery/manifest"
+import { findLatestAcceptanceEvidenceManifest } from "@/acceptance/manifest"
 
 const BOARD_SNAPSHOT_LIMIT = 80
 const BOARD_CHANGED_FILE_LIMIT = 80
@@ -122,21 +122,21 @@ function buildBoard(task: typeof EngineTaskTable.$inferSelect, snapshotVersion: 
   )
   const history = notes.filter((note) => ["user_request", "summary"].includes(note.kind))
   // Phase 5-e: board reads through the engine/store projection helpers
-  // instead of issuing its own SQL against EngineDelivery / EngineEvaluation.
+  // instead of issuing its own SQL against EngineAcceptance / EngineEvaluation.
   // The store helpers return newest-first; board callers below still want
   // oldest-first order (semantic matches the previous `orderBy(time_created)`
   // ascending + `.at(-1)` pattern), so reverse once here.
   const allDeliveries = [...findDeliveriesForTask(task.id)].reverse()
-  const delivery = run ? allDeliveries.filter((item) => item.run_id === run.id).at(-1) : undefined
-  const latestDelivery = delivery ?? allDeliveries.at(-1)
+  const acceptance = run ? allDeliveries.filter((item) => item.run_id === run.id).at(-1) : undefined
+  const latestAcceptance = acceptance ?? allDeliveries.at(-1)
   const allEvaluations = [...findEvaluationsByTask(task.id)].reverse()
   const evaluation = run ? allEvaluations.filter((item) => item.run_id === run.id).at(-1) : undefined
   const latestEvaluation = evaluation ?? allEvaluations.at(-1)
   const acceptedEvaluation = [...allEvaluations]
     .reverse()
     .find((item) => item.verdict === "accepted" || item.status === "passed")
-  const acceptedDelivery = acceptedEvaluation?.delivery_id
-    ? allDeliveries.find((item) => item.id === acceptedEvaluation.delivery_id)
+  const acceptedAcceptance = acceptedEvaluation?.acceptance_id
+    ? allDeliveries.find((item) => item.id === acceptedEvaluation.acceptance_id)
     : undefined
   const bindings = Database.use((db) =>
     db
@@ -159,12 +159,12 @@ function buildBoard(task: typeof EngineTaskTable.$inferSelect, snapshotVersion: 
   const latestArtifacts =
     artifacts.length > 0
       ? artifacts
-      : latestDelivery
+      : latestAcceptance
         ? Database.use((db) =>
             db
               .select()
               .from(EngineArtifactTable)
-              .where(eq(EngineArtifactTable.delivery_id, latestDelivery.id))
+              .where(eq(EngineArtifactTable.acceptance_id, latestAcceptance.id))
               .orderBy(EngineArtifactTable.time_created)
               .all(),
           )
@@ -180,8 +180,8 @@ function buildBoard(task: typeof EngineTaskTable.$inferSelect, snapshotVersion: 
     task,
     run,
     pendingInteractions,
-    candidateDelivery: latestDelivery,
-    acceptedDelivery,
+    candidateAcceptance: latestAcceptance,
+    acceptedAcceptance,
     evaluation: latestEvaluation,
     currentFailure,
   })
@@ -285,9 +285,9 @@ function buildBoard(task: typeof EngineTaskTable.$inferSelect, snapshotVersion: 
             },
           }
         : undefined,
-      delivery: viewBoardDelivery(latestDelivery),
-      candidateDelivery: viewBoardDelivery(latestDelivery),
-      acceptedDelivery: viewBoardDelivery(acceptedDelivery),
+      acceptance: viewBoardAcceptance(latestAcceptance),
+      candidateAcceptance: viewBoardAcceptance(latestAcceptance),
+      acceptedAcceptance: viewBoardAcceptance(acceptedAcceptance),
       evaluation: viewBoardEvaluation(latestEvaluation),
       interactions: interactions.map((item) => ({
         id: item.id,
@@ -324,7 +324,7 @@ function buildBoard(task: typeof EngineTaskTable.$inferSelect, snapshotVersion: 
         id: item.id,
         taskID: item.task_id,
         runID: item.run_id,
-        deliveryID: item.delivery_id ?? undefined,
+        acceptanceID: item.acceptance_id ?? undefined,
         kind: item.kind,
         label: item.label,
         payload: compactArtifactPayload(item.kind, item.payload),
@@ -341,11 +341,11 @@ function buildBoard(task: typeof EngineTaskTable.$inferSelect, snapshotVersion: 
       // Task-level criteria rollup. Sourced from engine_task.criteria_results,
       // populated by:
       //   - integrity acceptance verdict (deferred_checks + rejection_details + overall),
-      //     sunk via orchestrator/tools.ts → sinkDeliveryVerdictToCriteria()
+      //     sunk via orchestrator/tools.ts → sinkAcceptanceVerdictToCriteria()
       //   - in-process visual-diff gate (orchestrator/tools.ts, when task carries
       //     image attachments and a rendered index.html exists)
       // Hidden in the overlay for kind=build tasks (build self-verifies; this
-      // panel only applies to workflow tasks running through delivery).
+      // panel only applies to workflow tasks running through acceptance).
       criteriaResults: boardChecks(task.criteria_results),
   }
 }
@@ -405,7 +405,7 @@ function boardTagForTask(task: typeof EngineTaskTable.$inferSelect) {
   // Phase 5-e: derive {count, updated} from the same projection helpers the
   // board already reads for full rows. Two small arrays instead of two
   // aggregate SQL queries — acceptable overhead, eliminates the direct-SQL
-  // coupling to EngineDelivery / EngineEvaluation tables here.
+  // coupling to EngineAcceptance / EngineEvaluation tables here.
   const allDeliveriesForTag = findDeliveriesForTask(task.id)
   const deliveries = {
     count: allDeliveriesForTag.length,
@@ -588,23 +588,23 @@ function boardChecks(input: unknown) {
   })
 }
 
-function viewBoardDelivery(
-  row: DeliveryRow | undefined,
+function viewBoardAcceptance(
+  row: AcceptanceRow | undefined,
 ) {
   if (!row) return undefined
   const result = (row.result ?? {}) as Record<string, unknown>
-  // Project status from the delivery-agent verdict (single source — rule 22).
-  // The candidate-delivery row's `status` column tracks publish lifecycle
+  // Project status from the acceptance-agent verdict (single source — rule 22).
+  // The candidate-acceptance row's `status` column tracks publish lifecycle
   // (candidate → publishing → delivered), NOT verdict outcome — without this
-  // override a rejected delivery still surfaces as "candidate" in the overlay.
+  // override a rejected acceptance still surfaces as "candidate" in the overlay.
   // Verdict-absent: keep the underlying row.status so unrun / in-flight
   // deliveries still render their lifecycle stage.
-  const verdictArt = findLatestDeliveryVerdictArtifactForDelivery(row.id)
+  const verdictArt = findLatestAcceptanceVerdictArtifactForAcceptance(row.id)
   const verdictPayload = (verdictArt?.payload ?? null) as
     | { verdict?: string; summary?: string }
     | null
   const verdict = verdictPayload?.verdict
-  const manifest = findLatestDeliveryEvidenceManifest({ deliveryID: row.id })
+  const manifest = findLatestAcceptanceEvidenceManifest({ acceptanceID: row.id })
   const projectedStatus =
     verdict === "rejected"
       ? "failed"
@@ -680,7 +680,7 @@ function viewBoardEvaluation(
     id: row.id,
     taskID: row.task_id,
     runID: row.run_id,
-    deliveryID: row.delivery_id ?? undefined,
+    acceptanceID: row.acceptance_id ?? undefined,
     status: row.status,
     verdict: row.verdict,
     summary: clipBoard(row.summary),
@@ -751,8 +751,8 @@ function boardOverview(input: {
   task: typeof EngineTaskTable.$inferSelect
   run: RunRow | undefined
   pendingInteractions: Array<typeof EngineInteractionRequestTable.$inferSelect>
-  candidateDelivery: DeliveryRow | undefined
-  acceptedDelivery: DeliveryRow | undefined
+  candidateAcceptance: AcceptanceRow | undefined
+  acceptedAcceptance: AcceptanceRow | undefined
   evaluation: EvaluationRow | undefined
   currentFailure:
     | {
@@ -772,7 +772,7 @@ function boardOverview(input: {
     input.pendingInteractions.length > 0
       ? "Waiting on human input"
       : derivedStatus === "completed"
-        ? "Accepted delivery is ready"
+        ? "Accepted acceptance is ready"
         : derivedStatus === "failed"
           ? "Current attempt failed acceptance"
           : derivedStatus === "cancelled"
@@ -785,11 +785,11 @@ function boardOverview(input: {
   const summary =
     input.pendingInteractions.length > 0
       ? `${input.pendingInteractions.length} interaction${input.pendingInteractions.length > 1 ? "s" : ""} need attention before the task can continue.`
-      : derivedStatus === "completed" && input.acceptedDelivery
-        ? clipBoard(input.acceptedDelivery.summary)
+      : derivedStatus === "completed" && input.acceptedAcceptance
+        ? clipBoard(input.acceptedAcceptance.summary)
         : input.currentFailure?.summary ??
-          (input.candidateDelivery
-            ? clipBoard(input.candidateDelivery.summary)
+          (input.candidateAcceptance
+            ? clipBoard(input.candidateAcceptance.summary)
             : input.run
               ? `Current run is in ${input.run.phase}.`
               : "Task is ready for the first run.")
@@ -814,8 +814,8 @@ function boardOverview(input: {
             }
             : derivedStatus === "completed"
               ? {
-                  kind: "review_delivery" as const,
-                  title: "Review the accepted delivery",
+                  kind: "review_acceptance" as const,
+                  title: "Review the accepted acceptance",
                   detail: "Inspect the accepted result, changed files, and evaluation evidence before closing the loop.",
                 }
               : active
@@ -847,7 +847,7 @@ function boardOverview(input: {
 // MiniWorkflow board fields — workflow shape, per-goal workflows,
 // requirements list, and architect summary. Workflow template always
 // defaults to pipeline; task-scope step status is projected from
-// side-effects (spec / goals / runs / delivery presence), goal-scope
+// side-effects (spec / goals / runs / acceptance presence), goal-scope
 // step status from the goal_run chain.
 // ═══════════════════════════════════════════════════════════════════
 
@@ -872,7 +872,7 @@ function buildWorkflowFields(
   }
 
   // Both task-scope and goal-scope step status are projected from DB rows
-  // — task-scope from known side-effects (spec / goals / runs / delivery /
+  // — task-scope from known side-effects (spec / goals / runs / acceptance /
   // design_specs presence), goal-scope from the goal_run chain.
   const projectedGoalSteps = projectGoalSteps(task.id, workflow)
   const projectedTaskSteps = mergeTaskStepProjections(
@@ -909,12 +909,12 @@ function buildWorkflowFields(
     // the "pre-attempt" bucket under a stable pseudo-id.
     const tipRun = findLatestTipGoalRun(goal.id)
     // goalRunID surfaces the run the overlay's per-row diff click fetches
-    // via /goal-run/<id>/delivery. After a delivery-rejection reset the tip
-    // is a fresh pending row with no delivery, so click would resolve to an
+    // via /goal-run/<id>/acceptance. After a acceptance-rejection reset the tip
+    // is a fresh pending row with no acceptance, so click would resolve to an
     // empty diff. The Files panel displays whatever is currently merged on
     // master — which corresponds to the latest delivered run, not the
     // pending tip — so anchor to that run when one exists. Falls back to
-    // the tip when the goal has never produced a delivery (initial run
+    // the tip when the goal has never produced a acceptance (initial run
     // still in flight).
     const deliveredRun = findLatestDeliveredGoalRun(goal.id)
     // Single projection per goal — same query was previously called twice
@@ -1143,9 +1143,9 @@ function buildStepSummary(step: MiniWorkflowStep, goalID: string, status?: strin
   if (step.scope !== "goal") return undefined
   if (!step.phases || step.phases.length === 0) return undefined
 
-  // Use the latest *delivered* goal_run, not the tip. After a delivery
+  // Use the latest *delivered* goal_run, not the tip. After a acceptance
   // rejection, resetTaskGoalsToPending supersedes every goal's tip with a
-  // fresh pending row that has no delivery yet — but the prior delivery row's
+  // fresh pending row that has no acceptance yet — but the prior acceptance row's
   // files are still merged into master and remain the canonical "built"
   // surface. Falling through to currentGoalRun() here would silently zero
   // out the file count for every previously-passed goal until the next
@@ -1153,9 +1153,9 @@ function buildStepSummary(step: MiniWorkflowStep, goalID: string, status?: strin
   // misleadingly show "0 files" for goals whose code is still on disk.
   const deliveredRun = findLatestDeliveredGoalRun(goalID)
   if (deliveredRun) {
-    const delivery = findDeliveryByGoalRun(deliveredRun.id)
-    if (delivery) {
-      const result = delivery.result as { changed_files?: string[]; diffs?: unknown[] } | null
+    const acceptance = findAcceptanceByGoalRun(deliveredRun.id)
+    if (acceptance) {
+      const result = acceptance.result as { changed_files?: string[]; diffs?: unknown[] } | null
       const fileCount = result?.changed_files?.length ?? result?.diffs?.length ?? 0
       if (fileCount > 0) return `${fileCount} files`
     }
@@ -1218,7 +1218,7 @@ function buildStepPayload(step: MiniWorkflowStep, goalID: string, status?: strin
   // buildSessionID describes the live attempt — read from the tip.
   // changedFiles / changedFileDiffs / diffStats describe what's been merged
   // into master — read from the most-recently-delivered run, which can
-  // differ from the tip after a delivery-rejection reset (see
+  // differ from the tip after a acceptance-rejection reset (see
   // findLatestDeliveredGoalRun for the full rationale).
   //
   // workspaceDir used to be projected here too, but it duplicated the
@@ -1231,8 +1231,8 @@ function buildStepPayload(step: MiniWorkflowStep, goalID: string, status?: strin
   }
   const deliveredRun = findLatestDeliveredGoalRun(goalID)
   if (deliveredRun) {
-    const delivery = findDeliveryByGoalRun(deliveredRun.id)
-    const result = delivery?.result as {
+    const acceptance = findAcceptanceByGoalRun(deliveredRun.id)
+    const result = acceptance?.result as {
       commit_ref?: unknown
       changed_files?: string[]
       diffs?: { file?: string; additions?: unknown; deletions?: unknown; before?: unknown; after?: unknown; status?: string }[]

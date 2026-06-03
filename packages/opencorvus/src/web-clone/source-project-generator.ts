@@ -6823,8 +6823,8 @@ function renderSourceDomIterationStateTs(
       `Adopt the current source project as the visual baseline and compare the viewport matrix (${viewportNames}) against reference.png or matching reference artifacts.`,
       "Replace nextReplacement.regionFilePath with nextReplacement.recommendedComponentName using source data, sidecar assets, and scoped styles.",
       "Delete the replaced source-dom region only after the screenshot comparison is stable for the unchanged surrounding surface.",
-      "Run web_clone_source_audit with finalDeliveryMode=maintainable_replacement_required after each region replacement.",
-      "Repeat until remainingRegionCount is zero or each remaining source-dom region has measured evidence proving it is outside the requested delivery surface.",
+      "Run web_clone_source_audit with finalAcceptanceMode=maintainable_replacement_required after each region replacement.",
+      "Repeat until remainingRegionCount is zero or each remaining source-dom region has measured evidence proving it is outside the requested acceptance surface.",
     ],
     stopCondition: {
       sourceDomRegionFileCount: 0,

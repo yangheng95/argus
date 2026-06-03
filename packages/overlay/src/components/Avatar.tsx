@@ -21,7 +21,7 @@ export const AVATAR_ICON_BY_ROLE: Record<AgentRole, IconName> = {
   evaluator: "avatar-evaluator",
   integrity: "avatar-integrity",
   "fact-check": "avatar-integrity",
-  delivery: "avatar-delivery",
+  acceptance: "avatar-acceptance",
 }
 
 export function avatarRole(role: string): AgentRole {

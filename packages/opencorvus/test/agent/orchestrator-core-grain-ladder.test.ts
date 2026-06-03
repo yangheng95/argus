@@ -155,10 +155,10 @@ describe("orchestrator-core grain ladder hardening", () => {
  * future edit cannot silently re-open the bypass.
  */
 describe("orchestrator-core workflow-bypass prohibition", () => {
-  test("states the agent-team delivery principle", async () => {
+  test("states the agent-team acceptance principle", async () => {
     const text = await Bun.file(promptPath).text()
     expect(text).toContain("The system delivers a project through its specialist agent team")
-    expect(text).toContain("the team IS the\ndelivery mechanism")
+    expect(text).toContain("the team IS the\nacceptance mechanism")
   })
 
   test("prohibits jumping straight to direct build on a fresh workflow task", async () => {

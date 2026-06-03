@@ -226,7 +226,7 @@ Implement a staged replacement:
 7. Delete old compatibility paths instead of keeping fallback behavior.
 
 This is not a mandate to add a new global engine-level
-`AgentInvocation` truth. `goal_run_attempt`, `delivery`, and related workflow
+`AgentInvocation` truth. `goal_run_attempt`, `acceptance`, and related workflow
 facts remain engine artifacts. The new control/turn records are session-local
 execution plumbing and must not become a competing task status source.
 
@@ -739,7 +739,7 @@ Change:
   regression test proves a stale snapshot can override board/current state.
 - `/progress` may include snapshots, but current task/run/goal status must be
   derived from board/read-model facts: task, run artifacts, goal_run_attempt,
-  delivery, and live session status.
+  acceptance, and live session status.
 - UI consumers must not prefer progress snapshots over board projection.
 
 Acceptance:

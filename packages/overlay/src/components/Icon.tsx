@@ -62,7 +62,7 @@ export type IconName =
   | "avatar-explore"
   | "avatar-evaluator"
   | "avatar-integrity"
-  | "avatar-delivery"
+  | "avatar-acceptance"
   // Empty-state / cwd
   | "folder"
   | "folder-open"
@@ -73,7 +73,7 @@ export type IconName =
   | "goals"
   | "executor"
   | "criteria"
-  | "delivery"
+  | "acceptance"
   | "files"
   // Composer toolbar (was ChatComposer inline svg)
   | "attach"
@@ -630,7 +630,7 @@ const ICON_PATHS: Record<IconName, IconRecord> = {
       </>
     ),
   },
-  "avatar-delivery": {
+  "avatar-acceptance": {
     body: () => (
       <>
         <path d="M3.2 8.4 6.3 11.5 12.8 4.9" />
@@ -708,7 +708,7 @@ const ICON_PATHS: Record<IconName, IconRecord> = {
       </>
     ),
   },
-  delivery: {
+  acceptance: {
     body: () => (
       <>
         <path d="M2.5 5.5L8 2.5l5.5 3v5L8 13.5l-5.5-3Z" />

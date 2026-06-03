@@ -31,8 +31,8 @@ test("orchestrator wake with caller note preserves the caller-authored note", ()
   expect(text).toBe("operator provided this exact follow-up")
 })
 
-test("deliveryRework wake note carries iteration + reason + summary so re-dispatch context is unambiguous", () => {
-  const note = OrchestratorEventNote.deliveryRework({
+test("acceptanceRework wake note carries iteration + reason + summary so re-dispatch context is unambiguous", () => {
+  const note = OrchestratorEventNote.acceptanceRework({
     reason: "render_prerequisite_failed:bun_install",
     iteration: 0,
     summary: "bun install pre-launch exited code=1 in merged worktree",
@@ -45,8 +45,8 @@ test("deliveryRework wake note carries iteration + reason + summary so re-dispat
   expect(note).toContain("bun install pre-launch exited code=1 in merged worktree")
 })
 
-test("deliveryRework wake note reports exact affected goal count for agent-attributed rework", () => {
-  const note = OrchestratorEventNote.deliveryRework({
+test("acceptanceRework wake note reports exact affected goal count for agent-attributed rework", () => {
+  const note = OrchestratorEventNote.acceptanceRework({
     reason: "agent_verdict_rejected",
     iteration: 2,
     summary: "two scoped issues",

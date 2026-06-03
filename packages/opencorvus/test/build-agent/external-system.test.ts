@@ -26,7 +26,7 @@ describe("BuildAgent external coding system prompt", () => {
     expect(composed.system).not.toContain("figma_extract => mcp__opencorvus__figma_extract")
     expect(composed.system).toContain("Mirror extraction artifacts are produced by the upstream frontend_design stage")
     expect(composed.system).not.toContain("`web-clone-source/` package remains the compact evidence entrypoint")
-    expect(composed.system).not.toContain("Do not generate another separate source project for webpage clone delivery")
+    expect(composed.system).not.toContain("Do not generate another separate source project for webpage clone acceptance")
     expect(composed.system).toContain("Write shell commands for the actual platform and shell")
     expect(composed.system).toContain("PowerShell-native commands")
     expect(composed.system).toContain("On Windows, start Playwright only through Node Package Manager (`npm`)")

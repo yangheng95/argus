@@ -38,10 +38,10 @@ User 请求
 ┌──────────────┐
 │ Executor     │  OpenCorvus / Codex / Claude Code
 └──────┬───────┘  packages/opencorvus/src/executor/opencode.ts
-       ↓  delivery
+       ↓  acceptance
 ┌──────────────┐
 │ Evaluator    │  build/test/lint/… + LLM judge 兜底
-└──────┬───────┘  packages/opencorvus/src/evaluator/per-goal.ts
+└──────┬───────┘  packages/opencorvus/src/acceptance/checks/per-goal.ts
        ↓
  accepted / rejected
        ↓
@@ -55,10 +55,10 @@ User 请求
 | **Channel** | 协议适配（Slack/HTTP/TUI/…），把外部消息转成 `CreateTask` | `src/channel/ingress.ts:39` |
 | **Orchestrator** | Task/Run/Goal 生命周期、重试、重规划、预算控制 | `src/orchestrator/task-loop.ts:59` |
 | **Task Agent** | 主 LLM 决策者，协调 spec/goal/plan 子 agent | `src/task-agent/agent.ts:60` |
-| **Planner** | 为单个 Goal 产出 PlanSteps | `src/planner/per-goal.ts:45` |
+| **Planner** | 为单个 Goal 产出 PlanSteps | `removed-planning-package/per-goal.ts:45` |
 | **GoalPool** | 按 `depends_on` 拓扑排序并发调度 Goal | `src/orchestrator/goal-pool.ts` |
 | **Executor** | 把 prompt 注入 coding agent，跑 agentic loop | `src/executor/opencode.ts:36` |
-| **Evaluator** | 运行确定性检查 + LLM 判决 verdict | `src/evaluator/per-goal.ts` |
+| **Evaluator** | 运行确定性检查 + LLM 判决 verdict | `src/acceptance/checks/per-goal.ts` |
 
 ## 两层循环
 
@@ -101,7 +101,7 @@ while (session 活跃) {
 
 ## Worktree 并行
 
-每个 Goal 独立 worktree（`src/orchestrator/goal-pool.ts`），互不干扰。最终合并由 Delivery agent 负责。
+每个 Goal 独立 worktree（`src/orchestrator/goal-pool.ts`），互不干扰。最终合并由 Acceptance review 负责。
 
 这意味着：同一个 Task 可能有多个 Goal 在不同 worktree 里并行跑，失败的 Goal 重试时不影响其他 Goal。
 

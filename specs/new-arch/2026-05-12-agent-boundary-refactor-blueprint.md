@@ -4,8 +4,8 @@ Date: 2026-05-12
 Status: Draft for implementation, revised after sub-agent review
 
 2026-05-16 lifecycle update: `deliver` accepted is now the task completion
-authority. `publish_delivery` is explicit post-delivery artifact export only,
-and `prosecute` is post-delivery hardening evidence rather than a pre-publish
+authority. `publish_acceptance` is explicit post-acceptance artifact export only,
+and `prosecute` is post-acceptance hardening evidence rather than a pre-publish
 review window. See `specs/deliver-accepted-completes-task-2026-05-16.md`.
 
 ## 0. Problem Statement
@@ -14,13 +14,13 @@ Current agent architecture has responsibility drift, but the fix is not to
 invent a new parallel set of agent concepts. The current code already contains
 several real single-source candidates:
 
-- `DeliveryEvidenceManifest` is the existing delivery evidence snapshot.
-- The retired delivery verifier plus `arbitrateDeliveryVerdict` was the current
-  delivery-stage finalization path.
+- `AcceptanceEvidenceManifest` is the existing acceptance evidence snapshot.
+- The retired acceptance verifier plus `arbitrateAcceptanceVerdict` was the current
+  acceptance-stage finalization path.
 - `requirements` already avoids goal generation.
 - `architect` already owns goal graph and contracts.
 - `integrity` already runs as an explicit orchestrator tool, not as a hidden
-  delivery prerequisite.
+  acceptance prerequisite.
 
 The refactor must therefore converge existing runtime truth into sharper
 contracts. It must not create a second evidence DTO, second verdict authority,
@@ -28,11 +28,11 @@ or second role definition table.
 
 Observed problems:
 
-1. Delivery-stage responsibility is split across manifest assembly, delivery
-   tools, retired delivery agent/verifier, `arbiter`, and orchestrator
+1. Acceptance-stage responsibility is split across manifest assembly, acceptance
+   tools, retired acceptance review/verifier, `arbiter`, and orchestrator
    `deliver` side effects.
 2. `prosecutor` is positioned as an adversarial reviewer, but it does not yet
-   consume the same delivery evidence manifest as delivery, and failures can be
+   consume the same acceptance evidence manifest as acceptance, and failures can be
    converted into zero-activity results.
 3. `integrity` is sometimes described as plan-only, but current code also uses
    post-build requirement-status evidence to judge completion fidelity.
@@ -60,27 +60,27 @@ Consumers to validate against this contract:
 - live prompts such as `session/prompt/system.txt`
 - architecture specs
 
-### 1.2 `DeliveryEvidenceManifest` is the delivery evidence snapshot
+### 1.2 `AcceptanceEvidenceManifest` is the acceptance evidence snapshot
 
-Do not add a parallel `DeliveryEvidenceSnapshot`.
+Do not add a parallel `AcceptanceEvidenceSnapshot`.
 
 The implementation may add helper modules around the manifest, but the persisted
-artifact and type family must converge on `DeliveryEvidenceManifest` unless the
+artifact and type family must converge on `AcceptanceEvidenceManifest` unless the
 manifest is atomically renamed and all old semantics are deleted in the same
 change.
 
-### 1.3 Final delivery authority is the delivery stage, not only the LLM agent
+### 1.3 Final acceptance authority is the acceptance stage, not only the LLM agent
 
 Current final persisted verdict is produced by:
 
-1. `DeliveryAgent.verify` submitting a semantic verdict.
-2. `arbitrateDeliveryVerdict` applying deterministic host gates.
-3. The retired delivery verifier returning the final stage verdict.
+1. `AcceptanceReview.verify` submitting a semantic verdict.
+2. `arbitrateAcceptanceVerdict` applying deterministic host gates.
+3. The retired acceptance verifier returning the final stage verdict.
 
-This is acceptable only if treated as one delivery-stage finalization mechanism.
+This is acceptable only if treated as one acceptance-stage finalization mechanism.
 The arbiter is not a second agent and must not become a second subjective judge.
 It is deterministic projection of already-produced evidence into the final
-delivery-stage verdict.
+acceptance-stage verdict.
 
 ### 1.4 `integrity` is not pure plan review
 
@@ -89,10 +89,10 @@ requirement-status evidence to judge real completion fidelity.
 
 It must not:
 
-- run delivery runtime verification
-- publish delivery verdicts
+- run acceptance runtime verification
+- publish acceptance verdicts
 - mutate goals directly
-- masquerade as a hidden delivery prerequisite
+- masquerade as a hidden acceptance prerequisite
 
 It may:
 
@@ -116,27 +116,27 @@ role contract.
 
 | Role                | Owns                                                                                    | Must not own                                                                    |
 | ------------------- | --------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------- |
-| `orchestrator`      | task wake decisions, stage ordering, retry/fail/restart, task mutation tool use         | requirement extraction, goal graph authoring, subjective final delivery verdict |
+| `orchestrator`      | task wake decisions, stage ordering, retry/fail/restart, task mutation tool use         | requirement extraction, goal graph authoring, subjective final acceptance verdict |
 | `requirements`      | requirement extraction and foundational technical decisions                             | goals, contracts, retry strategy                                                |
-| `architect`         | goal graph, traceability, assembly ownership, cross-goal contracts                      | runtime evidence, delivery verdict                                              |
-| `integrity`         | requirement/goal integrity review, including post-build requirement-status fidelity     | delivery runtime verification, delivery verdict, direct goal mutation           |
+| `architect`         | goal graph, traceability, assembly ownership, cross-goal contracts                      | runtime evidence, acceptance verdict                                              |
+| `integrity`         | requirement/goal integrity review, including post-build requirement-status fidelity     | acceptance runtime verification, acceptance verdict, direct goal mutation           |
 | `build`             | implementation in worktree                                                              | final acceptance                                                                |
-| `delivery-manifest` | deterministic delivery evidence assembly and persisted evidence manifest                | subjective verdict authorship                                                   |
-| `delivery-agent`    | semantic accept/reject judgment over delivery evidence and on-demand inspection results | manifest assembly, hidden integrity routing                                     |
-| `delivery-arbiter`  | deterministic finalization of delivery-stage verdict from agent verdict plus host gates | subjective review, new evidence creation                                        |
-| `prosecutor`        | counterexamples and diagnostic challenge metrics over delivery evidence                 | accept/reject verdict, delivery truth mutation                                  |
+| `acceptance-manifest` | deterministic acceptance evidence assembly and persisted evidence manifest                | subjective verdict authorship                                                   |
+| `acceptance-agent`    | semantic accept/reject judgment over acceptance evidence and on-demand inspection results | manifest assembly, hidden integrity routing                                     |
+| `acceptance-arbiter`  | deterministic finalization of acceptance-stage verdict from agent verdict plus host gates | subjective review, new evidence creation                                        |
+| `prosecutor`        | counterexamples and diagnostic challenge metrics over acceptance evidence                 | accept/reject verdict, acceptance truth mutation                                  |
 
 ## 3. Current Reality Inventory
 
 ### 3.1 Preserve
 
-- `deliver` no longer runs integrity internally before delivery verification.
+- `deliver` no longer runs integrity internally before acceptance verification.
 - `requirements` does not produce goals.
 - `architect` owns goal graph output.
-- `DeliveryEvidenceManifest` already persists required checks, runtime
+- `AcceptanceEvidenceManifest` already persists required checks, runtime
   readiness, coverage, runtime flows, specialist reviews, review evidence, and
   final gate.
-- The retired delivery verifier centralized delivery verification and
+- The retired acceptance verifier centralized acceptance verification and
   arbitration.
 - Prosecutor challenge metrics are forced to `gate_class="diagnostic"` at the
   store layer.
@@ -148,14 +148,14 @@ role contract.
 - Prompt catalog can expose empty default prompts for native editable agents
   such as `integrity` / `prosecutor`.
 - Historical: `deliver` auto-publish could bypass the intended `deliver ->
-prosecute -> publish_delivery` review window. Superseded on 2026-05-16:
-  accepted `deliver` completes the task; `prosecute` is post-delivery evidence.
+prosecute -> publish_acceptance` review window. Superseded on 2026-05-16:
+  accepted `deliver` completes the task; `prosecute` is post-acceptance evidence.
 - `prosecutor.query_diff` is still a stub and its prompt still contains phase
   wording that describes incomplete wiring.
 - `runProsecutor` catches broad errors and returns zero activity.
-- `orchestrator/tools.ts` owns delivery-adjacent side effects that are not
+- `orchestrator/tools.ts` owns acceptance-adjacent side effects that are not
   represented in the first blueprint: merged render, system artifacts, metrics,
-  delivery commits, and LKG rollback.
+  acceptance commits, and LKG rollback.
 - `requirement-status` has fallback behavior from missing
   `metadata.source_requirement_id` to internal row id, and tests currently lock
   that behavior.
@@ -205,9 +205,9 @@ Acceptance:
 - role descriptions in code, prompt catalog, docs, and live prompts match the
   code-owned role contract.
 
-### Phase B: Formalize integrity vs delivery/prosecutor boundaries early
+### Phase B: Formalize integrity vs acceptance/prosecutor boundaries early
 
-Purpose: prevent later delivery manifest work from relying on conflicting
+Purpose: prevent later acceptance manifest work from relying on conflicting
 review semantics.
 
 Files to change:
@@ -222,11 +222,11 @@ Work:
 
 1. Define `integrity` as requirement/goal integrity review, not pure plan review.
 2. Keep post-build requirement-status input, but document it as completion
-   fidelity evidence, not delivery runtime verification.
+   fidelity evidence, not acceptance runtime verification.
 3. Lock that integrity can propose corrections and missing goals but cannot
    mutate/reopen goals directly.
 4. Remove contradictory prompt language where integrity is both task-end
-   delivery-adjacent review and wave-level build feedback without clear scope.
+   acceptance-adjacent review and wave-level build feedback without clear scope.
 5. Audit `requirement-status` fallback to internal row id:
    - either remove it and update tests,
    - or explicitly rename it as an allowed legacy compatibility violation to be
@@ -235,88 +235,88 @@ Work:
 Tests:
 
 - integrity can report/propose corrections without mutating goals.
-- delivery rejection does not mutate integrity artifacts.
+- acceptance rejection does not mutate integrity artifacts.
 - `deliver` still does not call integrity internally.
 - requirement-status behavior has an explicit non-fallback contract.
 
 Acceptance:
 
-- integrity's review surface is distinct from delivery runtime verification.
-- no prompt or test implies integrity publishes delivery verdicts.
+- integrity's review surface is distinct from acceptance runtime verification.
+- no prompt or test implies integrity publishes acceptance verdicts.
 
-### Phase C: Promote `DeliveryEvidenceManifest` as the only delivery evidence source
+### Phase C: Promote `AcceptanceEvidenceManifest` as the only acceptance evidence source
 
 Purpose: separate evidence production from semantic verdict without adding a
 parallel DTO.
 
 Files to change:
 
-- `packages/opencorvus/src/delivery/manifest.ts`
-- `packages/opencorvus/src/delivery/checks/project-gate.ts`
-- `packages/opencorvus/src/delivery/service.ts`
+- `packages/opencorvus/src/acceptance/manifest.ts`
+- `packages/opencorvus/src/acceptance/checks/project-gate.ts`
+- `packages/opencorvus/src/acceptance/service.ts`
 - `packages/opencorvus/src/orchestrator/tools.ts`
-- retired delivery agent source
+- retired acceptance review source
 
 Optional helper files:
 
-- `packages/opencorvus/src/delivery/manifest-context.ts`
-- `packages/opencorvus/src/delivery/manifest-reader.ts`
+- `packages/opencorvus/src/acceptance/manifest-context.ts`
+- `packages/opencorvus/src/acceptance/manifest-reader.ts`
 
-These helpers must wrap `DeliveryEvidenceManifest`; they must not introduce a
+These helpers must wrap `AcceptanceEvidenceManifest`; they must not introduce a
 second persisted snapshot type.
 
 Work:
 
-1. Treat `DeliveryEvidenceManifest` as the canonical evidence snapshot.
-2. Move every delivery evidence input that delivery/prosecutor need into either:
+1. Treat `AcceptanceEvidenceManifest` as the canonical evidence snapshot.
+2. Move every acceptance evidence input that acceptance/prosecutor need into either:
    - the manifest,
    - an explicit pointer from the manifest,
    - or a separately named non-evidence prompt context.
-3. Audit retired delivery verifier fields currently computed outside the
+3. Audit retired acceptance verifier fields currently computed outside the
    manifest, especially runtime/visual gates passed into arbiter.
-4. Audit `orchestrator/tools.ts` delivery side effects:
+4. Audit `orchestrator/tools.ts` acceptance side effects:
    - merged worktree render
    - `system_artifacts`
    - metrics and iteration snapshot
-   - delivery round commit
+   - acceptance round commit
    - LKG rollback
 5. Classify each side effect as:
    - manifest evidence production
-   - delivery-stage finalization
+   - acceptance-stage finalization
    - publish operation
    - unrelated orchestration side effect to move or document
 
 Tests:
 
 - exactly one manifest builder owns final gate assembly.
-- delivery prompt assertions read manifest-derived fields.
-- no second `DeliveryEvidenceSnapshot` or parallel persisted artifact family is
+- acceptance prompt assertions read manifest-derived fields.
+- no second `AcceptanceEvidenceSnapshot` or parallel persisted artifact family is
   introduced.
-- delivery/prosecutor can read the same manifest id.
+- acceptance/prosecutor can read the same manifest id.
 
 Acceptance:
 
-- delivery evidence has one persisted source: `DeliveryEvidenceManifest`.
+- acceptance evidence has one persisted source: `AcceptanceEvidenceManifest`.
 - evidence consumers do not reconstruct a second evidence world.
 
-### Phase D: Clarify delivery-stage final verdict and arbiter authority
+### Phase D: Clarify acceptance-stage final verdict and arbiter authority
 
 Purpose: remove the ambiguity between LLM semantic verdict and final persisted
-delivery verdict.
+acceptance verdict.
 
 Files to change:
 
-- `packages/opencorvus/src/delivery/service.ts`
-- `packages/opencorvus/src/delivery/arbiter.ts`
-- `packages/opencorvus/src/delivery/output-tools.ts`
+- `packages/opencorvus/src/acceptance/service.ts`
+- `packages/opencorvus/src/acceptance/arbiter.ts`
+- `packages/opencorvus/src/acceptance/output-tools.ts`
 - `packages/opencorvus/src/orchestrator/tools.ts`
-- `packages/opencorvus/test/delivery/arbiter.test.ts`
+- `packages/opencorvus/test/acceptance/arbiter.test.ts`
 
 Work:
 
 1. Rename documentation/comments so `submit_verdict` is the semantic verdict
-   from `delivery-agent`, not the final persisted delivery-stage verdict.
-2. Define `arbitrateDeliveryVerdict` as deterministic finalization over:
+   from `acceptance-agent`, not the final persisted acceptance-stage verdict.
+2. Define `arbitrateAcceptanceVerdict` as deterministic finalization over:
    - semantic agent verdict
    - manifest final gate
    - runtime/visual evidence already present in or pointed to by the manifest
@@ -324,8 +324,8 @@ Work:
    - required check failures may be auxiliary depending on current policy
    - workspace export and specialist findings are not automatically hard gates
      unless the existing arbiter policy says they are
-4. Unify `deliver` auto-publish and `publish_delivery` manifest gate semantics.
-   There must be one rule for whether a delivery-stage accepted result may
+4. Unify `deliver` auto-publish and `publish_acceptance` manifest gate semantics.
+   There must be one rule for whether a acceptance-stage accepted result may
    publish.
 
 Tests:
@@ -333,30 +333,30 @@ Tests:
 - manifest gate failures override semantic accept only through deterministic
   arbiter policy.
 - advisory check failures remain advisory where current tests require that.
-- `deliver` and `publish_delivery` agree on manifest gate rules.
-- final persisted verdict source is delivery-stage finalization, not direct LLM
+- `deliver` and `publish_acceptance` agree on manifest gate rules.
+- final persisted verdict source is acceptance-stage finalization, not direct LLM
   output.
 
 Acceptance:
 
-- there is one delivery-stage final verdict path.
+- there is one acceptance-stage final verdict path.
 - arbiter is deterministic policy, not a second subjective reviewer.
 
-### Phase E: Classify delivery tools and evidence deepening
+### Phase E: Classify acceptance tools and evidence deepening
 
-Purpose: make delivery-agent side effects explicit without pretending the agent
+Purpose: make acceptance-agent side effects explicit without pretending the agent
 is a pure static reader.
 
 Files to change:
 
-- retired delivery tool source
-- retired delivery agent source
-- `packages/opencorvus/src/delivery/output-tools.ts`
-- `packages/opencorvus/test/delivery/tools-readonly.test.ts`
+- retired acceptance tool source
+- retired acceptance review source
+- `packages/opencorvus/src/acceptance/output-tools.ts`
+- `packages/opencorvus/test/acceptance/tools-readonly.test.ts`
 
 Work:
 
-1. Classify every delivery tool:
+1. Classify every acceptance tool:
    - manifest inspection
    - evidence deepening
    - runtime inspection
@@ -369,22 +369,22 @@ Work:
    - `memory_write`
 3. If retained, define them as agent-requested evidence deepening with explicit
    artifact output, not hidden orchestration.
-4. Ensure delivery cannot call host manifest assembly from inside its tool loop.
+4. Ensure acceptance cannot call host manifest assembly from inside its tool loop.
 
 Tests:
 
-- retained delivery tools are classified and covered.
-- delivery cannot invoke manifest assembly as a tool.
+- retained acceptance tools are classified and covered.
+- acceptance cannot invoke manifest assembly as a tool.
 - evidence-deepening outputs are visible artifacts or manifest-linked evidence.
 
 Acceptance:
 
-- delivery-agent can inspect and deepen evidence in visible ways.
-- delivery-agent does not own host evidence assembly.
+- acceptance-agent can inspect and deepen evidence in visible ways.
+- acceptance-agent does not own host evidence assembly.
 
 ### Phase F: Upgrade prosecutor as a manifest-backed sibling reviewer
 
-Purpose: make prosecutor a real adversary over the same delivery facts.
+Purpose: make prosecutor a real adversary over the same acceptance facts.
 
 Files to change:
 
@@ -396,11 +396,11 @@ Files to change:
 
 Work:
 
-1. Replace `query_diff` stub behavior with manifest-backed delivery context.
-2. Pass delivery id / manifest id / final verdict context into `runProsecutor`.
+1. Replace `query_diff` stub behavior with manifest-backed acceptance context.
+2. Pass acceptance id / manifest id / final verdict context into `runProsecutor`.
 3. Give prosecutor read access to:
-   - `DeliveryEvidenceManifest`
-   - final delivery-stage verdict
+   - `AcceptanceEvidenceManifest`
+   - final acceptance-stage verdict
    - iteration history
    - current metric results
 4. Remove broad catch-to-zero-activity behavior. Failure must return or persist
@@ -415,9 +415,9 @@ Tests:
 
 - prosecutor can read manifest-backed diff/evidence.
 - prosecutor failure is not indistinguishable from no counterexamples.
-- prosecutor cannot write final delivery verdict state.
+- prosecutor cannot write final acceptance verdict state.
 - diagnostic challenge metrics cannot become acceptance authority.
-- accepted delivery completion leaves prosecutor usable as post-delivery
+- accepted acceptance completion leaves prosecutor usable as post-acceptance
   hardening evidence, without making publish the lifecycle gate.
 
 Acceptance:
@@ -442,8 +442,8 @@ Required assertions:
 - requirements has no goal registration output surface.
 - architect is the only goal graph producer.
 - integrity proposes corrections but does not mutate/reopen goals directly.
-- delivery does not call integrity internally.
-- delivery-stage final verdict goes through service + deterministic arbiter.
+- acceptance does not call integrity internally.
+- acceptance-stage final verdict goes through service + deterministic arbiter.
 - prosecutor reads the same manifest but cannot publish verdicts.
 - public docs, zh-CN docs, prompt catalog, registry descriptions, and live
   prompts match role contract.
@@ -493,8 +493,8 @@ Reason:
 - Phase A stops role truth drift.
 - Phase B resolves review-boundary conflicts before manifest work.
 - Phase C converges evidence onto the existing manifest.
-- Phase D defines final delivery-stage authority.
-- Phase E makes delivery-agent tool side effects explicit.
+- Phase D defines final acceptance-stage authority.
+- Phase E makes acceptance-agent tool side effects explicit.
 - Phase F gives prosecutor real evidence and removes soft failure.
 - Phase G locks the behavior.
 - Phase H waits until semantic ownership is stable.
@@ -504,10 +504,10 @@ Reason:
 Required targeted suites:
 
 1. `packages/opencorvus/test/agent/*role*.test.ts`
-2. `packages/opencorvus/test/delivery/agent.test.ts`
-3. `packages/opencorvus/test/delivery/arbiter.test.ts`
-4. `packages/opencorvus/test/delivery/project-gate.test.ts`
-5. `packages/opencorvus/test/delivery/tools-readonly.test.ts`
+2. `packages/opencorvus/test/acceptance/agent.test.ts`
+3. `packages/opencorvus/test/acceptance/arbiter.test.ts`
+4. `packages/opencorvus/test/acceptance/project-gate.test.ts`
+5. `packages/opencorvus/test/acceptance/tools-readonly.test.ts`
 6. `packages/opencorvus/test/integrity/requirement-status.test.ts`
 7. `packages/opencorvus/test/orchestrator/tools.test.ts`
 8. new `packages/opencorvus/test/prosecutor/*.test.ts`
@@ -516,12 +516,12 @@ Required targeted suites:
 Required assertions:
 
 - one role contract source in code
-- one delivery evidence source: `DeliveryEvidenceManifest`
-- one delivery-stage final verdict path: service + deterministic arbiter
+- one acceptance evidence source: `AcceptanceEvidenceManifest`
+- one acceptance-stage final verdict path: service + deterministic arbiter
 - one goal decomposition authority: architect
 - one lifecycle decision authority: orchestrator
 - prosecutor has manifest access but no verdict power
-- integrity and delivery do not both decide final delivery acceptance
+- integrity and acceptance do not both decide final acceptance acceptance
 - optional prosecutor cannot fail as zero-activity success
 
 ## 7. Risks
@@ -530,22 +530,22 @@ Required assertions:
 
 Mitigation:
 
-- forbid parallel `DeliveryEvidenceSnapshot`.
-- extend or atomically rename `DeliveryEvidenceManifest`.
+- forbid parallel `AcceptanceEvidenceSnapshot`.
+- extend or atomically rename `AcceptanceEvidenceManifest`.
 
 ### Risk 2: mislabeling arbiter as a second judge
 
 Mitigation:
 
-- define arbiter as deterministic delivery-stage finalization.
-- keep subjective review in `DeliveryAgent.verify`.
+- define arbiter as deterministic acceptance-stage finalization.
+- keep subjective review in `AcceptanceReview.verify`.
 
 ### Risk 3: over-shrinking integrity
 
 Mitigation:
 
 - preserve requirement-status completion fidelity.
-- forbid only delivery runtime verification and final verdict publication.
+- forbid only acceptance runtime verification and final verdict publication.
 
 ### Risk 4: prosecutor optionality becoming fallback
 
@@ -565,18 +565,18 @@ Mitigation:
 
 This refactor is complete only when all items below are true:
 
-1. `requirements`, `architect`, `integrity`, `delivery-agent`,
-   `delivery-arbiter`, and `prosecutor` each have one code-owned ownership
+1. `requirements`, `architect`, `integrity`, `acceptance-agent`,
+   `acceptance-arbiter`, and `prosecutor` each have one code-owned ownership
    sentence that docs and prompt catalog validate against.
-2. `DeliveryEvidenceManifest` is the only persisted delivery evidence source.
-3. Delivery-stage final verdict is produced by one path:
-   `DeliveryAgent.verify` semantic verdict plus deterministic arbiter
-   finalization in the retired delivery verifier.
-4. `prosecutor` reads the same manifest-backed evidence as delivery and cannot
+2. `AcceptanceEvidenceManifest` is the only persisted acceptance evidence source.
+3. Acceptance-stage final verdict is produced by one path:
+   `AcceptanceReview.verify` semantic verdict plus deterministic arbiter
+   finalization in the retired acceptance verifier.
+4. `prosecutor` reads the same manifest-backed evidence as acceptance and cannot
    write acceptance verdicts.
 5. `integrity` may use requirement-status completion evidence but does not run
-   delivery runtime verification or publish delivery verdicts.
-6. `deliver` accepted owns task completion; `publish_delivery` is artifact export
+   acceptance runtime verification or publish acceptance verdicts.
+6. `deliver` accepted owns task completion; `publish_acceptance` is artifact export
    and must not write task lifecycle.
 7. prosecutor failures are visible and cannot be collapsed into no-op success.
 8. no user-facing or internal live docs describe planner as active.
@@ -584,10 +584,10 @@ This refactor is complete only when all items below are true:
 
 ## 9. Non-Goals
 
-- Do not create a second delivery evidence artifact family.
+- Do not create a second acceptance evidence artifact family.
 - Do not create a second subjective acceptance authority.
 - Do not reintroduce planner as a compatibility shell.
-- Do not delete advisory-vs-blocking delivery policy accidentally.
+- Do not delete advisory-vs-blocking acceptance policy accidentally.
 - Do not mix runtime abstraction cleanup into the first responsibility repair.
 - Do not rely on prompt prose alone; every critical boundary must be enforced by
   tool surface and tests.

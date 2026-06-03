@@ -18,8 +18,8 @@
 //      do so with the
 //      shared `.empty-hint` class plus the `.empty-hint--card`
 //      modifier, never the legacy per-panel class.
-//   2. DeliveryPanel retired its bespoke empty placeholder entirely; when
-//      there is no delivery payload, it no longer renders a fake empty card.
+//   2. AcceptancePanel retired its bespoke empty placeholder entirely; when
+//      there is no acceptance payload, it no longer renders a fake empty card.
 //   2. styles.css advertises `.empty-hint--card` on the same card-chrome
 //      selector group as the existing nested-`.empty-hint` cards
 //      (single source — rule 8). That way every empty card looks the
@@ -77,10 +77,10 @@ describe("right-panel components emit the shared empty-hint primitive", () => {
   }
 })
 
-describe("DeliveryPanel retires the bespoke empty placeholder", () => {
+describe("AcceptancePanel retires the bespoke empty placeholder", () => {
   test("Board.tsx keeps the legacy empty class deleted and does not fake a shared empty-hint card", () => {
     const src = readComponent("Board.tsx")
-    expect(src).not.toContain("delivery-empty-hint")
+    expect(src).not.toContain("acceptance-empty-hint")
     expect(src).not.toContain('class="empty-hint empty-hint--card"')
   })
 })
@@ -103,6 +103,6 @@ describe("surface CSS declares .empty-hint--card on the shared card-chrome group
     expect(STYLES).not.toMatch(/^\s*\.req-empty\s*\{/m)
     expect(STYLES).not.toMatch(/^\s*\.integrity__empty\s*\{/m)
     expect(STYLES).not.toMatch(/^\s*\.agent-workflow-empty\s*\{/m)
-    expect(STYLES).not.toMatch(/^\s*\.delivery-empty-hint\s*\{/m)
+    expect(STYLES).not.toMatch(/^\s*\.acceptance-empty-hint\s*\{/m)
   })
 })

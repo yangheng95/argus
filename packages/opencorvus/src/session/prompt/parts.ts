@@ -404,7 +404,7 @@ export async function createUserMessage(input: PromptInput) {
               // Read tool binary content used to land in part.url as a
               // raw `data:<mime>;base64,...` string, which trips the
               // Session.updatePart inline-base64 guard
-              // (specs/delivery-attachment-store-single-source-2026-05-11.md).
+              // (specs/acceptance-attachment-store-single-source-2026-05-11.md).
               // Route through AttachmentStore so the persisted url is a
               // canonical ref and the bytes round-trip via toModelOutput's
               // ref → base64 reader at LLM call time.

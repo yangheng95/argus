@@ -185,7 +185,7 @@ export async function saveGoalDialog(): Promise<void> {
             type: "llm_judge",
             name: "operator-acceptance",
             criteria: criterion,
-            inputs: ["delivery_summary", "changed_files"],
+            inputs: ["acceptance_summary", "changed_files"],
           },
         ],
       };

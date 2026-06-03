@@ -687,7 +687,7 @@ export namespace Message {
     //
     // Two URL shapes are accepted:
     //  1. `/attachment/<projectID>/<sha>.<ext>` ref â€” the canonical form
-    //     post-2026-05-11 (specs/delivery-attachment-store-single-source-2026-05-11.md).
+    //     post-2026-05-11 (specs/acceptance-attachment-store-single-source-2026-05-11.md).
     //     Bytes are read from `AttachmentStore` on demand and base64-encoded
     //     here, so `part.data` stores small refs instead of MB of inline
     //     base64. This is the OOM fix; the disk read is amortized across all

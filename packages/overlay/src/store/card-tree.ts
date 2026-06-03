@@ -30,7 +30,7 @@
 // (`#orderIndex+1`) / description stamped onto the step card.
 //
 // 2026-04-21 per-attempt isolation: step / phase card ids carry the
-// current `goal_run.id` so each retry / delivery_rework / modify_contract
+// current `goal_run.id` so each retry / acceptance_rework / modify_contract
 // / restart_stage gets a fresh top-level card appended in time order.
 // Prior attempts survive as frozen history — the renderer shows them in
 // their original position; new activity lands on the new card. The

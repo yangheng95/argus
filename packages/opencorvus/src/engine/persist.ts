@@ -27,7 +27,7 @@ import {
   EngineRequirementTable,
   EngineSpecSnapshotTable,
   EngineTaskTable,
-  type EngineDeliveryStatus,
+  type EngineAcceptanceStatus,
   type EngineArtifactKind,
 } from "./engine.sql"
 import { persistEvidence } from "@/verification/persist"
@@ -136,7 +136,7 @@ function retryFeedbackValueFromGoalRun(input: {
     "Required for this retry:",
     "- Address the terminal error above before implementing unrelated changes.",
     "- Reuse and repair the preserved goal worktree when one is listed.",
-    "- Do not repeat the prior merge_back / delivery path without resolving the recorded failure.",
+    "- Do not repeat the prior merge_back / acceptance path without resolving the recorded failure.",
   )
   return lines.join("\n")
 }
@@ -611,7 +611,7 @@ export function persistArchitectContractGraph(
       task_id: input.taskID,
       run_id: null,
       goal_run_id: null,
-      delivery_id: null,
+      acceptance_id: null,
       kind: "architect_contract_graph",
       label: "active",
       payload: graph,
@@ -648,7 +648,7 @@ export function persistGoalWorkload(
       task_id: input.taskID,
       run_id: null,
       goal_run_id: null,
-      delivery_id: null,
+      acceptance_id: null,
       kind: "goal_workload",
       label: "active",
       payload: {
@@ -716,7 +716,7 @@ function persistResearchBriefArtifact(
       task_id: input.taskID,
       run_id: null,
       goal_run_id: null,
-      delivery_id: null,
+      acceptance_id: null,
       kind: input.kind,
       label: "active",
       payload: brief,
@@ -1229,7 +1229,7 @@ function appendGoalRunArtifact(input: {
 /**
  * Open a new attempt for a goal — single entry-point for "this goal must
  * re-dispatch under a fresh attempt." Replaces the four ad-hoc paths
- * (build_retry / modify_goal / restart_from_stage / delivery_rework)
+ * (build_retry / modify_goal / restart_from_stage / acceptance_rework)
  * that all expanded to the same supersede + sync sequence and drifted apart
  * over time.
  *
@@ -1299,7 +1299,7 @@ export function startNewAttempt(input: {
   // build retries and explicit rework retries share one decision_log shape.
   // Build prompts read `phase="retry"` filtered by goalID. Previously the
   // `feedback` parameter existed on the signature but was dropped silently;
-  // executors on delivery_rework/modify_contract rework cycles ran with no
+  // executors on acceptance_rework/modify_contract rework cycles ran with no
   // rejection context — i.e. blind retries.
   if (input.feedback) {
     appendRetryFeedbackOnce({
@@ -1414,37 +1414,37 @@ type EvaluationStatus = "passed" | "failed" | "pending"
 type EvaluationVerdict = "accepted" | "rejected"
 
 // `beginEvaluation` and `persistEvaluation` were part of the old `transition.ts`
-// pipeline. With per-goal dispatch + delivery/checks they have no callers; the
-// evaluation row is now created by `persistTaskDelivery()` (1:1 with the
-// task-level delivery) and updated by `updateEvaluationFromDeliveryVerdict()`.
+// pipeline. With per-goal dispatch + acceptance/checks they have no callers; the
+// evaluation row is now created by `persistTaskAcceptance()` (1:1 with the
+// task-level acceptance) and updated by `updateEvaluationFromAcceptanceVerdict()`.
 // Do not re-add conditional evaluation inserts — they break the
-// task-delivery↔evaluation invariant. Per-goal deliveries do NOT create an
+// task-acceptance↔evaluation invariant. Per-goal deliveries do NOT create an
 // evaluation row: goal_run status is driven by the executor directly, and the
-// delivery-agent's checks cover per-goal verdicts — a per-goal evaluation row
+// acceptance-agent's checks cover per-goal verdicts — a per-goal evaluation row
 // would be a dummy with no consumer.
 
-type DeliveryInput = {
+type AcceptanceInput = {
   summary: string
   commitRef?: string
   diffs: Array<{ file: string; [key: string]: unknown }>
-  report?: import("@/delivery/checks").GoalReportClaim
+  report?: import("@/acceptance/checks").GoalReportClaim
 }
 
-// Diff-stat reduction + artifact inserts for the task-level delivery path.
+// Diff-stat reduction + artifact inserts for the task-level acceptance path.
 // Per-goal deliveries are written inline by `finalizeBuildAttempt`; only
-// `persistTaskDelivery` calls this helper now.
-function writeDeliveryRow(
+// `persistTaskAcceptance` calls this helper now.
+function writeAcceptanceRow(
   db: Parameters<Parameters<typeof Database.transaction>[0]>[0],
   input: {
     task: TaskRow
     run: RunRow
     goalRunID?: string
-    deliveryID: string
-    delivery: DeliveryInput
+    acceptanceID: string
+    acceptance: AcceptanceInput
     now: number
   },
 ) {
-  const stats = input.delivery.diffs.reduce(
+  const stats = input.acceptance.diffs.reduce(
     (acc, d) => {
       const a = typeof (d as any).additions === "number" ? (d as any).additions : 0
       const r = typeof (d as any).deletions === "number" ? (d as any).deletions : 0
@@ -1454,30 +1454,30 @@ function writeDeliveryRow(
     },
     { additions: 0, deletions: 0 },
   )
-  // Phase-6-c: the delivery row itself is now an `engine_artifact` with
-  // kind="delivery" + label="delivery-<scope>" (task vs goal_run). Payload
-  // carries the full DeliveryRow shape so the read-model can reconstruct it
-  // without a JOIN. `deliveryID` is the artifact row id — consumers that
-  // reference `delivery_id` on other artifact rows still point at a valid id.
+  // Phase-6-c: the acceptance row itself is now an `engine_artifact` with
+  // kind="acceptance" + label="acceptance-<scope>" (task vs goal_run). Payload
+  // carries the full AcceptanceRow shape so the read-model can reconstruct it
+  // without a JOIN. `acceptanceID` is the artifact row id — consumers that
+  // reference `acceptance_id` on other artifact rows still point at a valid id.
   db.insert(EngineArtifactTable)
     .values({
-      id: input.deliveryID,
+      id: input.acceptanceID,
       task_id: input.task.id,
       run_id: input.run.id,
       goal_run_id: input.goalRunID,
-      delivery_id: input.deliveryID,
-      kind: "delivery",
-      label: input.goalRunID ? "delivery-goal_run" : "delivery-task",
+      acceptance_id: input.acceptanceID,
+      kind: "acceptance",
+      label: input.goalRunID ? "acceptance-goal_run" : "acceptance-task",
       payload: {
         status: "candidate",
-        summary: input.delivery.summary,
+        summary: input.acceptance.summary,
         result: {
-          summary: input.delivery.summary,
-          commit_ref: input.delivery.commitRef,
-          changed_files: input.delivery.diffs.map((item) => item.file),
-          diffs: input.delivery.diffs,
+          summary: input.acceptance.summary,
+          commit_ref: input.acceptance.commitRef,
+          changed_files: input.acceptance.diffs.map((item) => item.file),
+          diffs: input.acceptance.diffs,
           stats,
-          report: input.delivery.report,
+          report: input.acceptance.report,
         },
       },
       time_created: input.now,
@@ -1490,54 +1490,54 @@ function writeDeliveryRow(
       task_id: input.task.id,
       run_id: input.run.id,
       goal_run_id: input.goalRunID,
-      delivery_id: input.deliveryID,
+      acceptance_id: input.acceptanceID,
       kind: "report",
       label: "assistant-summary",
-      payload: { summary: input.delivery.summary },
+      payload: { summary: input.acceptance.summary },
       time_created: input.now,
       time_updated: input.now,
     })
     .run()
-  if (input.delivery.diffs.length > 0) {
+  if (input.acceptance.diffs.length > 0) {
     db.insert(EngineArtifactTable)
       .values({
         id: Identifier.ascending("artifact"),
         task_id: input.task.id,
         run_id: input.run.id,
         goal_run_id: input.goalRunID,
-        delivery_id: input.deliveryID,
+        acceptance_id: input.acceptanceID,
         kind: "diff",
         label: "workspace-diff",
-        payload: { diffs: input.delivery.diffs },
+        payload: { diffs: input.acceptance.diffs },
         time_created: input.now,
         time_updated: input.now,
       })
       .run()
   }
-  if (input.delivery.commitRef) {
+  if (input.acceptance.commitRef) {
     db.insert(EngineArtifactTable)
       .values({
         id: Identifier.ascending("artifact"),
         task_id: input.task.id,
         run_id: input.run.id,
         goal_run_id: input.goalRunID,
-        delivery_id: input.deliveryID,
+        acceptance_id: input.acceptanceID,
         kind: "git_ref",
-        label: "delivery-commit",
-        payload: { commit_ref: input.delivery.commitRef },
+        label: "acceptance-commit",
+        payload: { commit_ref: input.acceptance.commitRef },
         time_created: input.now,
         time_updated: input.now,
       })
       .run()
   }
-  for (const item of input.delivery.diffs) {
+  for (const item of input.acceptance.diffs) {
     db.insert(EngineArtifactTable)
       .values({
         id: Identifier.ascending("artifact"),
         task_id: input.task.id,
         run_id: input.run.id,
         goal_run_id: input.goalRunID,
-        delivery_id: input.deliveryID,
+        acceptance_id: input.acceptanceID,
         kind: "changed_file",
         label: item.file,
         payload: item,
@@ -1549,64 +1549,64 @@ function writeDeliveryRow(
 }
 
 // Per-goal deliveries are written inline by `finalizeBuildAttempt` (below) — it
-// owns the goal_run_id and binds the kind="delivery" artifact to it in the
+// owns the goal_run_id and binds the kind="acceptance" artifact to it in the
 // same transaction as the goal_run_attempt insert. The standalone
-// persistGoalDelivery helper that previously sat here was retired with
+// persistGoalAcceptance helper that previously sat here was retired with
 // pipeline/executor.ts in commit 54c382858 and replaced by the inline write,
-// keeping a single source of truth for goal-run delivery persistence.
+// keeping a single source of truth for goal-run acceptance persistence.
 
-// Task-level delivery: produced by orchestrator's `deliver` tool after all
-// goal_runs complete. Writes the aggregated delivery row (goal_run_id=NULL) +
-// one pending scope='delivery' evidence artifact. The delivery-agent settles
+// Task-level acceptance: produced by orchestrator's `deliver` tool after all
+// goal_runs complete. Writes the aggregated acceptance row (goal_run_id=NULL) +
+// one pending scope='acceptance' evidence artifact. The acceptance-agent settles
 // it later by appending a new evidence artifact (append-only — queries take
 // the latest via time_created desc). Post-phase-6 evidence lives in
 // engine_artifact (kind="verification-evidence"); see verification/persist.ts.
-export function persistTaskDelivery(input: {
+export function persistTaskAcceptance(input: {
   task: TaskRow
   run: RunRow
-  deliveryID: string
-  delivery: DeliveryInput
+  acceptanceID: string
+  acceptance: AcceptanceInput
   now: number
 }) {
   Database.transaction((db) => {
-    writeDeliveryRow(db, input)
+    writeAcceptanceRow(db, input)
     Database.effect(() =>
       EngineProtocol.emit(
-        Event.DeliveryReady,
-        { taskID: input.task.id, runID: input.run.id, deliveryID: input.deliveryID, summary: input.delivery.summary },
-        { source: "persist.delivery" },
+        Event.AcceptanceReady,
+        { taskID: input.task.id, runID: input.run.id, acceptanceID: input.acceptanceID, summary: input.acceptance.summary },
+        { source: "persist.acceptance" },
       ),
     )
   })
   persistEvidence({
     taskID: input.task.id,
     runID: input.run.id,
-    deliveryID: input.deliveryID,
-    scope: "delivery",
+    acceptanceID: input.acceptanceID,
+    scope: "acceptance",
     status: "pending",
     verdict: "inconclusive",
-    summary: input.delivery.summary,
+    summary: input.acceptance.summary,
     checks: [],
     now: input.now,
   })
 }
 
 /**
- * Settle the pending scope='delivery' evidence for a task-level delivery by
+ * Settle the pending scope='acceptance' evidence for a task-level acceptance by
  * appending a new evidence artifact row. Artifact rows are append-only so
  * this function inserts a fresh row rather than mutating the pending one —
- * `findLatestDeliveryEvidence(taskID)` naturally surfaces the newest row via
+ * `findLatestAcceptanceEvidence(taskID)` naturally surfaces the newest row via
  * `time_created desc`. Throws when the pending row never existed, because
- * that implies `persistTaskDelivery()` was bypassed (or the caller passed a
- * per-goal delivery id — per-goal deliveries carry no evidence by design).
+ * that implies `persistTaskAcceptance()` was bypassed (or the caller passed a
+ * per-goal acceptance id — per-goal deliveries carry no evidence by design).
  *
  * The `checks` parameter semantics match the pre-artifact behaviour: when
  * supplied, replaces the previous check set wholesale; when OMITTED, the
-  * prior check set is preserved (used by explicit post-delivery artifact export
+  * prior check set is preserved (used by explicit post-acceptance artifact export
   * after `deliver` has already written the structured checks). Pass [] to clear.
  */
-export function updateEvaluationFromDeliveryVerdict(input: {
-  deliveryID: string
+export function updateEvaluationFromAcceptanceVerdict(input: {
+  acceptanceID: string
   verdict: "accepted" | "rejected" | "inconclusive"
   summary: string
   checks?: import("./engine.sql").EngineEvaluationCheck[]
@@ -1620,7 +1620,7 @@ export function updateEvaluationFromDeliveryVerdict(input: {
       .from(EngineArtifactTable)
       .where(
         and(
-          eq(EngineArtifactTable.delivery_id, input.deliveryID),
+          eq(EngineArtifactTable.acceptance_id, input.acceptanceID),
           eq(EngineArtifactTable.kind, "verification-evidence"),
         ),
       )
@@ -1629,8 +1629,8 @@ export function updateEvaluationFromDeliveryVerdict(input: {
   )
   if (!existing) {
     throw new Error(
-      `updateEvaluationFromDeliveryVerdict: no evidence row found for delivery ${input.deliveryID}. ` +
-        `Either persistTaskDelivery() was bypassed, or the caller passed a per-goal delivery id ` +
+      `updateEvaluationFromAcceptanceVerdict: no evidence row found for acceptance ${input.acceptanceID}. ` +
+        `Either persistTaskAcceptance() was bypassed, or the caller passed a per-goal acceptance id ` +
         `(per-goal deliveries have no evidence row — only task-level deliveries are 1:1 with evidence).`,
     )
   }
@@ -1641,11 +1641,11 @@ export function updateEvaluationFromDeliveryVerdict(input: {
   const checks = input.checks ?? existingChecks
   const evidence = persistEvidence({
     taskID: existing.task_id,
-    // delivery-kind artifacts always have run_id set by writeDeliveryRow.
+    // acceptance-kind artifacts always have run_id set by writeAcceptanceRow.
     // run_id is nullable on the table only for kind="orchestrator-stream-error".
     runID: existing.run_id!,
-    deliveryID: input.deliveryID,
-    scope: "delivery",
+    acceptanceID: input.acceptanceID,
+    scope: "acceptance",
     status,
     verdict: input.verdict,
     summary: input.summary,
@@ -1660,7 +1660,7 @@ export function updateEvaluationFromDeliveryVerdict(input: {
     status,
     verdict: input.verdict,
     summary: input.summary,
-  }, { source: "evaluation.delivery" })
+  }, { source: "evaluation.acceptance" })
 }
 
 export function persistFailedRunEvaluation(input: {
@@ -1674,7 +1674,7 @@ export function persistFailedRunEvaluation(input: {
   // `run.error` already carries the failure text (set by updateRun in runtime.ts),
   // and the on-disk snapshot below preserves the structured view for operator
   // drill-down. The pre-phase-6 evaluation insert was invariant-violating
-  // anyway (wrote scope='delivery' with delivery_id=null) — we don't resurrect
+  // anyway (wrote scope='acceptance' with acceptance_id=null) — we don't resurrect
   // that shape in artifact land. Goal-run-scoped failures remain handled at the
   // goal-run site (the build tool persists evidence before failing).
   const evaluationID = Identifier.ascending("evaluation")
@@ -1703,16 +1703,16 @@ export function persistFailedRunEvaluation(input: {
   })
 }
 
-/** Phase-6-c: delivery rows are append-only `engine_artifact` rows with
- *  kind="delivery". `markDeliveryPublishing` / `finalizeDeliveryResult` now
+/** Phase-6-c: acceptance rows are append-only `engine_artifact` rows with
+ *  kind="acceptance". `markAcceptancePublishing` / `finalizeAcceptanceResult` now
  *  insert a new artifact row carrying the updated payload; queries pick the
  *  latest via `time_created desc`. The artifact row id stays stable across
- *  a delivery's lifecycle by referencing `delivery_id` in the artifact
+ *  a acceptance's lifecycle by referencing `acceptance_id` in the artifact
  *  column (FK intentionally decoupled — see engine.sql.ts). */
-export function markDeliveryPublishing(deliveryId: string, now: number) {
-  const existing = findLatestDeliveryArtifact(deliveryId)
+export function markAcceptancePublishing(acceptanceId: string, now: number) {
+  const existing = findLatestAcceptanceArtifact(acceptanceId)
   if (!existing) {
-    throw new Error(`markDeliveryPublishing: no delivery artifact found for ${deliveryId}`)
+    throw new Error(`markAcceptancePublishing: no acceptance artifact found for ${acceptanceId}`)
   }
   const payload = (existing.payload ?? {}) as Record<string, unknown>
   Database.use((db) =>
@@ -1723,8 +1723,8 @@ export function markDeliveryPublishing(deliveryId: string, now: number) {
         task_id: existing.task_id,
         run_id: existing.run_id,
         goal_run_id: existing.goal_run_id ?? null,
-        delivery_id: deliveryId,
-        kind: "delivery",
+        acceptance_id: acceptanceId,
+        kind: "acceptance",
         label: existing.label,
         payload: { ...payload, status: "publishing" },
         time_created: now,
@@ -1734,25 +1734,25 @@ export function markDeliveryPublishing(deliveryId: string, now: number) {
   )
 }
 
-export function finalizeDeliveryResult(input: {
-  deliveryId: string
+export function finalizeAcceptanceResult(input: {
+  acceptanceId: string
   taskId: string
   runId: string
-  delivery: { result?: Record<string, unknown> | null }
+  acceptance: { result?: Record<string, unknown> | null }
   result: {
-    status: EngineDeliveryStatus
+    status: EngineAcceptanceStatus
     summary: string
     artifacts: Array<{ kind: EngineArtifactKind; label: string; payload: Record<string, unknown> }>
     publish: unknown
   }
   now: number
 }) {
-  const existing = findLatestDeliveryArtifact(input.deliveryId)
+  const existing = findLatestAcceptanceArtifact(input.acceptanceId)
   if (!existing) {
-    throw new Error(`finalizeDeliveryResult: no delivery artifact found for ${input.deliveryId}`)
+    throw new Error(`finalizeAcceptanceResult: no acceptance artifact found for ${input.acceptanceId}`)
   }
   const existingPayload = (existing.payload ?? {}) as Record<string, unknown>
-  const existingResult = (existingPayload.result ?? input.delivery.result ?? {}) as Record<string, unknown>
+  const existingResult = (existingPayload.result ?? input.acceptance.result ?? {}) as Record<string, unknown>
   Database.transaction((db) => {
     db.insert(EngineArtifactTable)
       .values({
@@ -1760,8 +1760,8 @@ export function finalizeDeliveryResult(input: {
         task_id: input.taskId,
         run_id: input.runId,
         goal_run_id: existing.goal_run_id ?? null,
-        delivery_id: input.deliveryId,
-        kind: "delivery",
+        acceptance_id: input.acceptanceId,
+        kind: "acceptance",
         label: existing.label,
         payload: {
           status: input.result.status,
@@ -1786,7 +1786,7 @@ export function finalizeDeliveryResult(input: {
           id: Identifier.ascending("artifact"),
           task_id: input.taskId,
           run_id: input.runId,
-          delivery_id: input.deliveryId,
+          acceptance_id: input.acceptanceId,
           kind: artifact.kind,
           label: artifact.label,
           payload: artifact.payload,
@@ -1798,14 +1798,14 @@ export function finalizeDeliveryResult(input: {
   })
 }
 
-/** Phase-6-c internal: find the latest delivery artifact row by delivery_id.
+/** Phase-6-c internal: find the latest acceptance artifact row by acceptance_id.
  *  Newer rows supersede older ones (append-only semantics). */
-function findLatestDeliveryArtifact(deliveryId: string) {
+function findLatestAcceptanceArtifact(acceptanceId: string) {
   return Database.use((db) =>
     db
       .select()
       .from(EngineArtifactTable)
-      .where(and(eq(EngineArtifactTable.delivery_id, deliveryId), eq(EngineArtifactTable.kind, "delivery")))
+      .where(and(eq(EngineArtifactTable.acceptance_id, acceptanceId), eq(EngineArtifactTable.kind, "acceptance")))
       .orderBy(desc(EngineArtifactTable.time_created))
       .get(),
   )
@@ -1918,7 +1918,7 @@ export function beginBuildAttempt(input: {
     payload: Record<string, unknown>
     runID?: string | null
     goalRunID?: string | null
-    deliveryID?: string | null
+    acceptanceID?: string | null
   }>
   now?: number
 }): string {
@@ -1977,7 +1977,7 @@ export function beginBuildAttempt(input: {
   // build runs (audit §11.6, codex 3rd-pass).
   //   1. beginBuildAttempt-only retry: openGoalImplementationVersion ran the
   //      supersede here, returns supersededTipID directly.
-  //   2. startNewAttempt-then-beginBuildAttempt (delivery_rework /
+  //   2. startNewAttempt-then-beginBuildAttempt (acceptance_rework /
   //      modify_goal): startNewAttempt already patched superseded_reason on
   //      the prior tip, so openGoalImplementationVersion short-circuits and
   //      supersededTipID is undefined. The tip's id is still the right
@@ -2041,7 +2041,7 @@ export function beginBuildAttempt(input: {
           task_id: input.taskID,
           run_id: artifact.runID ?? input.runID ?? null,
           goal_run_id: artifact.goalRunID ?? id,
-          delivery_id: artifact.deliveryID ?? null,
+          acceptance_id: artifact.acceptanceID ?? null,
           kind: artifact.kind,
           label: artifact.label,
           payload: artifact.payload,
@@ -2076,7 +2076,7 @@ export function beginBuildAttempt(input: {
  * Finalize a goal_run opened by `beginBuildAttempt`. Updates the existing
  * goal_run via the append-only `updateGoalRun` writer (which sets
  * time_completed and emits goal_run.updated → terminal status), then writes
- * the per-goal `delivery` artifact when the build passed with concrete diffs.
+ * the per-goal `acceptance` artifact when the build passed with concrete diffs.
  *
  * Single source for the build → goal_run finalize path: the prior
  * `recordBuildAttempt` insert-at-end design is gone (rule 22). External
@@ -2113,12 +2113,12 @@ export function finalizeBuildAttempt(input: {
   if (input.workspaceBranch !== undefined) patch.workspace_branch = input.workspaceBranch
   if (input.workspaceBaseRef !== undefined) patch.workspace_base_ref = input.workspaceBaseRef
   updateGoalRun(input.goalRunID, patch)
-  const deliveryDiffs = (Array.isArray(input.diffs) ? input.diffs : []).filter(
+  const acceptanceDiffs = (Array.isArray(input.diffs) ? input.diffs : []).filter(
     (item) => !ProjectRuntimePaths.isInternalRuntimeRelativePath(item.file),
   )
-  const includeDelivery = input.status === "completed" && !!input.commitRef && deliveryDiffs.length > 0
-  if (!includeDelivery) return
-  const stats = deliveryDiffs.reduce(
+  const includeAcceptance = input.status === "completed" && !!input.commitRef && acceptanceDiffs.length > 0
+  if (!includeAcceptance) return
+  const stats = acceptanceDiffs.reduce(
     (acc, d) => {
       acc.additions += typeof d.additions === "number" ? d.additions : 0
       acc.deletions += typeof d.deletions === "number" ? d.deletions : 0
@@ -2126,27 +2126,27 @@ export function finalizeBuildAttempt(input: {
     },
     { additions: 0, deletions: 0 },
   )
-  const deliveryID = Identifier.ascending("delivery")
-  const summary = input.summary?.trim() || `Goal ${input.goalID} build delivered ${deliveryDiffs.length} file change(s).`
+  const acceptanceID = Identifier.ascending("acceptance")
+  const summary = input.summary?.trim() || `Goal ${input.goalID} build delivered ${acceptanceDiffs.length} file change(s).`
   Database.transaction((db) => {
     db.insert(EngineArtifactTable)
       .values({
-        id: deliveryID,
+        id: acceptanceID,
         task_id: input.taskID,
         run_id: input.runID ?? null,
         goal_run_id: input.goalRunID,
-        delivery_id: deliveryID,
-        kind: "delivery",
-        label: "delivery-goal_run",
+        acceptance_id: acceptanceID,
+        kind: "acceptance",
+        label: "acceptance-goal_run",
         payload: {
           status: "candidate",
           summary,
           result: {
             summary,
             commit_ref: input.commitRef,
-            changed_files: deliveryDiffs.map((d) => d.file),
+            changed_files: acceptanceDiffs.map((d) => d.file),
             file_changes: input.fileChanges ?? [],
-            diffs: deliveryDiffs,
+            diffs: acceptanceDiffs,
             stats,
           },
         },
@@ -2185,7 +2185,7 @@ export function recordIntegrityAttempt(input: {
    *  but solution_quality flagged 3 weak_acceptance specs" — losing this
    *  granularity behind a single aggregate would defeat the redesign. */
   /** Phase marker. `pre_build` attempts audit decomposition only — they cannot
-   *  satisfy the post-build delivery freshness gate (a green pre-build attempt
+   *  satisfy the post-build acceptance freshness gate (a green pre-build attempt
    *  must not let an unrun graph through). `post_build` attempts have access
    *  to a Requirement Status Snapshot and represent real end-to-end completion
    *  evidence. The orchestrator decides phase from whether any claiming goal
@@ -2201,7 +2201,7 @@ export function recordIntegrityAttempt(input: {
   reason?: string
   /** Full pre-rendered review markdown — every issue, every correction
    *  proposal, every missing-goal proposal as text. Persisted alongside the
-   *  count summary so read_context / delivery upstream context can present
+   *  count summary so read_context / acceptance upstream context can present
    *  the orchestrator LLM the same evidence the integrity LLM produced,
    *  rather than just counts. */
   reviewMarkdown?: string

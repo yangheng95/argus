@@ -62,7 +62,7 @@ export interface OverlaySettings {
   /** Default tool permission actions; synced from server config */
   toolPermissions: ToolPermissions;
   /** Surface task lifecycle (success / failure / cancellation / pending
-   *  interaction) as an OS-level desktop notification. Tauri delivery uses
+   *  interaction) as an OS-level desktop notification. Tauri acceptance uses
    *  the native notification plugin; browser dev mode uses the Web
    *  Notification API after the Settings gesture grants permission. Default
    *  ON because the user explicitly asked for it; can be turned off in

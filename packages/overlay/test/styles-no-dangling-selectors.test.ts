@@ -7,7 +7,7 @@
 //
 //   .section,
 //   .gwg,
-//   .delivery-panel,
+//   .acceptance-panel,
 //   .criteria-group,
 //   .eval-error,
 //   /* "rule deleted" comment */
@@ -19,7 +19,7 @@
 // continues" — comments are whitespace — so the dangling
 // selectors fuse with the next rule's selector list:
 //
-//   .section, .gwg, .delivery-panel, .criteria-group,
+//   .section, .gwg, .acceptance-panel, .criteria-group,
 //   .eval-error, .board-intro { display: flex; … }
 //
 // Result: every shell-level container silently inherited

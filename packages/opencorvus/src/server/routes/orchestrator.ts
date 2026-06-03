@@ -12,7 +12,7 @@ import {
   AgentSessionReplyResult,
   Budget,
   CreateTaskInput,
-  Delivery,
+  Acceptance,
   Evaluation,
   GlobalTaskBoard,
   InjectMessageInput,
@@ -1280,16 +1280,16 @@ export const EngineRoutes = lazy(() =>
       },
     )
     .get(
-      "/run/:runID/delivery",
+      "/run/:runID/acceptance",
       describeRoute({
-        summary: "Get run delivery",
-        operationId: "run.delivery",
+        summary: "Get run acceptance",
+        operationId: "run.acceptance",
         responses: {
           200: {
-            description: "Run delivery",
+            description: "Run acceptance",
             content: {
               "application/json": {
-                schema: resolver(Delivery),
+                schema: resolver(Acceptance),
               },
             },
           },
@@ -1298,20 +1298,20 @@ export const EngineRoutes = lazy(() =>
       }),
       validator("param", z.object({ runID: Run.shape.id })),
       async (c) => {
-        return c.json(await EngineService.getDelivery(c.req.valid("param").runID))
+        return c.json(await EngineService.getAcceptance(c.req.valid("param").runID))
       },
     )
     .get(
-      "/goal-run/:goalRunID/delivery",
+      "/goal-run/:goalRunID/acceptance",
       describeRoute({
-        summary: "Get goal-run delivery",
-        operationId: "goalRun.delivery",
+        summary: "Get goal-run acceptance",
+        operationId: "goalRun.acceptance",
         responses: {
           200: {
-            description: "Goal-run delivery, or null when the goal_run exists but has not produced a delivery yet (in-flight build).",
+            description: "Goal-run acceptance, or null when the goal_run exists but has not produced a acceptance yet (in-flight build).",
             content: {
               "application/json": {
-                schema: resolver(Delivery.nullable()),
+                schema: resolver(Acceptance.nullable()),
               },
             },
           },
@@ -1320,7 +1320,7 @@ export const EngineRoutes = lazy(() =>
       }),
       validator("param", z.object({ goalRunID: z.string().min(1) })),
       async (c) => {
-        return c.json(await EngineService.getGoalRunDelivery(c.req.valid("param").goalRunID))
+        return c.json(await EngineService.getGoalRunAcceptance(c.req.valid("param").goalRunID))
       },
     )
     .get(

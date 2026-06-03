@@ -24,14 +24,14 @@ opencorvus 核心有 5 张"状态机表"互相信任但不对齐：
 | `engine_task` | `status`, `blocking_reason` |
 | `engine_run` | `status`, `phase`, `blocking_reason` |
 | `engine_goal_run` | `status`, `blocking_reason`, `superseded_reason` |
-| `engine_delivery` | `status`（candidate / accepted / rejected…） |
+| `engine_acceptance` | `status`（candidate / accepted / rejected…） |
 | `engine_evaluation` | `status`, `verdict` |
 
 代码里 ~30 个文件、~74 处 `if (x.status === "Y")` / switch 分支消费这些字段。以前几轮删掉的是*场景化*状态机（某个具体流程的 FSM），但这 5 张表本身是根 FSM，每删一处代码都会被 loop / workflow / recovery 的隐式协议拖回去。
 
 **典型症状链**：
-1. goal 1~3 delivery=candidate（未 accept）；
-2. task 级聚合评估 `delivery_verdict=failed`；
+1. goal 1~3 acceptance=candidate（未 accept）；
+2. task 级聚合评估 `acceptance_verdict=failed`；
 3. 引擎重启；
 4. `recovery.ts:132` 判 run 孤儿 → `abortRuns(..., "Process restart: run lost live executor state during recovery")`；
 5. `engine_run.status=aborted`，`engine_task.status=active` —— 双状态机失去同步；
@@ -68,10 +68,10 @@ task_failed(t)          = task_done(t) && t.error != null
 | `engine_task` | `status`, `blocking_reason` | `time_completed`, `error`, `active_plan_version_id`, `active_run_id` |
 | `engine_run` | `status`, `phase`, `blocking_reason` | `time_started`, `time_completed`, `error`, `executor_ref`, `session_id`, `plan_version_id` |
 | `engine_goal_run` | `status`, `blocking_reason`, `superseded_reason` | `time_started`, `time_completed`, `error`, `supersede_of`, `lease_until`, `last_progress_at`, `commit_ref` |
-| `engine_delivery` | `status` | `result`（JSON 含 verdict/summary/artifacts）, `run_id`, `goal_run_id` |
+| `engine_acceptance` | `status` | `result`（JSON 含 verdict/summary/artifacts）, `run_id`, `goal_run_id` |
 | `engine_evaluation` | `status`, `verdict` | `summary`, `artifacts` |
 
-> delivery / evaluation 的 `verdict / status` 原本已经在 artifact payload 里，当前列是冗余，删之无痛。
+> acceptance / evaluation 的 `verdict / status` 原本已经在 artifact payload 里，当前列是冗余，删之无痛。
 
 ---
 
@@ -127,10 +127,10 @@ Orchestrator 看 snapshot 自行选择工具：
 - 删 `orchestrator/loop.ts` 中 `task.status === "completed"|"failed"|"cancelled"` 3 处分支，改为读 `task.time_completed != null`。
 - 删 `engine/runtime.ts:syncRun` 中 `run.status === "completed"|"failed"|"aborted"` 的提前 return，改为读 `run.time_completed`。
 
-### 轮 3 —— 删 delivery / evaluation 的 status+verdict 冗余列
+### 轮 3 —— 删 acceptance / evaluation 的 status+verdict 冗余列
 
 - verdict 已经在 `result.verdict / payload.verdict` artifact 里；删两张表的 `status` + `evaluation.verdict` 列。
-- `delivery/verdict.ts`、`delivery/output-tools.ts` 改为纯 artifact 读写，无状态枚举分支。
+- `acceptance/verdict.ts`、`acceptance/output-tools.ts` 改为纯 artifact 读写，无状态枚举分支。
 - reset DB。
 
 ### 轮 4 —— 删 `engine_run.status / phase / blocking_reason`
@@ -150,9 +150,9 @@ Orchestrator 看 snapshot 自行选择工具：
 
 ## 6. 验收标准
 
-- `rg "\.status\s*===\s*['\"]` 在 `packages/opencorvus/src/engine|orchestrator|delivery|scheduler` 下命中 = 0。
+- `rg "\.status\s*===\s*['\"]` 在 `packages/opencorvus/src/engine|orchestrator|acceptance|scheduler` 下命中 = 0。
 - DB schema 里 `status` / `phase` / `verdict` / `blocking_reason` 列全部消失。
-- 本次 tsk_dbe77dfce001Lh8rA66fISdbGF 同形状 fixture 在 process-restart + 前序 delivery 未通过场景下，task loop 能持续推进而不依赖任何"状态转移"。
+- 本次 tsk_dbe77dfce001Lh8rA66fISdbGF 同形状 fixture 在 process-restart + 前序 acceptance 未通过场景下，task loop 能持续推进而不依赖任何"状态转移"。
 - `recoverProjectExecution` 单测：重启后 run 不被标任何"终态"，LLM 决策路径拿到 `run_orphan=true` 事实。
 
 ---

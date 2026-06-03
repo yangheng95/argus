@@ -32,7 +32,7 @@ Other recent patch parts in the same DB are small: the next largest rows are onl
 | Compaction projection | `packages/opencorvus/src/session/compaction.ts` | `patchEvidence()` also expands every patch part with `files.join(", ")`; `runtimeContext()` appends this outside normal tool-output truncation. | Compaction can duplicate the same giant file list in selected history and runtime prompt. |
 | Compaction budget | `packages/opencorvus/src/session/compaction.ts` | `selectCompactionInput()` estimates selected history but does not validate the final prompt including runtime context before calling the provider. | Compaction can be invoked with a request larger than the compaction model's input limit. |
 | Session summary diff | `packages/opencorvus/src/session/summary.ts` | `computeDiff()` uses earliest `step-start` and latest `step-finish` snapshots for session diff. | An empty earliest snapshot can make overlay summary/diff report the whole worktree as changed. |
-| Managed executor delivery diff | `packages/opencorvus/src/executor/managed.ts` | Uses `Snapshot.track()` for `startHash` and delivery `currentHash`, but catches failures and continues with missing or empty diff data. | Snapshot integrity failures can be hidden from executor and delivery state. |
+| Managed executor acceptance diff | `packages/opencorvus/src/executor/managed.ts` | Uses `Snapshot.track()` for `startHash` and acceptance `currentHash`, but catches failures and continues with missing or empty diff data. | Snapshot integrity failures can be hidden from executor and acceptance state. |
 | Git checkpoint snapshot | `packages/opencorvus/src/engine/git.ts` | Stores `Snapshot.track()` result as baseline snapshot. | Bad snapshot hashes can enter task checkpoint metadata. |
 
 ## Root Cause
@@ -45,7 +45,7 @@ The immediate root cause is not "summarize got too large" by itself. The full ch
 4. That file list was persisted as a patch part around 677k characters.
 5. Compaction replayed the patch list into model input and exceeded `kimi-k2.6`'s 262144 input-token limit.
 
-The design failure is that snapshot capture has no integrity contract, and patch evidence projection has no bounded structured representation. Both must be fixed. Fixing only compaction would leave bad snapshots contaminating overlay diff, session history, and executor delivery paths. Fixing only snapshot would not protect existing polluted sessions or future unexpected large diffs.
+The design failure is that snapshot capture has no integrity contract, and patch evidence projection has no bounded structured representation. Both must be fixed. Fixing only compaction would leave bad snapshots contaminating overlay diff, session history, and executor acceptance paths. Fixing only snapshot would not protect existing polluted sessions or future unexpected large diffs.
 
 ## Non-Goals
 
@@ -82,7 +82,7 @@ Change:
 - `track()` must not return `4b825dc642cb6eb9a060e54bf8d69288fbee4904` for a non-empty worktree. If the temporary index writes the empty tree while the worktree has any non-ignored files, throw `SnapshotEmptyTreeError`.
 - Keep genuinely empty repositories valid only when `git ls-files --others --cached --exclude-standard` or equivalent confirms there is no trackable content.
 - Add explicit snapshot integrity errors to the message error schema and `Message.fromError()` so the visible assistant message is typed as `SnapshotIntegrityError` / `SnapshotEmptyTreeError`, not `Unknown`.
-- Remove `.catch(() => undefined)` and `.catch(() => [])` around `Snapshot.track()` / `Snapshot.diffFull()` in `executor/managed.ts`. Snapshot errors must make executor submit/delivery fail visibly.
+- Remove `.catch(() => undefined)` and `.catch(() => [])` around `Snapshot.track()` / `Snapshot.diffFull()` in `executor/managed.ts`. Snapshot errors must make executor submit/acceptance fail visibly.
 
 Acceptance:
 - Test `git add` failure is not ignored and `track()` rejects instead of returning empty tree.
