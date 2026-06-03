@@ -1,4 +1,5 @@
 import { describe, expect, test } from "bun:test"
+import { FrontendResearchTestHooks } from "../../src/frontend-research/agent"
 import { createFrontendResearchBuildDelegationTools } from "../../src/frontend-research/build-delegation"
 
 function callTool(tools: Record<string, any>, name: string, input: unknown): Promise<string> {
@@ -6,6 +7,14 @@ function callTool(tools: Record<string, any>, name: string, input: unknown): Pro
 }
 
 describe("frontend-research build delegation", () => {
+  test("does not prepare webpage evidence before delegating investigation to build", () => {
+    const config = FrontendResearchTestHooks.frontendResearchSessionConfig()
+
+    expect(config.prepareWebpageEvidence).toBe("none")
+    expect(config.includeRetrievalTools).toBe(false)
+    expect(config.createAdditionalTools).toBeTypeOf("function")
+  })
+
   test("delegates no-change deep research packets to build", async () => {
     let captured: any
     const tools = createFrontendResearchBuildDelegationTools({

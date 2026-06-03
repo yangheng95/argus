@@ -19,7 +19,6 @@ import {
 } from "./output-tools"
 import {
   prepareWebpagePrdEvidence,
-  readPreparedWebpagePrdEvidence,
   renderWebpagePrdEvidencePromptSection,
   type WebpagePrdEvidence,
 } from "./webpage-prd-evidence"
@@ -35,7 +34,7 @@ export interface ResearchSessionConfig {
   kind: ResearchLikeAgentKind
   core: string
   sessionTitlePrefix: string
-  prepareWebpageEvidence: "prd-only" | "always-for-source-url" | "existing-frontend-design"
+  prepareWebpageEvidence: "none" | "prd-only" | "always-for-source-url"
   bundlePathKind: "research" | "frontend-research"
   delegation: string
   includeRetrievalTools?: boolean
@@ -189,18 +188,10 @@ async function prepareInputWebpagePrdEvidence(
   const sourceUrls = input.sourceUrls ?? []
   const hasWebpageSource = sourceUrls.some((url) => /^https?:\/\//i.test(url))
   if (!hasWebpageSource) return undefined
+  if (mode === "none") return undefined
   if (mode === "prd-only" && input.targetDeliverable !== "prd") return undefined
   if (!input.taskID) {
     throw new Error("webpage PRD research requires taskID so rendered evidence can be persisted under task runtime")
-  }
-  if (mode === "existing-frontend-design") {
-    const url = sourceUrls.find((item) => /^https?:\/\//i.test(item))
-    if (!url) return undefined
-    return readPreparedWebpagePrdEvidence({
-      projectDir: Instance.directory,
-      taskID: input.taskID,
-      url,
-    })
   }
   return prepareWebpagePrdEvidence({
     projectDir: Instance.directory,
