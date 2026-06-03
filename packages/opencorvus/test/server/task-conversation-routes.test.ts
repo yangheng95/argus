@@ -11,6 +11,7 @@ import { MessageTable, PartTable } from "../../src/session/session.sql"
 import { SessionStatus } from "../../src/session/status"
 import { SessionPrompt } from "../../src/session/prompt"
 import { Message } from "../../src/session/message"
+import { WorkerTurnDescriptor } from "../../src/agent/worker-turn-descriptor"
 import { Database } from "../../src/storage/db"
 import { Log } from "../../src/util/log"
 import { resetDatabase } from "../fixture/db"
@@ -50,6 +51,42 @@ function sseReader(response: Response): () => Promise<any> {
   }
 }
 
+function integrityReviewCompletedPayload(input: { taskID: string; sessionID: string }) {
+  return {
+    taskID: input.taskID,
+    sessionID: input.sessionID,
+    verdict: "pass" as const,
+    summary: "faithful",
+    teamReportMarkdown: "Faithful replay passed.",
+    reviewers: [
+      {
+        reviewerID: "requirements_surface",
+        scope: "Requirement surface",
+        verdict: "pass" as const,
+        summary: "Requirements remain covered.",
+        evidence: ["The replayed event preserves task/session identity."],
+        findings: [],
+        openQuestions: [],
+      },
+      {
+        reviewerID: "delivery_surface",
+        scope: "Delivery surface",
+        verdict: "pass" as const,
+        summary: "Delivery remains covered.",
+        evidence: ["The replayed event preserves emittedAt fidelity."],
+        findings: [],
+        openQuestions: [],
+      },
+    ],
+    findings: [],
+    rounds: [],
+    requiredRepairs: [],
+    unresolvedDisagreements: [],
+    fact_check_items: [],
+    attempts: 1,
+  }
+}
+
 describe("task conversation routes", () => {
   afterEach(async () => {
     mock.restore()
@@ -86,32 +123,11 @@ describe("task conversation routes", () => {
           title: "fidelity replay session",
         })
 
-        await EngineProtocol.emit(Event.IntegrityReviewCompleted, {
-          taskID,
-          sessionID: session.id,
-          verdict: "pass",
-          summary: "faithful",
-          acceptance: {
-            verdict: "accepted",
-            summary: "Acceptance passed",
-            deferred_checks: [],
-            tool_call_evidence: [{ tool: "unit_test", passed: true, detail: "unit test passed" }],
-            rejection_details: [],
-          },
-          dimensions: [
-            {
-              id: "requirement_fidelity",
-              verdict: "pass",
-              issueCount: 0,
-              correctionCount: 0,
-              missingGoalCount: 0,
-            },
-          ],
-          issues: [],
-          corrections: [],
-          missingGoals: [],
-          attempts: 1,
-        }, { source: "test.server" })
+        await EngineProtocol.emit(
+          Event.IntegrityReviewCompleted,
+          integrityReviewCompletedPayload({ taskID, sessionID: session.id }),
+          { source: "test.server" },
+        )
 
         const response = await app.request(`/task/${taskID}/conversation`, {
           headers: {
@@ -567,13 +583,23 @@ describe("task conversation routes", () => {
           }).run(),
         )
 
-        await Session.updateMessage({
-          id: Identifier.ascending("message"),
-          sessionID: orchestrator.id,
-          role: "user",
-          time: { created: now + 1 },
-          agent: "orchestrator",
-          model: { providerID: "test-provider", modelID: "test-model" },
+        const messageID = Identifier.ascending("message")
+        await Session.persistMessage({
+          info: {
+            id: messageID,
+            sessionID: orchestrator.id,
+            role: "user",
+            time: { created: now + 1 },
+            agent: "orchestrator",
+            model: { providerID: "test-provider", modelID: "test-model" },
+          },
+          parts: [{
+            id: Identifier.ascending("part"),
+            sessionID: orchestrator.id,
+            messageID,
+            type: "text",
+            text: "cross project hydrate message",
+          }],
         })
 
         return {
@@ -713,11 +739,26 @@ describe("task conversation routes", () => {
         // field (the validator compares against the envelope, not the
         // session kind, when the envelope sets one) so the resume passes
         // validateSessionRuntimeContractForContinuation.
+        const descriptor = WorkerTurnDescriptor.create({
+          sessionID: requirements.id,
+          payload: {
+            agent: "requirements",
+            roleContractID: "requirements",
+            model: { providerID: "overlay", modelID: "requirements" },
+            prompt: { systemMode: "complete", rawSystemPrompt: false },
+            tools: { enabled: [] },
+            output: { format: "text", resultMode: "reply" },
+            workflow: { taskID, sessionKind: "requirements" },
+          },
+        })
+
         SessionPrompt.setSessionRuntimeContract(requirements.id, {
           identity: {
             sessionID: requirements.id,
             agentKind: "requirements",
             contractKind: "stage-attempt",
+            workerTurnDescriptorID: descriptor.id,
+            workerTurnDescriptorHash: descriptor.hash,
             installedAt: Date.now(),
           },
           tools: {},

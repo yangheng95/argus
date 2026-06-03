@@ -52,6 +52,7 @@ import { sessionGoalID, sessionParentID, sessionRole, taskIDForSession, taskMess
 import { ensureTaskMessageProtocolBridge, overlayMeta } from "@/orchestrator/protocol/message-bridge"
 import { DIRECT_AGENT_SESSION_CONTROL_KINDS } from "@/orchestrator/direct-reply"
 import { BusEvent } from "@/bus/bus-event"
+import { Instance } from "@/project/instance"
 const log = Log.create({ service: "server.routes.orchestrator" })
 const CONVERSATION_EVENT_PAGE_LIMIT = 500
 const TASK_MESSAGE_CHANGE_POLL_MS = 2_000
@@ -120,9 +121,9 @@ const TaskBindingList = z.array(
 export const EngineRoutes = lazy(() =>
   new Hono()
     .use(async (c, next) => {
-      if (c.req.path === "/global/tasks") return next()
-      // Initialize bridge lazily on first request — Instance context is available here
-      ensureTaskMessageProtocolBridge()
+      if (c.req.path !== "/global/tasks" && Instance.current()) {
+        ensureTaskMessageProtocolBridge()
+      }
       return next()
     })
     .post(
