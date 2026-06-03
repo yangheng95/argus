@@ -7,9 +7,12 @@ import {
   type LiveWebpageEvidencePipeline,
 } from "../../src/orchestrator/webpage-evidence"
 import {
+  readPreparedWebpagePrdEvidence,
   prepareWebpagePrdEvidence,
   renderWebpagePrdEvidencePromptSection,
 } from "../../src/research/webpage-prd-evidence"
+import { ProjectRuntimePaths } from "../../src/project/runtime-paths"
+import { prepareWebCloneContext } from "../../src/web-clone/context"
 import { tmpdir } from "../fixture/fixture"
 
 const WEBPAGE_PRD_EVIDENCE_TIMEOUT_MS = 60_000
@@ -71,6 +74,43 @@ describe("research webpage PRD evidence", () => {
     expect(summaryExcerpt?.excerpt).toContain("[artifact excerpt clipped:")
     expect(summaryExcerpt?.excerpt.length).toBeLessThan(2_700)
   }, { timeout: WEBPAGE_PRD_EVIDENCE_TIMEOUT_MS })
+
+  test("reads existing frontend-design evidence without running the live webpage pipeline", async () => {
+    await using tmp = await tmpdir()
+    const taskID = "tsk_research_webpage_prd_existing"
+    const url = "https://example.com/markets/world-economy/"
+    const paths = ProjectRuntimePaths.frontendDesignPaths(tmp.path, taskID)
+
+    await writeCompleteEvidence(paths.mirrorAbsolute, url, {})
+    await prepareWebCloneContext({
+      mirrorDir: paths.mirrorAbsolute,
+      outputDir: paths.sourcePackageAbsolute,
+    })
+
+    const evidence = await readPreparedWebpagePrdEvidence({
+      projectDir: tmp.path,
+      taskID,
+      url,
+    })
+
+    expect(evidence.status).toBe("reused")
+    expect(evidence.mirrorRelative).toBe(paths.mirrorRelative)
+    expect(evidence.sourcePackageRelative).toBe(paths.sourcePackageRelative)
+    expect(evidence.referenceImageRelative).toBe(`${paths.sourcePackageRelative}/reference.png`)
+    expect(evidence.artifacts).toContain(`${paths.mirrorRelative}/prd-evidence-summary.md`)
+    expect(evidence.artifacts).toContain(`${paths.sourcePackageRelative}/implementation-blueprint.md`)
+    expect(evidence.excerpts.some((item) => item.excerpt.includes("Economic trends"))).toBe(true)
+  }, { timeout: WEBPAGE_PRD_EVIDENCE_TIMEOUT_MS })
+
+  test("rejects frontend-research evidence reads when frontend-design has not prepared the runtime package", async () => {
+    await using tmp = await tmpdir()
+
+    await expect(readPreparedWebpagePrdEvidence({
+      projectDir: tmp.path,
+      taskID: "tsk_research_webpage_prd_missing",
+      url: "https://example.com/markets/world-economy/",
+    })).rejects.toThrow("requires existing frontend-design webpage evidence")
+  })
 })
 
 function fakePipeline(calls: string[], options: { longEvidenceSummary?: boolean } = {}): LiveWebpageEvidencePipeline {
