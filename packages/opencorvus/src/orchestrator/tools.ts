@@ -4080,7 +4080,7 @@ export function createOrchestratorTools(input: {
 
     frontend_research: tool({
       description:
-        "OPTIONAL read-only stage agent for webpage/UI investigation division. Use alongside `frontend_design` for supplied page URLs when downstream requirements, architect, or build need source-backed work packets for page functions, visual layout, style checks, interactions, content/data inventory, responsive behavior, fidelity acceptance, and risks. It partitions prepared webpage evidence into a frontend_research_brief/webpage_contract artifact; it does not perform deep investigation itself. It is NOT the frontend implementation template owner, NOT requirements, NOT architect, NOT build, NOT a route selector, and NOT final PRD/SPEC/report acceptance.",
+        "OPTIONAL submit-only publisher for webpage/UI investigation division. Use alongside `frontend_design` for supplied page URLs when downstream requirements, architect, or build need source-backed work packets for page functions, visual layout, style checks, interactions, content/data inventory, responsive behavior, fidelity acceptance, and risks. It partitions prepared webpage evidence into a frontend_research_brief/webpage_contract artifact; it does not perform deep investigation itself. It is NOT the frontend implementation template owner, NOT requirements, NOT architect, NOT build, NOT a route selector, and NOT final PRD/SPEC/report acceptance.",
       inputSchema: z.object({
         reason: z.string().min(1).describe("Why frontend webpage research is needed for this task."),
         source_urls: z

@@ -593,14 +593,7 @@ export namespace Agent {
         description: AgentRoleContract.description("frontend-research"),
         prompt: FRONTEND_RESEARCH_CORE,
         tools: {
-          include: [
-            "read_file",
-            "find_files",
-            "list_directory",
-            "memory_search",
-            "memory_get",
-            "webfetch",
-          ],
+          include: [],
         },
         steps: 1000,
         options: {},

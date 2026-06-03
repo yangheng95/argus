@@ -36,6 +36,7 @@ export interface ResearchSessionConfig {
   sessionTitlePrefix: string
   prepareWebpageEvidence: "none" | "prd-only" | "always-for-source-url" | "read-existing-for-source-url"
   bundlePathKind: "research" | "frontend-research"
+  retrievalTools: "readonly" | "none"
   delegation: string
 }
 
@@ -69,6 +70,7 @@ export namespace ResearchAgent {
       sessionTitlePrefix: "Research",
       prepareWebpageEvidence: "prd-only",
       bundlePathKind: "research",
+      retrievalTools: "readonly",
       delegation:
         "Orchestrator is asking research to gather evidence and prepare PRD/SPEC input material. " +
         "Return evidence, problem statements, user needs, constraints, document outline, and open questions only. " +
@@ -82,14 +84,13 @@ export async function runResearchSession(
   config: ResearchSessionConfig,
 ): Promise<ResearchAgent.RunResult> {
   const webpagePrdEvidence = await prepareInputWebpagePrdEvidence(input, config.prepareWebpageEvidence)
-  const retrievalTools = await filterAgentTools(
-    createReadonlyRetrievalTools(undefined, { websearch: false }),
-    config.kind,
-    {
-      taskID: input.taskID,
-      sessionID: input.parentSessionID,
-    },
-  )
+  const retrievalTools =
+    config.retrievalTools === "readonly"
+      ? await filterAgentTools(createReadonlyRetrievalTools(undefined, { websearch: false }), config.kind, {
+          taskID: input.taskID,
+          sessionID: input.parentSessionID,
+        })
+      : {}
   const outputToolKit = createResearchOutputTools()
   let sessionID: string | undefined
 
