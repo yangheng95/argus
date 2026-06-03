@@ -76,6 +76,8 @@ export default function ProvidersPanel() {
   const [refreshing, setRefreshing] = createSignal(false)
   const [lastRefreshedAt, setLastRefreshedAt] = createSignal<number | null>(null)
   const [providerSearch, setProviderSearch] = createSignal("")
+  const [discoveringModels, setDiscoveringModels] = createSignal(false)
+  const [formNotice, setFormNotice] = createSignal<string | null>(null)
 
   function formatRelative(ms: number): string {
     const diff = Date.now() - ms
@@ -251,6 +253,7 @@ export default function ProvidersPanel() {
     setFormApiKey("")
     setFormModels("")
     setFormError(null)
+    setFormNotice(null)
   }
 
   function startAdd() {
@@ -274,6 +277,7 @@ export default function ProvidersPanel() {
     setEditing(id)
     setShowAdd(true)
     setFormError(null)
+    setFormNotice(null)
   }
 
   function parseModels(text: string): Record<string, ProviderModel> {
@@ -291,20 +295,78 @@ export default function ProvidersPanel() {
     return models
   }
 
+  function sanitizeProviderId(value: string): string {
+    return value
+      .trim()
+      .toLowerCase()
+      .replace(/[^a-z0-9-_]/g, "-")
+      .replace(/-+/g, "-")
+      .replace(/^-|-$/g, "")
+  }
+
+  function providerIdFromApi(value: string): string {
+    try {
+      const host = new URL(value.trim()).hostname
+      const parts = host.split(".").filter(Boolean)
+      const source = parts.length >= 2 ? parts[parts.length - 2] : (parts[0] ?? "")
+      return sanitizeProviderId(source)
+    } catch {
+      return ""
+    }
+  }
+
+  function formProviderId(): string {
+    return editing() || sanitizeProviderId(formId()) || sanitizeProviderId(formName()) || providerIdFromApi(formApi())
+  }
+
+  async function handleDiscoverModels() {
+    if (discoveringModels()) return
+    setFormError(null)
+    setFormNotice(null)
+    const api = formApi().trim()
+    if (!api) {
+      setFormError(t("provider.form.error.api_required"))
+      return
+    }
+    setDiscoveringModels(true)
+    try {
+      const result = (await apiJson("provider/discover-models", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          api,
+          apiKey: formApiKey().trim() || undefined,
+          providerID: formProviderId() || undefined,
+        }),
+      })) as { ok: boolean; models: string[]; count: number; error?: string }
+      if (!result.ok) {
+        setFormError(t("provider.form.discover.failed", { reason: result.error || "unknown" }))
+        return
+      }
+      setFormModels(result.models.join("\n"))
+      setFormNotice(t("provider.form.discover.success", { count: result.count }))
+    } catch (e) {
+      setFormError(t("provider.form.discover.failed", { reason: describeFailure(e) }))
+    } finally {
+      setDiscoveringModels(false)
+    }
+  }
+
   async function handleSave() {
     setFormError(null)
-    const id =
-      editing() ||
-      formId()
-        .trim()
-        .toLowerCase()
-        .replace(/[^a-z0-9-_]/g, "-")
+    setFormNotice(null)
+    const id = formProviderId()
     if (!id) {
       setFormError(t("provider.form.error.id_required"))
       return
     }
     if (!formApi().trim()) {
       setFormError(t("provider.form.error.api_required"))
+      return
+    }
+    const models = parseModels(formModels())
+    if (Object.keys(models).length === 0) {
+      setFormError(t("provider.form.error.models_required"))
       return
     }
 
@@ -319,7 +381,7 @@ export default function ProvidersPanel() {
           baseConfig.options && typeof baseConfig.options === "object" && !Array.isArray(baseConfig.options)
             ? { ...(baseConfig.options as Record<string, unknown>) }
             : {},
-        models: parseModels(formModels()),
+        models,
       }
       const apiKey = formApiKey().trim()
       if (provider.options && Object.keys(provider.options).length === 0) delete provider.options
@@ -799,30 +861,6 @@ export default function ProvidersPanel() {
               {editing() ? t("provider.form.edit_title", { id: editing() ?? "" }) : t("provider.form.add_title")}
             </h4>
 
-            <Show when={!editing()}>
-              <label class="field">
-                <span class="field-label">{t("provider.form.id_label")}</span>
-                <input
-                  class="field-input"
-                  type="text"
-                  placeholder={t("provider.form.id_placeholder", { value: "hexin, my-gateway" })}
-                  value={formId()}
-                  onInput={(e) => setFormId(e.currentTarget.value)}
-                />
-              </label>
-            </Show>
-
-            <label class="field">
-              <span class="field-label">{t("provider.form.name_label")}</span>
-              <input
-                class="field-input"
-                type="text"
-                placeholder={t("provider.form.name_placeholder", { value: "Hexin OpenAI Gateway" })}
-                value={formName()}
-                onInput={(e) => setFormName(e.currentTarget.value)}
-              />
-            </label>
-
             <label class="field">
               <span class="field-label">{t("provider.form.api_label")}</span>
               <input
@@ -843,17 +881,6 @@ export default function ProvidersPanel() {
             </label>
 
             <label class="field">
-              <span class="field-label">{t("provider.form.env_label")}</span>
-              <input
-                class="field-input"
-                type="text"
-                placeholder={t("provider.form.env_placeholder", { value: "MY_API_KEY" })}
-                value={formEnvKey()}
-                onInput={(e) => setFormEnvKey(e.currentTarget.value)}
-              />
-            </label>
-
-            <label class="field">
               <span class="field-label">{t("provider.api_key.label")}</span>
               <input
                 class="field-input"
@@ -869,17 +896,87 @@ export default function ProvidersPanel() {
               />
             </label>
 
+            <details class="provider-advanced-fields">
+              <summary class="provider-advanced-summary">
+                <span>{t("provider.form.advanced")}</span>
+                <span class="provider-advanced-derived">
+                  {t("provider.form.advanced_id", { id: formProviderId() || t("provider.form.advanced_id_pending") })}
+                </span>
+              </summary>
+
+              <div class="provider-advanced-grid">
+                <Show when={!editing()}>
+                  <label class="field">
+                    <span class="field-label">{t("provider.form.id_label")}</span>
+                    <input
+                      class="field-input"
+                      type="text"
+                      placeholder={t("provider.form.id_placeholder", { value: "opentoken" })}
+                      value={formId()}
+                      onInput={(e) => setFormId(e.currentTarget.value)}
+                    />
+                  </label>
+                </Show>
+
+                <label class="field">
+                  <span class="field-label">{t("provider.form.name_label")}</span>
+                  <input
+                    class="field-input"
+                    type="text"
+                    placeholder={t("provider.form.name_placeholder", { value: "OpenToken CN2" })}
+                    value={formName()}
+                    onInput={(e) => setFormName(e.currentTarget.value)}
+                  />
+                </label>
+
+                <label class="field">
+                  <span class="field-label">{t("provider.form.env_label")}</span>
+                  <input
+                    class="field-input"
+                    type="text"
+                    placeholder={t("provider.form.env_placeholder", { value: "OPENTOKEN_API_KEY" })}
+                    value={formEnvKey()}
+                    onInput={(e) => setFormEnvKey(e.currentTarget.value)}
+                  />
+                </label>
+              </div>
+            </details>
+
             <label class="field">
               <span class="field-label">{t("provider.form.models_label")}</span>
-              {/* Fixed model mapping examples; these are literal IDs/display names, not instructional prose. */}
+              <div class="provider-model-field-head">
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  tone="neutral"
+                  onClick={() => void handleDiscoverModels()}
+                  disabled={discoveringModels() || !formApi().trim()}
+                  data-testid="provider-discover-models"
+                >
+                  <Icon name="refresh" size={13} />
+                  {discoveringModels() ? t("provider.form.discover.running") : t("provider.form.discover.button")}
+                </Button>
+              </div>
               <textarea
                 class="field-input provider-models-textarea"
                 rows={4}
                 placeholder={"gpt-5.4-mini:GPT-5.4 Mini\ngpt-5.4:GPT-5.4"}
                 value={formModels()}
-                onInput={(e) => setFormModels(e.currentTarget.value)}
+                onInput={(e) => {
+                  setFormModels(e.currentTarget.value)
+                  setFormNotice(null)
+                }}
               />
             </label>
+
+            <Show when={formNotice()}>
+              {(msg) => (
+                <div class="provider-form-notice" role="status" aria-live="polite">
+                  {msg()}
+                </div>
+              )}
+            </Show>
 
             <Show when={formError()}>
               {(msg) => (
@@ -899,7 +996,7 @@ export default function ProvidersPanel() {
                 size="sm"
                 tone="accent"
                 onClick={handleSave}
-                disabled={saving() || (!editing() && !formId().trim()) || !formApi().trim()}
+                disabled={saving() || !formProviderId() || !formApi().trim()}
               >
                 {saving() ? t("common.saving") : editing() ? t("provider.form.update") : t("provider.form.add")}
               </Button>

@@ -244,6 +244,7 @@ All endpoints are protected by `OPENCORVUS_SERVER_PASSWORD`. When set, clients m
 |---|---|---|---|
 | GET | `/provider` | List providers | `provider.list` |
 | GET | `/provider/auth` | Get provider auth methods | `provider.auth` |
+| POST | `/provider/discover-models` | Discover OpenAI-compatible provider models | `provider.discover.models` |
 | POST | `/provider/hexin/refresh` | Refresh hexin gateway model list | `provider.hexin.refresh` |
 | POST | `/provider/refresh` | Refresh the models.dev registry snapshot | `provider.refresh` |
 | POST | `/provider/{providerID}/auth/execute` | Execute auth method | `provider.auth.execute` |

@@ -6139,6 +6139,51 @@ export type ProviderHexinRefreshResponses = {
 
 export type ProviderHexinRefreshResponse = ProviderHexinRefreshResponses[keyof ProviderHexinRefreshResponses]
 
+export type ProviderDiscoverModelsData = {
+  body?: {
+    /**
+     * OpenAI-compatible base URL, usually ending in /v1
+     */
+    api: string
+    /**
+     * Optional API key used as a Bearer token
+     */
+    apiKey?: string
+    /**
+     * Optional provider ID whose saved auth key may be used
+     */
+    providerID?: string
+  }
+  path?: never
+  query?: {
+    directory?: string
+  }
+  url: "/provider/discover-models"
+}
+
+export type ProviderDiscoverModelsErrors = {
+  /**
+   * Bad request
+   */
+  400: BadRequestError
+}
+
+export type ProviderDiscoverModelsError = ProviderDiscoverModelsErrors[keyof ProviderDiscoverModelsErrors]
+
+export type ProviderDiscoverModelsResponses = {
+  /**
+   * Discovered model IDs
+   */
+  200: {
+    ok: boolean
+    models: Array<string>
+    count: number
+    error?: string
+  }
+}
+
+export type ProviderDiscoverModelsResponse = ProviderDiscoverModelsResponses[keyof ProviderDiscoverModelsResponses]
+
 export type ProviderTestData = {
   body?: {
     modelID?: string
