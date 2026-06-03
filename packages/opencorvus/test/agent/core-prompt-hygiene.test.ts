@@ -607,6 +607,22 @@ describe("core prompt hygiene", () => {
     expect(normalized).toContain("custom components only for truly page-specific surfaces")
   })
 
+  test("frontend-research requires PRD-grade webpage research, not a short outline", async () => {
+    const research = await readPrompt("frontendResearch")
+    const normalized = research.replace(/\s+/g, " ")
+
+    expect(normalized).toContain("A short page outline is insufficient for webpage replica work")
+    expect(normalized).toContain("Produce a PRD-grade webpage research bundle, not a summary")
+    expect(normalized).toContain("usable by requirements and architect without reopening the live page")
+    expect(normalized).toContain("For every visible surface in the prepared evidence")
+    expect(normalized).toContain("purpose, exact visible copy/data, bounds or layout relationship, style signals, interaction states, responsive behavior")
+    expect(normalized).toContain("Do not collapse long TradingView-style pages into a handful of headings")
+    expect(normalized).toContain("full_markdown is the durable PRD research artifact")
+    expect(normalized).toContain("Evidence Index, Page Inventory in visible order, Functional Surface Contracts, Layout and Responsive Contract, Style and Visual Token Contract, Interaction/State Contract, Data and Content Inventory, Asset/Media Inventory, Fidelity Acceptance Matrix, Risks/Open Questions, and Downstream PRD Outline")
+    expect(normalized).toContain("Each major page region needs its own subsection")
+    expect(normalized).toContain("do not write generic prose")
+  })
+
   test("webpage replica prompts enforce skeleton-first baseline then functional fill", async () => {
     const design = await readPrompt("frontendDesign")
     const requirements = await readPrompt("requirements")
