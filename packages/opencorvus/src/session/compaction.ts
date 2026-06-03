@@ -44,6 +44,7 @@ export namespace SessionCompaction {
   }
 
   const TRANSCRIPT_FIELD_MAX_CHARS = 30_000
+  const DISPATCH_ANCHOR_REFERENCE_MAX_CHARS = 4_000
   type Turn = {
     start: number
     end: number
@@ -65,6 +66,11 @@ export namespace SessionCompaction {
     userIndex: number
     assistantIndex: number
     handoff: CompactionHandoff.Info
+  }
+
+  export type DispatchAnchorReference = {
+    id: string
+    text: string
   }
 
   export async function isOverflow(input: { tokens: Message.Assistant["tokens"]; model: Provider.Model; sessionID?: string }) {
@@ -92,6 +98,20 @@ export namespace SessionCompaction {
       text.slice(0, head).trimEnd(),
       `[omitted ${text.length - maxChars} chars from compaction transcript]`,
       text.slice(text.length - tail).trimStart(),
+    ].join("\n")
+  }
+
+  function renderDispatchAnchorReference(input: DispatchAnchorReference) {
+    return [
+      "The dispatch anchor user message below is preserved outside the compacted range and remains visible after compaction by anchor_id.",
+      "Do not copy it into userMessages[]; userMessages[] covers only post-anchor user turns from the compacted history.",
+      "<dispatch-anchor-reference>",
+      `message_id: ${input.id}`,
+      `characters: ${input.text.length}`,
+      "<dispatch-anchor-excerpt>",
+      compactTranscriptField(input.text, DISPATCH_ANCHOR_REFERENCE_MAX_CHARS),
+      "</dispatch-anchor-excerpt>",
+      "</dispatch-anchor-reference>",
     ].join("\n")
   }
 
@@ -408,18 +428,9 @@ export namespace SessionCompaction {
     previousHandoff?: CompactionHandoff.Info
     context: string[]
     runtime: string
-    dispatchAnchor?: string
+    dispatchAnchor?: DispatchAnchorReference
   }) {
-    const dispatchAnchor = input.dispatchAnchor
-    const dispatchAnchorBlock =
-      dispatchAnchor && dispatchAnchor.length > 0
-        ? [
-            "The <dispatch-anchor> block below is preserved verbatim after compaction. Do not re-summarize it into userMessages[]; userMessages[] covers only post-anchor user turns from the compacted history.",
-            "<dispatch-anchor>",
-            dispatchAnchor,
-            "</dispatch-anchor>",
-          ].join("\n")
-        : undefined
+    const dispatchAnchorBlock = input.dispatchAnchor ? renderDispatchAnchorReference(input.dispatchAnchor) : undefined
     const previousHandoff = input.previousHandoff ? JSON.stringify(input.previousHandoff, null, 2) : undefined
     const anchor = previousHandoff
       ? [
@@ -711,7 +722,12 @@ export namespace SessionCompaction {
     const dispatchAnchorMessage = selected.anchor_id
       ? history.find((msg) => msg.info.id === selected.anchor_id)
       : undefined
-    const dispatchAnchor = dispatchAnchorMessage ? userText(dispatchAnchorMessage) : undefined
+    const dispatchAnchor = dispatchAnchorMessage
+      ? {
+          id: dispatchAnchorMessage.info.id,
+          text: userText(dispatchAnchorMessage),
+        }
+      : undefined
 
     const msg = (await Session.updateMessage({
       id: Identifier.ascending("message"),
