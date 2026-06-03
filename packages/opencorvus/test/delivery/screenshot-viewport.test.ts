@@ -3,11 +3,14 @@ import fs from "node:fs/promises"
 import http from "node:http"
 import os from "node:os"
 import path from "node:path"
-import { captureRuntimePage } from "../../src/delivery/runtime-capture"
+import { captureRuntimePage, type RuntimeCaptureSuccess } from "../../src/delivery/runtime-capture"
 import {
+  buildScreenshotToolOutput,
   normalizeDeliveryScreenshotViewport,
   normalizeVerifyPageIntegrityInput,
 } from "../../src/delivery/tools"
+import { Instance } from "../../src/project/instance"
+import { AttachmentStore } from "../../src/storage/attachment-store"
 
 const tempDirs: string[] = []
 const servers: http.Server[] = []
@@ -95,6 +98,52 @@ describe("delivery screenshot viewport", () => {
     expect(await fileExists(capture.path)).toBe(true)
   })
 
+  test("screenshot tool output attaches captured PNG for the next model turn", async () => {
+    const projectDir = await fs.mkdtemp(path.join(os.tmpdir(), "opencorvus-screenshot-tool-"))
+    tempDirs.push(projectDir)
+    await Bun.$`git init`.cwd(projectDir).quiet()
+    const screenshotPath = path.join(projectDir, "fixture.png")
+    await fs.writeFile(screenshotPath, Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 1]))
+
+    await Instance.provide({
+      directory: projectDir,
+      fn: async () => {
+        const output = (await buildScreenshotToolOutput(Instance.project.id, {
+          captured: true,
+          passed: true,
+          url: "http://127.0.0.1:4173",
+          target_url: "http://127.0.0.1:4173",
+          path: screenshotPath,
+          sha: "fixture-sha",
+          bytes: 9,
+          size: { width: 640, height: 480 },
+          requested_viewport: { width: 640, height: 480 },
+          viewport: { width: 640, height: 480, capped: false },
+          layers: { pixel: { variance: 72.5 } },
+          dom: {
+            textLength: 0,
+            nodeCount: 0,
+            bodyDescendantCount: 0,
+            hasBodyChildren: true,
+            isEmptyRootShell: false,
+          },
+          summary: "captured",
+        } as RuntimeCaptureSuccess)) as any
+
+        expect(output.text).toContain('"ok": true')
+        expect(output.attachments).toHaveLength(1)
+        const attachment = output.attachments[0]
+        expect(attachment.mime).toBe("image/png")
+        expect(attachment.url).toStartWith(`/attachment/${Instance.project.id}/`)
+        expect(attachment.url).not.toStartWith("data:")
+        const located = AttachmentStore.nameFromUrl(attachment.url)
+        expect(located).toBeTruthy()
+        const bytes = await AttachmentStore.read(located!.projectID, located!.name)
+        expect(bytes.subarray(0, 8)).toEqual(Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]))
+      },
+    })
+  })
+
   test("runtime capture treats browser unhandled rejections as JS integrity failures", async () => {
     const outDir = await fs.mkdtemp(path.join(os.tmpdir(), "opencorvus-runtime-capture-"))
     tempDirs.push(outDir)
@@ -133,7 +182,6 @@ describe("delivery screenshot viewport", () => {
     expect(block).not.toContain("puppeteer.launch")
     expect(block).not.toContain("networkidle0")
   })
-
 })
 
 async function serveHtml(html: string): Promise<string> {
@@ -152,5 +200,8 @@ async function serveHtml(html: string): Promise<string> {
 }
 
 async function fileExists(filePath: string): Promise<boolean> {
-  return fs.access(filePath).then(() => true, () => false)
+  return fs.access(filePath).then(
+    () => true,
+    () => false,
+  )
 }

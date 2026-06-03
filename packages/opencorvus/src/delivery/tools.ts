@@ -31,6 +31,7 @@ import {
   normalizeRuntimeCaptureRequest,
   normalizeRuntimeCaptureViewport,
   type RuntimeCaptureRequest,
+  type RuntimeCaptureSuccess,
 } from "@/delivery/runtime-capture"
 import { buildMultimodalToolResult } from "@/delivery/tool-result"
 import { AttachmentStore } from "@/storage/attachment-store"
@@ -74,6 +75,35 @@ export function normalizeDeliveryScreenshotViewport(input: { width: number; heig
 
 export function normalizeVerifyPageIntegrityInput(args: RuntimeCaptureRequest) {
   return normalizeRuntimeCaptureRequest(args)
+}
+
+export async function buildScreenshotToolOutput(projectID: string, capture: RuntimeCaptureSuccess) {
+  const variance = capture.layers.pixel.variance
+  return await buildMultimodalToolResult({
+    projectID,
+    text: JSON.stringify(
+      {
+        ok: true,
+        path: capture.path,
+        sha: capture.sha,
+        bytes: capture.bytes,
+        width: capture.size.width,
+        height: capture.size.height,
+        requested_viewport: capture.requested_viewport,
+        viewport: capture.viewport,
+        viewport_capped: capture.viewport.capped,
+        pixel_variance: Number(variance.toFixed(2)),
+        degenerate: variance < 25,
+        note:
+          variance < 25
+            ? "Pixel variance < 25 — the screenshot is near-uniform (blank page, JSON error body, or unhydrated shell). Do NOT count as a passed visual check."
+            : undefined,
+      },
+      null,
+      2,
+    ),
+    images: [{ path: capture.path, mime: "image/png", filename: path.basename(capture.path) }],
+  })
 }
 
 async function runDeliveryIntegrityReview(input: { taskID?: string; parentSessionID?: string; signal?: AbortSignal }) {
@@ -570,7 +600,10 @@ export function createDeliveryTools(input?: DeliveryToolContext) {
         "the result returns a PID and detected URL when available, and OpenCorvus ends the process after the timeout lease.",
       inputSchema: z.object({
         command: z.string().describe("Shell command to run (runs in project root)"),
-        timeout_ms: z.number().default(DEFAULT_BASH_TIMEOUT_MS).describe("Max execution time ms; for background=true this is the process lease"),
+        timeout_ms: z
+          .number()
+          .default(DEFAULT_BASH_TIMEOUT_MS)
+          .describe("Max execution time ms; for background=true this is the process lease"),
         background: z
           .boolean()
           .default(false)
@@ -599,13 +632,13 @@ export function createDeliveryTools(input?: DeliveryToolContext) {
         "Capture a PNG screenshot of an already running app URL via the delivery runtime capture engine and write it to the " +
         "task's .opencorvus/runtime delivery screenshot directory. Use this to produce visual evidence " +
         "that the running application actually renders, or to capture before/after images around a " +
-        "fix. The screenshot is saved to disk; reference the returned absolute path and sha when " +
+        "fix. The screenshot is saved to disk and attached as a multimodal tool result so the next LLM turn can inspect " +
+        "the captured pixels directly; reference the returned absolute path and sha when " +
         "citing this call in acceptance tool_call_evidence. The tool returns the shot's size " +
         "(bytes + dimensions) and a pixel-variance signal — a near-zero variance means the page " +
         "rendered blank/uniform (JSON error, pre-hydration stub, loading state) and the capture " +
         "itself does NOT count as a passed check. Capture viewport is capped at 1440x1080 " +
-        "inside Puppeteer only; it never changes the host display resolution. The PNG bytes are not attached to the delivery " +
-        "context; use compare_visual_artifacts when a visual comparison needs image bytes.",
+        "inside Puppeteer only; it never changes the host display resolution.",
       inputSchema: z.object({
         url: z
           .string()
@@ -639,28 +672,7 @@ export function createDeliveryTools(input?: DeliveryToolContext) {
           if (!capture.captured) {
             return JSON.stringify(capture, null, 2)
           }
-          const variance = capture.layers.pixel.variance
-          return JSON.stringify(
-            {
-              ok: true,
-              path: capture.path,
-              sha: capture.sha,
-              bytes: capture.bytes,
-              width: capture.size.width,
-              height: capture.size.height,
-              requested_viewport: capture.requested_viewport,
-              viewport: capture.viewport,
-              viewport_capped: capture.viewport.capped,
-              pixel_variance: Number(variance.toFixed(2)),
-              degenerate: variance < 25,
-              note:
-                variance < 25
-                  ? "Pixel variance < 25 — the screenshot is near-uniform (blank page, JSON error body, or unhydrated shell). Do NOT count as a passed visual check."
-                  : undefined,
-            },
-            null,
-            2,
-          )
+          return await buildScreenshotToolOutput(projectId, capture)
         } catch (err) {
           log.warn("screenshot failed", { url, err })
           // P0-0: failures stay text-only — there is no PNG to attach. Do NOT
