@@ -2,6 +2,11 @@ import { spawn } from "node:child_process"
 import fs from "node:fs/promises"
 import path from "node:path"
 import os from "node:os"
+import {
+  isBunExecutable,
+  packagedBrowserNodeRuntimePaths,
+  resolveBrowserNodeSidecarRuntime,
+} from "@/browser/runtime/node-sidecar"
 
 export namespace BrowserMCPNodeLauncher {
   export async function serveStdio() {
@@ -45,9 +50,10 @@ export namespace BrowserMCPNodeLauncher {
   ) {
     const packaged = packagedRuntimePaths(runtime)
     if ((await exists(packaged.node)) && (await exists(packaged.bundle))) return { ...packaged, packaged: true }
-    if (isBunRuntime(runtime.execPath ?? process.execPath)) {
+    if (isBunExecutable(runtime.execPath ?? process.execPath)) {
+      const browserRuntime = await resolveBrowserNodeSidecarRuntime(runtime)
       return {
-        node: process.env.OPENCORVUS_BROWSER_MCP_NODE ?? nodeExecutableName(runtime.platform ?? process.platform),
+        node: browserRuntime.nodeExecutable,
         bundle: await resolveSourceBundle(),
         packaged: false,
       }
@@ -63,22 +69,11 @@ export namespace BrowserMCPNodeLauncher {
       platform?: NodeJS.Platform
     } = {},
   ) {
-    const execPath = runtime.execPath ?? process.execPath
-    const platform = runtime.platform ?? process.platform
-    const dir = path.join(path.dirname(execPath), "browser-mcp-node")
+    const packaged = packagedBrowserNodeRuntimePaths(runtime)
     return {
-      node: path.join(dir, nodeExecutableName(platform)),
-      bundle: path.join(dir, "stdio.mjs"),
+      node: packaged.nodeExecutable,
+      bundle: packaged.mcpBundle,
     }
-  }
-
-  function nodeExecutableName(platform: NodeJS.Platform) {
-    return platform === "win32" ? "node.exe" : "node"
-  }
-
-  function isBunRuntime(execPath: string) {
-    const executable = path.basename(execPath).toLowerCase().replace(/\.exe$/, "")
-    return executable === "bun"
   }
 
   async function resolveSourceBundle() {
