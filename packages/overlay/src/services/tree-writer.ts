@@ -253,6 +253,10 @@ interface ProjectedSessionStatus {
   timeCompleted?: number;
 }
 const pendingSessionStatus = new Map<string, ProjectedSessionStatus>();
+/** Raw Question.ask interactions for standalone session conversations such as
+ *  Mission. Engine task questions are normalized by the backend into
+ *  board.interactions and must not be duplicated here. */
+const standaloneQuestionInteractions = new Map<string, any>();
 interface BufferedPartDelta {
   event: any;
   delta: string;
@@ -285,6 +289,7 @@ export function resetWriter(options: {
   pendingIntegrity.clear();
   runningReviews.clear();
   pendingSessionStatus.clear();
+  standaloneQuestionInteractions.clear();
   // Drop every key explicitly — plain assignment on a store merges instead of
   // replacing (see setMessages's messagesBySession fix in store/messages.ts).
   setCardTreeStore("order", []);
@@ -424,6 +429,10 @@ export function applyEvent(event: any): void {
   if (type === "interaction.requested" || type === "interaction.resolved") {
     flushBufferedPartDeltas();
     return handleInteraction(event);
+  }
+  if (type === "question.asked" || type === "question.replied" || type === "question.rejected") {
+    flushBufferedPartDeltas();
+    return applyVisibleCardTreeEvent(() => handleStandaloneQuestion(event));
   }
 
   if (
@@ -721,7 +730,10 @@ function handleMessageUpdated(event: any): void {
     ensureBoundaryPart(session, cardID, id, displayRole, timeCreated);
   } else if (priorMessageCount > 0) {
     regroupTimelineSegments();
-  } else if (Array.isArray(boardStore.board?.interactions) && boardStore.board.interactions.length > 0) {
+  } else if (
+    (Array.isArray(boardStore.board?.interactions) && boardStore.board.interactions.length > 0) ||
+    standaloneQuestionInteractions.size > 0
+  ) {
     rebuildCardHierarchy();
   } else {
     rebuildTopLevelOrder();
@@ -1132,6 +1144,77 @@ function handleInteraction(event: any): void {
   // Interactions are sourced from boardStore.board.interactions, not the event
   // payload — the board routes handle the write, we reproject.
   rebuildBoardDerivedCards();
+}
+
+function isSelectedStandaloneSession(sessionID: string): boolean {
+  const selected = boardStore.selectedSource;
+  if (selected?.kind === "session") return selected.id === sessionID;
+  const board = boardStore.board;
+  if (board?.kind === "session") return String(board?.sessionID || "") === sessionID;
+  return false;
+}
+
+function questionTitle(questions: any[]): string {
+  const headers = questions
+    .map((item) => typeof item?.header === "string" ? item.header.trim() : "")
+    .filter(Boolean);
+  return headers.join(" / ") || "Question";
+}
+
+function questionBody(questions: any[]): string {
+  return questions
+    .map((item) => typeof item?.question === "string" ? item.question.trim() : "")
+    .filter(Boolean)
+    .join("\n\n");
+}
+
+function handleStandaloneQuestion(event: any): void {
+  const type = String(event?.type || "");
+  const props = propsOf(event);
+  const requestID = String(props.id || props.requestID || "");
+  const sessionID = String(props.sessionID || props.session_id || "");
+  if (!requestID || !sessionID) {
+    throw new Error(`${type} missing requestID/sessionID`);
+  }
+  if (!isSelectedStandaloneSession(sessionID) && !standaloneQuestionInteractions.has(requestID)) {
+    return;
+  }
+
+  if (type === "question.asked") {
+    const questions = Array.isArray(props.questions) ? props.questions : [];
+    if (questions.length === 0) throw new Error(`question.asked ${requestID} missing questions`);
+    const created = eventEmittedAt(event);
+    standaloneQuestionInteractions.set(requestID, {
+      id: requestID,
+      sessionID,
+      type: "question",
+      status: "pending",
+      title: questionTitle(questions),
+      body: questionBody(questions),
+      payload: {
+        questions,
+        ...(props.tool ? { tool: props.tool } : {}),
+      },
+      replyEndpoint: "question",
+      time: { created },
+    });
+    rebuildCardHierarchy();
+    return;
+  }
+
+  const existing = standaloneQuestionInteractions.get(requestID);
+  if (!existing) return;
+  const resolved = eventEmittedAt(event);
+  standaloneQuestionInteractions.set(requestID, {
+    ...existing,
+    status: type === "question.rejected" ? "rejected" : "answered",
+    response: type === "question.replied" ? { answers: Array.isArray(props.answers) ? props.answers : [] } : {},
+    time: {
+      ...(existing.time || {}),
+      resolved,
+    },
+  });
+  rebuildCardHierarchy();
 }
 
 // ── Shared review stream + completed review bodies ──
@@ -2585,7 +2668,9 @@ function rebuildInteractionCards(board: any): {
   topLevel: string[];
 } {
   const knownSessionIDs = new Set<string>(sessions.keys());
-  const { bySession, orphan } = partitionInteractions(board?.interactions, knownSessionIDs);
+  const boardInteractions = Array.isArray(board?.interactions) ? board.interactions : [];
+  const interactions = [...boardInteractions, ...standaloneQuestionInteractions.values()];
+  const { bySession, orphan } = partitionInteractions(interactions, knownSessionIDs);
   const aliveCardIDs = new Set<string>();
   const bySessionCardID = new Map<string, string[]>();
   const topLevel: string[] = [];

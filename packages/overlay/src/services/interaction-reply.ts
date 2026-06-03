@@ -22,6 +22,8 @@ const REPLY_TIMEOUT_MS = 30_000;
 
 const inflight = new Map<string, Promise<void>>();
 
+export type InteractionReplyEndpoint = "interaction" | "question";
+
 function lockedRequest(id: string, fn: () => Promise<void>): Promise<void> {
   const prev = inflight.get(id);
   if (prev) return prev;
@@ -37,8 +39,21 @@ export async function replyInteraction(
   action: "once" | "always" | "answer",
   autoReply: boolean,
   input: { answers?: unknown[]; message?: string } = {},
+  endpoint: InteractionReplyEndpoint = "interaction",
 ): Promise<void> {
   return lockedRequest(id, async () => {
+    if (endpoint === "question") {
+      if (action !== "answer") throw new Error(`question reply endpoint does not support ${action}`);
+      const answers = Array.isArray(input.answers) ? input.answers : [];
+      await apiJson(`question/${id}/reply`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ answers }),
+        signal: AbortSignal.timeout(REPLY_TIMEOUT_MS),
+      });
+      return;
+    }
+
     if (action === "once" || action === "always") {
       await apiJson(`interaction/${id}/reply`, {
         method: "POST",
@@ -68,8 +83,20 @@ export async function replyInteraction(
   });
 }
 
-export async function rejectInteraction(id: string, autoReply: boolean): Promise<void> {
+export async function rejectInteraction(
+  id: string,
+  autoReply: boolean,
+  endpoint: InteractionReplyEndpoint = "interaction",
+): Promise<void> {
   return lockedRequest(id, async () => {
+    if (endpoint === "question") {
+      await apiJson(`question/${id}/reject`, {
+        method: "POST",
+        signal: AbortSignal.timeout(REPLY_TIMEOUT_MS),
+      });
+      return;
+    }
+
     await apiJson(`interaction/${id}/reject`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },

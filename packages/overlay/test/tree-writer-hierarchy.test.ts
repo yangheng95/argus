@@ -441,6 +441,92 @@ test("tree-writer projects interactions into session children and top-level card
   expect(cardTreeStore.cards[orphanCardID]?.parts?.[0]?.type).toBe("interaction-question");
 });
 
+test("tree-writer projects raw Mission question events into the session card", () => {
+  const MISSION_SID = "ses_mission_question";
+  const QUESTION_ID = "que_mission_stack";
+  setBoardStore("board", {
+    kind: "session",
+    sessionID: MISSION_SID,
+    status: "active",
+    title: "Mission Control",
+    directory: "D:/repo",
+  });
+  setBoardStore("selectedSource", { kind: "session", id: MISSION_SID });
+  setBoardStore("selectedTaskID", "");
+  resetWriter();
+
+  applyEvent({
+    type: "message.updated",
+    properties: {
+      info: stampedInfo("mission", {
+        id: "msg_mission_question",
+        sessionID: MISSION_SID,
+        role: "assistant",
+        resolvedRole: "mission",
+        agent: "mission",
+        channel: "mission",
+        time: { created: 1_780_500_000_000 },
+      }),
+    },
+  });
+
+  applyEvent({
+    type: "question.asked",
+    emittedAt: 1_780_500_000_500,
+    properties: {
+      id: QUESTION_ID,
+      sessionID: MISSION_SID,
+      questions: [
+        {
+          header: "Tech Stack",
+          question: "What tech stack should the Mission use?",
+          options: [{ label: "Vite + React", description: "Fast local app" }],
+        },
+      ],
+      tool: { messageID: "msg_mission_question", callID: "call_question" },
+    },
+  });
+
+  const missionCardID = `mission:session:${MISSION_SID}:message:msg_mission_question`;
+  const questionCardID = `interaction-card:ctx:interaction:${QUESTION_ID}`;
+  const questionPart = cardTreeStore.cards[questionCardID]?.parts?.[0] as any;
+
+  expect(cardTreeStore.cards[missionCardID]?.childIDs || []).toContain(questionCardID);
+  expect(questionPart?.type).toBe("interaction-question");
+  expect(questionPart?.interaction?.replyEndpoint).toBe("question");
+  expect(questionPart?.interaction?.payload?.questions?.[0]?.header).toBe("Tech Stack");
+});
+
+test("tree-writer does not duplicate task questions from raw question events", () => {
+  setBoardStore("board", {
+    task: {
+      id: TASK_ID,
+      status: "active",
+      request: "task question",
+      sessionID: ROOT_SID,
+      time: { created: 1_776_000_000_000 },
+      attachments: [],
+    },
+    goalWorkflows: [],
+    interactions: [],
+  });
+  setBoardStore("selectedSource", { kind: "task", id: TASK_ID });
+  setBoardStore("selectedTaskID", TASK_ID);
+  resetWriter();
+
+  applyEvent({
+    type: "question.asked",
+    emittedAt: 1_776_000_000_500,
+    properties: {
+      id: "que_task_normalized_elsewhere",
+      sessionID: ROOT_SID,
+      questions: [{ header: "Task", question: "Should not render raw?" }],
+    },
+  });
+
+  expect(cardTreeStore.cards["interaction-card:ctx:interaction:que_task_normalized_elsewhere"]).toBeUndefined();
+});
+
 test("root assistant session with parentSessionID pointing to task-virtual root surfaces at top level", () => {
   // Mirrors real backend shape (task-message-protocol-bridge.ts stamps
   // task.sessionID onto every event; the root assistant session therefore
