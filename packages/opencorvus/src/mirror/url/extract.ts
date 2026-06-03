@@ -17,8 +17,8 @@
  */
 
 import { mkdirSync, writeFileSync } from "node:fs"
-import { dirname, resolve } from "node:path"
-import puppeteer, { type Browser, type HTTPResponse } from "puppeteer-core"
+import { createRequire } from "node:module"
+import { dirname, join, resolve } from "node:path"
 
 import { BrowserRuntime } from "@/browser/runtime"
 import { Log } from "@/util/log"
@@ -31,6 +31,18 @@ import {
 import { UrlExtractError } from "../errors"
 
 const log = Log.create({ service: "mirror.url.extract" })
+
+type Browser = any
+type HTTPResponse = any
+
+type PuppeteerCore = {
+  launch(input: {
+    executablePath: string
+    headless: boolean
+    args: string[]
+    timeout: number
+  }): Promise<Browser>
+}
 
 // ─── Mirror's `infra/config.ts` image-download constants (inlined) ───────
 
@@ -698,6 +710,7 @@ export async function extractPage(input: ExtractPageInput): Promise<ExtractedPag
 
   let browser: Browser
   try {
+    const puppeteer = await loadPuppeteerCore()
     browser = await puppeteer.launch({
       executablePath: chromePath,
       headless: true,
@@ -924,4 +937,19 @@ export async function extractPage(input: ExtractPageInput): Promise<ExtractedPag
       log.warn("browser close failed", { error: err instanceof Error ? err.message : String(err) })
     }
   }
+}
+
+async function loadPuppeteerCore(): Promise<PuppeteerCore> {
+  const packagedRoot = dirname(process.execPath)
+  const packagedPackageJson = join(packagedRoot, "node_modules", "puppeteer-core", "package.json")
+  if (await fileExists(packagedPackageJson)) {
+    return createRequire(join(packagedRoot, "package.json"))("puppeteer-core") as PuppeteerCore
+  }
+  return createRequire(import.meta.url)("puppeteer-core") as PuppeteerCore
+}
+
+async function fileExists(filePath: string): Promise<boolean> {
+  return Bun.file(filePath)
+    .exists()
+    .catch(() => false)
 }

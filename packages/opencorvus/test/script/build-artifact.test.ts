@@ -1,4 +1,6 @@
 import { describe, expect, test } from "bun:test"
+import { readFileSync } from "node:fs"
+import { resolve } from "node:path"
 import {
   artifactBrowserMcpNodeExternalModules,
   artifactBrowserMcpNodeExecutableName,
@@ -42,6 +44,23 @@ describe("build-artifact", () => {
     expect(artifactBrowserMcpNodeExternalModules()).toContain("playwright")
     expect(artifactBrowserMcpNodeExternalModules()).toContain("playwright-core")
     expect(artifactBrowserMcpNodeExternalModules()).toContain("chromium-bidi")
+  })
+
+  test("overlay browser automation modules do not statically import browser drivers", () => {
+    const files = [
+      "src/delivery/checks/visual.ts",
+      "src/delivery/checks/walkthrough/run.ts",
+      "src/mcp/browser/guard.ts",
+      "src/mcp/browser/perf.ts",
+      "src/mcp/browser/sessions.ts",
+      "src/mcp/browser/tools.ts",
+      "src/mirror/url/extract.ts",
+    ]
+    for (const file of files) {
+      const source = readFileSync(resolve(import.meta.dir, "../../", file), "utf8")
+      expect(source).not.toMatch(/\bfrom\s+["']playwright["']/)
+      expect(source).not.toMatch(/\bfrom\s+["']puppeteer-core["']/)
+    }
   })
 
   test("browser MCP node runtime executable name is platform specific", () => {

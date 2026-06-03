@@ -1,7 +1,10 @@
-import type { Browser, BrowserContext, Page } from "playwright"
 import { BrowserRuntime } from "@/browser/runtime"
 import { createPerf, getPerf as buildPerf, initPerf, isThirdParty, type PerfState } from "./perf.js"
 import { VIRTUAL_CURSOR_SCRIPT } from "./scripts"
+
+type Browser = any
+type BrowserContext = any
+type Page = any
 
 export type ToolCallEntry = {
   tool: string
