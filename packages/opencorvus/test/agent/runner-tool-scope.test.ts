@@ -84,6 +84,8 @@ describe("agent runner build tool scope", () => {
     expect(prompt).toContain("generated REQ rows")
     expect(prompt).toContain("architect goals")
     expect(prompt).toContain("integrity feedback")
+    expect(prompt).toContain("visible content is componentized and data-fed")
+    expect(prompt).toContain("charts/maps/heatmaps/tables/tabs/components were not flattened")
     expect(prompt).toContain("correct the mismatch before finalizing")
     expect(prompt).toContain("not an additional deliverable")
   })

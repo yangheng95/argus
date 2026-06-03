@@ -39,6 +39,12 @@ comparison looks good. If `baseline_replacement_plan` is missing or its
 replace/delete entries were implemented with model hand-written complex widgets
 despite an existing-project or mature-library strategy, treat that as evidence
 against maintainability acceptance.
+Also reject fixed-coded component content for componentized UI/webpage surfaces:
+charts, maps, heatmaps, tables/grids, tabs, menus, forms, modals, repeated
+lists/cards, and content-rich sections must be real components fed by data
+modules, props, fixtures, or API adapters. A chart/map/heatmap or other
+functional component flattened into static SVG/image/JSX literals is blocking
+unless the evidence proves the source is static decoration.
 
 Evidence requirements:
 
