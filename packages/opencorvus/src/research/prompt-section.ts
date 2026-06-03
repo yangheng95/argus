@@ -73,6 +73,58 @@ export function renderResearchBriefPromptSection(input: {
       purpose: limitText(item.purpose, RESEARCH_PROMPT_LIMITS.itemChars),
       evidence_ids: item.evidence_ids,
     })),
+    webpage_contract: brief.webpage_contract
+      ? {
+          source_url: limitText(brief.webpage_contract.source_url, RESEARCH_PROMPT_LIMITS.itemChars),
+          reference_image_evidence_ids: brief.webpage_contract.reference_image_evidence_ids,
+          functional_surfaces: brief.webpage_contract.functional_surfaces.slice(0, RESEARCH_PROMPT_LIMITS.webpageContractItems).map((item) => ({
+            id: item.id,
+            title: limitText(item.title, RESEARCH_PROMPT_LIMITS.itemChars),
+            user_visible_behavior: limitText(item.user_visible_behavior, RESEARCH_PROMPT_LIMITS.itemChars),
+            required_interactions: item.required_interactions.map((interaction) => limitText(interaction, RESEARCH_PROMPT_LIMITS.itemChars)),
+            evidence_ids: item.evidence_ids,
+          })),
+          visual_layout: brief.webpage_contract.visual_layout.slice(0, RESEARCH_PROMPT_LIMITS.webpageContractItems).map((item) => ({
+            id: item.id,
+            viewport: item.viewport,
+            region: limitText(item.region, RESEARCH_PROMPT_LIMITS.itemChars),
+            layout_contract: limitText(item.layout_contract, RESEARCH_PROMPT_LIMITS.itemChars),
+            spacing_and_alignment: limitText(item.spacing_and_alignment, RESEARCH_PROMPT_LIMITS.itemChars),
+            evidence_ids: item.evidence_ids,
+          })),
+          style_requirements: brief.webpage_contract.style_requirements.slice(0, RESEARCH_PROMPT_LIMITS.webpageContractItems).map((item) => ({
+            id: item.id,
+            token_or_selector: limitText(item.token_or_selector, RESEARCH_PROMPT_LIMITS.itemChars),
+            requirement: limitText(item.requirement, RESEARCH_PROMPT_LIMITS.itemChars),
+            evidence_ids: item.evidence_ids,
+          })),
+          interaction_states: brief.webpage_contract.interaction_states.slice(0, RESEARCH_PROMPT_LIMITS.webpageContractItems).map((item) => ({
+            id: item.id,
+            component: limitText(item.component, RESEARCH_PROMPT_LIMITS.itemChars),
+            state: limitText(item.state, RESEARCH_PROMPT_LIMITS.itemChars),
+            behavior: limitText(item.behavior, RESEARCH_PROMPT_LIMITS.itemChars),
+            evidence_ids: item.evidence_ids,
+          })),
+          data_content_inventory: brief.webpage_contract.data_content_inventory.slice(0, RESEARCH_PROMPT_LIMITS.webpageContractItems).map((item) => ({
+            id: item.id,
+            surface: limitText(item.surface, RESEARCH_PROMPT_LIMITS.itemChars),
+            content_contract: limitText(item.content_contract, RESEARCH_PROMPT_LIMITS.itemChars),
+            evidence_ids: item.evidence_ids,
+          })),
+          fidelity_acceptance: brief.webpage_contract.fidelity_acceptance.slice(0, RESEARCH_PROMPT_LIMITS.webpageContractItems).map((item) => ({
+            id: item.id,
+            target: limitText(item.target, RESEARCH_PROMPT_LIMITS.itemChars),
+            criterion: limitText(item.criterion, RESEARCH_PROMPT_LIMITS.itemChars),
+            evidence_ids: item.evidence_ids,
+          })),
+          fidelity_risks: brief.webpage_contract.fidelity_risks.slice(0, RESEARCH_PROMPT_LIMITS.webpageContractItems).map((item) => ({
+            id: item.id,
+            risk: limitText(item.risk, RESEARCH_PROMPT_LIMITS.itemChars),
+            impact: limitText(item.impact, RESEARCH_PROMPT_LIMITS.itemChars),
+            evidence_ids: item.evidence_ids,
+          })),
+        }
+      : undefined,
     open_questions: brief.open_questions.slice(0, RESEARCH_PROMPT_LIMITS.openQuestionItems).map((item) => ({
       id: item.id,
       blocking: item.blocking,

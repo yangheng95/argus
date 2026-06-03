@@ -35,6 +35,16 @@ Webpage PRD module workflow:
 - Order document_outline by the rendered page flow and responsive importance, not by raw HTML order.
 - Include modules for viewport matrix, global navigation, hero/breadcrumb, sticky navigation, every major visible content section, repeated tables/cards/lists, charts/maps, interactive states, mobile behavior, style tokens, data/content inventory, footer, and evidence/unknowns.
 - Each document_outline item must cite prepared webpage evidence ids whenever evidence is available.
+- When "Prepared Webpage PRD Evidence" exists, submit a `webpage_contract` in `submit_research_brief`. This is mandatory evidence structure, not a final PRD:
+  - `reference_image_evidence_ids`: evidence id(s) for the visual reference image/capture.
+  - `functional_surfaces`: every user-visible page surface and its required behavior, including navigation, tabs, maps/charts/tables/cards/lists, footer/header, and empty/loading/error/expanded states when evidence shows them.
+  - `visual_layout`: desktop/mobile/responsive region contracts in visible page order, including grid/column relationships, sticky regions, section order, and spacing/alignment evidence.
+  - `style_requirements`: source-backed colors, typography, radii, borders, shadows, density, asset usage, and required source selectors/tokens when available.
+  - `interaction_states`: clickable/hover/active/selected/expanded/scrolling states visible in evidence or interaction hints.
+  - `data_content_inventory`: tables, cards, map/chart data, repeated item schemas, labels, units, dates, badges, and copied asset/source requirements.
+  - `fidelity_acceptance`: screenshot/viewport/DOM acceptance checks downstream implementers must satisfy to be faithful to the original page.
+  - `fidelity_risks`: missing, clipped, dynamic, or runtime-dependent evidence that could break faithful implementation.
+- Do not claim a webpage research surface is faithful if you only have a material inventory. If prepared evidence lacks enough detail for a function, layout, or style, record that gap in `fidelity_risks` and/or blocking `open_questions`.
 
 Output contract:
 - Call submit_research_brief exactly once when finished.

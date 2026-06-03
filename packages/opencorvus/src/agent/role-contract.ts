@@ -153,7 +153,7 @@ export namespace AgentRoleContract {
     research: {
       id: "research",
       description:
-        "Research agent. Read-only advisory evidence gatherer for external facts, source maps, PRD/SPEC/report input material, webpage functional/visual analysis for document outlines, constraints, and open questions. It starts from supplied webpages, can use rendered webpage PRD evidence, can emit subpage_research_tasks, and never chooses routes or delivers final documents.",
+        "Research agent. Read-only advisory evidence gatherer for external facts, source maps, PRD/SPEC/report input material, and webpage functional/visual analysis. For rendered webpage PRD evidence it emits a source-backed webpage_contract covering functions, layout, styles, interactions, content inventory, fidelity acceptance, risks, plus document outlines, constraints, and open questions. It starts from supplied webpages, can emit subpage_research_tasks, and never chooses routes or delivers final documents.",
       promptEditable: true,
       defaultPromptRequired: true,
       promptConfigMode: "append",

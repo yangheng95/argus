@@ -12,6 +12,7 @@ export const RESEARCH_PROMPT_LIMITS = {
   needItems: 40,
   constraintItems: 40,
   documentOutlineItems: 80,
+  webpageContractItems: 80,
   openQuestionItems: 40,
 } as const
 export const RESEARCH_BUNDLE_LIMITS = {
@@ -79,6 +80,70 @@ export const ResearchDocumentSectionSchema = z.object({
 })
 export type ResearchDocumentSection = z.infer<typeof ResearchDocumentSectionSchema>
 
+const WebpageEvidenceBackedItemBase = z.object({
+  id: z.string().min(1),
+  evidence_ids: z.array(z.string().min(1)).min(1),
+})
+
+export const ResearchWebpageFunctionalSurfaceSchema = WebpageEvidenceBackedItemBase.extend({
+  title: z.string().min(1),
+  user_visible_behavior: z.string().min(1),
+  required_interactions: z.array(z.string().min(1)).default([]),
+})
+export type ResearchWebpageFunctionalSurface = z.infer<typeof ResearchWebpageFunctionalSurfaceSchema>
+
+export const ResearchWebpageVisualLayoutSchema = WebpageEvidenceBackedItemBase.extend({
+  viewport: z.enum(["desktop", "tablet", "mobile", "responsive"]),
+  region: z.string().min(1),
+  layout_contract: z.string().min(1),
+  spacing_and_alignment: z.string().min(1),
+})
+export type ResearchWebpageVisualLayout = z.infer<typeof ResearchWebpageVisualLayoutSchema>
+
+export const ResearchWebpageStyleRequirementSchema = WebpageEvidenceBackedItemBase.extend({
+  token_or_selector: z.string().min(1),
+  requirement: z.string().min(1),
+})
+export type ResearchWebpageStyleRequirement = z.infer<typeof ResearchWebpageStyleRequirementSchema>
+
+export const ResearchWebpageInteractionStateSchema = WebpageEvidenceBackedItemBase.extend({
+  component: z.string().min(1),
+  state: z.string().min(1),
+  behavior: z.string().min(1),
+})
+export type ResearchWebpageInteractionState = z.infer<typeof ResearchWebpageInteractionStateSchema>
+
+export const ResearchWebpageDataInventorySchema = WebpageEvidenceBackedItemBase.extend({
+  surface: z.string().min(1),
+  content_contract: z.string().min(1),
+})
+export type ResearchWebpageDataInventory = z.infer<typeof ResearchWebpageDataInventorySchema>
+
+export const ResearchWebpageAcceptanceCriterionSchema = WebpageEvidenceBackedItemBase.extend({
+  target: z.string().min(1),
+  criterion: z.string().min(1),
+})
+export type ResearchWebpageAcceptanceCriterion = z.infer<typeof ResearchWebpageAcceptanceCriterionSchema>
+
+export const ResearchWebpageFidelityRiskSchema = WebpageEvidenceBackedItemBase.extend({
+  risk: z.string().min(1),
+  impact: z.string().min(1),
+})
+export type ResearchWebpageFidelityRisk = z.infer<typeof ResearchWebpageFidelityRiskSchema>
+
+export const ResearchWebpageContractSchema = z.object({
+  source_url: z.string().min(1),
+  reference_image_evidence_ids: z.array(z.string().min(1)).min(1),
+  functional_surfaces: z.array(ResearchWebpageFunctionalSurfaceSchema).min(1),
+  visual_layout: z.array(ResearchWebpageVisualLayoutSchema).min(1),
+  style_requirements: z.array(ResearchWebpageStyleRequirementSchema).min(1),
+  interaction_states: z.array(ResearchWebpageInteractionStateSchema).default([]),
+  data_content_inventory: z.array(ResearchWebpageDataInventorySchema).min(1),
+  fidelity_acceptance: z.array(ResearchWebpageAcceptanceCriterionSchema).min(1),
+  fidelity_risks: z.array(ResearchWebpageFidelityRiskSchema).default([]),
+})
+export type ResearchWebpageContract = z.infer<typeof ResearchWebpageContractSchema>
+
 export const ResearchSubpageTaskSchema = z.object({
   id: z.string().min(1),
   parent_url: z.string().min(1),
@@ -128,6 +193,7 @@ export const ResearchBriefSchema = z.object({
   user_needs: z.array(ResearchUserNeedSchema),
   constraints: z.array(ResearchConstraintSchema),
   document_outline: z.array(ResearchDocumentSectionSchema),
+  webpage_contract: ResearchWebpageContractSchema.optional(),
   subpage_research_tasks: z.array(ResearchSubpageTaskSchema).default([]),
   open_questions: z.array(ResearchOpenQuestionSchema),
 })
@@ -172,6 +238,7 @@ export function validateResearchBriefSemantics(brief: ResearchBrief): string | u
     ensureUnique(brief.user_needs.map((item) => item.id), "user_need") ??
     ensureUnique(brief.constraints.map((item) => item.id), "constraint") ??
     ensureUnique(brief.document_outline.map((item) => item.id), "document_outline") ??
+    ensureWebpageContractUniqueIDs(brief.webpage_contract) ??
     ensureUnique(brief.subpage_research_tasks.map((item) => item.id), "subpage_research_task") ??
     ensureUnique(brief.open_questions.map((item) => item.id), "open_question")
   if (uniqueError) return uniqueError
@@ -200,12 +267,62 @@ export function validateResearchBriefSemantics(brief: ResearchBrief): string | u
     const err = ensureRefs(item.evidence_ids, evidenceIDs, `document_outline ${item.id}.evidence_ids`)
     if (err) return err
   }
+  const webpageContractError = ensureWebpageContractRefs(brief.webpage_contract, evidenceIDs)
+  if (webpageContractError) return webpageContractError
   for (const item of brief.subpage_research_tasks) {
     const err = ensureRefs(item.evidence_ids, evidenceIDs, `subpage_research_task ${item.id}.evidence_ids`)
     if (err) return err
   }
   for (const item of brief.open_questions) {
     const err = ensureRefs(item.related_fact_ids, factIDs, `open_question ${item.id}.related_fact_ids`)
+    if (err) return err
+  }
+  return undefined
+}
+
+function ensureWebpageContractUniqueIDs(contract: ResearchWebpageContract | undefined): string | undefined {
+  if (!contract) return undefined
+  return (
+    ensureUnique(contract.functional_surfaces.map((item) => item.id), "webpage_contract.functional_surface") ??
+    ensureUnique(contract.visual_layout.map((item) => item.id), "webpage_contract.visual_layout") ??
+    ensureUnique(contract.style_requirements.map((item) => item.id), "webpage_contract.style_requirement") ??
+    ensureUnique(contract.interaction_states.map((item) => item.id), "webpage_contract.interaction_state") ??
+    ensureUnique(contract.data_content_inventory.map((item) => item.id), "webpage_contract.data_content_inventory") ??
+    ensureUnique(contract.fidelity_acceptance.map((item) => item.id), "webpage_contract.fidelity_acceptance") ??
+    ensureUnique(contract.fidelity_risks.map((item) => item.id), "webpage_contract.fidelity_risk")
+  )
+}
+
+function ensureWebpageContractRefs(contract: ResearchWebpageContract | undefined, evidenceIDs: Set<string>): string | undefined {
+  if (!contract) return undefined
+  const referenceErr = ensureRefs(contract.reference_image_evidence_ids, evidenceIDs, "webpage_contract.reference_image_evidence_ids")
+  if (referenceErr) return referenceErr
+  for (const item of contract.functional_surfaces) {
+    const err = ensureRefs(item.evidence_ids, evidenceIDs, `webpage_contract.functional_surface ${item.id}.evidence_ids`)
+    if (err) return err
+  }
+  for (const item of contract.visual_layout) {
+    const err = ensureRefs(item.evidence_ids, evidenceIDs, `webpage_contract.visual_layout ${item.id}.evidence_ids`)
+    if (err) return err
+  }
+  for (const item of contract.style_requirements) {
+    const err = ensureRefs(item.evidence_ids, evidenceIDs, `webpage_contract.style_requirement ${item.id}.evidence_ids`)
+    if (err) return err
+  }
+  for (const item of contract.interaction_states) {
+    const err = ensureRefs(item.evidence_ids, evidenceIDs, `webpage_contract.interaction_state ${item.id}.evidence_ids`)
+    if (err) return err
+  }
+  for (const item of contract.data_content_inventory) {
+    const err = ensureRefs(item.evidence_ids, evidenceIDs, `webpage_contract.data_content_inventory ${item.id}.evidence_ids`)
+    if (err) return err
+  }
+  for (const item of contract.fidelity_acceptance) {
+    const err = ensureRefs(item.evidence_ids, evidenceIDs, `webpage_contract.fidelity_acceptance ${item.id}.evidence_ids`)
+    if (err) return err
+  }
+  for (const item of contract.fidelity_risks) {
+    const err = ensureRefs(item.evidence_ids, evidenceIDs, `webpage_contract.fidelity_risk ${item.id}.evidence_ids`)
     if (err) return err
   }
   return undefined
