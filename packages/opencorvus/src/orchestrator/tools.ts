@@ -2361,11 +2361,11 @@ export function createOrchestratorTools(input: {
 
     frontend_design: tool({
       description: [
-        "Analyze visual/webpage references (images, URLs, Figma, materials) to produce a mirror-grounded frontend template with fillable modules, component/material inventories, and visual/data contracts.",
-        "Call this BEFORE every other downstream agent when the task involves frontend/UI development AND:",
+        "Analyze visual/webpage references (images, URLs, Figma, materials) to produce a mirror-grounded frontend implementation template with fillable modules, component/material inventories, and visual/data contracts.",
+        "Call this BEFORE every other downstream agent when the requested deliverable is frontend/UI implementation, webpage/app replication, or visual parity work AND:",
         "  - Image attachments are provided (screenshots, mockups, design files)",
-        "  - The request mentions a URL to replicate or analyze",
-        "  - The request explicitly asks for layout/frontend design",
+        "  - The request mentions a URL as a visual reference to clone, implement, reproduce, or refine",
+        "  - The request explicitly asks for layout/frontend design as implementation input",
         "",
         "The frontend-design agent must follow assistant.auto_iteration: one bounded frontend template review pass when disabled, at least two review passes when enabled.",
         "The full frontend template plus visual_consistency_contract and iteration/completeness review is persisted",
@@ -2377,7 +2377,8 @@ export function createOrchestratorTools(input: {
         "SKIP this step when:",
         "  - No visual references are available",
         "  - The task is purely backend/API/infrastructure",
-        "  - The request already contains detailed design specifications AND has no URL, screenshot/image, Figma/design-file, webpage-replica, or other visual reference that needs mirror/web-clone-source evidence",
+        "  - The request asks to research/analyze a webpage as PRD/SPEC/report/source material rather than implement or clone the UI; route those URLs through `research` with `source_urls`",
+        "  - The request already contains detailed design specifications AND has no URL, screenshot/image, Figma/design-file, webpage-replica, or other visual reference that needs mirror/web-clone-source evidence for implementation",
       ].join("\n"),
       inputSchema: z.object({
         reason: z.string().describe("Why frontend design is needed for this task"),
@@ -4031,7 +4032,7 @@ export function createOrchestratorTools(input: {
 
     research: tool({
       description:
-        "OPTIONAL advisory evidence side-tool agent. Use when the task depends on external facts, current documentation, competitor/industry/API research, or PRD/SPEC source material that should become a durable citation bundle. Pass known source_urls so research can webfetch those pages before broader discovery. The result is a compact research_brief artifact plus bundle paths and may include subpage_research_tasks for independent follow-up research. It is NOT a workflow step, NOT a route selector, NOT requirements, NOT architect, NOT build, and NOT a delivery path.",
+        "OPTIONAL advisory evidence side-tool agent. Use when the task depends on external facts, current documentation, competitor/industry/API research, or PRD/SPEC/report source material that should become a durable citation bundle. For webpage PRD/SPEC/report tasks, including requests that need both functional and visual analysis of a supplied page, pass known source_urls and set target_deliverable so research owns the rendered webpage PRD evidence path instead of frontend_design. The result is a compact research_brief artifact plus bundle paths and may include subpage_research_tasks for independent follow-up research. It is NOT a workflow step, NOT a route selector, NOT requirements, NOT architect, NOT build, and NOT a delivery path.",
       inputSchema: z.object({
         reason: z.string().min(1).describe("Why evidence research is needed for this task."),
         target_deliverable: z
