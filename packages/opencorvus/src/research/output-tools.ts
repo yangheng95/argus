@@ -20,6 +20,8 @@ export const ResearchSubmitSchema = ResearchBriefSchema.omit({
   fact_check_items: FactCheckItemListSchema.default([]),
 })
 
+export const WEBPAGE_PRD_MIN_FULL_MARKDOWN_LINES = 1_000
+
 export type ResearchSubmit = z.infer<typeof ResearchSubmitSchema>
 
 export interface ResearchCollector {
@@ -41,6 +43,8 @@ export function buildResearchBriefFromDraft(input: {
   metadata: Omit<ResearchBrief["metadata"], "source_digest">
   bundlePaths: ResearchBrief["bundle"]
 }): ResearchBrief {
+  const bundleDepthError = validateResearchSubmitBundleDepth(input.draft)
+  if (bundleDepthError) throw new Error(`research brief failed bundle-depth validation: ${bundleDepthError}`)
   const brief = parseResearchBriefWithCanonicalDigest({
     ...input.draft,
     metadata: {
@@ -51,6 +55,22 @@ export function buildResearchBriefFromDraft(input: {
   const semanticError = validateResearchBriefSemantics(brief)
   if (semanticError) throw new Error(`research brief failed semantic validation: ${semanticError}`)
   return brief
+}
+
+function countSubstantiveMarkdownLines(markdown: string): number {
+  return markdown.split(/\r?\n/).filter((line) => line.trim().length > 0).length
+}
+
+function validateResearchSubmitBundleDepth(draft: Omit<ResearchSubmit, "fact_check_items">): string | undefined {
+  if (!draft.webpage_contract) return undefined
+  const substantiveLines = countSubstantiveMarkdownLines(draft.bundle.full_markdown)
+  if (substantiveLines < WEBPAGE_PRD_MIN_FULL_MARKDOWN_LINES) {
+    return (
+      `webpage PRD full_markdown must contain at least ${WEBPAGE_PRD_MIN_FULL_MARKDOWN_LINES} substantive lines ` +
+      `when webpage_contract is present; got ${substantiveLines}.`
+    )
+  }
+  return undefined
 }
 
 function parseResearchBriefWithCanonicalDigest(input: unknown): ResearchBrief {
@@ -127,6 +147,11 @@ export function createResearchOutputTools() {
           full_markdown_path: "semantic-validation/full.md",
           evidence_json_path: "semantic-validation/evidence.json",
           citation_map_path: "semantic-validation/citations.json",
+        }
+        const bundleDepthError = validateResearchSubmitBundleDepth(draft)
+        if (bundleDepthError) {
+          collector.semantic_error = bundleDepthError
+          return `Error: research brief failed bundle-depth validation: ${bundleDepthError}`
         }
         const brief = parseResearchBriefWithCanonicalDigest({
           ...draft,
