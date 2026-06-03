@@ -30,6 +30,7 @@ async function waitFor<T>(read: () => T | null | Promise<T | null>, label: strin
 
 test("workspace terminal command opens the selected system terminal profile", async () => {
   const openBodies: Record<string, unknown>[] = [];
+  const profileRequestDirectories: string[] = [];
 
   const server = Bun.serve({
     idleTimeout: 255,
@@ -62,8 +63,12 @@ test("workspace terminal command opens the selected system terminal profile", as
       if (path === "/config") return send({ model: "" });
       if (path === "/panel/knowledge/memory") return send([]);
       if (path === "/panel/knowledge/preference") return send([]);
-      if (path === "/coding/cli/profiles") return send({ profiles: [] });
+      if (path === "/coding/cli/profiles") {
+        profileRequestDirectories.push(url.searchParams.get("directory") || "");
+        return send({ profiles: [] });
+      }
       if (path === "/terminal/profiles") {
+        profileRequestDirectories.push(url.searchParams.get("directory") || "");
         return send({
           defaultProfileID: "default",
           profiles: [
@@ -123,6 +128,8 @@ test("workspace terminal command opens the selected system terminal profile", as
 
     expect(panelState.mountHidden).toBe(true);
     expect(panelState.terminalPresent).toBe(false);
+    expect(profileRequestDirectories.length).toBeGreaterThan(0);
+    expect(profileRequestDirectories.every((directory) => directory === "D:/overlay/workspace/app")).toBe(true);
   } finally {
     await browser.close();
     server.stop(true);

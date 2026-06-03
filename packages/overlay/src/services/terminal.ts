@@ -13,8 +13,10 @@ export interface TerminalProfileList {
   profiles: TerminalProfile[];
 }
 
-export async function listTerminalProfiles(): Promise<TerminalProfileList> {
-  return await apiJson("terminal/profiles");
+export async function listTerminalProfiles(directory: string): Promise<TerminalProfileList> {
+  const dir = directory.trim();
+  if (!dir) throw new Error("Workspace directory is required");
+  return await apiJson(`terminal/profiles?directory=${encodeURIComponent(dir)}`);
 }
 
 export async function openSystemTerminal(input: {

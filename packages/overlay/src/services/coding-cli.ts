@@ -12,8 +12,10 @@ export interface CodingCliProfileList {
   profiles: CodingCliProfile[];
 }
 
-export async function listCodingCliProfiles(): Promise<CodingCliProfileList> {
-  return await apiJson("coding/cli/profiles");
+export async function listCodingCliProfiles(directory: string): Promise<CodingCliProfileList> {
+  const dir = directory.trim();
+  if (!dir) throw new Error("Workspace directory is required");
+  return await apiJson(`coding/cli/profiles?directory=${encodeURIComponent(dir)}`);
 }
 
 export async function openCodingCli(input: {

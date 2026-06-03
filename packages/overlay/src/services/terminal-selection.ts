@@ -25,9 +25,10 @@ export function selectTerminalProfileID(profileID: string): void {
 }
 
 export async function reloadTerminalProfileSelection(input: {
+  directory: string;
   defaultProfileMissingMessage: string;
 }): Promise<void> {
-  const response = await listTerminalProfiles();
+  const response = await listTerminalProfiles(input.directory);
   if (!response.profiles.some((profile) => profile.id === response.defaultProfileID)) {
     throw new Error(input.defaultProfileMissingMessage);
   }
