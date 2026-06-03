@@ -37,6 +37,7 @@ function renderFrontendResearchOverlay(frontendResearch: string): string {
     "",
     "The section below is task-specific webpage functional/visual PRD evidence from frontend_research. Treat it as binding evidence for the surfaces it describes, mediated by the active REQ-N list and Architect Contract Graph; do not skip it and implement from screenshots or source files alone.",
     "Before editing UI code, read this PRD evidence by page chunk and preserve the named component kinds. If it describes a chart, map, heatmap, table/grid, tabs, menu, modal, form, carousel, or other mature component, implement that component/content contract with existing project primitives or a mature library; do not flatten it into SVG/image markup unless the evidence identifies it as static decoration.",
+    "Use PRD evidence as the primary source for about 70% of reconstruction decisions: global page shape, components, functions, content/data, states, and interactions. Use skeleton/source evidence as about 30% support for styles, geometry, CSS, assets, and pixel consistency; do not let skeleton output override the PRD component/content contract.",
     "",
     frontendResearch.trim(),
   ]
