@@ -1599,6 +1599,7 @@ export type Session = {
     | "build"
     | "explore"
     | "research"
+    | "frontend-research"
     | "evaluator"
     | "system"
   goalID?: string
@@ -3116,6 +3117,7 @@ export type GlobalSession = {
     | "build"
     | "explore"
     | "research"
+    | "frontend-research"
     | "evaluator"
     | "system"
   goalID?: string
@@ -3292,6 +3294,10 @@ export type McpStatusDisconnected = {
   status: "disconnected"
 }
 
+export type McpStatusConnecting = {
+  status: "connecting"
+}
+
 export type McpStatusFailed = {
   status: "failed"
   error: string
@@ -3310,6 +3316,7 @@ export type McpStatus =
   | McpStatusConnected
   | McpStatusDisabled
   | McpStatusDisconnected
+  | McpStatusConnecting
   | McpStatusFailed
   | McpStatusNeedsAuth
   | McpStatusNeedsClientRegistration
@@ -4699,6 +4706,7 @@ export type SessionCreateData = {
       | "build"
       | "explore"
       | "research"
+      | "frontend-research"
       | "evaluator"
       | "system"
     goalID?: string

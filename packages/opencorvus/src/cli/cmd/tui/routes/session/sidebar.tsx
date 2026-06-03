@@ -136,6 +136,7 @@ export function Sidebar(props: { sessionID: string; overlay?: boolean }) {
                                 failed: theme.error,
                                 disabled: theme.textMuted,
                                 disconnected: theme.textMuted,
+                                connecting: theme.info,
                                 needs_auth: theme.warning,
                                 needs_client_registration: theme.error,
                               } as Record<string, typeof theme.success>
@@ -152,6 +153,7 @@ export function Sidebar(props: { sessionID: string; overlay?: boolean }) {
                               <Match when={item.status === "failed" && item}>{(val) => <i>{val().error}</i>}</Match>
                               <Match when={item.status === "disabled"}>Disabled</Match>
                               <Match when={(item.status as string) === "disconnected"}>Disconnected</Match>
+                              <Match when={(item.status as string) === "connecting"}>Connecting</Match>
                               <Match when={(item.status as string) === "needs_auth"}>Needs auth</Match>
                               <Match when={(item.status as string) === "needs_client_registration"}>
                                 Needs client ID

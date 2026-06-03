@@ -15,7 +15,7 @@ const { Instance } = await import("../../src/project/instance")
 const { MCP } = await import("../../src/mcp")
 const { tmpdir } = await import("../fixture/fixture")
 
-test("MCP status does not start local transports", async () => {
+test("MCP status starts local transports asynchronously", async () => {
   await using tmp = await tmpdir({
     config: {
       mcp: {
@@ -23,6 +23,9 @@ test("MCP status does not start local transports", async () => {
           type: "local",
           command: ["broken-mcp-command"],
           timeout: 1,
+        },
+        browser: {
+          enabled: false,
         },
       },
     },
@@ -32,13 +35,13 @@ test("MCP status does not start local transports", async () => {
     directory: tmp.path,
     fn: async () => {
       const status = await MCP.status()
-      expect(status.broken).toEqual({ status: "disconnected" })
+      expect(status.broken).toEqual({ status: "connecting" })
       expect(stdioTransportConstructed).toBe(0)
 
       await expect(MCP.tools()).resolves.toEqual({})
       expect(stdioTransportConstructed).toBe(0)
 
-      await MCP.connect("broken")
+      await waitFor(() => stdioTransportConstructed === 1)
       expect(stdioTransportConstructed).toBe(1)
       expect((await MCP.status()).broken).toEqual({
         status: "failed",
@@ -47,3 +50,12 @@ test("MCP status does not start local transports", async () => {
     },
   })
 })
+
+async function waitFor(predicate: () => boolean) {
+  const deadline = Date.now() + 1_000
+  while (Date.now() < deadline) {
+    if (predicate()) return
+    await new Promise((resolve) => setTimeout(resolve, 10))
+  }
+  expect(predicate()).toBe(true)
+}

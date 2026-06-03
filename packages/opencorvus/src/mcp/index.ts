@@ -90,6 +90,13 @@ export namespace MCP {
         }),
       z
         .object({
+          status: z.literal("connecting"),
+        })
+        .meta({
+          ref: "MCPStatusConnecting",
+        }),
+      z
+        .object({
           status: z.literal("failed"),
           error: z.string(),
         })
@@ -185,6 +192,12 @@ export namespace MCP {
     return error instanceof Error ? error.message : String(error)
   }
 
+  type McpState = {
+    status: Record<string, Status>
+    clients: Record<string, MCPClient>
+    connecting: Record<string, Promise<void> | undefined>
+  }
+
   async function createSafely(key: string, mcp: Config.Mcp) {
     try {
       return await create(key, mcp)
@@ -211,6 +224,7 @@ export namespace MCP {
       const config = (cfg.mcp ?? {}) as NonNullable<Config.Info["mcp"]>
       const clients: Record<string, MCPClient> = {}
       const status: Record<string, Status> = {}
+      const connecting: Record<string, Promise<void> | undefined> = {}
 
       for (const [key, mcp] of entries(config)) {
         if (isMcpDisabledOverride(mcp)) {
@@ -224,10 +238,13 @@ export namespace MCP {
 
         status[key] = mcp.enabled === false ? { status: "disabled" } : { status: "disconnected" }
       }
-      return {
+      const snapshot = {
         status,
         clients,
+        connecting,
       }
+      scheduleConfiguredConnections(snapshot, config)
+      return snapshot
     },
     async (state) => {
       await Promise.all(
@@ -242,6 +259,40 @@ export namespace MCP {
       pendingOAuthTransports.clear()
     },
   )
+
+  function scheduleConfiguredConnections(state: McpState, config: NonNullable<Config.Info["mcp"]>) {
+    for (const [key, mcp] of entries(config)) {
+      if (!isMcpConfigured(mcp)) continue
+      if (mcp.enabled === false) continue
+      if (state.status[key]?.status !== "disconnected") continue
+      startConnection(state, key, mcp)
+    }
+  }
+
+  function startConnection(state: McpState, key: string, mcp: Config.Mcp) {
+    if (state.connecting[key]) return state.connecting[key]
+    state.status[key] = { status: "connecting" }
+
+    let connection!: Promise<void>
+    connection = new Promise<void>((resolve) => setTimeout(resolve, 0))
+      .then(async () => {
+        const result = await createSafely(key, mcp)
+        state.status[key] = result.status
+        const existingClient = state.clients[key]
+        if (existingClient && existingClient !== result.mcpClient) {
+          await existingClient.close().catch((error) => {
+            log.error("Failed to close existing MCP client", { name: key, error })
+          })
+        }
+        if (result.mcpClient) state.clients[key] = result.mcpClient
+        else delete state.clients[key]
+      })
+      .finally(() => {
+        if (state.connecting[key] === connection) delete state.connecting[key]
+      })
+    state.connecting[key] = connection
+    return connection
+  }
 
   // Helper function to fetch prompts for a specific client
   async function fetchPromptsForClient(clientName: string, client: Client) {
@@ -539,6 +590,7 @@ export namespace MCP {
       result[key] = s.status[key] ?? (mcp.enabled === false ? { status: "disabled" } : { status: "disconnected" })
     }
 
+    scheduleConfiguredConnections(s, config)
     return result
   }
 
@@ -561,20 +613,8 @@ export namespace MCP {
       return
     }
 
-    const result = await createSafely(name, { ...mcpToConnect, enabled: true })
-
     const s = await state()
-    s.status[name] = result.status
-    if (result.mcpClient) {
-      // Close existing client if present to prevent memory leaks
-      const existingClient = s.clients[name]
-      if (existingClient) {
-        await existingClient.close().catch((error) => {
-          log.error("Failed to close existing MCP client", { name, error })
-        })
-      }
-      s.clients[name] = result.mcpClient
-    }
+    await startConnection(s, name, { ...mcpToConnect, enabled: true })
   }
 
   export async function disconnect(name: string) {
