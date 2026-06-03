@@ -83,7 +83,7 @@ describe("research webpage PRD evidence", () => {
 
     await writeCompleteEvidence(paths.webpageEvidenceAbsolute, url, {})
     await prepareWebCloneContext({
-      mirrorDir: paths.webpageEvidenceAbsolute,
+      webpageEvidenceDir: paths.webpageEvidenceAbsolute,
       outputDir: paths.sourcePackageAbsolute,
     })
 
@@ -137,14 +137,14 @@ function fakePipeline(calls: string[], options: { longEvidenceSummary?: boolean 
 }
 
 async function writeCompleteEvidence(
-  mirrorDir: string,
+  webpageEvidenceDir: string,
   url: string,
   options: { longEvidenceSummary?: boolean },
 ): Promise<void> {
-  await fs.mkdir(mirrorDir, { recursive: true })
+  await fs.mkdir(webpageEvidenceDir, { recursive: true })
   for (const artifact of primaryWebpageEvidenceArtifacts()) {
     const relative = artifact.replace(/^webpage-evidence[\\/]/, "").replace(/^mirror[\\/]/, "")
-    const file = path.join(mirrorDir, relative)
+    const file = path.join(webpageEvidenceDir, relative)
     await fs.mkdir(path.dirname(file), { recursive: true })
     if (relative === "reference.png") {
       await fs.writeFile(file, minimalPngBytes())

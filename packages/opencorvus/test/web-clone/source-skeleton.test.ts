@@ -279,7 +279,7 @@ describe("web-clone source skeleton", () => {
 
   test("does not leak extracted style or script placeholder text into visible skeleton HTML", async () => {
     await using tmp = await tmpdir()
-    const mirrorDir = path.join(tmp.path, "mirror")
+    const webpageEvidenceDir = path.join(tmp.path, "mirror")
     const extraction = extractArchiveHtml({
       html: `<!doctype html><html><head>
         <style>.__WEB_CLONE_CSS_ASSET_0__ { color: red; }</style>
@@ -290,10 +290,10 @@ describe("web-clone source skeleton", () => {
       title: "Calendar",
       url: "https://example.test/calendar",
     })
-    await writeWebCloneArchiveExtraction(mirrorDir, extraction)
+    await writeWebCloneArchiveExtraction(webpageEvidenceDir, extraction)
     const handoff = buildWebCloneHandoff(extraction.pageIr, extraction.assetGraph)
     const result = await writeWebCloneSourceSkeleton({
-      outputDir: mirrorDir,
+      outputDir: webpageEvidenceDir,
       pageIr: extraction.pageIr,
       assetGraph: extraction.assetGraph,
       segments: handoff.segments,
@@ -310,7 +310,7 @@ describe("web-clone source skeleton", () => {
 
   test("omits hidden single-file duplicate nodes from visible skeleton HTML", async () => {
     await using tmp = await tmpdir()
-    const mirrorDir = path.join(tmp.path, "mirror")
+    const webpageEvidenceDir = path.join(tmp.path, "mirror")
     const extraction = extractArchiveHtml({
       html: `<!doctype html><html><head>
         <style>.visible { display: block; }</style>
@@ -323,10 +323,10 @@ describe("web-clone source skeleton", () => {
       title: "Markets",
       url: "https://example.test/markets",
     })
-    await writeWebCloneArchiveExtraction(mirrorDir, extraction)
+    await writeWebCloneArchiveExtraction(webpageEvidenceDir, extraction)
     const handoff = buildWebCloneHandoff(extraction.pageIr, extraction.assetGraph)
     const result = await writeWebCloneSourceSkeleton({
-      outputDir: mirrorDir,
+      outputDir: webpageEvidenceDir,
       pageIr: extraction.pageIr,
       assetGraph: extraction.assetGraph,
       segments: handoff.segments,
@@ -344,7 +344,7 @@ describe("web-clone source skeleton", () => {
 
   test("preserves SVG geometry sidecar references for downstream framework code", async () => {
     await using tmp = await tmpdir()
-    const mirrorDir = path.join(tmp.path, "mirror")
+    const webpageEvidenceDir = path.join(tmp.path, "mirror")
     const extraction = extractArchiveHtml({
       html: `<!doctype html><html><body>
         <main>
@@ -356,10 +356,10 @@ describe("web-clone source skeleton", () => {
       title: "Map",
       url: "https://example.test/map",
     })
-    await writeWebCloneArchiveExtraction(mirrorDir, extraction)
+    await writeWebCloneArchiveExtraction(webpageEvidenceDir, extraction)
     const handoff = buildWebCloneHandoff(extraction.pageIr, extraction.assetGraph)
     const result = await writeWebCloneSourceSkeleton({
-      outputDir: mirrorDir,
+      outputDir: webpageEvidenceDir,
       pageIr: extraction.pageIr,
       assetGraph: extraction.assetGraph,
       segments: handoff.segments,
@@ -430,8 +430,8 @@ async function writeMinimalSourceManifest(sourcePackageDir: string): Promise<voi
     version: 1,
     purpose: "web-clone-visible-source-package",
     provenance: {
-      source: "mirror",
-      mirrorDir: sourcePackageDir,
+      source: "webpage-evidence",
+      webpageEvidenceDir: sourcePackageDir,
       reference: { path: "reference.png", sha256: referenceSha256, width: 1, height: 1, bytes: minimalPngBytes().length },
     },
     files: [{ path: "reference.png", sha256: referenceSha256, bytes: minimalPngBytes().length, source: "mirror/reference.png" }],

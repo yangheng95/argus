@@ -87,6 +87,26 @@ describe("claude agent sdk options", () => {
     expect("env" in (servers?.opencorvus ?? {})).toBe(false)
   })
 
+  test("passes OpenCorvus runtime env to MCP server when execution context exists", async () => {
+    await collect(ClaudeAgentExecutor.createSdk().run({
+      prompt: "build",
+      cwd: "D:\\repo\\worktree",
+      taskID: "tsk_123",
+      logicalSessionID: "ses_123",
+      runtimeDir: "D:\\repo\\.opencorvus\\runtime",
+      worktreeDir: "D:\\repo\\.opencorvus\\worktrees\\w1",
+    }))
+
+    const options = calls[0]?.options as Record<string, unknown> | undefined
+    const servers = options?.mcpServers as Record<string, { env?: Record<string, string> }> | undefined
+    expect(servers?.opencorvus?.env).toEqual({
+      OPENCORVUS_TASK_ID: "tsk_123",
+      OPENCORVUS_SESSION_ID: "ses_123",
+      OPENCORVUS_RUNTIME_DIR: "D:\\repo\\.opencorvus\\runtime",
+      OPENCORVUS_WORKTREE_DIR: "D:\\repo\\.opencorvus\\worktrees\\w1",
+    })
+  })
+
   test("teaches Claude Code the MCP-prefixed OpenCorvus executor tool names", async () => {
     await collect(
       ClaudeAgentExecutor.createSdk().run({ prompt: "build", system: "base system", cwd: "D:\\repo\\worktree" }),
@@ -100,7 +120,7 @@ describe("claude agent sdk options", () => {
     expect(systemPrompt?.append).toContain("task_report => mcp__opencorvus__task_report")
     expect(systemPrompt?.append).not.toContain("webpage_extract => mcp__opencorvus__webpage_extract")
     expect(systemPrompt?.append).not.toContain("figma_extract => mcp__opencorvus__figma_extract")
-    expect(systemPrompt?.append).toContain("Mirror extraction artifacts are produced by the upstream frontend_design stage")
+    expect(systemPrompt?.append).toContain("Webpage evidence artifacts are produced by the upstream frontend_design stage")
   })
 
   test("omits options.resume on a fresh run so Claude starts a new session", async () => {

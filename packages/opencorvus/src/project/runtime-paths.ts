@@ -142,17 +142,13 @@ export namespace ProjectRuntimePaths {
   export function frontendDesignPaths(projectDir: string, taskID: string): {
     relativeDir: string
     webpageEvidenceRelative: string
-    legacyMirrorRelative: string
-    /** @deprecated Use webpageEvidenceRelative. Legacy name retained for old callers during mirror dissolution. */
-    mirrorRelative: string
+    legacyWebpageEvidenceRelative: string
     sourcePackageRelative: string
     skeletonProjectRelative: string
     templateRelative: string
     manifestRelative: string
     webpageEvidenceAbsolute: string
-    legacyMirrorAbsolute: string
-    /** @deprecated Use webpageEvidenceAbsolute. Legacy name retained for old callers during mirror dissolution. */
-    mirrorAbsolute: string
+    legacyWebpageEvidenceAbsolute: string
     sourcePackageAbsolute: string
     skeletonProjectAbsolute: string
     templateAbsolute: string
@@ -160,20 +156,18 @@ export namespace ProjectRuntimePaths {
   } {
     const webpageEvidenceRelative = taskRelative(taskID, "frontend-design", "webpage-evidence")
     const webpageEvidenceAbsolute = taskAbsolute(projectDir, taskID, "frontend-design", "webpage-evidence")
-    const legacyMirrorRelative = taskRelative(taskID, "frontend-design", "mirror")
-    const legacyMirrorAbsolute = taskAbsolute(projectDir, taskID, "frontend-design", "mirror")
+    const legacyWebpageEvidenceRelative = taskRelative(taskID, "frontend-design", "mirror")
+    const legacyWebpageEvidenceAbsolute = taskAbsolute(projectDir, taskID, "frontend-design", "mirror")
     return {
       relativeDir: taskRelative(taskID, "frontend-design"),
       webpageEvidenceRelative,
-      legacyMirrorRelative,
-      mirrorRelative: webpageEvidenceRelative,
+      legacyWebpageEvidenceRelative,
       sourcePackageRelative: taskRelative(taskID, "frontend-design", "web-clone-source"),
       skeletonProjectRelative: taskRelative(taskID, "frontend-design", "frontend-design-skeleton"),
       templateRelative: taskRelative(taskID, "frontend-design", "frontend-template.md"),
       manifestRelative: taskRelative(taskID, "frontend-design", "evidence-source-manifest.md"),
       webpageEvidenceAbsolute,
-      legacyMirrorAbsolute,
-      mirrorAbsolute: webpageEvidenceAbsolute,
+      legacyWebpageEvidenceAbsolute,
       sourcePackageAbsolute: taskAbsolute(projectDir, taskID, "frontend-design", "web-clone-source"),
       skeletonProjectAbsolute: taskAbsolute(projectDir, taskID, "frontend-design", "frontend-design-skeleton"),
       templateAbsolute: taskAbsolute(projectDir, taskID, "frontend-design", "frontend-template.md"),

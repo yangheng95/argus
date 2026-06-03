@@ -32,7 +32,7 @@ import { AgentRoleContract, type AgentRoleID } from "./role-contract"
 import { PermissionNext } from "@/permission/next"
 import { mergeDeep, pipe, sortBy, values } from "remeda"
 import { entries, values as objectValues } from "@/util/object"
-import { WEBPAGE_EVIDENCE_ANALYSIS_TOOL_IDS, WEBPAGE_EVIDENCE_TOOL_IDS } from "@/webpage-evidence/tools/ids"
+import { WEBPAGE_EVIDENCE_ANALYSIS_TOOL_IDS, WEBPAGE_EVIDENCE_TOOL_IDS } from "@/frontend-design/tools/ids"
 
 const ORCHESTRATOR_RUNTIME_PROMPT = [
   "You are the OpenCorvus Orchestrator.",
@@ -387,7 +387,7 @@ export namespace Agent {
         // Excluded:
         //   - filesystem / shell (bash, read, edit, write, glob, search_code,
         //     external_code_search, lsp, codesearch, list)
-        //   - mirror toolchain (webpage_extract / compile / compile_html /
+        //   - webpage evidence toolchain (webpage_extract / compile / compile_html /
         //     analyze / render / evaluate / text_diff) — these belong to build
         //   - network (webfetch, websearch) — same reason
         //   - sub-agent dispatch via the generic `task` tool — orchestrator uses
@@ -489,7 +489,7 @@ export namespace Agent {
         name: "frontend-design",
         description: AgentRoleContract.description("frontend-design"),
         prompt: FRONTEND_DESIGN_CORE,
-        // frontend-design is the only stage that owns mirror extraction.
+        // frontend-design is the only stage that owns webpage evidence extraction.
         // Requirements / architect / build consume the persisted frontend
         // template and optional visual anchors rather than calling webpage evidence tools themselves.
         // Webpage rawproject work makes frontend-design the owner of the

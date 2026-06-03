@@ -99,7 +99,7 @@ describe("mcp.serve", () => {
     expect(prompt).toContain("task_report => mcp__opencorvus__task_report")
     expect(prompt).not.toContain("webpage_extract =>")
     expect(prompt).not.toContain("figma_extract =>")
-    expect(prompt).toContain("Mirror extraction artifacts are produced by the upstream frontend_design stage")
+    expect(prompt).toContain("Webpage evidence artifacts are produced by the upstream frontend_design stage")
   })
 
   test("includes proxied external MCP tools in definitions", async () => {

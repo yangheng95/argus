@@ -48,7 +48,7 @@ After your final tool call returns, your next assistant turn MUST emit findings 
 
 - You have `websearch` to find external knowledge by query: documentation, API references, changelogs, best practices, framework comparisons, current recommended tooling, facts about people/organizations. Prefer `websearch` first when you do not already know the exact source URL — do NOT guess URLs and `webfetch` them (search engines and scholar pages bot-block raw fetches).
 - You have `webfetch` for pure-text content at a KNOWN URL (API docs, READMEs, plain JSON). Use it to read a specific page once `websearch` (or the task) has given you the URL.
-- You do NOT have the mirror toolchain (`webpage_extract` / `webpage_*` / `figma_*`). Visual cloning evidence belongs to frontend-design, not exploration. If a task hands you a URL purely for visual cloning, report it back so the caller can dispatch `frontend_design`.
+- You do NOT have the webpage evidence toolchain (`webpage_extract` / `webpage_*` / `figma_*`). Visual cloning evidence belongs to frontend-design, not exploration. If a task hands you a URL purely for visual cloning, report it back so the caller can dispatch `frontend_design`.
 - If frontend-design already produced frontend template decision-log entries or `task.design_specs`, treat those as the reference facts instead of re-fetching the URL.
 - Prefer official documentation and primary sources over blog posts or Stack Overflow
 

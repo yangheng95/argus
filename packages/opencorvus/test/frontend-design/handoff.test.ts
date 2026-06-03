@@ -65,7 +65,7 @@ test("frontend-design handoff points to source files and keeps excerpts bounded"
         phase: "frontend_design",
         key: "visual_consistency_contract",
         value: longSpec,
-        reason: "mirror-derived visual contract",
+        reason: "webpage-evidence-derived visual contract",
       })
       log.append({
         phase: "frontend_design",
@@ -88,7 +88,7 @@ test("frontend-design handoff points to source files and keeps excerpts bounded"
       log.append({
         phase: "frontend_design",
         key: "evidence_source_manifest",
-        value: "webpage-evidence/reference.png\nwebpage-evidence/page-ir.xml",
+        value: "webpage-evidence/reference.png\nwebpage-evidence/page.ir.json",
         reason: "source manifest",
       })
 

@@ -1,8 +1,8 @@
 import fs from "node:fs/promises"
 import path from "node:path"
 
-import { WebpageAnalyzeTool, WebpageCompileTool, WebpageExtractTool } from "@/webpage-evidence/tools"
-import { captureWebpageRuntimeStateEvidence } from "@/webpage-evidence/url/runtime-state"
+import { WebpageAnalyzeTool, WebpageCompileTool, WebpageExtractTool } from "@/frontend-design/tools"
+import { captureWebpageRuntimeStateEvidence } from "@/browser/webpage/runtime-state"
 import { ProjectRuntimePaths } from "@/project/runtime-paths"
 import { TaskRuntimeMaterializer } from "@/project/task-runtime-materializer"
 import type { Tool } from "@/tool/tool"
@@ -33,10 +33,8 @@ const PRIMARY_WEBPAGE_EVIDENCE_FILES = [
   "assets/manifest.json",
   "segments.json",
   "codegen-context.json",
-  "shared-context.md",
   "prd-evidence-summary.md",
   "visual-surface-candidates.json",
-  "visual-surface-scaffold.json",
   "source-skeleton/index.html",
   "source-skeleton/critical.css",
   "source-skeleton/full-source.css",
@@ -72,7 +70,6 @@ const PRIMARY_WEBPAGE_SOURCE_PACKAGE_FILES = [
   "web-clone-source-manifest.json",
   "reference.png",
   "visual-surface-candidates.json",
-  "visual-surface-scaffold.json",
   "assets/manifest.json",
   "source-skeleton/index.html",
   "source-skeleton/critical.css",
@@ -119,7 +116,7 @@ export async function ensureLiveWebpageEvidence(input: {
 
   const paths = ProjectRuntimePaths.frontendDesignPaths(input.projectDir, input.taskID)
   const evidenceDir = paths.webpageEvidenceAbsolute
-  await promoteLegacyMirrorEvidence({ canonicalDir: evidenceDir, legacyDir: paths.legacyMirrorAbsolute, url })
+  await promoteLegacyWebpageEvidence({ canonicalDir: evidenceDir, legacyDir: paths.legacyWebpageEvidenceAbsolute, url })
 
   if (await hasCompletePrimaryEvidence(evidenceDir, url)) {
     await ensureVisibleSourcePackage(input.projectDir, input.worktreeDir, input.taskID)
@@ -152,7 +149,7 @@ export async function ensureLiveWebpageEvidence(input: {
 async function ensureVisibleSourcePackage(projectDir: string, worktreeDir: string, taskID: string): Promise<void> {
   const paths = ProjectRuntimePaths.frontendDesignPaths(projectDir, taskID)
   await prepareWebCloneContext({
-    mirrorDir: paths.webpageEvidenceAbsolute,
+    webpageEvidenceDir: paths.webpageEvidenceAbsolute,
     outputDir: paths.sourcePackageAbsolute,
   })
   if (!(await hasCompleteSourcePackage(paths.sourcePackageAbsolute))) {
@@ -161,7 +158,7 @@ async function ensureVisibleSourcePackage(projectDir: string, worktreeDir: strin
   await TaskRuntimeMaterializer.materializeFrontendDesign({ projectDir, taskID, worktreeDir })
 }
 
-async function promoteLegacyMirrorEvidence(input: {
+async function promoteLegacyWebpageEvidence(input: {
   canonicalDir: string
   legacyDir: string
   url: string
@@ -172,14 +169,14 @@ async function promoteLegacyMirrorEvidence(input: {
   await fs.cp(input.legacyDir, input.canonicalDir, { recursive: true, force: true })
 }
 
-export async function hasCompletePrimaryEvidence(mirrorDir: string, url?: string): Promise<boolean> {
-  if (!(await hasValidPngFile(path.join(mirrorDir, "reference.png")))) return false
+export async function hasCompletePrimaryEvidence(webpageEvidenceDir: string, url?: string): Promise<boolean> {
+  if (!(await hasValidPngFile(path.join(webpageEvidenceDir, "reference.png")))) return false
   for (const relative of PRIMARY_WEBPAGE_EVIDENCE_FILES) {
     if (relative === "reference.png") continue
-    if (!(await hasNonEmptyFile(path.join(mirrorDir, relative)))) return false
+    if (!(await hasNonEmptyFile(path.join(webpageEvidenceDir, relative)))) return false
   }
   if (!url) return true
-  const extractedUrl = await readExtractedPageUrl(path.join(mirrorDir, "extracted-page.json"))
+  const extractedUrl = await readExtractedPageUrl(path.join(webpageEvidenceDir, "extracted-page.json"))
   return normalizeUrlForEvidence(extractedUrl) === normalizeUrlForEvidence(url)
 }
 

@@ -30,7 +30,7 @@ export const WEB_CLONE_SOURCE_PACKAGE_FORBIDDEN_ARTIFACTS = [
   "tests/visual",
 ] as const
 
-export const WEB_CLONE_REQUIRED_MIRROR_ARTIFACTS = [
+export const WEB_CLONE_REQUIRED_WEBPAGE_EVIDENCE_ARTIFACTS = [
   "reference.png",
   "capture.html",
   "extracted-page.json",
@@ -114,9 +114,9 @@ export async function inspectWebCloneSourceManifest(sourcePackageDir: string): P
     findings.push("web-clone-source-manifest.json purpose must be web-clone-visible-source-package.")
   }
   const provenance = asRecord(manifest.provenance)
-  if (provenance.source !== "mirror") findings.push("web-clone-source-manifest.json provenance.source must be mirror.")
-  if (typeof provenance.mirrorDir !== "string" || provenance.mirrorDir.length === 0) {
-    findings.push("web-clone-source-manifest.json provenance.mirrorDir is required.")
+  if (provenance.source !== "webpage-evidence") findings.push("web-clone-source-manifest.json provenance.source must be webpage-evidence.")
+  if (typeof provenance.webpageEvidenceDir !== "string" || provenance.webpageEvidenceDir.length === 0) {
+    findings.push("web-clone-source-manifest.json provenance.webpageEvidenceDir is required.")
   }
 
   const referenceEvidence = await readPngEvidence(path.join(sourcePackageDir, "reference.png"))
@@ -191,10 +191,10 @@ export async function listExistingWebCloneSourcePackageContamination(sourcePacka
   return findings
 }
 
-export async function listMissingMirrorArtifacts(mirrorDir: string): Promise<string[]> {
+export async function listMissingWebpageEvidenceArtifacts(webpageEvidenceDir: string): Promise<string[]> {
   const missing: string[] = []
-  for (const relative of WEB_CLONE_REQUIRED_MIRROR_ARTIFACTS) {
-    if (!await hasNonEmptyFile(path.join(mirrorDir, relative))) missing.push(relative)
+  for (const relative of WEB_CLONE_REQUIRED_WEBPAGE_EVIDENCE_ARTIFACTS) {
+    if (!await hasNonEmptyFile(path.join(webpageEvidenceDir, relative))) missing.push(relative)
   }
   return missing
 }

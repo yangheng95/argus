@@ -525,12 +525,8 @@ export namespace BuildAgent {
 
       // Stage authoritative visual/reference attachments into `<worktree>/references/`
       // so the build agent can pass worktree-LOCAL relative paths to tools
-      // whose sandbox checks reject paths outside the worktree (notably
-      // `webpage_image_extract`'s `loadImage` sandbox check). Without this,
-      // the agent had to discover the attachments dir via glob/ls and copy
-      // each file by hand before each tool call — three retries observed
-      // during the first claude-sonnet bench run before Sonnet figured out
-      // the dance. The staging contract is owned by AttachmentStore (rule 22
+      // whose sandbox checks reject paths outside the worktree. The staging
+      // contract is owned by AttachmentStore (rule 22
       // — single source for "where staged attachments live"); this build
       // agent path just invokes it. Caller-owned worktrees (input.workDir)
       // skip — the caller is responsible for staging in that path.

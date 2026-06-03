@@ -52,7 +52,7 @@ export function createFrontendSkeletonProjectTool(options: {
         let result: Awaited<ReturnType<typeof generateWebCloneSourceProject>>
         try {
           result = await generateWebCloneSourceProject({
-            mirrorDir: sourcePackageDir,
+            webpageEvidenceDir: sourcePackageDir,
             outputDir,
             packageName: params.packageName,
             overwrite: params.overwrite === true,
@@ -69,7 +69,7 @@ export function createFrontendSkeletonProjectTool(options: {
           name: "create_frontend_skeleton_project",
           status: "passed",
           details: {
-            sourcePackageDir: result.mirrorDir,
+            sourcePackageDir: result.webpageEvidenceDir,
             outputDir: result.outputDir,
             files: result.files.length,
             stats: result.stats,
@@ -80,7 +80,7 @@ export function createFrontendSkeletonProjectTool(options: {
           output: [
             "# Frontend source skeleton project created",
             "",
-            `- Source package: ${result.mirrorDir}`,
+            `- Source package: ${result.webpageEvidenceDir}`,
             `- Output: ${result.outputDir}`,
             `- Files: ${result.files.length}`,
             `- Text signals: ${result.stats.textSignalCount}`,

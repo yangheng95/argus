@@ -10,11 +10,6 @@ export namespace TaskRuntimeMaterializer {
     return paths.webpageEvidenceAbsolute
   }
 
-  /** @deprecated Use webpageEvidenceDir. */
-  export async function mirrorDir(projectDir: string, taskID: string): Promise<string> {
-    return webpageEvidenceDir(projectDir, taskID)
-  }
-
   export async function materializeFrontendDesign(input: {
     projectDir: string
     taskID: string

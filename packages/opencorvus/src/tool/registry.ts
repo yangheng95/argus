@@ -42,15 +42,12 @@ import {
   WebpageCompileTool,
   WebpageAnalyzeTool,
   WebpageRuntimeStateTool,
-  WebpageImageExtractTool,
-  WebpageImageCompileTool,
-  WebpageImageAnalyzeTool,
   WebpageRenderTool,
   WebpageEvaluateTool,
   WebpageTextDiffTool,
   WebpageVisionJudgeTool,
-} from "@/webpage-evidence/tools"
-import { isWebpageEvidenceAnalysisToolId, isWebpageEvidenceToolId } from "@/webpage-evidence/tools/ids"
+} from "@/frontend-design/tools"
+import { isWebpageEvidenceAnalysisToolId, isWebpageEvidenceToolId } from "@/frontend-design/tools/ids"
 import { Glob } from "../util/glob"
 import { pathToFileURL } from "url"
 
@@ -158,9 +155,6 @@ export namespace ToolRegistry {
       WebpageCompileTool,
       WebpageAnalyzeTool,
       WebpageRuntimeStateTool,
-      WebpageImageExtractTool,
-      WebpageImageCompileTool,
-      WebpageImageAnalyzeTool,
       WebpageRenderTool,
       WebpageEvaluateTool,
       WebpageTextDiffTool,

@@ -279,6 +279,11 @@ Output: Creates directory 'foo'"
         },
         "type": "array",
       },
+      "followup_workload_guidance": {
+        "description": "Explicit warning for subsequent agents about hidden or remaining work surface, evidence they must read deeper, and whether goal workload analysis or Architect re-sizing should be revisited.",
+        "minLength": 1,
+        "type": "string",
+      },
       "implementation_approach": {
         "description": "The actual implementation plan: what scheme you used, core structure, key APIs, and data flow. Must describe the approach concretely so an evaluator can cross-check the diff against it.",
         "minLength": 40,
@@ -738,7 +743,7 @@ Output: Creates directory 'foo'"
                 },
                 "type": "object",
               },
-              "puppeteer": {
+              "playwright": {
                 "additionalProperties": false,
                 "properties": {
                   "browser": {
@@ -1413,7 +1418,7 @@ Output: Creates directory 'foo'"
                 },
                 "type": "object",
               },
-              "puppeteer": {
+              "playwright": {
                 "additionalProperties": false,
                 "properties": {
                   "browser": {

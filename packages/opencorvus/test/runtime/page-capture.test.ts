@@ -37,7 +37,7 @@ describe("runtime page capture", () => {
     const source = await fs.readFile(path.resolve(import.meta.dir, "../../src/build/screenshot-tool.ts"), "utf8")
 
     expect(source).toContain("captureRuntimePage")
-    expect(source).not.toContain("puppeteer.launch")
+    expect(source).not.toContain("Playwright.launch")
     expect(source).not.toContain("networkidle0")
   })
 })

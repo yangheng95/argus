@@ -46,14 +46,11 @@ import {
   WebpageCompileTool,
   WebpageEvaluateTool,
   WebpageExtractTool,
-  WebpageImageAnalyzeTool,
-  WebpageImageCompileTool,
-  WebpageImageExtractTool,
   WebpageRenderTool,
   WebpageRuntimeStateTool,
   WebpageTextDiffTool,
   WebpageVisionJudgeTool,
-} from "@/webpage-evidence/tools"
+} from "@/frontend-design/tools"
 import type { VisualSpec } from "./types"
 import { createFrontendTemplateOutputTools, type FrontendTemplateFinal, type FrontendTemplateOutputCollector } from "./output-tools"
 import { createReadAttachmentTool } from "./read-attachment-tool"
@@ -935,9 +932,6 @@ async function createWebpageEvidenceTools(input: { taskID?: string; signal?: Abo
     webpage_compile: await createFrontendTool(WebpageCompileTool, input, trace),
     webpage_analyze: await createFrontendTool(WebpageAnalyzeTool, input, trace),
     webpage_runtime_state: await createFrontendTool(WebpageRuntimeStateTool, input, trace),
-    webpage_image_extract: await createFrontendTool(WebpageImageExtractTool, input, trace),
-    webpage_image_compile: await createFrontendTool(WebpageImageCompileTool, input, trace),
-    webpage_image_analyze: await createFrontendTool(WebpageImageAnalyzeTool, input, trace),
   }
   return selectFrontendStaticTools(tools, FRONTEND_DESIGN_WEBPAGE_EVIDENCE_TOOL_IDS, "frontend-design webpage evidence")
 }

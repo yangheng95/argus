@@ -124,7 +124,7 @@ describe("BuildResultSchema", () => {
     const parsed = BuildResultSchema.safeParse({
       status: "passed",
       summary: "functional tests passed but visual score is below threshold",
-      files_changed: [{ path: "mirror/eval-result.json", summary: "Recorded visual score", reason: "Visual evidence" }],
+      files_changed: [{ path: "webpage-evidence/eval-result.json", summary: "Recorded visual score", reason: "Visual evidence" }],
       error: "Visual score 84/100 is below the 85 threshold",
     })
     expect(parsed.success).toBe(false)

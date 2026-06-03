@@ -4,7 +4,7 @@ import { createHash } from "node:crypto"
 import { parseDocument } from "htmlparser2"
 
 export interface GenerateWebCloneSourceProjectInput {
-  mirrorDir: string
+  webpageEvidenceDir: string
   outputDir: string
   framework?: "react"
   packageName?: string
@@ -13,7 +13,7 @@ export interface GenerateWebCloneSourceProjectInput {
 
 export interface GenerateWebCloneSourceProjectOutput {
   framework: "react"
-  mirrorDir: string
+  webpageEvidenceDir: string
   outputDir: string
   visualIterationMatrix: string
   files: string[]
@@ -993,40 +993,40 @@ export async function generateWebCloneSourceProject(
   const framework = input.framework ?? "react"
   if (framework !== "react") throw new Error(`Unsupported web clone source framework: ${framework}`)
 
-  const mirrorDir = path.resolve(input.mirrorDir)
+  const webpageEvidenceDir = path.resolve(input.webpageEvidenceDir)
   const outputDir = path.resolve(input.outputDir)
-  await assertMirrorInputs(mirrorDir)
+  await assertWebpageEvidenceInputs(webpageEvidenceDir)
   await prepareOutputDir(outputDir, input.overwrite === true)
 
   const [sourceSkeleton, rawCriticalCss, rawFullSourceCss, contentModel, componentTree, assetManifest, pageIr] = await Promise.all([
-    readText(path.join(mirrorDir, "source-skeleton", "index.html")),
-    readOptionalText(path.join(mirrorDir, "source-skeleton", "critical.css")),
-    readOptionalText(path.join(mirrorDir, "source-skeleton", "full-source.css")),
-    readJsonOptional(path.join(mirrorDir, "source-ir", "content-model.json")),
-    readJsonOptional(path.join(mirrorDir, "source-ir", "component-tree.json")),
-    readJsonOptional(path.join(mirrorDir, "assets", "manifest.json")),
-    readJsonOptional(path.join(mirrorDir, "page.ir.json")),
+    readText(path.join(webpageEvidenceDir, "source-skeleton", "index.html")),
+    readOptionalText(path.join(webpageEvidenceDir, "source-skeleton", "critical.css")),
+    readOptionalText(path.join(webpageEvidenceDir, "source-skeleton", "full-source.css")),
+    readJsonOptional(path.join(webpageEvidenceDir, "source-ir", "content-model.json")),
+    readJsonOptional(path.join(webpageEvidenceDir, "source-ir", "component-tree.json")),
+    readJsonOptional(path.join(webpageEvidenceDir, "assets", "manifest.json")),
+    readJsonOptional(path.join(webpageEvidenceDir, "page.ir.json")),
   ])
   const extractedAssets = new Map<string, ExtractedPublicAsset>()
   const criticalCss = sanitizeCssSidecar(rawCriticalCss, extractedAssets)
   const fullSourceCss = sanitizeCssSidecar(rawFullSourceCss, extractedAssets)
   const projectData = buildSourceProjectData({ sourceSkeleton, contentModel, componentTree, assetManifest })
-  const previewImagePaths = await readPreviewImagePaths(mirrorDir)
+  const previewImagePaths = await readPreviewImagePaths(webpageEvidenceDir)
   const nodeStyleFallbacks = extractNodeStyleFallbacks(pageIr)
   const nodeBoundsById = extractNodeBounds(pageIr)
   const irChildrenByNodeId = extractIrChildrenByNodeId(pageIr)
   const documentContext = extractDocumentContext(pageIr)
-  const svgPaths = await readSvgPathData(mirrorDir)
+  const svgPaths = await readSvgPathData(webpageEvidenceDir)
   const sourceDomProject = renderSourceDomProject(sourceSkeleton, previewImagePaths, nodeStyleFallbacks, nodeBoundsById, irChildrenByNodeId, projectData.sourceComponentPatterns)
   const replacementPlan = buildSourceDomReplacementPlan(sourceDomProject.regionMetrics, projectData)
-  const visualIteration = await buildSourceProjectVisualIteration(mirrorDir)
+  const visualIteration = await buildSourceProjectVisualIteration(webpageEvidenceDir)
 
   const packageName = normalizePackageName(input.packageName ?? `web-clone-${path.basename(outputDir)}`)
   const files = new Map<string, string>()
   files.set("package.json", renderPackageJson(packageName))
   files.set("tsconfig.json", renderTsconfigJson())
   files.set("index.html", renderIndexHtml(documentContext))
-  files.set("README.md", renderReadme(mirrorDir, visualIteration))
+  files.set("README.md", renderReadme(webpageEvidenceDir, visualIteration))
   files.set("vite.config.ts", renderViteConfigTs())
   files.set("src/vite-env.d.ts", renderViteEnvDts())
   files.set("src/main.tsx", renderMainTsx())
@@ -1057,12 +1057,12 @@ export async function generateWebCloneSourceProject(
   for (const [relativePath, content] of files) {
     await writeFile(path.join(outputDir, relativePath), content)
   }
-  await copyPublicAssets(mirrorDir, outputDir, extractedAssets)
-  const copiedReference = await copyReferenceImage(mirrorDir, outputDir)
+  await copyPublicAssets(webpageEvidenceDir, outputDir, extractedAssets)
+  const copiedReference = await copyReferenceImage(webpageEvidenceDir, outputDir)
   await writeJson(path.join(outputDir, "src/data/sourceProjectManifest.json"), {
     version: 1,
     purpose: "web-clone-source-project",
-    mirrorDir,
+    webpageEvidenceDir,
     generatedFrom: [
       "source-skeleton/index.html",
       "source-skeleton/critical.css",
@@ -1106,7 +1106,7 @@ export async function generateWebCloneSourceProject(
 
   return {
     framework,
-    mirrorDir,
+    webpageEvidenceDir,
     outputDir,
     visualIterationMatrix: renderSourceProjectVisualIterationMatrix(visualIteration.viewportMatrix),
     files: writtenFiles.map((file) => path.join(outputDir, file)),
@@ -6913,7 +6913,7 @@ function renderStylesCss(input: { hasCriticalCss: boolean; hasFullCss: boolean }
   ].filter(Boolean).join("\n")
 }
 
-function renderReadme(mirrorDir: string, visualIteration: SourceProjectVisualIteration): string {
+function renderReadme(webpageEvidenceDir: string, visualIteration: SourceProjectVisualIteration): string {
   return [
     "# Web Clone Source Project",
     "",
@@ -6942,7 +6942,7 @@ function renderReadme(mirrorDir: string, visualIteration: SourceProjectVisualIte
     "- Use `reference.png` only as visual validation evidence. Do not render it, replay screenshots, or add hidden semantic coverage layers.",
     "- Use `web_clone_source_audit` and overlay/visual comparison as diagnostics; fix the implementation when their findings describe a real user-visible or maintainability defect.",
     "",
-    `Mirror source: ${mirrorDir}`,
+    `Webpage evidence source: ${webpageEvidenceDir}`,
     "",
   ].join("\n")
 }
@@ -7038,17 +7038,17 @@ function decodeEntities(value: string): string {
     .replace(/&#39;/g, "'")
 }
 
-async function assertMirrorInputs(mirrorDir: string): Promise<void> {
+async function assertWebpageEvidenceInputs(webpageEvidenceDir: string): Promise<void> {
   const required = [
-    path.join(mirrorDir, "source-skeleton", "index.html"),
-    path.join(mirrorDir, "source-ir", "content-model.json"),
-    path.join(mirrorDir, "source-ir", "component-tree.json"),
+    path.join(webpageEvidenceDir, "source-skeleton", "index.html"),
+    path.join(webpageEvidenceDir, "source-ir", "content-model.json"),
+    path.join(webpageEvidenceDir, "source-ir", "component-tree.json"),
   ]
   const missing: string[] = []
   for (const file of required) {
     if (!await exists(file)) missing.push(file)
   }
-  if (missing.length > 0) throw new Error(`Mirror source-project inputs are missing: ${missing.join(", ")}`)
+  if (missing.length > 0) throw new Error(`Webpage evidence source-project inputs are missing: ${missing.join(", ")}`)
 }
 
 async function prepareOutputDir(outputDir: string, overwrite: boolean): Promise<void> {
@@ -7063,12 +7063,12 @@ async function prepareOutputDir(outputDir: string, overwrite: boolean): Promise<
 }
 
 async function copyPublicAssets(
-  mirrorDir: string,
+  webpageEvidenceDir: string,
   outputDir: string,
   extractedAssets: Map<string, ExtractedPublicAsset>,
 ): Promise<void> {
-  const sourceSvgDir = path.join(mirrorDir, "assets", "svg")
-  const sourceImagesDir = path.join(mirrorDir, "assets", "images")
+  const sourceSvgDir = path.join(webpageEvidenceDir, "assets", "svg")
+  const sourceImagesDir = path.join(webpageEvidenceDir, "assets", "images")
   const targetAssetsDir = path.join(outputDir, "public", "assets")
   const targetSvgDir = path.join(targetAssetsDir, "svg")
   await fs.rm(targetAssetsDir, { recursive: true, force: true })
@@ -7084,8 +7084,8 @@ async function copyPublicAssets(
   }
 }
 
-async function copyReferenceImage(mirrorDir: string, outputDir: string): Promise<boolean> {
-  const source = path.join(mirrorDir, "reference.png")
+async function copyReferenceImage(webpageEvidenceDir: string, outputDir: string): Promise<boolean> {
+  const source = path.join(webpageEvidenceDir, "reference.png")
   if (!await exists(source)) return false
   await fs.copyFile(source, path.join(outputDir, "reference.png"))
   return true
@@ -7105,8 +7105,8 @@ async function copyDecodedImageAssets(sourceDir: string, targetDir: string): Pro
   }
 }
 
-async function readPreviewImagePaths(mirrorDir: string): Promise<string[]> {
-  const imagesDir = path.join(mirrorDir, "assets", "images")
+async function readPreviewImagePaths(webpageEvidenceDir: string): Promise<string[]> {
+  const imagesDir = path.join(webpageEvidenceDir, "assets", "images")
   if (!await exists(imagesDir)) return []
   const entries = await fs.readdir(imagesDir, { withFileTypes: true })
   return entries
@@ -7117,8 +7117,8 @@ async function readPreviewImagePaths(mirrorDir: string): Promise<string[]> {
     .map((name) => `/assets/images/${name}`)
 }
 
-async function readSvgPathData(mirrorDir: string): Promise<Record<string, string>> {
-  const svgDir = path.join(mirrorDir, "assets", "svg")
+async function readSvgPathData(webpageEvidenceDir: string): Promise<Record<string, string>> {
+  const svgDir = path.join(webpageEvidenceDir, "assets", "svg")
   if (!await exists(svgDir)) return {}
   const entries = await fs.readdir(svgDir, { withFileTypes: true })
   const result: Record<string, string> = {}
@@ -7160,11 +7160,11 @@ async function readJsonOptional(filePath: string): Promise<unknown> {
   }
 }
 
-async function buildSourceProjectVisualIteration(mirrorDir: string): Promise<SourceProjectVisualIteration> {
-  const manifest = asRecord(await readJsonOptional(path.join(mirrorDir, "web-clone-source-manifest.json")))
+async function buildSourceProjectVisualIteration(webpageEvidenceDir: string): Promise<SourceProjectVisualIteration> {
+  const manifest = asRecord(await readJsonOptional(path.join(webpageEvidenceDir, "web-clone-source-manifest.json")))
   const provenance = asRecord(manifest.provenance)
   const manifestViewport = readVisualViewport(asRecord(provenance.captureViewport))
-  const extractedViewport = await readExtractedPageViewport(mirrorDir)
+  const extractedViewport = await readExtractedPageViewport(webpageEvidenceDir)
   const reference = asRecord(provenance.reference)
   const referenceWidth = readPositiveInteger(reference.width)
   const referenceHeight = readPositiveInteger(reference.height)
@@ -7190,8 +7190,8 @@ async function buildSourceProjectVisualIteration(mirrorDir: string): Promise<Sou
   }
 }
 
-async function readExtractedPageViewport(mirrorDir: string): Promise<{ width: number; height: number } | undefined> {
-  const extractedPage = asRecord(await readJsonOptional(path.join(mirrorDir, "extracted-page.json")))
+async function readExtractedPageViewport(webpageEvidenceDir: string): Promise<{ width: number; height: number } | undefined> {
+  const extractedPage = asRecord(await readJsonOptional(path.join(webpageEvidenceDir, "extracted-page.json")))
   return readVisualViewport(asRecord(extractedPage.viewport))
 }
 

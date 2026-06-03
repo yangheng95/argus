@@ -6,7 +6,7 @@ import { Skill } from "../skill"
 import { PermissionNext } from "../permission/next"
 import { Ripgrep } from "../file/ripgrep"
 import { iife } from "@/util/iife"
-import { isWebpageEvidenceToolId } from "@/webpage-evidence/tools/ids"
+import { isWebpageEvidenceToolId } from "@/frontend-design/tools/ids"
 
 export const SkillTool = Tool.define("skill", async (ctx) => {
   const skills = await Skill.all()

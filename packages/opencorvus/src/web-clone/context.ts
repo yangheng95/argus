@@ -4,16 +4,16 @@ import {
   readPassedAudit,
   readPngEvidence,
   sha256File,
-  WEB_CLONE_REQUIRED_MIRROR_ARTIFACTS,
+  WEB_CLONE_REQUIRED_WEBPAGE_EVIDENCE_ARTIFACTS,
 } from "./evidence-integrity"
 
 export interface PrepareWebCloneContextInput {
-  mirrorDir: string
+  webpageEvidenceDir: string
   outputDir?: string
 }
 
 export interface PrepareWebCloneContextOutput {
-  mirrorDir: string
+  webpageEvidenceDir: string
   sourcePackageDir: string
   sourceReadmePath: string
   contextPath: string
@@ -69,22 +69,22 @@ const REQUIRED_SOURCE_HANDOFF_ARTIFACTS = [
 ] as const
 
 export async function prepareWebCloneContext(input: PrepareWebCloneContextInput): Promise<PrepareWebCloneContextOutput> {
-  const mirrorDir = path.resolve(input.mirrorDir)
-  const outputDir = path.resolve(input.outputDir ?? path.join(path.dirname(mirrorDir), "web-clone-source"))
-  await assertContextInputs(mirrorDir)
-  if (isSameOrInside(outputDir, mirrorDir) || isSameOrInside(mirrorDir, outputDir)) {
-    throw new Error(`Web clone context outputDir must not overlap mirrorDir: ${outputDir}`)
+  const webpageEvidenceDir = path.resolve(input.webpageEvidenceDir)
+  const outputDir = path.resolve(input.outputDir ?? path.join(path.dirname(webpageEvidenceDir), "web-clone-source"))
+  await assertContextInputs(webpageEvidenceDir)
+  if (isSameOrInside(outputDir, webpageEvidenceDir) || isSameOrInside(webpageEvidenceDir, outputDir)) {
+    throw new Error(`Web clone context outputDir must not overlap webpageEvidenceDir: ${outputDir}`)
   }
 
   const [componentTree, contentModel, styleTokens, interactionHints, assetManifest, skeletonAudit, sourceQualityAudit, sourceSkeleton] = await Promise.all([
-    readJsonOptional(path.join(mirrorDir, "source-ir", "component-tree.json")),
-    readJsonOptional(path.join(mirrorDir, "source-ir", "content-model.json")),
-    readJsonOptional(path.join(mirrorDir, "source-ir", "style-tokens.json")),
-    readJsonOptional(path.join(mirrorDir, "source-ir", "interaction-hints.json")),
-    readJsonOptional(path.join(mirrorDir, "assets", "manifest.json")),
-    readJsonOptional(path.join(mirrorDir, "source-skeleton", "source-skeleton-audit.json")),
-    readJsonOptional(path.join(mirrorDir, "source-ir", "source-quality-audit.json")),
-    readOptionalText(path.join(mirrorDir, "source-skeleton", "index.html")),
+    readJsonOptional(path.join(webpageEvidenceDir, "source-ir", "component-tree.json")),
+    readJsonOptional(path.join(webpageEvidenceDir, "source-ir", "content-model.json")),
+    readJsonOptional(path.join(webpageEvidenceDir, "source-ir", "style-tokens.json")),
+    readJsonOptional(path.join(webpageEvidenceDir, "source-ir", "interaction-hints.json")),
+    readJsonOptional(path.join(webpageEvidenceDir, "assets", "manifest.json")),
+    readJsonOptional(path.join(webpageEvidenceDir, "source-skeleton", "source-skeleton-audit.json")),
+    readJsonOptional(path.join(webpageEvidenceDir, "source-ir", "source-quality-audit.json")),
+    readOptionalText(path.join(webpageEvidenceDir, "source-skeleton", "index.html")),
   ])
   const summary = buildContextSummary({
     componentTree,
@@ -111,10 +111,10 @@ export async function prepareWebCloneContext(input: PrepareWebCloneContextInput)
   const contractPath = path.join(outputDir, "web-clone-implementation-contract.json")
   await fs.rm(outputDir, { recursive: true, force: true })
   await fs.mkdir(outputDir, { recursive: true })
-  await fs.writeFile(contextPath, renderContextMarkdown(mirrorDir, summary, stats), "utf8")
-  await fs.writeFile(contractPath, `${JSON.stringify(renderContract(mirrorDir, summary, stats), null, 2)}\n`, "utf8")
+  await fs.writeFile(contextPath, renderContextMarkdown(webpageEvidenceDir, summary, stats), "utf8")
+  await fs.writeFile(contractPath, `${JSON.stringify(renderContract(webpageEvidenceDir, summary, stats), null, 2)}\n`, "utf8")
   const materializedFiles = await materializeVisibleSourcePackage({
-    mirrorDir,
+    webpageEvidenceDir,
     outputDir,
     contextPath,
     contractPath,
@@ -123,7 +123,7 @@ export async function prepareWebCloneContext(input: PrepareWebCloneContextInput)
   })
   const sourceReadmePath = path.join(outputDir, "README.md")
 
-  return { mirrorDir, sourcePackageDir: outputDir, sourceReadmePath, contextPath, contractPath, materializedFiles, stats }
+  return { webpageEvidenceDir, sourcePackageDir: outputDir, sourceReadmePath, contextPath, contractPath, materializedFiles, stats }
 }
 
 function buildContextSummary(input: {
@@ -151,14 +151,14 @@ function buildContextSummary(input: {
 }
 
 function renderContextMarkdown(
-  mirrorDir: string,
+  webpageEvidenceDir: string,
   summary: ContextSummary,
   stats: PrepareWebCloneContextOutput["stats"],
 ): string {
   return [
     "# Web Clone Context",
     "",
-    `Mirror: ${mirrorDir}`,
+    `Webpage evidence: ${webpageEvidenceDir}`,
     "",
     "## Required Reads",
     ...REQUIRED_READS.map((file) => `- ${file}`),
@@ -205,14 +205,14 @@ function renderContextMarkdown(
 }
 
 function renderContract(
-  mirrorDir: string,
+  webpageEvidenceDir: string,
   summary: ContextSummary,
   stats: PrepareWebCloneContextOutput["stats"],
 ): unknown {
   return {
     version: 1,
     purpose: "web-clone-implementation-context",
-    mirrorDir,
+    webpageEvidenceDir,
     requiredReads: REQUIRED_READS,
     rules: {
       visibleSourcePackage: "web-clone-source",
@@ -252,7 +252,7 @@ function renderContract(
 }
 
 async function materializeVisibleSourcePackage(input: {
-  mirrorDir: string
+  webpageEvidenceDir: string
   outputDir: string
   contextPath: string
   contractPath: string
@@ -265,36 +265,36 @@ async function materializeVisibleSourcePackage(input: {
   ])
   await fs.mkdir(input.outputDir, { recursive: true })
   const readmePath = path.join(input.outputDir, "README.md")
-  await fs.writeFile(readmePath, renderSourcePackageReadme(input.mirrorDir, input.stats), "utf8")
+  await fs.writeFile(readmePath, renderSourcePackageReadme(input.webpageEvidenceDir, input.stats), "utf8")
   written.add(readmePath)
 
   const blueprintPath = path.join(input.outputDir, "implementation-blueprint.md")
   await fs.writeFile(blueprintPath, renderImplementationBlueprint(input.summary, input.stats), "utf8")
   written.add(blueprintPath)
 
-  await copyFileIfExists(path.join(input.mirrorDir, "reference.png"), path.join(input.outputDir, "reference.png"), written)
-  await copyDirIfExists(path.join(input.mirrorDir, "source-skeleton"), path.join(input.outputDir, "source-skeleton"), written)
-  await copyDirIfExists(path.join(input.mirrorDir, "source-ir"), path.join(input.outputDir, "source-ir"), written)
-  await copyDirIfExists(path.join(input.mirrorDir, "interaction-states"), path.join(input.outputDir, "interaction-states"), written)
-  await copyFileIfExists(path.join(input.mirrorDir, "assets", "manifest.json"), path.join(input.outputDir, "assets", "manifest.json"), written)
-  await copyDirIfExists(path.join(input.mirrorDir, "assets", "svg"), path.join(input.outputDir, "assets", "svg"), written)
-  await copyDirIfExists(path.join(input.mirrorDir, "assets", "images"), path.join(input.outputDir, "assets", "images"), written)
-  for (const diagnostic of ["singlefile.html", "page.ir.json", "segments.json", "codegen-context.json", "shared-context.md", "prd-evidence-summary.md", "visual-surface-candidates.json", "visual-surface-scaffold.json"]) {
-    await copyFileIfExists(path.join(input.mirrorDir, diagnostic), path.join(input.outputDir, diagnostic), written)
+  await copyFileIfExists(path.join(input.webpageEvidenceDir, "reference.png"), path.join(input.outputDir, "reference.png"), written)
+  await copyDirIfExists(path.join(input.webpageEvidenceDir, "source-skeleton"), path.join(input.outputDir, "source-skeleton"), written)
+  await copyDirIfExists(path.join(input.webpageEvidenceDir, "source-ir"), path.join(input.outputDir, "source-ir"), written)
+  await copyDirIfExists(path.join(input.webpageEvidenceDir, "interaction-states"), path.join(input.outputDir, "interaction-states"), written)
+  await copyFileIfExists(path.join(input.webpageEvidenceDir, "assets", "manifest.json"), path.join(input.outputDir, "assets", "manifest.json"), written)
+  await copyDirIfExists(path.join(input.webpageEvidenceDir, "assets", "svg"), path.join(input.outputDir, "assets", "svg"), written)
+  await copyDirIfExists(path.join(input.webpageEvidenceDir, "assets", "images"), path.join(input.outputDir, "assets", "images"), written)
+  for (const diagnostic of ["singlefile.html", "page.ir.json", "segments.json", "codegen-context.json", "prd-evidence-summary.md", "visual-surface-candidates.json"]) {
+    await copyFileIfExists(path.join(input.webpageEvidenceDir, diagnostic), path.join(input.outputDir, diagnostic), written)
   }
 
   const manifestPath = path.join(input.outputDir, "web-clone-source-manifest.json")
   const referenceEvidence = await readPngEvidence(path.join(input.outputDir, "reference.png"))
-  const captureViewport = await readCaptureViewport(input.mirrorDir)
-  const manifestEntries = await buildSourceManifestEntries(input.outputDir, input.mirrorDir, written)
+  const captureViewport = await readCaptureViewport(input.webpageEvidenceDir)
+  const manifestEntries = await buildSourceManifestEntries(input.outputDir, input.webpageEvidenceDir, written)
   await fs.writeFile(manifestPath, `${JSON.stringify({
     version: 1,
     purpose: "web-clone-visible-source-package",
-    mirrorDir: input.mirrorDir,
+    webpageEvidenceDir: input.webpageEvidenceDir,
     provenance: {
-      source: "mirror",
-      mirrorDir: input.mirrorDir,
-      requiredMirrorArtifacts: WEB_CLONE_REQUIRED_MIRROR_ARTIFACTS,
+      source: "webpage-evidence",
+      webpageEvidenceDir: input.webpageEvidenceDir,
+      requiredWebpageEvidenceArtifacts: WEB_CLONE_REQUIRED_WEBPAGE_EVIDENCE_ARTIFACTS,
       captureViewport,
       reference: referenceEvidence.valid
         ? {
@@ -323,7 +323,6 @@ async function materializeVisibleSourcePackage(input: {
       "interaction-states/scroll-50.png",
       "interaction-states/scroll-75.png",
       "visual-surface-candidates.json",
-      "visual-surface-scaffold.json",
       "source-skeleton/critical.css",
       "source-skeleton/index.html",
       "assets/manifest.json",
@@ -344,7 +343,7 @@ async function materializeVisibleSourcePackage(input: {
   return Array.from(written).sort((a, b) => a.localeCompare(b))
 }
 
-function renderSourcePackageReadme(mirrorDir: string, stats: PrepareWebCloneContextOutput["stats"]): string {
+function renderSourcePackageReadme(webpageEvidenceDir: string, stats: PrepareWebCloneContextOutput["stats"]): string {
   return [
     "# Web Clone Source",
     "",
@@ -375,7 +374,7 @@ function renderSourcePackageReadme(mirrorDir: string, stats: PrepareWebCloneCont
     "",
     "Verification evidence should include source-consumption diagnostics plus runtime visual comparison against `reference.png` when those checks are available.",
     "",
-    `Mirror source: ${mirrorDir}`,
+    `Webpage evidence source: ${webpageEvidenceDir}`,
     "",
     "Source package stats:",
     `- components: ${stats.components}`,
@@ -449,7 +448,7 @@ async function copyDirIfExists(source: string, target: string, written: Set<stri
 
 async function buildSourceManifestEntries(
   outputDir: string,
-  mirrorDir: string,
+  webpageEvidenceDir: string,
   written: Set<string>,
 ): Promise<Array<{ path: string; sha256?: string; bytes?: number; source?: string }>> {
   const entries: Array<{ path: string; sha256?: string; bytes?: number; source?: string }> = []
@@ -461,7 +460,7 @@ async function buildSourceManifestEntries(
       path: relative,
       sha256: await sha256File(file),
       bytes: stat?.isFile() ? stat.size : undefined,
-      source: await exists(path.join(mirrorDir, relative)) ? normalizePath(path.join("mirror", relative)) : "generated",
+      source: await exists(path.join(webpageEvidenceDir, relative)) ? normalizePath(path.join("webpage-evidence", relative)) : "generated",
     })
   }
   return entries
@@ -653,19 +652,19 @@ function isSameOrInside(child: string, parent: string): boolean {
   return relative === "" || (!!relative && !relative.startsWith("..") && !path.isAbsolute(relative))
 }
 
-async function assertContextInputs(mirrorDir: string): Promise<void> {
-  const referenceEvidence = await readPngEvidence(path.join(mirrorDir, "reference.png"))
+async function assertContextInputs(webpageEvidenceDir: string): Promise<void> {
+  const referenceEvidence = await readPngEvidence(path.join(webpageEvidenceDir, "reference.png"))
   const missing: string[] = []
   if (!referenceEvidence.valid) missing.push(`${referenceEvidence.path} (${referenceEvidence.error ?? "invalid PNG"})`)
   for (const relative of REQUIRED_SOURCE_HANDOFF_ARTIFACTS) {
-    const file = path.join(mirrorDir, relative)
+    const file = path.join(webpageEvidenceDir, relative)
     if (!await exists(file)) missing.push(file)
   }
-  if (await readPassedAudit(path.join(mirrorDir, "source-skeleton", "source-skeleton-audit.json")) !== true) {
-    missing.push(path.join(mirrorDir, "source-skeleton", "source-skeleton-audit.json") + " (passed=true required)")
+  if (await readPassedAudit(path.join(webpageEvidenceDir, "source-skeleton", "source-skeleton-audit.json")) !== true) {
+    missing.push(path.join(webpageEvidenceDir, "source-skeleton", "source-skeleton-audit.json") + " (passed=true required)")
   }
-  if (await readPassedAudit(path.join(mirrorDir, "source-ir", "source-quality-audit.json")) !== true) {
-    missing.push(path.join(mirrorDir, "source-ir", "source-quality-audit.json") + " (passed=true required)")
+  if (await readPassedAudit(path.join(webpageEvidenceDir, "source-ir", "source-quality-audit.json")) !== true) {
+    missing.push(path.join(webpageEvidenceDir, "source-ir", "source-quality-audit.json") + " (passed=true required)")
   }
   if (missing.length > 0) throw new Error(`Web clone context inputs are missing: ${missing.join(", ")}`)
 }
@@ -678,8 +677,8 @@ async function readJsonOptional(filePath: string): Promise<unknown> {
   }
 }
 
-async function readCaptureViewport(mirrorDir: string): Promise<{ width: number; height: number } | undefined> {
-  const extractedPage = asRecord(await readJsonOptional(path.join(mirrorDir, "extracted-page.json")))
+async function readCaptureViewport(webpageEvidenceDir: string): Promise<{ width: number; height: number } | undefined> {
+  const extractedPage = asRecord(await readJsonOptional(path.join(webpageEvidenceDir, "extracted-page.json")))
   const viewport = asRecord(extractedPage.viewport)
   const width = readPositiveInteger(viewport.width)
   const height = readPositiveInteger(viewport.height)

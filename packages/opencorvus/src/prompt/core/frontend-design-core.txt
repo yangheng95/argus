@@ -105,16 +105,13 @@ Prompt-readable webpage evidence artifacts:
 - `webpage-evidence/source-skeleton/skeleton-manifest.json` for source coverage and component hints.
 - `webpage-evidence/source-skeleton/source-skeleton-audit.json` as the skeleton quality evidence; do not hand off the skeleton as acceptable unless this audit passed.
 - `webpage-evidence/source-ir/source-quality-audit.json` as semantic IR quality evidence; do not hand off source IR as acceptable unless this audit passed.
-- `webpage-evidence/shared-context.md` for compact design-token, surface, and pattern summary.
 - `webpage-evidence/visual-surface-candidates.json` for deterministic candidate boundaries and sourceRefs.
-- `webpage-evidence/visual-surface-scaffold.json` for compact semantic visual surfaces when a bounded frontend template gap remains.
 - `web-clone-source/implementation-blueprint.md` when materialized, as the first downstream implementation input.
 - `web-clone-source/web-clone-context.md` and `web-clone-source/web-clone-implementation-contract.json` as the visible source-package contract Build will consume.
 - `web-clone-source/source-ir/*`, `web-clone-source/source-skeleton/critical.css`, `web-clone-source/visual-surface-candidates.json`, `web-clone-source/assets/`, and `web-clone-source/reference.png` as the project-root handoff that replaces raw `webpage-evidence/` for Build.
-- Webpage evidence tool result summaries for counts, artifact paths, viewport, semantic surfaces, and patterns.
-- General scaffold JSON browsing is not for discovery. If compact artifacts leave one named unresolved gap, read one first excerpt only (`start_line=1`, `max_lines<=120`) and then finalize.
+- Webpage evidence tool result summaries for counts, artifact paths, viewport, semantic surfaces, and source handoff files.
 
-Do not read `webpage-evidence/extracted-page.json`, `webpage-evidence/capture.html`, or `webpage-evidence/image-analysis.json` wholesale into prompt context. Those raw files are durable evidence and tool inputs, not the frontend template working surface.
+Do not read `webpage-evidence/extracted-page.json` or `webpage-evidence/capture.html` wholesale into prompt context. Those raw files are durable evidence and tool inputs, not the frontend template working surface.
 
 If no visual/material evidence exists, produce only the facts explicitly present in the textual brief and mark missing details as open questions. Do not fabricate exact values.
 
@@ -164,14 +161,14 @@ Call `submit_frontend_template` once at the end. It must contain:
 - `ui_data_contract`: UI data contract only, with unknowns marked. For visual clone tasks, specify only the minimal local mock/static data contract and loading/error states unless real API evidence exists; derive mock data needs from source-ir/content-model.json and visible skeleton text. For explicit full-stack/database page replicas, include only the frontend-facing data entities, seed/reset expectation, and read interfaces such as page-data/navigation/sections needed to render the observed UI from data instead of hardcoded JSX. Requirements and Architect own backend/database implementation scope. Do not design infrastructure.
 - `template_iteration_notes`: review-pass notes proving you checked and corrected frontend template completeness before handoff. One note is enough when `assistant.auto_iteration=false`; include at least two when `assistant.auto_iteration=true`.
 - `completeness_review`: final audit explaining why the frontend template is complete enough for downstream agents, and exactly what remains unknown.
-- `reference_artifacts`: artifact paths, source file names, image names, attachment names, and mirror outputs you used as evidence. The orchestrator will persist a separate `evidence_source_manifest` decision-log entry and materialize task-scoped runtime frontend template and evidence-source-manifest files from these references plus task attachments/materialized artifacts so downstream agents know exactly which files/images/URLs they can read.
+- `reference_artifacts`: artifact paths, source file names, image names, attachment names, and webpage evidence outputs you used as evidence. The orchestrator will persist a separate `evidence_source_manifest` decision-log entry and materialize task-scoped runtime frontend template and evidence-source-manifest files from these references plus task attachments/materialized artifacts so downstream agents know exactly which files/images/URLs they can read.
 - `open_questions`: only facts that are truly unobservable.
 
 ## Quality Rules
 
 Use `MUST` in the frontend template for exact visual/product contracts backed by pixels or extracted facts. Use `SHOULD` for approximate or inferred requirements that are still important but not exact.
 
-1. Ground every exact value in pixels or mirror artifacts.
+1. Ground every exact value in pixels or webpage evidence artifacts.
 2. Put visual consistency requirements in `visual_consistency_contract` first, then reflect implementation consequences in `fillable_modules`.
 3. Bind every major visual surface/component/state to concrete reference artifacts or visible page regions by name.
 4. Cross-reference layouts/components/interactions/responsive rules inside the frontend design/replica contract.

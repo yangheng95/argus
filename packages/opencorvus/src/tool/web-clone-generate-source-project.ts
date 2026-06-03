@@ -9,7 +9,7 @@ export const WebCloneGenerateSourceProjectTool = Tool.define("web_clone_generate
 
 It writes framework components, sourceData arrays, CSS sidecars, copied assets, and reference.png from source-skeleton/source-IR. It does not render reference.png, replay screenshots, inline base64, inject raw HTML, or re-extract webpages. Downstream agents should preserve the generated CSS sidecars and refine the generated React modules in place as traceable source-region evidence. Use web_clone_source_audit and visual screenshot evaluation as diagnostics after generation.`,
   parameters: z.object({
-    mirrorDir: z
+    webpageEvidenceDir: z
       .string()
       .describe("Directory containing source-skeleton/, source-ir/, assets/, and reference.png. Defaults to <execution directory>/web-clone-source.")
       .optional(),
@@ -27,10 +27,10 @@ It writes framework components, sourceData arrays, CSS sidecars, copied assets, 
       .optional(),
   }),
   async execute(params) {
-    const mirrorDir = resolveInputPath(params.mirrorDir ?? path.join(Instance.directory, "web-clone-source"))
+    const webpageEvidenceDir = resolveInputPath(params.webpageEvidenceDir ?? path.join(Instance.directory, "web-clone-source"))
     const outputDir = resolveInputPath(params.outputDir ?? path.join(Instance.directory, "web-clone-source-project"))
     const result = await generateWebCloneSourceProject({
-      mirrorDir,
+      webpageEvidenceDir,
       outputDir,
       packageName: params.packageName,
       overwrite: params.overwrite === true,
@@ -40,7 +40,7 @@ It writes framework components, sourceData arrays, CSS sidecars, copied assets, 
       "# Web clone source project generated",
       "",
       `- Framework: ${result.framework}`,
-      `- Source package: ${result.mirrorDir}`,
+      `- Source package: ${result.webpageEvidenceDir}`,
       `- Output: ${result.outputDir}`,
       `- Files: ${result.files.length}`,
       `- Text signals: ${result.stats.textSignalCount}`,
@@ -54,7 +54,7 @@ It writes framework components, sourceData arrays, CSS sidecars, copied assets, 
       `- Visual iteration matrix: ${result.visualIterationMatrix}`,
       "",
       "Next checks:",
-      `- Run web_clone_source_audit with projectDir=${result.outputDir} and sourcePackageDir=${result.mirrorDir}.`,
+      `- Run web_clone_source_audit with projectDir=${result.outputDir} and sourcePackageDir=${result.webpageEvidenceDir}.`,
       "- Build/run the project, render a screenshot, and compare against web-clone-source/reference.png with the visual evaluator.",
     ].join("\n")
 

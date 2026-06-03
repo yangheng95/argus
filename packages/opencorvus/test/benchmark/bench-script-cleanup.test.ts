@@ -12,7 +12,7 @@ import path from "node:path"
  *   - Legacy `orchestrator.spec.created`/`spec.updated`/`plan.created`/
  *     `plan.activated` event types in `DIAG_TYPES` and the matching
  *     `formatEventLine` handler — the engine no longer emits them.
- *   - Unused `headless` constant (puppeteer launch hardcodes `false` per
+ *   - Unused `headless` constant (Playwright launch hardcodes `false` per
  *     rule 25 — visible UI is required for visual benchmarks).
  *   - Stale `TASK_GOALS` mention referencing a removed input format.
  *
@@ -48,9 +48,9 @@ test("legacy spec/plan event types stay removed from DIAG_TYPES", () => {
   expect(src).not.toMatch(/orchestrator\.plan\.activated/)
 })
 
-test("unused module-scope `headless` const is gone (puppeteer launch keeps the literal)", () => {
+test("unused module-scope `headless` const is gone (Playwright launch keeps the literal)", () => {
   expect(src).not.toMatch(/^const headless = false$/m)
-  // Sanity: the puppeteer launch site still exists and still uses the literal,
+  // Sanity: the Playwright launch site still exists and still uses the literal,
   // so removal of the unused module-scope const didn't accidentally hide the
   // visual-mode requirement (rule 25).
   expect(src).toMatch(/headless: false,/)

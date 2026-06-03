@@ -15,7 +15,7 @@ import {
   FRONTEND_DESIGN_WEBPAGE_EVIDENCE_TOOL_IDS,
   FRONTEND_DESIGN_UTILITY_TOOL_IDS,
 } from "../../src/frontend-design/static-tools"
-import { WEBPAGE_EVIDENCE_ANALYSIS_TOOL_IDS } from "../../src/webpage-evidence/tools/ids"
+import { WEBPAGE_EVIDENCE_ANALYSIS_TOOL_IDS } from "../../src/frontend-design/tools/ids"
 import { generateWebCloneSkeletonProject } from "../../src/web-clone"
 import { tmpdir } from "../fixture/fixture"
 
@@ -1061,8 +1061,8 @@ async function writeAuditFixtureSourcePackage(root: string): Promise<string> {
     version: 1,
     purpose: "web-clone-visible-source-package",
     provenance: {
-      source: "mirror",
-      mirrorDir: sourcePackage,
+      source: "webpage-evidence",
+      webpageEvidenceDir: sourcePackage,
       reference: { path: "reference.png", sha256: referenceSha256, width: 1, height: 1, bytes: referenceBytes.length },
     },
     files: [{ path: "reference.png", sha256: referenceSha256, bytes: referenceBytes.length, source: "webpage-evidence/reference.png" }],
