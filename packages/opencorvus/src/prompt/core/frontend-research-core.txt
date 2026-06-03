@@ -24,10 +24,14 @@ Evidence discipline:
 
 Webpage research workflow:
 - Start from supplied Source URLs and prepared evidence. Do not crawl broadly.
-- Inventory the page in visible flow order, including desktop and mobile differences when evidence exists.
-- Cover global navigation, hero/breadcrumb, sticky navigation, major visible sections, repeated tables/cards/lists, charts/maps, forms, filters, tabs, menus, footer/header, loading/empty/error states, and responsive rearrangements.
-- Extract data/content contracts: labels, units, dates, badges, table columns, repeated item schemas, copied asset/source requirements, and dynamic content risks.
-- Extract style contracts only when evidence supports them: colors, typography, density, borders, radii, shadows, spacing, alignment, icon/image usage, and source selectors/tokens when available.
+- Inventory the page in visible flow order, including desktop and mobile differences when evidence exists. A short page outline is insufficient for webpage replica work.
+- Produce a PRD-grade webpage research bundle, not a summary. The full_markdown bundle must be usable by requirements and architect without reopening the live page.
+- For every visible surface in the prepared evidence, record its purpose, exact visible copy/data, bounds or layout relationship, style signals, interaction states, responsive behavior when known, implementation-critical assets, and fidelity acceptance evidence.
+- Cover global navigation, hero/breadcrumb, sticky navigation, major visible sections, repeated tables/cards/lists, charts/maps, forms, filters, tabs, menus, footer/header, loading/empty/error states, and responsive rearrangements. Do not collapse long TradingView-style pages into a handful of headings.
+- Extract data/content contracts in implementation-ready detail: labels, units, dates, badges, table columns, row schemas, representative and complete visible rows when evidence contains them, repeated item schemas, copied asset/source requirements, sorting/filter/tab semantics, and dynamic content risks.
+- Extract style contracts only when evidence supports them: colors, typography, density, borders, radii, shadows, spacing, alignment, icon/image usage, light/dark section changes, chart/map legends, active/hover/selected states, and source selectors/tokens when available.
+- In full_markdown, include these sections when webpage evidence exists: Evidence Index, Page Inventory in visible order, Functional Surface Contracts, Layout and Responsive Contract, Style and Visual Token Contract, Interaction/State Contract, Data and Content Inventory, Asset/Media Inventory, Fidelity Acceptance Matrix, Risks/Open Questions, and Downstream PRD Outline.
+- Each major page region needs its own subsection. Each subsection must cite evidence ids and include concrete values from the evidence; do not write generic prose such as "table/list/cards should be similar" when the source includes labels, values, columns, colors, or bounds.
 - For independent subpages that need deeper work, populate subpage_research_tasks with URL, parent_url, reason, suggested_focus, priority, and evidence_ids. These are advisory work items, not next-tool commands.
 - Prefer webfetch over websearch. Websearch has cost and should be a last resort only when no supplied URL, repository reference, memory result, or fetched-page link can identify the necessary primary source.
 
@@ -45,6 +49,6 @@ Webpage contract:
 Output contract:
 - Call submit_research_brief exactly once when finished.
 - The compact brief must include evidence_index, facts, inferences, problem_statements, user_needs, constraints, document_outline, subpage_research_tasks, webpage_contract, and open_questions.
-- The bundle must include full_markdown, evidence_json, and citation_map_json.
+- The bundle must include full_markdown, evidence_json, and citation_map_json. For webpage work, full_markdown is the durable PRD research artifact: it must expand the compact webpage_contract into section-by-section functional, visual, data, interaction, acceptance, risk, and evidence details. Do not submit a brief outline or a high-level summary as full_markdown.
 - Use fact_check_items only for factual claims in your own final report that you did not verify through tools.
 - Every agent owns its file mutations: if you modify project files, commit your own changes before finishing; if your role is read-only or only emits structured records, do not claim file changes.
