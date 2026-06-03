@@ -28,6 +28,7 @@ import { ReviewStreamSection } from "./ReviewStreamSection";
 import { TracePanel } from "./TracePanel";
 import { t } from "../utils/i18n";
 import { StoreCardNode } from "./StoreCardNode";
+import { createAnimationFrameScheduler } from "../utils/animation-frame";
 
 const inFlightBuildHistorySessions = new Set<string>();
 
@@ -254,9 +255,7 @@ export function Card(props: { node: CardNode; depth: number }) {
     const article = articleRef;
     if (!article || !shouldLockInlineSize()) return;
 
-    let frame = 0;
     const updateStickyInlineSize = () => {
-      frame = 0;
       const nextWidth = Math.ceil(article.getBoundingClientRect().width);
       if (!Number.isFinite(nextWidth) || nextWidth <= 0) return;
       setStickyInlineSize((current) =>
@@ -264,17 +263,15 @@ export function Card(props: { node: CardNode; depth: number }) {
       );
     };
 
-    const observer = new ResizeObserver(() => {
-      if (frame) cancelAnimationFrame(frame);
-      frame = requestAnimationFrame(updateStickyInlineSize);
-    });
+    const updateStickyInlineSizeOnFrame = createAnimationFrameScheduler(updateStickyInlineSize);
+    const observer = new ResizeObserver(updateStickyInlineSizeOnFrame.schedule);
 
     observer.observe(article);
     updateStickyInlineSize();
 
     onCleanup(() => {
       observer.disconnect();
-      if (frame) cancelAnimationFrame(frame);
+      updateStickyInlineSizeOnFrame.cancel();
     });
   });
 
