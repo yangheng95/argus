@@ -1,8 +1,6 @@
-// @ts-nocheck
-import { AssetPath } from "./AssetPath"
-import { EconomyRegion } from "./source-dom/EconomyRegion"
 import { FooterNavigation } from "./semantic/FooterNavigation"
 import { HeaderNavigation } from "./semantic/HeaderNavigation"
+import { WorldEconomyOverviewContent } from "./semantic/WorldEconomyOverviewContent"
 
 export interface SourceDomPageProps {
   sourceComponentNames: string
@@ -33,7 +31,7 @@ export function SourceDomPage({ sourceComponentNames, tableCount }: SourceDomPag
         <div className={"js-container-ios-notification"} />
         <HeaderNavigation />
         <main data-source-role={"main"} className={"tv-content"} id={"tv-content"} aria-label={"Main content"} data-sf-nesting-track-id={"1.6.6"}>
-          <EconomyRegion />
+          <WorldEconomyOverviewContent />
         </main>
         <FooterNavigation />
       </div>
