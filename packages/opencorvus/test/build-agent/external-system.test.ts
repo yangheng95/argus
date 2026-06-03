@@ -15,6 +15,8 @@ describe("BuildAgent external coding system prompt", () => {
     expect(composed.system).toContain("Treat the user prompt as a build contract, not as a chat request.")
     expect(composed.system).toContain("complete source/target investigation is implementation work")
     expect(composed.system).toContain("context-menu/right-click behavior")
+    expect(composed.system).toContain("restate the detailed req/goal contract")
+    expect(composed.system).toContain("warn subsequent agents where to dig deeper for workload")
     expect(composed.system).toContain("Do not perform unrelated broad inventories")
     expect(composed.system).toContain("If required source evidence is absent or incomplete")
     expect(composed.system).toContain("Do not call OpenCorvus-only tools such as report_build_result or merge_back")

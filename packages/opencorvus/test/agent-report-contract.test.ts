@@ -105,6 +105,10 @@ test("agent output toolkits build explicit non-empty reports", async () => {
     result: {
       status: "passed",
       summary: "Updated report rendering.",
+      contract_restatement:
+        "Implemented the report rendering request for overlay agent report cards and left visual styling outside this build.",
+      followup_workload_guidance:
+        "Follow-up agents should inspect overlay report payload volume before estimating additional report work.",
       files_changed: [{ path: "src/app.ts", summary: "Read report payload.", reason: "Trace owns summaries." }],
       tests: [],
     },
@@ -116,7 +120,41 @@ test("agent output toolkits build explicit non-empty reports", async () => {
     checks_run: [],
     design_decisions: [],
     blockers: [],
+    followup_workload_guidance:
+      "Follow-up agents should read trace payload examples before expanding report UI scope.",
   }))
+})
+
+test("agent reports surface workload handoff guidance", () => {
+  const build = buildBuildAgentReport({
+    result: {
+      status: "passed",
+      summary: "Implemented the handoff fields.",
+      contract_restatement:
+        "Handled the detailed request to preserve req/goal complexity in build reports.",
+      followup_workload_guidance:
+        "Subsequent agents must re-read workload evidence before planning more report changes.",
+      files_changed: [],
+      tests: [],
+    },
+  })
+  expect(build.detail).toContain("## Contract Restatement")
+  expect(build.detail).toContain("preserve req/goal complexity")
+  expect(build.detail).toContain("## Follow-up Workload Guidance")
+  expect(build.detail).toContain("re-read workload evidence")
+
+  const goal = buildGoalReport({
+    implementation_approach:
+      "Implemented the goal report handoff by preserving hidden workload guidance in the structured report detail.",
+    files_changed: [],
+    checks_run: [],
+    design_decisions: [],
+    blockers: [],
+    followup_workload_guidance:
+      "Subsequent agents should inspect the goal workload brief before adding more executor report fields.",
+  })
+  expect(goal.detail).toContain("## Follow-up Workload Guidance")
+  expect(goal.detail).toContain("goal workload brief")
 })
 
 test("recordAgentReport writes the typed report payload", () => {

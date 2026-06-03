@@ -156,6 +156,10 @@ describe("build agent prompt context", () => {
     expect(prompt).toContain("supplies roughly 30% style, geometry, CSS, assets, and pixel-consistency support")
     expect(prompt).toContain("REQ-12")
     expect(prompt).toContain("fr-interaction-scroll-tabs")
+    expect(prompt).toContain("## Terminal Report Contract")
+    expect(prompt).toContain("contract_restatement")
+    expect(prompt).toContain("followup_workload_guidance")
+    expect(prompt).toContain("Weak follow-up models")
     expect(prompt.indexOf("## Requirements / PRD Coverage Contract")).toBeLessThan(
       prompt.indexOf("# Goal: Replica tabs"),
     )
@@ -183,6 +187,9 @@ describe("build agent prompt context", () => {
     expect(prompt).toContain("## Requirements / PRD Coverage Contract")
     expect(prompt).toContain("This direct build path still must honor the active requirements")
     expect(prompt).toContain("REQ-3")
+    expect(prompt).toContain("## Terminal Report Contract")
+    expect(prompt).toContain("detailed restatement of the effective req/goal contract")
+    expect(prompt).toContain("where task complexity may still be hidden")
     expect(prompt.indexOf("## Requirements / PRD Coverage Contract")).toBeLessThan(prompt.indexOf("# Request"))
   })
 
@@ -251,6 +258,8 @@ describe("build agent prompt context", () => {
     expect(prompt.indexOf("## Prior Attempt Failure Facts")).toBeLessThan(
       prompt.indexOf("## Acceptance Repair Overlay"),
     )
+    expect(prompt).toContain("Restate the detailed req/goal contract")
+    expect(prompt).toContain("workload may still be underestimated")
   })
 
   test("request-path rejects ad-hoc exploration without a concrete deliverable", () => {
