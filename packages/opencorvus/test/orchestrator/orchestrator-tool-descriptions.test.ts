@@ -27,14 +27,16 @@ describe("orchestrator tool descriptions for integrity stuck loops", () => {
     expect(tools.modify_goal.description).toContain("propose_task or question")
   })
 
-  test("research and frontend_design descriptions separate webpage PRD evidence from UI implementation", () => {
+  test("frontend_research and frontend_design descriptions separate webpage PRD evidence from UI implementation", () => {
     expect(tools.frontend_design.description).toContain("frontend/UI implementation")
     expect(tools.frontend_design.description).toContain("URL as a visual reference to clone, implement, reproduce, or refine")
     expect(tools.frontend_design.description).toContain("PRD/SPEC/report/source material")
-    expect(tools.frontend_design.description).toContain("route those URLs through `research` with `source_urls`")
+    expect(tools.frontend_design.description).toContain("route those URLs through `frontend_research` with `source_urls`")
 
     expect(tools.research.description).toContain("PRD/SPEC/report source material")
-    expect(tools.research.description).toContain("functional and visual analysis of a supplied page")
-    expect(tools.research.description).toContain("rendered webpage PRD evidence path instead of frontend_design")
+    expect(tools.research.description).toContain("use `frontend_research` instead")
+    expect(tools.frontend_research.description).toContain("webpage/UI reference research")
+    expect(tools.frontend_research.description).toContain("frontend_research_brief/webpage_contract")
+    expect(tools.frontend_research.description).toContain("NOT the frontend implementation template owner")
   })
 })

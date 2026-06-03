@@ -108,6 +108,7 @@ export type EngineArtifactKind =
   | "integrity_attempt"
   | "fact_check_attempt"
   | "research_brief"
+  | "frontend_research_brief"
   | "run"
   | "architect_contract_graph"
   | "goal_workload"

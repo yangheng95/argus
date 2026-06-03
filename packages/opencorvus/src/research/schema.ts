@@ -21,7 +21,7 @@ export const RESEARCH_BUNDLE_LIMITS = {
   citationMapJsonChars: 100_000,
 } as const
 
-const PROJECT_RELATIVE_RUNTIME_RESEARCH_PATH = /^\.opencorvus\/runtime\/tasks\/[^/]+\/research\/[^/]+\/[^/]+$/
+const PROJECT_RELATIVE_RUNTIME_RESEARCH_PATH = /^\.opencorvus\/runtime\/tasks\/[^/]+\/(?:research|frontend-research)\/[^/]+\/[^/]+$/
 
 export const ResearchEvidenceRefSchema = z.object({
   id: z.string().min(1),
@@ -356,7 +356,10 @@ export function validateResearchBriefIntegrity(brief: ResearchBrief): string | u
 }
 
 export function validateResearchBriefTaskBoundary(brief: ResearchBrief, taskID: string): string | undefined {
-  const expectedPrefix = `.opencorvus/runtime/tasks/${Identifier.shortPath(taskID)}/research/`
+  const expectedPrefixes = [
+    `.opencorvus/runtime/tasks/${Identifier.shortPath(taskID)}/research/`,
+    `.opencorvus/runtime/tasks/${Identifier.shortPath(taskID)}/frontend-research/`,
+  ]
   const bundlePaths = [
     brief.bundle.full_markdown_path,
     brief.bundle.evidence_json_path,
@@ -364,7 +367,7 @@ export function validateResearchBriefTaskBoundary(brief: ResearchBrief, taskID: 
   ]
   for (const bundlePath of bundlePaths) {
     const normalized = bundlePath.replaceAll("\\", "/")
-    if (!normalized.startsWith(expectedPrefix)) {
+    if (!expectedPrefixes.some((prefix) => normalized.startsWith(prefix))) {
       return `bundle path does not belong to task ${taskID}: ${bundlePath}.`
     }
   }

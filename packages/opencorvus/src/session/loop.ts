@@ -222,10 +222,12 @@ export namespace SessionLoop {
     "delivery",
     "fact-check",
     "frontend-design",
+    "frontend-research",
     "integrity",
     "intent-analysis",
     "orchestrator",
     "research",
+    "frontend-research",
     "requirements",
   ])
 

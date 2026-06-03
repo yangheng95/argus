@@ -32,7 +32,11 @@ import { filterAgentTools } from "@/agent/filter-tools"
 import { Log } from "@/util/log"
 import type { VisualSpec } from "@/frontend-design/types"
 import { renderVisualContractPromptSection } from "@/frontend-design/prompt-section"
-import { renderResearchBriefPromptSection, researchEvidenceIDsForTask } from "@/research/prompt-section"
+import {
+  allResearchEvidenceIDsForTask,
+  renderFrontendResearchBriefPromptSection,
+  renderResearchBriefPromptSection,
+} from "@/research/prompt-section"
 import type { GoalContractFields } from "@/pipeline/types"
 import type { DecisionLog } from "@/decision-log"
 import { renderSpecsAsText } from "@/acceptance/types"
@@ -115,7 +119,7 @@ export namespace ArchitectAgent {
         ...(input.frontendDesign?.trim() ? ["frontendDesign handoff is present"] : []),
       ],
       knownRequirementIDs: input.requirements?.map((requirement) => requirement.id),
-      knownResearchEvidenceIDs: researchEvidenceIDsForTask({
+      knownResearchEvidenceIDs: allResearchEvidenceIDsForTask({
         taskID: input.taskID,
         request: input.taskRequest,
       }),
@@ -289,6 +293,11 @@ function buildUserPrompt(input: ArchitectAgent.CoordinateInput): string {
     request: input.taskRequest,
   })
   if (researchBrief) sections.push(researchBrief)
+  const frontendResearchBrief = renderFrontendResearchBriefPromptSection({
+    taskID: input.taskID,
+    request: input.taskRequest,
+  })
+  if (frontendResearchBrief) sections.push(frontendResearchBrief)
 
   if (input.requirements && input.requirements.length > 0) {
     const reqText = input.requirements.map((r) => {

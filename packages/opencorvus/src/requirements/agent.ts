@@ -26,7 +26,11 @@ import { AttachmentStore } from "@/storage/attachment-store"
 import { renderUserRequestSection } from "@/intent/request-prompt"
 import type { VisualSpec } from "@/frontend-design/types"
 import { renderVisualContractPromptSection } from "@/frontend-design/prompt-section"
-import { renderResearchBriefPromptSection, researchEvidenceIDsForTask } from "@/research/prompt-section"
+import {
+  allResearchEvidenceIDsForTask,
+  renderFrontendResearchBriefPromptSection,
+  renderResearchBriefPromptSection,
+} from "@/research/prompt-section"
 import type {
   ParsedRequirement,
   RequirementsDecision,
@@ -97,7 +101,7 @@ export namespace RequirementsAgent {
     })
     const outputToolKit = createRequirementsOutputTools({
       decisionLog: input.decisionLog,
-      allowedResearchEvidenceIDs: researchEvidenceIDsForTask({
+      allowedResearchEvidenceIDs: allResearchEvidenceIDsForTask({
         taskID: input.taskID,
         request: input.request,
       }),
@@ -255,6 +259,11 @@ function buildUserPrompt(
     request: input.request,
   })
   if (researchBrief) sections.push(researchBrief)
+  const frontendResearchBrief = renderFrontendResearchBriefPromptSection({
+    taskID: input.taskID,
+    request: input.request,
+  })
+  if (frontendResearchBrief) sections.push(frontendResearchBrief)
 
   if (prefetched?.trim()) {
     sections.push(prefetched)

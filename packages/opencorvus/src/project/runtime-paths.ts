@@ -183,6 +183,24 @@ export namespace ProjectRuntimePaths {
     }
   }
 
+  export function frontendResearchPaths(projectDir: string, taskID: string, sessionID: string): {
+    relativeDir: string
+    absoluteDir: string
+    fullMarkdownAbsolute: string
+    evidenceJsonAbsolute: string
+    citationMapAbsolute: string
+  } {
+    const relativeDir = taskRelative(taskID, "frontend-research", idSegment(sessionID))
+    const absoluteDir = taskAbsolute(projectDir, taskID, "frontend-research", idSegment(sessionID))
+    return {
+      relativeDir,
+      absoluteDir,
+      fullMarkdownAbsolute: path.join(absoluteDir, "research-bundle.md"),
+      evidenceJsonAbsolute: path.join(absoluteDir, "evidence.json"),
+      citationMapAbsolute: path.join(absoluteDir, "citation-map.json"),
+    }
+  }
+
   export function deliveryPaths(projectDir: string, taskID: string): {
     root: string
     screenshots: string

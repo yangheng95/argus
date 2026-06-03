@@ -278,6 +278,17 @@ export function findLatestArchitectContractGraphArtifact(taskID: string): Artifa
 }
 
 export function findLatestResearchBriefArtifact(taskID: string): ResearchBriefArtifactRow | undefined {
+  return findLatestResearchBriefArtifactByKind(taskID, "research_brief")
+}
+
+export function findLatestFrontendResearchBriefArtifact(taskID: string): ResearchBriefArtifactRow | undefined {
+  return findLatestResearchBriefArtifactByKind(taskID, "frontend_research_brief")
+}
+
+function findLatestResearchBriefArtifactByKind(
+  taskID: string,
+  kind: "research_brief" | "frontend_research_brief",
+): ResearchBriefArtifactRow | undefined {
   const row = Database.use((db) =>
     db
       .select()
@@ -285,7 +296,7 @@ export function findLatestResearchBriefArtifact(taskID: string): ResearchBriefAr
       .where(
         and(
           eq(EngineArtifactTable.task_id, taskID),
-          eq(EngineArtifactTable.kind, "research_brief"),
+          eq(EngineArtifactTable.kind, kind),
           eq(EngineArtifactTable.label, "active"),
         ),
       )

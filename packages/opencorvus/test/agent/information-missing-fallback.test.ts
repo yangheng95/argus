@@ -26,10 +26,12 @@ const AGENT_PROMPTS = [
   "architect-core.txt",
   "build-core.txt",
   "frontend-design-core.txt",
+  "frontend-research-core.txt",
   "integrity-core.txt",
   "intent-analysis-core.txt",
   "orchestrator-core.txt",
   "requirements-core.txt",
+  "research-core.txt",
   "visual-qa-core.txt",
 ] as const
 

@@ -17,6 +17,7 @@ export type AgentRoleID =
   | "integrity"
   | "fact-check"
   | "research"
+  | "frontend-research"
   | "goal-workload-analyst"
 
 export interface AgentRoleContract {
@@ -153,7 +154,15 @@ export namespace AgentRoleContract {
     research: {
       id: "research",
       description:
-        "Research agent. Read-only advisory evidence gatherer for external facts, source maps, PRD/SPEC/report input material, and webpage functional/visual analysis. For rendered webpage PRD evidence it emits a source-backed webpage_contract covering functions, layout, styles, interactions, content inventory, fidelity acceptance, risks, plus document outlines, constraints, and open questions. It starts from supplied webpages, can emit subpage_research_tasks, and never chooses routes or delivers final documents.",
+        "Research agent. Read-only advisory evidence gatherer for external facts, source maps, current documentation, PRD/SPEC/report source material, constraints, document outlines, and open questions. Dedicated webpage functional/visual PRD evidence belongs to frontend-research. Research never chooses routes or delivers final documents.",
+      promptEditable: true,
+      defaultPromptRequired: true,
+      promptConfigMode: "append",
+    },
+    "frontend-research": {
+      id: "frontend-research",
+      description:
+        "Frontend research agent. Read-only webpage functional and visual evidence gatherer that pairs with frontend-design. It emits a source-backed frontend_research_brief with webpage_contract covering functions, layout, styles, interactions, content inventory, fidelity acceptance, risks, document outlines, constraints, and open questions. It does not create the frontend implementation template and never chooses routes or delivers final documents.",
       promptEditable: true,
       defaultPromptRequired: true,
       promptConfigMode: "append",

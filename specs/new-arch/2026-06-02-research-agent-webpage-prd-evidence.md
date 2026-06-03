@@ -1,5 +1,10 @@
 # Research Agent Webpage PRD Evidence Algorithm
 
+Superseded on 2026-06-03 by
+`specs/new-arch/2026-06-03-frontend-research-agent.md`: rendered webpage
+functional/visual PRD evidence now belongs to `frontend-research` /
+`frontend_research_brief`, not generic `research` / `research_brief`.
+
 ## Problem
 
 When a research task asks for a PRD of a live webpage, the current research prompt says to start from source URLs with
