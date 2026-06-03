@@ -135,3 +135,6 @@ packages/sdk/js/openapi-ts-error-*.log
 # Benchmark / scratch artifacts at repo root
 /overlay-web-benchmark-*.png
 /.tmp_g12_board.json
+
+# Auto-added by OpenCorvus
+# the whole baseline / acceptance commit aborts. Same trap for the other
