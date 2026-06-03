@@ -12,11 +12,18 @@ export function buildBuildAgentReport(collector: BuildReportCollector) {
   const changedFiles = result.files_changed.map(
     (file) => `${file.path}: ${file.summary}`,
   )
+  const detail = [
+    `## Summary\n${summary}`,
+    result.contract_restatement
+      ? `## Contract Restatement\n${result.contract_restatement}`
+      : undefined,
+    result.followup_workload_guidance
+      ? `## Follow-up Workload Guidance\n${result.followup_workload_guidance}`
+      : undefined,
+    `## Changed Files\n${changedFiles.length ? markdownList(changedFiles) : "- no changed files reported"}`,
+  ].filter((section): section is string => Boolean(section))
   return {
     summary: limitSummary(summary),
-    detail: [
-      `## Summary\n${summary}`,
-      `## Changed Files\n${changedFiles.length ? markdownList(changedFiles) : "- no changed files reported"}`,
-    ].join("\n\n"),
+    detail: detail.join("\n\n"),
   }
 }

@@ -31,10 +31,18 @@ describe("BuildResultSchema", () => {
       tests: [
         { name: "bun test src/note-store.test.ts", passed: true, detail: "5 pass" },
       ],
+      contract_restatement:
+        "Handled the NoteStore goal: create, list, toggle, and remove notes per the acceptance specs; no UI changes were in scope.",
+      followup_workload_guidance:
+        "Follow-up agents should inspect persistence and concurrency requirements before estimating more NoteStore work.",
       ...FCI,
     }
     const parsed = BuildResultSchema.safeParse(payload)
     expect(parsed.success).toBe(true)
+    if (parsed.success) {
+      expect(parsed.data.contract_restatement).toContain("NoteStore goal")
+      expect(parsed.data.followup_workload_guidance).toContain("Follow-up agents")
+    }
   })
 
   test("accepts a failed result with error but no commit_ref", () => {

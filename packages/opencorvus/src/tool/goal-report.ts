@@ -51,6 +51,14 @@ export namespace GoalReport {
     blockers: z.array(z.string()).default([]).describe(
       "Hard blockers hit during execution. Empty when none. A filled array signals the goal did not fully complete.",
     ),
+    followup_workload_guidance: z
+      .string()
+      .trim()
+      .min(1)
+      .optional()
+      .describe(
+        "Explicit warning for subsequent agents about hidden or remaining work surface, evidence they must read deeper, and whether goal workload analysis or Architect re-sizing should be revisited.",
+      ),
   })
 
   export type ReportInput = z.infer<typeof Report>
@@ -70,6 +78,7 @@ export const GoalReportTool = Tool.define("goal_report", {
 Fields are adversarially cross-checked against the diff by the acceptance evaluator:
 - implementation_approach is matched against the actual code written — a claim the diff does not support is a rejection.
 - design_decisions[].reason is challenged — a restated choice or a reason the code contradicts is a rejection.
+- followup_workload_guidance should warn later agents about remaining hidden work surface instead of letting them infer scope only from this goal's file list.
 
 Do not call this tool more than once. Do not call it as a progress update mid-goal.`,
   parameters: GoalReport.Report,
@@ -93,8 +102,11 @@ export function buildGoalReport(report: GoalReport.ReportInput) {
     summary: limitSummary(approach),
     detail: [
       `## Implementation Approach\n${approach}`,
+      report.followup_workload_guidance
+        ? `## Follow-up Workload Guidance\n${report.followup_workload_guidance}`
+        : undefined,
       `## Files Changed\n${fileLines.length ? markdownList(fileLines) : "- no files changed"}`,
-    ].join("\n\n"),
+    ].filter((section): section is string => Boolean(section)).join("\n\n"),
   }
 }
 

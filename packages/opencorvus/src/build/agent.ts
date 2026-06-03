@@ -712,6 +712,7 @@ export namespace BuildAgent {
             "so the orchestrator LLM cross-checks honesty itself. " +
             "Be honest: if you changed project files but didn't merge, report status='failed' with a concrete error. " +
             "If integrity feedback gave you blocking fingerprints, include repair_report and list every fingerprint exactly once as repaired or unrepaired. " +
+            "Include contract_restatement with the detailed req/goal you actually handled, and followup_workload_guidance warning later agents what work surface still needs deeper workload investigation. " +
             "If you legitimately reused a prior attempt's worktree without further edits, or the scoped implementation was already satisfied with a clean worktree, status='passed' with files_changed=[] is fine.",
           inputSchema: BuildResultSchema,
           execute: async (result) => {
@@ -1059,6 +1060,7 @@ function externalBuildSystemContract(executor: Exclude<TaskRow["executor"], "ope
     "- Read the files needed to confirm dependencies, local patterns, and implementation evidence, then edit the files required by the milestone.",
     "- For ports, migrations, rewrites, clones, parity fixes, or component translations, complete source/target investigation is implementation work: inspect every relevant source file/class, public property, event, data/API hook, styling rule, context-menu/right-click behavior, tests/examples, and existing target convention before writing.",
     "- Explain every changed file in the final report; shared-file edits are valid only when they preserve sibling-goal contracts and are explicitly justified.",
+    "- In the final report, restate the detailed req/goal contract you actually handled and warn subsequent agents where to dig deeper for workload, hidden surfaces, evidence, and re-sizing risk.",
     "- Do not perform unrelated broad inventories or spawn exploratory subagents; keep investigation scoped to the source and target surfaces needed to implement the build contract.",
     "- If required source evidence is absent or incomplete, finish with a concise failure summary naming the missing evidence instead of inventing behavior or substituting guesses.",
     "- Keep reasoning, plans, prompt/rule details, and progress narration out of assistant text. Use tools to act.",
@@ -1483,6 +1485,10 @@ function makeExternalPassedBuildResult(input: {
   return {
     status: "passed" as const,
     ...input,
+    contract_restatement:
+      "External executor completed against the persisted build prompt contract. Inspect the build user prompt, goal/request section, and changed files for the detailed req/goal scope.",
+    followup_workload_guidance:
+      "For follow-up agents: do not estimate remaining work from this synthesized summary alone. Read the build prompt, workload brief, diffs, verification evidence, and any unresolved executor events before planning more implementation.",
     fact_check_items: [],
   }
 }
@@ -1501,6 +1507,10 @@ function makeExternalFailedBuildResult(input: {
     tests: input.tests,
     error: input.error,
     files_changed: input.files_changed ?? [],
+    contract_restatement:
+      "External executor failed while working against the persisted build prompt contract. Inspect the build user prompt, goal/request section, and failure evidence for the detailed req/goal scope.",
+    followup_workload_guidance:
+      "For follow-up agents: treat this failed external run as a workload-underestimation risk. Re-read the build prompt, workload brief, source evidence, failed merge or verification output, and consider workload_analysis / Architect re-sizing before another implementation pass.",
     fact_check_items: [],
   }
 }
@@ -2490,6 +2500,18 @@ export function renderVisualContractPreamble(
   return lines.join("\n")
 }
 
+function renderBuildTerminalReportContract(): string {
+  return [
+    "## Terminal Report Contract",
+    "",
+    "When you call `report_build_result`, include:",
+    "- `contract_restatement`: a detailed restatement of the effective req/goal contract you handled, including the user request or goal objective, relevant acceptance specs, requirement ids, important source evidence, and scoped non-goals.",
+    "- `followup_workload_guidance`: an explicit note for subsequent agents about where task complexity may still be hidden, what evidence must be read deeper, and whether workload_analysis or Architect re-sizing should be revisited before more implementation.",
+    "",
+    "Do not shrink the report to the files you happened to touch. Weak follow-up models must be able to recover the real work surface from your terminal report without re-underestimating it.",
+  ].join("\n")
+}
+
 export function buildUserPrompt(target: BuildTarget, context?: BuildAgent.BuildContext, taskID?: string): string {
   if (target.kind === "goal") {
     const lines: string[] = []
@@ -2658,6 +2680,8 @@ export function buildUserPrompt(target: BuildTarget, context?: BuildAgent.BuildC
       "**File Change Report**: Before reporting success, list every project file you changed in `files_changed[]` with a concrete summary and reason. The host compares this list to the git diff; unexplained or phantom files fail collaboration review.",
     )
     lines.push("")
+    lines.push(renderBuildTerminalReportContract())
+    lines.push("")
     lines.push("Orchestrator is asking build to implement this goal, verify it, and report the result.")
     return lines.join("\n")
   }
@@ -2718,6 +2742,8 @@ export function buildUserPrompt(target: BuildTarget, context?: BuildAgent.BuildC
     "# File Change Report",
     "",
     "Before reporting success, list every project file you changed in `files_changed[]` with a concrete summary and reason. The host compares this list to the git diff; unexplained or phantom files fail collaboration review.",
+    "",
+    renderBuildTerminalReportContract(),
   ].join("\n")
 }
 
@@ -2777,6 +2803,7 @@ export function buildRetryFeedbackPrompt(target: BuildTarget, context?: BuildAge
   lines.push("- Edit the existing worktree in place.")
   lines.push("- Preserve all prior upstream contracts already present in this conversation.")
   lines.push("- Run the relevant verification commands before reporting success.")
+  lines.push("- Restate the detailed req/goal contract and warn follow-up agents where workload may still be underestimated.")
   lines.push("- Finish by calling report_build_result with the current attempt result.")
   return lines.join("\n")
 }

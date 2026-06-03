@@ -163,6 +163,26 @@ const BuildResultBase = {
     .array(BuildTestResult)
     .default([])
     .describe("Evidence the build actually ran verification; empty when no tests were required."),
+  contract_restatement: z
+    .string()
+    .trim()
+    .min(1)
+    .optional()
+    .describe(
+      "Detailed restatement of the effective req/goal contract you actually implemented or failed: " +
+        "user request, goal objective, relevant acceptance specs, requirement ids, and scoped non-goals. " +
+        "Use this to prevent later agents from underestimating what the work really covered.",
+    ),
+  followup_workload_guidance: z
+    .string()
+    .trim()
+    .min(1)
+    .optional()
+    .describe(
+      "Explicit warning for subsequent agents about remaining or hidden work surface. " +
+        "Call out underestimation traps, evidence they must read deeper, and whether workload_analysis / " +
+        "architect re-sizing should be revisited before more implementation.",
+    ),
   repair_report: BuildRepairReport.optional().describe(
     "Integrity repair ledger for builds dispatched from integrity feedback. Every blocking integrity fingerprint must be listed exactly once as repaired or unrepaired.",
   ),
