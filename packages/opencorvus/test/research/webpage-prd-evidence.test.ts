@@ -43,6 +43,8 @@ describe("research webpage PRD evidence", () => {
     expect(prompt).toContain("Return `document_outline` as the PRD major module list")
     expect(prompt).toContain("Also submit `webpage_contract`")
     expect(prompt).toContain("functional_surfaces, visual_layout, style_requirements, interaction_states")
+    expect(prompt).toContain("`bundle.full_markdown`")
+    expect(prompt).toContain("1000+ substantive non-empty lines")
     expect(prompt).toContain("source-ir/interaction-state-snapshots.json")
     expect(prompt).toContain("factual runtime evidence")
     expect(prompt).toContain("Do not substitute a raw artifact/material list for this contract")

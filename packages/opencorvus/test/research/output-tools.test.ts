@@ -1,5 +1,9 @@
 import { describe, expect, test } from "bun:test"
-import { buildResearchBriefFromDraft, createResearchOutputTools } from "../../src/research/output-tools"
+import {
+  WEBPAGE_PRD_MIN_FULL_MARKDOWN_LINES,
+  buildResearchBriefFromDraft,
+  createResearchOutputTools,
+} from "../../src/research/output-tools"
 import { researchRequestHash, validateResearchBriefIntegrity } from "../../src/research/schema"
 
 function callTool(tools: Record<string, any>, name: string, input: unknown): Promise<string> {
@@ -44,6 +48,24 @@ function validSubmit(overrides: Record<string, unknown> = {}) {
     open_questions: [{ id: "oq_1", question: "A question?", blocking: false, related_fact_ids: ["fact_1"] }],
     fact_check_items: [],
     ...overrides,
+  }
+}
+
+function validWebpagePrdMarkdown(lines = WEBPAGE_PRD_MIN_FULL_MARKDOWN_LINES): string {
+  return Array.from(
+    { length: lines },
+    (_item, index) => `Line ${index + 1}: evidence-backed webpage region, component, style, interaction, data, acceptance, and risk detail.`,
+  ).join("\n")
+}
+
+function withWebpagePrdBundle(overrides: Record<string, unknown> = {}) {
+  return {
+    ...overrides,
+    bundle: {
+      full_markdown: validWebpagePrdMarkdown(),
+      evidence_json: "{\"items\":[]}",
+      citation_map_json: "{\"citations\":[]}",
+    },
   }
 }
 
@@ -156,9 +178,9 @@ describe("research output tools", () => {
     const result = await callTool(
       kit.tools,
       "submit_research_brief",
-      validSubmit({
+      validSubmit(withWebpagePrdBundle({
         webpage_contract: validWebpageContract(),
-      }),
+      })),
     )
 
     expect(result).toContain("PASS")
@@ -168,12 +190,42 @@ describe("research output tools", () => {
     expect(kit.buildReport().detail).toContain("functional_surfaces=1")
   })
 
-  test("submit_research_brief rejects webpage contract references to unknown evidence", async () => {
+  test("submit_research_brief rejects short webpage PRD bundles", async () => {
     const kit = createResearchOutputTools()
     const result = await callTool(
       kit.tools,
       "submit_research_brief",
       validSubmit({
+        webpage_contract: validWebpageContract(),
+      }),
+    )
+
+    expect(result).toContain("failed bundle-depth validation")
+    expect(result).toContain(`at least ${WEBPAGE_PRD_MIN_FULL_MARKDOWN_LINES} substantive lines`)
+    expect(kit.getCollector().finalized).toBe(false)
+    expect(kit.getCollector().draft).toBeUndefined()
+  })
+
+  test("submit_research_brief accepts a 1000-line webpage PRD bundle", async () => {
+    const kit = createResearchOutputTools()
+    const result = await callTool(
+      kit.tools,
+      "submit_research_brief",
+      validSubmit(withWebpagePrdBundle({
+        webpage_contract: validWebpageContract(),
+      })),
+    )
+
+    expect(result).toContain("PASS")
+    expect(kit.getCollector().finalized).toBe(true)
+  })
+
+  test("submit_research_brief rejects webpage contract references to unknown evidence", async () => {
+    const kit = createResearchOutputTools()
+    const result = await callTool(
+      kit.tools,
+      "submit_research_brief",
+      validSubmit(withWebpagePrdBundle({
         webpage_contract: validWebpageContract({
           visual_layout: [
             {
@@ -186,7 +238,7 @@ describe("research output tools", () => {
             },
           ],
         }),
-      }),
+      })),
     )
 
     expect(result).toContain("failed semantic validation")
@@ -278,5 +330,29 @@ describe("research output tools", () => {
 
     expect(brief.evidence_index[0]?.volatile).toBe(false)
     expect(validateResearchBriefIntegrity(brief)).toBeUndefined()
+  })
+
+  test("buildResearchBriefFromDraft rejects short webpage PRD bundles", () => {
+    const submit = validSubmit({
+      webpage_contract: validWebpageContract(),
+    })
+    const { fact_check_items: _factCheckItems, bundle, ...draft } = submit
+
+    expect(() =>
+      buildResearchBriefFromDraft({
+        draft: { ...draft, bundle } as any,
+        metadata: {
+          research_session_id: "ses_research_short_webpage_prd",
+          created_for_message_id: "msg_research_short_webpage_prd",
+          request_hash: researchRequestHash("short webpage PRD regression"),
+          created_at: "2026-05-31T00:00:00.000Z",
+        },
+        bundlePaths: {
+          full_markdown_path: ".opencorvus/runtime/tasks/t/research/s/research-bundle.md",
+          evidence_json_path: ".opencorvus/runtime/tasks/t/research/s/evidence.json",
+          citation_map_path: ".opencorvus/runtime/tasks/t/research/s/citation-map.json",
+        },
+      }),
+    ).toThrow("research brief failed bundle-depth validation")
   })
 })
