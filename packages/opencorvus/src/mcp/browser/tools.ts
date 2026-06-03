@@ -2,7 +2,6 @@ import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js"
 import fs from "node:fs/promises"
 import os from "node:os"
 import path from "node:path"
-import type { Download } from "playwright"
 import { z } from "zod"
 import {
   adoptPage,
@@ -29,6 +28,8 @@ import {
 } from "./sessions.js"
 import { formatPerfText } from "./perf.js"
 import { clickGuardProfile, doubleClickGuardProfile, runPointGuard, type GuardResult } from "./guard.js"
+
+type Download = any
 
 // ─── 工具调用 tracing ────────────────────────────────────────────────────────
 

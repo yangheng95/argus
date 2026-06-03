@@ -1,5 +1,6 @@
-import type { Page } from "playwright"
 import { PERF_INIT_SCRIPT } from "./scripts"
+
+type Page = any
 
 // ── Public types ──────────────────────────────────────────────────────────────
 

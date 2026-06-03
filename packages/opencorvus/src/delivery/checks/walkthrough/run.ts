@@ -1,10 +1,11 @@
 import fs from "node:fs/promises"
 import path from "node:path"
-import type { Browser } from "playwright"
 import type { AcceptanceSpec } from "@/acceptance/types"
 import { BrowserRuntime } from "@/browser/runtime"
 import { executeWalkthrough, type WalkthroughExecutionResult, type WalkthroughPage } from "./dsl"
 import { translateScenarioToSteps } from "./translate"
+
+type Browser = any
 
 export type WalkthroughResult = WalkthroughExecutionResult & {
   specId: string

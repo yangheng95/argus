@@ -1,7 +1,7 @@
-import type { Page } from "playwright"
-
 export type GuardAction = "click" | "double_click"
 export type GuardDecision = "allow" | "warn" | "block"
+
+type Page = any
 
 export type GuardProfile = {
   action: GuardAction

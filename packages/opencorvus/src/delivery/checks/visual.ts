@@ -21,11 +21,12 @@
 import fs from "node:fs/promises"
 import path from "node:path"
 import { spawn } from "node:child_process"
-import type { Page } from "playwright"
 import { PNG } from "pngjs"
 import ssim from "ssim.js"
 import { isBrowserImplicitAssetRequest, isResourceLoadConsoleError } from "./browser-noise"
 import { BrowserRuntime, findBrowserExecutable } from "@/browser/runtime"
+
+type Page = any
 
 export interface VisualDiffOptions {
   /** Live http(s) URL. File paths are intentionally rejected by renderPage. */
