@@ -12,6 +12,7 @@ export const AVATAR_ICON_BY_ROLE: Record<AgentRole, IconName> = {
   spec: "avatar-spec",
   requirements: "avatar-requirements",
   "frontend-design": "avatar-frontend-design",
+  "frontend-research": "avatar-frontend-research",
   architect: "avatar-architect",
   planner: "avatar-planner",
   goal: "avatar-goal",
@@ -20,7 +21,7 @@ export const AVATAR_ICON_BY_ROLE: Record<AgentRole, IconName> = {
   explore: "avatar-explore",
   evaluator: "avatar-evaluator",
   integrity: "avatar-integrity",
-  "fact-check": "avatar-integrity",
+  "fact-check": "avatar-fact-check",
   acceptance: "avatar-acceptance",
 }
 

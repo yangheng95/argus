@@ -14,8 +14,19 @@ export type TaskScopeSectionVisibilityInput = {
 };
 
 export type TaskScopeSectionVisibility = {
+  frontendResearch: boolean;
   requirements: boolean;
   architect: boolean;
+};
+
+const STEP_SECTION_BY_ID: Record<string, string> = {
+  frontend_design: "frontendResearch",
+  frontend_research: "frontendResearch",
+  requirements: "requirements",
+  architect: "architect",
+  build: "goalWorkflows",
+  deliver: "acceptance",
+  refine: "acceptance",
 };
 
 function stepStatus(workflow: WorkflowLike | null | undefined, stepID: string): string {
@@ -30,9 +41,11 @@ function hasConcreteStepState(status: string): boolean {
 export function taskScopeSectionVisibility(
   input: TaskScopeSectionVisibilityInput,
 ): TaskScopeSectionVisibility {
+  const frontendResearchStatus = stepStatus(input.workflow, "frontend_research");
   const requirementsStatus = stepStatus(input.workflow, "requirements");
   const architectStatus = stepStatus(input.workflow, "architect");
   return {
+    frontendResearch: hasConcreteStepState(frontendResearchStatus),
     requirements:
       hasConcreteStepState(requirementsStatus)
       || (Array.isArray(input.requirements) && input.requirements.length > 0),
@@ -40,4 +53,9 @@ export function taskScopeSectionVisibility(
       hasConcreteStepState(architectStatus)
       || input.architect != null,
   };
+}
+
+export function taskScopeWorkflowSectionID(stepID: string | undefined | null): string {
+  const id = String(stepID || "");
+  return STEP_SECTION_BY_ID[id] ?? "";
 }

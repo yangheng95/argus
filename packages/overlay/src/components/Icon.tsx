@@ -54,6 +54,7 @@ export type IconName =
   | "avatar-spec"
   | "avatar-requirements"
   | "avatar-frontend-design"
+  | "avatar-frontend-research"
   | "avatar-architect"
   | "avatar-planner"
   | "avatar-goal"
@@ -62,6 +63,7 @@ export type IconName =
   | "avatar-explore"
   | "avatar-evaluator"
   | "avatar-integrity"
+  | "avatar-fact-check"
   | "avatar-acceptance"
   // Empty-state / cwd
   | "folder"
@@ -562,6 +564,15 @@ const ICON_PATHS: Record<IconName, IconRecord> = {
       </>
     ),
   },
+  "avatar-frontend-research": {
+    body: () => (
+      <>
+        <circle cx="6.5" cy="6.5" r="2.4" />
+        <path d="M8.3 8.3 11.4 11.4" />
+        <path d="M4.5 11.2h5.8M4.9 4.4h3.2M4.9 6.4h2.5" />
+      </>
+    ),
+  },
   "avatar-architect": {
     body: () => (
       <>
@@ -627,6 +638,14 @@ const ICON_PATHS: Record<IconName, IconRecord> = {
       <>
         <path d="M8 3.1 11.5 4.4v2.8c0 2.3-1.5 4.3-3.5 5.4-2-1.1-3.5-3.1-3.5-5.4V4.4Z" />
         <path d="M6.4 7.6 7.6 8.8l2.1-2.3" />
+      </>
+    ),
+  },
+  "avatar-fact-check": {
+    body: () => (
+      <>
+        <rect x="3.8" y="3.5" width="8.4" height="9" rx="1.4" />
+        <path d="M5.8 6h3.9M5.8 8h2.4M5.9 10l1.1 1.1 2.2-2.3" />
       </>
     ),
   },
