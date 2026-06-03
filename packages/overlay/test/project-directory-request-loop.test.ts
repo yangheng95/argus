@@ -25,6 +25,16 @@ describe("overlay project directory request loop", () => {
     expect(source).not.toContain("market().length === 0");
   });
 
+  test("MCP panel refreshes while backend connection state is still pending", () => {
+    const source = read("src/components/settings/SkillMarketPanel.tsx");
+    expect(source).toContain("const hasConnectingMcp = createMemo");
+    expect(source).toContain("item?.status === \"connecting\"");
+    expect(source).toContain('props.mode !== "mcp" || props.active !== true || !hasConnectingMcp()');
+    expect(source).toContain("window.setTimeout");
+    expect(source).toContain("loadExtensions().catch");
+    expect(source).toContain("window.clearTimeout(timer)");
+  });
+
   test("extension loaders surface request failures instead of rewriting stores to empty values", () => {
     const source = read("src/services/extensions.ts");
     expect(source).toContain('apiJson("skill/installed")');
