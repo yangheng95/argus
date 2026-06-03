@@ -16,13 +16,14 @@ describe("overlay benchmark store bridge", () => {
     expect(benchmark).toContain("settingsStore")
     expect(benchmark).toContain("overlay.boardStore.selectedTaskID")
     expect(benchmark).toContain("overlay.settingsStore.directory")
+    expect(benchmark).not.toContain("loadConversation")
   })
 
   test("overlay exposes explicit benchmark store hooks", () => {
     const main = readFileSync(overlayMainPath, "utf8")
 
     expect(main).not.toContain("(window as any).state")
-    expect(main).toContain("(window as any).boardStore = boardStore;")
-    expect(main).toContain("(window as any).settingsStore = settingsStore;")
+    expect(main).toMatch(/\(window as any\)\.boardStore\s*=\s*boardStore/)
+    expect(main).toMatch(/\(window as any\)\.settingsStore\s*=\s*settingsStore/)
   })
 })

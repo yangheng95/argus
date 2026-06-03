@@ -94,8 +94,7 @@ type OverlayBenchmarkWindow = Window & {
   loadTasks: () => Promise<void> | void
   selectTask: (taskID: string) => Promise<void> | void
   persistOverlaySettings: () => Promise<void> | void
-  loadBoard: () => Promise<void> | void
-  loadConversation: () => Promise<void> | void
+  loadBoard: (options?: { sync?: boolean }) => Promise<void> | void
   boardStore: {
     board: any
     tasks: any[]
@@ -2026,8 +2025,7 @@ async function verifyResume(
   await next.evaluate(async () => {
     const overlay = window as OverlayBenchmarkWindow
     await overlay.persistOverlaySettings()
-    if (!overlay.boardStore.board?.task?.id) await overlay.loadBoard()
-    await overlay.loadConversation()
+    await overlay.loadBoard({ sync: true })
   })
   await current.close().catch(() => undefined)
   return next
