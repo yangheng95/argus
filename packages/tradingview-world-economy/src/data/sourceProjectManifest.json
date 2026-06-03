@@ -11,25 +11,27 @@
     "assets/manifest.json"
   ],
   "sourceDomRegions": {
-    "count": 15,
+    "count": 1,
     "largestBytes": 480293,
-    "highPriorityCount": 6,
+    "highPriorityCount": 1,
     "metricsModule": "src/data/sourceDomRegions.ts",
     "replacementPlanModule": "src/data/sourceDomReplacementPlan.ts",
-    "replacementPlanCount": 15,
+    "replacementPlanCount": 1,
     "iterationStateModule": "src/data/sourceDomIterationState.ts",
-    "semanticReplacementCount": 2,
+    "semanticReplacementCount": 4,
     "svgAssetGroupModule": "src/data/sourceSvgAssetGroups.ts",
     "svgAssetGroupCount": 0,
     "faqGroupModule": "src/data/sourceFaqGroups.ts",
     "faqGroupCount": 0
   },
   "semanticReplacements": {
-    "count": 2,
+    "count": 4,
     "iterationStateModule": "src/data/sourceDomIterationState.ts",
     "components": [
       "FooterNavigation",
-      "HeaderNavigation"
+      "HeaderNavigation",
+      "EconomyPageHeader",
+      "WorldEconomyTabNavigation"
     ]
   },
   "visualIteration": {
