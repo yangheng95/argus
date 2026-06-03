@@ -370,7 +370,7 @@ function renderSourcePackageReadme(webpageEvidenceDir: string, stats: PrepareWeb
     "",
     "Do not treat this package as the deliverable app. The deliverable is the project-owned app source seeded from this package's structure, content, styles, and assets.",
     "",
-    "`source-ir/interaction-state-snapshots.json` is factual runtime evidence for frontend-research and implementation verification; it must not be treated as generated PRD prose.",
+    "`source-ir/interaction-state-snapshots.json` is factual runtime evidence for frontend-research investigation packets and implementation verification; it must not be treated as generated PRD prose.",
     "",
     "Verification evidence should include source-consumption diagnostics plus runtime visual comparison against `reference.png` when those checks are available.",
     "",

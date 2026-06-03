@@ -175,9 +175,9 @@ export namespace BuildAgent {
     /** Optional visual anchors from frontend_design. The frontend template is the
      *  authoritative contract; these rows only provide compact ids when present. */
     designSpecs?: VisualSpec[]
-    /** Compact frontend_research webpage PRD evidence rendered from the latest
-     *  non-stale frontend_research_brief artifact. Build must consume it before
-     *  implementing webpage/UI replica surfaces. */
+    /** Compact frontend_research webpage investigation plan rendered from the latest
+     *  non-stale frontend_research_brief artifact. Build consumes it as coverage
+     *  work packets before implementing webpage/UI replica surfaces. */
     frontendResearch?: string
     /** Full frontend-design frontend template and source manifest from the decision log.
      *  This names frontend_template, fillable_modules, visual_consistency_contract,
@@ -2371,10 +2371,10 @@ function renderBuildRequirementsSection(
     "Do not treat PRD/research/design material as optional background. If a requirement, evidence_ref, or acceptance line is unclear, missing from the worktree, or contradicted by available source/design evidence, fail with the concrete blocker or repair the assigned source; do not silently implement a simpler interpretation.",
   )
   lines.push(
-    "For UI/webpage work, read the PRD/frontend-research/frontend-design material in page chunks before editing: identify the component kind for each chunk, then implement the matching component and content. All visible content must be componentized and fed by props, data modules, fixtures, or API adapters instead of hardcoded directly into page wrappers, generated SVG, or one-off JSX literals. Charts, maps, heatmaps, geographic visualizations, tables/grids, tabs, menus, modals, forms, and carousels must remain real components with data/state/interaction contracts. Do not replace a chart/map/heatmap with a flat SVG/image/decorative vector unless the PRD evidence says it is static decoration.",
+    "For UI/webpage work, read the PRD/frontend_design material and any frontend_research investigation packets in page chunks before editing: identify the component kind for each chunk, verify the referenced evidence, then implement the matching component and content. All visible content must be componentized and fed by props, data modules, fixtures, or API adapters instead of hardcoded directly into page wrappers, generated SVG, or one-off JSX literals. Charts, maps, heatmaps, geographic visualizations, tables/grids, tabs, menus, modals, forms, and carousels must remain real components with data/state/interaction contracts. Do not replace a chart/map/heatmap with a flat SVG/image/decorative vector unless verified PRD/design evidence says it is static decoration.",
   )
   lines.push(
-    "Weight the sources accordingly: PRD/frontend-research/frontend-design contracts drive roughly 70% of implementation decisions for global layout, component functions, content/data, states, and interactions; skeleton/source-dom/source-skeleton evidence supplies roughly 30% style, geometry, CSS, assets, and pixel-consistency support. When they conflict, implement the PRD component/content contract and use the skeleton only to tune visual fidelity.",
+    "Weight the sources accordingly: PRD/frontend_design contracts drive roughly 70% of implementation decisions for global layout, component functions, content/data, states, and interactions; skeleton/source-dom/source-skeleton evidence supplies roughly 30% style, geometry, CSS, assets, and pixel-consistency support. Frontend_research packets are coverage and investigation prompts, not a separate fact source. When sources conflict, implement the PRD/component/design contract and use the skeleton only to tune visual fidelity.",
   )
   if (options.directRequest) {
     lines.push(

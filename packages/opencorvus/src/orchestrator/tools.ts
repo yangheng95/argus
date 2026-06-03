@@ -4080,13 +4080,13 @@ export function createOrchestratorTools(input: {
 
     frontend_research: tool({
       description:
-        "OPTIONAL read-only stage agent for webpage/UI reference research. Use alongside `frontend_design` for supplied page URLs when downstream requirements and architect need faithful source-backed facts about page functions, visual layout, style requirements, interactions, content/data inventory, responsive behavior, fidelity acceptance, and risks. It investigates rendered webpage evidence and source pages itself, then persists a frontend_research_brief/webpage_contract artifact. It is NOT the frontend implementation template owner, NOT requirements, NOT architect, NOT build, NOT a route selector, and NOT final PRD/SPEC/report acceptance.",
+        "OPTIONAL read-only stage agent for webpage/UI investigation division. Use alongside `frontend_design` for supplied page URLs when downstream requirements, architect, or build need source-backed work packets for page functions, visual layout, style checks, interactions, content/data inventory, responsive behavior, fidelity acceptance, and risks. It partitions prepared webpage evidence into a frontend_research_brief/webpage_contract artifact; it does not perform deep investigation itself. It is NOT the frontend implementation template owner, NOT requirements, NOT architect, NOT build, NOT a route selector, and NOT final PRD/SPEC/report acceptance.",
       inputSchema: z.object({
         reason: z.string().min(1).describe("Why frontend webpage research is needed for this task."),
         source_urls: z
           .array(z.string().min(1))
           .min(1)
-          .describe("Source page URLs the frontend-research agent must cover through prepared evidence and read-only source investigation."),
+          .describe("Source page URLs the frontend-research agent must partition into investigation work packets from prepared evidence."),
         focus: z.string().optional().describe("Optional narrow focus for the frontend-research agent."),
       }),
       execute: async ({ reason, source_urls, focus }) => {
@@ -4119,7 +4119,7 @@ export function createOrchestratorTools(input: {
           const subpageTasks = result.brief.subpage_research_tasks
           const contract = result.brief.webpage_contract
           return SubAgentProtocol.yieldResult({
-            headline: "Frontend research brief persisted as advisory webpage evidence.",
+            headline: "Frontend research brief persisted as webpage investigation division.",
             summary: result.brief.summary,
             fields: [
               ["session", result.sessionID],
@@ -4138,7 +4138,7 @@ export function createOrchestratorTools(input: {
               ["bundle_paths", Object.values(result.brief.bundle)],
             ],
             pointer:
-              `frontend_research_brief artifact ${artifactID}; requirements and architect read it as advisory webpage evidence. ` +
+              `frontend_research_brief artifact ${artifactID}; downstream agents read it as webpage investigation work packets. ` +
               "This result is evidence only; choose the next tool from full task context.",
           })
         } catch (err) {

@@ -87,19 +87,19 @@ material to the task, but do not treat the list as a mandatory next-tool command
 
 For a PRD/SPEC/report request about a webpage, including one that asks for both
 functional and visual description, call `frontend_research` with the supplied
-URL(s). The frontend-research agent owns the rendered webpage PRD evidence path
-and performs the initial read-only source-backed investigation for layout,
-visible content, responsive behavior, style tokens, components, tables, charts,
-maps, navigation, interactions, fidelity acceptance, and other page-inventory
-facts. It persists a `frontend_research_brief` with `webpage_contract`;
-downstream requirements and architect consume it as advisory evidence and split
-the later implementation work. Build is not a research worker for this stage.
+URL(s). The frontend-research agent owns webpage investigation division: it
+partitions prepared evidence, source URLs, visible regions, components, tables,
+charts, maps, navigation, interactions, responsive behavior, fidelity risks, and
+unknowns into source-backed work packets. It persists a
+`frontend_research_brief` with an investigation-partition `webpage_contract`;
+downstream requirements, architect, and build consume it as a coverage checklist,
+not as a completed PRD fact contract.
 
 `frontend_research` and `frontend_design` are siblings, not substitutes. For UI
 implementation or visual/page replication, call both when a live page URL is the
 source of truth: `frontend_design` materializes the maintainable frontend
-template/source handoff; `frontend_research` synthesizes the functional/visual
-PRD contract and risks from its own read-only investigation. For pure document research without implementation,
+template/source handoff; `frontend_research` publishes the functional/visual
+investigation division and risks from prepared evidence. For pure document research without implementation,
 `frontend_research` may run without `frontend_design`. For generic market/API
 facts around the same task, use `research` separately.
 
@@ -250,7 +250,7 @@ For UI replication or frontend implementation from visual reference,
 `analyze_intent` and before every downstream implementation stage.
 `frontend_design` materializes the frontend template and source manifest that
 Requirements, Architect, Build, and Integrity consume; `frontend_research`
-materializes the source-backed webpage functional/visual research brief.
+materializes the source-backed webpage investigation division brief.
 Typical shape: `frontend_design` + `frontend_research` in parallel -> optional
 `analyze_intent` -> `requirements` -> `architect` -> per-goal `build` ->
 `integrity`.
@@ -266,8 +266,8 @@ Do not apply the UI-replication rule to document/research requests such as
 "research this page and form a PRD", "analyze this product page", or "write a
 SPEC from this webpage". In those cases the URL is evidence for
 `frontend_research`; the final document artifact, if needed, is produced later
-from the frontend_research brief and task context by the appropriate execution
-surface.
+from the frontend_research investigation packets, downstream evidence, and task
+context by the appropriate execution surface.
 
 If `frontend_design` fails for screenshot acquisition, materialization, or
 missing-reference reasons, that is a missing authoritative-source problem. Do
@@ -379,7 +379,8 @@ contract.
   UI implementation.
 - `frontend_research`: use before requirements/architect when supplied webpage
   URLs require functional, visual, interaction, content, responsive, and fidelity
-  evidence. Pair it with `frontend_design` for page implementation/replication.
+  investigation division. Pair it with `frontend_design` for page
+  implementation/replication.
 - `requirements`: produce acceptance-level REQ-N rows and foundational
   decisions. It does not produce goals.
 - After a successful `requirements` result, call `architect` next. Do not call
