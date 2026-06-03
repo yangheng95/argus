@@ -8,9 +8,7 @@
  * acceptance_specs are now passed to integrity acceptance review as INFORMATION and
  * verified via LLM judgment + run_command, not deterministic scorer runs.
  * `discovery.ts` retains the project-shape helpers (build/test/lint command
- * sniffing) because the acceptance prompt still cites them for sanity
- * checks; `visual.ts` keeps the rendered-vs-reference diff because that is
- * a delivery-time concern driven by the LLM comparing attachments.
+ * sniffing); rendered-vs-reference diff primitives now live under runtime.
  */
 
 export * from "./types"
@@ -29,8 +27,6 @@ export {
   summarizeVisualReport,
   type VisualDiffOptions,
   type VisualDiffReport,
-} from "./visual"
+} from "@/runtime/visual-page"
 export { findBrowserExecutable } from "@/browser/runtime"
-export {
-  buildDeliveryEvidenceManifest,
-} from "./project-gate"
+export { buildDeliveryEvidenceManifest } from "./project-gate"

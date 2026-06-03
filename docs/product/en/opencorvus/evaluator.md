@@ -14,7 +14,7 @@ The Delivery agent resolves the current task's check family via `delivery/checks
 
 ### Stage 2: LLM judge
 
-Engaged **only when deterministic checks cannot decide** (e.g., no executable tests, or a UI visual fidelity judgment). Produces evidence via `delivery/checks/visual.ts` (visual / screenshot comparison), `delivery/checks/content-fingerprint.ts` (content fingerprint), and other submodules; the delivery agent's `verdict.ts` then aggregates these into the final verdict.
+Engaged **only when deterministic checks cannot decide** (e.g., no executable tests, or a UI visual fidelity judgment). Visual rendering evidence uses `runtime/visual-page.ts`; content fingerprint helpers live under `delivery/checks/content-fingerprint.ts`. Integrity review aggregates the final acceptance verdict.
 
 ## CheckSelector
 
@@ -53,11 +53,11 @@ Key implementation at `check/policy.ts:45`:
 
 Verdicts are persisted as `engine_artifact[kind="verdict"]`:
 
-| verdict | Next action |
-|---|---|
-| `accepted` | `deliver` completes the task directly; if additional artifacts (patch / git preview) are needed, call `publish_delivery` explicitly for post-delivery artifact export |
-| `rejected` | Remediation via `delivery-retry-feedback.ts`; once `delivery.max_retries` is exceeded, the Orchestrator decides whether to retry / replan / fail |
-| `inconclusive` | Treated as rejected, but prefers replan (an inability to decide usually means incomplete information or a doom-loop) |
+| verdict        | Next action                                                                                                                                                           |
+| -------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `accepted`     | `deliver` completes the task directly; if additional artifacts (patch / git preview) are needed, call `publish_delivery` explicitly for post-delivery artifact export |
+| `rejected`     | Remediation via `delivery-retry-feedback.ts`; once `delivery.max_retries` is exceeded, the Orchestrator decides whether to retry / replan / fail                      |
+| `inconclusive` | Treated as rejected, but prefers replan (an inability to decide usually means incomplete information or a doom-loop)                                                  |
 
 The Delivery agent is responsible only for verdicts and evidence. Starting / stopping / retrying / cancelling / failing the current task, and publishing new follow-up tasks, are Orchestrator lifecycle authority. If Delivery determines the work should be split into a new task, it can only recommend this in verdict evidence — it cannot create the task directly.
 

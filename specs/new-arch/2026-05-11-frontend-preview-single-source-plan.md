@@ -34,12 +34,11 @@ This inventory is required before any implementation change.
     - `preview_process_exited`
     - `preview_start_idle_timeout`
 
-### 1.2 Delivery tool path
+### 1.2 Retired delivery tool path
 
-- `packages/opencorvus/src/delivery/tools.ts`
-  - `createDeliveryTools(...)`
-  - `start_frontend_preview`
-  - currently hardcodes `workspaceDir = Filesystem.resolve(Instance.directory)`
+- Retired. Runtime screenshot capture is now build-owned via
+  `packages/opencorvus/src/build/screenshot-tool.ts` and
+  `packages/opencorvus/src/runtime/page-capture.ts`.
 
 ### 1.3 Runtime-flow / delivery gate path
 

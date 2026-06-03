@@ -1,5 +1,5 @@
 /**
- * Browser-implicit network noise classification for delivery runtime capture.
+ * Browser-implicit network noise classification for runtime page capture.
  *
  * A headless Chromium navigation produces two signals the app never authored:
  *

@@ -77,32 +77,31 @@ orchestrator/loop.ts — runTaskLoop()  (line 117)
 
 ## MiniWorkflow — two declarative templates
 
-| ID | Suited for | Recommended steps |
-|---|---|---|
-| `direct` | Single-file / bugfix / config / short debug | `build` → `deliver` |
+| ID         | Suited for                                                    | Recommended steps                                                                |
+| ---------- | ------------------------------------------------------------- | -------------------------------------------------------------------------------- |
+| `direct`   | Single-file / bugfix / config / short debug                   | `build` → `deliver`                                                              |
 | `pipeline` | Multi-file features / UI replication / cross-module refactors | `frontend_design?` → `requirements` → `architect` → per-goal `build` → `deliver` |
 
 Defined in `engine/workflow.ts`; users can customize via `opencorvus.jsonc`. The Orchestrator retrieves a template via `WorkflowRegistry.resolve(id)` but may still deviate based on its own reasoning.
 
 ## Sub-agent overview
 
-| Agent | Code | Responsibility |
-|---|---|---|
-| **Orchestrator** | `orchestrator/agent.ts` + `orchestrator/loop.ts` | Sole decision-maker; advances the task through 21 tools |
-| **Intent Analysis** | `intent-analysis/agent.ts` | Interprets short / ambiguous requests; outputs intent class / complexity / clarifications |
-| **Requirements** | `requirements/agent.ts` | Writes REQ-N + foundational decisions via Zod tool output; does not produce goals |
-| **Architect** | `architect/agent.ts` | Analyzes boundaries first, then produces at least 2 small, independently executable/verifiable goals; single all-in-one goals are disallowed; also owns interface contracts, traceability, and fidelity |
-| **Frontend Design** | `frontend-design/agent.ts` | Visual references (Figma / images / URL) → frontend template / fillable modules / component and material inventories |
-| **Build** | `build/agent.ts` + `build/index.ts` + `build/report.ts` + `build/types.ts` + `goal/runner.ts` + `agent/sub-agent-protocol.ts` | Actually writes code in the worktree; invoked by the Orchestrator via the `build` tool |
-| **Integrity Reviewer** | `integrity/agent.ts` | Multi-dimension integrity review (requirement_fidelity / technical_feasibility / hallucination / solution_quality) |
-| **Prosecutor** | `prosecutor/agent.ts` | Adversarial review of delivery candidates |
-| **Delivery** | `delivery/agent.ts` + `delivery/checks/` + `delivery/specialists/` | Diff acceptance + remediation triggers + deterministic / LLM judge checks; can trigger a `run_integrity_review` semantic integrity review based on delivery evidence |
+| Agent                  | Code                                                                                                                                                       | Responsibility                                                                                                                                                                                          |
+| ---------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Orchestrator**       | `orchestrator/agent.ts` + `orchestrator/loop.ts`                                                                                                           | Sole decision-maker; advances the task through 21 tools                                                                                                                                                 |
+| **Intent Analysis**    | `intent-analysis/agent.ts`                                                                                                                                 | Interprets short / ambiguous requests; outputs intent class / complexity / clarifications                                                                                                               |
+| **Requirements**       | `requirements/agent.ts`                                                                                                                                    | Writes REQ-N + foundational decisions via Zod tool output; does not produce goals                                                                                                                       |
+| **Architect**          | `architect/agent.ts`                                                                                                                                       | Analyzes boundaries first, then produces at least 2 small, independently executable/verifiable goals; single all-in-one goals are disallowed; also owns interface contracts, traceability, and fidelity |
+| **Frontend Design**    | `frontend-design/agent.ts`                                                                                                                                 | Visual references (Figma / images / URL) → frontend template / fillable modules / component and material inventories                                                                                    |
+| **Build**              | `build/agent.ts` + `build/index.ts` + `build/report.ts` + `build/types.ts` + `build/screenshot-tool.ts` + `goal/runner.ts` + `agent/sub-agent-protocol.ts` | Actually writes code in the worktree; invoked by the Orchestrator via the `build` tool; owns runtime screenshot capture evidence                                                                        |
+| **Integrity Reviewer** | `integrity/agent.ts`                                                                                                                                       | Multi-dimension integrity review (requirement_fidelity / technical_feasibility / hallucination / solution_quality); final workflow acceptance gate                                                      |
+| **Prosecutor**         | `prosecutor/agent.ts`                                                                                                                                      | Adversarial review of delivery candidates                                                                                                                                                               |
 
-Task lifecycle agent-side authority belongs exclusively to the **Orchestrator**: starting / stopping / retrying / cancelling / failing the current task, and publishing new follow-up tasks, must all go through Orchestrator explicit lifecycle tools (e.g. `propose_task`). Delivery can only output a verdict, evidence, and recommendations — it cannot directly create, cancel, retry, or terminate engine tasks.
+Task lifecycle agent-side authority belongs exclusively to the **Orchestrator**: starting / stopping / retrying / cancelling / failing the current task, and publishing new follow-up tasks, must all go through Orchestrator explicit lifecycle tools (e.g. `propose_task`). Integrity review produces the terminal acceptance verdict; Build produces implementation and runtime evidence.
 
 > **Planner agent removed.** The session-level `src/tool/planner.ts` is a working-memory tool (`add_task / update_task / scratchpad_*`) that any agent can mount to manage its own subtask tree; it is **not** a replacement for the old per-goal planner.
 >
-> **Evaluator agent removed.** Verification responsibilities are merged into `delivery/checks/` (`discovery.ts` resolves the check family → `project-gate.ts` / `runtime-readiness.ts` / `visual.ts`).
+> **Delivery agent removed.** Workflow acceptance now runs through `integrity`; runtime screenshot evidence belongs to Build.
 
 ## Two nested loops
 

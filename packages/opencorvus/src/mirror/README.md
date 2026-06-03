@@ -44,7 +44,9 @@ export async function compileDesignToXML(input: z.infer<typeof CompileInput>): P
 ---
 name: webpage-generate
 ---
+
 调用顺序：
+
 1. `webpage_extract` → 拿 ExtractedPage
 2. `webpage_compile` → 拿 XML IR
 3. `webpage_analyze` → 拿 scaffold/shared-context
@@ -112,60 +114,64 @@ mirror/* 禁止依赖:
 mirror/* 允许依赖:
   src/util, src/llm, src/engine/protocol, src/worktree,
   src/frontend-design/url-screenshot,
-  src/delivery/checks/visual (findBrowserExecutable)
+  src/runtime/visual-page (findBrowserExecutable)
 ```
 
 ---
 
 ## Mirror → opencorvus 映射表
 
-| Mirror 源 | 目标位置 | 说明 |
-|---|---|---|
-| `infra/parser/extract.ts` | `shared/extract-xml.ts` | 直接移植 |
-| `infra/utils/similarity.ts` | `shared/similarity.ts` | 直接移植 |
-| `infra/utils/tier-graph.ts` | `shared/tier-graph.ts` | 直接移植 |
-| `infra/utils/xml-escape.ts` | `shared/xml-escape.ts` | 直接移植 |
-| `infra/utils/text.ts` | 内联到调用点 | 删除 |
-| `infra/utils/path.ts` | 用 `util/filesystem.ts` | 删除 |
-| `infra/llm/token-estimator.ts` | `shared/token-estimator.ts` | 纯算法移植（非 LLM wrapper） |
-| `infra/llm/client.ts` | `src/llm/api.ts` | 弃（用 AI SDK） |
-| `infra/llm/budget.ts` | 弃 | AI SDK 内建 |
-| `infra/llm/models.ts` | 弃 | 用 opencorvus provider |
-| `infra/progress.ts` | `engine/protocol.ts` + `ctx?.emit` | 弃 |
-| `infra/image-constrain.ts` | `shared/image-constrain.ts` | 直接移植 |
-| `infra/design-language-extract.ts` | `shared/design-language.ts` | 直接移植 |
-| `infra/content-compare.ts` | `shared/content-compare.ts` | 直接移植 |
-| `infra/compile/ir-utils.ts` | 并入 `figma/compile.ts` | 折叠 |
-| `infra/figma-cache.ts` | `figma/cache.ts` | 独立工具，路径改 worktree；不被 fetch-tree 隐式调用 |
-| `infra/figma/extract-core.ts` | `figma/fetch-tree.ts` | isolated algorithm only；产品入口禁用 REST，走 Figma MCP |
-| `service/figma-extract.ts` | **删除**（是 mirror 的 stage 壳，不是算法） | — |
-| `service/figma-graph-analyze.ts` | `figma/graph-analyze.ts` | 单一函数 `compressDesignTree(design) → compressed` |
-| `service/figma-compile.ts` | `figma/compile.ts` | 单一函数 `compileDesignToXML(design) → xmlIR` |
-| `service/figma-to-code.ts` | **不移植**（是 e2e 管线） | — |
-| `infra/browser/url-extract-core.ts` | `url/extract.ts` | 单一函数 `extractPage(url, opts) → page`；mirror 本就是 puppeteer-core |
-| `service/url-extract.ts` | **删除**（是 stage 壳） | — |
-| `service/url-compile.ts` | `url/compile.ts` | 单一函数 `compilePageToXML(page) → xmlIR` |
-| `service/url-to-code.ts` | **不移植**（是 e2e 管线） | — |
-| `infra/pattern/*` | `url/pattern/*` | 保留目录组织；顶层单一函数 `analyzePage(page) → scaffold` |
-| `service/render.ts` | `visual/render.ts` | 单一函数 `renderFiles({ url, ... }) → screenshot` |
-| `service/evaluate.ts` | `visual/evaluate.ts` | 单一函数 `evaluateVisual(design, render) → score` |
-| `service/visual-refine-loop.ts` | **不移植**（是 e2e loop） | — |
-| `prompt/*` | 不移植 | skill markdown 承载 |
+| Mirror 源                           | 目标位置                                    | 说明                                                                   |
+| ----------------------------------- | ------------------------------------------- | ---------------------------------------------------------------------- |
+| `infra/parser/extract.ts`           | `shared/extract-xml.ts`                     | 直接移植                                                               |
+| `infra/utils/similarity.ts`         | `shared/similarity.ts`                      | 直接移植                                                               |
+| `infra/utils/tier-graph.ts`         | `shared/tier-graph.ts`                      | 直接移植                                                               |
+| `infra/utils/xml-escape.ts`         | `shared/xml-escape.ts`                      | 直接移植                                                               |
+| `infra/utils/text.ts`               | 内联到调用点                                | 删除                                                                   |
+| `infra/utils/path.ts`               | 用 `util/filesystem.ts`                     | 删除                                                                   |
+| `infra/llm/token-estimator.ts`      | `shared/token-estimator.ts`                 | 纯算法移植（非 LLM wrapper）                                           |
+| `infra/llm/client.ts`               | `src/llm/api.ts`                            | 弃（用 AI SDK）                                                        |
+| `infra/llm/budget.ts`               | 弃                                          | AI SDK 内建                                                            |
+| `infra/llm/models.ts`               | 弃                                          | 用 opencorvus provider                                                 |
+| `infra/progress.ts`                 | `engine/protocol.ts` + `ctx?.emit`          | 弃                                                                     |
+| `infra/image-constrain.ts`          | `shared/image-constrain.ts`                 | 直接移植                                                               |
+| `infra/design-language-extract.ts`  | `shared/design-language.ts`                 | 直接移植                                                               |
+| `infra/content-compare.ts`          | `shared/content-compare.ts`                 | 直接移植                                                               |
+| `infra/compile/ir-utils.ts`         | 并入 `figma/compile.ts`                     | 折叠                                                                   |
+| `infra/figma-cache.ts`              | `figma/cache.ts`                            | 独立工具，路径改 worktree；不被 fetch-tree 隐式调用                    |
+| `infra/figma/extract-core.ts`       | `figma/fetch-tree.ts`                       | isolated algorithm only；产品入口禁用 REST，走 Figma MCP               |
+| `service/figma-extract.ts`          | **删除**（是 mirror 的 stage 壳，不是算法） | —                                                                      |
+| `service/figma-graph-analyze.ts`    | `figma/graph-analyze.ts`                    | 单一函数 `compressDesignTree(design) → compressed`                     |
+| `service/figma-compile.ts`          | `figma/compile.ts`                          | 单一函数 `compileDesignToXML(design) → xmlIR`                          |
+| `service/figma-to-code.ts`          | **不移植**（是 e2e 管线）                   | —                                                                      |
+| `infra/browser/url-extract-core.ts` | `url/extract.ts`                            | 单一函数 `extractPage(url, opts) → page`；mirror 本就是 puppeteer-core |
+| `service/url-extract.ts`            | **删除**（是 stage 壳）                     | —                                                                      |
+| `service/url-compile.ts`            | `url/compile.ts`                            | 单一函数 `compilePageToXML(page) → xmlIR`                              |
+| `service/url-to-code.ts`            | **不移植**（是 e2e 管线）                   | —                                                                      |
+| `infra/pattern/*`                   | `url/pattern/*`                             | 保留目录组织；顶层单一函数 `analyzePage(page) → scaffold`              |
+| `service/render.ts`                 | `visual/render.ts`                          | 单一函数 `renderFiles({ url, ... }) → screenshot`                      |
+| `service/evaluate.ts`               | `visual/evaluate.ts`                        | 单一函数 `evaluateVisual(design, render) → score`                      |
+| `service/visual-refine-loop.ts`     | **不移植**（是 e2e loop）                   | —                                                                      |
+| `prompt/*`                          | 不移植                                      | skill markdown 承载                                                    |
 
 ---
 
 ## 跨模块契约
 
 ### `ir/compressed-design.ts`（Figma）
+
 `CompressedDesignSchema` — `fileKey`、`rootNode`、`componentMap`、`tokens`、`assets`、`stats`、`comments`
 
 ### `ir/extracted-page.ts`（URL）
+
 `ExtractedPageSchema` — `url`、`viewport`、`root`、`tokens`、`cssCustomProps`、`assets`、`screenshot?`
 
 ### `ir/xml-ir.ts`
+
 `XmlIRSchema` — `source: "figma"|"url"`、`xml: string`、`bytes`、`sectionIndex`
 
 ### `ir/scaffold.ts`
+
 `ScaffoldSchema` — `plan: PlanFile[]`、`tiers`、`prebuilt`、`sharedContext`
 
 ---
@@ -195,11 +201,11 @@ Phase 1 所有测试用 `emit: undefined`。Phase 2 才在 `engine/model.ts` 新
     "htmlparser2": "^10.1.0",
     "pixelmatch": "^6.0.0",
     "pngjs": "^7.0.0",
-    "ssim.js": "^3.5.0"
+    "ssim.js": "^3.5.0",
   },
   "devDependencies": {
-    "@types/pngjs": "^6.0.0"
-  }
+    "@types/pngjs": "^6.0.0",
+  },
 }
 ```
 
@@ -209,26 +215,26 @@ Bun 1.3.13 实测验证：`PNG.sync.read/write`、`pixelmatch`、`ssim.default` 
 
 ## 阶段化落地
 
-| 阶段 | 内容 | 人日 | 验收门 |
-|---|---|---|---|
-| **A. shared utilities** | `shared/*` 8 个文件 + 单测 | 4 | `bun test src/mirror/shared/**` 100% 通过；零网络/磁盘 side effect |
-| **B. IR schemas** | `types.ts` + `ir/*` Zod + fixture 校验 | 1.5 | 3 份 fixture JSON 解析通过 |
-| **C. visual QA** | `visual/render.ts` + `visual/evaluate.ts` | 1.5 | 固定双 PNG 分数误差 ±0.5 |
-| **D. figma 链路** | isolated legacy algorithms only；不注册工具、不进 frontend_design 产品路径 | 4.5 | 单元测试可保留，产品验收以 Figma MCP 为准 |
-| **E. url 链路 - extract** | `url/extract.ts` | 1.5 | 离线 fixture + 真实 puppeteer，ExtractedPage 通过 schema 校验 |
-| **F. url 链路 - compile + pattern** | `url/compile.ts` + `url/pattern/*` | 3 | fixture 驱动，输出与 mirror 字节级一致 |
-| **G. 冒烟脚本 + 文档** | `script/mirror-smoke.ts` | 1 | 本地一把跑通三条链路 |
-| **总计** | | **17 人日** | |
+| 阶段                                | 内容                                                                       | 人日        | 验收门                                                             |
+| ----------------------------------- | -------------------------------------------------------------------------- | ----------- | ------------------------------------------------------------------ |
+| **A. shared utilities**             | `shared/*` 8 个文件 + 单测                                                 | 4           | `bun test src/mirror/shared/**` 100% 通过；零网络/磁盘 side effect |
+| **B. IR schemas**                   | `types.ts` + `ir/*` Zod + fixture 校验                                     | 1.5         | 3 份 fixture JSON 解析通过                                         |
+| **C. visual QA**                    | `visual/render.ts` + `visual/evaluate.ts`                                  | 1.5         | 固定双 PNG 分数误差 ±0.5                                           |
+| **D. figma 链路**                   | isolated legacy algorithms only；不注册工具、不进 frontend_design 产品路径 | 4.5         | 单元测试可保留，产品验收以 Figma MCP 为准                          |
+| **E. url 链路 - extract**           | `url/extract.ts`                                                           | 1.5         | 离线 fixture + 真实 puppeteer，ExtractedPage 通过 schema 校验      |
+| **F. url 链路 - compile + pattern** | `url/compile.ts` + `url/pattern/*`                                         | 3           | fixture 驱动，输出与 mirror 字节级一致                             |
+| **G. 冒烟脚本 + 文档**              | `script/mirror-smoke.ts`                                                   | 1           | 本地一把跑通三条链路                                               |
+| **总计**                            |                                                                            | **17 人日** |                                                                    |
 
 ---
 
 ## 已验证风险（三项 subagent 实测）
 
-| 原假设 | 验证结论 |
-|---|---|
-| Playwright → puppeteer-core 迁移可能需改写 | **mirror 代码已是 puppeteer-core**，17 API 触点全 1:1 等价 |
-| `pattern/*` 可能隐性依赖 LLM / service | **零 LLM**；唯一跨目录 import（`compileElement`）随 `url-compile` 自然消解；`token-estimator` 纯算法需同步搬 |
-| pngjs Bun 下 zlib `writeSync` 崩溃 | **Bun 1.3.13 实测通过**，`PNG.sync.read/write` round-trip OK |
+| 原假设                                     | 验证结论                                                                                                     |
+| ------------------------------------------ | ------------------------------------------------------------------------------------------------------------ |
+| Playwright → puppeteer-core 迁移可能需改写 | **mirror 代码已是 puppeteer-core**，17 API 触点全 1:1 等价                                                   |
+| `pattern/*` 可能隐性依赖 LLM / service     | **零 LLM**；唯一跨目录 import（`compileElement`）随 `url-compile` 自然消解；`token-estimator` 纯算法需同步搬 |
+| pngjs Bun 下 zlib `writeSync` 崩溃         | **Bun 1.3.13 实测通过**，`PNG.sync.read/write` round-trip OK                                                 |
 
 ---
 
@@ -256,13 +262,14 @@ Bun 1.3.13 实测验证：`PNG.sync.read/write`、`pixelmatch`、`ssim.default` 
 - 不要先写 unit test，再写实现——单测会在你同样错的地方"成功"
 - 先证明确定性和 schema 边界，再补 edge case unit test
 - 如果原 mirror 与 OpenCorvus 的 source-layout contract 冲突，以本 README 和 `specs/new-arch/2026-05-08-mirror-emitter-promotion.md` 为准
-- pattern/* 的类型（`ProjectScaffold` 等）在 mirror 的 `types.ts` 里是 **broken import**（mirror tsc 走 skipLibCheck），本项目不照搬这个破绽——在 Phase F 根据实现反推真实 shape
+- pattern/\* 的类型（`ProjectScaffold` 等）在 mirror 的 `types.ts` 里是 **broken import**（mirror tsc 走 skipLibCheck），本项目不照搬这个破绽——在 Phase F 根据实现反推真实 shape
 
 ---
 
 ## Phase 2 预告（不在本次范围）
 
 完成 isolated integration 后，phase 2 接线约 5 人日：
+
 - 每个 URL/Image 原子算法包一层 `Tool.define`（薄壳，只做 Zod validate + 调用 + `EngineProtocol.emit` 事件），例：`url_extract` / `url_compile` / `url_analyze` / `visual_render` / `visual_evaluate`
 - `tool/registry.ts` 注册
 - `permission/defaults.ts` 新增 deny（出站请求：Figma API / 任意 URL 抓取）

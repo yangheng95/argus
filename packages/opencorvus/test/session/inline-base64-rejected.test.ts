@@ -3,8 +3,8 @@
  *
  * Specs: specs/delivery-attachment-store-single-source-2026-05-11.md
  *
- * Every inline-base64 producer (compare_visual_artifacts, MCP image
- * content, future visual tools) routes through Session.updatePart on the
+ * Every inline-base64 producer (MCP image content, screenshot tools, future
+ * visual tools) routes through Session.updatePart on the
  * way to PartTable. The guard is the single-point veto: any `data:*;base64,`
  * URL inside the persisted JSON throws InlineBase64InPartError loudly so
  * the regression is caught at the producer site instead of silently
@@ -67,11 +67,11 @@ describe("Session.updatePart inline-base64 guard", () => {
           messageID,
           sessionID,
           type: "tool",
-          tool: "compare_visual_artifacts",
+          tool: "image_probe",
           callID,
           state: {
             status: "completed",
-            title: "compare_visual_artifacts",
+            title: "image_probe",
             input: {},
             output: "{}",
             metadata: {},

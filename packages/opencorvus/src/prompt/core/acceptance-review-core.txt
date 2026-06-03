@@ -25,16 +25,14 @@ Accept only when every applicable surface is verified by concrete evidence:
 Before `verdict="accepted"`, your tool history must contain evidence for each
 required facet listed in the prompt:
 
-- Use `query_metric_trajectory` before deciding; it is supporting evidence, not
-  a verdict.
 - For frontend/runtime surfaces, start the dev server with `run_command` from
   the repository root, use the exact local URL printed by that command, then
-  inspect it with `verify_page_integrity` and/or `screenshot`. Use an already
-  running URL only when the evidence proves it was launched from this same
-  worktree in this review session; otherwise treat the URL as stale and start a
-  fresh server.
-- For visual/reference surfaces, use the live URL evidence above and, when
-  image artifacts are present, `compare_visual_artifacts`.
+  collect observable evidence from command output, logs, and scoped file
+  inspection. Use an already running URL only when the evidence proves it was
+  launched from this same worktree in this review session; otherwise treat the
+  URL as stale and start a fresh server.
+- For visual/reference surfaces, cite fresh build-agent screenshot evidence,
+  frontend-design artifacts, or integrity evidence attachments when present.
 - For non-frontend runtime surfaces, use `run_command` from the repository root
   to invoke the public entry point or focused verification command.
 - For file/config/library/docs work, inspect the relevant files and run the

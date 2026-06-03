@@ -4,12 +4,12 @@
 > `engine_artifact` + `kind="verification-evidence"`**；`engine_evaluation` 表已删（Phase 6-b）。
 >
 > 现行公开 API：
+>
 > - `verification/persist.ts` — `persistEvidence` / `findLatestGoalRunEvidence` /
 >   `findGoalRunEvidence` / `findLatestDeliveryEvidence`（**4 个 export**；该文件顶部注释里
 >   出现的 `findPreviousDeliveryEvidence` 名字属于跨文件描述，真函数是
 >   `delivery/manifest.ts:findPreviousDeliveryEvidenceManifest`，按 manifest 角度查 evidence）
-> - `verification/query.ts` — `queryEvidence` / `renderEvidence`（`query_evidence` tool 包装在
->   `delivery/tools.ts` 的 `createDeliveryTools` 里）
+> - `verification/query.ts` — `queryEvidence` / `renderEvidence`（当前无 delivery tool 包装）
 > - `delivery/arbiter.ts` — `arbitrateDeliveryGate` / `arbitrateDeliveryVerdict`
 >   （**arbiter 真源在 `src/delivery/`，不在 `src/metrics/`**；`src/metrics/` 只导出
 >   `types / score / store / executor`）
@@ -23,6 +23,7 @@
 > 持久化；`EngineEvaluationScope/Status/Verdict/Check` TypeScript 类型仍在
 > `engine.sql.ts:120-160` 区域，只是不再绑表。<br>
 > **2026-05-10 起的新增物（在本文中无对应章节）**：
+>
 > - `AcceptanceSpec.scenario` 字段（Gherkin Given/When/Then，`acceptance/types.ts:24,119`）
 >   作为 walkthrough 的结构化来源，影响 evidence check 的人类可读 reasoning。
 > - `engine_artifact.kind="orchestrator-stream-error"`（`engine.sql.ts:120`、
@@ -31,13 +32,12 @@
 > - 集成度审计已迁出 evidence 管线：参考 `integrity/agent.ts` 的 post-build
 >   `Requirement Status Snapshot` 与 `contract_audit` / `ContractIR` /
 >   `architect/linker.ts` 链路。
-> - 仲裁层真源 `delivery/arbiter.ts` 现导出 `arbitrateDeliveryGate` /
->   `arbitrateDeliveryVerdict` / `appendManifestEvidence`，verdict 失败签名走
->   `delivery/manifest.ts:failureSignatureForCheck` + `repeatedDeliveryFailureSignatures`。
+> - Delivery agent/tool/service surface 已删除；runtime screenshot capture 归属
+>   `build/screenshot-tool.ts` + `runtime/page-capture.ts`，最终验收归属 `integrity/`。
 >
 > 对应代码：`src/engine/engine.sql.ts` (EngineArtifactTable) · `src/engine/persist.ts` ·
 > `src/engine/store.ts` · `src/delivery/checks/` · `src/delivery/arbiter.ts` ·
-> `src/delivery/tools.ts` · `src/acceptance/contract-audit.ts` · `src/acceptance/types.ts` ·
+> `src/runtime/page-capture.ts` · `src/build/screenshot-tool.ts` · `src/acceptance/contract-audit.ts` · `src/acceptance/types.ts` ·
 > `src/orchestrator/tools.ts` · `src/verification/persist.ts` · `src/verification/query.ts`
 
 ## 一句话
@@ -68,9 +68,10 @@ language，而非新开一张表。
    条 spec 失败、什么 exit_code、stdout 末 500 字"下手修。
 
 4. **rework 无进展检测不存在**。`orchestrator/tools.ts:2497` 只比较 `reworkHistory.length
+
    > max_delivery_iterations`。没有"两次失败内容是否一致"的判断。bench8 观察到：同一个
-   14 条 strict fail 集合连续出现 3+ 次，直到耗尽 `max_delivery_iterations=3` 才 fail_task，
-   浪费 15-40 分钟在已知无解的重复上。
+14 条 strict fail 集合连续出现 3+ 次，直到耗尽 `max_delivery_iterations=3` 才 fail_task，
+   > 浪费 15-40 分钟在已知无解的重复上。
 
 5. **on_goal / on_delivery trigger 语义没被文档提升**。`acceptance/types.ts:125-130`
    的 `resolveTrigger` 是个现成合同：heuristic/prebuilt 默认 `on_goal`，llm_judge
@@ -140,20 +141,20 @@ export type EngineEvaluationCheck = {
   // 既有
   name: string
   label?: string
-  family?: string                    // "goal_eval" | "delivery_verify" | "visual_diff" | ...
+  family?: string // "goal_eval" | "delivery_verify" | "visual_diff" | ...
   status: "passed" | "failed" | "skipped"
-  evidence?: string                  // stdout/stderr 截断
+  evidence?: string // stdout/stderr 截断
   // 新增
-  spec_id?: string                   // 对应 acceptance_specs[].id
+  spec_id?: string // 对应 acceptance_specs[].id
   scorer_kind?: "heuristic_shell" | "heuristic_script_ref" | "llm_judge" | "prebuilt" | "visual_diff"
-  mode?: "strict" | "soft"           // 从 scorerMode(spec) 派生
+  mode?: "strict" | "soft" // 从 scorerMode(spec) 派生
   severity?: "essential" | "important" | "optional" | "pitfall"
   trigger?: "on_goal" | "on_delivery"
   // 失败时可选字段
   exit_code?: number
   idle_timed_out?: boolean
-  matched_paths?: string[]           // grep/file_exists 操作的命中路径
-  output_digest?: string             // sha256(evidence) 截断 16 字节 — signature 计算用
+  matched_paths?: string[] // grep/file_exists 操作的命中路径
+  output_digest?: string // sha256(evidence) 截断 16 字节 — signature 计算用
 }
 ```
 
@@ -196,12 +197,13 @@ retry 是有意义的。把 `exit_code` 和 `output_digest` 纳入，只有真�
 ### task-wide aggregate view 保留
 
 `task.metadata.criteria_results` 的 upsert 流继续存在 —— 它是 **evidence 的投影**，
-不是另一个真值源。`delivery/tools.ts:43` 的 `query_criteria` 不变，继续读 aggregate；
+不是另一个真值源。旧 delivery tool surface 的 `query_criteria` 继续读 aggregate；
 但 aggregate 的每一项来源都是一条 evidence row 的一个 check，不再是 orchestrator/
 goal-pool 各自独立上报的。
 
 新增 `query_evidence(scope?, goal_id?, latest?)` tool（仍在 delivery tools.ts）供
 delivery agent 精查：
+
 - `query_evidence(scope="goal_run", goal_id="gol_...", latest=true)` → 最近一次该 goal 的 goal_run evidence
 - `query_evidence(scope="delivery", latest=true)` → 最近一轮 delivery rework 的 evidence
 
@@ -274,7 +276,7 @@ updateGoalRun(goalRun.id, { status: "completed" })
 
 1. `engine.sql.ts`：`EngineEvaluationTable` 加 `scope`、`signature` 字段。drizzle
    migration。默认值：旧 row 的 `scope` 按 `delivery_id !== null ? "delivery" :
-   "goal_run"` 回填；`signature` 留空字符串（历史行不参与 signature 对比）。
+"goal_run"` 回填；`signature` 留空字符串（历史行不参与 signature 对比）。
 2. 新类型 `EngineEvaluationCheck`（在 engine.sql.ts 或独立文件）。`EngineGoalCheck`
    作为前者的 structural 子集保留供旧代码读取。
 3. 新模块 `src/verification/`（建议文件：`signature.ts` — computeSignature 纯函数；
@@ -284,7 +286,7 @@ updateGoalRun(goalRun.id, { status: "completed" })
 ### Phase B — goal_run scope 写入
 
 4. `goal-pool.ts:699` 后，`updateGoalRun` 前，调 `persistEvaluation({scope: "goal_run",
-   ...})`。不改 goal 状态逻辑，只是同时落一条 evidence 行。
+...})`。不改 goal 状态逻辑，只是同时落一条 evidence 行。
 5. 新 evidence 不被 retry / delivery 读 —— 这一步是影子写入，验证表结构与 signature
    稳定。用现有 bench 跑一次，只观察 `engine_evaluation` 表新增的 goal_run row 是否
    正确，signature 是否稳定跨 retry。
@@ -308,15 +310,15 @@ updateGoalRun(goalRun.id, { status: "completed" })
 
 10. delivery 分支拿到当前 delivery evidence 后，查上一条同 task 的 delivery evidence，
     比对 `signature`。相等 → `updateTask(status="failed", error="rework not converging
-    across 2 iterations — same signature")`；不等 → 继续现有 rework 流。
+across 2 iterations — same signature")`；不等 → 继续现有 rework 流。
 11. 顺便把 `_delivery_rework_history` 从"塞 feedback 字符串"降级为"存 evidence.id 指针
     列表"。
 
 ### Phase F — 新 tool + 清理
 
-12. `delivery/tools.ts` 加 `query_evidence(scope, goal_id?, latest?)`。
+12. 旧 delivery tool surface 加 `query_evidence(scope, goal_id?, latest?)`。
 13. 删掉 orchestrator delivery 分支里的重复 evaluateGoal 逻辑（已被 Phase D 替代）。
-14. 删 `prefetchDeliveryContext`（`delivery/agent.ts:373`）—— evidence 有结构化数据
+14. 删旧 delivery agent 的 `prefetchDeliveryContext` —— evidence 有结构化数据
     之后 memory recall 对 verdict 不再产生边际价值，它的低 minScore=0.15 模糊召回是
     噪声。
 15. 删 `FrontendCheck.renders_correctly` / `issues` / `DeliveryVerdict.deferred_checks`
@@ -331,7 +333,7 @@ updateGoalRun(goalRun.id, { status: "completed" })
 - 一个 goal_run 可以有一条 evidence（该 goal_run 的 scope="goal_run"），也可以没有（还
   没执行完就被 abort 之类）。
 - signature 是纯函数：同一组 `{spec_id, scorer_kind, mode, trigger, status, exit_code,
-  output_digest}` 输入产相同输出。
+output_digest}` 输入产相同输出。
 - `task.metadata.criteria_results` 的每一项都能从某条 evidence 的某个 check 推出 ——
   aggregate view 的唯一可信来源是 evidence 表。
 

@@ -1,18 +1,18 @@
 # 三任务调度与验收复盘：KeyStatisticsMT / CandlestickChart / TrendChart
 
 > 撰写日：2026-05-14
-> 取证：`engine_artifact` (kind=run / goal_run_attempt / delivery / integrity_attempt / verification-evidence / orchestrator-stream-error)、`protocol_event` (workflow.step.updated / integrity.review.*)、`session` 树、`engine_interaction_request`。
+> 取证：`engine_artifact` (kind=run / goal_run_attempt / delivery / integrity_attempt / verification-evidence / orchestrator-stream-error)、`protocol_event` (workflow.step.updated / integrity.review.\*)、`session` 树、`engine_interaction_request`。
 > 数据库快照：`C:\Users\chuan\AppData\Local\opencorvus\.opencorvus\opencorvus.db`，三任务时间窗 2026-05-13 11:20 — 2026-05-14 02:03。
 
 ---
 
 ## 0. 任务结局速览
 
-| Task | id | 结局 | Goal 数 | 耗时 | 关键现象 |
-|------|----|------|--------|------|---------|
-| KeyStatisticsMT | `tsk_e2110fadf001oLDWI9aO0Wrq7U` | **cancelled**（metadata.cancelled=true）；**真正原因是 `DeliveryService.verify threw` —— 见 §7-修订 1** | 5 / 5 passed（goal 4 retry=1，superseded=`build_retry`） | 11:20 → 14:16（约 2h 56m） | DAG 串行由 architect 设计强制；无 orchestrator stream error；无 interaction；终态来自 delivery_verification_threw |
-| CandlestickChart | `tsk_e21cff31a001KYZ7u8h27S0tKo` | **failed** | 1 / 1 passed | 14:48 → 17:12（约 2h 24m） | 4 次 deliver 拒绝 + 1 次 worktree 创建失败；component 全部 10 条 spec 通过；系统**确实**发了 `interaction_request` "阻断问题处理"，但 5min 后被自动 reject（见 §7-修订 3） |
-| TrendChart | `tsk_e21d04c70001ElmU0hK4MZwZEP` | **cancelled**（用户在凌晨 02:03 手动取消） | 1 goal pending（retry=1） | 14:49 → 02:03（约 11h 14m，其中 19:33—02:03 共 6.5h 处于 `blocked`） | LLMActivity 总 deadline 3600000ms 触发后无人收拾；6 次 build→deliver 循环；架构师下了缩量修正，executor 仍按全量做；任务前期早有一次 `interaction_request`（C# 源码路径） 也被 5min auto-reject |
+| Task             | id                               | 结局                                                                                                     | Goal 数                                                  | 耗时                                                                 | 关键现象                                                                                                                                                                                        |
+| ---------------- | -------------------------------- | -------------------------------------------------------------------------------------------------------- | -------------------------------------------------------- | -------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| KeyStatisticsMT  | `tsk_e2110fadf001oLDWI9aO0Wrq7U` | **cancelled**（metadata.cancelled=true）；**真正原因是 retired delivery verifier threw** —— 见 §7-修订 1 | 5 / 5 passed（goal 4 retry=1，superseded=`build_retry`） | 11:20 → 14:16（约 2h 56m）                                           | DAG 串行由 architect 设计强制；无 orchestrator stream error；无 interaction；终态来自 delivery_verification_threw                                                                               |
+| CandlestickChart | `tsk_e21cff31a001KYZ7u8h27S0tKo` | **failed**                                                                                               | 1 / 1 passed                                             | 14:48 → 17:12（约 2h 24m）                                           | 4 次 deliver 拒绝 + 1 次 worktree 创建失败；component 全部 10 条 spec 通过；系统**确实**发了 `interaction_request` "阻断问题处理"，但 5min 后被自动 reject（见 §7-修订 3）                      |
+| TrendChart       | `tsk_e21d04c70001ElmU0hK4MZwZEP` | **cancelled**（用户在凌晨 02:03 手动取消）                                                               | 1 goal pending（retry=1）                                | 14:49 → 02:03（约 11h 14m，其中 19:33—02:03 共 6.5h 处于 `blocked`） | LLMActivity 总 deadline 3600000ms 触发后无人收拾；6 次 build→deliver 循环；架构师下了缩量修正，executor 仍按全量做；任务前期早有一次 `interaction_request`（C# 源码路径） 也被 5min auto-reject |
 
 ---
 
@@ -33,21 +33,23 @@ CandlestickChart 的 `engine_task.error` 已是教科书级自陈：组件本体
 
 四个 deliver 失败对应四次"为了通过交付门禁去改 host 项目本身"，每一次都引入新一类项目级问题：
 
-| # | 阻断 | LLM 修复手段 | 引入的新问题 |
-|---|------|--------------|--------------|
-| 1 | `package.json` 缺 `packageManager` | 添加 `pnpm@10.32.1` | conflicting lockfiles |
-| 2 | `package-lock.json` 与 `pnpm-lock.yaml` 冲突 | 删 `package-lock.json` | TrendView 引用不存在的 `useTrendData` |
-| 3 | TrendView 引用缺失模块 | 创建 `trend-chart` 存根（22 文件） | TS 类型冲突 + 测试页缺 HXKlineChart CDN |
-| 4 | 存根 TS 冲突 + CDN 缺失 | — | `git worktree add` 失败（旧分支残留） |
+| #   | 阻断                                         | LLM 修复手段                       | 引入的新问题                            |
+| --- | -------------------------------------------- | ---------------------------------- | --------------------------------------- |
+| 1   | `package.json` 缺 `packageManager`           | 添加 `pnpm@10.32.1`                | conflicting lockfiles                   |
+| 2   | `package-lock.json` 与 `pnpm-lock.yaml` 冲突 | 删 `package-lock.json`             | TrendView 引用不存在的 `useTrendData`   |
+| 3   | TrendView 引用缺失模块                       | 创建 `trend-chart` 存根（22 文件） | TS 类型冲突 + 测试页缺 HXKlineChart CDN |
+| 4   | 存根 TS 冲突 + CDN 缺失                      | —                                  | `git worktree add` 失败（旧分支残留）   |
 
 **根因**：当 `runtime:web` 之类"硬门禁"需要项目级 dev server 真正能跑起来时，LLM 被迫去修 `package.json`/`lockfile`/`vite.config`/CDN——这是**项目主干的形状**，每一次修都把失败面外扩。组件 goal 与项目级基础设施的失败被混进同一回路，重试只会把雪球滚大。
 
 **对应的项目规则**：
+
 - **rule 7（禁止 fallback）反向破坏**：deliver-fail→build-fix 的循环正是在累积"为了通过门禁的补丁"，每一层都在制造下一层 bug。
 - **rule 20（禁止"最简单的修复"）**：每一轮 LLM 都在做"最简单的修复"，没有人 challenge"该不该修 host 配置"。
 - **rule 28b（敢于宣告失败）**：终局的 task.error 文本是这条规则的优秀范例——明确列出 4 次拒绝、未解决问题、建议手工恢复步骤。
 
 **整改方向（系统级）**：
+
 1. 引入**故障分类器**：`runtime:*`、`packageManager:*`、`worktree:*` 等环境/基础设施失败必须与"组件 goal 失败"走不同的恢复路径；前者不应触发 goal-level build retry。
 2. **冻结 host 主干文件**为交付期不可写白名单：`package.json` / `pnpm-lock.yaml` / `vite.config.*` / 根 `tsconfig` 等。LLM 若要改这些，必须显式 `interaction_request`，不能藏在 deliver-retry 里默默改。
 3. worktree 创建失败必须立即降级为不可重试的 fatal，不要继续 deliver-build 循环。
@@ -197,16 +199,16 @@ TrendChart 终态 cancelled 而非 failed，没有 `task.error` postmortem，没
 
 ## 5. 行动清单（优先级排序）
 
-| # | 项 | 影响 | 体力估算 |
-|---|---|---|---|
-| 1 | host gate 故障分类器：环境/基础设施类失败不进 build retry，强制走 interaction_request | 直接消除 CandlestickChart / TrendChart 失败模式 | 中（host manifest schema + run dispatcher 改） |
-| 2 | freeze host 主干文件：`package.json` / lockfile / 根 `vite.config` / 根 `tsconfig` 在交付期 LLM 不可改 | 切断 §1 的级联 | 小（工具白名单） |
-| 3 | integrity correction → 真正生成新 goal / 更新 contract，build prompt 必须从更新后 contract 派生 | 修复 §2 的双源行为 | 中 |
-| 4 | `run.status=blocked` 自动派发 force_user_input 或自动 cancel + 写 postmortem | 杜绝 TrendChart 的 6.5h 静默 | 小 |
-| 5 | goal scheduler 按 `depends_on` 拓扑并行，叶子层同时进入 build | 整体加速 30-40% | 中 |
-| 6 | cancel 与 fail 共用 postmortem 写入路径 | 复盘可用性 | 小 |
-| 7 | workflow.step.updated 同 phase 重入 >3 次 → 强制 interaction_request | 替代 1h deadline 的早期兜底 | 小 |
-| 8 | 审计 `persist.beginBuildAttempt` / `persist.updateGoalRun` 写入点合并 | 降噪 | 小 |
+| #   | 项                                                                                                     | 影响                                            | 体力估算                                       |
+| --- | ------------------------------------------------------------------------------------------------------ | ----------------------------------------------- | ---------------------------------------------- |
+| 1   | host gate 故障分类器：环境/基础设施类失败不进 build retry，强制走 interaction_request                  | 直接消除 CandlestickChart / TrendChart 失败模式 | 中（host manifest schema + run dispatcher 改） |
+| 2   | freeze host 主干文件：`package.json` / lockfile / 根 `vite.config` / 根 `tsconfig` 在交付期 LLM 不可改 | 切断 §1 的级联                                  | 小（工具白名单）                               |
+| 3   | integrity correction → 真正生成新 goal / 更新 contract，build prompt 必须从更新后 contract 派生        | 修复 §2 的双源行为                              | 中                                             |
+| 4   | `run.status=blocked` 自动派发 force_user_input 或自动 cancel + 写 postmortem                           | 杜绝 TrendChart 的 6.5h 静默                    | 小                                             |
+| 5   | goal scheduler 按 `depends_on` 拓扑并行，叶子层同时进入 build                                          | 整体加速 30-40%                                 | 中                                             |
+| 6   | cancel 与 fail 共用 postmortem 写入路径                                                                | 复盘可用性                                      | 小                                             |
+| 7   | workflow.step.updated 同 phase 重入 >3 次 → 强制 interaction_request                                   | 替代 1h deadline 的早期兜底                     | 小                                             |
+| 8   | 审计 `persist.beginBuildAttempt` / `persist.updateGoalRun` 写入点合并                                  | 降噪                                            | 小                                             |
 
 ---
 
@@ -219,7 +221,7 @@ TrendChart 终态 cancelled 而非 failed，没有 `task.error` postmortem，没
 `engine_artifact[task=KSM]` 含三条同时间戳（2026-05-13T14:16:59.293Z）证据：
 
 - `kind=delivery_verification_threw label=delivery_verification_threw payload={"error":"delivery agent failed","iteration":0,"verdict":"rejected"}` (id `art_e21b2b09d001lisYuliorQv72B`)
-- `kind=verdict label=delivery-agent-verdict summary="DeliveryService.verify threw before producing a verdict: delivery agent failed"`
+- `kind=verdict label=delivery-agent-verdict summary="retired delivery verifier threw before producing a verdict"`
 - `kind=verification-evidence label=evidence-delivery status=failed verdict=rejected`
 
 时间戳与 `engine_task.time_completed=1778681819305` / `error="task cancelled"` 完全重合。即所谓"用户取消"几乎可以肯定是**系统在 verifier 异常时把 task `metadata.cancelled` 翻成 true 并归于 cancel 终态**，并非真正的人工 cancel。原文档把 KSM 当"5/5 passed 但被用户 cancel"是错的——它是个 **delivery verifier 自身抛异常**的样本，比"串行慢"严重得多。
@@ -295,17 +297,17 @@ CC 的唯一 goal 仅 own `src/shared/components/CandlestickChart/` + C# 源目�
 
 ## 8. 修订后的行动清单（替换原 §5）
 
-| # | 优先级 | 项 | 影响 | 体力估算 |
-|---|---|---|---|---|
-| 1 | **P0** | **真正实现"两次 deliver-reject 后硬阻塞用户"**：`engine_interaction_request` 不得 5min auto-reject；至少在 `request_type=question + parent run 来自 deliver-fail` 时不许 stale；commit `15506698b` 是 prompt 级，现在需要 runtime 级保证 | 直接消灭 CC / TC 的失败模式 | 中（`runtime.ts:48` 的 5min 兜底要分类 + UI 侧需要更显眼地展示求助） |
-| 2 | **P0** | **parent run blocked/failed 时 child session 强制接管 + workflow step status 改从 `session.status.terminal.reason` 派生** | 修复 TC 父子脱钩与 step 错记 completed 的真值源问题 | 中 |
-| 3 | **P0** | **`DeliveryService.verify` 抛异常的结构化失败路径**：当 verifier 自身抛错时，task 终态不应混淆成 cancelled；要把 `delivery_verification_threw` 标记进 `engine_task.error` 并触发明确的 retry/escalation 语义 | 修复 KSM 的"假取消"误诊 | 小 |
-| 4 | **P1** | **architect/integrity 必须为 browser/UI deliverable 物化 infra goal**：root `package.json` / lockfile / preview/test runtime surface / 必要 CDN 要么被某个 goal `owned_paths` 覆盖，要么 integrity 在 `missing_capability` 维度 fail | 切断 CC 与 TC 的环境补丁雪崩根因 | 中（`dimensions.ts` 的 capability 维度扩展 + architect prompt 调整） |
-| 5 | **P1** | **integrity correction 必须真物化为新 contract / 新 goal**，build session prompt 必须从更新后 contract 派生，不能从 task-level 原始请求派生 | 修复 TC 的 goal 双源行为 | 中 |
-| 6 | **P1** | **cancel 与 fail 共用 postmortem 写入路径**：cancel 时把"已完成 / 未完成 / 失败原因 / 建议后续"落到 `engine_artifact[kind=verification-evidence, label=cancel-evidence]` | 解决 KSM/TC 的 cancel 吞诊断 | 小 |
-| 7 | **P2** | **architect 生成更"宽"的 goal DAG**：识别"只依赖文件存在"而非"实现细节"的弱依赖，提供并行路径。注意：这是 prompt 调整，不是给 scheduler 加调度算法 | KSM 风格的多 goal 任务整体提速 | 中 |
-| 8 | **P2** | `workflow.step.updated source=assistant` 全面切到 `source=session.status` 派生 | 真值源一致性 | 小 |
-| 9 | **P3** | 审计 `persist.beginBuildAttempt` / `persist.updateGoalRun` 写入点合并 | 降噪 | 小 |
+| #   | 优先级 | 项                                                                                                                                                                                                                                       | 影响                                                | 体力估算                                                             |
+| --- | ------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------- | -------------------------------------------------------------------- |
+| 1   | **P0** | **真正实现"两次 deliver-reject 后硬阻塞用户"**：`engine_interaction_request` 不得 5min auto-reject；至少在 `request_type=question + parent run 来自 deliver-fail` 时不许 stale；commit `15506698b` 是 prompt 级，现在需要 runtime 级保证 | 直接消灭 CC / TC 的失败模式                         | 中（`runtime.ts:48` 的 5min 兜底要分类 + UI 侧需要更显眼地展示求助） |
+| 2   | **P0** | **parent run blocked/failed 时 child session 强制接管 + workflow step status 改从 `session.status.terminal.reason` 派生**                                                                                                                | 修复 TC 父子脱钩与 step 错记 completed 的真值源问题 | 中                                                                   |
+| 3   | **P0** | **retired delivery verifier 抛异常的结构化失败路径**：当 verifier 自身抛错时，task 终态不应混淆成 cancelled；要把 `delivery_verification_threw` 标记进 `engine_task.error` 并触发明确的 retry/escalation 语义                            | 修复 KSM 的"假取消"误诊                             | 小                                                                   |
+| 4   | **P1** | **architect/integrity 必须为 browser/UI deliverable 物化 infra goal**：root `package.json` / lockfile / preview/test runtime surface / 必要 CDN 要么被某个 goal `owned_paths` 覆盖，要么 integrity 在 `missing_capability` 维度 fail     | 切断 CC 与 TC 的环境补丁雪崩根因                    | 中（`dimensions.ts` 的 capability 维度扩展 + architect prompt 调整） |
+| 5   | **P1** | **integrity correction 必须真物化为新 contract / 新 goal**，build session prompt 必须从更新后 contract 派生，不能从 task-level 原始请求派生                                                                                              | 修复 TC 的 goal 双源行为                            | 中                                                                   |
+| 6   | **P1** | **cancel 与 fail 共用 postmortem 写入路径**：cancel 时把"已完成 / 未完成 / 失败原因 / 建议后续"落到 `engine_artifact[kind=verification-evidence, label=cancel-evidence]`                                                                 | 解决 KSM/TC 的 cancel 吞诊断                        | 小                                                                   |
+| 7   | **P2** | **architect 生成更"宽"的 goal DAG**：识别"只依赖文件存在"而非"实现细节"的弱依赖，提供并行路径。注意：这是 prompt 调整，不是给 scheduler 加调度算法                                                                                       | KSM 风格的多 goal 任务整体提速                      | 中                                                                   |
+| 8   | **P2** | `workflow.step.updated source=assistant` 全面切到 `source=session.status` 派生                                                                                                                                                           | 真值源一致性                                        | 小                                                                   |
+| 9   | **P3** | 审计 `persist.beginBuildAttempt` / `persist.updateGoalRun` 写入点合并                                                                                                                                                                    | 降噪                                                | 小                                                                   |
 
 ### 已撤回 / 重写的原建议
 
@@ -359,14 +361,14 @@ CC 的唯一 goal 仅 own `src/shared/components/CandlestickChart/` + C# 源目�
 
 ### 修订后的根因优先级（替代原 §10 §5 段）
 
-| # | 根因 | 元层归属 | 一旦缺失，导致的真实事故 |
-|---|---|---|---|
-| **M-2** | Contract vs 磁盘双源、无写入门禁 | data integrity | TC `447494e` scope drift |
-| **M-6** | 未声明跨 goal 副作用无发现机制 | data integrity | CC 4 轮 deliver-fail 级联 |
-| M-3 | integrity advisory / deliver hard 错位 | gate routing | KSM Mock+死代码全程未挡 |
-| M-1 | 无复杂度→goal 粒度 invariant | gate routing | CC/TC 单 goal |
-| M-4 | fuse 窗口太窄 | recovery | TC 6.5h 静默 |
-| M-5 | spec 无法生成可达性/语义级断言 | verification | 三组件功能正确性盲区 |
+| #       | 根因                                   | 元层归属       | 一旦缺失，导致的真实事故  |
+| ------- | -------------------------------------- | -------------- | ------------------------- |
+| **M-2** | Contract vs 磁盘双源、无写入门禁       | data integrity | TC `447494e` scope drift  |
+| **M-6** | 未声明跨 goal 副作用无发现机制         | data integrity | CC 4 轮 deliver-fail 级联 |
+| M-3     | integrity advisory / deliver hard 错位 | gate routing   | KSM Mock+死代码全程未挡   |
+| M-1     | 无复杂度→goal 粒度 invariant           | gate routing   | CC/TC 单 goal             |
+| M-4     | fuse 窗口太窄                          | recovery       | TC 6.5h 静默              |
+| M-5     | spec 无法生成可达性/语义级断言         | verification   | 三组件功能正确性盲区      |
 
 按 CLAUDE.md rule 6.1 的分类：**M-2 和 M-6 属于"数据完整性"类（owned_paths/contract 的形态正确性）**，是 host 必须做的硬不变性；其余 4 条是 prompt/spec/调度算法的协同。若只能修一处，先修 M-2 + M-6，因为它们是元层、能阻断其余 4 条的实际事故路径。
 
@@ -378,11 +380,11 @@ CC 的唯一 goal 仅 own `src/shared/components/CandlestickChart/` + C# 源目�
 
 ### 总体判断
 
-| 项目 | DB 状态 | 真实完成度 | 真实完成度的"假象层" |
-|------|---------|-----------|---------------------|
-| KSM | 5/5 passed，`delivery_verification_threw` | **~85%** 但**核心路由有逻辑 bug** | integrity `requirement_fidelity=pass` 没接住 `resolveMarketKey` 11 条规则中有 5 条死代码 |
-| CC  | 1/1 passed，task failed at deliver | **~70%** 且**从未经过 integrity** | 整个任务全程**没有任何 `integrity_attempt` 行**，所谓 `goal passed` 仅代表 build 通过；`/test/` 页面从未真正渲染过 |
-| TC  | 1 goal pending，task cancelled | **~55%** 且**实际工作量超出 goal contract** | 文件系统上有 481 行 `TrendChart.tsx` + 220 行 `utils.ts` + 集成层（commit `447494e`），但 goal contract 仅声明数据层；DB `pending` 与磁盘"已实现一大半 UI"严重错位 |
+| 项目 | DB 状态                                   | 真实完成度                                  | 真实完成度的"假象层"                                                                                                                                               |
+| ---- | ----------------------------------------- | ------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| KSM  | 5/5 passed，`delivery_verification_threw` | **~85%** 但**核心路由有逻辑 bug**           | integrity `requirement_fidelity=pass` 没接住 `resolveMarketKey` 11 条规则中有 5 条死代码                                                                           |
+| CC   | 1/1 passed，task failed at deliver        | **~70%** 且**从未经过 integrity**           | 整个任务全程**没有任何 `integrity_attempt` 行**，所谓 `goal passed` 仅代表 build 通过；`/test/` 页面从未真正渲染过                                                 |
+| TC   | 1 goal pending，task cancelled            | **~55%** 且**实际工作量超出 goal contract** | 文件系统上有 481 行 `TrendChart.tsx` + 220 行 `utils.ts` + 集成层（commit `447494e`），但 goal contract 仅声明数据层；DB `pending` 与磁盘"已实现一大半 UI"严重错位 |
 
 ### KSM 详细评估
 
@@ -390,23 +392,22 @@ CC 的唯一 goal 仅 own `src/shared/components/CandlestickChart/` + C# 源目�
 
 **功能逐项核对**：
 
-| template 章节 | 要求 | 实现情况 |
-|---|---|---|
-| §3.1 主视图 | AcrossKeyValue 网格 + 动态列布局 | ✅ `KeyStatisticsMTts.tsx` 引用 `AcrossKeyValue`，`displayLines` 计算正确 |
-| §3.2 标题栏 | FlexibleTitleBar + 折叠按钮 | ✅ `FlexibleTitleBar` + `UpFoldDoubleArrow`/`DownFoldDoubleArrow` |
-| §3.3 折叠/展开 | folded=3 行 / unfolded=全部 | ✅ `folded ? 3 : Number.MAX_SAFE_INTEGER` |
-| §3.4 右键菜单 | "编辑字段" + "设置显示风格" | ✅ `KeyStatisticsMTts.menu.ts` `buildContextMenuItems` 恰好这两项 |
-| §3.5 字段编辑对话框 | OptionWindow + 系统默认 | ✅ `SYSTEM_DEFAULT_SELECTED_SHSZ` 12 项 + AVAILABLE 10 项 |
-| §3.6 显示风格 | DisplaySelector | ✅ 已 import 复用 |
-| §4.1 市场 Key 路由（11 条规则） | resolveMarketKey 11 条规则 | **❌ 严重 bug** —— 见下 |
-| §4.2 配置同步 | 跨实例广播 | ✅ `DISPLAY_STYLE_CHANGED_EVENT` + `CONFIG_CHANGED_EVENT_PREFIX` |
-| §4.3 分时回放规则 | 状态机 | 未检（需读 hooks 全文）|
-| §3.x 实时数据 | request + subscribe | ✅ hooks 实现 snapshot+subscribe 模式 |
+| template 章节                   | 要求                             | 实现情况                                                                  |
+| ------------------------------- | -------------------------------- | ------------------------------------------------------------------------- |
+| §3.1 主视图                     | AcrossKeyValue 网格 + 动态列布局 | ✅ `KeyStatisticsMTts.tsx` 引用 `AcrossKeyValue`，`displayLines` 计算正确 |
+| §3.2 标题栏                     | FlexibleTitleBar + 折叠按钮      | ✅ `FlexibleTitleBar` + `UpFoldDoubleArrow`/`DownFoldDoubleArrow`         |
+| §3.3 折叠/展开                  | folded=3 行 / unfolded=全部      | ✅ `folded ? 3 : Number.MAX_SAFE_INTEGER`                                 |
+| §3.4 右键菜单                   | "编辑字段" + "设置显示风格"      | ✅ `KeyStatisticsMTts.menu.ts` `buildContextMenuItems` 恰好这两项         |
+| §3.5 字段编辑对话框             | OptionWindow + 系统默认          | ✅ `SYSTEM_DEFAULT_SELECTED_SHSZ` 12 项 + AVAILABLE 10 项                 |
+| §3.6 显示风格                   | DisplaySelector                  | ✅ 已 import 复用                                                         |
+| §4.1 市场 Key 路由（11 条规则） | resolveMarketKey 11 条规则       | **❌ 严重 bug** —— 见下                                                   |
+| §4.2 配置同步                   | 跨实例广播                       | ✅ `DISPLAY_STYLE_CHANGED_EVENT` + `CONFIG_CHANGED_EVENT_PREFIX`          |
+| §4.3 分时回放规则               | 状态机                           | 未检（需读 hooks 全文）                                                   |
+| §3.x 实时数据                   | request + subscribe              | ✅ hooks 实现 snapshot+subscribe 模式                                     |
 
 **核心 bug —— 11 条市场路由规则有 5 个 USHA/USZA 子分支组不可达**（`KeyStatisticsMTts.api.ts:48-110`，Codex 二轮表述收紧）：
 
 > 注：规则 7/8/9/10/11 处理的是 UHKA / UUSA / UHKI / UHKE / UGLB 等独立市场代码，**不依赖** USHA/USZA 前置门控，因此**仍然活**。死代码限于规则 1 把 USHA/USZA 兜走后、规则 2-6 全部以 `market === 'USHA' || market === 'USZA'` 为门控的 5 个子分支组（A 股指数 / 可转债 / 上海债深圳债 / A 股基金 / 场内 ETF）。原文档"规则 2/3/4/5/6 全局死代码"表述过强。
-
 
 ```ts
 // 规则 1: 沪深A股 或 USTM
@@ -436,19 +437,19 @@ if (market === 'USHA' || market === 'USZA') {  // ← 死代码：规则 1 已 r
 
 **功能逐项核对**（template `Doc/components/HQComponent (debugged)/CandlestickChart.md`）：
 
-| 要求 | 实现 |
-|---|---|
-| HXKlineChart Canvas 渲染 | ✅ `window.HXKlineChart.init` |
-| 周期切换 1m/5m/15m/30m/60m/120m/1d/1w/1M | ⚠️ PERIOD_OPTIONS 缺 120m |
-| MA5/10/20/30/60 | ✅ |
-| VOL 指标 | ✅ |
-| 前复权/后复权/不复权 | ✅ |
-| 十字光标 / 缩放 / 拖拽 / hover | ✅ subscribeAction('crosshair') |
-| 右键菜单（周期切换 / 复权切换 / 指标切换） | ✅ |
-| 实时数据接入（subscribe streaming） | **❌** —— `api.ts` 只有 `requestCandleData`，无 subscribe；template 明确"支持实时数据接入" |
-| 画线工具 | **❌** 未实现 |
-| 视觉验证（/test/ 页面） | **❌** —— deliver round 3 verdict 自陈"测试页 /test/ 缺少 HXKlineChart 运行时依赖，图表画布无法渲染" |
-| MCP 协议周期别名（1h→60m, 4h→120m） | 未检 |
+| 要求                                       | 实现                                                                                                 |
+| ------------------------------------------ | ---------------------------------------------------------------------------------------------------- |
+| HXKlineChart Canvas 渲染                   | ✅ `window.HXKlineChart.init`                                                                        |
+| 周期切换 1m/5m/15m/30m/60m/120m/1d/1w/1M   | ⚠️ PERIOD_OPTIONS 缺 120m                                                                            |
+| MA5/10/20/30/60                            | ✅                                                                                                   |
+| VOL 指标                                   | ✅                                                                                                   |
+| 前复权/后复权/不复权                       | ✅                                                                                                   |
+| 十字光标 / 缩放 / 拖拽 / hover             | ✅ subscribeAction('crosshair')                                                                      |
+| 右键菜单（周期切换 / 复权切换 / 指标切换） | ✅                                                                                                   |
+| 实时数据接入（subscribe streaming）        | **❌** —— `api.ts` 只有 `requestCandleData`，无 subscribe；template 明确"支持实时数据接入"           |
+| 画线工具                                   | **❌** 未实现                                                                                        |
+| 视觉验证（/test/ 页面）                    | **❌** —— deliver round 3 verdict 自陈"测试页 /test/ 缺少 HXKlineChart 运行时依赖，图表画布无法渲染" |
+| MCP 协议周期别名（1h→60m, 4h→120m）        | 未检                                                                                                 |
 
 **结论**：组件代码扎实但有两处明确缺失（实时订阅、画线工具），且 **`/test/` 页面从来没有真正成功渲染过组件**——所谓"10/10 acceptance spec passed"是 build 通过 + 文件存在，不是行为验证。task 自陈的"组件本身已完整实现"经不起 rule 24 复核。
 
@@ -463,29 +464,30 @@ if (market === 'USHA' || market === 'USZA') {  // ← 死代码：规则 1 已 r
 
 **功能逐项核对**（template `Doc/components/HQComponent (debugged)/TrendChart.md` + integrity 列举的 15 项 uncovered）：
 
-| 要求（来自 template + integrity findings） | 实现状态 |
-|---|---|
-| HXKlineChart line 模式渲染 | ✅ |
-| 价格左轴 | ✅（HXKlineChart 内置） |
-| 涨跌幅右轴 | **❓** code 里没看到独立右轴配置；可能依赖 HXKlineChart 默认 |
-| 分时线 + 均价线叠加 | ✅ `均价线叠加` 块 |
-| 渐变填充 | **❌** 无 gradient 代码 |
-| 昨收基准线 | ⚠️ **委托 HXKlineChart**（`TrendChart.tsx:204` 调用 `chartRef.current.setPrePrice(data.meta.prevClose)`）。Codex 二轮纠正：组件层未显式绘制，但已通过库 API 传入；缺失与否仅凭 grep 不可定论。 |
-| 网格线 | ✅（HXKlineChart 内置） |
-| 成交量量柱图 | ✅ `成交量副图` |
-| 十字光标 | ✅ `subscribeAction('crosshair')` |
-| hover 提示 | ✅ |
-| 悬浮信息框 7 字段面板 | **⚠️ 部分** —— tooltip 显示均价/成交量，不到 7 字段 |
-| 键盘左右键平移十字线 | **❌** 无 keydown handler |
-| 顶部摘要栏（证券名/均价/最新价） | ✅ |
-| 右键菜单（指标/坐标/刷新/复制） | ✅ |
-| Canvas hi-DPI (devicePixelRatio) | ⚠️ **组件层无引用**，但 HXKlineChart 内部含 `a.width=o*l; a.height=i*l; s.scale(l,l)` 之类 DPR 缩放（Codex 二轮）；可能已被库覆盖，仅凭 grep 不可定论。 |
-| resize 自适应 | ✅ `ResizeObserver` |
-| 主题切换 | ⚠️ utils 读 `brush-*` CSS 变量，但无 MutationObserver 响应主题变化 |
-| 空数据 / 加载 / 错误边界态 | ✅ 三态都有 |
-| 实时数据推送 (SubscribeTrend) | **❌** —— `useTrendData` 有 `subscribe` 模式开关但实际未接 SubscribeTrend 接口 |
+| 要求（来自 template + integrity findings） | 实现状态                                                                                                                                                                                       |
+| ------------------------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| HXKlineChart line 模式渲染                 | ✅                                                                                                                                                                                             |
+| 价格左轴                                   | ✅（HXKlineChart 内置）                                                                                                                                                                        |
+| 涨跌幅右轴                                 | **❓** code 里没看到独立右轴配置；可能依赖 HXKlineChart 默认                                                                                                                                   |
+| 分时线 + 均价线叠加                        | ✅ `均价线叠加` 块                                                                                                                                                                             |
+| 渐变填充                                   | **❌** 无 gradient 代码                                                                                                                                                                        |
+| 昨收基准线                                 | ⚠️ **委托 HXKlineChart**（`TrendChart.tsx:204` 调用 `chartRef.current.setPrePrice(data.meta.prevClose)`）。Codex 二轮纠正：组件层未显式绘制，但已通过库 API 传入；缺失与否仅凭 grep 不可定论。 |
+| 网格线                                     | ✅（HXKlineChart 内置）                                                                                                                                                                        |
+| 成交量量柱图                               | ✅ `成交量副图`                                                                                                                                                                                |
+| 十字光标                                   | ✅ `subscribeAction('crosshair')`                                                                                                                                                              |
+| hover 提示                                 | ✅                                                                                                                                                                                             |
+| 悬浮信息框 7 字段面板                      | **⚠️ 部分** —— tooltip 显示均价/成交量，不到 7 字段                                                                                                                                            |
+| 键盘左右键平移十字线                       | **❌** 无 keydown handler                                                                                                                                                                      |
+| 顶部摘要栏（证券名/均价/最新价）           | ✅                                                                                                                                                                                             |
+| 右键菜单（指标/坐标/刷新/复制）            | ✅                                                                                                                                                                                             |
+| Canvas hi-DPI (devicePixelRatio)           | ⚠️ **组件层无引用**，但 HXKlineChart 内部含 `a.width=o*l; a.height=i*l; s.scale(l,l)` 之类 DPR 缩放（Codex 二轮）；可能已被库覆盖，仅凭 grep 不可定论。                                        |
+| resize 自适应                              | ✅ `ResizeObserver`                                                                                                                                                                            |
+| 主题切换                                   | ⚠️ utils 读 `brush-*` CSS 变量，但无 MutationObserver 响应主题变化                                                                                                                             |
+| 空数据 / 加载 / 错误边界态                 | ✅ 三态都有                                                                                                                                                                                    |
+| 实时数据推送 (SubscribeTrend)              | **❌** —— `useTrendData` 有 `subscribe` 模式开关但实际未接 SubscribeTrend 接口                                                                                                                 |
 
 **结论**：TC 大约 **55-60%** 的 template 要求在磁盘上有对应实现，但：
+
 - 关键缺失：渐变填充、昨收基准线、键盘导航、hi-DPI、SubscribeTrend 接入；
 - DB 状态完全失真：goal=pending 表示"还没做"，但 `TrendChart.tsx 481 行`已在 master；
 - 这部分工作是 integrity 标记 11 missing goals 之后由 executor "私自"做的，未被 architect 物化为新 goal，未走 integrity 二审，未进 delivery 验收范围。
@@ -500,7 +502,7 @@ if (market === 'USHA' || market === 'USZA') {  // ← 死代码：规则 1 已 r
    - KSM：goal passed，**逻辑错**（死代码）
    - CC：goal passed，**整个 integrity 步被跳过**
    - TC：goal pending，**实际超出 contract 已交付一大半 UI**
-   `engine_goal.status` 在三个样本里没有一个准确反映真实完成度。
+     `engine_goal.status` 在三个样本里没有一个准确反映真实完成度。
 
 2. **integrity_attempt 缺失或失真比之前估计的更普遍**——CC 完全没有 integrity 步；KSM integrity 只看了"代码有几条分支"没跑可达性；TC integrity 给的修正没被物化。这条比 §7 修订 1-4 还要严重。
 
@@ -517,17 +519,15 @@ if (market === 'USHA' || market === 'USZA') {  // ← 死代码：规则 1 已 r
    - TC `TrendChart.tsx:106`：`const mode = isElectron ? 'real' : 'mock'`；`useTrendData.ts` import `fetchTrendDataMock / subscribeTrendMock`
    - 这比单个功能漏实现更本质：**生产环境跑起来后，DA 不可用就静默走 Mock**，用户/QA 看不出来；rule 7 明确禁止这种掩盖问题的 fallback；acceptance spec 在"分支级"验过没揪出来。这是 rule 7 的系统性违反，需要 **P0-13**：禁止生产组件含 Mock 兜底分支，Mock 必须只在 dev preview 入口注入。
 
-
-
-| AGENTS.md 规则 | 本次复盘印证 |
-|---|---|
-| rule 1（看见 bug 思考本质） | TrendChart 最后那条 evidence 已经诊断出 `managed_preview_command` 配错，但回路仍在让 LLM 改根 vite 配置——这是没贯彻 rule 1 |
-| rule 6.1（prompt-over-host-invariant） | host gate 把"环境失败"和"组件失败"混在同一 retry 回路，是错配。环境配错应靠 host manifest 修正（数据完整性范畴），不靠 LLM build retry |
-| rule 7（禁止 fallback） | deliver-fail→build-fix 的循环是 fallback 累积的活样本 |
-| rule 8（禁止双源） | TrendChart integrity 修正缩减 goal claim 但 executor 全量执行，是双源 |
-| rule 20（禁止"最简单的修复"） | 每一次 deliver-fail 修 host 的 LLM 行为都是最简单修复 |
-| rule 28b（敢于宣告失败） | CandlestickChart 的 task.error 是优秀范例；TrendChart 的 cancel 路径欠这条 |
-| rule 30（并行 SubAgent） | ~~KeyStatisticsMT 的 5-goal 串行违反~~ —— **修订后撤回**：DAG 由 architect 设计为串行，scheduler 已按 DAG 执行；要修就修 architect 让它给出更宽的 DAG（§8 #7） |
-| rule 35（穷举调用点 / 不要单点采样） | 本文档自己第一版犯了——`KSM 可并行`只看了 `owned_paths` 没看 `depends_on`；`TC 19:33 后静默`只看了非 stream event 没看 part 表 |
-| rule 28b（敢于宣告失败） | CC 的 `task.error` 是优秀范例；KSM 是反例（`delivery_verification_threw` 被悄悄翻成 cancelled）；TC 也是反例（cancel 吞诊断） |
-| rule 28c（无） | 当前规则集**缺失**一条"用户输入是真实硬阻塞"——CC/TC 的 5min auto-reject 直接撞这个缺口；建议补 rule 28c |
+| AGENTS.md 规则                         | 本次复盘印证                                                                                                                                                   |
+| -------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| rule 1（看见 bug 思考本质）            | TrendChart 最后那条 evidence 已经诊断出 `managed_preview_command` 配错，但回路仍在让 LLM 改根 vite 配置——这是没贯彻 rule 1                                     |
+| rule 6.1（prompt-over-host-invariant） | host gate 把"环境失败"和"组件失败"混在同一 retry 回路，是错配。环境配错应靠 host manifest 修正（数据完整性范畴），不靠 LLM build retry                         |
+| rule 7（禁止 fallback）                | deliver-fail→build-fix 的循环是 fallback 累积的活样本                                                                                                          |
+| rule 8（禁止双源）                     | TrendChart integrity 修正缩减 goal claim 但 executor 全量执行，是双源                                                                                          |
+| rule 20（禁止"最简单的修复"）          | 每一次 deliver-fail 修 host 的 LLM 行为都是最简单修复                                                                                                          |
+| rule 28b（敢于宣告失败）               | CandlestickChart 的 task.error 是优秀范例；TrendChart 的 cancel 路径欠这条                                                                                     |
+| rule 30（并行 SubAgent）               | ~~KeyStatisticsMT 的 5-goal 串行违反~~ —— **修订后撤回**：DAG 由 architect 设计为串行，scheduler 已按 DAG 执行；要修就修 architect 让它给出更宽的 DAG（§8 #7） |
+| rule 35（穷举调用点 / 不要单点采样）   | 本文档自己第一版犯了——`KSM 可并行`只看了 `owned_paths` 没看 `depends_on`；`TC 19:33 后静默`只看了非 stream event 没看 part 表                                  |
+| rule 28b（敢于宣告失败）               | CC 的 `task.error` 是优秀范例；KSM 是反例（`delivery_verification_threw` 被悄悄翻成 cancelled）；TC 也是反例（cancel 吞诊断）                                  |
+| rule 28c（无）                         | 当前规则集**缺失**一条"用户输入是真实硬阻塞"——CC/TC 的 5min auto-reject 直接撞这个缺口；建议补 rule 28c                                                        |

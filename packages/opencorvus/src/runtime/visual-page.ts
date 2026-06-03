@@ -1,8 +1,9 @@
 /**
  * Visual similarity evaluator — Browser Runtime screenshot + SSIM gate.
+ * SSIM means structural similarity index measure.
  *
  * The same logic that ships in `script/benchmark/visual-diff.ts` (which is
- * now a thin CLI wrapper) lives here as a library so the per-goal evaluator
+ * now a thin CLI (command-line interface) wrapper) lives here as a library so the per-goal evaluator
  * can run it inside the orchestrator. Every fig2code-style task that lists a
  * visual reference automatically gets a structural-similarity check without
  * any external pipeline tooling.
@@ -105,8 +106,8 @@ export interface RenderPageCapture {
 }
 
 /** Pure-render API — renders an HTML/URL target into `<outDir>/rendered.png`
- *  and returns the absolute path. No SSIM / no comparison. The delivery
- *  pipeline uses this to hand the LLM a screenshot of the actual built
+ *  and returns the absolute path. No SSIM / no comparison. Runtime visual
+ *  tools use this to hand the LLM (large language model) a screenshot of the actual built
  *  artifact; the LLM then compares it against the reference image via its
  *  vision capability (far more actionable than a single SSIM number).
  *
@@ -170,7 +171,9 @@ export async function renderPage(opts: {
   await fs.mkdir(opts.outDir, { recursive: true })
 
   if (!/^https?:\/\//i.test(opts.rendered)) {
-    throw new Error(`renderPage: delivery rendering is URL-only; start the app yourself, then pass its http(s) URL. Received: ${opts.rendered}`)
+    throw new Error(
+      `renderPage: runtime rendering is URL-only; start the app yourself, then pass its http(s) URL. Received: ${opts.rendered}`,
+    )
   }
   const target = opts.rendered
 
@@ -245,11 +248,8 @@ export async function renderPage(opts: {
       }
       window.addEventListener("unhandledrejection", (event) => {
         const reason = event.reason
-        const message = reason instanceof Error
-          ? reason.message
-          : typeof reason === "string"
-            ? reason
-            : JSON.stringify(reason)
+        const message =
+          reason instanceof Error ? reason.message : typeof reason === "string" ? reason : JSON.stringify(reason)
         globalWindow.__opencorvusCaptureUnhandledRejection?.(message)
       })
     })
@@ -286,32 +286,33 @@ export async function renderPage(opts: {
     // root). 2.5s is a conservative cap — most apps hydrate in <500ms but
     // a cold first-paint with code-splitting can stretch to 1-2s.
     await new Promise((r) => setTimeout(r, opts.settleMs ?? 2_500))
-    const collectDom = () => page.evaluate(() => {
-      const body = document.body
-      const text = body ? (body.innerText ?? "").trim() : ""
-      const nodeCount = document.querySelectorAll("*").length
-      const bodyDescendantCount = body ? body.getElementsByTagName("*").length : 0
-      const hasBodyChildren = !!body && body.children.length > 0
-      // 检测 Vite/CRA 空壳：`<div id="root">` 是 body 的唯一非脚本子元素且其内部
-      // 元素 <= 1。React SPA 渲染失败 / 未 hydrate / hydrate 了空 App 都会命中。
-      const isEmptyRootShell = (() => {
-        if (!body) return true
-        const elementChildren = Array.from(body.children).filter(
-          (c) => c.tagName !== "SCRIPT" && c.tagName !== "STYLE" && c.tagName !== "NOSCRIPT",
-        )
-        if (elementChildren.length !== 1) return false
-        const sole = elementChildren[0] as HTMLElement
-        if (sole.id !== "root" && sole.id !== "app" && sole.id !== "__next") return false
-        return sole.querySelectorAll("*").length <= 1
-      })()
-      return {
-        textLength: text.length,
-        nodeCount,
-        bodyDescendantCount,
-        hasBodyChildren,
-        isEmptyRootShell,
-      }
-    })
+    const collectDom = () =>
+      page.evaluate(() => {
+        const body = document.body
+        const text = body ? (body.innerText ?? "").trim() : ""
+        const nodeCount = document.querySelectorAll("*").length
+        const bodyDescendantCount = body ? body.getElementsByTagName("*").length : 0
+        const hasBodyChildren = !!body && body.children.length > 0
+        // 检测 Vite/CRA 空壳：`<div id="root">` 是 body 的唯一非脚本子元素且其内部
+        // 元素 <= 1。React SPA 渲染失败 / 未 hydrate / hydrate 了空 App 都会命中。
+        const isEmptyRootShell = (() => {
+          if (!body) return true
+          const elementChildren = Array.from(body.children).filter(
+            (c) => c.tagName !== "SCRIPT" && c.tagName !== "STYLE" && c.tagName !== "NOSCRIPT",
+          )
+          if (elementChildren.length !== 1) return false
+          const sole = elementChildren[0] as HTMLElement
+          if (sole.id !== "root" && sole.id !== "app" && sole.id !== "__next") return false
+          return sole.querySelectorAll("*").length <= 1
+        })()
+        return {
+          textLength: text.length,
+          nodeCount,
+          bodyDescendantCount,
+          hasBodyChildren,
+          isEmptyRootShell,
+        }
+      })
     dom = await collectDom()
     if (opts.probeInteractions) {
       interaction = await probeRuntimeInteractions(page)
@@ -328,7 +329,10 @@ export async function renderPage(opts: {
     const variance = pngLuminanceVariance(rendered)
     const missingSelectors: string[] = []
     for (const sel of opts.expectSelectors ?? []) {
-      const found = await page.$(sel).then((e) => !!e).catch(() => false)
+      const found = await page
+        .$(sel)
+        .then((e) => !!e)
+        .catch(() => false)
       if (!found) missingSelectors.push(sel)
     }
     if (missingWaitSelector && !missingSelectors.includes(missingWaitSelector)) {
@@ -415,19 +419,25 @@ async function renderPageWithChromeCli(opts: {
   const renderedPath = path.join(opts.outDir, "rendered.png")
   await fs.rm(renderedPath, { force: true })
   await new Promise<void>((resolve, reject) => {
-    const child = spawn(chromePath, [
-      "--headless",
-      "--disable-gpu",
-      "--no-sandbox",
-      "--disable-dev-shm-usage",
-      "--hide-scrollbars",
-      `--virtual-time-budget=${opts.navigationTimeoutMs ?? 5_000}`,
-      `--screenshot=${renderedPath}`,
-      `--window-size=${opts.viewport.width},${opts.viewport.height}`,
-      opts.target,
-    ], { stdio: "ignore", windowsHide: true })
+    const child = spawn(
+      chromePath,
+      [
+        "--headless",
+        "--disable-gpu",
+        "--no-sandbox",
+        "--disable-dev-shm-usage",
+        "--hide-scrollbars",
+        `--virtual-time-budget=${opts.navigationTimeoutMs ?? 5_000}`,
+        `--screenshot=${renderedPath}`,
+        `--window-size=${opts.viewport.width},${opts.viewport.height}`,
+        opts.target,
+      ],
+      { stdio: "ignore", windowsHide: true },
+    )
     child.on("error", reject)
-    child.on("exit", (code) => code === 0 ? resolve() : reject(new Error(`Chrome CLI screenshot exited with code ${code}`)))
+    child.on("exit", (code) =>
+      code === 0 ? resolve() : reject(new Error(`Chrome CLI screenshot exited with code ${code}`)),
+    )
   })
   const rendered = await decodePNG(renderedPath)
   const variance = pngLuminanceVariance(rendered)
@@ -494,9 +504,9 @@ async function probeRuntimeInteractions(page: Page): Promise<RuntimeInteractionP
         const style = window.getComputedStyle(el)
         return rect.width > 0 && rect.height > 0 && style.visibility !== "hidden" && style.display !== "none"
       }
-      const elements = Array.from(document.querySelectorAll(
-        "button,a[href],input,textarea,select,[role='button'],[contenteditable='true']",
-      )).filter((el) => visible(el))
+      const elements = Array.from(
+        document.querySelectorAll("button,a[href],input,textarea,select,[role='button'],[contenteditable='true']"),
+      ).filter((el) => visible(el))
       return elements.map((el) => {
         let id = el.getAttribute("data-opencorvus-runtime-probe-id")
         if (!id) {
@@ -507,9 +517,10 @@ async function probeRuntimeInteractions(page: Page): Promise<RuntimeInteractionP
         }
         const selector = `[data-opencorvus-runtime-probe-id="${id}"]`
         const isFileInput = el instanceof HTMLInputElement && (el.type || "").toLowerCase() === "file"
-        const isTextInput = el instanceof HTMLTextAreaElement
-          || (el instanceof HTMLInputElement
-            && ["email", "password", "search", "text", "url"].includes((el.type || "text").toLowerCase()))
+        const isTextInput =
+          el instanceof HTMLTextAreaElement ||
+          (el instanceof HTMLInputElement &&
+            ["email", "password", "search", "text", "url"].includes((el.type || "text").toLowerCase()))
         return { id, selector, isTextInput, isFileInput }
       })
     })
@@ -531,9 +542,7 @@ async function probeRuntimeInteractions(page: Page): Promise<RuntimeInteractionP
       }
     }
 
-    const clickTargets = controls
-      .filter((item) => !item.isFileInput && !seen.has(item.id))
-      .slice(0, 5)
+    const clickTargets = controls.filter((item) => !item.isFileInput && !seen.has(item.id)).slice(0, 5)
     if (clickTargets.length === 0 && roundTextInputCount === 0) break
     for (const item of clickTargets) {
       seen.add(item.id)
@@ -565,7 +574,7 @@ async function probeRuntimeInteractions(page: Page): Promise<RuntimeInteractionP
 }
 
 /** SSIM visual diff — retained for the external benchmark CLI and operator
- *  verification workflows only. The delivery pipeline no longer gates on
+ *  verification workflows only. The workflow no longer gates on
  *  SSIM: the LLM compares rendered vs reference via vision (see `renderPage`
  *  + integrity acceptance multimodal attachments), which produces actionable
  *  "header is missing N button, sidebar 20px too wide" feedback instead of
@@ -573,7 +582,10 @@ async function probeRuntimeInteractions(page: Page): Promise<RuntimeInteractionP
 export async function runVisualDiff(opts: VisualDiffOptions): Promise<VisualDiffReport> {
   const threshold = opts.threshold ?? 0.85
   const worstThreshold = opts.worstThreshold ?? 0.55
-  for (const [name, value] of [["threshold", threshold], ["worstThreshold", worstThreshold]] as const) {
+  for (const [name, value] of [
+    ["threshold", threshold],
+    ["worstThreshold", worstThreshold],
+  ] as const) {
     if (!Number.isFinite(value) || value <= 0 || value > 1) {
       throw new Error(`runVisualDiff: invalid ${name} (expected 0..1): ${value}`)
     }

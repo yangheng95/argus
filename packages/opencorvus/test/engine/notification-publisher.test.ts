@@ -1,13 +1,10 @@
 import { afterEach, beforeEach, expect, mock, test } from "bun:test"
-import { DeliveryService } from "../../src/delivery/service"
 import { EngineArtifactTable, EngineTaskTable } from "../../src/engine/engine.sql"
 import { updateEvaluationFromDeliveryVerdict } from "../../src/engine/persist"
 import { ProtocolStore } from "../../src/protocol/store"
-import { Instance } from "../../src/project/instance"
 import { ProjectTable } from "../../src/project/project.sql"
 import { Database } from "../../src/storage/db"
 import { resetDatabase } from "../fixture/db"
-import { tmpdir } from "../fixture/fixture"
 
 let projectID = ""
 let taskID = ""
@@ -51,77 +48,58 @@ test("updateEvaluationFromDeliveryVerdict emits one evaluation.completed event",
   expect(ProtocolStore.listTaskEvents(taskID).filter((item) => item.type === "evaluation.completed")).toHaveLength(1)
 })
 
-test("DeliveryService.verify is retired and emits no legacy gate event", async () => {
-  await using tmp = await tmpdir({ git: true })
-
-  await Instance.provide({
-    directory: tmp.path,
-    fn: async () => {
-      await expect(DeliveryService.verify({
-        task: {
-          id: taskID,
-          title: "Notification publisher",
-          request: "Verify retired delivery service.",
-        },
-        goals: [goal()],
-        delivery: {
-          summary: "Candidate",
-          changedFiles: ["src/App.tsx"],
-        },
-        runID,
-        iteration: 3,
-      })).rejects.toThrow("DeliveryService.verify is retired")
-    },
-  })
-
-  expect(ProtocolStore.listTaskEvents(taskID).filter((item) => item.type === "delivery.gate.rejected")).toHaveLength(0)
-})
-
 function seedTask() {
   const now = Date.now()
   Database.use((db) => {
-    db.insert(ProjectTable).values({
-      id: projectID,
-      worktree: process.cwd(),
-      name: "Notification Publisher Test",
-      sandboxes: "[]",
-      time_created: now,
-      time_updated: now,
-    }).run()
-    db.insert(EngineTaskTable).values({
-      id: taskID,
-      project_id: projectID,
-      source: "test",
-      title: "Notification publisher",
-      request: "Verify notification publisher wiring",
-      priority: "normal",
-      time_created: now,
-      time_updated: now,
-    }).run()
+    db.insert(ProjectTable)
+      .values({
+        id: projectID,
+        worktree: process.cwd(),
+        name: "Notification Publisher Test",
+        sandboxes: "[]",
+        time_created: now,
+        time_updated: now,
+      })
+      .run()
+    db.insert(EngineTaskTable)
+      .values({
+        id: taskID,
+        project_id: projectID,
+        source: "test",
+        title: "Notification publisher",
+        request: "Verify notification publisher wiring",
+        priority: "normal",
+        time_created: now,
+        time_updated: now,
+      })
+      .run()
   })
 }
 
 function seedEvidence(id: string) {
   Database.use((db) =>
-    db.insert(EngineArtifactTable).values({
-      id,
-      task_id: taskID,
-      run_id: runID,
-      goal_run_id: null,
-      delivery_id: deliveryID,
-      kind: "verification-evidence",
-      label: "evidence-delivery",
-      payload: {
-        scope: "delivery",
-        status: "pending",
-        verdict: "inconclusive",
-        summary: "Pending evidence",
-        checks: [],
-        time_completed: null,
-      },
-      time_created: 900,
-      time_updated: 900,
-    }).run(),
+    db
+      .insert(EngineArtifactTable)
+      .values({
+        id,
+        task_id: taskID,
+        run_id: runID,
+        goal_run_id: null,
+        delivery_id: deliveryID,
+        kind: "verification-evidence",
+        label: "evidence-delivery",
+        payload: {
+          scope: "delivery",
+          status: "pending",
+          verdict: "inconclusive",
+          summary: "Pending evidence",
+          checks: [],
+          time_completed: null,
+        },
+        time_created: 900,
+        time_updated: 900,
+      })
+      .run(),
   )
 }
 
@@ -132,22 +110,4 @@ async function waitForEvent(type: string) {
     await Bun.sleep(20)
   }
   return ProtocolStore.listTaskEvents(taskID).find((item) => item.type === type)
-}
-
-function goal() {
-  return {
-    id: "gol_notification",
-    title: "Notification goal",
-    description: "Exercise retired delivery service.",
-    criteria: "No legacy gate event is emitted.",
-    priority: "blocking" as const,
-    acceptance_spec_count: 1,
-    acceptance_scenarios: [],
-    check_selector: [],
-    requirement_ids: [],
-    depends_on: [],
-    imports: [],
-    exports: [],
-    owned_paths: ["src/App.tsx"],
-  }
 }

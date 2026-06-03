@@ -9,12 +9,10 @@
  *
  * Public API (`persistEvidence / queryEvidence / findLatestGoalRunEvidence /
  * findGoalRunEvidence / findLatestDeliveryEvidence / findPreviousDeliveryEvidence`)
- * signatures stay stable through the migration — the single consumer
- * (`delivery/tools.ts`) does not need to churn.
+ * signatures stay stable for artifact-backed evidence readers.
  *
  * Post-DAM Phase 5 note: signature-based convergence detection lives in
- * `src/metrics/arbiter.ts`; this module is only the delivery-agent
- * verdict wrapper.
+ * `src/metrics/arbiter.ts`; this module persists verification evidence only.
  */
 import { and, desc, eq, inArray, sql } from "drizzle-orm"
 import { Database } from "@/storage/db"

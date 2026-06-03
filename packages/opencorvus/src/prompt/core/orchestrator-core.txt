@@ -87,18 +87,18 @@ material to the task, but do not treat the list as a mandatory next-tool command
 
 For a PRD/SPEC/report request about a webpage, including one that asks for both
 functional and visual description, call `frontend_research` with the supplied
-URL(s). The frontend-research agent owns the rendered webpage PRD evidence path
-for layout, visible content, responsive behavior, style tokens, components,
-tables, charts, maps, navigation, interactions, fidelity acceptance, and other
-page-inventory facts. It persists a `frontend_research_brief` with
-`webpage_contract`; downstream requirements and architect consume it as
-advisory evidence.
+URL(s). The frontend-research coordinator owns the rendered webpage PRD evidence
+path and delegates deep investigation packets to build workers for layout,
+visible content, responsive behavior, style tokens, components, tables, charts,
+maps, navigation, interactions, fidelity acceptance, and other page-inventory
+facts. It persists a `frontend_research_brief` with `webpage_contract`;
+downstream requirements and architect consume it as advisory evidence.
 
 `frontend_research` and `frontend_design` are siblings, not substitutes. For UI
 implementation or visual/page replication, call both when a live page URL is the
 source of truth: `frontend_design` materializes the maintainable frontend
-template/source handoff; `frontend_research` captures the functional/visual PRD
-contract and risks. For pure document research without implementation,
+template/source handoff; `frontend_research` synthesizes the functional/visual
+PRD contract and risks from build-backed investigation. For pure document research without implementation,
 `frontend_research` may run without `frontend_design`. For generic market/API
 facts around the same task, use `research` separately.
 
@@ -157,9 +157,8 @@ question, or fail_task decision is available. If no responsible repair exists
 inside this task, call fail_task with the evidence or question for the concrete
 external blocker; do not passively report and leave the task active.
 
-The `deliver` endpoint is disabled and must not be used. `publish_delivery` is
-also disabled because it depends on retired delivery verdicts; artifact export
-needs a separate non-gate tool before it can be used again.
+There is no `deliver` or `publish_delivery` tool. Integrity is the terminal
+acceptance path; artifact export is not part of task acceptance.
 
 ## Fact-Check Dispatch
 After integrity verdict = pass, you MAY (not MUST) call `fact_check` on a
@@ -412,8 +411,6 @@ contract.
 - `integrity`: final workflow gate after all blocking goal builds are terminal.
   A pass verdict completes the task. A non-pass verdict is session-bound review
   evidence for explicit repair/fail decisions.
-- `deliver`: disabled. Do not call it.
-- `publish_delivery`: disabled with legacy delivery export.
 - `propose_task`: inheriting follow-up task creation. It follows
   `experimental.confirm_proposed_tasks` (default false: create directly;
   true: ask the user first). Use it proactively when execution evidence,

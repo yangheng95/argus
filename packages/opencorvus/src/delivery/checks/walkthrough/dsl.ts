@@ -1,5 +1,5 @@
 import z from "zod"
-import { isResourceLoadConsoleError } from "../browser-noise"
+import { isResourceLoadConsoleError } from "@/runtime/browser-noise"
 
 export const WalkthroughStepSchema = z.discriminatedUnion("action", [
   z.object({ action: z.literal("goto"), path: z.string().min(1) }),

@@ -1,7 +1,7 @@
 import fs from "fs/promises"
 import path from "path"
 import crypto from "node:crypto"
-import { renderPage, type RenderPageCapture, type RuntimeInteractionProbe } from "@/delivery/checks/visual"
+import { renderPage, type RenderPageCapture, type RuntimeInteractionProbe } from "@/runtime/visual-page"
 
 export const RUNTIME_CAPTURE_VIEWPORT_MAX = { width: 1440, height: 1080 } as const
 export const RUNTIME_CAPTURE_DEFAULTS = {
@@ -24,14 +24,15 @@ export type RuntimeCaptureRequest = {
   settle_ms?: number
 }
 
-export type NormalizedRuntimeCaptureRequest = Required<
-  Omit<RuntimeCaptureRequest, "wait_for_selector">
-> & { wait_for_selector?: string }
+export type NormalizedRuntimeCaptureRequest = Required<Omit<RuntimeCaptureRequest, "wait_for_selector">> & {
+  wait_for_selector?: string
+}
 
 export type RuntimeCaptureInput = RuntimeCaptureRequest & {
   outDir: string
   referenceForViewport?: string
   browserExecutable?: string
+  headless?: boolean
   probeInteractions?: boolean
   fileLabel?: string
 }
@@ -107,15 +108,15 @@ export async function captureRuntimePage(input: RuntimeCaptureInput): Promise<Ru
   })
   await fs.mkdir(input.outDir, { recursive: true })
   try {
-    const useReferenceViewport = !!input.referenceForViewport
-      && input.viewport_width === undefined
-      && input.viewport_height === undefined
+    const useReferenceViewport =
+      !!input.referenceForViewport && input.viewport_width === undefined && input.viewport_height === undefined
     const rendered = await renderPage({
       rendered: args.url,
       outDir: input.outDir,
       viewport: useReferenceViewport ? undefined : viewport,
       referenceForViewport: input.referenceForViewport,
       browserExecutable: input.browserExecutable,
+      headless: input.headless,
       navigationTimeoutMs: args.wait_timeout_ms,
       settleMs: args.settle_ms,
       waitForSelector: args.wait_for_selector,
@@ -153,9 +154,10 @@ export async function captureRuntimePage(input: RuntimeCaptureInput): Promise<Ru
       layers: rendered.capture.layers,
       dom: rendered.dom,
       interaction: rendered.interaction,
-      summary: failedLayers.length === 0
-        ? `all runtime capture layers passed on ${args.url}`
-        : `failed layers: ${failedLayers.join(", ")}`,
+      summary:
+        failedLayers.length === 0
+          ? `all runtime capture layers passed on ${args.url}`
+          : `failed layers: ${failedLayers.join(", ")}`,
     }
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error)

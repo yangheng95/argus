@@ -48,20 +48,12 @@ import { abortChildExecutionForSession, abortGoalRunExecution } from "@/engine/e
 import { Message } from "@/session/message"
 import { toolFailureCauseFromUnknown } from "@/session/tool-failure-cause"
 import { PartTable } from "@/session/session.sql"
-import {
-  renderFrontendDesignHandoffReference,
-  frontendDesignArtifactPaths,
-} from "@/frontend-design/handoff"
+import { renderFrontendDesignHandoffReference, frontendDesignArtifactPaths } from "@/frontend-design/handoff"
 import { renderFrontendResearchBriefPromptSection } from "@/research/prompt-section"
 import { ensureLiveWebpageEvidence, primaryWebpageEvidenceArtifacts } from "./webpage-evidence"
 import { renderUserRequestSection } from "@/intent/request-prompt"
 import { materializeMcpToolResult } from "@/mcp/materialize"
-import {
-  EngineArtifactTable,
-  EngineGoalTable,
-  EngineTaskTable,
-  type EngineArtifactKind,
-} from "@/engine/engine.sql"
+import { EngineArtifactTable, EngineGoalTable, EngineTaskTable, type EngineArtifactKind } from "@/engine/engine.sql"
 import {
   supersedePriorActivePlansForTask,
   ensureBuildRetryFeedbackForGoal,
@@ -420,7 +412,9 @@ function renderEvidenceSourceManifest(input: {
   lines.push(
     "Canonical decision-log entries: phase=frontend_design keys public_report, frontend_template, final_delivery_mode, fillable_modules, component_reuse_plan, baseline_replacement_plan, quality_project_contract, frontend_project, material_inventory, visual_consistency_contract, ui_data_contract, template_iteration_notes, completeness_review, open_questions.",
   )
-  lines.push("Optional visual anchors: task.design_specs, when present. They are secondary to visual_consistency_contract.")
+  lines.push(
+    "Optional visual anchors: task.design_specs, when present. They are secondary to visual_consistency_contract.",
+  )
 
   if (input.materializedFiles && input.materializedFiles.length > 0) {
     lines.push("")
@@ -493,17 +487,21 @@ function renderMaterializedFrontendDesignReport(input: {
   report: AgentReport
   evidenceSourceManifest: string
 }): string {
-  return [
-    "# Frontend Design Public Report",
-    "",
-    "This file is the materialized frontend_design terminal report for downstream agents.",
-    "The report is the public readable handoff; the evidence manifest below names source files and images to read.",
-    "",
-    "## Evidence Source Manifest",
-    input.evidenceSourceManifest.trim(),
-    "",
-    input.report.detail.trim(),
-  ].join("\n").trimEnd() + "\n"
+  return (
+    [
+      "# Frontend Design Public Report",
+      "",
+      "This file is the materialized frontend_design terminal report for downstream agents.",
+      "The report is the public readable handoff; the evidence manifest below names source files and images to read.",
+      "",
+      "## Evidence Source Manifest",
+      input.evidenceSourceManifest.trim(),
+      "",
+      input.report.detail.trim(),
+    ]
+      .join("\n")
+      .trimEnd() + "\n"
+  )
 }
 
 async function writeFrontendDesignArtifacts(input: {
@@ -1839,7 +1837,8 @@ export function createOrchestratorTools(input: {
       buildRecords: deliveriesForAcceptance,
       goalRuns: listGoalRunsForTask(taskID),
     })
-    const frontendDesignContract = decisionLog.readByPhase("frontend_design")
+    const frontendDesignContract = decisionLog
+      .readByPhase("frontend_design")
       .map((entry) => `## ${entry.key}\nreason: ${entry.reason}\n\n${entry.value}`)
       .join("\n\n")
     const verdict = await reviewIntegrity({
@@ -2215,10 +2214,10 @@ export function createOrchestratorTools(input: {
             result.summary,
             "",
             "## Requirements",
-              ...result.requirements.map(
-                (r) =>
-                  `- **${r.id}** [${r.type}]: ${r.description} Acceptance: ${r.acceptance} Non-goals: ${r.non_goals} Evidence: ${r.evidence_refs.join(", ") || "(none)"}`,
-              ),
+            ...result.requirements.map(
+              (r) =>
+                `- **${r.id}** [${r.type}]: ${r.description} Acceptance: ${r.acceptance} Non-goals: ${r.non_goals} Evidence: ${r.evidence_refs.join(", ") || "(none)"}`,
+            ),
             "",
             "## Decisions",
             ...result.decisions.map((d) => `- **${d.key}** = ${d.value} — ${d.reason}`),
@@ -2575,8 +2574,12 @@ export function createOrchestratorTools(input: {
         // heuristics are diagnostics attached to the materialized reference.
         for (const liveUrl of liveUrls) {
           try {
-            const { captureReferenceManifest, assessCaptureDiagnostics, summarizeCaptureDiagnostics, CaptureReferenceError } =
-              await import("@/frontend-design/capture-gate")
+            const {
+              captureReferenceManifest,
+              assessCaptureDiagnostics,
+              summarizeCaptureDiagnostics,
+              CaptureReferenceError,
+            } = await import("@/frontend-design/capture-gate")
             const osMod = await import("node:os")
             const outDir = pathMod.join(
               osMod.tmpdir(),
@@ -2700,9 +2703,8 @@ export function createOrchestratorTools(input: {
               urls: liveUrls,
               signal: input.signal,
             })
-            preparedWebpageEvidenceArtifacts = evidence.artifacts.length > 0
-              ? evidence.artifacts
-              : primaryWebpageEvidenceArtifacts(taskID)
+            preparedWebpageEvidenceArtifacts =
+              evidence.artifacts.length > 0 ? evidence.artifacts : primaryWebpageEvidenceArtifacts(taskID)
             preparedWebpageEvidenceStatus = evidence.status
             log.info("frontend_design: live webpage mirror evidence prepared", {
               taskID,
@@ -2771,11 +2773,13 @@ export function createOrchestratorTools(input: {
         if (!enrichedHasAttachments && materializedCount === 0 && preparedWebpageEvidenceArtifacts.length === 0) {
           await closeFrontendDesignStep(true)
           const providedCount = liveUrls.length + figmaUrls.length + materialPaths.length
-          const failureDetail = materializationFailures.length > 0
-            ? " Materialization errors: " + materializationFailures
-              .map((failure) => `${failure.source}:${failure.target} [${failure.stage}] ${failure.error}`)
-              .join("; ")
-            : ""
+          const failureDetail =
+            materializationFailures.length > 0
+              ? " Materialization errors: " +
+                materializationFailures
+                  .map((failure) => `${failure.source}:${failure.target} [${failure.stage}] ${failure.error}`)
+                  .join("; ")
+              : ""
           const message =
             `frontend_design aborted: all ${providedCount} provided visual source(s) ` +
             `failed to materialize (URLs unreachable, Figma fetch failed, or local material ` +
@@ -2882,7 +2886,8 @@ export function createOrchestratorTools(input: {
             phase: "frontend_design",
             key: "public_report",
             value: analysis.report.detail,
-            reason: "Frontend-design terminal report; public readable handoff for Requirements, Architect, Build, and Delivery.",
+            reason:
+              "Frontend-design terminal report; public readable handoff for Requirements, Architect, Build, and Delivery.",
           })
           decisionLog.append({
             phase: "frontend_design",
@@ -2922,19 +2927,22 @@ export function createOrchestratorTools(input: {
             phase: "frontend_design",
             key: "final_delivery_mode",
             value: analysis.finalDeliveryMode ?? "visual_baseline_allowed",
-            reason: "Whether downstream Build may keep the visual baseline or must replace requested surfaces with maintainable semantic components/data/API bindings.",
+            reason:
+              "Whether downstream Build may keep the visual baseline or must replace requested surfaces with maintainable semantic components/data/API bindings.",
           })
           decisionLog.append({
             phase: "frontend_design",
             key: "fillable_modules",
             value: analysis.fillableModules,
-            reason: "Fillable module and slot plan derived from visual evidence, mirror artifacts, and the task-runtime web-clone-source package.",
+            reason:
+              "Fillable module and slot plan derived from visual evidence, mirror artifacts, and the task-runtime web-clone-source package.",
           })
           decisionLog.append({
             phase: "frontend_design",
             key: "component_inventory",
             value: analysis.componentInventory,
-            reason: "Legacy compatibility field only; downstream agents should read public_report, reuse constraints, quality_project_contract, completeness_review, and source artifacts instead of treating this as a component checklist.",
+            reason:
+              "Legacy compatibility field only; downstream agents should read public_report, reuse constraints, quality_project_contract, completeness_review, and source artifacts instead of treating this as a component checklist.",
           })
           decisionLog.append({
             phase: "frontend_design",
@@ -2946,13 +2954,15 @@ export function createOrchestratorTools(input: {
             phase: "frontend_design",
             key: "baseline_replacement_plan",
             value: JSON.stringify(analysis.baselineReplacementPlan ?? [], null, 2),
-            reason: "Generated-baseline deletion/replacement checklist that tells Build which skeleton regions must be replaced, deleted, or temporarily deferred and which existing/mature components own each boundary.",
+            reason:
+              "Generated-baseline deletion/replacement checklist that tells Build which skeleton regions must be replaced, deleted, or temporarily deferred and which existing/mature components own each boundary.",
           })
           decisionLog.append({
             phase: "frontend_design",
             key: "quality_project_contract",
             value: analysis.qualityProjectContract,
-            reason: "High-quality maintainable frontend project contract; raw extracted baseline is not the delivered project.",
+            reason:
+              "High-quality maintainable frontend project contract; raw extracted baseline is not the delivered project.",
           })
           decisionLog.append({
             phase: "frontend_design",
@@ -4070,14 +4080,14 @@ export function createOrchestratorTools(input: {
 
     frontend_research: tool({
       description:
-        "OPTIONAL stage agent for webpage/UI reference research. Use alongside `frontend_design` for supplied page URLs when downstream requirements and architect need faithful source-backed facts about page functions, visual layout, style requirements, interactions, content/data inventory, responsive behavior, fidelity acceptance, and risks. It consumes rendered webpage evidence and persists a frontend_research_brief/webpage_contract artifact. It is NOT the frontend implementation template owner, NOT build, NOT requirements, NOT architect, NOT a route selector, and NOT final PRD/SPEC/report delivery.",
+        "OPTIONAL stage coordinator for webpage/UI reference research. Use alongside `frontend_design` for supplied page URLs when downstream requirements and architect need faithful source-backed facts about page functions, visual layout, style requirements, interactions, content/data inventory, responsive behavior, fidelity acceptance, and risks. It organizes rendered webpage evidence, delegates deep investigation packets to build workers, and persists a frontend_research_brief/webpage_contract artifact. It is NOT the frontend implementation template owner, NOT requirements, NOT architect, NOT a route selector, and NOT final PRD/SPEC/report delivery.",
       inputSchema: z.object({
         reason: z.string().min(1).describe("Why frontend webpage research is needed for this task."),
         source_urls: z
           .array(z.string().min(1))
           .min(1)
-          .describe("Source page URLs the frontend-research agent must inspect through prepared rendered evidence."),
-        focus: z.string().optional().describe("Optional narrow focus for the frontend-research agent."),
+          .describe("Source page URLs the frontend-research coordinator must cover through prepared evidence and delegated build investigation."),
+        focus: z.string().optional().describe("Optional narrow focus for the frontend-research coordinator."),
       }),
       execute: async ({ reason, source_urls, focus }) => {
         const task = requireTask(taskID)
@@ -4120,7 +4130,10 @@ export function createOrchestratorTools(input: {
               ["functional_surfaces", String(contract?.functional_surfaces.length ?? 0)],
               ["visual_layout", String(contract?.visual_layout.length ?? 0)],
               ["style_requirements", String(contract?.style_requirements.length ?? 0)],
-              ["subpage_research_tasks", subpageTasks.map((item) => `${item.id}: ${item.url} | ${item.suggested_focus}`)],
+              [
+                "subpage_research_tasks",
+                subpageTasks.map((item) => `${item.id}: ${item.url} | ${item.suggested_focus}`),
+              ],
               ["blocking_open_questions", blocking.map((item) => `${item.id}: ${item.question}`)],
               ["bundle_paths", Object.values(result.brief.bundle)],
             ],
@@ -4196,7 +4209,10 @@ export function createOrchestratorTools(input: {
               ["artifact_id", artifactID],
               ["sources", String(result.brief.evidence_index.length)],
               ["facts", String(result.brief.facts.length)],
-              ["subpage_research_tasks", subpageTasks.map((item) => `${item.id}: ${item.url} | ${item.suggested_focus}`)],
+              [
+                "subpage_research_tasks",
+                subpageTasks.map((item) => `${item.id}: ${item.url} | ${item.suggested_focus}`),
+              ],
               ["blocking_open_questions", blocking.map((item) => `${item.id}: ${item.question}`)],
               ["bundle_paths", Object.values(result.brief.bundle)],
             ],
@@ -4673,7 +4689,12 @@ export function createOrchestratorTools(input: {
         }
 
         if (scope === "all") {
-          await appendResearchBriefContext(sections, "Research Brief", findLatestResearchBriefArtifact(taskID), task.request)
+          await appendResearchBriefContext(
+            sections,
+            "Research Brief",
+            findLatestResearchBriefArtifact(taskID),
+            task.request,
+          )
           await appendResearchBriefContext(
             sections,
             "Frontend Research Brief",
@@ -5019,21 +5040,20 @@ export function createOrchestratorTools(input: {
 
         const aborted = target.goalRunID
           ? await abortGoalRunExecution({
-            taskID,
-            goalRunID: target.goalRunID,
-            reason: `cancel_subagent: ${reason}`,
-          })
+              taskID,
+              goalRunID: target.goalRunID,
+              reason: `cancel_subagent: ${reason}`,
+            })
           : await abortChildExecutionForSession({
-            taskID,
-            sessionID: target.sessionID,
-            reason: `cancel_subagent: ${reason}`,
-          })
-        const abortedFact = aborted.goalRunAborted || aborted.executorAbortAttempted
-          ? (
-            ` goal_run ${target.goalRunID ?? "(unknown)"} ${aborted.goalRunAborted ? "aborted" : "unchanged"}` +
-            `${aborted.executorAbortAttempted ? `; executor_abort=${aborted.executorAbortSucceeded ? "ok" : "failed"}` : ""}.`
-          )
-          : ""
+              taskID,
+              sessionID: target.sessionID,
+              reason: `cancel_subagent: ${reason}`,
+            })
+        const abortedFact =
+          aborted.goalRunAborted || aborted.executorAbortAttempted
+            ? ` goal_run ${target.goalRunID ?? "(unknown)"} ${aborted.goalRunAborted ? "aborted" : "unchanged"}` +
+              `${aborted.executorAbortAttempted ? `; executor_abort=${aborted.executorAbortSucceeded ? "ok" : "failed"}` : ""}.`
+            : ""
 
         return (
           `Cancelled sub-agent session ${target.sessionID} (kind=${kind}). ` +
@@ -5057,34 +5077,6 @@ export function createOrchestratorTools(input: {
         reason: z.string().describe("Why restarting from this stage"),
       }),
       execute: async ({ stage, reason }) => restartTaskFromStage(stage, reason),
-    }),
-
-    deliver: tool({
-      description:
-        "DISABLED. Delivery host-gate verification is retired. Do not call this tool. Use integrity as the workflow final gate after all blocking builds are terminal.",
-      inputSchema: z.object({
-        reason: z.string().optional().describe("Why you decided to deliver now"),
-      }),
-      execute: async () => {
-        return (
-          "deliver: disabled. Delivery host-gate verification has been retired because workflow acceptance must stay inside agent sessions. " +
-          "Run `integrity` after all blocking builds are terminal; a post-build integrity pass is the workflow completion gate."
-        )
-      },
-    }),
-
-    publish_delivery: tool({
-      description:
-        "DISABLED. Legacy post-delivery artifact export depends on retired delivery verdicts. Do not call this tool.",
-      inputSchema: z.object({
-        reason: z.string().optional().describe("Confirmation that both verifications passed"),
-      }),
-      execute: async () => {
-        return (
-          "publish_delivery: disabled. Accepted delivery verdicts are retired; post-build `integrity` pass is the workflow completion gate. " +
-          "Artifact export needs a separate non-gate tool before it can be used again."
-        )
-      },
     }),
 
     refine: tool({

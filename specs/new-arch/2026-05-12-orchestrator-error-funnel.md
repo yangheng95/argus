@@ -17,10 +17,10 @@ the violation, and proposes a fix.
 
 ## 1. Background: the two single-source mechanisms
 
-| Channel | Single-source helper | Consumer | Rule |
-|---|---|---|---|
+| Channel                                   | Single-source helper                                                                                           | Consumer                                                                                    | Rule                                                         |
+| ----------------------------------------- | -------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------- | ------------------------------------------------------------ |
 | Structured error → next-wake LLM decision | `engine/persist.ts::recordOrchestratorStreamError` (writes `engine_artifact kind="orchestrator-stream-error"`) | `engine/describe.ts:427::listOrchestratorStreamErrorArtifacts` → next wake's describe block | rule 23 — LLM reads facts, decides retry/restart/fail itself |
-| Structured retry fuse | `engine/persist.ts::maybeTripOrchestratorStreamErrorFuse` | Same orchestrator wake; trips → permits `updateTask({status:'failed'})` once | rule 23 — explicit fuse, not implicit FSM |
+| Structured retry fuse                     | `engine/persist.ts::maybeTripOrchestratorStreamErrorFuse`                                                      | Same orchestrator wake; trips → permits `updateTask({status:'failed'})` once                | rule 23 — explicit fuse, not implicit FSM                    |
 
 The reference implementation is `orchestrator/agent.ts:434-477` (stream-error
 mid-wake handling). Notably **it does NOT call `updateTask({status:"failed"})`**
@@ -42,11 +42,11 @@ Output of `grep resolveAgentModel`, `grep Provider.defaultModel`,
 
 ### 2.1 Pattern A — preserve `NamedError.data`, surface it, rethrow (**conformant**)
 
-| Site | Behavior |
-|---|---|
-| `session/loop.ts:1606-1617` | catches `ModelNotFoundError`, reads `e.data.{providerID,modelID,suggestions}`, publishes `Session.Event.Error` with structured payload, **rethrows** |
-| `session/command-exec.ts:106-118` | same shape — destructures `e.data`, `Bus.publish`, rethrow |
-| `session/prompt/command.ts:120-129` | converts `ModelNotFoundError.data` into a structured `NamedError.Unknown(...).toObject()` for the prompt surface |
+| Site                                | Behavior                                                                                                                                             |
+| ----------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `session/loop.ts:1606-1617`         | catches `ModelNotFoundError`, reads `e.data.{providerID,modelID,suggestions}`, publishes `Session.Event.Error` with structured payload, **rethrows** |
+| `session/command-exec.ts:106-118`   | same shape — destructures `e.data`, `Bus.publish`, rethrow                                                                                           |
+| `session/prompt/command.ts:120-129` | converts `ModelNotFoundError.data` into a structured `NamedError.Unknown(...).toObject()` for the prompt surface                                     |
 
 Structural property: **the `NamedError` payload survives the boundary** so
 downstream (CLI / server / overlay / prompt assembly) can act on real fields
@@ -54,42 +54,42 @@ instead of grepping flat strings.
 
 ### 2.2 Pattern B — wrap with cause preserved (**conformant**)
 
-| Site | Behavior |
-|---|---|
+| Site                      | Behavior                                                                                                                                                                                  |
+| ------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `agent/runner.ts:570-587` | catches model-resolution error, stores it as `modelResolutionError`, throws `AgentRunError(..., { cause: modelResolutionError })`; the original instance stays reachable through `.cause` |
 
 ### 2.3 Pattern C — strict propagation, no swallow (**conformant by omission**)
 
-| Site | Effect |
-|---|---|
-| `delivery/agent.ts:71-75` | bubbles raw `Provider.getModel` failure to orchestrator delivery flow |
-| `orchestrator/tools.ts:4791` (`refine`) | bubbles raw `resolveAgentModel` failure to the tool caller |
-| `control/message.ts:224-230` | `Provider.defaultModel()` is intentionally uncaught; missing config stays operator-visible |
-| `session/wake.ts:101-103` | wake loop `resolveModel()` returns `Provider.defaultModel()` raw; no local swallow |
-| `session/shell-exec.ts:52-55` | shell resume path resolves `Provider.defaultModel()` raw when `input.model` and `agent.model` are absent |
-| `agent/agent.ts:510-511` | `generate()` resolves `Provider.defaultModel()` then `Provider.getModel()` raw |
-| `cli/cmd/debug/agent.ts:73-74` | debug tool listing uses `Provider.defaultModel()` raw |
-| `cli/cmd/debug/agent.ts:117-118` | debug tool execution context uses `Provider.defaultModel()` raw |
-| `mirror/tools/webpage-image-extract.ts:66-69` | mirror image extract resolves configured/default model raw |
-| `mirror/tools/webpage-vision-judge.ts:147-150` | mirror vision judge resolves configured/default model raw |
-| `session/prompt/title.ts:35` | title generation resolves model raw |
-| `task-api/index.ts:1596` | follow-up summary model resolves raw |
+| Site                                           | Effect                                                                                                   |
+| ---------------------------------------------- | -------------------------------------------------------------------------------------------------------- |
+| retired delivery agent provider setup          | bubbled raw `Provider.getModel` failure to orchestrator delivery flow                                    |
+| `orchestrator/tools.ts:4791` (`refine`)        | bubbles raw `resolveAgentModel` failure to the tool caller                                               |
+| `control/message.ts:224-230`                   | `Provider.defaultModel()` is intentionally uncaught; missing config stays operator-visible               |
+| `session/wake.ts:101-103`                      | wake loop `resolveModel()` returns `Provider.defaultModel()` raw; no local swallow                       |
+| `session/shell-exec.ts:52-55`                  | shell resume path resolves `Provider.defaultModel()` raw when `input.model` and `agent.model` are absent |
+| `agent/agent.ts:510-511`                       | `generate()` resolves `Provider.defaultModel()` then `Provider.getModel()` raw                           |
+| `cli/cmd/debug/agent.ts:73-74`                 | debug tool listing uses `Provider.defaultModel()` raw                                                    |
+| `cli/cmd/debug/agent.ts:117-118`               | debug tool execution context uses `Provider.defaultModel()` raw                                          |
+| `mirror/tools/webpage-image-extract.ts:66-69`  | mirror image extract resolves configured/default model raw                                               |
+| `mirror/tools/webpage-vision-judge.ts:147-150` | mirror vision judge resolves configured/default model raw                                                |
+| `session/prompt/title.ts:35`                   | title generation resolves model raw                                                                      |
+| `task-api/index.ts:1596`                       | follow-up summary model resolves raw                                                                     |
 
 These are fine: they either intentionally surface the error to their caller or
 defer policy to a higher boundary.
 
 ### 2.4 Pattern D — optional lookup with selective swallow (**real violation at `parts.ts:92`**)
 
-| Site | Current behavior | Verdict |
-|---|---|---|
+| Site                            | Current behavior                                                                                              | Verdict                                                                                                                                                                                      |
+| ------------------------------- | ------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `session/prompt/parts.ts:89-93` | optional variant lookup does `Provider.getModel(...).catch(() => undefined)` before computing `agent.variant` | **Violation** — literal swallow of every error class. The lookup is optional, but only `ModelNotFoundError` is legitimately ignorable; provider init / registry / I/O failures must surface. |
 
-### 2.5 Pattern E — orchestrator task-error boundary (**real violation at `orchestrator/agent.ts`**) 
+### 2.5 Pattern E — orchestrator task-error boundary (**real violation at `orchestrator/agent.ts`**)
 
-| Site | Current behavior | Verdict |
-|---|---|---|
+| Site                            | Current behavior                                                                              | Verdict                                                                                                                                                               |
+| ------------------------------- | --------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `orchestrator/agent.ts:178-185` | startup catch logs `e.message`, writes flat `engine_task.error`, marks task `failed`, returns | **Violation** — the first-wake terminal contract is correct and must stay, but `.message` extraction drops `NamedError.data` (`providerID`, `modelID`, `suggestions`) |
-| `orchestrator/agent.ts:479-514` | outer catch logs `error.message`, writes flat `engine_task.error` when task is non-terminal | **Violation** — this boundary should continue using `engine_task.error` for non-stream exceptions, but it also drops `NamedError.data` |
+| `orchestrator/agent.ts:479-514` | outer catch logs `error.message`, writes flat `engine_task.error` when task is non-terminal   | **Violation** — this boundary should continue using `engine_task.error` for non-stream exceptions, but it also drops `NamedError.data`                                |
 
 ---
 
@@ -187,12 +187,12 @@ Implementation:
 
 ### 4.5 Tests (rule 36)
 
-| Test | Assertion |
-|---|---|
-| `test/orchestrator/startup-error-envelope.test.ts` (new) | startup `Provider.ModelNotFoundError` still fast-fails the task, still never enters `SessionPrompt.prompt`, and `engine_task.error` exposes a parseable envelope with `errorName/message/data` |
-| `test/orchestrator/missing-model-fast-fail.test.ts` (existing, unchanged) | first-wake missing-config terminal behavior remains intact |
-| `test/session/prompt-parts-model-resolution.test.ts` (new) | `createUserMessage()` swallows only `Provider.ModelNotFoundError` during optional variant lookup and rethrows a generic error class |
-| `test/provider/default-model.test.ts` (already updated) | default model assertion remains `deepseek/deepseek-v4-pro` |
+| Test                                                                      | Assertion                                                                                                                                                                                      |
+| ------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `test/orchestrator/startup-error-envelope.test.ts` (new)                  | startup `Provider.ModelNotFoundError` still fast-fails the task, still never enters `SessionPrompt.prompt`, and `engine_task.error` exposes a parseable envelope with `errorName/message/data` |
+| `test/orchestrator/missing-model-fast-fail.test.ts` (existing, unchanged) | first-wake missing-config terminal behavior remains intact                                                                                                                                     |
+| `test/session/prompt-parts-model-resolution.test.ts` (new)                | `createUserMessage()` swallows only `Provider.ModelNotFoundError` during optional variant lookup and rethrows a generic error class                                                            |
+| `test/provider/default-model.test.ts` (already updated)                   | default model assertion remains `deepseek/deepseek-v4-pro`                                                                                                                                     |
 
 ### 4.6 Related companion fix (already applied)
 

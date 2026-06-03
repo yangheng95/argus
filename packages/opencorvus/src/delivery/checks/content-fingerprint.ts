@@ -7,7 +7,7 @@
  *
  * 消费者（未来）：
  *  - goal 验收 checks_run 新增 `content_fingerprint` 检查项
- *  - delivery/agent.ts 作为硬门通过后的软质量指标
+ *  - integrity review 作为运行时内容证据
  *
  * 契约（CLAUDE.md）：
  *  - rule 1：锚点必须来自 manifest，缺失直接抛错，不 fallback 到关键字搜索
@@ -38,10 +38,7 @@ function normalizeText(s: string): string {
 }
 
 /** reference_strings 的命中率：非空 trimmed 串出现在 rendered innerText 里记一次。 */
-export function computeStringHitRatio(
-  referenceStrings: readonly string[],
-  renderedText: string,
-): number {
+export function computeStringHitRatio(referenceStrings: readonly string[], renderedText: string): number {
   const haystack = normalizeText(renderedText)
   if (haystack.length === 0) return 0
   let hits = 0
@@ -60,10 +57,7 @@ export function computeStringHitRatio(
  * 调用方应把 rendered PNG 经 `util/pixel-stats.topKPalette` 取 top-K（与 reference 同
  * K 值），再传进来——本模块只做集合比较，不再重算像素。
  */
-export function computePaletteJaccard(
-  referencePalette: readonly string[],
-  renderedPalette: readonly string[],
-): number {
+export function computePaletteJaccard(referencePalette: readonly string[], renderedPalette: readonly string[]): number {
   const ref = new Set(referencePalette.map((c) => c.toLowerCase()))
   const ren = new Set(renderedPalette.map((c) => c.toLowerCase()))
   if (ref.size === 0 && ren.size === 0) return 1
@@ -144,9 +138,7 @@ export interface ContentFingerprintResult {
   regionPassedMask: Record<string, boolean>
 }
 
-export function evaluateContentFingerprint(
-  input: ContentFingerprintInput,
-): ContentFingerprintResult {
+export function evaluateContentFingerprint(input: ContentFingerprintInput): ContentFingerprintResult {
   const threshold = input.regionIouThreshold ?? 0.4
   const layout = computeLayoutOverlap(input.manifest.layout, input.rendered.layout)
   const regionPassedMask: Record<string, boolean> = {}

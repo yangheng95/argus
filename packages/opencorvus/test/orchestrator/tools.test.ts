@@ -68,7 +68,11 @@ import {
 } from "../../src/engine/tool-ownership"
 import { Ownership } from "../../src/engine/ownership"
 import { buildIntegrityReplayContext, buildSpecSnapshotLineage } from "../../src/integrity/replay-context"
-import { buildIntegrityRootHistory, persistentRootSummary, renderIntegrityRootHistoryBlock } from "../../src/integrity/root-history"
+import {
+  buildIntegrityRootHistory,
+  persistentRootSummary,
+  renderIntegrityRootHistoryBlock,
+} from "../../src/integrity/root-history"
 import { Config } from "../../src/config/config"
 import { ProtocolEventTable } from "../../src/protocol/protocol.sql"
 
@@ -76,7 +80,6 @@ let buildAgentRunImpl: ((input: any) => Promise<any>) | undefined
 let reviewIntegrityImpl: ((input: any) => Promise<any>) | undefined
 let computeRequirementStatusSnapshotImpl: ((input: any) => any[]) | undefined
 let architectCoordinateImpl: ((input: any) => Promise<any>) | undefined
-let deliveryServiceVerifyImpl: ((input: any) => Promise<any>) | undefined
 let designAnalyzeImpl: ((input: any) => Promise<any>) | undefined
 let mcpServerToolsImpl: (() => Promise<any[]>) | undefined
 let mcpCallToolImpl: ((input: { key: string; args: Record<string, unknown> }) => Promise<any>) | undefined
@@ -170,7 +173,11 @@ function integrityTeamResult(input: {
     summary,
     teamReportMarkdown:
       input.teamReportMarkdown ??
-      [summary, ...findings.map((finding) => finding.description), ...requiredRepairs.map((repair) => repair.description)]
+      [
+        summary,
+        ...findings.map((finding) => finding.description),
+        ...requiredRepairs.map((repair) => repair.description),
+      ]
         .filter(Boolean)
         .join("\n"),
     reviewers: [
@@ -197,7 +204,7 @@ function integrityTeamResult(input: {
     rounds: [],
     requiredRepairs,
     unresolvedDisagreements: [],
-        fact_check_items: [],
+    fact_check_items: [],
     sessionID: input.sessionID ?? "ses_integrity_default",
   }
 }
@@ -264,16 +271,6 @@ mock.module("@/mcp", () => ({
   },
 }))
 
-mock.module("@/delivery/service", () => ({
-  DeliveryFailureError: class DeliveryFailureError extends Error {},
-  DeliveryService: {
-    verify: (input: any) => {
-      if (!deliveryServiceVerifyImpl) throw new Error("DeliveryService.verify mock not configured")
-      return deliveryServiceVerifyImpl(input)
-    },
-  },
-}))
-
 mock.module("@/plugin", () => ({
   Plugin: {
     list: async () => [],
@@ -281,15 +278,15 @@ mock.module("@/plugin", () => ({
   },
 }))
 
-async function markBuildSlotAcquired(input: any, sessionID = `ses_build_mock_${Date.now()}_${Math.random().toString(36).slice(2)}`) {
-  await input.onSessionCreated?.(
-    sessionID,
-    {
-      worktreeDir: input.managedWorktree?.directory,
-      worktreeBranch: input.managedWorktree?.branch,
-      worktreeBaseRef: input.managedWorktree?.baseRef,
-    },
-  )
+async function markBuildSlotAcquired(
+  input: any,
+  sessionID = `ses_build_mock_${Date.now()}_${Math.random().toString(36).slice(2)}`,
+) {
+  await input.onSessionCreated?.(sessionID, {
+    worktreeDir: input.managedWorktree?.directory,
+    worktreeBranch: input.managedWorktree?.branch,
+    worktreeBaseRef: input.managedWorktree?.baseRef,
+  })
 }
 
 function deliveryDecisionFixture(verdict: any) {
@@ -466,27 +463,38 @@ async function writePassingSourceSkeletonHandoff(projectDir: string) {
   await fs.writeFile(path.join(skeletonDir, "full-source.css"), "main { display: block; }\n", "utf8")
   await fs.writeFile(path.join(skeletonDir, "used-selectors.json"), JSON.stringify({ rules: [], stats: {} }), "utf8")
   await fs.writeFile(path.join(skeletonDir, "README.md"), "Use ../reference.png as visual truth.\n", "utf8")
-  await fs.writeFile(path.join(skeletonDir, "source-skeleton-audit.json"), JSON.stringify({
-    version: 1,
-    purpose: "web-clone-source-skeleton-audit",
-    passed: true,
-    hasHtml: true,
-    hasCss: true,
-    hasCriticalCss: true,
-    hasFullSourceCss: true,
-    hasUsedSelectors: true,
-    hasReadme: true,
-    hasSourceIr: true,
-    frameworkAgnostic: true,
-    referencesScreenshot: true,
-    cssAssetBytes: 24,
-    criticalCssBytes: 24,
-    computedStyleRuleCount: 0,
-    replayFactoryDetected: false,
-    generatedProjectDetected: false,
-    findings: [],
-  }), "utf8")
-  for (const file of ["component-tree.json", "content-model.json", "layout-map.json", "style-tokens.json", "interaction-hints.json", "source-quality-audit.json"]) {
+  await fs.writeFile(
+    path.join(skeletonDir, "source-skeleton-audit.json"),
+    JSON.stringify({
+      version: 1,
+      purpose: "web-clone-source-skeleton-audit",
+      passed: true,
+      hasHtml: true,
+      hasCss: true,
+      hasCriticalCss: true,
+      hasFullSourceCss: true,
+      hasUsedSelectors: true,
+      hasReadme: true,
+      hasSourceIr: true,
+      frameworkAgnostic: true,
+      referencesScreenshot: true,
+      cssAssetBytes: 24,
+      criticalCssBytes: 24,
+      computedStyleRuleCount: 0,
+      replayFactoryDetected: false,
+      generatedProjectDetected: false,
+      findings: [],
+    }),
+    "utf8",
+  )
+  for (const file of [
+    "component-tree.json",
+    "content-model.json",
+    "layout-map.json",
+    "style-tokens.json",
+    "interaction-hints.json",
+    "source-quality-audit.json",
+  ]) {
     await fs.writeFile(path.join(sourceIrDir, file), JSON.stringify({ version: 1, passed: true }), "utf8")
   }
   await writeMinimalSourceManifest(sourcePackageDir)
@@ -494,30 +502,46 @@ async function writePassingSourceSkeletonHandoff(projectDir: string) {
 
 function minimalPngBytes(): Uint8Array {
   return Uint8Array.from([
-    0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a,
-    0x00, 0x00, 0x00, 0x0d, 0x49, 0x48, 0x44, 0x52,
-    0x00, 0x00, 0x00, 0x01, 0x00, 0x00, 0x00, 0x01,
-    0x08, 0x06, 0x00, 0x00, 0x00, 0x1f, 0x15, 0xc4,
-    0x89, 0x00, 0x00, 0x00, 0x0a, 0x49, 0x44, 0x41,
-    0x54, 0x78, 0x9c, 0x63, 0x00, 0x01, 0x00, 0x00,
-    0x05, 0x00, 0x01, 0x0d, 0x0a, 0x2d, 0xb4, 0x00,
-    0x00, 0x00, 0x00, 0x49, 0x45, 0x4e, 0x44, 0xae,
-    0x42, 0x60, 0x82,
+    0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 0x00, 0x00, 0x00, 0x0d, 0x49, 0x48, 0x44, 0x52, 0x00, 0x00, 0x00,
+    0x01, 0x00, 0x00, 0x00, 0x01, 0x08, 0x06, 0x00, 0x00, 0x00, 0x1f, 0x15, 0xc4, 0x89, 0x00, 0x00, 0x00, 0x0a, 0x49,
+    0x44, 0x41, 0x54, 0x78, 0x9c, 0x63, 0x00, 0x01, 0x00, 0x00, 0x05, 0x00, 0x01, 0x0d, 0x0a, 0x2d, 0xb4, 0x00, 0x00,
+    0x00, 0x00, 0x49, 0x45, 0x4e, 0x44, 0xae, 0x42, 0x60, 0x82,
   ])
 }
 
 async function writeMinimalSourceManifest(sourcePackageDir: string): Promise<void> {
   const referenceSha256 = createHash("sha256").update(Buffer.from(minimalPngBytes())).digest("hex")
-  await fs.writeFile(path.join(sourcePackageDir, "web-clone-source-manifest.json"), JSON.stringify({
-    version: 1,
-    purpose: "web-clone-visible-source-package",
-    provenance: {
-      source: "mirror",
-      mirrorDir: sourcePackageDir,
-      reference: { path: "reference.png", sha256: referenceSha256, width: 1, height: 1, bytes: minimalPngBytes().length },
-    },
-    files: [{ path: "reference.png", sha256: referenceSha256, bytes: minimalPngBytes().length, source: "mirror/reference.png" }],
-  }, null, 2), "utf8")
+  await fs.writeFile(
+    path.join(sourcePackageDir, "web-clone-source-manifest.json"),
+    JSON.stringify(
+      {
+        version: 1,
+        purpose: "web-clone-visible-source-package",
+        provenance: {
+          source: "mirror",
+          mirrorDir: sourcePackageDir,
+          reference: {
+            path: "reference.png",
+            sha256: referenceSha256,
+            width: 1,
+            height: 1,
+            bytes: minimalPngBytes().length,
+          },
+        },
+        files: [
+          {
+            path: "reference.png",
+            sha256: referenceSha256,
+            bytes: minimalPngBytes().length,
+            source: "mirror/reference.png",
+          },
+        ],
+      },
+      null,
+      2,
+    ),
+    "utf8",
+  )
 }
 
 function seedTerminalFailedBuildRun(input: {
@@ -546,12 +570,7 @@ function seedTerminalFailedBuildRun(input: {
   return goalRunID
 }
 
-function seedBuildUptakeIntegrityHistory(input: {
-  taskID: string
-  specID: string
-  now: number
-  rootID?: string
-}) {
+function seedBuildUptakeIntegrityHistory(input: { taskID: string; specID: string; now: number; rootID?: string }) {
   const rootID = input.rootID ?? "storage-validation"
   recordIntegrityAttempt({
     taskID: input.taskID,
@@ -622,7 +641,6 @@ describe("orchestrator tools", () => {
     reviewIntegrityImpl = undefined
     computeRequirementStatusSnapshotImpl = undefined
     architectCoordinateImpl = undefined
-    deliveryServiceVerifyImpl = undefined
     designAnalyzeImpl = undefined
     mcpServerToolsImpl = undefined
     mcpCallToolImpl = undefined
@@ -685,7 +703,10 @@ describe("orchestrator tools", () => {
           workflowState: createWorkflowState(pipeline),
         })
 
-        const result = await tools.fail_task.execute({ error: "persistent integrity failure" }, buildToolOptions("fail_task"))
+        const result = await tools.fail_task.execute(
+          { error: "persistent integrity failure" },
+          buildToolOptions("fail_task"),
+        )
 
         expect(result).toContain(`Task ${taskID} failed`)
         expect(deriveTaskStatus(findTask(taskID)!)).toBe("failed")
@@ -1994,7 +2015,7 @@ describe("orchestrator tools", () => {
     })
   })
 
-  test("task-level direct build creates a run and deliver stays disabled", async () => {
+  test("task-level direct build creates a run without exposing deliver", async () => {
     await tmp?.[Symbol.asyncDispose]?.()
     tmp = await tmpdir({ git: true })
 
@@ -2052,10 +2073,6 @@ describe("orchestrator tools", () => {
         diffs: [{ file: "direct-output.txt", diff: "New file:\ndirect build output\n" }],
       }
     }
-    deliveryServiceVerifyImpl = async (input: any) => {
-      throw new Error(`DeliveryService.verify must not run after deliver retirement: ${input?.runID ?? "no-run"}`)
-    }
-
     await Instance.provide({
       directory: tmp.path,
       fn: async () => {
@@ -2081,13 +2098,8 @@ describe("orchestrator tools", () => {
         expect(run).toBeDefined()
         expect(run?.plan_version_id).toBeNull()
 
-        const deliverResult = await tools.deliver.execute(
-          { reason: "Direct build finished and must pass delivery." },
-          buildToolOptions(),
-        )
-
-        expect(deliverResult).toContain("deliver: disabled")
-        expect(deliverResult).toContain("integrity")
+        expect("deliver" in tools).toBe(false)
+        expect("publish_delivery" in tools).toBe(false)
         expect(findRun(run!.id)?.phase).not.toBe("deliver")
         expect(findDeliveryByRun(run!.id)).toBeUndefined()
       },
@@ -2128,9 +2140,6 @@ describe("orchestrator tools", () => {
         worktreeBaseRef: input.managedWorktree.baseRef,
         diffs: [{ file: "accepted-output.txt", diff: "New file:\naccepted integrity output\n" }],
       }
-    }
-    deliveryServiceVerifyImpl = async () => {
-      throw new Error("DeliveryService.verify must not complete the task after deliver retirement")
     }
     computeRequirementStatusSnapshotImpl = () => [
       {
@@ -2296,11 +2305,7 @@ describe("orchestrator tools", () => {
           "REQ-1 evidence is acceptable but should be strengthened next time.",
         )
 
-        const publishResult = await tools.publish_delivery.execute(
-          { reason: "Explicit artifact export after integrity completion." },
-          buildToolOptions(),
-        )
-        expect(publishResult).toContain("publish_delivery: disabled")
+        expect("publish_delivery" in tools).toBe(false)
         const taskAfterPublishAttempt = Database.use((db) =>
           db.select().from(EngineTaskTable).where(eq(EngineTaskTable.id, taskID)).get(),
         )
@@ -3113,7 +3118,10 @@ describe("orchestrator tools", () => {
           workflowState,
         })
 
-        const result = await tools.frontend_design.execute({ reason: "visual replica requires source template" }, {} as any)
+        const result = await tools.frontend_design.execute(
+          { reason: "visual replica requires source template" },
+          {} as any,
+        )
         expect(result).toContain("frontend_template_file")
         expect(result).toContain(".opencorvus")
 
@@ -3207,7 +3215,9 @@ describe("orchestrator tools", () => {
                   source_requirement_id: "REQ-1",
                   goal_id: goalID,
                   title: "post-build integrity reviews source skeleton diagnostic evidence",
-                  scorers: [{ type: "llm_judge", name: "diagnostic review", criteria: "Review source skeleton artifacts." }],
+                  scorers: [
+                    { type: "llm_judge", name: "diagnostic review", criteria: "Review source skeleton artifacts." },
+                  ],
                   severity: "essential",
                 },
               ],
@@ -3322,7 +3332,13 @@ describe("orchestrator tools", () => {
                   source_requirement_id: "REQ-1",
                   goal_id: goalID,
                   title: "post-build integrity reviews source skeleton consumption evidence",
-                  scorers: [{ type: "llm_judge", name: "diagnostic review", criteria: "Review source skeleton consumption evidence." }],
+                  scorers: [
+                    {
+                      type: "llm_judge",
+                      name: "diagnostic review",
+                      criteria: "Review source skeleton consumption evidence.",
+                    },
+                  ],
                   severity: "essential",
                 },
               ],
@@ -3424,15 +3440,17 @@ describe("orchestrator tools", () => {
             taskID,
             specSnapshotID: specID,
             now,
-            requirements: [{
-              id: "REQ-1",
-              title: "Source skeleton implementation",
-              description: "Implement from web-clone-source artifacts.",
-              acceptance: ["post-build integrity reviews visible source package evidence"],
-              evidence_refs: [],
-              non_goals: [],
-              priority: "blocking",
-            }],
+            requirements: [
+              {
+                id: "REQ-1",
+                title: "Source skeleton implementation",
+                description: "Implement from web-clone-source artifacts.",
+                acceptance: ["post-build integrity reviews visible source package evidence"],
+                evidence_refs: [],
+                non_goals: [],
+                priority: "blocking",
+              },
+            ],
           })
         })
         const runID = beginBuildAttempt({
@@ -3445,12 +3463,14 @@ describe("orchestrator tools", () => {
           now: now + 1,
         })
         updateGoalRun(runID, { status: "completed", time_completed: now + 2 })
-        computeRequirementStatusSnapshotImpl = () => [{
-          requirementID: "REQ-1",
-          title: "Source skeleton implementation",
-          status: "claimed",
-          claimingGoals: [{ goalID, runStatus: "completed" }],
-        }]
+        computeRequirementStatusSnapshotImpl = () => [
+          {
+            requirementID: "REQ-1",
+            title: "Source skeleton implementation",
+            status: "claimed",
+            claimingGoals: [{ goalID, runStatus: "completed" }],
+          },
+        ]
 
         let reviewCalled = false
         reviewIntegrityImpl = async () => {
@@ -3526,7 +3546,9 @@ describe("orchestrator tools", () => {
             .where(and(eq(ProtocolEventTable.task_id, taskID), eq(ProtocolEventTable.type, "workflow.step.updated")))
             .all(),
         )
-        expect(stepEvents.some((event) => event.payload?.stepID === "frontend_design" && event.payload?.status === "failed")).toBe(true)
+        expect(
+          stepEvents.some((event) => event.payload?.stepID === "frontend_design" && event.payload?.status === "failed"),
+        ).toBe(true)
       },
     })
   })
@@ -6170,7 +6192,7 @@ describe("orchestrator tools", () => {
     })
   })
 
-  test("deliver is disabled and does not run integrity or delivery verification", async () => {
+  test("orchestrator tool surface omits retired deliver verification", async () => {
     await tmp?.[Symbol.asyncDispose]?.()
     tmp = await tmpdir({ git: true })
 
@@ -6180,8 +6202,6 @@ describe("orchestrator tools", () => {
     const taskID = `tsk_deliver_integrity_prereq_${stamp}`
     const goalID = `goal_deliver_integrity_prereq_${stamp}`
     const specID = `spec_${goalID}`
-    const order: string[] = []
-
     await Instance.provide({
       directory: tmp.path,
       fn: async () => {
@@ -6201,25 +6221,14 @@ describe("orchestrator tools", () => {
           now,
           specID,
         })
-        reviewIntegrityImpl = async () => {
-          throw new Error("deliver must not call integrity internally")
-        }
-        deliveryServiceVerifyImpl = async () => {
-          order.push("verify")
-          throw new Error("deliver must not call DeliveryService.verify")
-        }
-
         const { tools } = createOrchestratorTools({
           taskID,
           agentSessionID: parent.id,
           signal: new AbortController().signal,
         })
 
-        const result = await tools.deliver.execute({ reason: "All goals are ready for final delivery" }, {} as any)
-
-        expect(result).toContain("deliver: disabled")
-        expect(result).toContain("integrity")
-        expect(order).toEqual([])
+        expect("deliver" in tools).toBe(false)
+        expect("publish_delivery" in tools).toBe(false)
         const artifact = findLatestIntegrityAttemptArtifact({ taskID, specSnapshotID: specID })
         expect(artifact).toBeUndefined()
         const throwArtifact = Database.use((db) =>
