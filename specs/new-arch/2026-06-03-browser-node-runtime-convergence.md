@@ -251,7 +251,7 @@ bun test packages/opencorvus/test/browser/node-sidecar.test.ts \
 
 | Alternative | Reason rejected |
 | --- | --- |
-| Increase browser launch timeout | Hides the Bun plus Playwright Windows boundary failure and delays error feedback. |
+| Increase browser launch timeout instead of moving browser work to Node | Hides the Bun plus Playwright Windows boundary failure and delays error feedback. After Node sidecar convergence, the timeout still belongs in the shared `BrowserRuntime` policy so Windows Chrome startup is not capped by smaller private caller defaults. |
 | Expose runtime-state as an MCP tool | Makes deterministic host evidence materialization depend on LLM tool choice. |
 | Bun-first then Node fallback | Creates dual-source behavior and makes failures harder to locate. |
 | Rename `browser-mcp-node/` now | High artifact and overlay packaging churn; defer until runtime executor/resolver are clean. |
@@ -263,6 +263,10 @@ bun test packages/opencorvus/test/browser/node-sidecar.test.ts \
 - One shared resolver owns browser Node runtime path resolution.
 - Runtime-state, visual render, and frontend capture no longer duplicate
   spawn/stdout/stderr/timeout code.
+- Browser launch timeout defaults to 300_000ms through
+  `BrowserRuntime.resolveBrowserLaunchTimeoutMs`; frontend capture passes that
+  value into the Node script and must not embed a private 15s
+  `chromium.launch` cap.
 - No new LLM-visible MCP browser evidence tools are exposed.
 - Targeted tests and `packages/opencorvus` typecheck pass.
 - Overlay benchmark no longer fails `frontend_design` due to Chrome launch

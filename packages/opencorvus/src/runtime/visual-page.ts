@@ -45,7 +45,7 @@ export interface VisualDiffOptions {
   outDir: string
   /** Optional override for the chrome/edge executable. */
   browserExecutable?: string
-  /** Override browser launch timeout. Default: 60_000ms. */
+  /** Override browser launch timeout. Default: BrowserRuntime.DEFAULT_BROWSER_LAUNCH_TIMEOUT_MS. */
   browserLaunchTimeoutMs?: number
   /** Run Chromium headless. Default false to preserve overlay benchmark visual mode. */
   headless?: boolean
@@ -121,7 +121,7 @@ export async function renderPage(opts: {
   viewport?: { width: number; height: number }
   referenceForViewport?: string
   browserExecutable?: string
-  /** Override browser launch timeout. Default: 60_000ms. */
+  /** Override browser launch timeout. Default: BrowserRuntime.DEFAULT_BROWSER_LAUNCH_TIMEOUT_MS. */
   browserLaunchTimeoutMs?: number
   /** Run Chromium headless. Default false to preserve overlay benchmark visual mode. */
   headless?: boolean
@@ -183,7 +183,7 @@ export async function renderPage(opts: {
       executablePath: opts.browserExecutable,
       headless: opts.headless ?? false,
       args: ["--no-sandbox", "--disable-gpu", "--disable-dev-shm-usage"],
-      timeoutMs: opts.browserLaunchTimeoutMs ?? Number(process.env.OPENCORVUS_BROWSER_LAUNCH_TIMEOUT_MS ?? 60_000),
+      timeoutMs: BrowserRuntime.resolveBrowserLaunchTimeoutMs(opts.browserLaunchTimeoutMs),
     })
   } catch (error) {
     if (!opts.chromeCliFallback) throw error
