@@ -2,7 +2,10 @@ import { afterEach, describe, expect, test } from "bun:test"
 import fs from "node:fs/promises"
 import path from "node:path"
 import { tmpdir } from "../fixture/fixture"
-import { resolveBrowserNodeSidecarRuntime } from "../../src/browser/runtime/node-sidecar"
+import {
+  packagedBrowserNodeRuntimePaths,
+  resolveBrowserNodeSidecarRuntime,
+} from "../../src/browser/runtime/node-sidecar"
 
 describe("browser Node sidecar runtime", () => {
   const originalNode = process.env.OPENCORVUS_BROWSER_MCP_NODE
@@ -33,6 +36,20 @@ describe("browser Node sidecar runtime", () => {
       nodeExecutable: path.join(runtime, "node.exe"),
       playwrightRequirePath: path.join(moduleDir, "index.js"),
       packaged: true,
+    })
+  })
+
+  test("computes packaged Node, Playwright, and MCP bundle paths from one source", async () => {
+    await using tmp = await tmpdir()
+    const paths = packagedBrowserNodeRuntimePaths({
+      execPath: path.join(tmp.path, "opencorvus.exe"),
+      platform: "win32",
+    })
+
+    expect(paths).toEqual({
+      nodeExecutable: path.join(tmp.path, "browser-mcp-node", "node.exe"),
+      playwrightRequirePath: path.join(tmp.path, "browser-mcp-node", "node_modules", "playwright", "index.js"),
+      mcpBundle: path.join(tmp.path, "browser-mcp-node", "stdio.mjs"),
     })
   })
 

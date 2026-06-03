@@ -8,40 +8,52 @@ export interface BrowserNodeSidecarRuntime {
   packaged: boolean
 }
 
+export function packagedBrowserNodeRuntimePaths(input: {
+  execPath?: string
+  platform?: NodeJS.Platform
+} = {}) {
+  const execPath = input.execPath ?? process.execPath
+  const platform = input.platform ?? process.platform
+  const dir = path.join(path.dirname(execPath), "browser-mcp-node")
+  return {
+    nodeExecutable: path.join(dir, browserNodeExecutableName(platform)),
+    playwrightRequirePath: path.join(dir, "node_modules", "playwright", "index.js"),
+    mcpBundle: path.join(dir, "stdio.mjs"),
+  }
+}
+
 export async function resolveBrowserNodeSidecarRuntime(input: {
   execPath?: string
   platform?: NodeJS.Platform
 } = {}): Promise<BrowserNodeSidecarRuntime> {
   const platform = input.platform ?? process.platform
-  const packagedDir = path.join(path.dirname(input.execPath ?? process.execPath), "browser-mcp-node")
-  const packagedNode = path.join(packagedDir, nodeExecutableName(platform))
-  const packagedPlaywright = path.join(packagedDir, "node_modules", "playwright", "index.js")
-  if ((await exists(packagedNode)) && (await exists(packagedPlaywright))) {
+  const packaged = packagedBrowserNodeRuntimePaths(input)
+  if ((await exists(packaged.nodeExecutable)) && (await exists(packaged.playwrightRequirePath))) {
     return {
-      nodeExecutable: packagedNode,
-      playwrightRequirePath: packagedPlaywright,
+      nodeExecutable: packaged.nodeExecutable,
+      playwrightRequirePath: packaged.playwrightRequirePath,
       packaged: true,
     }
   }
 
-  if (isBunRuntime(input.execPath ?? process.execPath)) {
+  if (isBunExecutable(input.execPath ?? process.execPath)) {
     return {
-      nodeExecutable: process.env.OPENCORVUS_BROWSER_MCP_NODE ?? nodeExecutableName(platform),
+      nodeExecutable: process.env.OPENCORVUS_BROWSER_MCP_NODE ?? browserNodeExecutableName(platform),
       playwrightRequirePath: createRequire(import.meta.url).resolve("playwright"),
       packaged: false,
     }
   }
 
   throw new Error(
-    `Browser Node sidecar runtime is missing. Expected ${packagedNode} and ${packagedPlaywright} beside the opencorvus executable.`,
+    `Browser Node sidecar runtime is missing. Expected ${packaged.nodeExecutable} and ${packaged.playwrightRequirePath} beside the opencorvus executable.`,
   )
 }
 
-function nodeExecutableName(platform: NodeJS.Platform) {
+export function browserNodeExecutableName(platform: NodeJS.Platform) {
   return platform === "win32" ? "node.exe" : "node"
 }
 
-function isBunRuntime(execPath: string) {
+export function isBunExecutable(execPath: string) {
   const executable = path.basename(execPath).toLowerCase().replace(/\.exe$/, "")
   return executable === "bun"
 }
