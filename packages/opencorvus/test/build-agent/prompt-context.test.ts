@@ -151,6 +151,9 @@ describe("build agent prompt context", () => {
     expect(prompt).toContain("instead of hardcoded directly into page wrappers, generated SVG, or one-off JSX literals")
     expect(prompt).toContain("Charts, maps, heatmaps, geographic visualizations")
     expect(prompt).toContain("Do not replace a chart/map/heatmap with a flat SVG/image/decorative vector")
+    expect(prompt).toContain("Weight the sources accordingly")
+    expect(prompt).toContain("drive roughly 70% of implementation decisions")
+    expect(prompt).toContain("supplies roughly 30% style, geometry, CSS, assets, and pixel-consistency support")
     expect(prompt).toContain("REQ-12")
     expect(prompt).toContain("fr-interaction-scroll-tabs")
     expect(prompt.indexOf("## Requirements / PRD Coverage Contract")).toBeLessThan(
@@ -494,6 +497,8 @@ describe("build agent prompt context", () => {
     expect(prompt).toContain("read this PRD evidence by page chunk")
     expect(prompt).toContain("preserve the named component kinds")
     expect(prompt).toContain("do not flatten it into SVG/image markup")
+    expect(prompt).toContain("Use PRD evidence as the primary source for about 70%")
+    expect(prompt).toContain("Use skeleton/source evidence as about 30% support")
     expect(prompt).toContain("floating tab bar appears after scroll")
     expect(prompt.indexOf("## Frontend Research PRD Evidence")).toBeLessThan(
       prompt.indexOf("## Frontend Design Handoff"),

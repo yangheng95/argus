@@ -2351,6 +2351,9 @@ function renderBuildRequirementsSection(
   lines.push(
     "For UI/webpage work, read the PRD/frontend-research/frontend-design material in page chunks before editing: identify the component kind for each chunk, then implement the matching component and content. All visible content must be componentized and fed by props, data modules, fixtures, or API adapters instead of hardcoded directly into page wrappers, generated SVG, or one-off JSX literals. Charts, maps, heatmaps, geographic visualizations, tables/grids, tabs, menus, modals, forms, and carousels must remain real components with data/state/interaction contracts. Do not replace a chart/map/heatmap with a flat SVG/image/decorative vector unless the PRD evidence says it is static decoration.",
   )
+  lines.push(
+    "Weight the sources accordingly: PRD/frontend-research/frontend-design contracts drive roughly 70% of implementation decisions for global layout, component functions, content/data, states, and interactions; skeleton/source-dom/source-skeleton evidence supplies roughly 30% style, geometry, CSS, assets, and pixel-consistency support. When they conflict, implement the PRD component/content contract and use the skeleton only to tune visual fidelity.",
+  )
   if (options.directRequest) {
     lines.push(
       "This direct build path still must honor the active requirements when they are present; the raw request text is not permission to bypass the persisted PRD/REQ contract.",
