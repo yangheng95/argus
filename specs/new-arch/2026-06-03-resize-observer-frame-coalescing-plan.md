@@ -39,3 +39,18 @@ layout work moves out of the observer delivery phase.
 Add source-level regression tests that require the high-risk components to use
 the shared scheduler and disallow direct synchronous `ResizeObserver` callbacks
 in `Conversation.tsx` and `TaskProgressBar.tsx`.
+
+## Follow-up diagnosis
+
+After callback coalescing, the notification still appeared. The remaining
+source is `packages/overlay/src/main.tsx`: Chromium emits ResizeObserver
+delivery diagnostics through `window.error`, and the overlay runtime diagnostic
+handler promoted every `window.error` into a persistent user-facing
+notification.
+
+That browser delivery diagnostic is not an application runtime failure. Keep
+logging it at debug level, but do not create an error notification for the two
+exact browser messages:
+
+- `ResizeObserver loop completed with undelivered notifications.`
+- `ResizeObserver loop limit exceeded`

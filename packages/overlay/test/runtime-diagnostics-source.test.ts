@@ -16,4 +16,12 @@ describe("overlay runtime diagnostics", () => {
     expect(source).toContain('reportOverlayRuntimeError("initApp", error)');
     expect(source).not.toContain("console.error(error)\n  } finally");
   });
+
+  test("browser ResizeObserver delivery events do not become user-facing runtime notifications", () => {
+    expect(source).toContain("BROWSER_RESIZE_OBSERVER_DELIVERY_MESSAGES");
+    expect(source).toContain('"ResizeObserver loop completed with undelivered notifications."');
+    expect(source).toContain('"ResizeObserver loop limit exceeded"');
+    expect(source).toContain("function isBrowserResizeObserverDeliveryError");
+    expect(source).toMatch(/if \(isBrowserResizeObserverDeliveryError\(error\)\) \{[\s\S]*?AppLog\.debug\("runtime", scope,[\s\S]*?return[\s\S]*?\}/);
+  });
 });
