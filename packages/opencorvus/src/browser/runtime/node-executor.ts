@@ -12,6 +12,21 @@ export interface BrowserNodeSidecarRunResult<TResult> {
   signal: NodeJS.Signals | null
 }
 
+export class BrowserNodeSidecarError extends Error {
+  constructor(
+    readonly kind: "aborted" | "invalid_json" | "spawn" | "timeout",
+    message: string,
+    readonly detail: {
+      stderr?: string
+      stdout?: string
+    } = {},
+    options?: ErrorOptions,
+  ) {
+    super(message, options)
+    this.name = "BrowserNodeSidecarError"
+  }
+}
+
 export async function runBrowserNodeSidecar<TResult>(input: {
   runtime?: BrowserNodeSidecarRuntime
   script: string
@@ -22,7 +37,7 @@ export async function runBrowserNodeSidecar<TResult>(input: {
   label: string
 }): Promise<BrowserNodeSidecarRunResult<TResult>> {
   if (input.signal?.aborted) {
-    throw input.signal.reason instanceof Error ? input.signal.reason : new Error(`${input.label} aborted`)
+    throw new BrowserNodeSidecarError("aborted", input.signal.reason instanceof Error ? input.signal.reason.message : `${input.label} aborted`)
   }
   const runtime = input.runtime ?? await resolveBrowserNodeSidecarRuntime()
   const payload = Buffer.from(JSON.stringify(input.payload), "utf8").toString("base64")
@@ -58,7 +73,11 @@ export async function runBrowserNodeSidecar<TResult>(input: {
   const exit = await new Promise<{ code: number | null; signal: NodeJS.Signals | null }>((resolve, reject) => {
     const timer = setTimeout(() => {
       child.kill()
-      reject(new Error(`${input.label} timed out after ${input.hardTimeoutMs}ms. stderr=${stderr.slice(-2000)}`))
+      reject(new BrowserNodeSidecarError(
+        "timeout",
+        `${input.label} timed out after ${input.hardTimeoutMs}ms. stderr=${stderr.slice(-2000)}`,
+        { stderr },
+      ))
     }, input.hardTimeoutMs)
     child.once("error", (error) => {
       clearTimeout(timer)
@@ -78,19 +97,27 @@ export async function runBrowserNodeSidecar<TResult>(input: {
 
   if ("error" in exit) {
     const error = exit.error
-    throw new Error(error instanceof Error ? error.message : String(error), { cause: error })
+    if (error instanceof BrowserNodeSidecarError) throw error
+    throw new BrowserNodeSidecarError("spawn", error instanceof Error ? error.message : String(error), { stderr }, { cause: error })
   }
   if (aborted) {
-    throw input.signal?.reason instanceof Error ? input.signal.reason : new Error(`${input.label} aborted`)
+    throw new BrowserNodeSidecarError(
+      "aborted",
+      input.signal?.reason instanceof Error ? input.signal.reason.message : `${input.label} aborted`,
+      { stderr },
+    )
   }
 
   let result: TResult
   try {
     result = JSON.parse(stdout) as TResult
   } catch (error) {
-    throw new Error(`${input.label} returned invalid JSON. stderr=${stderr.trim()} stdout=${stdout.slice(0, 500)}`, {
-      cause: error,
-    })
+    throw new BrowserNodeSidecarError(
+      "invalid_json",
+      `${input.label} returned invalid JSON. stderr=${stderr.trim()} stdout=${stdout.slice(0, 500)}`,
+      { stderr, stdout },
+      { cause: error },
+    )
   }
 
   return {

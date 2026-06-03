@@ -6,10 +6,10 @@
  * substitute resources.
  */
 
-import { spawn } from "node:child_process"
 import z from "zod"
 
 import { BrowserRuntime } from "@/browser/runtime"
+import { BrowserNodeSidecarError, runBrowserNodeSidecar } from "@/browser/runtime/node-executor"
 import { resolveBrowserNodeSidecarRuntime } from "@/browser/runtime/node-sidecar"
 import { RenderError } from "../errors"
 
@@ -134,75 +134,33 @@ type NodeRenderResult =
     }
 
 async function renderFilesViaNode(input: NodeRenderInput): Promise<NodeRenderResult> {
-  const payload = Buffer.from(JSON.stringify(input), "utf8").toString("base64")
-  const child = spawn(input.nodeExecutable, ["-"], {
-    cwd: process.cwd(),
-    env: {
-      ...process.env,
-      OPENCORVUS_RENDER_INPUT: payload,
-      OPENCORVUS_PLAYWRIGHT_REQUIRE_PATH: input.playwrightRequirePath,
-    },
-    stdio: ["pipe", "pipe", "pipe"],
-    windowsHide: true,
-  })
-  child.stdin.end(NODE_RENDER_SCRIPT)
-
-  let stdout = ""
-  let stderr = ""
-  child.stdout.setEncoding("utf8")
-  child.stderr.setEncoding("utf8")
-  child.stdout.on("data", (chunk) => {
-    stdout += chunk
-  })
-  child.stderr.on("data", (chunk) => {
-    stderr += chunk
-  })
-
   const hardTimeoutMs = input.launchTimeoutMs + input.timeout + 20_000
-  const exit = await new Promise<{ code: number | null; signal: NodeJS.Signals | null }>((resolve, reject) => {
-    const timer = setTimeout(() => {
-      child.kill()
-      reject(new Error(`Node webpage render timed out after ${hardTimeoutMs}ms. stderr=${stderr.slice(-2000)}`))
-    }, hardTimeoutMs)
-    child.once("error", (error) => {
-      clearTimeout(timer)
-      reject(error)
-    })
-    child.once("exit", (code, signal) => {
-      clearTimeout(timer)
-      resolve({ code, signal })
-    })
-  }).catch((error) => ({
-    code: 1,
-    signal: null,
-    error,
-  }))
-
-  if ("error" in exit) {
-    const error = exit.error
-    return {
-      ok: false,
-      phase: "launch",
-      message: error instanceof Error ? error.message : String(error),
-      stack: error instanceof Error ? error.stack : undefined,
-    }
-  }
-
   try {
-    const parsed = JSON.parse(stdout) as NodeRenderResult
-    if (exit.code !== 0 && parsed.ok) {
+    const run = await runBrowserNodeSidecar<NodeRenderResult>({
+      runtime: {
+        nodeExecutable: input.nodeExecutable,
+        playwrightRequirePath: input.playwrightRequirePath,
+        packaged: false,
+      },
+      script: NODE_RENDER_SCRIPT,
+      payload: input,
+      payloadEnvName: "OPENCORVUS_RENDER_INPUT",
+      hardTimeoutMs,
+      label: "Node webpage render",
+    })
+    if (run.exitCode !== 0 && run.result.ok) {
       return {
         ok: false,
         phase: "evaluate",
-        message: `Node webpage render exited with ${exit.signal ?? exit.code}. stderr=${stderr.trim()}`,
+        message: `Node webpage render exited with ${run.signal ?? run.exitCode}. stderr=${run.stderr.trim()}`,
       }
     }
-    return parsed
+    return run.result
   } catch (error) {
     return {
       ok: false,
-      phase: "evaluate",
-      message: `Node webpage render returned invalid JSON. stderr=${stderr.trim()} stdout=${stdout.slice(0, 500)}`,
+      phase: error instanceof BrowserNodeSidecarError && error.kind === "invalid_json" ? "evaluate" : "launch",
+      message: error instanceof Error ? error.message : String(error),
       stack: error instanceof Error ? error.stack : undefined,
     }
   }
