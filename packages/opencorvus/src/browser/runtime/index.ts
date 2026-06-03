@@ -1,10 +1,18 @@
 import fs from "node:fs/promises"
 import path from "node:path"
 import { pathToFileURL } from "node:url"
-import type { Browser } from "playwright"
 
 export namespace BrowserRuntime {
-  type PlaywrightModule = typeof import("playwright")
+  type PlaywrightModule = {
+    chromium: {
+      launch(input: {
+        executablePath: string
+        headless: boolean
+        args: string[]
+        timeout: number
+      }): Promise<any>
+    }
+  }
 
   export type ErrorCode = "browser_executable_not_found" | "browser_missing" | "browser_launch_failed"
 
@@ -83,7 +91,7 @@ export namespace BrowserRuntime {
     executablePath?: string
     args?: string[]
     timeoutMs?: number
-  }): Promise<Browser> {
+  }): Promise<any> {
     const executablePath = await findBrowserExecutable(input.executablePath)
     try {
       const { chromium } = await loadPlaywright()

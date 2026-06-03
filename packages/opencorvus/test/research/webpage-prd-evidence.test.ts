@@ -1,0 +1,152 @@
+import { describe, expect, test } from "bun:test"
+import fs from "node:fs/promises"
+import path from "node:path"
+
+import {
+  primaryWebpageEvidenceArtifacts,
+  type LiveWebpageEvidencePipeline,
+} from "../../src/orchestrator/webpage-evidence"
+import {
+  prepareWebpagePrdEvidence,
+  renderWebpagePrdEvidencePromptSection,
+} from "../../src/research/webpage-prd-evidence"
+import { tmpdir } from "../fixture/fixture"
+
+const WEBPAGE_PRD_EVIDENCE_TIMEOUT_MS = 60_000
+
+describe("research webpage PRD evidence", () => {
+  test("prepares rendered webpage evidence as the research prompt surface", async () => {
+    await using tmp = await tmpdir()
+    const taskID = "tsk_research_webpage_prd"
+    const calls: string[] = []
+
+    const evidence = await prepareWebpagePrdEvidence({
+      projectDir: tmp.path,
+      worktreeDir: tmp.path,
+      taskID,
+      sourceUrls: ["https://example.com/markets/world-economy/"],
+      pipeline: fakePipeline(calls),
+    })
+
+    expect(evidence?.status).toBe("generated")
+    expect(calls).toEqual(["extract:https://example.com/markets/world-economy/", "compile", "analyze"])
+    expect(evidence?.excerpts.some((item) => item.excerpt.includes("Economic trends"))).toBe(true)
+
+    const prompt = renderWebpagePrdEvidencePromptSection(evidence)
+    expect(prompt).toContain("Prepared Webpage PRD Evidence")
+    expect(prompt).toContain("Do not call `webfetch` against this same URL")
+    expect(prompt).toContain("Return `document_outline` as the PRD major module list")
+    expect(prompt).toContain("source-ir/content-model.json")
+    expect(prompt).toContain("web-clone-source/reference.png")
+    expect(prompt).not.toContain("singlefile.html")
+    expect(prompt).not.toContain("extracted-page.json")
+  }, { timeout: WEBPAGE_PRD_EVIDENCE_TIMEOUT_MS })
+
+  test("clips large artifact excerpts before adding them to the prompt", async () => {
+    await using tmp = await tmpdir()
+    const taskID = "tsk_research_webpage_prd_clip"
+
+    const evidence = await prepareWebpagePrdEvidence({
+      projectDir: tmp.path,
+      worktreeDir: tmp.path,
+      taskID,
+      sourceUrls: ["https://example.com/markets/world-economy/"],
+      pipeline: fakePipeline([], { longEvidenceSummary: true }),
+    })
+
+    const summaryExcerpt = evidence?.excerpts.find((item) => item.label === "PRD evidence summary")
+    expect(summaryExcerpt?.clipped).toBe(true)
+    expect(summaryExcerpt?.excerpt).toContain("[artifact excerpt clipped:")
+    expect(summaryExcerpt?.excerpt.length).toBeLessThan(2_700)
+  }, { timeout: WEBPAGE_PRD_EVIDENCE_TIMEOUT_MS })
+})
+
+function fakePipeline(calls: string[], options: { longEvidenceSummary?: boolean } = {}): LiveWebpageEvidencePipeline {
+  return {
+    extract: async ({ outputDir, url }) => {
+      calls.push(`extract:${url}`)
+      await fs.mkdir(outputDir, { recursive: true })
+      await fs.writeFile(path.join(outputDir, "extracted-page.json"), JSON.stringify({ url }), "utf8")
+    },
+    compile: async ({ outputDir }) => {
+      calls.push("compile")
+      await fs.mkdir(outputDir, { recursive: true })
+    },
+    analyze: async ({ outputDir }) => {
+      calls.push("analyze")
+      const extracted = JSON.parse(await fs.readFile(path.join(outputDir, "extracted-page.json"), "utf8"))
+      await writeCompleteEvidence(outputDir, extracted.url, options)
+    },
+  }
+}
+
+async function writeCompleteEvidence(
+  mirrorDir: string,
+  url: string,
+  options: { longEvidenceSummary?: boolean },
+): Promise<void> {
+  await fs.mkdir(mirrorDir, { recursive: true })
+  for (const artifact of primaryWebpageEvidenceArtifacts()) {
+    const relative = artifact.replace(/^mirror[\\/]/, "")
+    const file = path.join(mirrorDir, relative)
+    await fs.mkdir(path.dirname(file), { recursive: true })
+    if (relative === "reference.png") {
+      await fs.writeFile(file, minimalPngBytes())
+      continue
+    }
+    await fs.writeFile(file, artifactContent(relative, url, options), "utf8")
+  }
+}
+
+function artifactContent(relative: string, url: string, options: { longEvidenceSummary?: boolean }): string {
+  if (relative === "extracted-page.json") return JSON.stringify({ url })
+  if (relative === "prd-evidence-summary.md") {
+    const base = [
+      "# Mirror frontend template Evidence Summary",
+      "",
+      "## Page Inventory",
+      "- Header: logo, search, navigation, account CTA.",
+      "- Economic trends: inflation map, GDP growth table, indicator cards.",
+      "- News, calendar, FAQ, footer.",
+    ].join("\n")
+    return options.longEvidenceSummary ? `${base}\n${"Economic trends detail.\n".repeat(400)}` : base
+  }
+  if (relative === "source-ir/content-model.json") {
+    return JSON.stringify({
+      tables: [{ title: "GDP growth", headers: ["Country", "GDP Growth", "Nominal GDP"] }],
+      cards: [{ title: "US unemployment rate", text: ["Actual 4.3%", "Forecast 4.3%"] }],
+      textSignals: ["Economy", "Overview", "Economic indicators heatmap"],
+    }, null, 2)
+  }
+  if (relative === "source-ir/component-tree.json") {
+    return JSON.stringify({ components: [{ name: "Economic trends", kind: "section" }] }, null, 2)
+  }
+  if (relative === "source-ir/layout-map.json") {
+    return JSON.stringify({ regions: [{ name: "Economic trends", bounds: { x: 40, y: 440, w: 1360, h: 620 } }] }, null, 2)
+  }
+  if (relative === "source-ir/style-tokens.json") {
+    return JSON.stringify({ colors: ["#ffffff", "#131722", "#2962ff"], fonts: ["Inter"] }, null, 2)
+  }
+  if (relative === "source-ir/interaction-hints.json") {
+    return JSON.stringify({ interactions: [{ type: "tabs", label: "Popular Recent Video" }] }, null, 2)
+  }
+  if (relative === "source-skeleton/source-skeleton-audit.json" || relative === "source-ir/source-quality-audit.json") {
+    return JSON.stringify({ passed: true }, null, 2)
+  }
+  if (relative.endsWith(".json")) return JSON.stringify({ version: 1 }, null, 2)
+  return `${relative}\n`
+}
+
+function minimalPngBytes(): Uint8Array {
+  return Uint8Array.from([
+    0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a,
+    0x00, 0x00, 0x00, 0x0d, 0x49, 0x48, 0x44, 0x52,
+    0x00, 0x00, 0x00, 0x01, 0x00, 0x00, 0x00, 0x01,
+    0x08, 0x06, 0x00, 0x00, 0x00, 0x1f, 0x15, 0xc4,
+    0x89, 0x00, 0x00, 0x00, 0x0a, 0x49, 0x44, 0x41,
+    0x54, 0x78, 0x9c, 0x63, 0x00, 0x01, 0x00, 0x00,
+    0x05, 0x00, 0x01, 0x0d, 0x0a, 0x2d, 0xb4, 0x00,
+    0x00, 0x00, 0x00, 0x49, 0x45, 0x4e, 0x44, 0xae,
+    0x42, 0x60, 0x82,
+  ])
+}

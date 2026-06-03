@@ -4,7 +4,7 @@ import { streamSSE } from "hono/streaming"
 import { HTTPException } from "hono/http-exception"
 import z from "zod"
 import { ControlTimeline } from "@/control/timeline"
-import { projectConversationView } from "@/conversation/view"
+import { conversationMessageHasDisplay, projectConversationView } from "@/conversation/view"
 import {
   Artifact,
   AgentSessionCancelResult,
@@ -1717,6 +1717,10 @@ export function __conversationHistoryBeforeForTest(
   }
 }
 
+export function __displayableConversationTranscriptForTest(transcript: any[]) {
+  return transcript.filter(conversationMessageHasDisplay)
+}
+
 async function loadTaskTranscript(taskID: string) {
   const task = requireTask(taskID)
   const rootSessionID = task.session_id
@@ -1747,7 +1751,7 @@ async function loadTaskTranscript(taskID: string) {
     const parentSessionID = sessionParentID(sid)
     if (parentSessionID) (msg.info as any).parentSessionID = parentSessionID
   }
-  return messages
+  return __displayableConversationTranscriptForTest(messages)
 }
 
 function conversationEventPage(

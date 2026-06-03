@@ -88,7 +88,7 @@ exports[`tool parameter schemas keeps built-in tool schemas stable 1`] = `
     "additionalProperties": false,
     "properties": {
       "background": {
-        "description": "When true, the command keeps running after this tool call returns until explicitly stopped or until the timeout lease expires. The tool returns immediately with the spawned PID once stdout/stderr are observed (or after a short readiness window). Use ONLY for long-lived servers (dev/preview/serve) that must outlive a single tool call so delivery checks can probe them. You are responsible for stopping it later (e.g. \`kill <pid>\` or \`lsof -ti :<port> | xargs kill\`).",
+        "description": "When true, the command keeps running after this tool call returns until explicitly stopped or until the background lease expires. The tool returns immediately with the spawned PID once stdout/stderr are observed (or after a short readiness window). Use ONLY for long-lived servers (dev/preview/serve) that must outlive a single tool call so delivery checks can probe them. You are responsible for stopping it later (e.g. \`kill <pid>\` or \`lsof -ti :<port> | xargs kill\`).",
         "type": "boolean",
       },
       "command": {
@@ -111,6 +111,10 @@ Input: mkdir foo
 Output: Creates directory 'foo'"
 ,
         "type": "string",
+      },
+      "leaseTimeout": {
+        "description": "Optional background process lease in milliseconds. Only applies with background: true. Defaults to 3600000ms (1 hour). Use this only when you intentionally need a shorter or longer lease; timeout controls the tool/readiness wait, not the background process lifetime.",
+        "type": "number",
       },
       "timeout": {
         "description": "Optional timeout in milliseconds",
@@ -484,6 +488,35 @@ Output: Creates directory 'foo'"
         },
         "required": [
           "action",
+        ],
+        "type": "object",
+      },
+      {
+        "additionalProperties": false,
+        "properties": {
+          "action": {
+            "const": "query_task",
+            "type": "string",
+          },
+          "includeChildren": {
+            "type": "boolean",
+          },
+          "includeInteractions": {
+            "type": "boolean",
+          },
+          "taskIDs": {
+            "items": {
+              "minLength": 1,
+              "type": "string",
+            },
+            "maxItems": 50,
+            "minItems": 1,
+            "type": "array",
+          },
+        },
+        "required": [
+          "action",
+          "taskIDs",
         ],
         "type": "object",
       },
@@ -2146,7 +2179,7 @@ Output: Creates directory 'foo'"
         "type": "string",
       },
       "pattern": {
-        "description": "Required regex pattern to search for in file contents. This field is named \"pattern\"; do not use \"query\".",
+        "description": "Required regex pattern to search for in file contents. This field is named "pattern"; do not use "query".",
         "type": "string",
       },
     },

@@ -1168,6 +1168,117 @@ test("phase-absorbed agent does not split a later orchestrator turn", () => {
   expect(cardTreeStore.order.filter((id) => id === o1 || id === o2)).toEqual([o1]);
 });
 
+test("phase-absorbed empty build messages do not create timestamp-only boundaries", () => {
+  seedTurnBoard("empty build envelope");
+
+  const goalID = "goal_empty_build";
+  const sessionID = "ses_empty_build";
+  const messageID = "msg_empty_build";
+  const hasEmptyBoundary = () =>
+    Object.values(cardTreeStore.cards).some((card: any) =>
+      (card?.parts || []).some((part: any) => part.type === "boundary" && part.messageID === messageID),
+    );
+  const hasVisibleMessagePart = () =>
+    Object.values(cardTreeStore.cards).some((card: any) =>
+      (card?.parts || []).some((part: any) =>
+        part.messageID === messageID &&
+        part.type !== "step-start" &&
+        part.type !== "step-finish" &&
+        part.type !== "boundary",
+      ),
+    );
+
+  applyEvent({ type: "message.updated", properties: { taskID: TASK_ID, info: stampedInfo("build", {
+    id: messageID, sessionID, role: "assistant", resolvedRole: "build", agent: "build",
+    parentSessionID: ROOT_SID, goalID, time: { created: 1_776_000_000_150 } }) } });
+
+  expect(hasEmptyBoundary()).toBe(false);
+  expect(hasVisibleMessagePart()).toBe(false);
+
+  applyEvent({ type: "message.part.updated", properties: { taskID: TASK_ID, part: stampedPart("build", {
+    id: "prt_empty_step", messageID, sessionID, type: "step-start",
+    parentSessionID: ROOT_SID, goalID }) } });
+
+  expect(hasEmptyBoundary()).toBe(false);
+  expect(hasVisibleMessagePart()).toBe(false);
+
+  applyEvent({ type: "message.part.updated", properties: { taskID: TASK_ID, part: stampedPart("build", {
+    id: "prt_visible_text", messageID, sessionID, type: "text", text: "visible build output",
+    parentSessionID: ROOT_SID, goalID }) } });
+
+  const phaseCard = Object.values(cardTreeStore.cards).find((card: any) => card?.phaseSessionID === sessionID) as any;
+  expect(phaseCard).toBeDefined();
+  expect(phaseCard.parts.some((part: any) => part.type === "boundary" && part.messageID === messageID)).toBe(true);
+  expect(phaseCard.parts.some((part: any) => part.type === "text" && part.text === "visible build output")).toBe(true);
+});
+
+test("hydrate skips empty build transcript messages before boundary projection", () => {
+  seedTurnBoard("hydrate empty build envelope");
+
+  const goalID = "goal_hydrate_empty";
+  const emptySessionID = "ses_hydrate_empty";
+  const visibleSessionID = "ses_hydrate_visible";
+  hydrateConversationView(
+    {
+      sessions: [
+        {
+          sessionID: emptySessionID,
+          stage: "build",
+          parentSessionID: ROOT_SID,
+          goalID,
+          messageIDs: ["msg_hydrate_empty"],
+          firstMessageTime: 1_776_000_000_150,
+          lastMessageTime: 1_776_000_000_150,
+          placement: "goal_phase",
+          phase: { stepID: "build", phaseID: "build" },
+        },
+        {
+          sessionID: visibleSessionID,
+          stage: "build",
+          parentSessionID: ROOT_SID,
+          goalID,
+          messageIDs: ["msg_hydrate_visible"],
+          lastDisplayMessageID: "msg_hydrate_visible",
+          firstMessageTime: 1_776_000_000_200,
+          lastMessageTime: 1_776_000_000_200,
+          placement: "goal_phase",
+          phase: { stepID: "build", phaseID: "build" },
+        },
+      ],
+      topLevelSessionIDs: [],
+    },
+    [
+      {
+        info: stampedInfo("build", {
+          id: "msg_hydrate_empty",
+          sessionID: emptySessionID,
+          role: "assistant",
+          parentSessionID: ROOT_SID,
+          goalID,
+          time: { created: 1_776_000_000_150 },
+        }),
+        parts: [],
+      },
+      {
+        info: stampedInfo("build", {
+          id: "msg_hydrate_visible",
+          sessionID: visibleSessionID,
+          role: "assistant",
+          parentSessionID: ROOT_SID,
+          goalID,
+          time: { created: 1_776_000_000_200 },
+        }),
+        parts: [{ id: "prt_hydrate_visible", type: "text", text: "hydrated build output" }],
+      },
+    ],
+  );
+
+  expect(Object.values(cardTreeStore.cards).some((card: any) => card?.phaseSessionID === emptySessionID)).toBe(false);
+  const phaseCard = Object.values(cardTreeStore.cards).find((card: any) => card?.phaseSessionID === visibleSessionID) as any;
+  expect(phaseCard).toBeDefined();
+  expect(phaseCard.parts.some((part: any) => part.type === "text" && part.text === "hydrated build output")).toBe(true);
+});
+
 test("interaction remains attached to the turn active at interaction time", () => {
   setBoardStore("board", {
     task: {

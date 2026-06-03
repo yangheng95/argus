@@ -540,6 +540,26 @@ function isUserStage(stage: string): boolean {
   return normalizeAgentRole(stage) === "user";
 }
 
+function conversationPartHasDisplay(part: any): boolean {
+  const type = String(part?.type || "");
+  if (!type || type === "step-start" || type === "step-finish" || type === "boundary") return false;
+  if (type === "text" || type === "reasoning") return Boolean(String(part?.text || "").trim());
+  return true;
+}
+
+function transcriptMessageHasDisplay(message: any): boolean {
+  return Array.isArray(message?.parts) && message.parts.some(conversationPartHasDisplay);
+}
+
+function projectedMessageHasDisplayPart(messageID: string): boolean {
+  for (const card of Object.values(cardTreeStore.cards)) {
+    for (const part of card?.parts || []) {
+      if (String(part?.messageID || "") === messageID && conversationPartHasDisplay(part)) return true;
+    }
+  }
+  return false;
+}
+
 function createSessionCardNode(
   cardID: string,
   stage: string,
@@ -697,7 +717,7 @@ function handleMessageUpdated(event: any): void {
   // Phase cards always need in-card message boundaries. Non-phase cards are
   // regrouped by the authoritative message timeline below; doing that from
   // live arrival order is the regression this path avoids.
-  if (isPhase) {
+  if (isPhase && projectedMessageHasDisplayPart(id)) {
     ensureBoundaryPart(session, cardID, id, displayRole, timeCreated);
   } else if (priorMessageCount > 0) {
     regroupTimelineSegments();
@@ -768,13 +788,15 @@ function ensurePartProjection(part: any, opts: { observationTime?: number } = {}
     throw new Error(`message.part.updated could not ensure session ${sessionID}`);
   }
   if (!cardID) {
+    if (!conversationPartHasDisplay(part)) return null;
     const observationTime = opts.observationTime ?? Date.now();
+    const message = messages.get(messageID);
     const ensured = ensureMessageTurnProjection(session, messageID, {
       stage: session.stage,
       goalID: session.goalID,
       role: String(part.resolvedRole || session.stage),
-      time: observationTime,
-      stampServerTime: false,
+      time: message?.time || observationTime,
+      stampServerTime: Boolean(message?.time),
     });
     cardID = ensured.cardID;
     if (ensured.isPhase) {
@@ -783,7 +805,7 @@ function ensurePartProjection(part: any, opts: { observationTime?: number } = {}
         cardID,
         messageID,
         String(part.resolvedRole || session.stage),
-        observationTime,
+        message?.time || observationTime,
       );
     }
     drainPendingSessionStatus(sessionID);
@@ -795,9 +817,20 @@ function ensurePartProjection(part: any, opts: { observationTime?: number } = {}
 }
 
 function handlePartUpdated(event: any): void {
-  const projection = ensurePartProjection(propsOf(event).part);
+  const part = propsOf(event).part;
+  const projection = ensurePartProjection(part);
   if (!projection) return;
-  const { session } = projection;
+  const { session, cardID, messageID } = projection;
+  if (isPhaseAbsorbedSession(session.stage, session.goalID) && conversationPartHasDisplay(part)) {
+    const message = messages.get(messageID);
+    ensureBoundaryPart(
+      session,
+      cardID,
+      messageID,
+      String(part?.resolvedRole || session.stage),
+      message?.time || (Date.now()),
+    );
+  }
   syncExecutorTopLevelVisibility(session);
 }
 
@@ -2121,6 +2154,7 @@ export function hydrateConversationView(view: any, transcript: any[]): void {
       Number.isFinite(info?.time?.completed) && Number(info.time.completed) > 0;
     const stage = deriveSessionStage(info);
     if (stage === "filtered") continue;
+    if (!transcriptMessageHasDisplay(message)) continue;
     const displayRole = displayRoleForStage(stage);
     messages.set(messageID, {
       id: messageID,

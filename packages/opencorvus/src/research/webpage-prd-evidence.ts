@@ -1,0 +1,185 @@
+import fs from "node:fs/promises"
+import path from "node:path"
+
+import {
+  ensureLiveWebpageEvidence,
+  type LiveWebpageEvidencePipeline,
+  type LiveWebpageEvidenceResult,
+} from "@/orchestrator/webpage-evidence"
+import { ProjectRuntimePaths } from "@/project/runtime-paths"
+
+const EXCERPT_MAX_CHARS = 2_400
+const RAW_WEBPAGE_EVIDENCE_LINE_PATTERNS = [
+  /\bsinglefile\.html\b/i,
+  /\bcapture\.html\b/i,
+  /\bextracted-page\.json\b/i,
+  /\bsource-skeleton\/index\.html\b/i,
+] as const
+
+const PROMPT_ARTIFACTS = [
+  {
+    label: "PRD evidence summary",
+    relative: ["mirror", "prd-evidence-summary.md"],
+  },
+  {
+    label: "Source package context",
+    relative: ["web-clone-source", "web-clone-context.md"],
+  },
+  {
+    label: "Implementation blueprint",
+    relative: ["web-clone-source", "implementation-blueprint.md"],
+  },
+  {
+    label: "Component tree",
+    relative: ["web-clone-source", "source-ir", "component-tree.json"],
+  },
+  {
+    label: "Content model",
+    relative: ["web-clone-source", "source-ir", "content-model.json"],
+  },
+  {
+    label: "Layout map",
+    relative: ["web-clone-source", "source-ir", "layout-map.json"],
+  },
+  {
+    label: "Style tokens",
+    relative: ["web-clone-source", "source-ir", "style-tokens.json"],
+  },
+  {
+    label: "Interaction hints",
+    relative: ["web-clone-source", "source-ir", "interaction-hints.json"],
+  },
+] as const
+
+export interface WebpagePrdEvidenceExcerpt {
+  label: string
+  relativePath: string
+  excerpt: string
+  originalChars: number
+  clipped: boolean
+}
+
+export interface WebpagePrdEvidence {
+  url: string
+  status: LiveWebpageEvidenceResult["status"]
+  mirrorRelative: string
+  sourcePackageRelative: string
+  referenceImageRelative: string
+  artifacts: string[]
+  excerpts: WebpagePrdEvidenceExcerpt[]
+}
+
+export async function prepareWebpagePrdEvidence(input: {
+  projectDir: string
+  worktreeDir: string
+  taskID: string
+  sourceUrls: readonly string[]
+  signal?: AbortSignal
+  pipeline?: LiveWebpageEvidencePipeline
+}): Promise<WebpagePrdEvidence | undefined> {
+  const url = input.sourceUrls.find((item) => /^https?:\/\//i.test(item))
+  if (!url) return undefined
+
+  const evidence = await ensureLiveWebpageEvidence({
+    projectDir: input.projectDir,
+    worktreeDir: input.worktreeDir,
+    taskID: input.taskID,
+    urls: input.sourceUrls,
+    signal: input.signal,
+    pipeline: input.pipeline,
+  })
+  if (!evidence.url) throw new Error("webpage PRD evidence preparation did not resolve a source URL")
+
+  const paths = ProjectRuntimePaths.frontendDesignPaths(input.projectDir, input.taskID)
+  const excerpts = await Promise.all(PROMPT_ARTIFACTS.map((artifact) => readPromptArtifact(paths.relativeDir, paths, artifact)))
+  return {
+    url: evidence.url,
+    status: evidence.status,
+    mirrorRelative: paths.mirrorRelative,
+    sourcePackageRelative: paths.sourcePackageRelative,
+    referenceImageRelative: path.posix.join(paths.sourcePackageRelative, "reference.png"),
+    artifacts: evidence.artifacts,
+    excerpts,
+  }
+}
+
+export function renderWebpagePrdEvidencePromptSection(evidence: WebpagePrdEvidence | undefined): string | undefined {
+  if (!evidence) return undefined
+  const artifactList = evidence.artifacts
+    .filter((artifact) =>
+      artifact.endsWith("prd-evidence-summary.md") ||
+      artifact.includes("/source-ir/") ||
+      artifact.endsWith("web-clone-context.md") ||
+      artifact.endsWith("implementation-blueprint.md") ||
+      artifact.endsWith("reference.png"),
+    )
+    .map((artifact) => `- ${artifact}`)
+    .join("\n")
+  const excerpts = evidence.excerpts
+    .map((item) =>
+      [
+        `## ${item.label}`,
+        `Path: ${item.relativePath}`,
+        item.clipped ? `Excerpt: clipped to ${EXCERPT_MAX_CHARS} of ${item.originalChars} chars.` : "Excerpt: complete.",
+        "",
+        "```",
+        item.excerpt,
+        "```",
+      ].join("\n"),
+    )
+    .join("\n\n")
+
+  return [
+    "# Prepared Webpage PRD Evidence",
+    "",
+    `Source URL: ${evidence.url}`,
+    `Evidence status: ${evidence.status}`,
+    `Mirror evidence root: ${evidence.mirrorRelative}`,
+    `Source package root: ${evidence.sourcePackageRelative}`,
+    `Visual reference image: ${evidence.referenceImageRelative}`,
+    "",
+    "Use this rendered webpage evidence as the primary source for page layout, visible content, responsive behavior, style tokens, interactions, maps, charts, cards, tables, and footer/header inventory.",
+    "Do not call `webfetch` against this same URL for visual layout or content extraction. Use `webfetch` only for narrow metadata or linked-source confirmation when these artifacts identify a missing fact.",
+    "Return `document_outline` as the PRD major module list for downstream agent splitting. Order modules by visible page flow and include evidence ids for each module.",
+    "",
+    "## Canonical Artifact Paths",
+    artifactList || "- none",
+    "",
+    excerpts,
+  ].join("\n")
+}
+
+async function readPromptArtifact(
+  taskRelativeRoot: string,
+  paths: ReturnType<typeof ProjectRuntimePaths.frontendDesignPaths>,
+  artifact: typeof PROMPT_ARTIFACTS[number],
+): Promise<WebpagePrdEvidenceExcerpt> {
+  const [root, ...rest] = artifact.relative
+  const absoluteRoot = root === "mirror" ? paths.mirrorAbsolute : paths.sourcePackageAbsolute
+  const relativeRoot = root === "mirror" ? paths.mirrorRelative : paths.sourcePackageRelative
+  const absolutePath = path.join(absoluteRoot, ...rest)
+  const relativePath = path.posix.join(relativeRoot, ...rest)
+  if (!relativePath.startsWith(taskRelativeRoot.replaceAll("\\", "/"))) {
+    throw new Error(`webpage PRD artifact path escaped task frontend-design runtime root: ${relativePath}`)
+  }
+  const rawText = await fs.readFile(absolutePath, "utf8")
+  const text = sanitizeResearchPromptArtifactText(rawText)
+  const excerpt = text.length > EXCERPT_MAX_CHARS
+    ? `${text.slice(0, EXCERPT_MAX_CHARS).trimEnd()}\n[artifact excerpt clipped: ${text.length - EXCERPT_MAX_CHARS} chars omitted]`
+    : text.trim()
+  return {
+    label: artifact.label,
+    relativePath,
+    excerpt,
+    originalChars: text.length,
+    clipped: text.length > EXCERPT_MAX_CHARS,
+  }
+}
+
+function sanitizeResearchPromptArtifactText(text: string): string {
+  return text
+    .split(/\r?\n/)
+    .filter((line) => !RAW_WEBPAGE_EVIDENCE_LINE_PATTERNS.some((pattern) => pattern.test(line)))
+    .join("\n")
+    .trim()
+}

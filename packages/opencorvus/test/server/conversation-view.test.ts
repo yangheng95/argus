@@ -1,5 +1,5 @@
 import { expect, test } from "bun:test"
-import { projectConversationView } from "../../src/conversation/view"
+import { conversationMessageHasDisplay, projectConversationView } from "../../src/conversation/view"
 
 test("projectConversationView classifies top-level, hidden, and goal-phase sessions", () => {
   const board = {
@@ -110,4 +110,25 @@ test("projectConversationView tracks the last message with displayable content",
       lastDisplayMessageID: "msg_display",
     }),
   )
+})
+
+test("conversationMessageHasDisplay rejects envelope-only and control-only messages", () => {
+  const base = {
+    info: {
+      id: "msg",
+      sessionID: "ses",
+      channel: "build",
+      time: { created: 10 },
+    },
+  }
+
+  expect(conversationMessageHasDisplay({ ...base, parts: [] })).toBe(false)
+  expect(conversationMessageHasDisplay({ ...base, parts: [{ type: "step-start" }] })).toBe(false)
+  expect(conversationMessageHasDisplay({ ...base, parts: [{ type: "step-finish" }] })).toBe(false)
+  expect(conversationMessageHasDisplay({ ...base, parts: [{ type: "boundary" }] })).toBe(false)
+  expect(conversationMessageHasDisplay({ ...base, parts: [{ type: "text", text: "   " }] })).toBe(false)
+  expect(conversationMessageHasDisplay({ ...base, parts: [{ type: "reasoning", text: "" }] })).toBe(false)
+  expect(conversationMessageHasDisplay({ ...base, parts: [{ type: "text", text: "visible" }] })).toBe(true)
+  expect(conversationMessageHasDisplay({ ...base, parts: [{ type: "reasoning", text: "visible" }] })).toBe(true)
+  expect(conversationMessageHasDisplay({ ...base, parts: [{ type: "tool", tool: "read" }] })).toBe(true)
 })

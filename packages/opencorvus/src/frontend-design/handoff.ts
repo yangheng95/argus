@@ -63,11 +63,11 @@ function renderSourceRegionRefactorGuidance(entries: Map<string, DecisionEntry>)
   return [
     "## Source-Region Refactor Guidance",
     "",
-    "Dynamic interpretation from the frontend_design decision log: this webpage handoff starts from a source_baseline_input project. Treat that project as captured rawproject evidence and the traceable source seed for region-by-region refinement.",
+    "Dynamic interpretation from the frontend_design decision log: this webpage handoff starts from a source_baseline_input skeleton. Treat that project as captured rawproject evidence and the traceable source seed for extraction into the target delivery project.",
     "",
     "- Requirements: express maintainability as source-region traceability. Every new component, data module, style rule, and boundary cleanup must map to source nodes/regions/assets/reference screenshots. Maintainable mode should report measured webpage_evaluate evidence and zero-finding web_clone_source_audit evidence before claiming final maintainability.",
     "- Architect: keep ownership inside the frontend-design handoff and downstream implementation. Do not change other agent prompts or communication paths. Decompose work by named sourceDomReplacementPlan/source region only when that region is in scope.",
-    "- Build: copy/adapt only traceable source files into the delivery root, then replace regions vertically: source data extraction, semantic component, scoped CSS, generated fixed-layout cleanup, and screenshot comparison. Reuse project components or mature libraries for hard UI domains; do not hand-roll complex controls.",
+    "- Build: start from the target delivery project populated by frontend_design. Only finish integration and precision fixes; do not treat frontend-design-skeleton as app source. Reuse project components or mature libraries for hard UI domains; do not hand-roll complex controls.",
     "- Delivery/Integrity: verify source traceability, visual parity for unchanged reference surfaces, absence of screenshot/base64/iframe replay, and documented handling for every replaced/deferred source region.",
   ].join("\n")
 }

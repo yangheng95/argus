@@ -1,29 +1,19 @@
 /**
- * Visual render — capture an explicit browser URL.
- *
- * Ported from `mirror/src/service/render.ts`. Adaptations vs. upstream:
- *   - `findChromePath` → opencorvus `findBrowserExecutable` (shared with
- *     `delivery/checks/visual.ts` and `frontend-design/url-screenshot.ts`
- *     so a single browser-lifecycle policy stays in sync).
- *   - Silent `catch` blocks → `Log.create({ service: "mirror.render" })`
- *     with structured context.
- *   - Failure modes raise `RenderError` (typed) instead of plain `Error`.
+ * Visual render - capture an explicit browser URL.
  *
  * This is an atomic tool: it navigates to the caller-provided URL and returns
  * the captured screenshot. It does not start servers, infer project shape, or
  * substitute resources.
  */
 
+import { spawn } from "node:child_process"
+import { createRequire } from "node:module"
+import fs from "node:fs/promises"
+import path from "node:path"
 import z from "zod"
-import { type Browser } from "playwright"
 
 import { BrowserRuntime } from "@/browser/runtime"
-import { Log } from "@/util/log"
 import { RenderError } from "../errors"
-
-const log = Log.create({ service: "mirror.render" })
-
-// ─── Screenshot stabilization CSS ────────────────────────────────────────
 
 /** Injected before capture so screenshots are pixel-identical across runs. */
 export const SCREENSHOT_STABILIZATION_CSS = `
@@ -39,8 +29,6 @@ export const SCREENSHOT_STABILIZATION_CSS = `
 html { scrollbar-width: none !important; }
 * { caret-color: transparent !important; }
 `
-
-// ─── Public API ──────────────────────────────────────────────────────────
 
 export const RenderInputSchema = z.object({
   /** Explicit page URL to capture. */
@@ -82,172 +70,290 @@ export async function renderFiles(input: RenderInput, ctx?: RenderFilesCtx): Pro
   const fullPage = parsed.fullPage ?? false
   const { url, viewport } = parsed
 
-  let browser: Browser | undefined
+  ctx?.emit?.({ phase: "launch-browser" })
+  const sidecarRuntime = await resolveNodeRenderSidecarRuntime()
+  const result = await renderFilesViaNode({
+    url,
+    viewport,
+    timeout,
+    fullPage,
+    executablePath: await BrowserRuntime.findBrowserExecutable(),
+    nodeExecutable: sidecarRuntime.nodeExecutable,
+    playwrightRequirePath: sidecarRuntime.playwrightRequirePath,
+    launchTimeoutMs: BrowserRuntime.resolveBrowserLaunchTimeoutMs(),
+    stabilizationCss: SCREENSHOT_STABILIZATION_CSS,
+  })
+
+  if (!result.ok) {
+    throw new RenderError(
+      {
+        url,
+        reason: result.message,
+        phase: result.phase,
+      },
+      { cause: result.stack ? new Error(result.stack) : undefined },
+    )
+  }
+
+  ctx?.emit?.({ phase: "screenshot" })
+  const screenshotBuffer = Buffer.from(result.screenshotBase64, "base64")
+  return {
+    screenshotDataUrl: `data:image/png;base64,${screenshotBuffer.toString("base64")}`,
+    screenshotBuffer,
+    viewport,
+    renderTimeMs: Date.now() - startTime,
+    bodyText: result.bodyText,
+    visibleText: result.visibleText,
+    consoleErrors: result.consoleErrors.length > 0 ? result.consoleErrors : undefined,
+  }
+}
+
+type NodeRenderInput = {
+  url: string
+  viewport: { width: number; height: number }
+  timeout: number
+  fullPage: boolean
+  executablePath: string
+  nodeExecutable: string
+  playwrightRequirePath: string
+  launchTimeoutMs: number
+  stabilizationCss: string
+}
+
+type NodeRenderResult =
+  | {
+      ok: true
+      screenshotBase64: string
+      bodyText: string
+      visibleText: string
+      consoleErrors: string[]
+    }
+  | {
+      ok: false
+      phase: "launch" | "navigate" | "evaluate" | "screenshot" | "close"
+      message: string
+      stack?: string
+    }
+
+async function renderFilesViaNode(input: NodeRenderInput): Promise<NodeRenderResult> {
+  const payload = Buffer.from(JSON.stringify(input), "utf8").toString("base64")
+  const child = spawn(input.nodeExecutable, ["-"], {
+    cwd: process.cwd(),
+    env: {
+      ...process.env,
+      OPENCORVUS_RENDER_INPUT: payload,
+      OPENCORVUS_PLAYWRIGHT_REQUIRE_PATH: input.playwrightRequirePath,
+    },
+    stdio: ["pipe", "pipe", "pipe"],
+    windowsHide: true,
+  })
+  child.stdin.end(NODE_RENDER_SCRIPT)
+
+  let stdout = ""
+  let stderr = ""
+  child.stdout.setEncoding("utf8")
+  child.stderr.setEncoding("utf8")
+  child.stdout.on("data", (chunk) => {
+    stdout += chunk
+  })
+  child.stderr.on("data", (chunk) => {
+    stderr += chunk
+  })
+
+  const hardTimeoutMs = input.launchTimeoutMs + input.timeout + 20_000
+  const exit = await new Promise<{ code: number | null; signal: NodeJS.Signals | null }>((resolve, reject) => {
+    const timer = setTimeout(() => {
+      child.kill()
+      reject(new Error(`Node webpage render timed out after ${hardTimeoutMs}ms. stderr=${stderr.slice(-2000)}`))
+    }, hardTimeoutMs)
+    child.once("error", (error) => {
+      clearTimeout(timer)
+      reject(error)
+    })
+    child.once("exit", (code, signal) => {
+      clearTimeout(timer)
+      resolve({ code, signal })
+    })
+  }).catch((error) => ({
+    code: 1,
+    signal: null,
+    error,
+  }))
+
+  if ("error" in exit) {
+    const error = exit.error
+    return {
+      ok: false,
+      phase: "launch",
+      message: error instanceof Error ? error.message : String(error),
+      stack: error instanceof Error ? error.stack : undefined,
+    }
+  }
+
   try {
-    ctx?.emit?.({ phase: "launch-browser" })
-
-    try {
-      browser = await BrowserRuntime.launchPlaywrightBrowser({
-        headless: true,
-        args: [
-          "--no-sandbox",
-          "--disable-gpu",
-          "--disable-dev-shm-usage",
-          "--disable-extensions",
-          "--disable-background-networking",
-          `--window-size=${viewport.width},${viewport.height}`,
-        ],
-      })
-    } catch (err) {
-      throw new RenderError(
-        {
-          url,
-          reason: err instanceof Error ? err.message : String(err),
-          phase: "launch",
-        },
-        { cause: err },
-      )
+    const parsed = JSON.parse(stdout) as NodeRenderResult
+    if (exit.code !== 0 && parsed.ok) {
+      return {
+        ok: false,
+        phase: "evaluate",
+        message: `Node webpage render exited with ${exit.signal ?? exit.code}. stderr=${stderr.trim()}`,
+      }
     }
-    const context = await browser.newContext({ viewport })
-    const page = await context.newPage()
+    return parsed
+  } catch (error) {
+    return {
+      ok: false,
+      phase: "evaluate",
+      message: `Node webpage render returned invalid JSON. stderr=${stderr.trim()} stdout=${stdout.slice(0, 500)}`,
+      stack: error instanceof Error ? error.stack : undefined,
+    }
+  }
+}
 
-    const consoleErrors: string[] = []
+export async function resolveNodeRenderSidecarRuntime(input: {
+  execPath?: string
+  platform?: NodeJS.Platform
+} = {}): Promise<{ nodeExecutable: string; playwrightRequirePath: string }> {
+  const platform = input.platform ?? process.platform
+  const packagedDir = path.join(path.dirname(input.execPath ?? process.execPath), "browser-mcp-node")
+  const packagedNode = path.join(packagedDir, platform === "win32" ? "node.exe" : "node")
+  const packagedPlaywright = path.join(packagedDir, "node_modules", "playwright", "index.js")
+  if ((await exists(packagedNode)) && (await exists(packagedPlaywright))) {
+    return {
+      nodeExecutable: process.env.OPENCORVUS_BROWSER_MCP_NODE ?? packagedNode,
+      playwrightRequirePath: packagedPlaywright,
+    }
+  }
+  return {
+    nodeExecutable: process.env.OPENCORVUS_BROWSER_MCP_NODE ?? (platform === "win32" ? "node.exe" : "node"),
+    playwrightRequirePath: createRequire(import.meta.url).resolve("playwright"),
+  }
+}
+
+async function exists(file: string): Promise<boolean> {
+  return fs.access(file).then(
+    () => true,
+    () => false,
+  )
+}
+
+const NODE_RENDER_SCRIPT = String.raw`
+const { chromium } = require(process.env.OPENCORVUS_PLAYWRIGHT_REQUIRE_PATH || "playwright");
+
+async function main() {
+  const input = JSON.parse(Buffer.from(process.env.OPENCORVUS_RENDER_INPUT || "", "base64").toString("utf8"));
+  let browser;
+  let phase = "launch";
+  try {
+    browser = await chromium.launch({
+      executablePath: input.executablePath,
+      headless: true,
+      timeout: input.launchTimeoutMs,
+      args: [
+        "--no-sandbox",
+        "--disable-gpu",
+        "--disable-dev-shm-usage",
+        "--disable-extensions",
+        "--disable-background-networking",
+        "--window-size=" + input.viewport.width + "," + input.viewport.height,
+      ],
+    });
+    const context = await browser.newContext({ viewport: input.viewport });
+    const page = await context.newPage();
+    const consoleErrors = [];
     page.on("console", (msg) => {
-      if (msg.type() === "error") consoleErrors.push(msg.text())
-    })
+      if (msg.type() === "error") consoleErrors.push(msg.text());
+    });
     page.on("pageerror", (err) => {
-      consoleErrors.push(err instanceof Error ? err.message : String(err))
-    })
+      consoleErrors.push(err && err.message ? err.message : String(err));
+    });
 
-    ctx?.emit?.({ phase: "load-page" })
-    try {
-      await page.goto(url, { waitUntil: "networkidle", timeout })
-    } catch (err) {
-      const baseReason = err instanceof Error ? err.message : String(err)
-      throw new RenderError(
-        {
-          url,
-          reason: baseReason,
-          phase: "navigate",
-        },
-        { cause: err },
-      )
-    }
+    phase = "navigate";
+    await page.goto(input.url, { waitUntil: "networkidle", timeout: input.timeout });
 
-    // Fonts + images settle.
-    try {
-      await Promise.race([
-        page.evaluate(() => (document as any).fonts?.ready),
-        new Promise((resolve) => setTimeout(resolve, 5_000)),
-      ])
-    } catch {
-      // older browsers may not expose document.fonts
-    }
-    try {
-      await Promise.race([
-        page.evaluate(() => {
-          const imgs = Array.from(document.querySelectorAll("img"))
-          return Promise.all(
-            imgs.map((img) =>
-              img.complete
-                ? Promise.resolve()
-                : new Promise((r) => {
-                    img.onload = r
-                    img.onerror = r
-                  }),
-            ),
-          )
-        }),
-        new Promise((resolve) => setTimeout(resolve, 5_000)),
-      ])
-    } catch {
-      // DOM may be empty — nothing to wait for.
-    }
-
-    await page.addStyleTag({ content: SCREENSHOT_STABILIZATION_CSS })
-    await new Promise((r) => setTimeout(r, 3_000))
+    phase = "evaluate";
+    await Promise.race([
+      page.evaluate(() => document.fonts && document.fonts.ready),
+      new Promise((resolve) => setTimeout(resolve, 5000)),
+    ]).catch(() => undefined);
+    await Promise.race([
+      page.evaluate(() => {
+        const imgs = Array.from(document.querySelectorAll("img"));
+        return Promise.all(imgs.map((img) => img.complete ? Promise.resolve() : new Promise((resolve) => {
+          img.onload = resolve;
+          img.onerror = resolve;
+        })));
+      }),
+      new Promise((resolve) => setTimeout(resolve, 5000)),
+    ]).catch(() => undefined);
+    await page.addStyleTag({ content: input.stabilizationCss });
+    await new Promise((resolve) => setTimeout(resolve, 3000));
     const textSignals = await page.evaluate(() => {
-      function isElementVisible(element: Element): boolean {
-        const style = window.getComputedStyle(element)
-        if (style.display === "none" || style.visibility === "hidden" || Number(style.opacity) === 0) return false
-        if (style.display === "contents") return true
-        const rect = element.getBoundingClientRect()
-        if (rect.width <= 0 || rect.height <= 0) return false
-        if (rect.bottom <= 0 || rect.right <= 0 || rect.top >= window.innerHeight || rect.left >= window.innerWidth) {
-          return false
-        }
-        return true
+      function isElementVisible(element) {
+        const style = window.getComputedStyle(element);
+        if (style.display === "none" || style.visibility === "hidden" || Number(style.opacity) === 0) return false;
+        if (style.display === "contents") return true;
+        const rect = element.getBoundingClientRect();
+        if (rect.width <= 0 || rect.height <= 0) return false;
+        if (rect.bottom <= 0 || rect.right <= 0 || rect.top >= window.innerHeight || rect.left >= window.innerWidth) return false;
+        return true;
       }
 
-      function isTextNodeVisible(node: Text): boolean {
-        const parent = node.parentElement
-        if (!parent || !node.textContent?.trim()) return false
-        let element: Element | null = parent
+      function isTextNodeVisible(node) {
+        const parent = node.parentElement;
+        if (!parent || !node.textContent || !node.textContent.trim()) return false;
+        let element = parent;
         while (element) {
-          if (!isElementVisible(element)) return false
-          element = element.parentElement
+          if (!isElementVisible(element)) return false;
+          element = element.parentElement;
         }
-        const range = document.createRange()
-        range.selectNodeContents(node)
+        const range = document.createRange();
+        range.selectNodeContents(node);
         const visible = Array.from(range.getClientRects()).some((rect) =>
           rect.width > 0 &&
           rect.height > 0 &&
           rect.bottom > 0 &&
           rect.right > 0 &&
           rect.top < window.innerHeight &&
-          rect.left < window.innerWidth,
-        )
-        range.detach()
-        return visible
+          rect.left < window.innerWidth
+        );
+        range.detach();
+        return visible;
       }
 
-      const walker = document.createTreeWalker(document.body ?? document.documentElement, NodeFilter.SHOW_TEXT)
-      const visible: string[] = []
+      const walker = document.createTreeWalker(document.body || document.documentElement, NodeFilter.SHOW_TEXT);
+      const visible = [];
       while (walker.nextNode()) {
-        const node = walker.currentNode
-        if (node instanceof Text && isTextNodeVisible(node)) visible.push(node.textContent ?? "")
+        const node = walker.currentNode;
+        if (node instanceof Text && isTextNodeVisible(node)) visible.push(node.textContent || "");
       }
       return {
-        bodyText: document.body?.innerText ?? "",
+        bodyText: document.body && document.body.innerText ? document.body.innerText : "",
         visibleText: visible.join(" "),
-      }
-    }).catch(() => ({ bodyText: "", visibleText: "" }))
+      };
+    }).catch(() => ({ bodyText: "", visibleText: "" }));
 
-    ctx?.emit?.({ phase: "screenshot" })
-    let screenshotBuffer: Buffer
-    try {
-      const screenshotUint8 = await page.screenshot({ type: "png", fullPage })
-      screenshotBuffer = Buffer.from(screenshotUint8)
-    } catch (err) {
-      throw new RenderError(
-        {
-          url,
-          reason: err instanceof Error ? err.message : String(err),
-          phase: "screenshot",
-        },
-        { cause: err },
-      )
-    }
-
-    const screenshotDataUrl = `data:image/png;base64,${screenshotBuffer.toString("base64")}`
-    const renderTimeMs = Date.now() - startTime
-
-    return {
-      screenshotDataUrl,
-      screenshotBuffer,
-      viewport,
-      renderTimeMs,
+    phase = "screenshot";
+    const screenshot = Buffer.from(await page.screenshot({ type: "png", fullPage: input.fullPage }));
+    process.stdout.write(JSON.stringify({
+      ok: true,
+      screenshotBase64: screenshot.toString("base64"),
       bodyText: textSignals.bodyText,
       visibleText: textSignals.visibleText,
-      consoleErrors: consoleErrors.length > 0 ? consoleErrors : undefined,
-    }
+      consoleErrors,
+    }));
+  } catch (error) {
+    process.stdout.write(JSON.stringify({
+      ok: false,
+      phase,
+      message: error && error.message ? error.message : String(error),
+      stack: error && error.stack ? error.stack : undefined,
+    }));
+    process.exitCode = 1;
   } finally {
-    if (browser) {
-      try {
-        await browser.close()
-      } catch (err) {
-        log.warn("browser close failed", { error: err instanceof Error ? err.message : String(err) })
-      }
-    }
+    if (browser) await browser.close().catch(() => {});
   }
 }
+
+main();
+`

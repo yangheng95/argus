@@ -3,6 +3,8 @@ import { createAgentContextTools } from "../../src/agent/context-tools"
 import { filterAgentTools } from "../../src/agent/filter-tools"
 import { Instance } from "../../src/project/instance"
 
+const INSTANCE_STARTUP_TIMEOUT_MS = 60_000
+
 describe("agent context tools", () => {
   test("websearch is offered by default — no env switch", async () => {
     await Instance.provide({
@@ -15,7 +17,7 @@ describe("agent context tools", () => {
         expect("web_search" in tools).toBe(false)
       },
     })
-  })
+  }, { timeout: INSTANCE_STARTUP_TIMEOUT_MS })
 
   // The shared set offers websearch, but each agent only receives it if its
   // tools.include opts in (filterAgentTools is the include gate). Decision
@@ -35,7 +37,7 @@ describe("agent context tools", () => {
           expect("web_search" in tools).toBe(false)
         },
       })
-    })
+    }, { timeout: INSTANCE_STARTUP_TIMEOUT_MS })
   }
 
   for (const agentName of ["frontend-design", "intent-analysis", "research"] as const) {
@@ -47,6 +49,18 @@ describe("agent context tools", () => {
           expect("websearch" in tools).toBe(false)
         },
       })
-    })
+    }, { timeout: INSTANCE_STARTUP_TIMEOUT_MS })
+  }
+
+  for (const agentName of ["fact-check", "research"] as const) {
+    test(`${agentName} resolves webfetch through the read-only retrieval surface`, async () => {
+      await Instance.provide({
+        directory: process.cwd(),
+        fn: async () => {
+          const tools = await filterAgentTools(createAgentContextTools(), agentName)
+          expect("webfetch" in tools).toBe(true)
+        },
+      })
+    }, { timeout: INSTANCE_STARTUP_TIMEOUT_MS })
   }
 })

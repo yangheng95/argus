@@ -1,5 +1,6 @@
 import { expect, test } from "bun:test"
 import {
+  __displayableConversationTranscriptForTest,
   __conversationHistoryBeforeForTest,
   __conversationHistoryWindowForTest,
 } from "../../src/server/routes/orchestrator"
@@ -77,4 +78,17 @@ test("conversation tail window keeps the requested message-count cap", () => {
 
   expect(page.transcript.map((item) => item.info.id)).toEqual(["msg_a2", "msg_c1"])
   expect(page.history.hasMore).toBe(true)
+})
+
+test("conversation hydrate filters non-display transcript messages before windowing", () => {
+  const transcript = [
+    message("msg_empty", "ses_build", 100),
+    { ...message("msg_step", "ses_build", 110), parts: [{ type: "step-start" }] },
+    { ...message("msg_text", "ses_build", 120), parts: [{ type: "text", text: "real build output" }] },
+    { ...message("msg_tool", "ses_build", 130), parts: [{ type: "tool", tool: "bash" }] },
+  ]
+
+  const filtered = __displayableConversationTranscriptForTest(transcript)
+
+  expect(filtered.map((item) => item.info.id)).toEqual(["msg_text", "msg_tool"])
 })
