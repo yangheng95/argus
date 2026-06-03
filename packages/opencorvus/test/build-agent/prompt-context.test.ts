@@ -115,6 +115,74 @@ describe("build agent prompt context", () => {
     )
   })
 
+  test("goal-path build treats active requirements as a PRD coverage contract", () => {
+    const prompt = buildUserPrompt(
+      {
+        kind: "goal",
+        id: "gol_replica_tabs",
+        title: "Replica tabs",
+        objective: "Implement the floating tab content region.",
+        acceptance_specs: ["floating tab region works"],
+        owned_paths: ["src/components/tabs"],
+        depends_on: [],
+      },
+      {
+        requirements: [
+          {
+            id: "REQ-12",
+            type: "explicit",
+            description: "When the page scrolls down, a floating tab region switches visible economic content.",
+            acceptance: "Runtime verification shows the floating tabs and switched content.",
+            non_goals: "",
+            evidence_refs: ["fr-interaction-scroll-tabs"],
+          },
+        ],
+      },
+    )
+
+    expect(prompt).toContain("## Requirements / PRD Coverage Contract")
+    expect(prompt).toContain("Read this before editing")
+    expect(prompt).toContain("active REQ-N rows are the implementation contract")
+    expect(prompt).toContain("map each requirement that touches your goal/request")
+    expect(prompt).toContain("Do not treat PRD/research/design material as optional background")
+    expect(prompt).toContain("read the PRD/frontend-research/frontend-design material in page chunks")
+    expect(prompt).toContain("identify the component kind for each chunk")
+    expect(prompt).toContain("All visible content must be componentized and fed by props, data modules, fixtures, or API adapters")
+    expect(prompt).toContain("instead of hardcoded directly into page wrappers, generated SVG, or one-off JSX literals")
+    expect(prompt).toContain("Charts, maps, heatmaps, geographic visualizations")
+    expect(prompt).toContain("Do not replace a chart/map/heatmap with a flat SVG/image/decorative vector")
+    expect(prompt).toContain("REQ-12")
+    expect(prompt).toContain("fr-interaction-scroll-tabs")
+    expect(prompt.indexOf("## Requirements / PRD Coverage Contract")).toBeLessThan(
+      prompt.indexOf("# Goal: Replica tabs"),
+    )
+  })
+
+  test("direct build also receives active requirements when present", () => {
+    const prompt = buildUserPrompt(
+      {
+        kind: "request",
+        text: "Continue the webpage replica implementation.",
+      },
+      {
+        requirements: [
+          {
+            id: "REQ-3",
+            type: "implicit",
+            description: "The replica must preserve the original page layout and interactions.",
+            acceptance: "Visual and interaction checks pass.",
+            non_goals: "",
+          },
+        ],
+      },
+    )
+
+    expect(prompt).toContain("## Requirements / PRD Coverage Contract")
+    expect(prompt).toContain("This direct build path still must honor the active requirements")
+    expect(prompt).toContain("REQ-3")
+    expect(prompt.indexOf("## Requirements / PRD Coverage Contract")).toBeLessThan(prompt.indexOf("# Request"))
+  })
+
   test("request-path renders retryGuidance under its own heading", () => {
     const prompt = buildUserPrompt(
       {
@@ -401,6 +469,35 @@ describe("build agent prompt context", () => {
 
     expect(prompt).toContain("## Visual Reference Overlay")
     expect(prompt).toContain("Referenced images, captures, and visual specs are binding source material")
+  })
+
+  test("request-path build receives frontend-research PRD evidence overlay", () => {
+    const prompt = buildUserPrompt(
+      {
+        kind: "request",
+        text: "Implement the researched webpage replica.",
+      },
+      {
+        frontendResearch:
+          "# Frontend Research Brief (advisory webpage functional/visual input)\n\n" +
+          "webpage_contract: floating tab bar appears after scroll and switches economic indicators.",
+        frontendDesign:
+          "# Frontend Design Public Report\n\n" +
+          "- key=visual_consistency_contract value=Match the researched page.",
+      },
+    )
+
+    expect(prompt).toContain("Rendered overlays: frontend-research-prd-evidence, frontend-design-handoff")
+    expect(prompt).toContain("## Frontend Research PRD Evidence")
+    expect(prompt).toContain("Treat it as binding evidence for the surfaces it describes")
+    expect(prompt).toContain("do not skip it and implement from screenshots or source files alone")
+    expect(prompt).toContain("read this PRD evidence by page chunk")
+    expect(prompt).toContain("preserve the named component kinds")
+    expect(prompt).toContain("do not flatten it into SVG/image markup")
+    expect(prompt).toContain("floating tab bar appears after scroll")
+    expect(prompt.indexOf("## Frontend Research PRD Evidence")).toBeLessThan(
+      prompt.indexOf("## Frontend Design Handoff"),
+    )
   })
 
   test("plain document deliverable prompt does not inherit webpage clone policy", () => {

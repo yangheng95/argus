@@ -176,6 +176,10 @@ export namespace BuildAgent {
     /** Optional visual anchors from frontend_design. The frontend template is the
      *  authoritative contract; these rows only provide compact ids when present. */
     designSpecs?: VisualSpec[]
+    /** Compact frontend_research webpage PRD evidence rendered from the latest
+     *  non-stale frontend_research_brief artifact. Build must consume it before
+     *  implementing webpage/UI replica surfaces. */
+    frontendResearch?: string
     /** Full frontend-design frontend template and source manifest from the decision log.
      *  This names frontend_template, fillable_modules, visual_consistency_contract,
      *  ui_data_contract, review notes, completeness audit, reference artifacts,
@@ -2330,6 +2334,40 @@ function renderGoalWorkloadBriefSection(wlBrief: WorkloadBrief | undefined): str
   return lines.join("\n")
 }
 
+function renderBuildRequirementsSection(
+  reqs: NonNullable<BuildAgent.BuildContext["requirements"]>,
+  options: { directRequest?: boolean } = {},
+): string {
+  if (reqs.length === 0) return ""
+  const lines: string[] = []
+  lines.push("## Requirements / PRD Coverage Contract")
+  lines.push("")
+  lines.push(
+    "Read this before editing. These active REQ-N rows are the implementation contract derived from the user's request and upstream PRD evidence. For this build attempt, map each requirement that touches your goal/request to concrete files, behavior, UI surfaces, data, styles, interactions, and verification evidence before reporting success.",
+  )
+  lines.push(
+    "Do not treat PRD/research/design material as optional background. If a requirement, evidence_ref, or acceptance line is unclear, missing from the worktree, or contradicted by available source/design evidence, fail with the concrete blocker or repair the assigned source; do not silently implement a simpler interpretation.",
+  )
+  lines.push(
+    "For UI/webpage work, read the PRD/frontend-research/frontend-design material in page chunks before editing: identify the component kind for each chunk, then implement the matching component and content. All visible content must be componentized and fed by props, data modules, fixtures, or API adapters instead of hardcoded directly into page wrappers, generated SVG, or one-off JSX literals. Charts, maps, heatmaps, geographic visualizations, tables/grids, tabs, menus, modals, forms, and carousels must remain real components with data/state/interaction contracts. Do not replace a chart/map/heatmap with a flat SVG/image/decorative vector unless the PRD evidence says it is static decoration.",
+  )
+  if (options.directRequest) {
+    lines.push(
+      "This direct build path still must honor the active requirements when they are present; the raw request text is not permission to bypass the persisted PRD/REQ contract.",
+    )
+  }
+  lines.push("")
+  for (const r of reqs) {
+    lines.push(`- **${r.id}** [${r.type}]: ${r.description}`)
+    if (r.acceptance.trim().length > 0) lines.push(`  Acceptance: ${r.acceptance}`)
+    if (r.non_goals.trim().length > 0) lines.push(`  Non-goals: ${r.non_goals}`)
+    const evidenceRefs = r.evidence_refs ?? []
+    if (evidenceRefs.length > 0) lines.push(`  Evidence refs: ${evidenceRefs.join(", ")}`)
+  }
+  lines.push("")
+  return lines.join("\n")
+}
+
 type BuildReferenceAttachment = {
   sha?: string
   url: string
@@ -2450,20 +2488,7 @@ export function buildUserPrompt(target: BuildTarget, context?: BuildAgent.BuildC
     //    section is rendered only when the caller supplied it. ───────────
     const reqs = context?.requirements ?? []
     if (reqs.length > 0) {
-      lines.push("## Requirements (from Requirements stage)")
-      lines.push("")
-      lines.push(
-        "These are the user-facing requirements driving this task. Your goal's acceptance_specs are derived from a subset; consult the originals when an implementation choice is ambiguous.",
-      )
-      lines.push("")
-      for (const r of reqs) {
-        lines.push(`- **${r.id}** [${r.type}]: ${r.description}`)
-        if (r.acceptance.trim().length > 0) lines.push(`  Acceptance: ${r.acceptance}`)
-        if (r.non_goals.trim().length > 0) lines.push(`  Non-goals: ${r.non_goals}`)
-        const evidenceRefs = r.evidence_refs ?? []
-        if (evidenceRefs.length > 0) lines.push(`  Evidence refs: ${evidenceRefs.join(", ")}`)
-      }
-      lines.push("")
+      lines.push(renderBuildRequirementsSection(reqs))
     }
 
     if (context?.contractGraph) {
@@ -2618,6 +2643,10 @@ export function buildUserPrompt(target: BuildTarget, context?: BuildAgent.BuildC
     return lines.join("\n")
   }
   const contextLines: string[] = []
+  const reqs = context?.requirements ?? []
+  if (reqs.length > 0) {
+    contextLines.push(renderBuildRequirementsSection(reqs, { directRequest: true }))
+  }
   const overlays = renderBuildPromptOverlays(context ? { ...context, deliveryFeedback: undefined } : undefined)
   if (overlays.sections.length > 0) {
     contextLines.push("## Task-Specific Build Overlays")

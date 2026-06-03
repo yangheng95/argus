@@ -52,6 +52,7 @@ import {
   renderFrontendDesignHandoffReference,
   frontendDesignArtifactPaths,
 } from "@/frontend-design/handoff"
+import { renderFrontendResearchBriefPromptSection } from "@/research/prompt-section"
 import { ensureLiveWebpageEvidence, primaryWebpageEvidenceArtifacts } from "./webpage-evidence"
 import { renderUserRequestSection } from "@/intent/request-prompt"
 import { materializeMcpToolResult } from "@/mcp/materialize"
@@ -78,6 +79,7 @@ import {
   findEvaluationByRun,
   findGoal,
   findGoalRun,
+  findRequirements,
   findLatestArchitectContractGraph,
   findLatestArchitectContractGraphArtifact,
   findLatestFrontendResearchBriefArtifact,
@@ -5803,6 +5805,10 @@ export function createOrchestratorTools(input: {
 
             const designSpecs = Array.isArray(task.design_specs) ? (task.design_specs as any) : undefined
             const frontendDesign = renderFrontendDesignHandoffReference(taskID)
+            const frontendResearch = renderFrontendResearchBriefPromptSection({
+              taskID,
+              request: task.request,
+            })
 
             // Retry feedback from decision log. Materialize the terminal
             // build-attempt facts before reading so this new session receives
@@ -5869,6 +5875,7 @@ export function createOrchestratorTools(input: {
               dependencies: dependencies.length > 0 ? dependencies : undefined,
               collaborationGoals,
               designSpecs,
+              frontendResearch: frontendResearch.trim().length > 0 ? frontendResearch : undefined,
               frontendDesign: frontendDesign.trim().length > 0 ? frontendDesign : undefined,
               fidelity: taskFidelity,
               retryGuidance: requestText.length > 0 ? requestText : undefined,
@@ -5896,14 +5903,24 @@ export function createOrchestratorTools(input: {
             })
             const designSpecs = Array.isArray(task.design_specs) ? (task.design_specs as any) : undefined
             const frontendDesign = renderFrontendDesignHandoffReference(taskID)
+            const frontendResearch = renderFrontendResearchBriefPromptSection({
+              taskID,
+              request: task.request,
+            })
+            const reqRows = activeSpecForContext ? findRequirements(activeSpecForContext.id) : []
+            const requirements = reqRows.map(parsedRequirementFromRow)
             context =
               integrityFeedback ||
               deliveryFeedback ||
               retryAttachments ||
               designSpecs ||
+              frontendResearch.trim().length > 0 ||
+              requirements.length > 0 ||
               frontendDesign.trim().length > 0
                 ? {
+                    requirements: requirements.length > 0 ? requirements : undefined,
                     designSpecs,
+                    frontendResearch: frontendResearch.trim().length > 0 ? frontendResearch : undefined,
                     frontendDesign: frontendDesign.trim().length > 0 ? frontendDesign : undefined,
                     integrityFeedback,
                     deliveryFeedback,

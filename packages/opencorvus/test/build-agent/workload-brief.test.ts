@@ -68,7 +68,7 @@ describe("build prompt — goal workload brief injection", () => {
     // The brief frames everything else so broad specs and sibling summaries do
     // not bury the work sizing signal.
     const workloadIndex = prompt.indexOf("Goal Workload Brief")
-    expect(workloadIndex).toBeLessThan(prompt.indexOf("## Requirements"))
+    expect(workloadIndex).toBeLessThan(prompt.indexOf("## Requirements / PRD Coverage Contract"))
     expect(workloadIndex).toBeLessThan(prompt.indexOf("## Collaboration State"))
     expect(workloadIndex).toBeLessThan(prompt.indexOf("# Goal: Visual shell"))
   })

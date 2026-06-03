@@ -1,4 +1,5 @@
 export interface BuildPromptOverlayContext {
+  frontendResearch?: string
   frontendDesign?: string
   integrityFeedback?: string
   deliveryFeedback?: string
@@ -26,6 +27,18 @@ function renderFrontendDesignOverlay(frontendDesign: string): string {
     "The section below is task-specific upstream context from frontend_design / decision_log. Treat it as the source for this build attempt; do not infer frontend or visual policy from the build role core.",
     "",
     frontendDesign.trim(),
+  ]
+  return sections.join("\n")
+}
+
+function renderFrontendResearchOverlay(frontendResearch: string): string {
+  const sections = [
+    "## Frontend Research PRD Evidence",
+    "",
+    "The section below is task-specific webpage functional/visual PRD evidence from frontend_research. Treat it as binding evidence for the surfaces it describes, mediated by the active REQ-N list and Architect Contract Graph; do not skip it and implement from screenshots or source files alone.",
+    "Before editing UI code, read this PRD evidence by page chunk and preserve the named component kinds. If it describes a chart, map, heatmap, table/grid, tabs, menu, modal, form, carousel, or other mature component, implement that component/content contract with existing project primitives or a mature library; do not flatten it into SVG/image markup unless the evidence identifies it as static decoration.",
+    "",
+    frontendResearch.trim(),
   ]
   return sections.join("\n")
 }
@@ -85,7 +98,13 @@ function renderAcceptanceRepairOverlay(deliveryFeedback: string): string {
 export function renderBuildPromptOverlays(context: BuildPromptOverlayContext | undefined): BuildPromptOverlayResult {
   const ids: string[] = []
   const sections: string[] = []
+  const frontendResearch = context?.frontendResearch
   const frontendDesign = context?.frontendDesign
+
+  if (hasText(frontendResearch)) {
+    ids.push("frontend-research-prd-evidence")
+    sections.push(renderFrontendResearchOverlay(frontendResearch))
+  }
 
   if (hasText(frontendDesign)) {
     ids.push("frontend-design-handoff")
