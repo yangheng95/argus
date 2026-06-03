@@ -9,7 +9,7 @@
  *     `frontend-design/url-screenshot.ts`, `delivery/checks/visual.ts`).
  *   - Silent `catch` → `Log.create({ service: "mirror.url.extract" })`
  *     with structured fields.
- *   - Throws `UrlExtractError` (typed) on 401/403/429 + browser infra failures.
+ *   - Throws `UrlExtractError` (typed) on 401/403/429 + infra/asset failures.
  *   - Image-download constants inlined (mirror imports them from `infra/config.ts`).
  *
  * **Atomic tool guarantee**: this module does not call `url/compile`,
@@ -41,16 +41,6 @@ const IMAGE_DOWNLOAD_CONCURRENCY = 6
 const IMAGE_DOWNLOAD_TIMEOUT_MS = 10_000
 const INLINE_IMAGE_DATA_URL_RE = /^data:(image\/[a-zA-Z0-9.+-]+);base64,([A-Za-z0-9+/=]+)$/i
 const CSS_URL_RE = /url\(["']?(data:image\/[a-zA-Z0-9.+-]+;base64,[A-Za-z0-9+/=]+)["']?\)/
-
-interface ImageDownloadFailure {
-  src: string
-  reason: string
-}
-
-interface NodeDownloadImagesResult {
-  imageMap: Record<string, string>
-  failures: ImageDownloadFailure[]
-}
 
 // ─── Extraction constants ────────────────────────────────────────────────
 
@@ -429,9 +419,8 @@ async function nodeDownloadImages(
   outputDir: string,
   signal: AbortSignal | undefined,
   onProgress: ((msg: string) => void) | undefined,
-): Promise<NodeDownloadImagesResult> {
+): Promise<Record<string, string>> {
   const imageMap: Record<string, string> = {}
-  const failures: ImageDownloadFailure[] = []
   const imagesDir = resolve(outputDir, "images")
   mkdirSync(imagesDir, { recursive: true })
 
@@ -469,28 +458,18 @@ async function nodeDownloadImages(
 
     for (const r of results) {
       if ("error" in r) {
-        failures.push({ src: r.url, reason: r.error })
-        log.warn("image asset download failed", {
-          url: r.url,
-          error: r.error,
-        })
-        continue
-      }
-      if (signal?.aborted) {
         throw new UrlExtractError({
           url: r.url,
-          reason: "image download aborted",
+          reason: `image download failed: ${r.error}`,
           phase: "asset",
         })
       }
       if (totalBytes + r.buf.length > IMAGE_DOWNLOAD_MAX_TOTAL_BYTES) {
-        const reason = `image download total bytes would exceed ${IMAGE_DOWNLOAD_MAX_TOTAL_BYTES}`
-        failures.push({ src: r.url, reason })
-        log.warn("image asset download skipped", {
+        throw new UrlExtractError({
           url: r.url,
-          reason,
+          reason: `image download total bytes would exceed ${IMAGE_DOWNLOAD_MAX_TOTAL_BYTES}`,
+          phase: "asset",
         })
-        continue
       }
       const ext = mimeToExt(r.mime)
       const fileName = `img-${downloaded}.${ext}`
@@ -502,8 +481,7 @@ async function nodeDownloadImages(
   }
 
   if (downloaded > 0) onProgress?.(`saved ${downloaded} images (${(totalBytes / 1024).toFixed(0)}KB)`)
-  if (failures.length > 0) onProgress?.(`recorded ${failures.length} image download failures`)
-  return { imageMap, failures }
+  return imageMap
 }
 
 // ─── Public API ──────────────────────────────────────────────────────────
@@ -664,7 +642,6 @@ export function materializeInlineExtractedPageAssets(page: ExtractedPage, output
       ...page.assets,
       images,
       imageMap: persistedImageMap,
-      imageDownloadFailures: page.assets.imageDownloadFailures,
     },
   })
 }
@@ -874,7 +851,6 @@ export async function extractPage(input: ExtractPageInput): Promise<ExtractedPag
     for (const [color, count] of colorEntries) colors[color] = `${count}x`
 
     let imageMap: Record<string, string> | undefined
-    let imageDownloadFailures: ImageDownloadFailure[] | undefined
     if (outputDir && downloadImages) {
       const allImages = result.images
       const seen = new Set<string>()
@@ -890,9 +866,7 @@ export async function extractPage(input: ExtractPageInput): Promise<ExtractedPag
       if (downloadUrls.length > 0) {
         onProgress?.(`Downloading ${downloadUrls.length} images (Node-side)...`)
         try {
-          const downloadResult = await nodeDownloadImages(downloadUrls, outputDir, signal, onProgress)
-          imageMap = downloadResult.imageMap
-          imageDownloadFailures = downloadResult.failures.length > 0 ? downloadResult.failures : undefined
+          imageMap = await nodeDownloadImages(downloadUrls, outputDir, signal, onProgress)
           onProgress?.(`Downloaded ${Object.keys(imageMap).length}/${downloadUrls.length} images`)
         } catch (err) {
           if (UrlExtractError.isInstance(err)) throw err
@@ -924,7 +898,6 @@ export async function extractPage(input: ExtractPageInput): Promise<ExtractedPag
         images: result.images,
         icons: result.icons,
         imageMap,
-        imageDownloadFailures,
       },
       stats: {
         totalElements: result.totalElements,
@@ -951,8 +924,4 @@ export async function extractPage(input: ExtractPageInput): Promise<ExtractedPag
       log.warn("browser close failed", { error: err instanceof Error ? err.message : String(err) })
     }
   }
-}
-
-export const MirrorUrlExtractTestHooks = {
-  nodeDownloadImages,
 }

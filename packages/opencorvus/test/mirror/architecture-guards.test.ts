@@ -40,12 +40,12 @@ describe("mirror architecture guards", () => {
     expect(source).toMatch(/without explicit contracts\.imports/)
   })
 
-  test("url extraction records selected image download failures as source evidence", () => {
+  test("url extraction treats selected image download failure as fatal", () => {
     const source = readMirrorSource("url/extract.ts")
     expect(source).not.toMatch(/browser context fallback/i)
     expect(source).not.toMatch(/best-effort/i)
     expect(source).not.toMatch(/non-fatal/i)
-    expect(source).toMatch(/imageDownloadFailures/)
-    expect(source).toMatch(/image asset download failed/)
+    expect(source).toMatch(/phase:\s*"asset"/)
+    expect(source).toMatch(/image download failed/)
   })
 })
