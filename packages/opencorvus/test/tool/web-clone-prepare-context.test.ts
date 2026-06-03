@@ -203,6 +203,11 @@ async function writeFixtureMirror(root: string): Promise<string> {
   }, null, 2))
   await Bun.write(path.join(mirrorDir, "source-ir", "style-tokens.json"), JSON.stringify({ colors: [{ name: "text", value: "#111827" }] }, null, 2))
   await Bun.write(path.join(mirrorDir, "source-ir", "interaction-hints.json"), JSON.stringify({ controls: [{ type: "link", label: "Markets", href: "/markets" }] }, null, 2))
+  await Bun.write(path.join(mirrorDir, "source-ir", "interaction-state-snapshots.json"), JSON.stringify({
+    version: 1,
+    source: { url: "https://example.com/markets", viewport: { width: 1366, height: 768 } },
+    snapshots: [{ id: "initial", scrollY: 0 }],
+  }, null, 2))
   await Bun.write(path.join(mirrorDir, "source-ir", "layout-map.json"), JSON.stringify({ regions: [] }, null, 2))
   await Bun.write(path.join(mirrorDir, "assets", "manifest.json"), JSON.stringify({
     assets: [{ id: "asset_000001", kind: "svg-path-data", path: "assets/svg/asset_000001.path.txt", semanticRole: "svg-geometry" }],

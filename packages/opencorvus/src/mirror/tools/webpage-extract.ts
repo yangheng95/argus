@@ -108,13 +108,30 @@ Use this only when URL evidence is missing for the requested output directory. D
     await fs.writeFile(jsonPath, JSON.stringify(page, null, 2), "utf8")
 
     const singleFilePath = path.join(outputDir, "singlefile.html")
-    const singleFile = await captureSingleFileHtml({
-      url: params.url,
-      outputPath: singleFilePath,
-      viewport,
-      waitDelayMs: 10_000,
-      signal: ctx.abort,
-    })
+    let singleFile:
+      | {
+        outputPath: string
+        bytes: number
+      }
+      | undefined
+    let singleFileError: string | undefined
+    try {
+      singleFile = await captureSingleFileHtml({
+        url: params.url,
+        outputPath: singleFilePath,
+        viewport,
+        waitDelayMs: 10_000,
+        signal: ctx.abort,
+      })
+    } catch (error) {
+      singleFileError = error instanceof Error ? error.message : String(error)
+      log.warn("SingleFile capture failed; continuing with browser HTML capture", {
+        url: params.url,
+        outputDir,
+        error: singleFileError,
+      })
+      await fs.writeFile(path.join(outputDir, "singlefile-failure.txt"), `${singleFileError}\n`, "utf8").catch(() => undefined)
+    }
 
     const summary = {
       url: params.url,
@@ -123,7 +140,8 @@ Use this only when URL evidence is missing for the requested output directory. D
       referencePath,
       captureHtmlPath,
       extractedPagePath: jsonPath,
-      singleFilePath: singleFile.outputPath,
+      singleFilePath: singleFile?.outputPath,
+      singleFileError,
       stats: page.stats,
       tokens: {
         colors: Object.keys(page.tokens.colors).length,
@@ -152,7 +170,9 @@ Use this only when URL evidence is missing for the requested output directory. D
         `**Reference screenshot:** \`${referencePath}\``,
         `**HTML capture:** \`${captureHtmlPath}\``,
         `**Full extracted page JSON:** \`${jsonPath}\``,
-        `**SingleFile HTML:** \`${singleFile.outputPath}\` (${Math.round(singleFile.bytes / 1024)}KB)`,
+        singleFile
+          ? `**SingleFile HTML:** \`${singleFile.outputPath}\` (${Math.round(singleFile.bytes / 1024)}KB)`
+          : `**SingleFile HTML:** unavailable; using browser HTML capture. See \`${path.join(outputDir, "singlefile-failure.txt")}\`.`,
         "",
         "Evidence acquired. Do not rerun extraction for this URL/outputDir unless the source changed. Use compact mirror artifacts for frontend template synthesis; do not read `extracted-page.json` wholesale.",
       ].join("\n"),
