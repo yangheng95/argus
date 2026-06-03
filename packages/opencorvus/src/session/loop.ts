@@ -117,6 +117,8 @@ export namespace SessionLoop {
     terminalToolContract?: TerminalToolContract
     structuredOutputGuard?: StructuredOutputGuard
     stream?: TextHooks
+    /** False disables Model Context Protocol tools for this exact worker session. */
+    includeMcpTools?: boolean
   }
 
   // ---------------------------------------------------------------------------
@@ -2366,7 +2368,8 @@ export namespace SessionLoop {
       }
     }
 
-    for (const [key, item] of Object.entries(exactRuntimeContractTools ? {} : await MCP.tools())) {
+    const includeMcpTools = runtimeContract?.includeMcpTools !== false
+    for (const [key, item] of Object.entries(exactRuntimeContractTools || !includeMcpTools ? {} : await MCP.tools())) {
       const execute = item.execute
       if (!execute) continue
 

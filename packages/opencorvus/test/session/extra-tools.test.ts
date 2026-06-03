@@ -78,6 +78,20 @@ describe("SessionLoop session runtime contract", () => {
     expect(Object.keys(SessionLoop.getSessionRuntimeContract(sessionID)?.tools ?? {})).toEqual(["second"])
   })
 
+  test("runtime contract preserves the Model Context Protocol tool-loading flag", () => {
+    const sessionID = `ses_runtime_${Date.now()}_mcp_off`
+    SessionLoop.setSessionRuntimeContract(
+      sessionID,
+      runtimeContract(sessionID, {
+        tools: { persistent: dummyTool() },
+        includeMcpTools: false,
+      }),
+    )
+
+    expect(SessionLoop.getSessionRuntimeContract(sessionID)?.includeMcpTools).toBe(false)
+    SessionLoop.clearSessionRuntimeContract(sessionID)
+  })
+
   test("SessionPrompt.cancel preserves runtime contract until the owning loop settles", async () => {
     const sessionID = `ses_runtime_${Date.now()}_cancel`
     await using tmp = await tmpdir({ git: true })
