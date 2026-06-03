@@ -13,6 +13,8 @@ test("orchestrator core prompt routes webpage PRD research to frontend_research 
   expect(prompt).toContain("For a PRD/SPEC/report request about a webpage")
   expect(prompt).toContain("call `frontend_research` with the supplied")
   expect(prompt).toContain("`frontend_research` and `frontend_design` are siblings")
+  expect(prompt).toContain("Frontend_research")
+  expect(prompt).toContain("not acquire webpage evidence")
   expect(prompt).toContain("Do not apply the UI-replication rule to document/research requests")
   expect(prompt).toContain("research this page and form a PRD")
   expect(prompt).toContain("the URL is evidence for")

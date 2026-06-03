@@ -627,6 +627,8 @@ describe("core prompt hygiene", () => {
     expect(normalized).toContain("Do not write code, edit files, execute shell commands, search implementation code, or call build")
     expect(normalized).toContain("publish source-backed investigation work packets")
     expect(normalized).toContain("Do not perform deep source-page or artifact investigation yourself")
+    expect(normalized).toContain("If prepared webpage evidence is absent")
+    expect(normalized).toContain("do not request or perform webpage evidence acquisition yourself")
     expect(normalized).toContain("The orchestrator owns routing")
     expect(normalized).toContain("Build a coverage plan")
     expect(normalized).toContain("Publish investigation work packets instead of completing the investigation yourself")

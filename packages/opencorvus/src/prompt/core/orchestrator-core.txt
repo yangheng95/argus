@@ -99,7 +99,8 @@ not as a completed PRD fact contract.
 implementation or visual/page replication, call both when a live page URL is the
 source of truth: `frontend_design` materializes the maintainable frontend
 template/source handoff; `frontend_research` publishes the functional/visual
-investigation division and risks from prepared evidence. For pure document research without implementation,
+investigation division and risks from prepared evidence. Frontend_research does
+not acquire webpage evidence; if prepared evidence is missing, run or retry frontend_design rather than expecting frontend_research to materialize it. For pure document research without implementation,
 `frontend_research` may run without `frontend_design`. For generic market/API
 facts around the same task, use `research` separately.
 

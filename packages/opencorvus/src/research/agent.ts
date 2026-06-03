@@ -18,6 +18,7 @@ import {
 } from "./output-tools"
 import {
   prepareWebpagePrdEvidence,
+  readPreparedWebpagePrdEvidence,
   renderWebpagePrdEvidencePromptSection,
   type WebpagePrdEvidence,
 } from "./webpage-prd-evidence"
@@ -33,7 +34,7 @@ export interface ResearchSessionConfig {
   kind: ResearchLikeAgentKind
   core: string
   sessionTitlePrefix: string
-  prepareWebpageEvidence: "none" | "prd-only" | "always-for-source-url"
+  prepareWebpageEvidence: "none" | "prd-only" | "always-for-source-url" | "read-existing-for-source-url"
   bundlePathKind: "research" | "frontend-research"
   delegation: string
 }
@@ -178,6 +179,21 @@ async function prepareInputWebpagePrdEvidence(
   if (mode === "prd-only" && input.targetDeliverable !== "prd") return undefined
   if (!input.taskID) {
     throw new Error("webpage PRD research requires taskID so rendered evidence can be persisted under task runtime")
+  }
+  if (mode === "read-existing-for-source-url") {
+    try {
+      return await readPreparedWebpagePrdEvidence({
+        projectDir: Instance.directory,
+        taskID: input.taskID,
+        url: sourceUrls.find((url) => /^https?:\/\//i.test(url))!,
+      })
+    } catch (err) {
+      log.info("frontend-research prepared webpage evidence not yet available", {
+        taskID: input.taskID,
+        error: err instanceof Error ? err.message : String(err),
+      })
+      return undefined
+    }
   }
   return prepareWebpagePrdEvidence({
     projectDir: Instance.directory,
