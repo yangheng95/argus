@@ -65,6 +65,7 @@ export function createFrontendResearchBuildDelegationTools(input: FrontendResear
           task,
           parentSessionID: input.getParentSessionID?.() ?? input.parentSessionID,
           model: input.model,
+          autoIteration: false,
           signal: input.signal,
         })
         return renderDelegatedBuildResult(out.result, out.sessionID)
