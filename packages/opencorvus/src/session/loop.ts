@@ -50,6 +50,7 @@ import { decodeDataUrlBase64 } from "./text-mime"
 import { normalizeToolInput } from "./tool-input-norm"
 import { toolFailureCauseFromUnknown } from "./tool-failure-cause"
 import { SessionRuntimeContractMissingError } from "@/orchestrator/direct-reply"
+import { AutomaticCompaction } from "./auto-compaction"
 import {
   renderPreTerminalReflectionPrompt,
   renderPreTerminalReflectionReminder,
@@ -231,19 +232,8 @@ export namespace SessionLoop {
     "requirements",
   ])
 
-  const workflowAutoCompactionDisabledSessionKinds = new Set([
-    "architect",
-    "delivery",
-    "fact-check",
-    "goal-workload-analyst",
-    "intent-analysis",
-    "orchestrator",
-    "research",
-    "requirements",
-  ])
-
   function disablesAutomaticCompaction(session: Session.Info): boolean {
-    return workflowAutoCompactionDisabledSessionKinds.has(session.kind)
+    return AutomaticCompaction.isDisabledForKind(session.kind)
   }
 
   function isActionableSessionControl(control: SessionControl.Record): boolean {

@@ -103,12 +103,45 @@ describe("SessionCompaction continuation", () => {
     })
   })
 
-  test("allows queued automatic compaction for build sessions", async () => {
+  for (const kind of ["build", "frontend-design", "integrity"] as const) {
+    test(`rejects queued automatic compaction for ${kind} workflow sessions`, async () => {
+      await using tmp = await tmpdir()
+      await Instance.provide({
+        directory: tmp.path,
+        fn: async () => {
+          const session = await Session.create({ kind, title: `${kind} auto compaction` })
+          const source = await Session.updateMessage({
+            id: Identifier.ascending("message"),
+            sessionID: session.id,
+            role: "user",
+            time: { created: Date.now() },
+            agent: kind,
+            model: { providerID: "provider-a", modelID: "model-a" },
+          })
+          expect(source.role).toBe("user")
+          if (source.role !== "user") return
+
+          await expect(
+            SessionCompaction.create({
+              sessionID: session.id,
+              source,
+              auto: true,
+              overflow: true,
+            }),
+          ).rejects.toThrow(`Automatic compaction is disabled for workflow session kind ${kind}`)
+
+          expect(SessionControl.pending(session.id)).toEqual([])
+        },
+      })
+    })
+  }
+
+  test("allows manual summarize for build sessions", async () => {
     await using tmp = await tmpdir()
     await Instance.provide({
       directory: tmp.path,
       fn: async () => {
-        const session = await Session.create({ kind: "build", title: "workflow auto compaction" })
+        const session = await Session.create({ kind: "build", title: "workflow manual summarize" })
         const source = await Session.updateMessage({
           id: Identifier.ascending("message"),
           sessionID: session.id,
@@ -123,50 +156,13 @@ describe("SessionCompaction continuation", () => {
         await SessionCompaction.create({
           sessionID: session.id,
           source,
-          auto: true,
+          auto: false,
           overflow: true,
         })
 
         const controls = SessionControl.pending(session.id)
         expect(controls).toHaveLength(1)
-        expect(controls[0].kind).toBe("compaction_request")
-      },
-    })
-  })
-
-  test("allows queued automatic compaction for integrity sessions", async () => {
-    await using tmp = await tmpdir()
-    await Instance.provide({
-      directory: tmp.path,
-      fn: async () => {
-        const session = await Session.create({ kind: "integrity", title: "integrity auto compaction" })
-        const source = await Session.updateMessage({
-          id: Identifier.ascending("message"),
-          sessionID: session.id,
-          role: "user",
-          time: { created: Date.now() },
-          agent: "integrity",
-          model: { providerID: "provider-a", modelID: "model-a" },
-        })
-        expect(source.role).toBe("user")
-        if (source.role !== "user") return
-
-        await SessionCompaction.create({
-          sessionID: session.id,
-          source,
-          auto: true,
-          overflow: true,
-        })
-
-        const controls = SessionControl.pending(session.id)
-        expect(controls).toHaveLength(1)
-        expect(controls[0].kind).toBe("compaction_request")
-        expect(controls[0].payload).toEqual({
-          source_user_message_id: source.id,
-          model: undefined,
-          overflow: true,
-          focus: undefined,
-        })
+        expect(controls[0].kind).toBe("manual_summarize")
       },
     })
   })
