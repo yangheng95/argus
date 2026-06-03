@@ -179,7 +179,7 @@ export function renderWebpagePrdEvidencePromptSection(evidence: WebpagePrdEviden
     "Do not call `webfetch` against this same URL to replace prepared visual layout or content extraction. In frontend-research, use read-only retrieval only for narrow metadata, source text, or linked-source confirmation when these artifacts identify a missing fact.",
     "Return `document_outline` as the PRD major module list for downstream agent splitting. Order modules by visible page flow and include evidence ids for each module.",
     "Also submit `webpage_contract`. It must be faithful to the rendered page and must cover functional_surfaces, visual_layout, style_requirements, interaction_states, data_content_inventory, fidelity_acceptance, and fidelity_risks. Do not substitute a raw artifact/material list for this contract.",
-    "The submitted `bundle.full_markdown` for this webpage contract must contain 1000+ substantive non-empty lines; do not pad, and make each line carry region, component, style, interaction, data/content, acceptance, risk, or evidence detail.",
+    "The submitted `bundle.full_markdown` for this webpage contract must be complete but bounded enough to submit in one terminal-tool call. Cover every major visible region with evidence-backed component, style, interaction, data/content, acceptance, risk, and evidence detail; do not pad and do not dump raw artifacts.",
     "If the evidence is insufficient to describe an original-page function, layout, or style faithfully, preserve that uncertainty in fidelity_risks and open_questions instead of inventing a design.",
     "",
     "## Canonical Artifact Paths",

@@ -634,8 +634,8 @@ describe("core prompt hygiene", () => {
     expect(normalized).toContain("Treat PRD evidence as the primary implementation source")
     expect(normalized).toContain("about 70% of the downstream reconstruction signal")
     expect(normalized).toContain("Skeleton/source evidence is only the remaining visual-support signal")
-    expect(normalized).toContain("`bundle.full_markdown` must contain 1000+ substantive non-empty lines")
-    expect(normalized).toContain("Do not pad")
+    expect(normalized).toContain("keep `bundle.full_markdown` complete but bounded enough to submit in one terminal-tool call")
+    expect(normalized).toContain("do not pad and do not dump raw artifacts")
     expect(normalized).toContain("For every visible surface in the prepared evidence")
     expect(normalized).toContain(
       "purpose, exact visible copy/data, bounds or layout relationship, style signals, interaction states, responsive behavior",
