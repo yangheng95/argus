@@ -430,10 +430,20 @@ test("native stage agent registry tool surfaces match role boundaries", async ()
 
       const frontendResearch = await Agent.get("frontend-research")
       expect(frontendResearch).toBeDefined()
-      expect(frontendResearch?.tools?.include).toEqual([])
+      expect(frontendResearch?.tools?.include?.sort()).toEqual(
+        [
+          "find_files",
+          "list_directory",
+          "memory_get",
+          "memory_search",
+          "read_file",
+          "webfetch",
+        ].sort(),
+      )
       expect(frontendResearch?.tools?.include).not.toContain("websearch")
-      expect(frontendResearch?.tools?.include).not.toContain("webfetch")
+      expect(frontendResearch?.tools?.include).not.toContain("search_code")
       expect(frontendResearch?.tools?.include).not.toContain("task")
+      expect(frontendResearch?.tools?.include).not.toContain("build")
 
       const integrity = await Agent.get("integrity")
       expect(integrity).toBeDefined()

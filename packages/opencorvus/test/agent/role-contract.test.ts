@@ -177,15 +177,15 @@ test("research and frontend-design role descriptions keep document research dist
   expect(AgentRoleContract.description("research")).toContain("PRD/SPEC/report source material")
   expect(AgentRoleContract.description("research")).toContain("Dedicated webpage functional/visual PRD evidence belongs to frontend-research")
 
-  expect(AgentRoleContract.description("frontend-research")).toContain("Frontend research coordinator")
-  expect(AgentRoleContract.description("frontend-research")).toContain("delegates deep investigation packets to build")
+  expect(AgentRoleContract.description("frontend-research")).toContain("Frontend research agent")
+  expect(AgentRoleContract.description("frontend-research")).toContain("Directly performs read-only webpage functional and visual research")
   expect(AgentRoleContract.description("frontend-research")).toContain("frontend_research_brief")
-  expect(AgentRoleContract.description("frontend-research")).toContain("does not directly investigate pages")
+  expect(AgentRoleContract.description("frontend-research")).toContain("does not call build")
   expect(AgentRoleContract.description("frontend-research")).toContain("does not create the frontend implementation template")
 })
 
 test("public docs and live prompt do not describe deleted planner or requirements-owned goals", async () => {
-  const root = process.cwd()
+  const root = path.resolve(import.meta.dirname, "../../../..")
   const files = [
     "packages/web/src/content/docs/agents.mdx",
     "packages/web/src/content/docs/zh-cn/agents.mdx",

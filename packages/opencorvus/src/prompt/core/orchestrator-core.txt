@@ -87,18 +87,19 @@ material to the task, but do not treat the list as a mandatory next-tool command
 
 For a PRD/SPEC/report request about a webpage, including one that asks for both
 functional and visual description, call `frontend_research` with the supplied
-URL(s). The frontend-research coordinator owns the rendered webpage PRD evidence
-path and delegates deep investigation packets to build workers for layout,
+URL(s). The frontend-research agent owns the rendered webpage PRD evidence path
+and performs the initial read-only source-backed investigation for layout,
 visible content, responsive behavior, style tokens, components, tables, charts,
 maps, navigation, interactions, fidelity acceptance, and other page-inventory
 facts. It persists a `frontend_research_brief` with `webpage_contract`;
-downstream requirements and architect consume it as advisory evidence.
+downstream requirements and architect consume it as advisory evidence and split
+the later implementation work. Build is not a research worker for this stage.
 
 `frontend_research` and `frontend_design` are siblings, not substitutes. For UI
 implementation or visual/page replication, call both when a live page URL is the
 source of truth: `frontend_design` materializes the maintainable frontend
 template/source handoff; `frontend_research` synthesizes the functional/visual
-PRD contract and risks from build-backed investigation. For pure document research without implementation,
+PRD contract and risks from its own read-only investigation. For pure document research without implementation,
 `frontend_research` may run without `frontend_design`. For generic market/API
 facts around the same task, use `research` separately.
 

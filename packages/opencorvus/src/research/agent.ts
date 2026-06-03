@@ -1,6 +1,5 @@
 import fs from "node:fs/promises"
 import path from "node:path"
-import type { ToolSet } from "ai"
 import { runAgentSession } from "@/agent/runner"
 import { filterAgentTools } from "@/agent/filter-tools"
 import { createReadonlyRetrievalTools } from "@/agent/retrieval-tools"
@@ -37,12 +36,6 @@ export interface ResearchSessionConfig {
   prepareWebpageEvidence: "none" | "prd-only" | "always-for-source-url"
   bundlePathKind: "research" | "frontend-research"
   delegation: string
-  includeRetrievalTools?: boolean
-  createAdditionalTools?: (input: {
-    runInput: ResearchAgent.RunInput
-    webpagePrdEvidence?: WebpagePrdEvidence
-    getSessionID: () => string | undefined
-  }) => ToolSet
 }
 
 export namespace ResearchAgent {
@@ -88,23 +81,16 @@ export async function runResearchSession(
   config: ResearchSessionConfig,
 ): Promise<ResearchAgent.RunResult> {
   const webpagePrdEvidence = await prepareInputWebpagePrdEvidence(input, config.prepareWebpageEvidence)
-  const retrievalTools = config.includeRetrievalTools === false
-    ? {}
-    : await filterAgentTools(
-      createReadonlyRetrievalTools(undefined, { websearch: false }),
-      config.kind,
-      {
-        taskID: input.taskID,
-        sessionID: input.parentSessionID,
-      },
-    )
+  const retrievalTools = await filterAgentTools(
+    createReadonlyRetrievalTools(undefined, { websearch: false }),
+    config.kind,
+    {
+      taskID: input.taskID,
+      sessionID: input.parentSessionID,
+    },
+  )
   const outputToolKit = createResearchOutputTools()
   let sessionID: string | undefined
-  const additionalTools = config.createAdditionalTools?.({
-    runInput: input,
-    webpagePrdEvidence,
-    getSessionID: () => sessionID,
-  }) ?? {}
 
   log.info(`${config.kind} starting`, {
     title: input.title,
@@ -126,7 +112,7 @@ export async function runResearchSession(
       input.onSessionCreated?.(session.id)
     },
     toolKit: {
-      tools: { ...retrievalTools, ...additionalTools, ...outputToolKit.tools },
+      tools: { ...retrievalTools, ...outputToolKit.tools },
       getCollector: outputToolKit.getCollector,
       buildReport: outputToolKit.buildReport,
     },
