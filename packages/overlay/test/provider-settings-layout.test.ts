@@ -26,6 +26,16 @@ test("provider form folds derivable fields into advanced settings", () => {
   expect(SOURCE).not.toContain("(!editing() && !formId().trim())");
 });
 
+test("provider deletion disables inherited entries and clears credentials", () => {
+  expect(SOURCE).toContain("function disabledProviderIds()");
+  expect(SOURCE).toContain("if (disabled.has(id)) continue");
+  expect(SOURCE).toContain("removeDisabledProvider(cfg, id)");
+  expect(SOURCE).toContain("addDisabledProvider(cfg, id)");
+  expect(SOURCE).toContain("removeProviderModelReferences(cfg, id)");
+  expect(SOURCE).toContain('apiJson(`auth/${id}`, { method: "DELETE" })');
+  expect(SOURCE).toContain("await refreshAuthState()");
+});
+
 test("provider API key editor stays inline despite later field.css defaults", () => {
   expect(STYLES).toContain(".field.provider-api-key-field");
   expect(STYLES).toContain("grid-template-columns: max-content minmax(0, 1fr);");
