@@ -9,10 +9,10 @@ import { WebpageAnalyzeTool } from "../../src/mirror/tools/webpage-analyze"
 import { writeGeneratedSourceFiles } from "../../src/mirror/tools/generated-source"
 import webpageGenerateMd from "../../src/skill/builtin/webpage-generate.md" with { type: "text" }
 import imageGenerateMd from "../../src/skill/builtin/image-generate.md" with { type: "text" }
-import { MIRROR_TOOL_IDS } from "../../src/mirror/tools/ids"
+import { WEBPAGE_EVIDENCE_TOOL_IDS } from "../../src/webpage-evidence/tools/ids"
 
 describe("webpage-generate dependency guards", () => {
-  test("skill declares frontend-design template mirror pipeline only", () => {
+  test("skill declares frontend-design template webpage evidence pipeline only", () => {
     const parsed = matter(webpageGenerateMd)
     expect(parsed.data.stage).toBeUndefined()
     expect(parsed.data.required_tools).toContain("webpage_extract")
@@ -28,23 +28,23 @@ describe("webpage-generate dependency guards", () => {
     expect(parsed.content).toContain("template_iteration_notes")
     expect(parsed.content).toContain("visual_consistency_contract")
     expect(parsed.content).toContain("completeness_review")
-    expect(parsed.content).toContain("mirror/page.ir.json")
-    expect(parsed.content).toContain("mirror/assets/manifest.json")
-    expect(parsed.content).toContain("mirror/segments.json")
-    expect(parsed.content).toContain("mirror/codegen-context.json")
-    expect(parsed.content).toContain("mirror/source-skeleton/")
-    expect(parsed.content).toContain("mirror/source-skeleton/README.md")
-    expect(parsed.content).toContain("mirror/source-ir/component-tree.json")
-    expect(parsed.content).toContain("mirror/source-ir/content-model.json")
-    expect(parsed.content).toContain("mirror/source-skeleton/index.html")
-    expect(parsed.content).toContain("mirror/source-skeleton/critical.css")
-    expect(parsed.content).toContain("mirror/source-skeleton/full-source.css")
-    expect(parsed.content).toContain("mirror/source-skeleton/used-selectors.json")
-    expect(parsed.content).toContain("mirror/source-skeleton/source-skeleton-audit.json")
-    expect(parsed.content).toContain("mirror/source-ir/source-quality-audit.json")
-    expect(parsed.content).toContain("mirror/visual-surface-candidates.json")
-    expect(parsed.content).toContain("mirror/visual-surface-scaffold.json")
-    expect(parsed.content).toContain("mirror/prd-evidence-summary.md")
+    expect(parsed.content).toContain("webpage-evidence/page.ir.json")
+    expect(parsed.content).toContain("webpage-evidence/assets/manifest.json")
+    expect(parsed.content).toContain("webpage-evidence/segments.json")
+    expect(parsed.content).toContain("webpage-evidence/codegen-context.json")
+    expect(parsed.content).toContain("webpage-evidence/source-skeleton/")
+    expect(parsed.content).toContain("webpage-evidence/source-skeleton/README.md")
+    expect(parsed.content).toContain("webpage-evidence/source-ir/component-tree.json")
+    expect(parsed.content).toContain("webpage-evidence/source-ir/content-model.json")
+    expect(parsed.content).toContain("webpage-evidence/source-skeleton/index.html")
+    expect(parsed.content).toContain("webpage-evidence/source-skeleton/critical.css")
+    expect(parsed.content).toContain("webpage-evidence/source-skeleton/full-source.css")
+    expect(parsed.content).toContain("webpage-evidence/source-skeleton/used-selectors.json")
+    expect(parsed.content).toContain("webpage-evidence/source-skeleton/source-skeleton-audit.json")
+    expect(parsed.content).toContain("webpage-evidence/source-ir/source-quality-audit.json")
+    expect(parsed.content).toContain("webpage-evidence/visual-surface-candidates.json")
+    expect(parsed.content).toContain("webpage-evidence/visual-surface-scaffold.json")
+    expect(parsed.content).toContain("webpage-evidence/prd-evidence-summary.md")
     expect(parsed.content).toContain("web-clone-source/README.md")
     expect(parsed.content).toContain("web-clone-source/web-clone-context.md")
     expect(parsed.content).toContain("web-clone-source/source-skeleton/index.html")
@@ -62,11 +62,11 @@ describe("webpage-generate dependency guards", () => {
     expect(parsed.content).toContain("unfinished source debt")
     expect(parsed.content).toContain("source skeleton handoff")
     expect(parsed.content).toContain("functional fill")
-    expect(parsed.content).toContain("Do not read `mirror/extracted-page.json` or `mirror/capture.html` wholesale")
+    expect(parsed.content).toContain("Do not read `webpage-evidence/extracted-page.json` or `webpage-evidence/capture.html` wholesale")
     expect(parsed.content).not.toContain("src/App.tsx")
     expect(parsed.content).not.toContain("src/design-tokens.ts")
-    expect(parsed.content).toContain("create the mirror evidence package once")
-    expect(parsed.content).toContain("stop acquiring mirror evidence")
+    expect(parsed.content).toContain("create the webpage evidence package once")
+    expect(parsed.content).toContain("stop acquiring webpage evidence")
     expect(parsed.content).not.toContain("Run `webpage_extract`")
     expect(parsed.content).not.toContain("Run `webpage_compile`")
     expect(parsed.content).not.toContain("Run `webpage_analyze`")
@@ -91,7 +91,7 @@ describe("webpage-generate dependency guards", () => {
       expect(parsed.data.description).not.toContain("->")
       expect(parsed.content).not.toContain("## Required Evidence Path")
       expect(parsed.content).not.toMatch(/\bRun `(?:webpage|figma)/)
-      expect(parsed.content).toContain("stop acquiring mirror evidence")
+      expect(parsed.content).toContain("stop acquiring webpage evidence")
       expect(parsed.content).not.toContain("webpage_render url=<explicit")
       expect(parsed.content).not.toContain("webpage_evaluate.passed = true")
       expect(parsed.content).not.toContain("webpage_vision_judge.accepted = true")
@@ -102,10 +102,10 @@ describe("webpage-generate dependency guards", () => {
     }
   })
 
-  test("mirror tool surface does not expose Figma REST tools", () => {
-    expect(MIRROR_TOOL_IDS).not.toContain("figma_extract" as any)
-    expect(MIRROR_TOOL_IDS).not.toContain("figma_compile" as any)
-    expect(MIRROR_TOOL_IDS).not.toContain("figma_analyze" as any)
+  test("webpage evidence tool surface does not expose Figma REST tools", () => {
+    expect(WEBPAGE_EVIDENCE_TOOL_IDS).not.toContain("figma_extract" as any)
+    expect(WEBPAGE_EVIDENCE_TOOL_IDS).not.toContain("figma_compile" as any)
+    expect(WEBPAGE_EVIDENCE_TOOL_IDS).not.toContain("figma_analyze" as any)
   })
 
   test("read_file refuses raw mirror extraction JSON and unbounded dense mirror artifacts", async () => {
@@ -123,7 +123,7 @@ describe("webpage-generate dependency guards", () => {
     const readFile = tools.read_file as any
 
     const raw = await readFile.execute({ path: "mirror/extracted-page.json" }, {})
-    expect(raw).toContain("raw mirror extraction JSON")
+    expect(raw).toContain("raw webpage evidence extraction JSON")
     expect(raw).toContain("web-clone-source/implementation-blueprint.md")
     expect(raw).toContain("mirror/source-ir/*.json")
 

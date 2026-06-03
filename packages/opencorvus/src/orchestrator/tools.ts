@@ -2398,7 +2398,7 @@ export function createOrchestratorTools(input: {
 
     frontend_design: tool({
       description: [
-        "Analyze visual/webpage references (images, URLs, Figma, materials) to produce a mirror-grounded frontend implementation template with fillable modules, component/material inventories, and visual/data contracts.",
+        "Analyze visual/webpage references (images, URLs, Figma, materials) to produce a webpage-evidence-grounded frontend implementation template with fillable modules, component/material inventories, and visual/data contracts.",
         "Call this BEFORE every other downstream agent when the requested deliverable is frontend/UI implementation, webpage/app replication, or visual parity work AND:",
         "  - Image attachments are provided (screenshots, mockups, design files)",
         "  - The request mentions a URL as a visual reference to clone, implement, reproduce, or refine",
@@ -2408,14 +2408,14 @@ export function createOrchestratorTools(input: {
         "The full frontend template plus visual_consistency_contract and iteration/completeness review is persisted",
         "into the decision log from the same frontend-design run. Optional task.design_specs rows may exist as anchors, but the",
         "decision-log frontend template is authoritative. The decision log also includes evidence_source_manifest,",
-        "which names the source files, images, URLs, materialized artifacts, mirror artifacts, and task-runtime web-clone-source package downstream stages can read so they",
-        "consume one source of truth instead of re-running mirror extraction.",
+        "which names the source files, images, URLs, materialized artifacts, webpage evidence artifacts, and task-runtime web-clone-source package downstream stages can read so they",
+        "consume one source of truth instead of re-running webpage extraction.",
         "",
         "SKIP this step when:",
         "  - No visual references are available",
         "  - The task is purely backend/API/infrastructure",
         "  - The request asks to research/analyze a webpage as PRD/SPEC/report/source material rather than implement or clone the UI; route those URLs through `frontend_research` with `source_urls`",
-        "  - The request already contains detailed design specifications AND has no URL, screenshot/image, Figma/design-file, webpage-replica, or other visual reference that needs mirror/web-clone-source evidence for implementation",
+        "  - The request already contains detailed design specifications AND has no URL, screenshot/image, Figma/design-file, webpage-replica, or other visual reference that needs webpage-evidence/web-clone-source evidence for implementation",
       ].join("\n"),
       inputSchema: z.object({
         reason: z.string().describe("Why frontend design is needed for this task"),
@@ -2426,7 +2426,7 @@ export function createOrchestratorTools(input: {
           .describe(
             "Any number of design-reference URLs: live pages, design-tool share links " +
               "(Sketch Cloud / Adobe XD / Framer / InVision / Zeplin / Penpot), docs, etc. " +
-              "Non-Figma URLs are available to frontend-design for mirror extraction and may also be materialized " +
+              "Non-Figma URLs are available to frontend-design for webpage evidence extraction and may also be materialized " +
               "as screenshot references. Figma URLs use the connected Figma MCP path. Do not route URL/page extraction to build.",
           ),
         figma_url: z
@@ -2706,11 +2706,11 @@ export function createOrchestratorTools(input: {
             preparedWebpageEvidenceArtifacts =
               evidence.artifacts.length > 0 ? evidence.artifacts : primaryWebpageEvidenceArtifacts(taskID)
             preparedWebpageEvidenceStatus = evidence.status
-            log.info("frontend_design: live webpage mirror evidence prepared", {
+            log.info("frontend_design: live webpage evidence prepared", {
               taskID,
               url: evidence.url,
               status: evidence.status,
-              mirrorDir: evidence.mirrorDir,
+              evidenceDir: evidence.evidenceDir,
               artifacts: preparedWebpageEvidenceArtifacts.length,
             })
             if (evidence.status !== "skipped") {
@@ -2718,7 +2718,7 @@ export function createOrchestratorTools(input: {
                 const { createDecisionLog } = await import("@/decision-log")
                 createDecisionLog(taskID).append({
                   phase: "frontend_design",
-                  key: "webpage_mirror_evidence",
+                  key: "webpage_evidence",
                   value:
                     `Host-prepared live webpage evidence for ${evidence.url} (${evidence.status}).\n` +
                     preparedWebpageEvidenceArtifacts.map((item) => `- ${item}`).join("\n"),
@@ -2738,8 +2738,8 @@ export function createOrchestratorTools(input: {
               const { createDecisionLog } = await import("@/decision-log")
               createDecisionLog(taskID).append({
                 phase: "frontend_design",
-                key: "abort_webpage_mirror_evidence_failed",
-                value: `Live webpage mirror evidence generation failed before frontend template synthesis: ${error}`,
+                key: "abort_webpage_evidence_failed",
+                value: `Live webpage evidence generation failed before frontend template synthesis: ${error}`,
                 reason:
                   "A live webpage clone task cannot be grounded by prose alone; extraction/compile/analyze must succeed or surface the real acquisition failure.",
               })
@@ -3060,7 +3060,7 @@ export function createOrchestratorTools(input: {
               ["reference_artifacts", String(analysis.referenceArtifacts.length)],
               ["frontend_project_status", analysis.frontendProject.status],
               ["frontend_project_root", analysis.frontendProject.project_root],
-              ["webpage_mirror_evidence", preparedWebpageEvidenceStatus ?? "none"],
+              ["webpage_evidence", preparedWebpageEvidenceStatus ?? "none"],
               ["webpage_clone_artifacts", String(preparedWebpageEvidenceArtifacts.length)],
               ["source_manifest", "decision_log:frontend_design/evidence_source_manifest"],
               ["frontend_template_file", writtenDesignArtifacts.templateRelative],

@@ -373,7 +373,7 @@ contract.
   file, symbol, or architecture facts before requirements or implementation.
   Its findings are returned to you and persisted under `phase=explore`.
 - `frontend_design`: use before visual reference implementation, UI replication,
-  or visual parity work; it owns mirror acquisition and the binding visual
+  or visual parity work; it owns webpage evidence acquisition and the binding visual
   frontend template for implementation. Do not use it for PRD/SPEC/report
   webpage research when the user asked for document/source analysis rather than
   UI implementation.

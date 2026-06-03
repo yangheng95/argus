@@ -1,10 +1,8 @@
 import fs from "node:fs/promises"
 import path from "node:path"
 
-import { WebpageAnalyzeTool } from "@/mirror/tools/webpage-analyze"
-import { WebpageCompileTool } from "@/mirror/tools/webpage-compile"
-import { WebpageExtractTool } from "@/mirror/tools/webpage-extract"
-import { captureWebpageRuntimeStateEvidence } from "@/mirror/url/runtime-state"
+import { WebpageAnalyzeTool, WebpageCompileTool, WebpageExtractTool } from "@/webpage-evidence/tools"
+import { captureWebpageRuntimeStateEvidence } from "@/webpage-evidence/url/runtime-state"
 import { ProjectRuntimePaths } from "@/project/runtime-paths"
 import { TaskRuntimeMaterializer } from "@/project/task-runtime-materializer"
 import type { Tool } from "@/tool/tool"
@@ -16,7 +14,7 @@ export type LiveWebpageEvidenceStatus = "skipped" | "reused" | "generated"
 export interface LiveWebpageEvidenceResult {
   status: LiveWebpageEvidenceStatus
   url?: string
-  mirrorDir?: string
+  evidenceDir?: string
   artifacts: string[]
 }
 
@@ -61,8 +59,8 @@ const PRIMARY_WEBPAGE_EVIDENCE_FILES = [
 
 export function primaryWebpageEvidenceArtifacts(taskID?: string): string[] {
   const root = taskID
-    ? ProjectRuntimePaths.frontendDesignPaths("", taskID).mirrorRelative
-    : "mirror"
+    ? ProjectRuntimePaths.frontendDesignPaths("", taskID).webpageEvidenceRelative
+    : "webpage-evidence"
   return PRIMARY_WEBPAGE_EVIDENCE_FILES.map((file) => path.posix.join(root, file))
 }
 
@@ -119,31 +117,34 @@ export async function ensureLiveWebpageEvidence(input: {
     worktreeDir: input.worktreeDir,
   })
 
-  const mirrorDir = ProjectRuntimePaths.frontendDesignPaths(input.projectDir, input.taskID).mirrorAbsolute
-  if (await hasCompletePrimaryEvidence(mirrorDir, url)) {
+  const paths = ProjectRuntimePaths.frontendDesignPaths(input.projectDir, input.taskID)
+  const evidenceDir = paths.webpageEvidenceAbsolute
+  await promoteLegacyMirrorEvidence({ canonicalDir: evidenceDir, legacyDir: paths.legacyMirrorAbsolute, url })
+
+  if (await hasCompletePrimaryEvidence(evidenceDir, url)) {
     await ensureVisibleSourcePackage(input.projectDir, input.worktreeDir, input.taskID)
     return {
       status: "reused",
       url,
-      mirrorDir,
+      evidenceDir,
       artifacts: [...primaryWebpageEvidenceArtifacts(input.taskID), ...primaryWebpageSourcePackageArtifacts(input.taskID)],
     }
   }
 
   const pipeline = input.pipeline ?? defaultLiveWebpageEvidencePipeline()
-  await pipeline.extract({ url, outputDir: mirrorDir, signal: input.signal, taskID: input.taskID })
-  await pipeline.compile({ outputDir: mirrorDir, signal: input.signal, taskID: input.taskID })
-  await pipeline.analyze({ outputDir: mirrorDir, signal: input.signal, taskID: input.taskID })
-  await pipeline.captureRuntimeState({ url, outputDir: mirrorDir, signal: input.signal, taskID: input.taskID })
-  if (!(await hasCompletePrimaryEvidence(mirrorDir, url))) {
-    throw new Error(`Live webpage evidence pipeline finished but did not produce the complete primary mirror artifact set in ${mirrorDir}`)
+  await pipeline.extract({ url, outputDir: evidenceDir, signal: input.signal, taskID: input.taskID })
+  await pipeline.compile({ outputDir: evidenceDir, signal: input.signal, taskID: input.taskID })
+  await pipeline.analyze({ outputDir: evidenceDir, signal: input.signal, taskID: input.taskID })
+  await pipeline.captureRuntimeState({ url, outputDir: evidenceDir, signal: input.signal, taskID: input.taskID })
+  if (!(await hasCompletePrimaryEvidence(evidenceDir, url))) {
+    throw new Error(`Live webpage evidence pipeline finished but did not produce the complete primary webpage evidence artifact set in ${evidenceDir}`)
   }
   await ensureVisibleSourcePackage(input.projectDir, input.worktreeDir, input.taskID)
 
   return {
     status: "generated",
     url,
-    mirrorDir,
+    evidenceDir,
     artifacts: [...primaryWebpageEvidenceArtifacts(input.taskID), ...primaryWebpageSourcePackageArtifacts(input.taskID)],
   }
 }
@@ -151,13 +152,24 @@ export async function ensureLiveWebpageEvidence(input: {
 async function ensureVisibleSourcePackage(projectDir: string, worktreeDir: string, taskID: string): Promise<void> {
   const paths = ProjectRuntimePaths.frontendDesignPaths(projectDir, taskID)
   await prepareWebCloneContext({
-    mirrorDir: paths.mirrorAbsolute,
+    mirrorDir: paths.webpageEvidenceAbsolute,
     outputDir: paths.sourcePackageAbsolute,
   })
   if (!(await hasCompleteSourcePackage(paths.sourcePackageAbsolute))) {
     throw new Error(`Live webpage evidence pipeline produced an incomplete web-clone-source package in ${paths.sourcePackageAbsolute}`)
   }
   await TaskRuntimeMaterializer.materializeFrontendDesign({ projectDir, taskID, worktreeDir })
+}
+
+async function promoteLegacyMirrorEvidence(input: {
+  canonicalDir: string
+  legacyDir: string
+  url: string
+}): Promise<void> {
+  if (await hasCompletePrimaryEvidence(input.canonicalDir, input.url)) return
+  if (!(await hasCompletePrimaryEvidence(input.legacyDir, input.url))) return
+  await fs.mkdir(path.dirname(input.canonicalDir), { recursive: true })
+  await fs.cp(input.legacyDir, input.canonicalDir, { recursive: true, force: true })
 }
 
 export async function hasCompletePrimaryEvidence(mirrorDir: string, url?: string): Promise<boolean> {

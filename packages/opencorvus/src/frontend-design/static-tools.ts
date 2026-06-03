@@ -67,7 +67,7 @@ export const FRONTEND_DESIGN_CONTEXT_TOOL_IDS = [
   "memory_get",
 ] as const
 
-export const FRONTEND_DESIGN_MIRROR_ANALYSIS_TOOL_IDS = [
+export const FRONTEND_DESIGN_WEBPAGE_EVIDENCE_TOOL_IDS = [
   "webpage_extract",
   "webpage_compile",
   "webpage_analyze",

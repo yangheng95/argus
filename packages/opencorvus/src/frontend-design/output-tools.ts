@@ -942,9 +942,9 @@ export function createFrontendTemplateOutputTools(options: { autoIteration?: boo
 
     submit_frontend_template: tool({
       description:
-        "Submit the complete mirror-grounded frontend design/replica contract for downstream agents. " +
+        "Submit the complete webpage-evidence-grounded frontend design/replica contract for downstream agents. " +
         "Use this as the final action after visual evidence review and the frontend template review pass(es) required by assistant.auto_iteration; " +
-        "do not register rows or call more mirror tools once this terminal tool is exposed.",
+        "do not register rows or call more webpage evidence tools once this terminal tool is exposed.",
       inputSchema: FrontendTemplateToolInputSchema,
       execute: async (input) => {
         if (collector.final) return "Error: frontend template already submitted; duplicate submit_frontend_template ignored."

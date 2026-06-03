@@ -88,7 +88,7 @@ test("frontend-design handoff points to source files and keeps excerpts bounded"
       log.append({
         phase: "frontend_design",
         key: "evidence_source_manifest",
-        value: "mirror/reference.png\nmirror/page-ir.xml",
+        value: "webpage-evidence/reference.png\nwebpage-evidence/page-ir.xml",
         reason: "source manifest",
       })
 
@@ -98,7 +98,7 @@ test("frontend-design handoff points to source files and keeps excerpts bounded"
       expect(handoff).toContain("frontend_design public report")
       expect(handoff).toContain(`.opencorvus/runtime/tasks/${taskID}/frontend-design/frontend-template.md`)
       expect(handoff).toContain(`.opencorvus/runtime/tasks/${taskID}/frontend-design/evidence-source-manifest.md`)
-      expect(handoff).toContain("do not run mirror tools outside frontend_design")
+      expect(handoff).toContain("do not run webpage evidence tools outside frontend_design")
       expect(handoff).toContain("public_report")
       expect(handoff).toContain("visual_consistency_contract")
       expect(handoff).toContain("quality_project_contract")

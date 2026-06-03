@@ -18,7 +18,7 @@ test("submit_frontend_template defaults missing fact_check_items during direct e
           family_id: "comp-chart-shell",
           name: "Chart shell",
           observed_surface: "Main chart area",
-          source_refs: ["mirror/reference.png"],
+          source_refs: ["webpage-evidence/reference.png"],
           implementation_strategy: "mature_library",
           reuse_source: "lightweight-charts",
           mature_library_candidates: ["lightweight-charts"],

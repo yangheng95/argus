@@ -7,7 +7,10 @@ import { Config } from "../../src/config/config"
 import { PermissionNext } from "../../src/permission/next"
 import { SystemPrompt } from "../../src/session/system"
 import { ToolRegistry } from "../../src/tool/registry"
-import { MIRROR_ANALYSIS_TOOL_IDS, MIRROR_ACCEPTANCE_TOOL_IDS, MIRROR_TOOL_IDS } from "../../src/mirror/tools/ids"
+import {
+  WEBPAGE_EVIDENCE_ACCEPTANCE_TOOL_IDS,
+  WEBPAGE_EVIDENCE_ANALYSIS_TOOL_IDS,
+} from "../../src/webpage-evidence/tools/ids"
 import { FRONTEND_DESIGN_STATIC_TOOL_IDS } from "../../src/frontend-design/static-tools"
 import BUILD_CORE from "../../src/prompt/core/build-core.txt"
 import VISUAL_QA_CORE from "../../src/prompt/core/visual-qa-core.txt"
@@ -108,13 +111,13 @@ test("visual-qa agent is full-function build-grade with visual acceptance tools"
 
       const tools = await ToolRegistry.tools({ providerID: "", modelID: "" }, visualQa)
       const ids = new Set(tools.map((tool) => tool.id))
-      for (const id of MIRROR_ACCEPTANCE_TOOL_IDS) expect(ids.has(id)).toBe(true)
-      for (const id of MIRROR_ANALYSIS_TOOL_IDS) expect(ids.has(id)).toBe(false)
+      for (const id of WEBPAGE_EVIDENCE_ACCEPTANCE_TOOL_IDS) expect(ids.has(id)).toBe(true)
+      for (const id of WEBPAGE_EVIDENCE_ANALYSIS_TOOL_IDS) expect(ids.has(id)).toBe(false)
     },
   })
 }, 30_000)
 
-test("visual-qa mirror analysis denial cannot be reopened by per-agent permission config", async () => {
+test("visual-qa webpage evidence analysis denial cannot be reopened by per-agent permission config", async () => {
   await using tmp = await tmpdir({
     config: {
       agent: {
@@ -974,7 +977,7 @@ test("frontend-design advertises url_screenshot and omits webfetch", async () =>
   })
 })
 
-test("frontend-design statically declares mirror and source refinement tools", async () => {
+test("frontend-design statically declares webpage evidence and source refinement tools", async () => {
   await using tmp = await tmpdir()
   await Instance.provide({
     directory: tmp.path,
@@ -983,10 +986,10 @@ test("frontend-design statically declares mirror and source refinement tools", a
       expect(frontendDesign).toBeDefined()
       expect(frontendDesign?.tools?.include).toEqual([...FRONTEND_DESIGN_STATIC_TOOL_IDS])
       const designToolIds = new Set(frontendDesign?.tools?.include ?? [])
-      for (const id of MIRROR_ANALYSIS_TOOL_IDS) {
+      for (const id of WEBPAGE_EVIDENCE_ANALYSIS_TOOL_IDS) {
         expect(designToolIds.has(id)).toBe(true)
       }
-      for (const id of MIRROR_ACCEPTANCE_TOOL_IDS) {
+      for (const id of WEBPAGE_EVIDENCE_ACCEPTANCE_TOOL_IDS) {
         expect(designToolIds.has(id)).toBe(true)
       }
       expect(designToolIds.has("bash")).toBe(true)

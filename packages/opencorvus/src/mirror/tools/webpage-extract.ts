@@ -1,5 +1,5 @@
 /**
- * `webpage_extract` tool — wraps `mirror/url/extract::extractPage`.
+ * `webpage_extract` tool — wraps the webpage extraction runtime.
  *
  * Launches a headless browser, pulls the DOM tree + computed styles + full-
  * page screenshot, and writes five primary artifacts to the worktree:
@@ -45,7 +45,7 @@ Use this only when URL evidence is missing for the requested output directory. D
     outputDir: z
       .string()
       .describe(
-        `Directory to write artifacts. Defaults to task-scoped \`${DEFAULT_MIRROR_SUBDIR}\`. Do not set this during task sessions; overrides are for benchmarks/tests and task-session overrides must stay under \`${DEFAULT_MIRROR_SUBDIR}\`.`,
+        `Directory to write artifacts. Defaults to task-scoped \`${DEFAULT_MIRROR_SUBDIR}\`. Do not set this during task sessions; overrides are for benchmarks/tests and task-session overrides must stay under \`${DEFAULT_MIRROR_SUBDIR}\`. Legacy \`mirror/\` overrides are accepted as aliases.`,
       )
       .optional(),
     viewport_width: z.number().int().positive().describe("Viewport width in logical pixels. Default 1440.").optional(),
@@ -174,7 +174,7 @@ Use this only when URL evidence is missing for the requested output directory. D
           ? `**SingleFile HTML:** \`${singleFile.outputPath}\` (${Math.round(singleFile.bytes / 1024)}KB)`
           : `**SingleFile HTML:** unavailable; using browser HTML capture. See \`${path.join(outputDir, "singlefile-failure.txt")}\`.`,
         "",
-        "Evidence acquired. Do not rerun extraction for this URL/outputDir unless the source changed. Use compact mirror artifacts for frontend template synthesis; do not read `extracted-page.json` wholesale.",
+        "Evidence acquired. Do not rerun extraction for this URL/outputDir unless the source changed. Use compact webpage evidence artifacts for frontend template synthesis; do not read `extracted-page.json` wholesale.",
       ].join("\n"),
       metadata: summary,
     }

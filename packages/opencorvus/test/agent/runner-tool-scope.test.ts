@@ -22,7 +22,7 @@ describe("agent runner build tool scope", () => {
     expect(switches.goal_report).toBe(false)
   })
 
-  test("build tool scope does not reopen mirror tools", () => {
+  test("build tool scope does not reopen webpage evidence tools", () => {
     const switches = promptToolSwitchesForAgentRun({
       extraToolNames: ["report_build_result"],
       kind: "build",

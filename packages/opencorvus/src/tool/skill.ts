@@ -6,7 +6,7 @@ import { Skill } from "../skill"
 import { PermissionNext } from "../permission/next"
 import { Ripgrep } from "../file/ripgrep"
 import { iife } from "@/util/iife"
-import { isMirrorToolId } from "@/mirror/tools/ids"
+import { isWebpageEvidenceToolId } from "@/webpage-evidence/tools/ids"
 
 export const SkillTool = Tool.define("skill", async (ctx) => {
   const skills = await Skill.all()
@@ -20,7 +20,7 @@ export const SkillTool = Tool.define("skill", async (ctx) => {
         if (rule.action === "deny") return false
         if (
           agent.name !== "frontend-design" &&
-          (skill.required_tools ?? []).some((toolID) => isMirrorToolId(toolID))
+          (skill.required_tools ?? []).some((toolID) => isWebpageEvidenceToolId(toolID))
         ) {
           return false
         }

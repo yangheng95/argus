@@ -64,7 +64,7 @@ function rawMirrorArtifactReason(relPath: string): string | null {
     normalized.endsWith("/mirror/figma-design.json") ||
     normalized === "mirror/figma-design.json"
   ) {
-    return "raw mirror extraction JSON"
+    return "raw webpage evidence extraction JSON"
   }
   return null
 }

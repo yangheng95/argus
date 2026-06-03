@@ -668,20 +668,20 @@ describe("core prompt hygiene", () => {
     const orchestrator = await readPrompt("orchestrator")
     const workflow = await readSource("engine/workflow.ts")
 
-    expect(design).toContain("`mirror/page.ir.json` for canonical DOM order")
-    expect(design).toContain("`mirror/assets/manifest.json` for dense CSS")
-    expect(design).toContain("`mirror/segments.json` for implementation chunks")
-    expect(design).toContain("`mirror/source-ir/component-tree.json` as semantic component boundary evidence")
+    expect(design).toContain("`webpage-evidence/page.ir.json` for canonical DOM order")
+    expect(design).toContain("`webpage-evidence/assets/manifest.json` for dense CSS")
+    expect(design).toContain("`webpage-evidence/segments.json` for implementation chunks")
+    expect(design).toContain("`webpage-evidence/source-ir/component-tree.json` as semantic component boundary evidence")
     expect(design).toContain(
-      "`mirror/source-ir/content-model.json` as tables/lists/cards/controls/repeated group evidence",
+      "`webpage-evidence/source-ir/content-model.json` as tables/lists/cards/controls/repeated group evidence",
     )
-    expect(design).toContain("`mirror/source-skeleton/index.html` as raw semantic HTML evidence")
+    expect(design).toContain("`webpage-evidence/source-skeleton/index.html` as raw semantic HTML evidence")
     expect(design).toContain(
-      "`mirror/source-skeleton/critical.css` as reachable CSS plus computed-style fallback rules",
+      "`webpage-evidence/source-skeleton/critical.css` as reachable CSS plus computed-style fallback rules",
     )
-    expect(design).toContain("`mirror/source-skeleton/full-source.css` as the complete CSS sidecar")
-    expect(design).toContain("`mirror/source-skeleton/source-skeleton-audit.json` as the skeleton quality evidence")
-    expect(design).toContain("`mirror/source-ir/source-quality-audit.json` as semantic IR quality evidence")
+    expect(design).toContain("`webpage-evidence/source-skeleton/full-source.css` as the complete CSS sidecar")
+    expect(design).toContain("`webpage-evidence/source-skeleton/source-skeleton-audit.json` as the skeleton quality evidence")
+    expect(design).toContain("`webpage-evidence/source-ir/source-quality-audit.json` as semantic IR quality evidence")
     expect(design).toContain("skeleton-first source handoff")
     expect(design).toContain("`web-clone-source/implementation-blueprint.md`")
     expect(design).toContain("uses `reference.png` as visual truth")
@@ -691,7 +691,7 @@ describe("core prompt hygiene", () => {
     expect(design).toContain("desktop/tablet/mobile viewport matrix")
     expect(design).toContain("source-quality review against static HTML/base64/CSS replay")
     expect(design).toContain(
-      "frontend_design/host materializes raw mirror evidence and the `web-clone-source/` package under `.opencorvus/runtime/tasks/<taskID>/frontend-design/`",
+      "frontend_design/host materializes raw webpage evidence and the `web-clone-source/` package under `.opencorvus/runtime/tasks/<taskID>/frontend-design/`",
     )
     expect(design).toContain("When task-runtime webpage evidence already exists")
     expect(design).toContain(
@@ -747,7 +747,7 @@ describe("core prompt hygiene", () => {
     expect(requirements).toContain("source-ir/*")
     expect(requirements).toContain("source-skeleton/critical.css")
     expect(requirements).toContain("targeted-gap evidence only")
-    expect(requirements).toContain("`mirror/` is raw frontend_design provenance")
+    expect(requirements).toContain("`webpage-evidence/` is raw frontend_design provenance")
 
     expect(architect).toContain("decompose by phase outcomes, not UI parts")
     expect(architect).toContain("first adopt the frontend-design skeleton/slots/CSS as the root app baseline")
@@ -831,22 +831,22 @@ describe("core prompt hygiene", () => {
     expect(workflow).toContain("不能被当成旁路参考后从空白页手搓")
   })
 
-  test("frontend-design treats raw mirror JSON as evidence, not template working context", async () => {
+  test("frontend-design treats raw webpage evidence JSON as evidence, not template working context", async () => {
     const design = await readPrompt("frontendDesign")
-    expect(design).toContain("After the compact artifacts exist, stop calling mirror acquisition tools")
+    expect(design).toContain("After the compact artifacts exist, stop calling webpage evidence acquisition tools")
     expect(design).toContain(
       "Figma references are materialized before this agent through the connected Figma MCP server",
     )
-    expect(design).toContain("`mirror/page.ir.json` for canonical DOM order")
-    expect(design).toContain("`mirror/assets/manifest.json` for dense CSS")
-    expect(design).toContain("`mirror/segments.json` for implementation chunks")
-    expect(design).toContain("`mirror/source-skeleton/index.html` as raw semantic HTML evidence")
-    expect(design).toContain("`mirror/shared-context.md` for compact design-token")
+    expect(design).toContain("`webpage-evidence/page.ir.json` for canonical DOM order")
+    expect(design).toContain("`webpage-evidence/assets/manifest.json` for dense CSS")
+    expect(design).toContain("`webpage-evidence/segments.json` for implementation chunks")
+    expect(design).toContain("`webpage-evidence/source-skeleton/index.html` as raw semantic HTML evidence")
+    expect(design).toContain("`webpage-evidence/shared-context.md` for compact design-token")
     expect(design).toContain(
-      "Do not read `mirror/extracted-page.json`, `mirror/capture.html`, or `mirror/image-analysis.json` wholesale",
+      "Do not read `webpage-evidence/extracted-page.json`, `webpage-evidence/capture.html`, or `webpage-evidence/image-analysis.json` wholesale",
     )
     expect(design).not.toContain(
-      "`mirror/extracted-page.json` or image/Figma analysis JSON for structure and style facts",
+      "`webpage-evidence/extracted-page.json` or image/Figma analysis JSON for structure and style facts",
     )
   })
 
