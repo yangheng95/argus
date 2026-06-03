@@ -1,8 +1,64 @@
-import { describe, expect, test } from "bun:test"
+import { afterEach, describe, expect, test } from "bun:test"
+import fs from "node:fs/promises"
+import os from "node:os"
+import path from "node:path"
+import { pathToFileURL } from "node:url"
 
-import { deriveRuntimeStateObservations, type RuntimeStateSnapshot } from "../../../src/mirror/url/runtime-state"
+import { BrowserRuntime } from "../../../src/browser/runtime"
+import {
+  captureWebpageRuntimeStateEvidence,
+  deriveRuntimeStateObservations,
+  type RuntimeStateSnapshot,
+} from "../../../src/mirror/url/runtime-state"
 
-describe("runtime webpage state evidence", () => {
+describe("runtime-state evidence", () => {
+  const originalLaunch = BrowserRuntime.launchPlaywrightBrowser
+
+  afterEach(() => {
+    ;(BrowserRuntime as { launchPlaywrightBrowser: typeof originalLaunch }).launchPlaywrightBrowser = originalLaunch
+  })
+
+  test("captures interaction states through Node sidecar without Bun Playwright launch", async () => {
+    const dir = path.join(os.tmpdir(), `runtime-state-sidecar-${process.pid}-${Date.now()}`)
+    await fs.mkdir(dir, { recursive: true })
+    const html = path.join(dir, "index.html")
+    await fs.writeFile(
+      html,
+      `<!doctype html><html><body style="margin:0">
+        <nav style="position:sticky;top:0;background:white">
+          <a href="#a">Markets</a><a href="#b">Calendar</a><a href="#c">News</a>
+        </nav>
+        <main style="height:1800px;padding-top:20px"><button>Open economy panel</button></main>
+      </body></html>`,
+      "utf8",
+    )
+    let launchCount = 0
+    ;(BrowserRuntime as { launchPlaywrightBrowser: typeof originalLaunch }).launchPlaywrightBrowser = async () => {
+      launchCount++
+      throw new Error("runtime-state must not use Bun Playwright launch")
+    }
+
+    try {
+      const evidence = await captureWebpageRuntimeStateEvidence({
+        url: pathToFileURL(html).href,
+        outputDir: dir,
+        viewport: { width: 360, height: 240 },
+      })
+
+      expect(launchCount).toBe(0)
+      expect(evidence.source.captureEngine).toBe("playwright")
+      expect(evidence.snapshots.map((snapshot) => snapshot.id)).toEqual(["initial", "scroll-25", "scroll-50", "scroll-75"])
+      for (const snapshot of evidence.snapshots) {
+        const stat = await fs.stat(path.join(dir, snapshot.screenshot))
+        expect(stat.size).toBeGreaterThan(0)
+      }
+      const persisted = JSON.parse(await fs.readFile(path.join(dir, "source-ir", "interaction-state-snapshots.json"), "utf8"))
+      expect(persisted.snapshots).toHaveLength(4)
+    } finally {
+      await fs.rm(dir, { recursive: true, force: true })
+    }
+  }, 90_000)
+
   test("identifies viewport-persistent tab evidence across scroll snapshots", () => {
     const snapshots: RuntimeStateSnapshot[] = [
       snapshot("initial", 0, 148, 148),

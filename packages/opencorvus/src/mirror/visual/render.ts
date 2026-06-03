@@ -7,12 +7,10 @@
  */
 
 import { spawn } from "node:child_process"
-import { createRequire } from "node:module"
-import fs from "node:fs/promises"
-import path from "node:path"
 import z from "zod"
 
 import { BrowserRuntime } from "@/browser/runtime"
+import { resolveBrowserNodeSidecarRuntime } from "@/browser/runtime/node-sidecar"
 import { RenderError } from "../errors"
 
 /** Injected before capture so screenshots are pixel-identical across runs. */
@@ -214,27 +212,11 @@ export async function resolveNodeRenderSidecarRuntime(input: {
   execPath?: string
   platform?: NodeJS.Platform
 } = {}): Promise<{ nodeExecutable: string; playwrightRequirePath: string }> {
-  const platform = input.platform ?? process.platform
-  const packagedDir = path.join(path.dirname(input.execPath ?? process.execPath), "browser-mcp-node")
-  const packagedNode = path.join(packagedDir, platform === "win32" ? "node.exe" : "node")
-  const packagedPlaywright = path.join(packagedDir, "node_modules", "playwright", "index.js")
-  if ((await exists(packagedNode)) && (await exists(packagedPlaywright))) {
-    return {
-      nodeExecutable: process.env.OPENCORVUS_BROWSER_MCP_NODE ?? packagedNode,
-      playwrightRequirePath: packagedPlaywright,
-    }
-  }
+  const runtime = await resolveBrowserNodeSidecarRuntime(input)
   return {
-    nodeExecutable: process.env.OPENCORVUS_BROWSER_MCP_NODE ?? (platform === "win32" ? "node.exe" : "node"),
-    playwrightRequirePath: createRequire(import.meta.url).resolve("playwright"),
+    nodeExecutable: runtime.nodeExecutable,
+    playwrightRequirePath: runtime.playwrightRequirePath,
   }
-}
-
-async function exists(file: string): Promise<boolean> {
-  return fs.access(file).then(
-    () => true,
-    () => false,
-  )
 }
 
 const NODE_RENDER_SCRIPT = String.raw`

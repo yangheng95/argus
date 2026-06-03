@@ -1,7 +1,9 @@
+import { spawn } from "node:child_process"
 import fs from "node:fs/promises"
 import path from "node:path"
 
 import { BrowserRuntime } from "@/browser/runtime"
+import { resolveBrowserNodeSidecarRuntime } from "@/browser/runtime/node-sidecar"
 
 export interface RuntimeStateViewport {
   width: number
@@ -99,59 +101,150 @@ export async function captureWebpageRuntimeStateEvidence(input: RuntimeStateCapt
   await fs.mkdir(path.join(input.outputDir, "source-ir"), { recursive: true })
   input.onProgress?.(`Capturing runtime state evidence: ${input.url}`)
 
-  const browser = await BrowserRuntime.launchPlaywrightBrowser({
-    headless: false,
-    timeoutMs: BrowserRuntime.resolveBrowserLaunchTimeoutMs(),
+  const snapshots = await captureRuntimeStateSnapshotsViaNode({
+    url: input.url,
+    outputDir: input.outputDir,
+    viewport: input.viewport,
+    signal: input.signal,
   })
 
-  try {
-    const page = await browser.newPage()
-    await page.setViewportSize(input.viewport)
-    await page.setExtraHTTPHeaders({ "Accept-Language": "zh-CN,zh;q=0.9,en;q=0.8" })
-    await page.goto(input.url, { waitUntil: "networkidle", timeout: 60_000 })
-    await page.waitForTimeout(1200)
-
-    const snapshots: RuntimeStateSnapshot[] = []
-    for (const point of STATE_POINTS) {
-      if (input.signal?.aborted) throw input.signal.reason
-      const documentHeight = await page.evaluate(() => Math.max(document.body.scrollHeight, document.documentElement.scrollHeight))
-      const maxScroll = Math.max(0, documentHeight - input.viewport.height)
-      await page.evaluate((scrollY: number) => window.scrollTo(0, scrollY), Math.round(maxScroll * point.ratio))
-      await page.waitForTimeout(700)
-      const screenshotRelative = path.posix.join("interaction-states", `${point.id}.png`)
-      await page.screenshot({ path: path.join(input.outputDir, screenshotRelative), fullPage: false, type: "png" })
-      const snapshot = await page.evaluate(browserCaptureRuntimeState, {
-        id: point.id,
-        label: point.label,
-        screenshot: screenshotRelative,
-      }) as Omit<RuntimeStateSnapshot, "screenshot"> & { screenshot: string }
-      snapshots.push(snapshot)
-    }
-
-    const evidence: RuntimeStateEvidence = {
-      version: 1,
-      purpose: "webpage-runtime-interaction-state-evidence",
-      source: {
-        url: input.url,
-        viewport: input.viewport,
-        captureEngine: "playwright",
-      },
-      artifacts: {
-        screenshotsDir: "interaction-states",
-      },
-      snapshots,
-      observations: deriveRuntimeStateObservations(snapshots),
-    }
-
-    await fs.writeFile(
-      path.join(input.outputDir, "source-ir", "interaction-state-snapshots.json"),
-      `${JSON.stringify(evidence, null, 2)}\n`,
-      "utf8",
-    )
-    return evidence
-  } finally {
-    await browser.close().catch(() => undefined)
+  const evidence: RuntimeStateEvidence = {
+    version: 1,
+    purpose: "webpage-runtime-interaction-state-evidence",
+    source: {
+      url: input.url,
+      viewport: input.viewport,
+      captureEngine: "playwright",
+    },
+    artifacts: {
+      screenshotsDir: "interaction-states",
+    },
+    snapshots,
+    observations: deriveRuntimeStateObservations(snapshots),
   }
+
+  await fs.writeFile(
+    path.join(input.outputDir, "source-ir", "interaction-state-snapshots.json"),
+    `${JSON.stringify(evidence, null, 2)}\n`,
+    "utf8",
+  )
+  return evidence
+}
+
+type NodeRuntimeStateInput = {
+  url: string
+  outputDir: string
+  viewport: RuntimeStateViewport
+  executablePath: string
+  launchTimeoutMs: number
+  navigationTimeoutMs: number
+  captureFunctionSource: string
+  statePoints: typeof STATE_POINTS
+}
+
+type NodeRuntimeStateResult =
+  | {
+      ok: true
+      snapshots: RuntimeStateSnapshot[]
+    }
+  | {
+      ok: false
+      phase: "launch" | "navigate" | "capture" | "close"
+      message: string
+      stack?: string
+    }
+
+async function captureRuntimeStateSnapshotsViaNode(input: {
+  url: string
+  outputDir: string
+  viewport: RuntimeStateViewport
+  signal?: AbortSignal
+}): Promise<RuntimeStateSnapshot[]> {
+  if (input.signal?.aborted) throw input.signal.reason
+  const runtime = await resolveBrowserNodeSidecarRuntime()
+  const executablePath = await BrowserRuntime.findBrowserExecutable()
+  const launchTimeoutMs = BrowserRuntime.resolveBrowserLaunchTimeoutMs()
+  const payloadInput: NodeRuntimeStateInput = {
+    url: input.url,
+    outputDir: input.outputDir,
+    viewport: input.viewport,
+    executablePath,
+    launchTimeoutMs,
+    navigationTimeoutMs: 60_000,
+    captureFunctionSource: browserCaptureRuntimeState.toString(),
+    statePoints: STATE_POINTS,
+  }
+  const payload = Buffer.from(JSON.stringify(payloadInput), "utf8").toString("base64")
+  const child = spawn(runtime.nodeExecutable, ["-"], {
+    cwd: process.cwd(),
+    env: {
+      ...process.env,
+      OPENCORVUS_RUNTIME_STATE_INPUT: payload,
+      OPENCORVUS_PLAYWRIGHT_REQUIRE_PATH: runtime.playwrightRequirePath,
+    },
+    stdio: ["pipe", "pipe", "pipe"],
+    windowsHide: true,
+  })
+  child.stdin.end(NODE_RUNTIME_STATE_SCRIPT)
+
+  let stdout = ""
+  let stderr = ""
+  child.stdout.setEncoding("utf8")
+  child.stderr.setEncoding("utf8")
+  child.stdout.on("data", (chunk) => {
+    stdout += chunk
+  })
+  child.stderr.on("data", (chunk) => {
+    stderr += chunk
+  })
+
+  const hardTimeoutMs = launchTimeoutMs + 60_000 + 30_000
+  const abortHandler = () => child.kill()
+  input.signal?.addEventListener("abort", abortHandler, { once: true })
+  const exit = await new Promise<{ code: number | null; signal: NodeJS.Signals | null }>((resolve, reject) => {
+    const timer = setTimeout(() => {
+      child.kill()
+      reject(new Error(`Node runtime state capture timed out after ${hardTimeoutMs}ms. stderr=${stderr.slice(-2000)}`))
+    }, hardTimeoutMs)
+    child.once("error", (error) => {
+      clearTimeout(timer)
+      reject(error)
+    })
+    child.once("exit", (code, signal) => {
+      clearTimeout(timer)
+      resolve({ code, signal })
+    })
+  }).catch((error) => ({
+    code: 1,
+    signal: null,
+    error,
+  })).finally(() => {
+    input.signal?.removeEventListener("abort", abortHandler)
+  })
+
+  if ("error" in exit) {
+    const error = exit.error
+    throw new Error(error instanceof Error ? error.message : String(error), { cause: error })
+  }
+
+  let result: NodeRuntimeStateResult
+  try {
+    result = JSON.parse(stdout) as NodeRuntimeStateResult
+  } catch (error) {
+    throw new Error(`Node runtime state capture returned invalid JSON. stderr=${stderr.trim()} stdout=${stdout.slice(0, 500)}`, {
+      cause: error,
+    })
+  }
+
+  if (!result.ok) {
+    throw new Error(`Node runtime state capture failed during ${result.phase}: ${result.message}`, {
+      cause: result.stack ? new Error(result.stack) : undefined,
+    })
+  }
+  if (exit.code !== 0) {
+    throw new Error(`Node runtime state capture exited with ${exit.signal ?? exit.code}. stderr=${stderr.trim()}`)
+  }
+  return result.snapshots
 }
 
 function browserCaptureRuntimeState(args: {
@@ -282,6 +375,74 @@ function browserCaptureRuntimeState(args: {
       })
   }
 }
+
+const NODE_RUNTIME_STATE_SCRIPT = String.raw`
+const path = require("node:path");
+const { chromium } = require(process.env.OPENCORVUS_PLAYWRIGHT_REQUIRE_PATH || "playwright");
+
+async function main() {
+  const input = JSON.parse(Buffer.from(process.env.OPENCORVUS_RUNTIME_STATE_INPUT || "", "base64").toString("utf8"));
+  const captureRuntimeState = eval("(" + input.captureFunctionSource + ")");
+  let browser;
+  let phase = "launch";
+  try {
+    browser = await chromium.launch({
+      executablePath: input.executablePath,
+      headless: true,
+      timeout: input.launchTimeoutMs,
+      args: [
+        "--no-sandbox",
+        "--disable-gpu",
+        "--disable-dev-shm-usage",
+        "--disable-extensions",
+        "--disable-background-networking",
+        "--window-size=" + input.viewport.width + "," + input.viewport.height,
+      ],
+    });
+    const context = await browser.newContext({
+      viewport: input.viewport,
+      extraHTTPHeaders: { "Accept-Language": "zh-CN,zh;q=0.9,en;q=0.8" },
+    });
+    const page = await context.newPage();
+
+    phase = "navigate";
+    await page.goto(input.url, { waitUntil: "networkidle", timeout: input.navigationTimeoutMs });
+    await page.waitForTimeout(1200);
+
+    phase = "capture";
+    const snapshots = [];
+    for (const point of input.statePoints) {
+      const documentHeight = await page.evaluate(() => Math.max(document.body.scrollHeight, document.documentElement.scrollHeight));
+      const maxScroll = Math.max(0, documentHeight - input.viewport.height);
+      await page.evaluate((scrollY) => window.scrollTo(0, scrollY), Math.round(maxScroll * point.ratio));
+      await page.waitForTimeout(700);
+      const screenshotRelative = path.posix.join("interaction-states", point.id + ".png");
+      await page.screenshot({ path: path.join(input.outputDir, screenshotRelative), fullPage: false, type: "png" });
+      const snapshot = await page.evaluate(captureRuntimeState, {
+        id: point.id,
+        label: point.label,
+        screenshot: screenshotRelative,
+      });
+      snapshots.push(snapshot);
+    }
+
+    process.stdout.write(JSON.stringify({ ok: true, snapshots }));
+  } catch (error) {
+    process.stdout.write(JSON.stringify({
+      ok: false,
+      phase,
+      message: error && error.message ? error.message : String(error),
+      stack: error && error.stack ? error.stack : undefined,
+    }));
+    process.exitCode = 1;
+  } finally {
+    phase = "close";
+    if (browser) await browser.close().catch(() => {});
+  }
+}
+
+main();
+`
 
 export function deriveRuntimeStateObservations(snapshots: RuntimeStateSnapshot[]): RuntimeStateObservation[] {
   const rows = new Map<string, RuntimeStateElement[]>()
