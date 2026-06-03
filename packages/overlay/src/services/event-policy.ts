@@ -19,12 +19,40 @@ const TREE_WRITER_NOOP_TYPES = new Set([
   "task.messages.changed",
   "agent.updated",
   "message.injected",
+  "command.executed",
   "spec.created",
   "spec.updated",
   "spec.approved",
   "milestone.activated",
   "milestone.passed",
   "milestone.failed",
+  "global.disposed",
+  "server.instance.disposed",
+  "installation.updated",
+  "installation.update-available",
+  "project.updated",
+  "lsp.client.diagnostics",
+  "lsp.updated",
+  "mcp.tools.changed",
+  "mcp.browser.open.failed",
+  "mcp.prompts.changed",
+  "mcp.resources.changed",
+  "task-queue.completed",
+  "task.report",
+  "file.watcher.updated",
+  "vcs.branch.updated",
+  "worktree.ready",
+  "worktree.failed",
+  "task_plan.updated",
+  "session.compacted",
+  "file.edited",
+  "workspace.ready",
+  "workspace.failed",
+  "todo.updated",
+  "tui.prompt.append",
+  "tui.command.execute",
+  "tui.toast.show",
+  "tui.session.select",
   // Integrity `started` / `progress` / `completed` are NOT noop —
   // started/progress promote a running integrity card, and completed upserts
   // it with the structured verdict. Handled by tree-writer's `handleIntegrity*`
@@ -32,18 +60,61 @@ const TREE_WRITER_NOOP_TYPES = new Set([
   // three events.
 ])
 
-const TREE_WRITER_PASS_THROUGH_PREFIXES = [
-  "run.",
-  "plan.",
-  "goal.",
-  "goal_run.",
-  "evaluation.",
-  "workflow.",
-  "task.",
-  "interaction.",
-] as const
+const TREE_WRITER_PASS_THROUGH_PREFIXES = [] as const
 
-const TREE_WRITER_PASS_THROUGH_EXACT_TYPES = new Set(["acceptance.ready", "acceptance.evidence.updated"])
+const TREE_WRITER_PASS_THROUGH_EXACT_TYPES = new Set([
+  "run.created",
+  "run.updated",
+  "run.progress",
+  "run.output",
+  "plan.created",
+  "plan.activated",
+  "goal.progress",
+  "goal_run.updated",
+  "goal.passed",
+  "goal.failed",
+  "goal.workflow.progress",
+  "goal.report",
+  "evaluation.completed",
+  "workflow.selected",
+  "workflow.step.updated",
+  "task.failed",
+  "task.cancelled",
+  "task.blocked",
+  "task.rewound",
+  "task.message",
+  "acceptance.ready",
+  "acceptance.evidence.updated",
+])
+
+const TREE_WRITER_PROJECTED_EXACT_TYPES = new Set([
+  "message.part.delta",
+  "task.created",
+  "task.updated",
+  "task.completed",
+  "goal.created",
+  "interaction.requested",
+  "interaction.resolved",
+  "question.asked",
+  "question.replied",
+  "question.rejected",
+  "message.updated",
+  "message.part.updated",
+  "message.removed",
+  "message.part.removed",
+  "review.stream.started",
+  "review.stream.progress",
+  "review.stream.chunk",
+  "integrity.review.completed",
+  "session.status",
+  "session.error",
+  "session.idle",
+  "approval.request",
+  "input.request",
+  "permission.asked",
+  "permission.replied",
+  "diff.delta",
+])
 
 const BOARD_INVALIDATING_EXACT_TYPES = new Set([
   "task.created",
@@ -76,6 +147,14 @@ export function isTreeWriterNoopEventType(type: string): boolean {
 
 export function isTreeWriterPassThroughEventType(type: string): boolean {
   return TREE_WRITER_PASS_THROUGH_EXACT_TYPES.has(type) || hasPrefix(type, TREE_WRITER_PASS_THROUGH_PREFIXES)
+}
+
+export function isTreeWriterKnownEventType(type: string): boolean {
+  return (
+    TREE_WRITER_PROJECTED_EXACT_TYPES.has(type) ||
+    isTreeWriterNoopEventType(type) ||
+    isTreeWriterPassThroughEventType(type)
+  )
 }
 
 export function isBoardInvalidatingEventType(type: string): boolean {
