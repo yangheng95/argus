@@ -43,8 +43,9 @@ function counts(events: LLMActivityEvent[]) {
   }
 }
 
-test("DefaultLLMActivityPolicy uses a one hour total deadline", () => {
+test("DefaultLLMActivityPolicy uses one hour total and five minute first-byte deadlines", () => {
   expect(DefaultLLMActivityPolicy.totalMs).toBe(60 * 60_000)
+  expect(DefaultLLMActivityPolicy.firstByteMs).toBe(5 * 60_000)
 })
 
 test("happy path: returns value, exactly one started + one terminal=done", async () => {
