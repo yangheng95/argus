@@ -621,6 +621,11 @@ describe("core prompt hygiene", () => {
     expect(normalized).toContain("Evidence Index, Page Inventory in visible order, Functional Surface Contracts, Layout and Responsive Contract, Style and Visual Token Contract, Interaction/State Contract, Data and Content Inventory, Asset/Media Inventory, Fidelity Acceptance Matrix, Risks/Open Questions, and Downstream PRD Outline")
     expect(normalized).toContain("Each major page region needs its own subsection")
     expect(normalized).toContain("do not write generic prose")
+    expect(normalized).toContain("`<div>` elements are normal layout primitives")
+    expect(normalized).toContain("mechanical DOM dump")
+    expect(normalized).toContain("`SourceDomPage`, `src/components/source-dom/*`, `src/data/sourceDom*`")
+    expect(normalized).toContain("pervasive `data-source-node-id`")
+    expect(normalized).toContain("semantic component/data/library boundaries")
   })
 
   test("webpage replica prompts enforce skeleton-first baseline then functional fill", async () => {
@@ -662,6 +667,12 @@ describe("core prompt hygiene", () => {
     expect(design).toContain("`baseline_replacement_plan`")
     expect(design).toContain("maintainable_replacement_required")
     expect(design).toContain("existing project components and mature libraries")
+    expect(design).toContain("Div-soup boundary")
+    expect(design).toContain("`<div>` is a valid semantic-neutral layout primitive")
+    expect(design).toContain("The defect is delivering a mechanical DOM dump as application source")
+    expect(design).toContain("`SourceDomPage`, `src/components/source-dom/*`, `src/data/sourceDom*`")
+    expect(design).toContain("pervasive `data-source-node-id`")
+    expect(design).toContain("no mechanical DOM dump / `div soup` remains as the primary app source")
 
     expect(requirements).toContain("skeleton-first implementation constraint")
     expect(requirements).toContain("must first be adopted into the root app as a temporary visual baseline")
@@ -695,6 +706,10 @@ describe("core prompt hygiene", () => {
     expect(architect).toContain("Do not put API/state wiring directly into extracted static markup")
     expect(architect).toContain("project-owned semantic components/data modules/API bindings")
     expect(architect).toContain("must not treat the frontend-design skeleton alone as deliverable completion")
+    expect(architect).toContain("mechanical DOM dump / `div soup`")
+    expect(architect).toContain("`SourceDomPage`, `src/components/source-dom/*`, `src/data/sourceDom*`")
+    expect(architect).toContain("pervasive `data-source-node-id`")
+    expect(architect).toContain("`<div>` usage itself is normal")
 
     expect(build).not.toContain("web-clone-source")
     expect(build).not.toContain("frontend-design")
