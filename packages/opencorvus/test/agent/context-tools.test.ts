@@ -27,7 +27,7 @@ describe("agent context tools", () => {
   //   frontend-design            → drop  (owns mirror extraction; redundant)
   //   intent-analysis           → drop  (first cheap classifier; must not research)
   //   research                  → drop  (starts from source URLs with webfetch; search costs are avoided)
-  //   frontend-research         → drop  (starts from prepared webpage/source URLs with webfetch)
+  //   frontend-research         → drop  (organizes build-delegated webpage research)
   for (const agentName of ["requirements", "architect"] as const) {
     test(`${agentName} resolves websearch through its include whitelist`, async () => {
       await Instance.provide({
@@ -53,7 +53,7 @@ describe("agent context tools", () => {
     }, { timeout: INSTANCE_STARTUP_TIMEOUT_MS })
   }
 
-  for (const agentName of ["fact-check", "research", "frontend-research"] as const) {
+  for (const agentName of ["fact-check", "research"] as const) {
     test(`${agentName} resolves webfetch through the read-only retrieval surface`, async () => {
       await Instance.provide({
         directory: process.cwd(),
@@ -64,4 +64,14 @@ describe("agent context tools", () => {
       })
     }, { timeout: INSTANCE_STARTUP_TIMEOUT_MS })
   }
+
+  test("frontend-research does not resolve direct retrieval tools", async () => {
+    await Instance.provide({
+      directory: process.cwd(),
+      fn: async () => {
+        const tools = await filterAgentTools(createAgentContextTools(), "frontend-research")
+        expect(Object.keys(tools)).toEqual([])
+      },
+    })
+  }, { timeout: INSTANCE_STARTUP_TIMEOUT_MS })
 })

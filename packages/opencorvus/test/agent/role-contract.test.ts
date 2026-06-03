@@ -177,8 +177,10 @@ test("research and frontend-design role descriptions keep document research dist
   expect(AgentRoleContract.description("research")).toContain("PRD/SPEC/report source material")
   expect(AgentRoleContract.description("research")).toContain("Dedicated webpage functional/visual PRD evidence belongs to frontend-research")
 
-  expect(AgentRoleContract.description("frontend-research")).toContain("webpage functional and visual evidence")
+  expect(AgentRoleContract.description("frontend-research")).toContain("Frontend research coordinator")
+  expect(AgentRoleContract.description("frontend-research")).toContain("delegates deep investigation packets to build")
   expect(AgentRoleContract.description("frontend-research")).toContain("frontend_research_brief")
+  expect(AgentRoleContract.description("frontend-research")).toContain("does not directly investigate pages")
   expect(AgentRoleContract.description("frontend-research")).toContain("does not create the frontend implementation template")
 })
 

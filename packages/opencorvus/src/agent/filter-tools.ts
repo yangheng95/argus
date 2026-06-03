@@ -31,7 +31,7 @@ export async function filterAgentTools<T extends Record<string, unknown>>(
   const include = filter.include
   const exclude = filter.exclude
   const entries = Object.entries(tools).filter(([name]) => {
-    if (include && include.length > 0 && !include.includes(name)) return false
+    if (include && !include.includes(name)) return false
     if (exclude?.includes(name)) return false
     return true
   })
