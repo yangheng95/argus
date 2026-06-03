@@ -1,5 +1,5 @@
-import { SourceClonePage } from "./components/SourceClonePage"
+import { TradingViewWorldEconomyPage } from "./components/TradingViewWorldEconomyPage"
 
 export default function App() {
-  return <SourceClonePage />
+  return <TradingViewWorldEconomyPage />
 }

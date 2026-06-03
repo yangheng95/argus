@@ -8,7 +8,7 @@ body,
   min-width: 320px;
 }
 
-.source-dom-page {
+.tradingview-world-economy-page {
   min-height: 100vh;
 }
 
@@ -22,4 +22,66 @@ body,
   font-weight: 700;
   line-height: 28px;
   letter-spacing: 0;
+}
+
+.semantic-extracted-map-legend {
+  align-items: center;
+  display: flex;
+  justify-content: space-around;
+  margin: -18px auto 0;
+  max-width: min(600px, 80%);
+  min-height: 38px;
+  padding-top: 14px;
+  position: relative;
+  text-align: center;
+  width: 600px;
+}
+
+.semantic-extracted-map-legend::before {
+  background: linear-gradient(90deg, #fff3df, #ffdca3, #ffb547, #ff9200, #e14c00);
+  border-radius: 999px;
+  content: "";
+  height: 8px;
+  left: 0;
+  position: absolute;
+  right: 0;
+  top: 0;
+}
+
+.semantic-extracted-chart {
+  display: grid;
+  min-height: var(--cms-lightweight-symbols-chart-min-height, 123px);
+  overflow: hidden;
+  place-items: stretch;
+}
+
+.semantic-extracted-chart img {
+  grid-area: 1 / 1;
+  height: 100%;
+  object-fit: fill;
+  width: 100%;
+}
+
+.semantic-extracted-card-grid {
+  display: grid;
+  gap: 16px;
+  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+}
+
+.web-clone-table {
+  margin-top: 24px;
+  overflow-x: auto;
+}
+
+.web-clone-table table {
+  border-collapse: collapse;
+  min-width: 960px;
+  width: 100%;
+}
+
+.web-clone-table th,
+.web-clone-table td {
+  border-bottom: 1px solid var(--color-divider-line-secondary);
+  padding: 10px 12px;
+  text-align: start;
 }

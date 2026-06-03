@@ -1,14 +1,10 @@
 // @ts-nocheck
-// semantic-source-replacement: generated from source header navigation, logo assets, menu links, and action buttons with data loops.
+// semantic-extracted-materials: generated from extracted header navigation, logo assets, menu links, and action buttons with data loops.
 import { AssetPath } from "../AssetPath"
 
 const headerNavigationData = {
   "componentName": "HeaderNavigation",
   "rootClassName": "tv-header tv-header__top js-site-header-container tv-header--sticky",
-  "rootSourceNodeId": "node_000693",
-  "rootDataAttrs": {
-    "data-source-role": "header"
-  },
   "backdropClassName": "",
   "innerClassName": "tv-header__inner",
   "logoAreaClassName": "tv-header__area tv-header__area--logo-menu",
@@ -269,11 +265,7 @@ function HeaderButton({ button }) {
 export function HeaderNavigation() {
   const header = headerNavigationData
   return (
-    <div
-      className={header.rootClassName}
-      data-source-region={header.rootSourceNodeId}
-      data-source-role={headerNavigationData.rootDataAttrs["data-source-role"]}
-    >
+    <div className={header.rootClassName}>
       {header.backdropClassName ? <div className={header.backdropClassName} /> : null}
       <div className={header.innerClassName}>
         <div className={header.logoAreaClassName}>
