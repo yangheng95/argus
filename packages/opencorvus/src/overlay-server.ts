@@ -11,18 +11,9 @@ import { Installation } from "./installation"
 import { NamedError } from "@opencorvus-ai/util/error"
 import { FormatError } from "./cli/error"
 import { EOL } from "os"
+import { installProcessErrorLogging } from "./util/process-error-logging"
 
-process.on("unhandledRejection", (e) => {
-  Log.Default.error("rejection", {
-    e: e instanceof Error ? e.message : e,
-  })
-})
-
-process.on("uncaughtException", (e) => {
-  Log.Default.error("exception", {
-    e: e instanceof Error ? e.message : e,
-  })
-})
+installProcessErrorLogging()
 
 const cli = yargs(hideBin(process.argv))
   .parserConfiguration({ "populate--": true })

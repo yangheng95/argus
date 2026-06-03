@@ -109,6 +109,37 @@ if ((import.meta as any).hot) {
 }
 const listenerOpts = { signal: moduleTeardown.signal } as const
 
+function reportOverlayRuntimeError(scope: string, error: unknown): void {
+  const details = formatErrorDetails(error)
+  const message = error instanceof Error ? error.message : String(error)
+  AppLog.error("runtime", scope, {
+    message,
+    details,
+  })
+  notifyError({
+    id: `runtime:${scope}`,
+    title: t("common.error"),
+    message: scope,
+    details,
+  })
+}
+
+window.addEventListener(
+  "error",
+  (event) => {
+    reportOverlayRuntimeError("window.error", event.error ?? event.message)
+  },
+  listenerOpts,
+)
+
+window.addEventListener(
+  "unhandledrejection",
+  (event) => {
+    reportOverlayRuntimeError("window.unhandledrejection", event.reason)
+  },
+  listenerOpts,
+)
+
 // ── Application-level signals (shared across mount points) ──
 
 const [logOpen, setLogOpen] = createSignal(false)
@@ -1526,7 +1557,7 @@ void (async () => {
     document.body.appendChild(onboardingHost)
     render(() => <WorkspaceOnboardingDialog />, onboardingHost)
   } catch (error) {
-    console.error(error)
+    reportOverlayRuntimeError("initApp", error)
   } finally {
     await waitForLogDrain()
     ;(window as any).__overlayInitSettled = true
