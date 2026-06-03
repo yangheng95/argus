@@ -32,18 +32,9 @@ import { SessionCommand } from "./cli/cmd/session"
 import { DbCommand } from "./cli/cmd/db"
 import { SlackCommand } from "./cli/cmd/slack"
 import { Capability } from "./platform/capability"
+import { installProcessErrorLogging } from "./util/process-error-logging"
 
-process.on("unhandledRejection", (e) => {
-  Log.Default.error("rejection", {
-    e: e instanceof Error ? e.message : e,
-  })
-})
-
-process.on("uncaughtException", (e) => {
-  Log.Default.error("exception", {
-    e: e instanceof Error ? e.message : e,
-  })
-})
+installProcessErrorLogging()
 
 let cli = yargs(hideBin(process.argv))
   .parserConfiguration({ "populate--": true })

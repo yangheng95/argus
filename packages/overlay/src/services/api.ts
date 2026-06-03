@@ -85,6 +85,7 @@ export function getServerUrl(): string {
  */
 const NO_DIRECTORY_PATHS = new Set<string>([
   "log",
+  "log/tail",
   "shutdown",
   "restart",
   "global/health",
