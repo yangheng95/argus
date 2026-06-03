@@ -289,8 +289,6 @@ export const AuthLoginCommand = cmd({
           prompts.outro("Done")
           return
         }
-        await ModelsDev.refresh().catch(() => {})
-
         const config = await Config.get()
 
         const disabled = new Set(config.disabled_providers ?? [])
