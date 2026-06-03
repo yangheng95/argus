@@ -1,7 +1,7 @@
 import { afterEach, expect, test } from "bun:test"
 import fs from "node:fs/promises"
 import path from "node:path"
-import { standaloneGitEnvForProject } from "../../script/benchmark/git"
+import { ensureStandaloneGitRepo, standaloneGitEnvForProject } from "../../script/benchmark/git"
 
 const created: string[] = []
 
@@ -32,6 +32,41 @@ test("benchmark git init creates an isolated repo inside a parent worktree", asy
   expect(exitCode).toBe(0)
   expect(await fs.stat(path.join(dir, ".git")).then((stat) => stat.isDirectory()).catch(() => false)).toBe(true)
 
+  const topProc = Bun.spawn(["git", "rev-parse", "--show-toplevel"], {
+    cwd: dir,
+    env: standaloneGitEnvForProject(dir),
+    stdout: "pipe",
+    stderr: "pipe",
+  })
+  const [topExit, top] = await Promise.all([
+    topProc.exited,
+    new Response(topProc.stdout).text(),
+  ])
+  expect(topExit).toBe(0)
+  expect(path.resolve(top.trim())).toBe(dir)
+})
+
+test("benchmark helper repairs explicit project dirs that inherit the parent repo", async () => {
+  const repoRoot = path.resolve(import.meta.dir, "../../../..")
+  const dir = path.join(repoRoot, ".scratch", `explicit-benchmark-git-${Date.now()}`)
+  created.push(dir)
+  await fs.mkdir(dir, { recursive: true })
+
+  const inheritedTop = Bun.spawn(["git", "rev-parse", "--show-toplevel"], {
+    cwd: dir,
+    stdout: "pipe",
+    stderr: "pipe",
+  })
+  const [inheritedExit, inheritedStdout] = await Promise.all([
+    inheritedTop.exited,
+    new Response(inheritedTop.stdout).text(),
+  ])
+  expect(inheritedExit).toBe(0)
+  expect(path.resolve(inheritedStdout.trim())).toBe(repoRoot)
+
+  await ensureStandaloneGitRepo(dir)
+
+  expect(await fs.stat(path.join(dir, ".git")).then((stat) => stat.isDirectory()).catch(() => false)).toBe(true)
   const topProc = Bun.spawn(["git", "rev-parse", "--show-toplevel"], {
     cwd: dir,
     env: standaloneGitEnvForProject(dir),

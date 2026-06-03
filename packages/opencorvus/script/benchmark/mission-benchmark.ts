@@ -3,7 +3,7 @@
 import fs from "node:fs/promises"
 import os from "node:os"
 import path from "node:path"
-import { standaloneGitEnvForProject } from "./git"
+import { ensureStandaloneGitRepo } from "./git"
 import {
   DEFAULT_MISSION_BENCHMARK_REQUEST,
   DEFAULT_MISSION_VERIFY_CMD,
@@ -425,17 +425,7 @@ async function writeBenchmarkConfig(dir: string, configDir: string, model: strin
 }
 
 async function gitInit(dir: string): Promise<void> {
-  const proc = Bun.spawn(["git", "init"], {
-    cwd: dir,
-    env: standaloneGitEnvForProject(dir),
-    stdout: "pipe",
-    stderr: "pipe",
-  })
-  const code = await proc.exited
-  if (code !== 0) {
-    const stderr = await new Response(proc.stderr).text()
-    throw new Error(`git init failed in ${dir}: ${stderr.trim()}`)
-  }
+  await ensureStandaloneGitRepo(dir)
 }
 
 async function writeIfMissing(file: string, content: string): Promise<void> {

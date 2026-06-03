@@ -86,7 +86,7 @@ import os from "node:os"
 import path from "node:path"
 import puppeteer, { type Page } from "puppeteer-core"
 import { parseSSE } from "../../src/util/sse"
-import { standaloneGitEnvForProject } from "./git"
+import { ensureStandaloneGitRepo } from "./git"
 import { auditWorkspace, deriveRunMetrics, evaluateQualityGates, moduleBlocksFromRequest } from "./quality-gates"
 
 type OverlayBenchmarkWindow = Window & {
@@ -455,6 +455,7 @@ if (resumeTaskID) {
     await fs.rm(path.join(temp.dir, ".opencorvus"), { recursive: true, force: true })
     await fs.mkdir(temp.config, { recursive: true })
     await fs.mkdir(path.join(temp.dir, ".opencorvus"), { recursive: true })
+    await ensureStandaloneGitRepo(temp.dir)
     // Re-register the benchmark model in the isolated config override. Fresh
     // scaffolds do the same; here we only write runtime config so the
     // existing source tree is preserved and the orchestrator boots with an
@@ -1242,17 +1243,7 @@ async function scaffoldProject(dir: string, model: string) {
   // unattended and creates its own scratch dir, so it must init git itself
   // — there is no overlay user gesture to prompt for.
   {
-    const proc = Bun.spawn(["git", "init"], {
-      cwd: dir,
-      env: standaloneGitEnvForProject(dir),
-      stdout: "pipe",
-      stderr: "pipe",
-    })
-    const code = await proc.exited
-    if (code !== 0) {
-      const err = (await proc.stderr.text()).trim() || "git init failed"
-      throw new Error(`scaffoldProject: git init failed in ${dir}: ${err}`)
-    }
+    await ensureStandaloneGitRepo(dir)
   }
   // Generate .gitignore only if one doesn't already exist
   const gitignorePath = path.join(dir, ".gitignore")
