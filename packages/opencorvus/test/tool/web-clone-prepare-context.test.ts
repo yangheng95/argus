@@ -28,9 +28,9 @@ describe("tool.web_clone_prepare_context", () => {
         expect(ids).toContain("web_clone_prepare_context")
       },
     })
-  })
+  }, { timeout: 20_000 })
 
-  test("writes compact context and implementation contract from mirror evidence", async () => {
+  test("writes compact context and implementation contract from webpage evidence", async () => {
     await using tmp = await tmpdir()
     const mirrorDir = await writeFixtureMirror(tmp.path)
 

@@ -25,7 +25,7 @@ import { MCP } from "@/mcp"
 import { Bus } from "@/bus"
 import path from "path"
 import z from "zod"
-import { MIRROR_TOOL_IDS } from "@/mirror/tools/ids"
+import { WEBPAGE_EVIDENCE_TOOL_IDS } from "@/webpage-evidence/tools/ids"
 
 const log = Log.create({ service: "mcp.serve" })
 
@@ -66,7 +66,7 @@ const EXECUTOR_TOOL_IMPLS: Record<ExecutorToolID, Tool.Info> = {
 }
 
 const EXECUTOR_PROXIED_TOOL_DENY_IDS = new Set([
-  ...MIRROR_TOOL_IDS,
+  ...WEBPAGE_EVIDENCE_TOOL_IDS,
   "web_clone_prepare_context",
   "web_clone_generate_source_project",
 ])

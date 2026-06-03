@@ -81,9 +81,9 @@ describe("research webpage PRD evidence", () => {
     const url = "https://example.com/markets/world-economy/"
     const paths = ProjectRuntimePaths.frontendDesignPaths(tmp.path, taskID)
 
-    await writeCompleteEvidence(paths.mirrorAbsolute, url, {})
+    await writeCompleteEvidence(paths.webpageEvidenceAbsolute, url, {})
     await prepareWebCloneContext({
-      mirrorDir: paths.mirrorAbsolute,
+      mirrorDir: paths.webpageEvidenceAbsolute,
       outputDir: paths.sourcePackageAbsolute,
     })
 
@@ -94,10 +94,10 @@ describe("research webpage PRD evidence", () => {
     })
 
     expect(evidence.status).toBe("reused")
-    expect(evidence.mirrorRelative).toBe(paths.mirrorRelative)
+    expect(evidence.webpageEvidenceRelative).toBe(paths.webpageEvidenceRelative)
     expect(evidence.sourcePackageRelative).toBe(paths.sourcePackageRelative)
     expect(evidence.referenceImageRelative).toBe(`${paths.sourcePackageRelative}/reference.png`)
-    expect(evidence.artifacts).toContain(`${paths.mirrorRelative}/prd-evidence-summary.md`)
+    expect(evidence.artifacts).toContain(`${paths.webpageEvidenceRelative}/prd-evidence-summary.md`)
     expect(evidence.artifacts).toContain(`${paths.sourcePackageRelative}/implementation-blueprint.md`)
     expect(evidence.excerpts.some((item) => item.excerpt.includes("Economic trends"))).toBe(true)
   }, { timeout: WEBPAGE_PRD_EVIDENCE_TIMEOUT_MS })
@@ -109,7 +109,7 @@ describe("research webpage PRD evidence", () => {
       projectDir: tmp.path,
       taskID: "tsk_research_webpage_prd_missing",
       url: "https://example.com/markets/world-economy/",
-    })).rejects.toThrow("requires a complete frontend-design runtime evidence package")
+    })).rejects.toThrow("requires a complete runtime webpage evidence package")
   })
 })
 
@@ -143,7 +143,7 @@ async function writeCompleteEvidence(
 ): Promise<void> {
   await fs.mkdir(mirrorDir, { recursive: true })
   for (const artifact of primaryWebpageEvidenceArtifacts()) {
-    const relative = artifact.replace(/^mirror[\\/]/, "")
+    const relative = artifact.replace(/^webpage-evidence[\\/]/, "").replace(/^mirror[\\/]/, "")
     const file = path.join(mirrorDir, relative)
     await fs.mkdir(path.dirname(file), { recursive: true })
     if (relative === "reference.png") {
@@ -162,7 +162,7 @@ function artifactContent(relative: string, url: string, options: { longEvidenceS
   if (relative === "extracted-page.json") return JSON.stringify({ url })
   if (relative === "prd-evidence-summary.md") {
     const base = [
-      "# Mirror frontend template Evidence Summary",
+      "# Webpage frontend template Evidence Summary",
       "",
       "## Page Inventory",
       "- Header: logo, search, navigation, account CTA.",

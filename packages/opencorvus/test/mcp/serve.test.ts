@@ -130,7 +130,7 @@ describe("mcp.serve", () => {
     })
   })
 
-  test("filters webpage clone and mirror tools from executor proxied definitions", async () => {
+  test("filters webpage clone and webpage evidence tools from executor proxied definitions", async () => {
     await using tmp = await tmpdir({ git: true })
     const proxiedTools = [
       {

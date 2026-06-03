@@ -12,10 +12,10 @@ import { createFrontendTemplateOutputTools } from "../../src/frontend-design/out
 import {
   FRONTEND_DESIGN_CONTEXT_TOOL_IDS,
   FRONTEND_DESIGN_IMPLEMENTATION_TOOL_IDS,
-  FRONTEND_DESIGN_MIRROR_ANALYSIS_TOOL_IDS,
+  FRONTEND_DESIGN_WEBPAGE_EVIDENCE_TOOL_IDS,
   FRONTEND_DESIGN_UTILITY_TOOL_IDS,
 } from "../../src/frontend-design/static-tools"
-import { MIRROR_ANALYSIS_TOOL_IDS } from "../../src/mirror/tools/ids"
+import { WEBPAGE_EVIDENCE_ANALYSIS_TOOL_IDS } from "../../src/webpage-evidence/tools/ids"
 import { generateWebCloneSkeletonProject } from "../../src/web-clone"
 import { tmpdir } from "../fixture/fixture"
 
@@ -108,7 +108,7 @@ describe("frontend-design prompt assembly", () => {
     expect(prompt).toContain("off-track process defect")
     expect(prompt).toContain("Do not solve benchmark failures by lowering thresholds")
     expect(prompt).not.toContain("Do not loop through render/evaluation attempts")
-    expect(prompt).toContain("Do not change other agent prompts, communication paths, evaluator scoring, runtime source packages, raw mirror evidence, or generated evidence outputs")
+    expect(prompt).toContain("Do not change other agent prompts, communication paths, evaluator scoring, runtime source packages, raw webpage evidence, or generated evidence outputs")
     expect(prompt).not.toContain("overallScore >=80/100")
     expect(prompt).not.toContain("100/100")
     expect(prompt).not.toContain("96/100")
@@ -136,7 +136,7 @@ describe("frontend-design prompt assembly", () => {
     expect(parts).toHaveLength(1)
     expect(parts[0]?.type).toBe("text")
     expect(parts[0]?.text).toContain("stored for provenance but are not inlined")
-    expect(parts[0]?.text).toContain("Use the task-runtime webpage evidence and mirror analysis tools")
+    expect(parts[0]?.text).toContain("Use the task-runtime webpage evidence and webpage evidence tools")
     expect(parts[0]?.text).toContain("assistant.auto_iteration=false")
     expect(parts[0]?.text).not.toContain("webpage_extract")
     expect(parts[0]?.text).not.toContain("webpage_compile")
@@ -337,12 +337,12 @@ describe("frontend-design prompt assembly", () => {
       directory: dir,
       fn: async () => {
         const contextTools = FrontendDesignTestHooks.createFrontendDesignContextTools()
-        const mirrorTools = await FrontendDesignTestHooks.createMirrorAnalysisTools({})
+        const mirrorTools = await FrontendDesignTestHooks.createWebpageEvidenceTools({})
         const implementationTools = await FrontendDesignTestHooks.createFrontendImplementationTools({})
         const utilityTools = await FrontendDesignTestHooks.createFrontendUtilityTools({})
 
         expect(Object.keys(contextTools)).toEqual([...FRONTEND_DESIGN_CONTEXT_TOOL_IDS])
-        expect(Object.keys(mirrorTools)).toEqual([...FRONTEND_DESIGN_MIRROR_ANALYSIS_TOOL_IDS])
+        expect(Object.keys(mirrorTools)).toEqual([...FRONTEND_DESIGN_WEBPAGE_EVIDENCE_TOOL_IDS])
         expect(Object.keys(implementationTools)).toEqual([...FRONTEND_DESIGN_IMPLEMENTATION_TOOL_IDS])
         expect(Object.keys(utilityTools)).toEqual([...FRONTEND_DESIGN_UTILITY_TOOL_IDS])
 
@@ -496,7 +496,7 @@ describe("frontend-design prompt assembly", () => {
           family_id: "comp-chart-panel",
           name: "Chart panel",
           observed_surface: "Primary chart panel",
-          source_refs: ["mirror/reference.png"],
+          source_refs: ["webpage-evidence/reference.png"],
           implementation_strategy: "extracted_baseline_defer",
           reuse_source: "frontend-design-skeleton/src/components/SourceClonePage.tsx",
           mature_library_candidates: [],
@@ -511,7 +511,7 @@ describe("frontend-design prompt assembly", () => {
       ui_data_contract: "UI data contract",
       template_iteration_notes: ["bounded inventory and implementation review complete"],
       completeness_review: "frontend template complete enough for handoff",
-      reference_artifacts: ["mirror/reference.png", "mirror/prd-evidence-summary.md"],
+      reference_artifacts: ["webpage-evidence/reference.png", "webpage-evidence/prd-evidence-summary.md"],
       open_questions: [],
     }, {})
 
@@ -536,7 +536,7 @@ describe("frontend-design prompt assembly", () => {
           family_id: "comp-chart-panel",
           name: "Chart panel",
           observed_surface: "Primary chart panel",
-          source_refs: ["mirror/reference.png"],
+          source_refs: ["webpage-evidence/reference.png"],
           implementation_strategy: "extracted_baseline_defer",
           reuse_source: "frontend-design-skeleton/src/components/SourceClonePage.tsx",
           mature_library_candidates: [],
@@ -551,7 +551,7 @@ describe("frontend-design prompt assembly", () => {
       ui_data_contract: "UI data contract",
       template_iteration_notes: ["pass 1 inventory complete"],
       completeness_review: "frontend template complete enough for handoff",
-      reference_artifacts: ["mirror/reference.png"],
+      reference_artifacts: ["webpage-evidence/reference.png"],
       open_questions: [],
     }
 
@@ -648,7 +648,7 @@ describe("frontend-design prompt assembly", () => {
     expect(prompt).toContain("measured webpage_evaluate evidence")
     expect(prompt).toContain("zero-finding web_clone_source_audit evidence")
     expect(prompt).toContain("Do not alter evaluators, other agent prompts, communication paths, generated outputs, or runtime source packages to satisfy the report.")
-    expect(prompt).toContain("Mirror/source evidence stays in task runtime paths")
+    expect(prompt).toContain("Webpage/source evidence stays in task runtime paths")
     expect(prompt).toContain("Do not instruct downstream agents to move or clean `web-clone-source/`")
     expect(prompt).toContain("reuse existing repository components/design-system primitives")
     expect(prompt).toContain("mature maintained libraries for hard UI domains")
@@ -967,10 +967,10 @@ describe("frontend-design prompt assembly", () => {
     }
   })
 
-  test("agent runtime exposes mirror analysis tools for missing webpage evidence", async () => {
-    const tools = await FrontendDesignTestHooks.createMirrorAnalysisTools({})
+  test("agent runtime exposes webpage evidence tools for missing webpage evidence", async () => {
+    const tools = await FrontendDesignTestHooks.createWebpageEvidenceTools({})
 
-    for (const id of MIRROR_ANALYSIS_TOOL_IDS) {
+    for (const id of WEBPAGE_EVIDENCE_ANALYSIS_TOOL_IDS) {
       expect(Object.keys(tools)).toContain(id)
     }
   })
@@ -1065,7 +1065,7 @@ async function writeAuditFixtureSourcePackage(root: string): Promise<string> {
       mirrorDir: sourcePackage,
       reference: { path: "reference.png", sha256: referenceSha256, width: 1, height: 1, bytes: referenceBytes.length },
     },
-    files: [{ path: "reference.png", sha256: referenceSha256, bytes: referenceBytes.length, source: "mirror/reference.png" }],
+    files: [{ path: "reference.png", sha256: referenceSha256, bytes: referenceBytes.length, source: "webpage-evidence/reference.png" }],
   }, null, 2))
   return sourcePackage
 }

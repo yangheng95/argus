@@ -4,10 +4,15 @@ import path from "node:path"
 import { ProjectRuntimePaths } from "@/project/runtime-paths"
 
 export namespace TaskRuntimeMaterializer {
-  export async function mirrorDir(projectDir: string, taskID: string): Promise<string> {
+  export async function webpageEvidenceDir(projectDir: string, taskID: string): Promise<string> {
     const paths = ProjectRuntimePaths.frontendDesignPaths(projectDir, taskID)
-    await fs.mkdir(paths.mirrorAbsolute, { recursive: true })
-    return paths.mirrorAbsolute
+    await fs.mkdir(paths.webpageEvidenceAbsolute, { recursive: true })
+    return paths.webpageEvidenceAbsolute
+  }
+
+  /** @deprecated Use webpageEvidenceDir. */
+  export async function mirrorDir(projectDir: string, taskID: string): Promise<string> {
+    return webpageEvidenceDir(projectDir, taskID)
   }
 
   export async function materializeFrontendDesign(input: {
@@ -16,9 +21,9 @@ export namespace TaskRuntimeMaterializer {
     worktreeDir: string
   }): Promise<void> {
     const paths = ProjectRuntimePaths.frontendDesignPaths(input.projectDir, input.taskID)
-    await fs.mkdir(paths.mirrorAbsolute, { recursive: true })
+    await fs.mkdir(paths.webpageEvidenceAbsolute, { recursive: true })
 
-    const canonicalDesignDir = path.dirname(paths.mirrorAbsolute)
+    const canonicalDesignDir = path.dirname(paths.webpageEvidenceAbsolute)
     const designView = path.join(input.worktreeDir, paths.relativeDir)
     if (sameResolvedPath(designView, canonicalDesignDir)) return
 

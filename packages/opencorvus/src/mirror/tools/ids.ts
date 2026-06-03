@@ -1,37 +1,29 @@
-export const MIRROR_ANALYSIS_TOOL_IDS = [
-  "webpage_extract",
-  "webpage_compile",
-  "webpage_analyze",
-  "webpage_runtime_state",
-  "webpage_image_extract",
-  "webpage_image_compile",
-  "webpage_image_analyze",
-] as const
+import {
+  WEBPAGE_EVIDENCE_ACCEPTANCE_TOOL_IDS,
+  WEBPAGE_EVIDENCE_ANALYSIS_TOOL_IDS,
+  WEBPAGE_EVIDENCE_TOOL_IDS,
+  isWebpageEvidenceAcceptanceToolId,
+  isWebpageEvidenceAnalysisToolId,
+  isWebpageEvidenceToolId,
+} from "@/webpage-evidence/tools/ids"
 
-export const MIRROR_ACCEPTANCE_TOOL_IDS = [
-  "webpage_render",
-  "webpage_evaluate",
-  "webpage_text_diff",
-  "webpage_vision_judge",
-] as const
+/** @deprecated Use WEBPAGE_EVIDENCE_ANALYSIS_TOOL_IDS. */
+export const MIRROR_ANALYSIS_TOOL_IDS = WEBPAGE_EVIDENCE_ANALYSIS_TOOL_IDS
+/** @deprecated Use WEBPAGE_EVIDENCE_ACCEPTANCE_TOOL_IDS. */
+export const MIRROR_ACCEPTANCE_TOOL_IDS = WEBPAGE_EVIDENCE_ACCEPTANCE_TOOL_IDS
+/** @deprecated Use WEBPAGE_EVIDENCE_TOOL_IDS. */
+export const MIRROR_TOOL_IDS = WEBPAGE_EVIDENCE_TOOL_IDS
 
-export const MIRROR_TOOL_IDS = [
-  ...MIRROR_ANALYSIS_TOOL_IDS,
-  ...MIRROR_ACCEPTANCE_TOOL_IDS,
-] as const
+/** @deprecated Use WebpageEvidenceToolId. */
+export type MirrorToolId = typeof WEBPAGE_EVIDENCE_TOOL_IDS[number]
+/** @deprecated Use WebpageEvidenceAnalysisToolId. */
+export type MirrorAnalysisToolId = typeof WEBPAGE_EVIDENCE_ANALYSIS_TOOL_IDS[number]
+/** @deprecated Use WebpageEvidenceAcceptanceToolId. */
+export type MirrorAcceptanceToolId = typeof WEBPAGE_EVIDENCE_ACCEPTANCE_TOOL_IDS[number]
 
-export type MirrorToolId = typeof MIRROR_TOOL_IDS[number]
-export type MirrorAnalysisToolId = typeof MIRROR_ANALYSIS_TOOL_IDS[number]
-export type MirrorAcceptanceToolId = typeof MIRROR_ACCEPTANCE_TOOL_IDS[number]
-
-export function isMirrorToolId(id: string): id is MirrorToolId {
-  return (MIRROR_TOOL_IDS as readonly string[]).includes(id)
-}
-
-export function isMirrorAnalysisToolId(id: string): id is MirrorAnalysisToolId {
-  return (MIRROR_ANALYSIS_TOOL_IDS as readonly string[]).includes(id)
-}
-
-export function isMirrorAcceptanceToolId(id: string): id is MirrorAcceptanceToolId {
-  return (MIRROR_ACCEPTANCE_TOOL_IDS as readonly string[]).includes(id)
-}
+/** @deprecated Use isWebpageEvidenceToolId. */
+export const isMirrorToolId = isWebpageEvidenceToolId
+/** @deprecated Use isWebpageEvidenceAnalysisToolId. */
+export const isMirrorAnalysisToolId = isWebpageEvidenceAnalysisToolId
+/** @deprecated Use isWebpageEvidenceAcceptanceToolId. */
+export const isMirrorAcceptanceToolId = isWebpageEvidenceAcceptanceToolId

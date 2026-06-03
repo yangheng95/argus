@@ -7,7 +7,7 @@ import { prepareWebCloneContext } from "../web-clone/context"
 export const WebClonePrepareContextTool = Tool.define("web_clone_prepare_context", {
   description: `Prepare a visible, mandatory webpage-clone source package from an existing mirror handoff.
 
-This is a same-worktree host repair tool. It reads the current project/worktree's mirror/source-skeleton, mirror/source-ir, and mirror/assets summaries, then writes a project-root web-clone-source/ handoff containing implementation-blueprint.md, web-clone-context.md, web-clone-implementation-contract.json, source-skeleton/, source-ir/, reference.png, and reusable asset sidecars. Do not use it to chase primary-project paths, sibling worktrees, or absolute external directories. It does not re-extract webpages and does not generate application source.`,
+This is a same-worktree host repair tool. It reads the current project/worktree's webpage-evidence/source-skeleton, webpage-evidence/source-ir, and webpage-evidence/assets summaries (legacy mirror/ paths are accepted only as compatibility aliases), then writes a project-root web-clone-source/ handoff containing implementation-blueprint.md, web-clone-context.md, web-clone-implementation-contract.json, source-skeleton/, source-ir/, reference.png, and reusable asset sidecars. Do not use it to chase primary-project paths, sibling worktrees, or absolute external directories. It does not re-extract webpages and does not generate application source.`,
   parameters: z.object({
     mirrorDir: z
       .string()

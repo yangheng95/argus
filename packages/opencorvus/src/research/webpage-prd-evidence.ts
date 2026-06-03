@@ -23,7 +23,7 @@ const RAW_WEBPAGE_EVIDENCE_LINE_PATTERNS = [
 const PROMPT_ARTIFACTS = [
   {
     label: "PRD evidence summary",
-    relative: ["mirror", "prd-evidence-summary.md"],
+    relative: ["webpage-evidence", "prd-evidence-summary.md"],
   },
   {
     label: "Source package context",
@@ -70,7 +70,7 @@ export interface WebpagePrdEvidenceExcerpt {
 export interface WebpagePrdEvidence {
   url: string
   status: LiveWebpageEvidenceResult["status"]
-  mirrorRelative: string
+  webpageEvidenceRelative: string
   sourcePackageRelative: string
   referenceImageRelative: string
   artifacts: string[]
@@ -115,20 +115,20 @@ export async function readPreparedWebpagePrdEvidence(input: {
   artifacts?: string[]
 }): Promise<WebpagePrdEvidence> {
   const paths = ProjectRuntimePaths.frontendDesignPaths(input.projectDir, input.taskID)
-  const [hasMirror, hasSourcePackage] = await Promise.all([
-    hasCompletePrimaryEvidence(paths.mirrorAbsolute, input.url),
+  const [hasWebpageEvidence, hasSourcePackage] = await Promise.all([
+    hasCompletePrimaryEvidence(paths.webpageEvidenceAbsolute, input.url),
     hasCompleteSourcePackage(paths.sourcePackageAbsolute),
   ])
-  if (!hasMirror || !hasSourcePackage) {
+  if (!hasWebpageEvidence || !hasSourcePackage) {
     throw new Error(
-      "prepared webpage PRD evidence requires a complete frontend-design runtime evidence package",
+      "prepared webpage PRD evidence requires a complete runtime webpage evidence package",
     )
   }
   const excerpts = await Promise.all(PROMPT_ARTIFACTS.map((artifact) => readPromptArtifact(paths.relativeDir, paths, artifact)))
   return {
     url: input.url,
     status: input.status ?? "reused",
-    mirrorRelative: paths.mirrorRelative,
+    webpageEvidenceRelative: paths.webpageEvidenceRelative,
     sourcePackageRelative: paths.sourcePackageRelative,
     referenceImageRelative: path.posix.join(paths.sourcePackageRelative, "reference.png"),
     artifacts: input.artifacts ?? [
@@ -170,7 +170,7 @@ export function renderWebpagePrdEvidencePromptSection(evidence: WebpagePrdEviden
     "",
     `Source URL: ${evidence.url}`,
     `Evidence status: ${evidence.status}`,
-    `Mirror evidence root: ${evidence.mirrorRelative}`,
+    `Webpage evidence root: ${evidence.webpageEvidenceRelative}`,
     `Source package root: ${evidence.sourcePackageRelative}`,
     `Visual reference image: ${evidence.referenceImageRelative}`,
     "",
@@ -195,8 +195,8 @@ async function readPromptArtifact(
   artifact: typeof PROMPT_ARTIFACTS[number],
 ): Promise<WebpagePrdEvidenceExcerpt> {
   const [root, ...rest] = artifact.relative
-  const absoluteRoot = root === "mirror" ? paths.mirrorAbsolute : paths.sourcePackageAbsolute
-  const relativeRoot = root === "mirror" ? paths.mirrorRelative : paths.sourcePackageRelative
+  const absoluteRoot = root === "webpage-evidence" ? paths.webpageEvidenceAbsolute : paths.sourcePackageAbsolute
+  const relativeRoot = root === "webpage-evidence" ? paths.webpageEvidenceRelative : paths.sourcePackageRelative
   const absolutePath = path.join(absoluteRoot, ...rest)
   const relativePath = path.posix.join(relativeRoot, ...rest)
   if (!relativePath.startsWith(taskRelativeRoot.replaceAll("\\", "/"))) {

@@ -32,7 +32,7 @@ import { AgentRoleContract, type AgentRoleID } from "./role-contract"
 import { PermissionNext } from "@/permission/next"
 import { mergeDeep, pipe, sortBy, values } from "remeda"
 import { entries, values as objectValues } from "@/util/object"
-import { MIRROR_ANALYSIS_TOOL_IDS, MIRROR_TOOL_IDS } from "@/mirror/tools/ids"
+import { WEBPAGE_EVIDENCE_ANALYSIS_TOOL_IDS, WEBPAGE_EVIDENCE_TOOL_IDS } from "@/webpage-evidence/tools/ids"
 
 const ORCHESTRATOR_RUNTIME_PROMPT = [
   "You are the OpenCorvus Orchestrator.",
@@ -119,20 +119,20 @@ export namespace Agent {
       read: "allow",
     })
     const user = PermissionNext.fromConfig(cfg.permission ?? {})
-    const mirrorDenied = PermissionNext.fromConfig(Object.fromEntries(MIRROR_TOOL_IDS.map((id) => [id, "deny"])))
-    const mirrorAnalysisDenied = PermissionNext.fromConfig(
-      Object.fromEntries(MIRROR_ANALYSIS_TOOL_IDS.map((id) => [id, "deny"])),
+    const webpageEvidenceDenied = PermissionNext.fromConfig(Object.fromEntries(WEBPAGE_EVIDENCE_TOOL_IDS.map((id) => [id, "deny"])))
+    const webpageEvidenceAnalysisDenied = PermissionNext.fromConfig(
+      Object.fromEntries(WEBPAGE_EVIDENCE_ANALYSIS_TOOL_IDS.map((id) => [id, "deny"])),
     )
     const nonDesignPermissions = (...rulesets: PermissionNext.Ruleset[]) =>
-      PermissionNext.merge(defaults, ...rulesets, user, mirrorDenied)
+      PermissionNext.merge(defaults, ...rulesets, user, webpageEvidenceDenied)
     const visualQaPermissions = (...rulesets: PermissionNext.Ruleset[]) =>
-      PermissionNext.merge(defaults, ...rulesets, user, mirrorAnalysisDenied)
+      PermissionNext.merge(defaults, ...rulesets, user, webpageEvidenceAnalysisDenied)
 
     const result: Record<string, Info> = {
       coding: {
         name: "coding",
         description: AgentRoleContract.description("coding"),
-        tools: { exclude: ["panel", "task_report", "analytics", ...MIRROR_TOOL_IDS] },
+        tools: { exclude: ["panel", "task_report", "analytics", ...WEBPAGE_EVIDENCE_TOOL_IDS] },
         options: {},
         prompt: PROMPT_CODING,
         permission: nonDesignPermissions(
@@ -154,7 +154,7 @@ export namespace Agent {
             "analytics",
             "web_clone_prepare_context",
             "web_clone_generate_source_project",
-            ...MIRROR_TOOL_IDS,
+            ...WEBPAGE_EVIDENCE_TOOL_IDS,
           ],
         },
         options: {},
@@ -172,7 +172,7 @@ export namespace Agent {
       "visual-qa": {
         name: "visual-qa",
         description: AgentRoleContract.description("visual-qa"),
-        tools: { exclude: ["panel", "task_report", "analytics", ...MIRROR_ANALYSIS_TOOL_IDS] },
+        tools: { exclude: ["panel", "task_report", "analytics", ...WEBPAGE_EVIDENCE_ANALYSIS_TOOL_IDS] },
         options: {},
         prompt: VISUAL_QA_CORE,
         permission: visualQaPermissions(
@@ -193,7 +193,7 @@ export namespace Agent {
         name: "general",
         description: AgentRoleContract.description("general"),
         tools: {
-          exclude: ["planner", "panel", "task_report", "analytics", "todoread", "todowrite", ...MIRROR_TOOL_IDS],
+          exclude: ["planner", "panel", "task_report", "analytics", "todoread", "todowrite", ...WEBPAGE_EVIDENCE_TOOL_IDS],
         },
         prompt: PROMPT_GENERAL,
         permission: nonDesignPermissions(
@@ -491,7 +491,7 @@ export namespace Agent {
         prompt: FRONTEND_DESIGN_CORE,
         // frontend-design is the only stage that owns mirror extraction.
         // Requirements / architect / build consume the persisted frontend
-        // template and optional visual anchors rather than calling mirror tools themselves.
+        // template and optional visual anchors rather than calling webpage evidence tools themselves.
         // Webpage rawproject work makes frontend-design the owner of the
         // maintainable source project before Build handoff, so it also needs
         // file-edit, command, source-audit, and visual verification tools.
@@ -696,7 +696,7 @@ export namespace Agent {
       if (item.permission) {
         item.permission = PermissionNext.merge(item.permission, PermissionNext.fromConfig(value.permission ?? {}))
         if (key === "visual-qa") {
-          item.permission = PermissionNext.merge(item.permission, mirrorAnalysisDenied)
+          item.permission = PermissionNext.merge(item.permission, webpageEvidenceAnalysisDenied)
         }
       }
     }

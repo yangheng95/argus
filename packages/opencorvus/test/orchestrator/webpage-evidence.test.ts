@@ -12,7 +12,7 @@ import {
 import { tmpdir } from "../fixture/fixture"
 
 describe("live webpage evidence pipeline", () => {
-  test("runs extract, compile, and analyze when primary mirror evidence is missing", async () => {
+  test("runs extract, compile, and analyze when primary webpage evidence is missing", async () => {
     await using tmp = await tmpdir()
     const taskID = "tsk_webpage_evidence_generate"
     const calls: string[] = []
@@ -26,20 +26,20 @@ describe("live webpage evidence pipeline", () => {
       pipeline,
     })
 
-    const mirrorDir = ProjectRuntimePaths.frontendDesignPaths(tmp.path, taskID).mirrorAbsolute
+    const evidenceDir = ProjectRuntimePaths.frontendDesignPaths(tmp.path, taskID).webpageEvidenceAbsolute
     expect(result.status).toBe("generated")
     expect(calls).toEqual(["extract:https://example.com/markets", "compile", "analyze", "captureRuntimeState:https://example.com/markets"])
-    expect(await hasCompletePrimaryEvidence(mirrorDir, "https://example.com/markets")).toBe(true)
+    expect(await hasCompletePrimaryEvidence(evidenceDir, "https://example.com/markets")).toBe(true)
     const paths = ProjectRuntimePaths.frontendDesignPaths(tmp.path, taskID)
-    expect(result.artifacts).toContain(path.posix.join(paths.mirrorRelative, "source-skeleton/index.html"))
-    expect(result.artifacts).not.toContain(path.posix.join(paths.mirrorRelative, "singlefile.html"))
-    expect(result.artifacts).toContain(path.posix.join(paths.mirrorRelative, "source-skeleton/used-selectors.json"))
-    expect(result.artifacts).toContain(path.posix.join(paths.mirrorRelative, "source-skeleton/skeleton-manifest.json"))
-    expect(result.artifacts).toContain(path.posix.join(paths.mirrorRelative, "source-ir/component-tree.json"))
-    expect(result.artifacts).toContain(path.posix.join(paths.mirrorRelative, "source-ir/interaction-state-snapshots.json"))
-    expect(result.artifacts).toContain(path.posix.join(paths.mirrorRelative, "interaction-states/scroll-50.png"))
-    expect(result.artifacts).toContain(path.posix.join(paths.mirrorRelative, "visual-surface-candidates.json"))
-    expect(result.artifacts).toContain(path.posix.join(paths.mirrorRelative, "visual-surface-scaffold.json"))
+    expect(result.artifacts).toContain(path.posix.join(paths.webpageEvidenceRelative, "source-skeleton/index.html"))
+    expect(result.artifacts).not.toContain(path.posix.join(paths.webpageEvidenceRelative, "singlefile.html"))
+    expect(result.artifacts).toContain(path.posix.join(paths.webpageEvidenceRelative, "source-skeleton/used-selectors.json"))
+    expect(result.artifacts).toContain(path.posix.join(paths.webpageEvidenceRelative, "source-skeleton/skeleton-manifest.json"))
+    expect(result.artifacts).toContain(path.posix.join(paths.webpageEvidenceRelative, "source-ir/component-tree.json"))
+    expect(result.artifacts).toContain(path.posix.join(paths.webpageEvidenceRelative, "source-ir/interaction-state-snapshots.json"))
+    expect(result.artifacts).toContain(path.posix.join(paths.webpageEvidenceRelative, "interaction-states/scroll-50.png"))
+    expect(result.artifacts).toContain(path.posix.join(paths.webpageEvidenceRelative, "visual-surface-candidates.json"))
+    expect(result.artifacts).toContain(path.posix.join(paths.webpageEvidenceRelative, "visual-surface-scaffold.json"))
     expect(result.artifacts).toContain(path.posix.join(paths.sourcePackageRelative, "README.md"))
     expect(result.artifacts).not.toContain(path.posix.join(paths.sourcePackageRelative, "singlefile.html"))
     expect(result.artifacts).toContain(path.posix.join(paths.sourcePackageRelative, "implementation-blueprint.md"))
@@ -59,11 +59,11 @@ describe("live webpage evidence pipeline", () => {
     expect(await fileExists(path.join(paths.sourcePackageAbsolute, "source-ir", "interaction-state-snapshots.json"))).toBe(true)
   })
 
-  test("reuses complete mirror evidence for the same URL", async () => {
+  test("reuses complete webpage evidence for the same URL", async () => {
     await using tmp = await tmpdir()
     const taskID = "tsk_webpage_evidence_reuse"
-    const mirrorDir = ProjectRuntimePaths.frontendDesignPaths(tmp.path, taskID).mirrorAbsolute
-    await writeCompleteEvidence(mirrorDir, "https://example.com/markets")
+    const evidenceDir = ProjectRuntimePaths.frontendDesignPaths(tmp.path, taskID).webpageEvidenceAbsolute
+    await writeCompleteEvidence(evidenceDir, "https://example.com/markets")
     const calls: string[] = []
 
     const result = await ensureLiveWebpageEvidence({
@@ -85,7 +85,7 @@ describe("live webpage evidence pipeline", () => {
     expect(await fileExists(path.join(paths.sourcePackageAbsolute, "web-clone-context.md"))).toBe(true)
   })
 
-  test("repoints the project mirror view from a previous task to the current task", async () => {
+  test("repoints the project webpage evidence view from a previous task to the current task", async () => {
     await using tmp = await tmpdir()
     const firstCalls: string[] = []
     await ensureLiveWebpageEvidence({
@@ -108,9 +108,10 @@ describe("live webpage evidence pipeline", () => {
     const secondPaths = ProjectRuntimePaths.frontendDesignPaths(tmp.path, "tsk_webpage_evidence_second")
     expect(result.status).toBe("generated")
     expect(secondCalls).toEqual(["extract:https://example.com/second", "compile", "analyze", "captureRuntimeState:https://example.com/second"])
+    expect(await fileExists(path.join(tmp.path, "webpage-evidence", "reference.png"))).toBe(false)
     expect(await fileExists(path.join(tmp.path, "mirror", "reference.png"))).toBe(false)
     expect(await fileExists(path.join(tmp.path, "web-clone-source", "reference.png"))).toBe(false)
-    expect(await fileExists(path.join(secondPaths.mirrorAbsolute, "reference.png"))).toBe(true)
+    expect(await fileExists(path.join(secondPaths.webpageEvidenceAbsolute, "reference.png"))).toBe(true)
     expect(await fileExists(path.join(secondPaths.sourcePackageAbsolute, "reference.png"))).toBe(true)
     expect(await fileExists(path.join(secondPaths.sourcePackageAbsolute, "singlefile.html"))).toBe(false)
   })
@@ -118,12 +119,12 @@ describe("live webpage evidence pipeline", () => {
   test("treats SingleFile archive as optional when capture and source evidence are complete", async () => {
     await using tmp = await tmpdir()
     const taskID = "tsk_webpage_evidence_capture_only"
-    const mirrorDir = ProjectRuntimePaths.frontendDesignPaths(tmp.path, taskID).mirrorAbsolute
-    await writeCompleteEvidence(mirrorDir, "https://example.com/markets")
+    const evidenceDir = ProjectRuntimePaths.frontendDesignPaths(tmp.path, taskID).webpageEvidenceAbsolute
+    await writeCompleteEvidence(evidenceDir, "https://example.com/markets")
 
-    expect(await fileExists(path.join(mirrorDir, "capture.html"))).toBe(true)
-    expect(await fileExists(path.join(mirrorDir, "singlefile.html"))).toBe(false)
-    expect(await hasCompletePrimaryEvidence(mirrorDir, "https://example.com/markets")).toBe(true)
+    expect(await fileExists(path.join(evidenceDir, "capture.html"))).toBe(true)
+    expect(await fileExists(path.join(evidenceDir, "singlefile.html"))).toBe(false)
+    expect(await hasCompletePrimaryEvidence(evidenceDir, "https://example.com/markets")).toBe(true)
   })
 
   test("rejects a pipeline run that does not produce the source skeleton and IR", async () => {
@@ -143,7 +144,7 @@ describe("live webpage evidence pipeline", () => {
         analyze: async () => {},
         captureRuntimeState: async () => {},
       },
-    })).rejects.toThrow("did not produce the complete primary mirror artifact set")
+    })).rejects.toThrow("did not produce the complete primary webpage evidence artifact set")
   })
 })
 
@@ -178,11 +179,11 @@ async function fileExists(file: string): Promise<boolean> {
   }
 }
 
-async function writeCompleteEvidence(mirrorDir: string, url: string): Promise<void> {
-  await fs.mkdir(mirrorDir, { recursive: true })
+async function writeCompleteEvidence(evidenceDir: string, url: string): Promise<void> {
+  await fs.mkdir(evidenceDir, { recursive: true })
   for (const artifact of primaryWebpageEvidenceArtifacts()) {
-    const relative = artifact.replace(/^mirror[\\/]/, "")
-    const file = path.join(mirrorDir, relative)
+    const relative = artifact.replace(/^webpage-evidence[\\/]/, "").replace(/^mirror[\\/]/, "")
+    const file = path.join(evidenceDir, relative)
     await fs.mkdir(path.dirname(file), { recursive: true })
     if (relative === "reference.png") {
       await fs.writeFile(file, minimalPngBytes())
@@ -204,13 +205,13 @@ async function writeCompleteEvidence(mirrorDir: string, url: string): Promise<vo
   }
 }
 
-async function writeRuntimeStateEvidence(mirrorDir: string, url: string): Promise<void> {
-  await fs.mkdir(path.join(mirrorDir, "source-ir"), { recursive: true })
-  await fs.mkdir(path.join(mirrorDir, "interaction-states"), { recursive: true })
+async function writeRuntimeStateEvidence(evidenceDir: string, url: string): Promise<void> {
+  await fs.mkdir(path.join(evidenceDir, "source-ir"), { recursive: true })
+  await fs.mkdir(path.join(evidenceDir, "interaction-states"), { recursive: true })
   for (const name of ["initial.png", "scroll-25.png", "scroll-50.png", "scroll-75.png"]) {
-    await fs.writeFile(path.join(mirrorDir, "interaction-states", name), minimalPngBytes())
+    await fs.writeFile(path.join(evidenceDir, "interaction-states", name), minimalPngBytes())
   }
-  await fs.writeFile(path.join(mirrorDir, "source-ir", "interaction-state-snapshots.json"), JSON.stringify({
+  await fs.writeFile(path.join(evidenceDir, "source-ir", "interaction-state-snapshots.json"), JSON.stringify({
     version: 1,
     purpose: "webpage-runtime-interaction-state-evidence",
     source: { url, viewport: { width: 1440, height: 900 }, captureEngine: "playwright" },

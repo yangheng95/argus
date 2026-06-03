@@ -54,3 +54,30 @@ Full-repo grep covered these related surfaces before implementation:
   - `collect_frontend_research_evidence`
   - `build-delegation`
   - `delegates deep investigation packets to build`
+
+## 2026-06-03 Mirror Dissolution Follow-up
+
+The direct-investigation fix still left a wrong coupling: `frontend-research`
+read prepared webpage evidence through `frontend-design/mirror` paths. That made
+an independent research agent depend on a legacy implementation name from the
+frontend-design tool surface.
+
+Corrected architecture:
+
+- Canonical rendered webpage evidence lives under
+  `.opencorvus/runtime/tasks/<taskID>/frontend-design/webpage-evidence/`.
+- `frontend-research` consumes a prepared webpage evidence package, not
+  `mirror` provenance. Its prompt says "webpage evidence root" and never treats
+  mirror as a routing or ownership concept.
+- Existing `.opencorvus/.../frontend-design/mirror/` directories are legacy
+  read inputs only. When complete legacy evidence is found, the host promotes it
+  into `webpage-evidence/` before building the `web-clone-source/` package.
+- Browser capture remains host-owned infrastructure. The older
+  `src/mirror/url/extract.ts` implementation is to be dissolved into the browser
+  Node sidecar / webpage-evidence infrastructure; agents should see only
+  `webpage_*` tools and task-runtime evidence paths.
+
+This is intentionally different from deleting the extraction implementation in
+one patch. The stable boundary is the artifact contract and tool names; the
+legacy source directory can be removed after imports and tests no longer depend
+on `src/mirror`.

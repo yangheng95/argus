@@ -1,12 +1,12 @@
 /**
  * Shared output-directory resolver for all `webpage_*` tools.
  *
- * Mirror tools produce intermediate evidence artifacts such as reference.png,
+ * Webpage evidence tools produce intermediate evidence artifacts such as reference.png,
  * extracted-page.json, page-ir.xml, scaffold.json, shared-context.md,
  * rendered.png, diff.png, and images/.
  *
  * The default lives in the task runtime:
- *   `<project>/.opencorvus/runtime/tasks/<task>/frontend-design/mirror/`
+ *   `<project>/.opencorvus/runtime/tasks/<task>/frontend-design/webpage-evidence/`
  * Legacy `mirror/...` override strings are resolved as aliases into that
  * runtime directory; no project-root mirror directory is created.
  *
@@ -21,7 +21,8 @@ import { Instance } from "@/project/instance"
 import { ProjectRuntimePaths } from "@/project/runtime-paths"
 import { TaskRuntimeMaterializer } from "@/project/task-runtime-materializer"
 
-const MIRROR_SUBDIR = "mirror"
+const WEBPAGE_EVIDENCE_SUBDIR = "webpage-evidence"
+const LEGACY_MIRROR_SUBDIR = "mirror"
 
 export interface ResolveMirrorOutputDirInput {
   override?: string
@@ -29,11 +30,12 @@ export interface ResolveMirrorOutputDirInput {
 }
 
 /**
- * Resolve the effective output directory for a mirror tool.
+ * Resolve the effective output directory for a webpage evidence tool.
  *
- * - No override -> task-scoped frontend-design mirror directory.
+ * - No override -> task-scoped frontend-design webpage evidence directory.
  * - Override without a session -> explicit benchmark/test directory.
- * - Override inside a task session -> must resolve under `mirror/`.
+ * - Override inside a task session -> must resolve under `webpage-evidence/`
+ *   or legacy `mirror/`.
  *
  * `mkdir -p` is always invoked so tools can immediately write artifacts
  * without each having to repeat the existence check.
@@ -51,7 +53,7 @@ export async function resolveMirrorOutputDir(input: ResolveMirrorOutputDirInput 
   }
 
   if (!input.sessionID) {
-    throw new Error("resolveMirrorOutputDir: default mirror output requires sessionID")
+    throw new Error("resolveMirrorOutputDir: default webpage evidence output requires sessionID")
   }
 
   return resolveSessionDefault(input.sessionID)
@@ -70,30 +72,36 @@ async function resolveSessionDefault(sessionID: string): Promise<string> {
     worktreeDir: Instance.directory,
   })
   const paths = ProjectRuntimePaths.frontendDesignPaths(projectDir, taskID)
-  await fs.mkdir(paths.mirrorAbsolute, { recursive: true })
-  return paths.mirrorAbsolute
+  await fs.mkdir(paths.webpageEvidenceAbsolute, { recursive: true })
+  return paths.webpageEvidenceAbsolute
 }
 
 async function resolveSessionOverride(override: string, sessionID: string): Promise<string> {
-  const mirrorRoot = await resolveSessionDefault(sessionID)
-  const viewRoot = path.resolve(Instance.directory, MIRROR_SUBDIR)
+  const evidenceRoot = await resolveSessionDefault(sessionID)
+  const viewRoot = path.resolve(Instance.directory, WEBPAGE_EVIDENCE_SUBDIR)
+  const legacyViewRoot = path.resolve(Instance.directory, LEGACY_MIRROR_SUBDIR)
   const requested = path.isAbsolute(override)
     ? path.resolve(override)
     : path.resolve(Instance.directory, override)
 
-  if (samePath(requested, viewRoot)) return mirrorRoot
+  if (samePath(requested, viewRoot) || samePath(requested, legacyViewRoot)) return evidenceRoot
   if (isPathInside(viewRoot, requested)) {
-    const target = path.join(mirrorRoot, path.relative(viewRoot, requested))
+    const target = path.join(evidenceRoot, path.relative(viewRoot, requested))
     await fs.mkdir(target, { recursive: true })
     return target
   }
-  if (samePath(requested, mirrorRoot) || isPathInside(mirrorRoot, requested)) {
+  if (isPathInside(legacyViewRoot, requested)) {
+    const target = path.join(evidenceRoot, path.relative(legacyViewRoot, requested))
+    await fs.mkdir(target, { recursive: true })
+    return target
+  }
+  if (samePath(requested, evidenceRoot) || isPathInside(evidenceRoot, requested)) {
     await fs.mkdir(requested, { recursive: true })
     return requested
   }
 
   throw new Error(
-    `resolveMirrorOutputDir: task sessions may only write mirror artifacts under ${MIRROR_SUBDIR}/; ` +
+    `resolveMirrorOutputDir: task sessions may only write webpage evidence artifacts under ${WEBPAGE_EVIDENCE_SUBDIR}/; ` +
     `refusing outputDir=${override}`,
   )
 }
@@ -114,4 +122,4 @@ function pathKey(input: string): string {
 
 /** The path segment used when no override is supplied. Exposed for docstrings
  *  and tool-description text that needs to name the convention. */
-export const DEFAULT_MIRROR_SUBDIR = MIRROR_SUBDIR
+export const DEFAULT_MIRROR_SUBDIR = WEBPAGE_EVIDENCE_SUBDIR

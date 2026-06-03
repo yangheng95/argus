@@ -2,7 +2,7 @@ import { describe, expect, test } from "bun:test"
 import { BuildAgent, externalEventPartText, externalToolProtocolErrorMessage } from "../../src/build/agent"
 
 describe("BuildAgent external coding system prompt", () => {
-  test("injects OpenCorvus MCP executor aliases without reopening mirror tools", () => {
+  test("injects OpenCorvus MCP executor aliases without reopening webpage evidence tools", () => {
     const composed = BuildAgent.composeExternalCodingSystem({
       executor: "codex",
       baseSystem: "base system",

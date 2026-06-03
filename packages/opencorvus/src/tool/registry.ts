@@ -49,8 +49,8 @@ import {
   WebpageEvaluateTool,
   WebpageTextDiffTool,
   WebpageVisionJudgeTool,
-} from "../mirror/tools"
-import { isMirrorAnalysisToolId, isMirrorToolId } from "../mirror/tools/ids"
+} from "@/webpage-evidence/tools"
+import { isWebpageEvidenceAnalysisToolId, isWebpageEvidenceToolId } from "@/webpage-evidence/tools/ids"
 import { Glob } from "../util/glob"
 import { pathToFileURL } from "url"
 
@@ -186,13 +186,13 @@ export namespace ToolRegistry {
     let items = await all(config)
 
     // Agent tool adapter: filter by agent's declared tool set.
-    // frontend_design is the single owner of mirror extraction. Other agents
-    // consume decision-log frontend template entries and optional task.design_specs
-    // anchors instead of reopening URL/Figma/image extraction through registry tools.
+    // frontend_design owns webpage evidence acquisition. Other agents consume
+    // prepared task-runtime evidence and public frontend_design handoff files
+    // instead of reopening URL/Figma/image extraction through registry tools.
     if (agent?.name === "visual-qa") {
-      items = items.filter((t) => !isMirrorAnalysisToolId(t.id))
+      items = items.filter((t) => !isWebpageEvidenceAnalysisToolId(t.id))
     } else if (agent?.name !== "frontend-design") {
-      items = items.filter((t) => !isMirrorToolId(t.id))
+      items = items.filter((t) => !isWebpageEvidenceToolId(t.id))
     }
 
     if (agent?.tools?.include) {
