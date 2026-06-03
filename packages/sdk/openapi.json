@@ -3094,6 +3094,7 @@
                       "build",
                       "explore",
                       "research",
+                      "frontend-research",
                       "evaluator",
                       "system"
                     ]
@@ -33360,6 +33361,7 @@
               "build",
               "explore",
               "research",
+              "frontend-research",
               "evaluator",
               "system"
             ]
@@ -36591,6 +36593,7 @@
               "build",
               "explore",
               "research",
+              "frontend-research",
               "evaluator",
               "system"
             ]
@@ -37242,6 +37245,18 @@
           "status"
         ]
       },
+      "MCPStatusConnecting": {
+        "type": "object",
+        "properties": {
+          "status": {
+            "type": "string",
+            "const": "connecting"
+          }
+        },
+        "required": [
+          "status"
+        ]
+      },
       "MCPStatusFailed": {
         "type": "object",
         "properties": {
@@ -37296,6 +37311,9 @@
           },
           {
             "$ref": "#/components/schemas/MCPStatusDisconnected"
+          },
+          {
+            "$ref": "#/components/schemas/MCPStatusConnecting"
           },
           {
             "$ref": "#/components/schemas/MCPStatusFailed"
