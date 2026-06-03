@@ -3136,6 +3136,15 @@ describe("overlay architecture guards", () => {
     expect(channelsPanel).not.toContain("loadConfigInfo")
   })
 
+  test("agent model refresh key does not serialize the full provider catalog", () => {
+    const agentModelsPanel = withoutComments(
+      readText(join(OVERLAY_ROOT, "src/components/settings/AgentModelsPanel.tsx")),
+    )
+    expect(agentModelsPanel).toContain("appStore.providerCatalog?.connected")
+    expect(agentModelsPanel).not.toContain("appStore.providerCatalog?.all")
+    expect(agentModelsPanel).not.toContain("Object.keys(provider?.models")
+  })
+
   test("new primitive style files use data attributes for variants and never use important", () => {
     const files = walkFiles(join(OVERLAY_ROOT, "src/styles/primitives"), (path) => path.endsWith(".css"))
     expect(files.length).toBeGreaterThan(0)
