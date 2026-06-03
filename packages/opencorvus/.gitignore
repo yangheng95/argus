@@ -88,3 +88,6 @@ lpt9
 
 # Auto-added by OpenCorvus
 /artifacts/
+
+# Auto-added by OpenCorvus
+# the whole baseline / acceptance commit aborts. Same trap for the other
