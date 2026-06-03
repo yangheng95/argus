@@ -1028,13 +1028,12 @@ describe("core prompt hygiene", () => {
   test("orchestrator prompt keeps visual workflow ordering and verification-goal lifecycle coherent", async () => {
     const text = await readPrompt("orchestrator")
     const normalized = text.replace(/\s+/g, " ")
-    expect(normalized).toContain(
-      "`frontend_design` and any needed `frontend_research` MUST be first, before `analyze_intent`",
-    )
+    expect(normalized).toContain("decide whether `frontend_design`, `frontend_research`, both, or neither are needed")
     expect(normalized).toContain("UI replication from visual reference")
-    expect(normalized).toContain(
-      "`frontend_design` and `frontend_research` in parallel when a live page URL is the source of truth",
-    )
+    expect(normalized).toContain("These tools are evidence producers, not fixed lifecycle gates")
+    expect(normalized).not.toContain("`frontend_design` and any needed `frontend_research` MUST be first")
+    expect(normalized).not.toContain("`frontend_design` and `frontend_research` in parallel")
+    expect(normalized).not.toContain("Typical shape")
     expect(normalized).not.toContain("UI replication from visual reference` in `Kind: workflow` → `analyze_intent`")
     expect(normalized).not.toContain("verification` goals are integration checks; they stay pending until **deliver**")
     expect(normalized).toContain("Dispatch them with `build({ goalID })` like every other goal")

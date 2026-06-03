@@ -543,6 +543,61 @@ const ModifyGoalInputSchema = z.object({
   reason: z.string().min(1).describe("Why you decided to modify this goal."),
 })
 
+const FrontendDesignReasonField = z.string().describe("Why frontend design is needed for this task")
+const FrontendDesignLegacyUrlField = z
+  .string()
+  .optional()
+  .describe("Deprecated — use `urls`. Single URL for back-compat; merged into `urls`.")
+const FrontendDesignUrlsField = z
+  .array(z.string())
+  .optional()
+  .describe(
+    "Any number of design-reference URLs: live pages, design-tool share links " +
+      "(Sketch Cloud / Adobe XD / Framer / InVision / Zeplin / Penpot), docs, etc. " +
+      "Non-Figma URLs are available to frontend-design for webpage evidence extraction and may also be materialized " +
+      "as screenshot references. Figma URLs use the connected Figma MCP path. Do not route URL/page extraction to build.",
+  )
+const FrontendDesignFigmaUrlField = z
+  .string()
+  .optional()
+  .describe(
+    "Figma file URL materialized through the connected Figma MCP server (figma.com/file/... or figma.com/design/...). " +
+      "Requires Figma MCP tools get_design_context, get_screenshot, get_metadata, and get_variable_defs.",
+  )
+const FrontendDesignMaterialsField = z
+  .array(z.string())
+  .optional()
+  .describe(
+    "Local design-material paths (relative to project root, or absolute under it). " +
+      "Supported: images, PDFs, markdown/text style guides, design-tokens JSON, CSS. " +
+      "Each is read from disk and materialized into the attachment store as a visual_reference " +
+      "so it flows through the same multimodal / read_attachment pipeline as user uploads.",
+  )
+
+const FrontendDesignInputSchema = z
+  .object({})
+  .extend({ reason: FrontendDesignReasonField })
+  .extend({ url: FrontendDesignLegacyUrlField })
+  .extend({ urls: FrontendDesignUrlsField })
+  .extend({ figma_url: FrontendDesignFigmaUrlField })
+  .extend({ materials: FrontendDesignMaterialsField })
+
+const FrontendResearchReasonField = z
+  .string()
+  .min(1)
+  .describe("Why frontend webpage investigation packets are useful for this task.")
+const FrontendResearchSourceUrlsField = z
+  .array(z.string().min(1))
+  .min(1)
+  .describe("Source page URLs the frontend-research agent must partition into investigation work packets from prepared evidence.")
+const FrontendResearchFocusField = z.string().optional().describe("Optional narrow focus for the frontend-research agent.")
+
+const FrontendResearchInputSchema = z
+  .object({})
+  .extend({ reason: FrontendResearchReasonField })
+  .extend({ source_urls: FrontendResearchSourceUrlsField })
+  .extend({ focus: FrontendResearchFocusField })
+
 function resolveSteerTarget(input: { taskID: string; sessionID?: string; goalID?: string }): {
   sessionID: string
   source: string
@@ -2143,8 +2198,8 @@ export function createOrchestratorTools(input: {
         "or concrete evidence that the active REQ snapshot is invalid.\n" +
         "SKIP WHEN: trivial direct edit (single-file bug fix, typo / config tweak); " +
         "build agent can run against the user's text alone and `deliver` has enough " +
-        "signal in the request to verify. When a visual/reference artifact is actually the task contract, " +
-        "prefer `frontend_design` first so requirements can consume its frontend template review entries.",
+        "signal in the request to verify. Frontend evidence tools are available candidates when the full task context " +
+        "needs visual/reference material for requirements analysis.",
       inputSchema: z.object({
         reason: z.string().optional().describe("Why you decided to analyze requirements"),
       }),
@@ -2399,7 +2454,7 @@ export function createOrchestratorTools(input: {
     frontend_design: tool({
       description: [
         "Analyze visual/webpage references (images, URLs, Figma, materials) to produce a webpage-evidence-grounded frontend implementation template with fillable modules, component/material inventories, and visual/data contracts.",
-        "Call this BEFORE every other downstream agent when the requested deliverable is frontend/UI implementation, webpage/app replication, or visual parity work AND:",
+        "Use when you decide the requested deliverable needs frontend/UI implementation, webpage/app replication, or visual parity evidence AND:",
         "  - Image attachments are provided (screenshots, mockups, design files)",
         "  - The request mentions a URL as a visual reference to clone, implement, reproduce, or refine",
         "  - The request explicitly asks for layout/frontend design as implementation input",
@@ -2414,38 +2469,10 @@ export function createOrchestratorTools(input: {
         "SKIP this step when:",
         "  - No visual references are available",
         "  - The task is purely backend/API/infrastructure",
-        "  - The request asks to research/analyze a webpage as PRD/SPEC/report/source material rather than implement or clone the UI; route those URLs through `frontend_research` with `source_urls`",
+        "  - You decide the URL is only PRD/SPEC/report source material and does not need frontend implementation-template evidence",
         "  - The request already contains detailed design specifications AND has no URL, screenshot/image, Figma/design-file, webpage-replica, or other visual reference that needs webpage-evidence/web-clone-source evidence for implementation",
       ].join("\n"),
-      inputSchema: z.object({
-        reason: z.string().describe("Why frontend design is needed for this task"),
-        url: z.string().optional().describe("Deprecated — use `urls`. Single URL for back-compat; merged into `urls`."),
-        urls: z
-          .array(z.string())
-          .optional()
-          .describe(
-            "Any number of design-reference URLs: live pages, design-tool share links " +
-              "(Sketch Cloud / Adobe XD / Framer / InVision / Zeplin / Penpot), docs, etc. " +
-              "Non-Figma URLs are available to frontend-design for webpage evidence extraction and may also be materialized " +
-              "as screenshot references. Figma URLs use the connected Figma MCP path. Do not route URL/page extraction to build.",
-          ),
-        figma_url: z
-          .string()
-          .optional()
-          .describe(
-            "Figma file URL materialized through the connected Figma MCP server (figma.com/file/... or figma.com/design/...). " +
-              "Requires Figma MCP tools get_design_context, get_screenshot, get_metadata, and get_variable_defs.",
-          ),
-        materials: z
-          .array(z.string())
-          .optional()
-          .describe(
-            "Local design-material paths (relative to project root, or absolute under it). " +
-              "Supported: images, PDFs, markdown/text style guides, design-tokens JSON, CSS. " +
-              "Each is read from disk and materialized into the attachment store as a visual_reference " +
-              "so it flows through the same multimodal / read_attachment pipeline as user uploads.",
-          ),
-      }),
+      inputSchema: FrontendDesignInputSchema,
       execute: async ({ reason, url, urls, figma_url, materials }) => {
         const task = requireTask(taskID)
 
@@ -3100,8 +3127,8 @@ export function createOrchestratorTools(input: {
         "re-run architect merely to widen owned_paths or bless ordinary shared-file " +
         "edits; build sessions may edit outside responsibility paths when needed " +
         "and must explain every touched file in files_changed[]. For contract-level " +
-        "point fixes prefer `modify_goal`. When a visual/reference artifact is actually the task contract, " +
-        "prefer `frontend_design` before architect so the goal graph can consume its frontend template review entries.",
+        "point fixes prefer `modify_goal`. Frontend evidence tools are available candidates when the full task context " +
+        "needs visual/reference material for architecture.",
       inputSchema: z.object({
         reason: z.string().optional().describe("Why you decided to run architect"),
       }),
@@ -3924,17 +3951,14 @@ export function createOrchestratorTools(input: {
     }),
 
     // -----------------------------------------------------------------------
-    // Analyze intent — post-design disambiguation for visual/reference tasks.
+    // Analyze intent — request disambiguation for ambiguous tasks.
     //
     // Lifted out of an unused free-floating IntentAnalysisAgent.analyze
     // module (audit 2026-04-25). The agent runs at the very front of the
     // pipeline (before requirements / architect) to reconstruct the user's
     // real intent from a typically-terse request, the surrounding work
     // record (decision log + prior acceptance feedback when re-entering a
-    // task), and a read-only tour of the repository. When visual/reference
-    // artifacts are actually the task contract, the orchestrator can run
-    // frontend_design first so intent analysis reads the same frontend template source
-    // as downstream stages.
+    // task), and a read-only tour of the repository.
     // -----------------------------------------------------------------------
 
     analyze_intent: tool({
@@ -4080,15 +4104,8 @@ export function createOrchestratorTools(input: {
 
     frontend_research: tool({
       description:
-        "OPTIONAL submit-only publisher for webpage/UI investigation division. Use alongside `frontend_design` for supplied page URLs when downstream requirements, architect, or build need source-backed work packets for page functions, visual layout, style checks, interactions, content/data inventory, responsive behavior, fidelity acceptance, and risks. It partitions prepared webpage evidence into a frontend_research_brief/webpage_contract artifact; it does not perform deep investigation itself. It is NOT the frontend implementation template owner, NOT requirements, NOT architect, NOT build, NOT a route selector, and NOT final PRD/SPEC/report acceptance.",
-      inputSchema: z.object({
-        reason: z.string().min(1).describe("Why frontend webpage research is needed for this task."),
-        source_urls: z
-          .array(z.string().min(1))
-          .min(1)
-          .describe("Source page URLs the frontend-research agent must partition into investigation work packets from prepared evidence."),
-        focus: z.string().optional().describe("Optional narrow focus for the frontend-research agent."),
-      }),
+        "OPTIONAL submit-only publisher for webpage/UI investigation division. Available independently or alongside `frontend_design` when your current task decision needs source-backed work packets for page functions, visual layout, style checks, interactions, content/data inventory, responsive behavior, fidelity acceptance, and risks. It partitions prepared webpage evidence into a frontend_research_brief/webpage_contract artifact; it does not perform deep investigation itself. It is NOT the frontend implementation template owner, NOT requirements, NOT architect, NOT build, NOT a route selector, and NOT final PRD/SPEC/report acceptance.",
+      inputSchema: FrontendResearchInputSchema,
       execute: async ({ reason, source_urls, focus }) => {
         const task = requireTask(taskID)
         await trackStepStart("frontend_research")
@@ -4162,7 +4179,7 @@ export function createOrchestratorTools(input: {
 
     research: tool({
       description:
-        "OPTIONAL advisory evidence side-tool agent. Use when the task depends on external facts, current documentation, competitor/industry/API research, source maps, or PRD/SPEC/report source material that should become a durable citation bundle. For supplied webpage URLs that need functional/visual frontend analysis, use `frontend_research` instead; for implementation-template/source handoff, use `frontend_design`. The result is a compact research_brief artifact plus bundle paths and may include subpage_research_tasks for independent follow-up research. It is NOT a workflow step, NOT a route selector, NOT requirements, NOT architect, NOT build, and NOT a acceptance path.",
+        "OPTIONAL advisory evidence side-tool agent. Use when the task depends on external facts, current documentation, competitor/industry/API research, source maps, or PRD/SPEC/report source material that should become a durable citation bundle. For supplied webpage URLs that need functional/visual frontend analysis, `frontend_research` is a separate candidate; for implementation-template/source handoff, `frontend_design` is a separate candidate. The result is a compact research_brief artifact plus bundle paths and may include subpage_research_tasks for independent follow-up research. It is NOT a workflow step, NOT a route selector, NOT requirements, NOT architect, NOT build, and NOT a acceptance path.",
       inputSchema: z.object({
         reason: z.string().min(1).describe("Why evidence research is needed for this task."),
         target_deliverable: z
@@ -5425,8 +5442,8 @@ export function createOrchestratorTools(input: {
         "recover that artifact or get explicit user confirmation before continuing from stale integrity data. " +
         "DO NOT USE FOR: multi-file features, UI replication from designs, anything with explicit acceptance " +
         "criteria, cross-module refactors, new subsystems — those go through requirements → architect → " +
-        "per-goal build → integrity (the pipeline workflow). When a visual/reference artifact is actually " +
-        "the task contract, prefer frontend_design before build so build can consume its frontend template review entries.",
+        "per-goal build → integrity (the pipeline workflow). Frontend evidence tools are available candidates " +
+        "when the full task context needs visual/reference material for build dispatch.",
       inputSchema: z.object({
         request: z
           .string()
