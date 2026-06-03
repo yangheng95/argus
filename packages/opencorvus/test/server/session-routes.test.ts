@@ -34,6 +34,8 @@ describe("session routes", () => {
         })
 
         expect(response.status).toBe(200)
+        const requestID = response.headers.get("x-opencorvus-request-id")
+        expect(requestID).toBeTruthy()
         await Bun.sleep(50)
 
         const logs = await app.request("/log/tail?n=500", {
@@ -43,17 +45,78 @@ describe("session routes", () => {
         })
         expect(logs.status).toBe(200)
         const body = await logs.json() as { lines: string[] }
-        const line = [...body.lines].reverse().find((item) =>
-          item.includes("service=server") &&
-          item.includes("session.get") &&
-          item.includes(`sessionID=${session.id}`),
-        )
+        const line = [...body.lines]
+          .reverse()
+          .map((item) => JSON.parse(item) as Record<string, unknown>)
+          .find((item) =>
+            item.service === "server" &&
+            item.message === "session.get" &&
+            item.sessionID === session.id
+          )
 
         expect(line).toBeDefined()
-        expect(line).toContain(`sessionID=${session.id}`)
-        expect(line).toContain(`"id":"${session.id}"`)
-        expect(line).toContain(`"title":"log-session"`)
+        expect(line?.sessionID).toBe(session.id)
+        expect(line?.session).toMatchObject({
+          id: session.id,
+          title: "log-session",
+        })
+        const requestCompleted = [...body.lines]
+          .reverse()
+          .map((item) => JSON.parse(item) as Record<string, unknown>)
+          .find((item) =>
+            item.service === "server" &&
+            item.message === "request" &&
+            item.requestID === requestID &&
+            item.status === "completed"
+          )
+        expect(requestCompleted).toMatchObject({
+          method: "GET",
+          path: `/session/${session.id}`,
+          statusCode: 200,
+        })
+        expect(typeof requestCompleted?.duration).toBe("number")
       },
+    })
+  })
+
+  test("project-scoped route errors include request id and failed request log", async () => {
+    const app = Server.App()
+    const response = await app.request("/session/missing-directory")
+    expect(response.status).toBe(400)
+    const requestID = response.headers.get("x-opencorvus-request-id")
+    expect(requestID).toBeTruthy()
+    await Bun.sleep(50)
+
+    const logs = await app.request("/log/tail?n=500")
+    expect(logs.status).toBe(200)
+    const body = await logs.json() as { lines: string[] }
+    const records = body.lines.map((item) => JSON.parse(item) as Record<string, unknown>)
+
+    const boundaryCompletion = [...records].reverse().find((item) =>
+      item.service === "server" &&
+      item.message === "request" &&
+      item.requestID === requestID &&
+      item.status === "completed"
+    )
+    expect(boundaryCompletion).toMatchObject({
+      method: "GET",
+      path: "/session/missing-directory",
+      statusCode: 400,
+    })
+    expect(typeof boundaryCompletion?.duration).toBe("number")
+
+    const routeFailure = [...records].reverse().find((item) =>
+      item.service === "server" &&
+      item.message === "request failed" &&
+      item.requestID === requestID
+    )
+    expect(routeFailure).toMatchObject({
+      method: "GET",
+      path: "/session/missing-directory",
+      statusCode: 400,
+    })
+    expect(routeFailure?.error).toMatchObject({
+      type: "DirectoryRequiredError",
     })
   })
 

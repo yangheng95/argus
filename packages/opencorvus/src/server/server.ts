@@ -58,52 +58,69 @@ export namespace Server {
     }
   }
 
+  function requestID(c: { req: { header(name: string): string | undefined }; res: Response }) {
+    return c.req.header("x-opencorvus-request-id") ?? c.res.headers.get("x-opencorvus-request-id") ?? crypto.randomUUID()
+  }
+
+  function namedErrorStatus(err: NamedError): ContentfulStatusCode {
+    if (err instanceof NotFoundError) return 404
+    if (err instanceof Provider.ModelNotFoundError) return 400
+    if (err instanceof DirectoryRequiredError) return 400
+    if (err instanceof Filesystem.InvalidDirectoryError) return 400
+    // R5.1 item 2: a child session does not own a config overlay;
+    // "fix your input — target the root session" is a 400.
+    if (err.name === "ChildSessionConfigError") return 400
+    // WorktreeNotGitError is a precondition (the directory is reachable
+    // and valid, but does not contain a `.git` repository). 412 lets
+    // the overlay distinguish "fix your input" (400) from "init the
+    // repo and retry" (412); the former is an irrecoverable user error,
+    // the latter is a one-click recovery prompt.
+    if (err.name === "WorktreeNotGitError") return 412
+    if (err.name.startsWith("Worktree")) return 400
+    // Direct-reply taxonomy — see orchestrator/direct-reply.ts.
+    // These three are all about "this session structurally cannot
+    // accept the reply you sent", which is a 4xx client situation,
+    // not a server crash. The overlay reads err.name to decide
+    // whether to retry, hide the reply box, or surface a generic
+    // failure dialog. Without this mapping all three collapsed to
+    // 500 and AgentSessionReplyBox could not tell them apart from
+    // a real server error.
+    if (err.name === "InvalidReplyTargetKindError") return 400
+    if (err.name === "BuildSessionDirectReplyError") return 400
+    if (err.name === "ReplyTargetEnvelopeMissingError") return 409
+    if (err.name === "SessionRuntimeContractMissingError") return 410
+    // MissingModelConfigError is a user-fixable config error
+    // ("set agent.X.model in opencorvus.jsonc"), not a server
+    // crash. agent/model.ts throws it from resolveAgentModelRef
+    // which the reply route hits after the runtime-contract
+    // validator — if it falls through to the default `500` arm
+    // the overlay can't distinguish "your config is missing a
+    // model" from "the server is broken". codex review
+    // 2026-05-26.
+    if (err.name === "MissingModelConfigError") return 400
+    return 500
+  }
+
   const app = new Hono()
   export const App: () => Hono = lazy(
     () =>
       app
         .onError((err, c) => {
-          log.error("failed", {
+          const id = requestID(c)
+          c.header("x-opencorvus-request-id", id)
+          const status = err instanceof NamedError
+            ? namedErrorStatus(err)
+            : err instanceof HTTPException
+              ? err.status
+              : 500
+          log.error("request failed", {
+            requestID: id,
+            method: c.req.method,
+            path: c.req.path,
+            statusCode: status,
             error: err,
           })
           if (err instanceof NamedError) {
-            let status: ContentfulStatusCode
-            if (err instanceof NotFoundError) status = 404
-            else if (err instanceof Provider.ModelNotFoundError) status = 400
-            else if (err instanceof DirectoryRequiredError) status = 400
-            else if (err instanceof Filesystem.InvalidDirectoryError) status = 400
-            // R5.1 item 2: a child session does not own a config overlay;
-            // "fix your input — target the root session" is a 400.
-            else if (err.name === "ChildSessionConfigError") status = 400
-            // WorktreeNotGitError is a precondition (the directory is reachable
-            // and valid, but does not contain a `.git` repository). 412 lets
-            // the overlay distinguish "fix your input" (400) from "init the
-            // repo and retry" (412); the former is an irrecoverable user error,
-            // the latter is a one-click recovery prompt.
-            else if (err.name === "WorktreeNotGitError") status = 412
-            else if (err.name.startsWith("Worktree")) status = 400
-            // Direct-reply taxonomy — see orchestrator/direct-reply.ts.
-            // These three are all about "this session structurally cannot
-            // accept the reply you sent", which is a 4xx client situation,
-            // not a server crash. The overlay reads err.name to decide
-            // whether to retry, hide the reply box, or surface a generic
-            // failure dialog. Without this mapping all three collapsed to
-            // 500 and AgentSessionReplyBox could not tell them apart from
-            // a real server error.
-            else if (err.name === "InvalidReplyTargetKindError") status = 400
-            else if (err.name === "BuildSessionDirectReplyError") status = 400
-            else if (err.name === "ReplyTargetEnvelopeMissingError") status = 409
-            else if (err.name === "SessionRuntimeContractMissingError") status = 410
-            // MissingModelConfigError is a user-fixable config error
-            // ("set agent.X.model in opencorvus.jsonc"), not a server
-            // crash. agent/model.ts throws it from resolveAgentModelRef
-            // which the reply route hits after the runtime-contract
-            // validator — if it falls through to the default `500` arm
-            // the overlay can't distinguish "your config is missing a
-            // model" from "the server is broken". codex review
-            // 2026-05-26.
-            else if (err.name === "MissingModelConfigError") status = 400
-            else status = 500
             return c.json(err.toObject(), { status })
           }
           if (err instanceof HTTPException) return err.getResponse()
@@ -129,19 +146,41 @@ export namespace Server {
         })
         .use(async (c, next) => {
           const skipLogging = c.req.path === "/log"
+          const id = requestID(c)
+          c.header("x-opencorvus-request-id", id)
+          const started = Date.now()
           if (!skipLogging) {
             log.info("request", {
+              requestID: id,
               method: c.req.method,
               path: c.req.path,
+              status: "started",
             })
           }
-          const timer = log.time("request", {
-            method: c.req.method,
-            path: c.req.path,
-          })
-          await next()
-          if (!skipLogging) {
-            timer.stop()
+          try {
+            await next()
+            if (!skipLogging) {
+              log.info("request", {
+                requestID: id,
+                method: c.req.method,
+                path: c.req.path,
+                status: "completed",
+                statusCode: c.res.status,
+                duration: Date.now() - started,
+              })
+            }
+          } catch (error) {
+            if (!skipLogging) {
+              log.error("request", {
+                requestID: id,
+                method: c.req.method,
+                path: c.req.path,
+                status: "failed",
+                duration: Date.now() - started,
+                error,
+              })
+            }
+            throw error
           }
         })
         .use(
@@ -180,6 +219,7 @@ export namespace Server {
           // root router; if no handler matches, the request 404s cleanly.
           if (
             c.req.path === "/log"
+            || c.req.path === "/log/tail"
             || c.req.path === "/shutdown"
             || c.req.path === "/restart"
             || c.req.path === "/favicon.ico"

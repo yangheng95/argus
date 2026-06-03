@@ -206,6 +206,34 @@ function parseLogValue(raw: string): unknown {
   return text;
 }
 
+function parsePinoLogLine(raw: string): ServerLogEntry | undefined {
+  let value: unknown;
+  try {
+    value = JSON.parse(raw);
+  } catch {
+    return undefined;
+  }
+  if (!value || typeof value !== "object" || Array.isArray(value)) return undefined;
+  const record = value as Record<string, unknown>;
+  const level = typeof record.level === "string" ? record.level : "info";
+  const ts = typeof record.time === "string" ? record.time.replace(/\.\d{3}Z$/, "") : "";
+  const message = typeof record.message === "string" ? record.message : "";
+  const service = typeof record.service === "string" ? record.service : "";
+  const fields = { ...record };
+  delete fields.level;
+  delete fields.time;
+  delete fields.message;
+  return {
+    level,
+    ts,
+    delta: typeof record.duration === "number" ? fmtElapsed(record.duration) : "",
+    service,
+    message,
+    fields,
+    raw,
+  };
+}
+
 function scanBalancedLogValue(text: string, start: number): number {
   if (text[start] === '"') {
     let escaped = false;
@@ -254,7 +282,7 @@ function scanLogValueEnd(text: string, start: number): number {
     let probe = nextSpace;
     while (probe < text.length && text[probe] === " ") probe++;
     if (/^[A-Za-z0-9_.-]+=/.test(text.slice(probe))) return nextSpace;
-    cursor = probe;
+    return nextSpace;
   }
   return text.length;
 }
@@ -279,6 +307,8 @@ function parseLeadingLogFields(text: string): {
 }
 
 export function parseServerLogLine(raw: string): ServerLogEntry {
+  const pinoLine = parsePinoLogLine(raw);
+  if (pinoLine) return pinoLine;
   const match = raw.match(
     /^(DEBUG|INFO|WARN|ERROR)\s+(\S+)\s+(\+\d+ms)\s+(.*)$/,
   );

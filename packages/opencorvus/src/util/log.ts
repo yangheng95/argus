@@ -1,27 +1,23 @@
 import path from "path"
 import fs from "fs/promises"
-import { createWriteStream } from "fs"
+import pino, { type Logger as PinoLogger } from "pino"
 import { Global } from "../global"
 import z from "zod"
 import { Glob } from "./glob"
-import { safeStringify, sanitizeMessage } from "./log-safety"
+import { sanitizeMessage } from "./log-safety"
 import { SessionObservability } from "./session-observability"
 
 export namespace Log {
   export const Level = z.enum(["DEBUG", "INFO", "WARN", "ERROR"]).meta({ ref: "LogLevel", description: "Log level" })
   export type Level = z.infer<typeof Level>
 
-  const levelPriority: Record<Level, number> = {
-    DEBUG: 0,
-    INFO: 1,
-    WARN: 2,
-    ERROR: 3,
-  }
+  type PinoLevel = "debug" | "info" | "warn" | "error"
 
-  let level: Level = "INFO"
-
-  function shouldLog(input: Level): boolean {
-    return levelPriority[input] >= levelPriority[level]
+  const pinoLevel: Record<Level, PinoLevel> = {
+    DEBUG: "debug",
+    INFO: "info",
+    WARN: "warn",
+    ERROR: "error",
   }
 
   export type Logger = {
@@ -40,38 +36,40 @@ export namespace Log {
     }
   }
 
-  export const Default = create({ service: "default" })
-
   export interface Options {
     print: boolean
     dev?: boolean
     level?: Level
   }
 
+  let level: Level = "INFO"
   let logpath = ""
+  let generation = 0
+  let root = createRootLogger(pino.destination(2))
+
+  export const Default = create({ service: "default" })
+
   export function file() {
     return logpath
-  }
-  let write = (msg: string) => {
-    process.stderr.write(msg)
   }
 
   export async function init(options: Options) {
     if (options.level) level = options.level
-    cleanup(Global.Path.log)
-    if (options.print) return
-    logpath = path.join(
-      Global.Path.log,
-      options.dev ? "dev.log" : new Date().toISOString().split(".")[0].replace(/:/g, "") + ".log",
-    )
-    await fs.truncate(logpath).catch(() => {})
-    const stream = createWriteStream(logpath, { flags: "a" })
-    stream.on("error", (err) => {
-      process.stderr.write(`log stream error: ${err.message}\n`)
-    })
-    write = (msg: string) => {
-      stream.write(msg)
+    await cleanup(Global.Path.log)
+    logpath = ""
+    let destination: pino.DestinationStream
+    if (options.print) {
+      destination = pino.destination(2)
+    } else {
+      logpath = path.join(
+        Global.Path.log,
+        options.dev ? "dev.log" : new Date().toISOString().split(".")[0].replace(/:/g, "") + ".log",
+      )
+      await fs.truncate(logpath).catch(() => {})
+      destination = pino.destination({ dest: logpath, sync: false, mkdir: true })
     }
+    root = createRootLogger(destination)
+    generation++
   }
 
   const KEEP_RECENT = 10
@@ -86,61 +84,72 @@ export namespace Log {
     await Promise.all(filesToDelete.map((file) => fs.unlink(file).catch(() => {})))
   }
 
-  function formatError(error: Error, depth = 0): string {
-    const head = error.stack ?? `${error.name}: ${error.message}`
-    return error.cause instanceof Error && depth < 10
-      ? head + "\nCaused by: " + formatError(error.cause, depth + 1)
-      : head
+  function createRootLogger(destination: pino.DestinationStream) {
+    return pino(
+      {
+        base: undefined,
+        level: pinoLevel[level],
+        messageKey: "message",
+        errorKey: "error",
+        timestamp: pino.stdTimeFunctions.isoTime,
+        formatters: {
+          level(label) {
+            return { level: label }
+          },
+        },
+        serializers: {
+          error: pino.stdSerializers.err,
+          err: pino.stdSerializers.err,
+        },
+      },
+      destination,
+    )
   }
 
-  // safeStringify / sanitizeMessage moved to ./log-safety so the
-  // pure-function contract is unit-testable without spying on
-  // process.stderr (audit-2026-04-29 W2-V17).
+  function sanitizeRecord(input?: Record<string, any>): Record<string, any> {
+    if (!input) return {}
+    const output: Record<string, any> = {}
+    for (const [key, value] of Object.entries(input)) {
+      if (value === undefined || value === null) continue
+      output[key] = typeof value === "string" ? sanitizeMessage(value) : value
+    }
+    return output
+  }
+
+  function emit(logger: PinoLogger, level: PinoLevel, message: any, extra?: Record<string, any>) {
+    const attributes = {
+      ...sanitizeRecord(extra),
+      ...sanitizeRecord(SessionObservability.logTags()),
+    }
+    const safeMessage = message === undefined || message === null ? undefined : sanitizeMessage(message)
+    logger[level](attributes, safeMessage)
+  }
 
   export function create(tags?: Record<string, any>) {
-    const ownTags: Record<string, any> = { ...(tags ?? {}) }
-    let last = Date.now()
+    const ownTags = sanitizeRecord(tags)
+    let cachedGeneration = -1
+    let cachedLogger: PinoLogger | undefined
 
-    function build(message: any, extra?: Record<string, any>) {
-      const prefix = Object.entries({
-        ...ownTags,
-        ...extra,
-        ...SessionObservability.logTags(),
-      })
-        .filter(([_, value]) => value !== undefined && value !== null)
-        .map(([key, value]) => {
-          const prefix = `${key}=`
-          if (value instanceof Error) return prefix + sanitizeMessage(formatError(value))
-          if (typeof value === "object") return prefix + sanitizeMessage(safeStringify(value))
-          return prefix + sanitizeMessage(value)
-        })
-        .join(" ")
-      const next = new Date()
-      const diff = next.getTime() - last
-      last = next.getTime()
-      const safeMessage = message === undefined || message === null ? message : sanitizeMessage(message)
-      return [next.toISOString().split(".")[0], "+" + diff + "ms", prefix, safeMessage].filter(Boolean).join(" ") + "\n"
+    function logger() {
+      if (!cachedLogger || cachedGeneration !== generation) {
+        cachedLogger = root.child(ownTags)
+        cachedGeneration = generation
+      }
+      return cachedLogger
     }
+
     const result: Logger = {
       debug(message?: any, extra?: Record<string, any>) {
-        if (shouldLog("DEBUG")) {
-          write("DEBUG " + build(message, extra))
-        }
+        emit(logger(), "debug", message, extra)
       },
       info(message?: any, extra?: Record<string, any>) {
-        if (shouldLog("INFO")) {
-          write("INFO  " + build(message, extra))
-        }
+        emit(logger(), "info", message, extra)
       },
       error(message?: any, extra?: Record<string, any>) {
-        if (shouldLog("ERROR")) {
-          write("ERROR " + build(message, extra))
-        }
+        emit(logger(), "error", message, extra)
       },
       warn(message?: any, extra?: Record<string, any>) {
-        if (shouldLog("WARN")) {
-          write("WARN  " + build(message, extra))
-        }
+        emit(logger(), "warn", message, extra)
       },
       tag(key: string, value: string) {
         return Log.create({ ...ownTags, [key]: value })
@@ -151,7 +160,10 @@ export namespace Log {
       time(message: string, extra?: Record<string, any>) {
         const now = Date.now()
         result.info(message, { status: "started", ...extra })
+        let stopped = false
         function stop() {
+          if (stopped) return
+          stopped = true
           result.info(message, {
             status: "completed",
             duration: Date.now() - now,
