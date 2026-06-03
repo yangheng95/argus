@@ -39,6 +39,8 @@ test("provider model discovery controls have stable form styles", () => {
   expect(STYLES).toContain(".provider-form-notice");
   expect(STYLES).toContain(".provider-advanced-fields");
   expect(STYLES).toContain(".provider-advanced-summary");
+  expect(STYLES).toContain(".provider-advanced-fields:not([open]) > .provider-advanced-grid");
+  expect(STYLES).toContain("display: none;");
 });
 
 test("provider rows keep stable responsive grid areas", () => {

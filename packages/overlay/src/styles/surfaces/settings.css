@@ -2162,6 +2162,9 @@
   gap: var(--ui-gap-sm);
   padding: 0 var(--ui-gap-md) var(--ui-gap-md);
 }
+.provider-advanced-fields:not([open]) > .provider-advanced-grid {
+  display: none;
+}
 .provider-form-actions {
   margin-top: var(--ui-gap-md);
 }
