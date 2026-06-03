@@ -29,11 +29,15 @@ test("logger tags non-session and session contexts from SessionContext", async (
 
   await Bun.sleep(50)
   const raw = readFileSync(Log.file(), "utf8")
-  const outside = raw.split("\n").find((line) => line.includes("outside")) ?? ""
-  const inside = raw.split("\n").find((line) => line.includes("inside")) ?? ""
+  const lines = raw
+    .split("\n")
+    .filter(Boolean)
+    .map((line) => JSON.parse(line) as Record<string, unknown>)
+  const outside = lines.find((line) => line.message === "outside")
+  const inside = lines.find((line) => line.message === "inside")
 
-  expect(outside).toContain("logDomain=non-session")
-  expect(outside).not.toContain("sessionID=")
-  expect(inside).toContain("logDomain=session")
-  expect(inside).toContain(`sessionID=${sessionID}`)
+  expect(outside?.logDomain).toBe("non-session")
+  expect(outside).not.toHaveProperty("sessionID")
+  expect(inside?.logDomain).toBe("session")
+  expect(inside?.sessionID).toBe(sessionID)
 })
