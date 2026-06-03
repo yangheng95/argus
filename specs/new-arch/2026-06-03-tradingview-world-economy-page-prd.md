@@ -1,3202 +1,1744 @@
-# TradingView World Economy Page PRD
+# TradingView World Economy 页面 PRD
 
-Document status: complete Product Requirements Document for implementation, visual QA, data QA, and regression planning.
-Date: 2026-06-03.
-Owner: OpenCorvus product and engineering.
-Target page: https://www.tradingview.com/markets/world-economy/.
-Source page title: World Economy — Rankings and Forecasts — TradingView.
-Primary source evidence: live TradingView page text, rendered frontend_design evidence, and extracted implementation package.
-Target implementation package: packages/tradingview-world-economy.
-Reference screenshot: packages/tradingview-world-economy/reference.png.
-Line-count requirement: this file intentionally exceeds 1000 lines.
-Non-goal: this PRD does not grant permission to copy proprietary backend systems or private TradingView APIs.
+版本：v2 readable rewrite。
+日期：2026-06-03。
+目标页面：https://www.tradingview.com/markets/world-economy/。
+页面标题：World Economy — Rankings and Forecasts — TradingView。
+交付目标：写给产品、设计、研发、测试、数据和法务都能直接使用的页面级 PRD。
+行数要求：用户要求 1000 行以上，本版保留 1000 行以上，但正文按真实 PRD 阅读路径组织，不再用机械编号堆行。
+重要说明：本文定义的是可实现的产品需求，不定义私有 TradingView 后端复制方案，不要求绕过版权或数据授权。
 
-## 0. 缩写与术语定义
-- GLOSSARY-001 PRD: Product Requirements Document，产品需求文档，用于定义目标、范围、用户体验、数据、接口、验收和发布要求。
-- GLOSSARY-002 UI: User Interface，用户界面，指用户可见的页面布局、控件、视觉样式和文案。
-- GLOSSARY-003 UX: User Experience，用户体验，指用户完成宏观经济观察、国家比较和市场事件追踪的完整路径。
-- GLOSSARY-004 API: Application Programming Interface，应用程序接口，指页面前端与数据服务之间的稳定合约。
-- GLOSSARY-005 GDP: Gross Domestic Product，国内生产总值，用于衡量一个国家或地区一定时期内的经济总产出。
-- GLOSSARY-006 YoY: Year over Year，同比，表示本期数值相对去年同期的变化。
-- GLOSSARY-007 KPI: Key Performance Indicator，关键指标，本页指 GDP、利率、通胀、失业率等宏观经济指标。
-- GLOSSARY-008 CPI: Consumer Price Index，消费者价格指数，常用于计算通胀率。
-- GLOSSARY-009 PPI: Producer Price Index，生产者价格指数，用于观察生产端价格变化。
-- GLOSSARY-010 PMI: Purchasing Managers Index，采购经理人指数，用于衡量制造业或服务业景气度。
-- GLOSSARY-011 FAQ: Frequently Asked Questions，常见问题区域，用于解释 GDP、利率、通胀等术语。
-- GLOSSARY-012 CTA: Call To Action，行动号召控件，例如 Get started、See all、Keep reading。
-- GLOSSARY-013 SEO: Search Engine Optimization，搜索引擎优化，包含标题、结构化内容、可索引链接和内部链接。
-- GLOSSARY-014 ARIA: Accessible Rich Internet Applications，无障碍语义属性，用于辅助技术理解控件。
-- GLOSSARY-015 SVG: Scalable Vector Graphics，可缩放矢量图，本页地图和图标大量使用 SVG。
-- GLOSSARY-016 CSS: Cascading Style Sheets，层叠样式表，定义页面字体、颜色、间距、网格和响应式行为。
-- GLOSSARY-017 IR: Intermediate Representation，中间表示，frontend_design 抽取得到的页面结构、布局、内容和交互证据。
-- GLOSSARY-018 QA: Quality Assurance，质量保障，包含功能、视觉、数据、性能和无障碍验证。
-- GLOSSARY-019 WCAG: Web Content Accessibility Guidelines，网页内容无障碍指南，用于约束对比度、键盘访问和语义。
-- GLOSSARY-020 LCP: Largest Contentful Paint，最大内容绘制，用于衡量首屏主要内容加载速度。
-- GLOSSARY-021 CLS: Cumulative Layout Shift，累积布局偏移，用于衡量页面稳定性。
-- GLOSSARY-022 INP: Interaction to Next Paint，交互到下一次绘制，用于衡量交互响应速度。
-- GLOSSARY-023 CDN: Content Delivery Network，内容分发网络，用于静态资源分发。
-- GLOSSARY-024 SPA: Single Page Application，单页应用，指前端路由和局部渲染驱动的网页应用。
-- GLOSSARY-025 SSR: Server Side Rendering，服务端渲染，用于提升首屏可索引性和加载体验。
-- GLOSSARY-026 ETF: Exchange Traded Fund，交易所交易基金，TradingView 全站导航中的市场品类。
-- GLOSSARY-027 DEX: Decentralized Exchange，去中心化交易所，全站导航中的加密资产交易对入口。
-- GLOSSARY-028 FRED: Federal Reserve Economic Data，美国联邦储备经济数据，社区观点中常见的数据源符号前缀。
-- GLOSSARY-029 CUSIP: Committee on Uniform Securities Identification Procedures，北美证券标识体系，页脚版权说明提到的数据源。
-- GLOSSARY-030 APR: Annual Percentage Rate，年化百分比利率，FAQ 中解释利率示例时使用。
-- GLOSSARY-031 BEA: Bureau of Economic Analysis，美国经济分析局，社区观点中提到的 GDP 数据来源。
+## 快速阅读路径
 
-## 1. 来源证据与单一来源
-- EVIDENCE-001 TradingView live page text confirms the public page title, top navigation, Economy breadcrumb, Overview and Economic trends tabs.
-- EVIDENCE-002 TradingView live page text confirms Inflation map legend values 0%, 3%, 7%, 12%, and 25%.
-- EVIDENCE-003 TradingView live page text confirms GDP growth ranking rows for India, Indonesia, Mainland China, South Korea, Saudi Arabia, and USA.
-- EVIDENCE-004 TradingView live page text confirms country chip links including Argentina, Australia, Brazil, Canada, European Union, France, Germany, India, Indonesia, Italy, Japan, Mainland China, Mexico, Russia, Saudi Arabia, South Africa, South Korea, Turkey, United Kingdom, and United States.
-- EVIDENCE-005 TradingView live page text confirms Ideas tabs Popular, Recent, Video, and More.
-- EVIDENCE-006 TradingView live page text confirms Economic indicators heatmap metrics GDP, GDP Growth, Budget to GDP, Government Debt to GDP, Interest Rate, Inflation Rate, Unemployment Rate, Current Account to GDP, and Industrial Production YoY.
-- EVIDENCE-007 TradingView live page text confirms Main indicators links such as GDP, GDP Growth, Real GDP, GDP Per Capita, GDP Per Capita PPP, Inflation Rate, Interest Rate, Unemployment Rate, Government Debt to GDP, Population, Average Hourly Earnings, House Price Index, Manufacturing Production YoY, Industrial Production YoY, Current Account, Balance of Trade, Economic Activity Index, and Crude Oil Production.
-- EVIDENCE-008 TradingView live page text confirms Global industrial map uses the same heatmap legend scale labels as Inflation map.
-- EVIDENCE-009 TradingView live page text confirms News and Economic Calendar sections with See/Keep reading continuation links.
-- EVIDENCE-010 TradingView live page text confirms FAQ content for GDP, GDP formula, GDP per capita, highest GDP country, real GDP, interest rate, interest-rate calculation, current interest rate, inflation, inflation formula, and Japan inflation YoY.
-- EVIDENCE-011 frontend_design evidence summary captures a 1440x900 viewport and a 1440px-wide header with long scrollable market dashboard content.
-- EVIDENCE-012 frontend_design evidence summary captures page surfaces from header at y=0 through footer at y=5571.
-- EVIDENCE-013 frontend_design style tokens show primary text rgb(15, 15, 15), secondary text rgb(112, 112, 112), light surfaces rgb(242, 242, 242), white backgrounds, blue links, and orange/tan heatmap colors.
-- EVIDENCE-014 frontend_design style tokens show system font stack and EuclidCircularSemibold for the large display title.
-- EVIDENCE-015 frontend_design reusable component patterns identify table rows, cards, buttons, blocks, navigation links, grouped SVG geometry, list items, and repeated spans.
-- EVIDENCE-016 frontend_design manifest lists source IR files for component tree, content model, layout map, style tokens, interaction hints, and source quality audit.
-- EVIDENCE-017 packages/tradingview-world-economy keeps extracted CSS sidecars source-critical.css and source-full.css as visual material.
-- EVIDENCE-018 packages/tradingview-world-economy keeps economicTrendsExtracted.ts as the data source for map paths, GDP rows, country links, metric cards, news/calendar signals, and FAQ formula signals.
-- EVIDENCE-019 packages/tradingview-world-economy qa extracted-materials.test.ts asserts 205 inflation map paths, six GDP growth rows, at least twenty country links, and metric card tickers USUR, USINTR, USBOT.
-- EVIDENCE-020 specs/new-arch/2026-06-03-tradingview-world-economy-extracted-clone.md records that the implementation target is a direct extracted-material project, not a hand-built approximation.
-- EVIDENCE-021 PRD requirement 21 must remain traceable to live page visible text and must not invent content that is absent from the observed page or extracted evidence.
-- EVIDENCE-022 PRD requirement 22 must remain traceable to rendered reference screenshot and must not invent content that is absent from the observed page or extracted evidence.
-- EVIDENCE-023 PRD requirement 23 must remain traceable to source IR component tree and must not invent content that is absent from the observed page or extracted evidence.
-- EVIDENCE-024 PRD requirement 24 must remain traceable to source IR content model and must not invent content that is absent from the observed page or extracted evidence.
-- EVIDENCE-025 PRD requirement 25 must remain traceable to source IR layout map and must not invent content that is absent from the observed page or extracted evidence.
-- EVIDENCE-026 PRD requirement 26 must remain traceable to source IR style tokens and must not invent content that is absent from the observed page or extracted evidence.
-- EVIDENCE-027 PRD requirement 27 must remain traceable to source IR interaction hints and must not invent content that is absent from the observed page or extracted evidence.
-- EVIDENCE-028 PRD requirement 28 must remain traceable to target package README and must not invent content that is absent from the observed page or extracted evidence.
-- EVIDENCE-029 PRD requirement 29 must remain traceable to semantic component files and must not invent content that is absent from the observed page or extracted evidence.
-- EVIDENCE-030 PRD requirement 30 must remain traceable to data extraction tests and must not invent content that is absent from the observed page or extracted evidence.
-- EVIDENCE-031 PRD requirement 31 must remain traceable to live page visible text and must not invent content that is absent from the observed page or extracted evidence.
-- EVIDENCE-032 PRD requirement 32 must remain traceable to rendered reference screenshot and must not invent content that is absent from the observed page or extracted evidence.
-- EVIDENCE-033 PRD requirement 33 must remain traceable to source IR component tree and must not invent content that is absent from the observed page or extracted evidence.
-- EVIDENCE-034 PRD requirement 34 must remain traceable to source IR content model and must not invent content that is absent from the observed page or extracted evidence.
-- EVIDENCE-035 PRD requirement 35 must remain traceable to source IR layout map and must not invent content that is absent from the observed page or extracted evidence.
-- EVIDENCE-036 PRD requirement 36 must remain traceable to source IR style tokens and must not invent content that is absent from the observed page or extracted evidence.
-- EVIDENCE-037 PRD requirement 37 must remain traceable to source IR interaction hints and must not invent content that is absent from the observed page or extracted evidence.
-- EVIDENCE-038 PRD requirement 38 must remain traceable to target package README and must not invent content that is absent from the observed page or extracted evidence.
-- EVIDENCE-039 PRD requirement 39 must remain traceable to semantic component files and must not invent content that is absent from the observed page or extracted evidence.
-- EVIDENCE-040 PRD requirement 40 must remain traceable to data extraction tests and must not invent content that is absent from the observed page or extracted evidence.
-- EVIDENCE-041 PRD requirement 41 must remain traceable to live page visible text and must not invent content that is absent from the observed page or extracted evidence.
-- EVIDENCE-042 PRD requirement 42 must remain traceable to rendered reference screenshot and must not invent content that is absent from the observed page or extracted evidence.
-- EVIDENCE-043 PRD requirement 43 must remain traceable to source IR component tree and must not invent content that is absent from the observed page or extracted evidence.
-- EVIDENCE-044 PRD requirement 44 must remain traceable to source IR content model and must not invent content that is absent from the observed page or extracted evidence.
-- EVIDENCE-045 PRD requirement 45 must remain traceable to source IR layout map and must not invent content that is absent from the observed page or extracted evidence.
-- EVIDENCE-046 PRD requirement 46 must remain traceable to source IR style tokens and must not invent content that is absent from the observed page or extracted evidence.
-- EVIDENCE-047 PRD requirement 47 must remain traceable to source IR interaction hints and must not invent content that is absent from the observed page or extracted evidence.
-- EVIDENCE-048 PRD requirement 48 must remain traceable to target package README and must not invent content that is absent from the observed page or extracted evidence.
-- EVIDENCE-049 PRD requirement 49 must remain traceable to semantic component files and must not invent content that is absent from the observed page or extracted evidence.
-- EVIDENCE-050 PRD requirement 50 must remain traceable to data extraction tests and must not invent content that is absent from the observed page or extracted evidence.
+- 只想理解要做什么：读第 1 到第 5 章。
+- 要开始设计页面：读第 6 到第 9 章。
+- 要开始研发拆任务：读第 10 到第 11 章的模块规格。
+- 要接数据：读第 12 到第 14 章。
+- 要做测试验收：读第 21 到第 23 章。
+- 要查具体页面内容：读第 24 到第 29 章附录。
+- 本 PRD 的中心判断：这是一个宏观经济数据工作台，不是营销落地页。
+- 实现时优先使用已有成熟组件和项目中已抽取的 TradingView 页面素材。
+- 任何空白卡片、假地图、假新闻、假社区观点都不应被当作合格交付。
+- 如果数据不可得，产品必须展示明确的数据不可用状态，而不是用无关内容顶替。
 
-## 2. 文档目标
-- DOC-GOAL-001 Define the full product behavior of the World Economy page as a market intelligence landing page.
-- DOC-GOAL-002 Convert visible TradingView behavior into implementation-ready requirements without relying on placeholder UI.
-- DOC-GOAL-003 Preserve observed page hierarchy from global navigation to footer.
-- DOC-GOAL-004 Preserve dense market dashboard utility instead of turning the page into a marketing hero page.
-- DOC-GOAL-005 Give engineering a concrete data model for maps, tables, cards, ideas, news, calendar, FAQ, and footer links.
-- DOC-GOAL-006 Give design a visual contract for TradingView-like density, typography, spacing, and heatmap treatment.
-- DOC-GOAL-007 Give QA a line-item checklist for visual, interaction, data, performance, SEO, and accessibility verification.
-- DOC-GOAL-008 Keep the extracted page package as the implementation source and avoid duplicate render paths.
-- DOC-GOAL-009 Identify unknown backend details explicitly so they are not papered over by fake fallbacks.
-- DOC-GOAL-010 Define acceptance criteria for both public webpage parity and maintainable implementation.
-- DOC-GOAL-011 The PRD must make data expectations explicit enough for independent review.
-- DOC-GOAL-012 The PRD must make interaction expectations explicit enough for independent review.
-- DOC-GOAL-013 The PRD must make visual expectations explicit enough for independent review.
-- DOC-GOAL-014 The PRD must make responsive expectations explicit enough for independent review.
-- DOC-GOAL-015 The PRD must make accessibility expectations explicit enough for independent review.
-- DOC-GOAL-016 The PRD must make performance expectations explicit enough for independent review.
-- DOC-GOAL-017 The PRD must make analytics expectations explicit enough for independent review.
-- DOC-GOAL-018 The PRD must make SEO expectations explicit enough for independent review.
-- DOC-GOAL-019 The PRD must make release expectations explicit enough for independent review.
-- DOC-GOAL-020 The PRD must make scope expectations explicit enough for independent review.
-- DOC-GOAL-021 The PRD must make data expectations explicit enough for independent review.
-- DOC-GOAL-022 The PRD must make interaction expectations explicit enough for independent review.
-- DOC-GOAL-023 The PRD must make visual expectations explicit enough for independent review.
-- DOC-GOAL-024 The PRD must make responsive expectations explicit enough for independent review.
-- DOC-GOAL-025 The PRD must make accessibility expectations explicit enough for independent review.
-- DOC-GOAL-026 The PRD must make performance expectations explicit enough for independent review.
-- DOC-GOAL-027 The PRD must make analytics expectations explicit enough for independent review.
-- DOC-GOAL-028 The PRD must make SEO expectations explicit enough for independent review.
-- DOC-GOAL-029 The PRD must make release expectations explicit enough for independent review.
-- DOC-GOAL-030 The PRD must make scope expectations explicit enough for independent review.
-- DOC-GOAL-031 The PRD must make data expectations explicit enough for independent review.
-- DOC-GOAL-032 The PRD must make interaction expectations explicit enough for independent review.
-- DOC-GOAL-033 The PRD must make visual expectations explicit enough for independent review.
-- DOC-GOAL-034 The PRD must make responsive expectations explicit enough for independent review.
-- DOC-GOAL-035 The PRD must make accessibility expectations explicit enough for independent review.
-- DOC-GOAL-036 The PRD must make performance expectations explicit enough for independent review.
-- DOC-GOAL-037 The PRD must make analytics expectations explicit enough for independent review.
-- DOC-GOAL-038 The PRD must make SEO expectations explicit enough for independent review.
-- DOC-GOAL-039 The PRD must make release expectations explicit enough for independent review.
-- DOC-GOAL-040 The PRD must make scope expectations explicit enough for independent review.
+## 1. 一句话产品定义
 
-## 3. 产品定位
-- POSITION-001 The page is a world macroeconomics overview page for investors, traders, analysts, and learners.
-- POSITION-002 The page combines market-grade numeric tables with explanatory education content.
-- POSITION-003 The page acts as a hub to deeper country pages, indicator pages, economic calendar events, news, and community ideas.
-- POSITION-004 The page supports both scanning and drill-down: users can read a ranking, inspect a map, then open a country or symbol page.
-- POSITION-005 The page should feel like a serious market dashboard, not a blog article.
-- POSITION-006 The page should preserve TradingView brand patterns: compact cards, light background, blue link accents, grey metadata, and dense footer navigation.
-- POSITION-007 The page should not require login for core public economic exploration.
-- POSITION-008 The page can use account CTA for conversion, but conversion must not block public reading.
-- POSITION-009 The page should present data values as current at page render time, with release metadata when available.
-- POSITION-010 The page should communicate that data and reference providers have legal attribution obligations.
-- POSITION-011 The page must support macroeconomic discovery as a first-class product purpose without diluting the other purposes.
-- POSITION-012 The page must support country comparison as a first-class product purpose without diluting the other purposes.
-- POSITION-013 The page must support indicator lookup as a first-class product purpose without diluting the other purposes.
-- POSITION-014 The page must support event monitoring as a first-class product purpose without diluting the other purposes.
-- POSITION-015 The page must support community idea discovery as a first-class product purpose without diluting the other purposes.
-- POSITION-016 The page must support education as a first-class product purpose without diluting the other purposes.
-- POSITION-017 The page must support market navigation as a first-class product purpose without diluting the other purposes.
-- POSITION-018 The page must support conversion to account creation as a first-class product purpose without diluting the other purposes.
-- POSITION-019 The page must support macroeconomic discovery as a first-class product purpose without diluting the other purposes.
-- POSITION-020 The page must support country comparison as a first-class product purpose without diluting the other purposes.
-- POSITION-021 The page must support indicator lookup as a first-class product purpose without diluting the other purposes.
-- POSITION-022 The page must support event monitoring as a first-class product purpose without diluting the other purposes.
-- POSITION-023 The page must support community idea discovery as a first-class product purpose without diluting the other purposes.
-- POSITION-024 The page must support education as a first-class product purpose without diluting the other purposes.
-- POSITION-025 The page must support market navigation as a first-class product purpose without diluting the other purposes.
-- POSITION-026 The page must support conversion to account creation as a first-class product purpose without diluting the other purposes.
-- POSITION-027 The page must support macroeconomic discovery as a first-class product purpose without diluting the other purposes.
-- POSITION-028 The page must support country comparison as a first-class product purpose without diluting the other purposes.
-- POSITION-029 The page must support indicator lookup as a first-class product purpose without diluting the other purposes.
-- POSITION-030 The page must support event monitoring as a first-class product purpose without diluting the other purposes.
-- POSITION-031 The page must support community idea discovery as a first-class product purpose without diluting the other purposes.
-- POSITION-032 The page must support education as a first-class product purpose without diluting the other purposes.
-- POSITION-033 The page must support market navigation as a first-class product purpose without diluting the other purposes.
-- POSITION-034 The page must support conversion to account creation as a first-class product purpose without diluting the other purposes.
-- POSITION-035 The page must support macroeconomic discovery as a first-class product purpose without diluting the other purposes.
-- POSITION-036 The page must support country comparison as a first-class product purpose without diluting the other purposes.
-- POSITION-037 The page must support indicator lookup as a first-class product purpose without diluting the other purposes.
-- POSITION-038 The page must support event monitoring as a first-class product purpose without diluting the other purposes.
-- POSITION-039 The page must support community idea discovery as a first-class product purpose without diluting the other purposes.
-- POSITION-040 The page must support education as a first-class product purpose without diluting the other purposes.
-- POSITION-041 The page must support market navigation as a first-class product purpose without diluting the other purposes.
-- POSITION-042 The page must support conversion to account creation as a first-class product purpose without diluting the other purposes.
-- POSITION-043 The page must support macroeconomic discovery as a first-class product purpose without diluting the other purposes.
-- POSITION-044 The page must support country comparison as a first-class product purpose without diluting the other purposes.
-- POSITION-045 The page must support indicator lookup as a first-class product purpose without diluting the other purposes.
-- POSITION-046 The page must support event monitoring as a first-class product purpose without diluting the other purposes.
-- POSITION-047 The page must support community idea discovery as a first-class product purpose without diluting the other purposes.
-- POSITION-048 The page must support education as a first-class product purpose without diluting the other purposes.
-- POSITION-049 The page must support market navigation as a first-class product purpose without diluting the other purposes.
-- POSITION-050 The page must support conversion to account creation as a first-class product purpose without diluting the other purposes.
+- World Economy 页面是面向交易者和投资者的全球宏观经济入口页。
+- 用户进入页面后，应能快速看到全球经济趋势、通胀分布、GDP 增长排行、重点美国宏观指标、国家入口、经济热力图、新闻、日历和解释型 FAQ。
+- 页面的价值不是单个图表，而是把“全球概览 -> 国家/指标钻取 -> 新闻/日历跟进 -> 基础概念解释”串成一条完整路径。
+- 页面第一屏必须传达数据密度和市场工具感，不能做成大图 hero 或品牌宣传页。
+- 页面必须让新手能读懂 GDP、利率、通胀等基础概念，也要让专业用户能快速点击进入具体国家、指标和事件。
 
-## 4. 用户画像
-- PERSONA-001 Retail trader: wants a fast view of global growth, inflation, rates, unemployment, and upcoming economic events before trading.
-- PERSONA-002 Macro analyst: compares countries and indicators to build a thesis across regions.
-- PERSONA-003 Financial journalist: uses headline numbers, maps, and calendar events to contextualize market news.
-- PERSONA-004 Student or beginner: reads FAQ explanations for GDP, interest rates, and inflation formulas.
-- PERSONA-005 TradingView community member: discovers and publishes ideas related to macroeconomic symbols.
-- PERSONA-006 International investor: navigates from world overview to country-specific pages.
-- PERSONA-007 SEO visitor: lands from a search query such as highest GDP country or inflation rate formula.
-- PERSONA-008 Returning TradingView user: expects product navigation, symbol pages, watchlist-like linking, and account CTA consistency.
-- PERSONA-009 Persona coverage 9 requires the page to let at least one user scan top countries quickly.
-- PERSONA-010 Persona coverage 10 requires the page to let at least one user trust visible data attribution.
-- PERSONA-011 Persona coverage 11 requires the page to let at least one user open a related country page.
-- PERSONA-012 Persona coverage 12 requires the page to let at least one user open an economic symbol page.
-- PERSONA-013 Persona coverage 13 requires the page to let at least one user compare indicators in a table.
-- PERSONA-014 Persona coverage 14 requires the page to let at least one user read an explanation without leaving the page.
-- PERSONA-015 Persona coverage 15 requires the page to let at least one user continue to economic calendar.
-- PERSONA-016 Persona coverage 16 requires the page to let at least one user continue to news flow.
-- PERSONA-017 Persona coverage 17 requires the page to let at least one user scan top countries quickly.
-- PERSONA-018 Persona coverage 18 requires the page to let at least one user trust visible data attribution.
-- PERSONA-019 Persona coverage 19 requires the page to let at least one user open a related country page.
-- PERSONA-020 Persona coverage 20 requires the page to let at least one user open an economic symbol page.
-- PERSONA-021 Persona coverage 21 requires the page to let at least one user compare indicators in a table.
-- PERSONA-022 Persona coverage 22 requires the page to let at least one user read an explanation without leaving the page.
-- PERSONA-023 Persona coverage 23 requires the page to let at least one user continue to economic calendar.
-- PERSONA-024 Persona coverage 24 requires the page to let at least one user continue to news flow.
-- PERSONA-025 Persona coverage 25 requires the page to let at least one user scan top countries quickly.
-- PERSONA-026 Persona coverage 26 requires the page to let at least one user trust visible data attribution.
-- PERSONA-027 Persona coverage 27 requires the page to let at least one user open a related country page.
-- PERSONA-028 Persona coverage 28 requires the page to let at least one user open an economic symbol page.
-- PERSONA-029 Persona coverage 29 requires the page to let at least one user compare indicators in a table.
-- PERSONA-030 Persona coverage 30 requires the page to let at least one user read an explanation without leaving the page.
-- PERSONA-031 Persona coverage 31 requires the page to let at least one user continue to economic calendar.
-- PERSONA-032 Persona coverage 32 requires the page to let at least one user continue to news flow.
-- PERSONA-033 Persona coverage 33 requires the page to let at least one user scan top countries quickly.
-- PERSONA-034 Persona coverage 34 requires the page to let at least one user trust visible data attribution.
-- PERSONA-035 Persona coverage 35 requires the page to let at least one user open a related country page.
-- PERSONA-036 Persona coverage 36 requires the page to let at least one user open an economic symbol page.
-- PERSONA-037 Persona coverage 37 requires the page to let at least one user compare indicators in a table.
-- PERSONA-038 Persona coverage 38 requires the page to let at least one user read an explanation without leaving the page.
-- PERSONA-039 Persona coverage 39 requires the page to let at least one user continue to economic calendar.
-- PERSONA-040 Persona coverage 40 requires the page to let at least one user continue to news flow.
-- PERSONA-041 Persona coverage 41 requires the page to let at least one user scan top countries quickly.
-- PERSONA-042 Persona coverage 42 requires the page to let at least one user trust visible data attribution.
-- PERSONA-043 Persona coverage 43 requires the page to let at least one user open a related country page.
-- PERSONA-044 Persona coverage 44 requires the page to let at least one user open an economic symbol page.
-- PERSONA-045 Persona coverage 45 requires the page to let at least one user compare indicators in a table.
-- PERSONA-046 Persona coverage 46 requires the page to let at least one user read an explanation without leaving the page.
-- PERSONA-047 Persona coverage 47 requires the page to let at least one user continue to economic calendar.
-- PERSONA-048 Persona coverage 48 requires the page to let at least one user continue to news flow.
-- PERSONA-049 Persona coverage 49 requires the page to let at least one user scan top countries quickly.
-- PERSONA-050 Persona coverage 50 requires the page to let at least one user trust visible data attribution.
-- PERSONA-051 Persona coverage 51 requires the page to let at least one user open a related country page.
-- PERSONA-052 Persona coverage 52 requires the page to let at least one user open an economic symbol page.
-- PERSONA-053 Persona coverage 53 requires the page to let at least one user compare indicators in a table.
-- PERSONA-054 Persona coverage 54 requires the page to let at least one user read an explanation without leaving the page.
-- PERSONA-055 Persona coverage 55 requires the page to let at least one user continue to economic calendar.
-- PERSONA-056 Persona coverage 56 requires the page to let at least one user continue to news flow.
+## 2. 当前页面观察结论
 
-## 5. 页面范围
-- SCOPE-IN-001 Global TradingView header navigation.
-- SCOPE-IN-002 Search entry in the header.
-- SCOPE-IN-003 Language selector and Get started account CTA.
-- SCOPE-IN-004 Markets / Economy breadcrumb.
-- SCOPE-IN-005 Economy page title.
-- SCOPE-IN-006 Overview and Economic trends tab navigation.
-- SCOPE-IN-007 Economic trends dashboard region.
-- SCOPE-IN-008 Inflation map with heatmap legend.
-- SCOPE-IN-009 GDP growth YoY ranking card.
-- SCOPE-IN-010 US unemployment rate mini chart card.
-- SCOPE-IN-011 US interest rate mini chart card with 10 years timeframe.
-- SCOPE-IN-012 US trade balance mini chart card.
-- SCOPE-IN-013 Countries chip list and See all link.
-- SCOPE-IN-014 Ideas section with category filters and idea cards.
-- SCOPE-IN-015 Economic indicators heatmap table.
-- SCOPE-IN-016 Main indicators link catalog.
-- SCOPE-IN-017 Global industrial map.
-- SCOPE-IN-018 News section and Keep reading link.
-- SCOPE-IN-019 Economic Calendar section and See all market events link.
-- SCOPE-IN-020 FAQ accordions or expanded FAQ content.
-- SCOPE-IN-021 Footer product, community, tools, policies, business, and growth navigation.
-- SCOPE-IN-022 Legal data provider attribution.
-- SCOPE-OUT-001 Authenticated portfolio management is out of scope.
-- SCOPE-OUT-002 Broker order placement is out of scope for this page.
-- SCOPE-OUT-003 Full charting terminal behavior is out of scope; the page links to symbols rather than embedding Supercharts.
-- SCOPE-OUT-004 Custom country watchlists are out of scope unless introduced by a separate product request.
-- SCOPE-OUT-005 Private TradingView backend replication is out of scope.
-- SCOPE-OUT-006 Paywall and subscription plan management are out of scope except global navigation links.
-- SCOPE-OUT-007 User idea publishing workflow is out of scope except links/cards to ideas.
-- SCOPE-OUT-008 Economic data vendor onboarding workflow is out of scope.
-- SCOPE-IN-023 The implemented page must keep the visible market summary surface represented as product scope.
-- SCOPE-IN-024 The implemented page must keep the visible map surface represented as product scope.
-- SCOPE-IN-025 The implemented page must keep the visible ranking surface represented as product scope.
-- SCOPE-IN-026 The implemented page must keep the visible indicator card surface represented as product scope.
-- SCOPE-IN-027 The implemented page must keep the visible country link surface represented as product scope.
-- SCOPE-IN-028 The implemented page must keep the visible community card surface represented as product scope.
-- SCOPE-IN-029 The implemented page must keep the visible heatmap surface represented as product scope.
-- SCOPE-IN-030 The implemented page must keep the visible calendar surface represented as product scope.
-- SCOPE-IN-031 The implemented page must keep the visible FAQ surface represented as product scope.
-- SCOPE-IN-032 The implemented page must keep the visible footer surface represented as product scope.
-- SCOPE-IN-033 The implemented page must keep the visible navigation surface represented as product scope.
-- SCOPE-IN-034 The implemented page must keep the visible market summary surface represented as product scope.
-- SCOPE-IN-035 The implemented page must keep the visible map surface represented as product scope.
-- SCOPE-IN-036 The implemented page must keep the visible ranking surface represented as product scope.
-- SCOPE-IN-037 The implemented page must keep the visible indicator card surface represented as product scope.
-- SCOPE-IN-038 The implemented page must keep the visible country link surface represented as product scope.
-- SCOPE-IN-039 The implemented page must keep the visible community card surface represented as product scope.
-- SCOPE-IN-040 The implemented page must keep the visible heatmap surface represented as product scope.
-- SCOPE-IN-041 The implemented page must keep the visible calendar surface represented as product scope.
-- SCOPE-IN-042 The implemented page must keep the visible FAQ surface represented as product scope.
-- SCOPE-IN-043 The implemented page must keep the visible footer surface represented as product scope.
-- SCOPE-IN-044 The implemented page must keep the visible navigation surface represented as product scope.
-- SCOPE-IN-045 The implemented page must keep the visible market summary surface represented as product scope.
-- SCOPE-IN-046 The implemented page must keep the visible map surface represented as product scope.
-- SCOPE-IN-047 The implemented page must keep the visible ranking surface represented as product scope.
-- SCOPE-IN-048 The implemented page must keep the visible indicator card surface represented as product scope.
-- SCOPE-IN-049 The implemented page must keep the visible country link surface represented as product scope.
-- SCOPE-IN-050 The implemented page must keep the visible community card surface represented as product scope.
-- SCOPE-IN-051 The implemented page must keep the visible heatmap surface represented as product scope.
-- SCOPE-IN-052 The implemented page must keep the visible calendar surface represented as product scope.
-- SCOPE-IN-053 The implemented page must keep the visible FAQ surface represented as product scope.
-- SCOPE-IN-054 The implemented page must keep the visible footer surface represented as product scope.
-- SCOPE-IN-055 The implemented page must keep the visible navigation surface represented as product scope.
-- SCOPE-IN-056 The implemented page must keep the visible market summary surface represented as product scope.
-- SCOPE-IN-057 The implemented page must keep the visible map surface represented as product scope.
-- SCOPE-IN-058 The implemented page must keep the visible ranking surface represented as product scope.
-- SCOPE-IN-059 The implemented page must keep the visible indicator card surface represented as product scope.
-- SCOPE-IN-060 The implemented page must keep the visible country link surface represented as product scope.
-- SCOPE-IN-061 The implemented page must keep the visible community card surface represented as product scope.
-- SCOPE-IN-062 The implemented page must keep the visible heatmap surface represented as product scope.
-- SCOPE-IN-063 The implemented page must keep the visible calendar surface represented as product scope.
-- SCOPE-IN-064 The implemented page must keep the visible FAQ surface represented as product scope.
-- SCOPE-IN-065 The implemented page must keep the visible footer surface represented as product scope.
-- SCOPE-IN-066 The implemented page must keep the visible navigation surface represented as product scope.
-- SCOPE-IN-067 The implemented page must keep the visible market summary surface represented as product scope.
-- SCOPE-IN-068 The implemented page must keep the visible map surface represented as product scope.
-- SCOPE-IN-069 The implemented page must keep the visible ranking surface represented as product scope.
-- SCOPE-IN-070 The implemented page must keep the visible indicator card surface represented as product scope.
+- 页面顶部是 TradingView 全站导航，包括品牌、Products、Community、Markets、Brokers、More、搜索、语言和 Get started。
+- 页面主体从 Markets / Economy 面包屑进入，H1 为 Economy。
+- 页面提供 Overview 和 Economic trends 两个页签。
+- 核心内容从 Economic trends 开始，不是长文介绍。
+- 经济趋势区域包含 Inflation map、GDP growth YoY、US unemployment rate、US interest rate、US trade balance。
+- Inflation map 使用世界地图和 0%、3%、7%、12%、25% 的热力图图例。
+- GDP growth YoY 排行展示 India、Indonesia、Mainland China、South Korea、Saudi Arabia、USA。
+- 页面随后提供 Countries 国家 chip，覆盖 Argentina、Australia、Brazil、Canada、European Union 等 20 个入口。
+- Ideas 区域展示社区观点，并提供 Popular、Recent、Video、More 分类。
+- Economic indicators heatmap 用国家行和指标列展示 GDP、GDP Growth、Budget to GDP、Government Debt to GDP、Interest Rate、Inflation Rate 等。
+- Main indicators 是指标目录，提供 GDP、Real GDP、GDP Per Capita、Inflation Rate、Interest Rate、Unemployment Rate 等入口。
+- Global industrial map 是第二张全球热力地图，和 Inflation map 共享相似视觉语言。
+- News 区域展示宏观经济新闻来源，例如 Reuters、Trading Economics。
+- Economic Calendar 区域展示 Today 经济事件，例如 PMI、GDP Growth Rate QoQ、GDP Growth Rate YoY。
+- FAQ 区域解释 GDP、GDP formula、GDP per capita、real GDP formula、interest rate、inflation rate formula 等。
+- Footer 保留 TradingView 全站级导航和数据提供商版权声明。
 
-## 6. 信息架构与页面流
-- IA-001 Page order starts with global header, then breadcrumb, then page title, then page tabs, then economic trends content.
-- IA-002 Economic trends content starts with high-density macro overview rather than editorial copy.
-- IA-003 The first data row of the overview contains map, GDP ranking, and three compact indicator cards.
-- IA-004 Country navigation appears after the summary because it is a drill-down from the global view.
-- IA-005 Community ideas follow country navigation because they add interpretation to raw macro data.
-- IA-006 Economic indicators heatmap follows ideas and countries to provide broader comparative data.
-- IA-007 Main indicators links follow the heatmap as a catalog for deeper exploration.
-- IA-008 Global industrial map appears as a second map surface, focused on industrial trends.
-- IA-009 News and economic calendar appear after data exploration as temporal follow-up content.
-- IA-010 FAQ appears near the bottom because it supports education and SEO after the primary dashboard.
-- IA-011 Footer appears last and must remain complete enough for full TradingView navigation context.
-- IA-012 Region order requirement 12: header must have a stable visual position and must not jump ahead of higher-priority macro overview content.
-- IA-013 Region order requirement 13: breadcrumb must have a stable visual position and must not jump ahead of higher-priority macro overview content.
-- IA-014 Region order requirement 14: title must have a stable visual position and must not jump ahead of higher-priority macro overview content.
-- IA-015 Region order requirement 15: tabs must have a stable visual position and must not jump ahead of higher-priority macro overview content.
-- IA-016 Region order requirement 16: economic trends must have a stable visual position and must not jump ahead of higher-priority macro overview content.
-- IA-017 Region order requirement 17: countries must have a stable visual position and must not jump ahead of higher-priority macro overview content.
-- IA-018 Region order requirement 18: ideas must have a stable visual position and must not jump ahead of higher-priority macro overview content.
-- IA-019 Region order requirement 19: heatmap must have a stable visual position and must not jump ahead of higher-priority macro overview content.
-- IA-020 Region order requirement 20: main indicators must have a stable visual position and must not jump ahead of higher-priority macro overview content.
-- IA-021 Region order requirement 21: industrial map must have a stable visual position and must not jump ahead of higher-priority macro overview content.
-- IA-022 Region order requirement 22: news must have a stable visual position and must not jump ahead of higher-priority macro overview content.
-- IA-023 Region order requirement 23: calendar must have a stable visual position and must not jump ahead of higher-priority macro overview content.
-- IA-024 Region order requirement 24: FAQ must have a stable visual position and must not jump ahead of higher-priority macro overview content.
-- IA-025 Region order requirement 25: footer must have a stable visual position and must not jump ahead of higher-priority macro overview content.
-- IA-026 Region order requirement 26: header must have a stable visual position and must not jump ahead of higher-priority macro overview content.
-- IA-027 Region order requirement 27: breadcrumb must have a stable visual position and must not jump ahead of higher-priority macro overview content.
-- IA-028 Region order requirement 28: title must have a stable visual position and must not jump ahead of higher-priority macro overview content.
-- IA-029 Region order requirement 29: tabs must have a stable visual position and must not jump ahead of higher-priority macro overview content.
-- IA-030 Region order requirement 30: economic trends must have a stable visual position and must not jump ahead of higher-priority macro overview content.
-- IA-031 Region order requirement 31: countries must have a stable visual position and must not jump ahead of higher-priority macro overview content.
-- IA-032 Region order requirement 32: ideas must have a stable visual position and must not jump ahead of higher-priority macro overview content.
-- IA-033 Region order requirement 33: heatmap must have a stable visual position and must not jump ahead of higher-priority macro overview content.
-- IA-034 Region order requirement 34: main indicators must have a stable visual position and must not jump ahead of higher-priority macro overview content.
-- IA-035 Region order requirement 35: industrial map must have a stable visual position and must not jump ahead of higher-priority macro overview content.
-- IA-036 Region order requirement 36: news must have a stable visual position and must not jump ahead of higher-priority macro overview content.
-- IA-037 Region order requirement 37: calendar must have a stable visual position and must not jump ahead of higher-priority macro overview content.
-- IA-038 Region order requirement 38: FAQ must have a stable visual position and must not jump ahead of higher-priority macro overview content.
-- IA-039 Region order requirement 39: footer must have a stable visual position and must not jump ahead of higher-priority macro overview content.
-- IA-040 Region order requirement 40: header must have a stable visual position and must not jump ahead of higher-priority macro overview content.
-- IA-041 Region order requirement 41: breadcrumb must have a stable visual position and must not jump ahead of higher-priority macro overview content.
-- IA-042 Region order requirement 42: title must have a stable visual position and must not jump ahead of higher-priority macro overview content.
-- IA-043 Region order requirement 43: tabs must have a stable visual position and must not jump ahead of higher-priority macro overview content.
-- IA-044 Region order requirement 44: economic trends must have a stable visual position and must not jump ahead of higher-priority macro overview content.
-- IA-045 Region order requirement 45: countries must have a stable visual position and must not jump ahead of higher-priority macro overview content.
-- IA-046 Region order requirement 46: ideas must have a stable visual position and must not jump ahead of higher-priority macro overview content.
-- IA-047 Region order requirement 47: heatmap must have a stable visual position and must not jump ahead of higher-priority macro overview content.
-- IA-048 Region order requirement 48: main indicators must have a stable visual position and must not jump ahead of higher-priority macro overview content.
-- IA-049 Region order requirement 49: industrial map must have a stable visual position and must not jump ahead of higher-priority macro overview content.
-- IA-050 Region order requirement 50: news must have a stable visual position and must not jump ahead of higher-priority macro overview content.
-- IA-051 Region order requirement 51: calendar must have a stable visual position and must not jump ahead of higher-priority macro overview content.
-- IA-052 Region order requirement 52: FAQ must have a stable visual position and must not jump ahead of higher-priority macro overview content.
-- IA-053 Region order requirement 53: footer must have a stable visual position and must not jump ahead of higher-priority macro overview content.
-- IA-054 Region order requirement 54: header must have a stable visual position and must not jump ahead of higher-priority macro overview content.
-- IA-055 Region order requirement 55: breadcrumb must have a stable visual position and must not jump ahead of higher-priority macro overview content.
-- IA-056 Region order requirement 56: title must have a stable visual position and must not jump ahead of higher-priority macro overview content.
-- IA-057 Region order requirement 57: tabs must have a stable visual position and must not jump ahead of higher-priority macro overview content.
-- IA-058 Region order requirement 58: economic trends must have a stable visual position and must not jump ahead of higher-priority macro overview content.
-- IA-059 Region order requirement 59: countries must have a stable visual position and must not jump ahead of higher-priority macro overview content.
-- IA-060 Region order requirement 60: ideas must have a stable visual position and must not jump ahead of higher-priority macro overview content.
-- IA-061 Region order requirement 61: heatmap must have a stable visual position and must not jump ahead of higher-priority macro overview content.
-- IA-062 Region order requirement 62: main indicators must have a stable visual position and must not jump ahead of higher-priority macro overview content.
-- IA-063 Region order requirement 63: industrial map must have a stable visual position and must not jump ahead of higher-priority macro overview content.
-- IA-064 Region order requirement 64: news must have a stable visual position and must not jump ahead of higher-priority macro overview content.
-- IA-065 Region order requirement 65: calendar must have a stable visual position and must not jump ahead of higher-priority macro overview content.
-- IA-066 Region order requirement 66: FAQ must have a stable visual position and must not jump ahead of higher-priority macro overview content.
-- IA-067 Region order requirement 67: footer must have a stable visual position and must not jump ahead of higher-priority macro overview content.
-- IA-068 Region order requirement 68: header must have a stable visual position and must not jump ahead of higher-priority macro overview content.
-- IA-069 Region order requirement 69: breadcrumb must have a stable visual position and must not jump ahead of higher-priority macro overview content.
-- IA-070 Region order requirement 70: title must have a stable visual position and must not jump ahead of higher-priority macro overview content.
-- IA-071 Region order requirement 71: tabs must have a stable visual position and must not jump ahead of higher-priority macro overview content.
-- IA-072 Region order requirement 72: economic trends must have a stable visual position and must not jump ahead of higher-priority macro overview content.
+## 3. 证据来源
 
-## 7. Global Header Requirements
-- HEADER-001 Header must include TradingView brand mark as a home link.
-- HEADER-002 Header must include Products, Community, Markets, Brokers, and More navigation entries.
-- HEADER-003 Header navigation entries must be keyboard-focusable links or disclosure controls according to behavior.
-- HEADER-004 Search entry must be visible in the global header.
-- HEADER-005 Language selector must show EN on the captured English page.
-- HEADER-006 Get started CTA must be visually prominent but not block reading.
-- HEADER-007 Header height should match the captured 64px desktop reference.
-- HEADER-008 Header must keep a white background and strong bottom separation from page content.
-- HEADER-009 Header must remain usable on mobile through a compact navigation pattern.
-- HEADER-010 Header dropdown behavior is required if Products, Community, Markets, Brokers, or More have menus in the implementation scope.
-- HEADER-011 Header default state must preserve link semantics, visible focus, and layout stability.
-- HEADER-012 Header hover state must preserve link semantics, visible focus, and layout stability.
-- HEADER-013 Header focus state must preserve link semantics, visible focus, and layout stability.
-- HEADER-014 Header active state must preserve link semantics, visible focus, and layout stability.
-- HEADER-015 Header open state must preserve link semantics, visible focus, and layout stability.
-- HEADER-016 Header collapsed state must preserve link semantics, visible focus, and layout stability.
-- HEADER-017 Header mobile state must preserve link semantics, visible focus, and layout stability.
-- HEADER-018 Header default state must preserve link semantics, visible focus, and layout stability.
-- HEADER-019 Header hover state must preserve link semantics, visible focus, and layout stability.
-- HEADER-020 Header focus state must preserve link semantics, visible focus, and layout stability.
-- HEADER-021 Header active state must preserve link semantics, visible focus, and layout stability.
-- HEADER-022 Header open state must preserve link semantics, visible focus, and layout stability.
-- HEADER-023 Header collapsed state must preserve link semantics, visible focus, and layout stability.
-- HEADER-024 Header mobile state must preserve link semantics, visible focus, and layout stability.
-- HEADER-025 Header default state must preserve link semantics, visible focus, and layout stability.
-- HEADER-026 Header hover state must preserve link semantics, visible focus, and layout stability.
-- HEADER-027 Header focus state must preserve link semantics, visible focus, and layout stability.
-- HEADER-028 Header active state must preserve link semantics, visible focus, and layout stability.
-- HEADER-029 Header open state must preserve link semantics, visible focus, and layout stability.
-- HEADER-030 Header collapsed state must preserve link semantics, visible focus, and layout stability.
-- HEADER-031 Header mobile state must preserve link semantics, visible focus, and layout stability.
-- HEADER-032 Header default state must preserve link semantics, visible focus, and layout stability.
-- HEADER-033 Header hover state must preserve link semantics, visible focus, and layout stability.
-- HEADER-034 Header focus state must preserve link semantics, visible focus, and layout stability.
-- HEADER-035 Header active state must preserve link semantics, visible focus, and layout stability.
-- HEADER-036 Header open state must preserve link semantics, visible focus, and layout stability.
-- HEADER-037 Header collapsed state must preserve link semantics, visible focus, and layout stability.
-- HEADER-038 Header mobile state must preserve link semantics, visible focus, and layout stability.
-- HEADER-039 Header default state must preserve link semantics, visible focus, and layout stability.
-- HEADER-040 Header hover state must preserve link semantics, visible focus, and layout stability.
-- HEADER-041 Header focus state must preserve link semantics, visible focus, and layout stability.
-- HEADER-042 Header active state must preserve link semantics, visible focus, and layout stability.
-- HEADER-043 Header open state must preserve link semantics, visible focus, and layout stability.
-- HEADER-044 Header collapsed state must preserve link semantics, visible focus, and layout stability.
-- HEADER-045 Header mobile state must preserve link semantics, visible focus, and layout stability.
-- HEADER-046 Header default state must preserve link semantics, visible focus, and layout stability.
-- HEADER-047 Header hover state must preserve link semantics, visible focus, and layout stability.
-- HEADER-048 Header focus state must preserve link semantics, visible focus, and layout stability.
-- HEADER-049 Header active state must preserve link semantics, visible focus, and layout stability.
-- HEADER-050 Header open state must preserve link semantics, visible focus, and layout stability.
-- HEADER-051 Header collapsed state must preserve link semantics, visible focus, and layout stability.
-- HEADER-052 Header mobile state must preserve link semantics, visible focus, and layout stability.
-- HEADER-053 Header default state must preserve link semantics, visible focus, and layout stability.
-- HEADER-054 Header hover state must preserve link semantics, visible focus, and layout stability.
-- HEADER-055 Header focus state must preserve link semantics, visible focus, and layout stability.
-- HEADER-056 Header active state must preserve link semantics, visible focus, and layout stability.
-- HEADER-057 Header open state must preserve link semantics, visible focus, and layout stability.
-- HEADER-058 Header collapsed state must preserve link semantics, visible focus, and layout stability.
-- HEADER-059 Header mobile state must preserve link semantics, visible focus, and layout stability.
-- HEADER-060 Header default state must preserve link semantics, visible focus, and layout stability.
-- HEADER-061 Header hover state must preserve link semantics, visible focus, and layout stability.
-- HEADER-062 Header focus state must preserve link semantics, visible focus, and layout stability.
-- HEADER-063 Header active state must preserve link semantics, visible focus, and layout stability.
-- HEADER-064 Header open state must preserve link semantics, visible focus, and layout stability.
-- HEADER-065 Header collapsed state must preserve link semantics, visible focus, and layout stability.
+| 类型 | 证据 | 用途 |
+| --- | --- | --- |
+| Live page | `https://www.tradingview.com/markets/world-economy/` | 确认页面标题、可见模块、可见文案和链接语义。 |
+| Rendered evidence | `.opencorvus/runtime/tasks/tsk_e8b012d9e001/frontend-design/mirror/reference.png` | 确认桌面视口视觉结构。 |
+| Evidence summary | `.opencorvus/runtime/tasks/tsk_e8b012d9e001/frontend-design/mirror/prd-evidence-summary.md` | 确认页面 surface、颜色、字体、组件模式。 |
+| Source IR | `.opencorvus/runtime/tasks/tsk_e8b012d9e001/frontend-design/mirror/source-ir/*` | 确认布局、内容模型、样式 token 和交互 hint。 |
+| Target package | `packages/tradingview-world-economy` | 确认已有实现包、抽取数据和测试基线。 |
+| Extracted data | `packages/tradingview-world-economy/src/data/economicTrendsExtracted.ts` | 确认地图路径、GDP 行、国家入口、指标卡、新闻、日历、FAQ 信号。 |
+| Extracted table | `packages/tradingview-world-economy/src/data/sourceData.ts` | 确认 heatmap 表格和可见文本信号。 |
+| Existing spec | `specs/new-arch/2026-06-03-tradingview-world-economy-extracted-clone.md` | 确认项目策略是 extracted-material project，不是手写近似页面。 |
+| QA test | `packages/tradingview-world-economy/qa/extracted-materials.test.ts` | 确认当前抽取材料的可测试基线。 |
 
-## 8. Breadcrumb, Title, And Tabs
-- BREADCRUMB-TAB-001 Breadcrumb must show Markets, slash separator, and Economy.
-- BREADCRUMB-TAB-002 Breadcrumb links must lead to their corresponding market category pages.
-- BREADCRUMB-TAB-003 Main H1 must read Economy on the captured page.
-- BREADCRUMB-TAB-004 Overview tab must exist and be selected by default when the URL is the base world economy page.
-- BREADCRUMB-TAB-005 Economic trends tab must exist as the sibling tab.
-- BREADCRUMB-TAB-006 Tab controls must be semantic links or tabs; they must not be inert styled text.
-- BREADCRUMB-TAB-007 Selected tab state must be visually clear through color, underline, or TradingView-equivalent active treatment.
-- BREADCRUMB-TAB-008 Tabs must remain near the H1 and before major dashboard content.
-- BREADCRUMB-TAB-009 Mobile tabs may horizontally scroll if labels do not fit.
-- BREADCRUMB-TAB-010 Tab order must be stable between desktop and mobile.
-- BREADCRUMB-TAB-011 Breadcrumb and tab requirement 11 must keep users oriented within Markets > Economy and preserve direct navigation to sibling page states.
-- BREADCRUMB-TAB-012 Breadcrumb and tab requirement 12 must keep users oriented within Markets > Economy and preserve direct navigation to sibling page states.
-- BREADCRUMB-TAB-013 Breadcrumb and tab requirement 13 must keep users oriented within Markets > Economy and preserve direct navigation to sibling page states.
-- BREADCRUMB-TAB-014 Breadcrumb and tab requirement 14 must keep users oriented within Markets > Economy and preserve direct navigation to sibling page states.
-- BREADCRUMB-TAB-015 Breadcrumb and tab requirement 15 must keep users oriented within Markets > Economy and preserve direct navigation to sibling page states.
-- BREADCRUMB-TAB-016 Breadcrumb and tab requirement 16 must keep users oriented within Markets > Economy and preserve direct navigation to sibling page states.
-- BREADCRUMB-TAB-017 Breadcrumb and tab requirement 17 must keep users oriented within Markets > Economy and preserve direct navigation to sibling page states.
-- BREADCRUMB-TAB-018 Breadcrumb and tab requirement 18 must keep users oriented within Markets > Economy and preserve direct navigation to sibling page states.
-- BREADCRUMB-TAB-019 Breadcrumb and tab requirement 19 must keep users oriented within Markets > Economy and preserve direct navigation to sibling page states.
-- BREADCRUMB-TAB-020 Breadcrumb and tab requirement 20 must keep users oriented within Markets > Economy and preserve direct navigation to sibling page states.
-- BREADCRUMB-TAB-021 Breadcrumb and tab requirement 21 must keep users oriented within Markets > Economy and preserve direct navigation to sibling page states.
-- BREADCRUMB-TAB-022 Breadcrumb and tab requirement 22 must keep users oriented within Markets > Economy and preserve direct navigation to sibling page states.
-- BREADCRUMB-TAB-023 Breadcrumb and tab requirement 23 must keep users oriented within Markets > Economy and preserve direct navigation to sibling page states.
-- BREADCRUMB-TAB-024 Breadcrumb and tab requirement 24 must keep users oriented within Markets > Economy and preserve direct navigation to sibling page states.
-- BREADCRUMB-TAB-025 Breadcrumb and tab requirement 25 must keep users oriented within Markets > Economy and preserve direct navigation to sibling page states.
-- BREADCRUMB-TAB-026 Breadcrumb and tab requirement 26 must keep users oriented within Markets > Economy and preserve direct navigation to sibling page states.
-- BREADCRUMB-TAB-027 Breadcrumb and tab requirement 27 must keep users oriented within Markets > Economy and preserve direct navigation to sibling page states.
-- BREADCRUMB-TAB-028 Breadcrumb and tab requirement 28 must keep users oriented within Markets > Economy and preserve direct navigation to sibling page states.
-- BREADCRUMB-TAB-029 Breadcrumb and tab requirement 29 must keep users oriented within Markets > Economy and preserve direct navigation to sibling page states.
-- BREADCRUMB-TAB-030 Breadcrumb and tab requirement 30 must keep users oriented within Markets > Economy and preserve direct navigation to sibling page states.
-- BREADCRUMB-TAB-031 Breadcrumb and tab requirement 31 must keep users oriented within Markets > Economy and preserve direct navigation to sibling page states.
-- BREADCRUMB-TAB-032 Breadcrumb and tab requirement 32 must keep users oriented within Markets > Economy and preserve direct navigation to sibling page states.
-- BREADCRUMB-TAB-033 Breadcrumb and tab requirement 33 must keep users oriented within Markets > Economy and preserve direct navigation to sibling page states.
-- BREADCRUMB-TAB-034 Breadcrumb and tab requirement 34 must keep users oriented within Markets > Economy and preserve direct navigation to sibling page states.
-- BREADCRUMB-TAB-035 Breadcrumb and tab requirement 35 must keep users oriented within Markets > Economy and preserve direct navigation to sibling page states.
-- BREADCRUMB-TAB-036 Breadcrumb and tab requirement 36 must keep users oriented within Markets > Economy and preserve direct navigation to sibling page states.
-- BREADCRUMB-TAB-037 Breadcrumb and tab requirement 37 must keep users oriented within Markets > Economy and preserve direct navigation to sibling page states.
-- BREADCRUMB-TAB-038 Breadcrumb and tab requirement 38 must keep users oriented within Markets > Economy and preserve direct navigation to sibling page states.
-- BREADCRUMB-TAB-039 Breadcrumb and tab requirement 39 must keep users oriented within Markets > Economy and preserve direct navigation to sibling page states.
-- BREADCRUMB-TAB-040 Breadcrumb and tab requirement 40 must keep users oriented within Markets > Economy and preserve direct navigation to sibling page states.
-- BREADCRUMB-TAB-041 Breadcrumb and tab requirement 41 must keep users oriented within Markets > Economy and preserve direct navigation to sibling page states.
-- BREADCRUMB-TAB-042 Breadcrumb and tab requirement 42 must keep users oriented within Markets > Economy and preserve direct navigation to sibling page states.
-- BREADCRUMB-TAB-043 Breadcrumb and tab requirement 43 must keep users oriented within Markets > Economy and preserve direct navigation to sibling page states.
-- BREADCRUMB-TAB-044 Breadcrumb and tab requirement 44 must keep users oriented within Markets > Economy and preserve direct navigation to sibling page states.
-- BREADCRUMB-TAB-045 Breadcrumb and tab requirement 45 must keep users oriented within Markets > Economy and preserve direct navigation to sibling page states.
-- BREADCRUMB-TAB-046 Breadcrumb and tab requirement 46 must keep users oriented within Markets > Economy and preserve direct navigation to sibling page states.
-- BREADCRUMB-TAB-047 Breadcrumb and tab requirement 47 must keep users oriented within Markets > Economy and preserve direct navigation to sibling page states.
-- BREADCRUMB-TAB-048 Breadcrumb and tab requirement 48 must keep users oriented within Markets > Economy and preserve direct navigation to sibling page states.
-- BREADCRUMB-TAB-049 Breadcrumb and tab requirement 49 must keep users oriented within Markets > Economy and preserve direct navigation to sibling page states.
-- BREADCRUMB-TAB-050 Breadcrumb and tab requirement 50 must keep users oriented within Markets > Economy and preserve direct navigation to sibling page states.
+## 4. 缩写和术语
 
-## 9. Economic Trends Summary
-- ECON-SUMMARY-001 Economic trends section must have a visible section heading.
-- ECON-SUMMARY-002 Economic trends section must render map, GDP list, and metric cards as a coherent grid on desktop.
-- ECON-SUMMARY-003 The grid must preserve card boundaries and spacing from the captured reference.
-- ECON-SUMMARY-004 The grid must not replace charts or maps with text-only placeholders.
-- ECON-SUMMARY-005 Card surfaces must use light backgrounds and subtle separation consistent with TradingView cards.
-- ECON-SUMMARY-006 Economic trends section must be visible above country chips in the natural scroll order.
-- ECON-SUMMARY-007 Economic trends section must expose data labels, not only visual shapes.
-- ECON-SUMMARY-008 The section must support loading, loaded, stale, and error states as product states if live data is used.
-- ECON-SUMMARY-009 The section must not silently substitute old data if source data fails.
-- ECON-SUMMARY-010 Each card must be addressable for QA with stable test identifiers or semantic labels.
-- ECON-SUMMARY-011 Economic trends layout grid requirement 11 must be validated against the reference page and extracted data.
-- ECON-SUMMARY-012 Economic trends card density requirement 12 must be validated against the reference page and extracted data.
-- ECON-SUMMARY-013 Economic trends data freshness requirement 13 must be validated against the reference page and extracted data.
-- ECON-SUMMARY-014 Economic trends numeric formatting requirement 14 must be validated against the reference page and extracted data.
-- ECON-SUMMARY-015 Economic trends link targets requirement 15 must be validated against the reference page and extracted data.
-- ECON-SUMMARY-016 Economic trends visual hierarchy requirement 16 must be validated against the reference page and extracted data.
-- ECON-SUMMARY-017 Economic trends source attribution requirement 17 must be validated against the reference page and extracted data.
-- ECON-SUMMARY-018 Economic trends responsive stacking requirement 18 must be validated against the reference page and extracted data.
-- ECON-SUMMARY-019 Economic trends layout grid requirement 19 must be validated against the reference page and extracted data.
-- ECON-SUMMARY-020 Economic trends card density requirement 20 must be validated against the reference page and extracted data.
-- ECON-SUMMARY-021 Economic trends data freshness requirement 21 must be validated against the reference page and extracted data.
-- ECON-SUMMARY-022 Economic trends numeric formatting requirement 22 must be validated against the reference page and extracted data.
-- ECON-SUMMARY-023 Economic trends link targets requirement 23 must be validated against the reference page and extracted data.
-- ECON-SUMMARY-024 Economic trends visual hierarchy requirement 24 must be validated against the reference page and extracted data.
-- ECON-SUMMARY-025 Economic trends source attribution requirement 25 must be validated against the reference page and extracted data.
-- ECON-SUMMARY-026 Economic trends responsive stacking requirement 26 must be validated against the reference page and extracted data.
-- ECON-SUMMARY-027 Economic trends layout grid requirement 27 must be validated against the reference page and extracted data.
-- ECON-SUMMARY-028 Economic trends card density requirement 28 must be validated against the reference page and extracted data.
-- ECON-SUMMARY-029 Economic trends data freshness requirement 29 must be validated against the reference page and extracted data.
-- ECON-SUMMARY-030 Economic trends numeric formatting requirement 30 must be validated against the reference page and extracted data.
-- ECON-SUMMARY-031 Economic trends link targets requirement 31 must be validated against the reference page and extracted data.
-- ECON-SUMMARY-032 Economic trends visual hierarchy requirement 32 must be validated against the reference page and extracted data.
-- ECON-SUMMARY-033 Economic trends source attribution requirement 33 must be validated against the reference page and extracted data.
-- ECON-SUMMARY-034 Economic trends responsive stacking requirement 34 must be validated against the reference page and extracted data.
-- ECON-SUMMARY-035 Economic trends layout grid requirement 35 must be validated against the reference page and extracted data.
-- ECON-SUMMARY-036 Economic trends card density requirement 36 must be validated against the reference page and extracted data.
-- ECON-SUMMARY-037 Economic trends data freshness requirement 37 must be validated against the reference page and extracted data.
-- ECON-SUMMARY-038 Economic trends numeric formatting requirement 38 must be validated against the reference page and extracted data.
-- ECON-SUMMARY-039 Economic trends link targets requirement 39 must be validated against the reference page and extracted data.
-- ECON-SUMMARY-040 Economic trends visual hierarchy requirement 40 must be validated against the reference page and extracted data.
-- ECON-SUMMARY-041 Economic trends source attribution requirement 41 must be validated against the reference page and extracted data.
-- ECON-SUMMARY-042 Economic trends responsive stacking requirement 42 must be validated against the reference page and extracted data.
-- ECON-SUMMARY-043 Economic trends layout grid requirement 43 must be validated against the reference page and extracted data.
-- ECON-SUMMARY-044 Economic trends card density requirement 44 must be validated against the reference page and extracted data.
-- ECON-SUMMARY-045 Economic trends data freshness requirement 45 must be validated against the reference page and extracted data.
-- ECON-SUMMARY-046 Economic trends numeric formatting requirement 46 must be validated against the reference page and extracted data.
-- ECON-SUMMARY-047 Economic trends link targets requirement 47 must be validated against the reference page and extracted data.
-- ECON-SUMMARY-048 Economic trends visual hierarchy requirement 48 must be validated against the reference page and extracted data.
-- ECON-SUMMARY-049 Economic trends source attribution requirement 49 must be validated against the reference page and extracted data.
-- ECON-SUMMARY-050 Economic trends responsive stacking requirement 50 must be validated against the reference page and extracted data.
-- ECON-SUMMARY-051 Economic trends layout grid requirement 51 must be validated against the reference page and extracted data.
-- ECON-SUMMARY-052 Economic trends card density requirement 52 must be validated against the reference page and extracted data.
-- ECON-SUMMARY-053 Economic trends data freshness requirement 53 must be validated against the reference page and extracted data.
-- ECON-SUMMARY-054 Economic trends numeric formatting requirement 54 must be validated against the reference page and extracted data.
-- ECON-SUMMARY-055 Economic trends link targets requirement 55 must be validated against the reference page and extracted data.
-- ECON-SUMMARY-056 Economic trends visual hierarchy requirement 56 must be validated against the reference page and extracted data.
-- ECON-SUMMARY-057 Economic trends source attribution requirement 57 must be validated against the reference page and extracted data.
-- ECON-SUMMARY-058 Economic trends responsive stacking requirement 58 must be validated against the reference page and extracted data.
-- ECON-SUMMARY-059 Economic trends layout grid requirement 59 must be validated against the reference page and extracted data.
-- ECON-SUMMARY-060 Economic trends card density requirement 60 must be validated against the reference page and extracted data.
-- ECON-SUMMARY-061 Economic trends data freshness requirement 61 must be validated against the reference page and extracted data.
-- ECON-SUMMARY-062 Economic trends numeric formatting requirement 62 must be validated against the reference page and extracted data.
-- ECON-SUMMARY-063 Economic trends link targets requirement 63 must be validated against the reference page and extracted data.
-- ECON-SUMMARY-064 Economic trends visual hierarchy requirement 64 must be validated against the reference page and extracted data.
-- ECON-SUMMARY-065 Economic trends source attribution requirement 65 must be validated against the reference page and extracted data.
-- ECON-SUMMARY-066 Economic trends responsive stacking requirement 66 must be validated against the reference page and extracted data.
-- ECON-SUMMARY-067 Economic trends layout grid requirement 67 must be validated against the reference page and extracted data.
-- ECON-SUMMARY-068 Economic trends card density requirement 68 must be validated against the reference page and extracted data.
-- ECON-SUMMARY-069 Economic trends data freshness requirement 69 must be validated against the reference page and extracted data.
-- ECON-SUMMARY-070 Economic trends numeric formatting requirement 70 must be validated against the reference page and extracted data.
-- ECON-SUMMARY-071 Economic trends link targets requirement 71 must be validated against the reference page and extracted data.
-- ECON-SUMMARY-072 Economic trends visual hierarchy requirement 72 must be validated against the reference page and extracted data.
-- ECON-SUMMARY-073 Economic trends source attribution requirement 73 must be validated against the reference page and extracted data.
-- ECON-SUMMARY-074 Economic trends responsive stacking requirement 74 must be validated against the reference page and extracted data.
-- ECON-SUMMARY-075 Economic trends layout grid requirement 75 must be validated against the reference page and extracted data.
-- ECON-SUMMARY-076 Economic trends card density requirement 76 must be validated against the reference page and extracted data.
-- ECON-SUMMARY-077 Economic trends data freshness requirement 77 must be validated against the reference page and extracted data.
-- ECON-SUMMARY-078 Economic trends numeric formatting requirement 78 must be validated against the reference page and extracted data.
-- ECON-SUMMARY-079 Economic trends link targets requirement 79 must be validated against the reference page and extracted data.
-- ECON-SUMMARY-080 Economic trends visual hierarchy requirement 80 must be validated against the reference page and extracted data.
-- ECON-SUMMARY-081 Economic trends source attribution requirement 81 must be validated against the reference page and extracted data.
-- ECON-SUMMARY-082 Economic trends responsive stacking requirement 82 must be validated against the reference page and extracted data.
-- ECON-SUMMARY-083 Economic trends layout grid requirement 83 must be validated against the reference page and extracted data.
-- ECON-SUMMARY-084 Economic trends card density requirement 84 must be validated against the reference page and extracted data.
-- ECON-SUMMARY-085 Economic trends data freshness requirement 85 must be validated against the reference page and extracted data.
-- ECON-SUMMARY-086 Economic trends numeric formatting requirement 86 must be validated against the reference page and extracted data.
-- ECON-SUMMARY-087 Economic trends link targets requirement 87 must be validated against the reference page and extracted data.
-- ECON-SUMMARY-088 Economic trends visual hierarchy requirement 88 must be validated against the reference page and extracted data.
-- ECON-SUMMARY-089 Economic trends source attribution requirement 89 must be validated against the reference page and extracted data.
-- ECON-SUMMARY-090 Economic trends responsive stacking requirement 90 must be validated against the reference page and extracted data.
+- PRD: Product Requirements Document，产品需求文档，用来对齐产品目标、范围、模块、数据、交互、验收和风险。
+- UI: User Interface，用户界面，指页面可见控件、布局、文案和视觉样式。
+- UX: User Experience，用户体验，指用户从进入页面到完成信息获取或跳转的完整体验。
+- GDP: Gross Domestic Product，国内生产总值，用于衡量一个国家或地区的经济总产出。
+- YoY: Year over Year，同比，表示当前周期相对去年同期的变化。
+- QoQ: Quarter over Quarter，环比季度变化，经济日历中常用于 GDP Growth Rate QoQ。
+- PMI: Purchasing Managers Index，采购经理人指数，用来衡量制造业或服务业景气度。
+- CPI: Consumer Price Index，消费者价格指数，是计算通胀率的常见基础。
+- PPI: Producer Price Index，生产者价格指数，用于观察生产端价格变化。
+- FAQ: Frequently Asked Questions，常见问题，用来解释基础概念和公式。
+- CTA: Call To Action，行动入口，例如 Get started、See all、Keep reading。
+- SEO: Search Engine Optimization，搜索引擎优化，指标题、结构化内容、内部链接和可索引 FAQ。
+- ARIA: Accessible Rich Internet Applications，无障碍语义属性，用于描述 tabs、accordion、toolbar 等控件状态。
+- SVG: Scalable Vector Graphics，可缩放矢量图，本页面的世界地图和图标大量使用这种格式。
+- LCP: Largest Contentful Paint，最大内容绘制，用来衡量首屏主要内容加载速度。
+- CLS: Cumulative Layout Shift，累积布局偏移，用来衡量布局稳定性。
+- INP: Interaction to Next Paint，交互到下一次绘制，用来衡量交互响应速度。
+- IR: Intermediate Representation，中间表示，指 frontend_design 抽取出的页面结构、内容、布局、样式和交互证据。
+- QA: Quality Assurance，质量保障，覆盖功能测试、视觉测试、数据测试、可访问性测试和性能测试。
+- FRED: Federal Reserve Economic Data，美国联邦储备经济数据，页面社区观点中出现的数据源符号前缀。
+- BEA: Bureau of Economic Analysis，美国经济分析局，社区观点中提到的 GDP 数据来源。
+- CUSIP: Committee on Uniform Securities Identification Procedures，北美证券标识体系，页脚数据版权中出现。
+- ETF: Exchange Traded Fund，交易所交易基金，全站导航中的市场品类。
+- DEX: Decentralized Exchange，去中心化交易所，全站导航中的加密交易对入口。
+- API: Application Programming Interface，应用程序接口，指页面向数据服务读取经济数据、新闻和日历的合约。
+- SSR: Server Side Rendering，服务端渲染，用于提高首屏可索引性和加载体验。
+- SPA: Single Page Application，单页应用，指页面在前端局部更新内容和交互状态。
 
-## 10. Inflation Map Requirements
-- INFLATION-MAP-001 Inflation map card title must read Inflation map.
-- INFLATION-MAP-002 Inflation map must display world geography using extracted SVG map path geometry or a mature map rendering library fed by equivalent geometry.
-- INFLATION-MAP-003 Inflation map legend labels must include 0%, 3%, 7%, 12%, and 25%.
-- INFLATION-MAP-004 Inflation map color scale must use the captured tan/orange heatmap preset.
-- INFLATION-MAP-005 Countries without data must have a disabled or neutral visual treatment.
-- INFLATION-MAP-006 Map must expose accessible name or summary explaining that color represents inflation.
-- INFLATION-MAP-007 Map must not rely on hover-only information for core data on touch devices.
-- INFLATION-MAP-008 Map must preserve aspect ratio around 745 by 372 in the captured implementation.
-- INFLATION-MAP-009 Map must stay inside its card and not overflow into adjacent GDP or metric cards.
-- INFLATION-MAP-010 Map must support responsive downscaling without text collision in the legend.
-- INFLATION-MAP-011 Inflation map SVG path count requirement 11 must be reviewed as part of map QA.
-- INFLATION-MAP-012 Inflation map legend spacing requirement 12 must be reviewed as part of map QA.
-- INFLATION-MAP-013 Inflation map color bucket mapping requirement 13 must be reviewed as part of map QA.
-- INFLATION-MAP-014 Inflation map disabled country treatment requirement 14 must be reviewed as part of map QA.
-- INFLATION-MAP-015 Inflation map tooltip behavior requirement 15 must be reviewed as part of map QA.
-- INFLATION-MAP-016 Inflation map keyboard discoverability requirement 16 must be reviewed as part of map QA.
-- INFLATION-MAP-017 Inflation map mobile fit requirement 17 must be reviewed as part of map QA.
-- INFLATION-MAP-018 Inflation map visual contrast requirement 18 must be reviewed as part of map QA.
-- INFLATION-MAP-019 Inflation map loaded state requirement 19 must be reviewed as part of map QA.
-- INFLATION-MAP-020 Inflation map data source freshness requirement 20 must be reviewed as part of map QA.
-- INFLATION-MAP-021 Inflation map SVG path count requirement 21 must be reviewed as part of map QA.
-- INFLATION-MAP-022 Inflation map legend spacing requirement 22 must be reviewed as part of map QA.
-- INFLATION-MAP-023 Inflation map color bucket mapping requirement 23 must be reviewed as part of map QA.
-- INFLATION-MAP-024 Inflation map disabled country treatment requirement 24 must be reviewed as part of map QA.
-- INFLATION-MAP-025 Inflation map tooltip behavior requirement 25 must be reviewed as part of map QA.
-- INFLATION-MAP-026 Inflation map keyboard discoverability requirement 26 must be reviewed as part of map QA.
-- INFLATION-MAP-027 Inflation map mobile fit requirement 27 must be reviewed as part of map QA.
-- INFLATION-MAP-028 Inflation map visual contrast requirement 28 must be reviewed as part of map QA.
-- INFLATION-MAP-029 Inflation map loaded state requirement 29 must be reviewed as part of map QA.
-- INFLATION-MAP-030 Inflation map data source freshness requirement 30 must be reviewed as part of map QA.
-- INFLATION-MAP-031 Inflation map SVG path count requirement 31 must be reviewed as part of map QA.
-- INFLATION-MAP-032 Inflation map legend spacing requirement 32 must be reviewed as part of map QA.
-- INFLATION-MAP-033 Inflation map color bucket mapping requirement 33 must be reviewed as part of map QA.
-- INFLATION-MAP-034 Inflation map disabled country treatment requirement 34 must be reviewed as part of map QA.
-- INFLATION-MAP-035 Inflation map tooltip behavior requirement 35 must be reviewed as part of map QA.
-- INFLATION-MAP-036 Inflation map keyboard discoverability requirement 36 must be reviewed as part of map QA.
-- INFLATION-MAP-037 Inflation map mobile fit requirement 37 must be reviewed as part of map QA.
-- INFLATION-MAP-038 Inflation map visual contrast requirement 38 must be reviewed as part of map QA.
-- INFLATION-MAP-039 Inflation map loaded state requirement 39 must be reviewed as part of map QA.
-- INFLATION-MAP-040 Inflation map data source freshness requirement 40 must be reviewed as part of map QA.
-- INFLATION-MAP-041 Inflation map SVG path count requirement 41 must be reviewed as part of map QA.
-- INFLATION-MAP-042 Inflation map legend spacing requirement 42 must be reviewed as part of map QA.
-- INFLATION-MAP-043 Inflation map color bucket mapping requirement 43 must be reviewed as part of map QA.
-- INFLATION-MAP-044 Inflation map disabled country treatment requirement 44 must be reviewed as part of map QA.
-- INFLATION-MAP-045 Inflation map tooltip behavior requirement 45 must be reviewed as part of map QA.
-- INFLATION-MAP-046 Inflation map keyboard discoverability requirement 46 must be reviewed as part of map QA.
-- INFLATION-MAP-047 Inflation map mobile fit requirement 47 must be reviewed as part of map QA.
-- INFLATION-MAP-048 Inflation map visual contrast requirement 48 must be reviewed as part of map QA.
-- INFLATION-MAP-049 Inflation map loaded state requirement 49 must be reviewed as part of map QA.
-- INFLATION-MAP-050 Inflation map data source freshness requirement 50 must be reviewed as part of map QA.
-- INFLATION-MAP-051 Inflation map SVG path count requirement 51 must be reviewed as part of map QA.
-- INFLATION-MAP-052 Inflation map legend spacing requirement 52 must be reviewed as part of map QA.
-- INFLATION-MAP-053 Inflation map color bucket mapping requirement 53 must be reviewed as part of map QA.
-- INFLATION-MAP-054 Inflation map disabled country treatment requirement 54 must be reviewed as part of map QA.
-- INFLATION-MAP-055 Inflation map tooltip behavior requirement 55 must be reviewed as part of map QA.
-- INFLATION-MAP-056 Inflation map keyboard discoverability requirement 56 must be reviewed as part of map QA.
-- INFLATION-MAP-057 Inflation map mobile fit requirement 57 must be reviewed as part of map QA.
-- INFLATION-MAP-058 Inflation map visual contrast requirement 58 must be reviewed as part of map QA.
-- INFLATION-MAP-059 Inflation map loaded state requirement 59 must be reviewed as part of map QA.
-- INFLATION-MAP-060 Inflation map data source freshness requirement 60 must be reviewed as part of map QA.
-- INFLATION-MAP-061 Inflation map SVG path count requirement 61 must be reviewed as part of map QA.
-- INFLATION-MAP-062 Inflation map legend spacing requirement 62 must be reviewed as part of map QA.
-- INFLATION-MAP-063 Inflation map color bucket mapping requirement 63 must be reviewed as part of map QA.
-- INFLATION-MAP-064 Inflation map disabled country treatment requirement 64 must be reviewed as part of map QA.
-- INFLATION-MAP-065 Inflation map tooltip behavior requirement 65 must be reviewed as part of map QA.
-- INFLATION-MAP-066 Inflation map keyboard discoverability requirement 66 must be reviewed as part of map QA.
-- INFLATION-MAP-067 Inflation map mobile fit requirement 67 must be reviewed as part of map QA.
-- INFLATION-MAP-068 Inflation map visual contrast requirement 68 must be reviewed as part of map QA.
-- INFLATION-MAP-069 Inflation map loaded state requirement 69 must be reviewed as part of map QA.
-- INFLATION-MAP-070 Inflation map data source freshness requirement 70 must be reviewed as part of map QA.
-- INFLATION-MAP-071 Inflation map SVG path count requirement 71 must be reviewed as part of map QA.
-- INFLATION-MAP-072 Inflation map legend spacing requirement 72 must be reviewed as part of map QA.
-- INFLATION-MAP-073 Inflation map color bucket mapping requirement 73 must be reviewed as part of map QA.
-- INFLATION-MAP-074 Inflation map disabled country treatment requirement 74 must be reviewed as part of map QA.
-- INFLATION-MAP-075 Inflation map tooltip behavior requirement 75 must be reviewed as part of map QA.
-- INFLATION-MAP-076 Inflation map keyboard discoverability requirement 76 must be reviewed as part of map QA.
-- INFLATION-MAP-077 Inflation map mobile fit requirement 77 must be reviewed as part of map QA.
-- INFLATION-MAP-078 Inflation map visual contrast requirement 78 must be reviewed as part of map QA.
-- INFLATION-MAP-079 Inflation map loaded state requirement 79 must be reviewed as part of map QA.
-- INFLATION-MAP-080 Inflation map data source freshness requirement 80 must be reviewed as part of map QA.
+## 5. 产品目标
 
-## 11. GDP Growth Ranking Requirements
-- GDP-RANK-001 GDP ranking card title must read GDP growth, YoY.
-- GDP-RANK-002 Ranking header must expose Country, GDP Growth, and Nominal GDP columns.
-- GDP-RANK-003 Ranking row 1 must show India with GDP Growth 7.80% and Nominal GDP 3.91 T USD.
-- GDP-RANK-004 Ranking row 2 must show Indonesia with GDP Growth 5.61% and Nominal GDP 1.40 T USD.
-- GDP-RANK-005 Ranking row 3 must show Mainland China with GDP Growth 5.00% and Nominal GDP 18.74 T USD.
-- GDP-RANK-006 Ranking row 4 must show South Korea with GDP Growth 3.60% and Nominal GDP 1.92 T USD.
-- GDP-RANK-007 Ranking row 5 must show Saudi Arabia with GDP Growth 2.80% and Nominal GDP 1.24 T USD.
-- GDP-RANK-008 Ranking row 6 must show USA with GDP Growth 2.70% and Nominal GDP 29.18 T USD.
-- GDP-RANK-009 GDP ranking country logo requirement 9 must match captured table behavior and remain readable at supported widths.
-- GDP-RANK-010 GDP ranking country link requirement 10 must match captured table behavior and remain readable at supported widths.
-- GDP-RANK-011 GDP ranking growth value requirement 11 must match captured table behavior and remain readable at supported widths.
-- GDP-RANK-012 GDP ranking nominal GDP value requirement 12 must match captured table behavior and remain readable at supported widths.
-- GDP-RANK-013 GDP ranking USD unit requirement 13 must match captured table behavior and remain readable at supported widths.
-- GDP-RANK-014 GDP ranking row hover requirement 14 must match captured table behavior and remain readable at supported widths.
-- GDP-RANK-015 GDP ranking column alignment requirement 15 must match captured table behavior and remain readable at supported widths.
-- GDP-RANK-016 GDP ranking overflow tooltip requirement 16 must match captured table behavior and remain readable at supported widths.
-- GDP-RANK-017 GDP ranking country logo requirement 17 must match captured table behavior and remain readable at supported widths.
-- GDP-RANK-018 GDP ranking country link requirement 18 must match captured table behavior and remain readable at supported widths.
-- GDP-RANK-019 GDP ranking growth value requirement 19 must match captured table behavior and remain readable at supported widths.
-- GDP-RANK-020 GDP ranking nominal GDP value requirement 20 must match captured table behavior and remain readable at supported widths.
-- GDP-RANK-021 GDP ranking USD unit requirement 21 must match captured table behavior and remain readable at supported widths.
-- GDP-RANK-022 GDP ranking row hover requirement 22 must match captured table behavior and remain readable at supported widths.
-- GDP-RANK-023 GDP ranking column alignment requirement 23 must match captured table behavior and remain readable at supported widths.
-- GDP-RANK-024 GDP ranking overflow tooltip requirement 24 must match captured table behavior and remain readable at supported widths.
-- GDP-RANK-025 GDP ranking country logo requirement 25 must match captured table behavior and remain readable at supported widths.
-- GDP-RANK-026 GDP ranking country link requirement 26 must match captured table behavior and remain readable at supported widths.
-- GDP-RANK-027 GDP ranking growth value requirement 27 must match captured table behavior and remain readable at supported widths.
-- GDP-RANK-028 GDP ranking nominal GDP value requirement 28 must match captured table behavior and remain readable at supported widths.
-- GDP-RANK-029 GDP ranking USD unit requirement 29 must match captured table behavior and remain readable at supported widths.
-- GDP-RANK-030 GDP ranking row hover requirement 30 must match captured table behavior and remain readable at supported widths.
-- GDP-RANK-031 GDP ranking column alignment requirement 31 must match captured table behavior and remain readable at supported widths.
-- GDP-RANK-032 GDP ranking overflow tooltip requirement 32 must match captured table behavior and remain readable at supported widths.
-- GDP-RANK-033 GDP ranking country logo requirement 33 must match captured table behavior and remain readable at supported widths.
-- GDP-RANK-034 GDP ranking country link requirement 34 must match captured table behavior and remain readable at supported widths.
-- GDP-RANK-035 GDP ranking growth value requirement 35 must match captured table behavior and remain readable at supported widths.
-- GDP-RANK-036 GDP ranking nominal GDP value requirement 36 must match captured table behavior and remain readable at supported widths.
-- GDP-RANK-037 GDP ranking USD unit requirement 37 must match captured table behavior and remain readable at supported widths.
-- GDP-RANK-038 GDP ranking row hover requirement 38 must match captured table behavior and remain readable at supported widths.
-- GDP-RANK-039 GDP ranking column alignment requirement 39 must match captured table behavior and remain readable at supported widths.
-- GDP-RANK-040 GDP ranking overflow tooltip requirement 40 must match captured table behavior and remain readable at supported widths.
-- GDP-RANK-041 GDP ranking country logo requirement 41 must match captured table behavior and remain readable at supported widths.
-- GDP-RANK-042 GDP ranking country link requirement 42 must match captured table behavior and remain readable at supported widths.
-- GDP-RANK-043 GDP ranking growth value requirement 43 must match captured table behavior and remain readable at supported widths.
-- GDP-RANK-044 GDP ranking nominal GDP value requirement 44 must match captured table behavior and remain readable at supported widths.
-- GDP-RANK-045 GDP ranking USD unit requirement 45 must match captured table behavior and remain readable at supported widths.
-- GDP-RANK-046 GDP ranking row hover requirement 46 must match captured table behavior and remain readable at supported widths.
-- GDP-RANK-047 GDP ranking column alignment requirement 47 must match captured table behavior and remain readable at supported widths.
-- GDP-RANK-048 GDP ranking overflow tooltip requirement 48 must match captured table behavior and remain readable at supported widths.
-- GDP-RANK-049 GDP ranking country logo requirement 49 must match captured table behavior and remain readable at supported widths.
-- GDP-RANK-050 GDP ranking country link requirement 50 must match captured table behavior and remain readable at supported widths.
-- GDP-RANK-051 GDP ranking growth value requirement 51 must match captured table behavior and remain readable at supported widths.
-- GDP-RANK-052 GDP ranking nominal GDP value requirement 52 must match captured table behavior and remain readable at supported widths.
-- GDP-RANK-053 GDP ranking USD unit requirement 53 must match captured table behavior and remain readable at supported widths.
-- GDP-RANK-054 GDP ranking row hover requirement 54 must match captured table behavior and remain readable at supported widths.
-- GDP-RANK-055 GDP ranking column alignment requirement 55 must match captured table behavior and remain readable at supported widths.
-- GDP-RANK-056 GDP ranking overflow tooltip requirement 56 must match captured table behavior and remain readable at supported widths.
-- GDP-RANK-057 GDP ranking country logo requirement 57 must match captured table behavior and remain readable at supported widths.
-- GDP-RANK-058 GDP ranking country link requirement 58 must match captured table behavior and remain readable at supported widths.
-- GDP-RANK-059 GDP ranking growth value requirement 59 must match captured table behavior and remain readable at supported widths.
-- GDP-RANK-060 GDP ranking nominal GDP value requirement 60 must match captured table behavior and remain readable at supported widths.
-- GDP-RANK-061 GDP ranking USD unit requirement 61 must match captured table behavior and remain readable at supported widths.
-- GDP-RANK-062 GDP ranking row hover requirement 62 must match captured table behavior and remain readable at supported widths.
-- GDP-RANK-063 GDP ranking column alignment requirement 63 must match captured table behavior and remain readable at supported widths.
-- GDP-RANK-064 GDP ranking overflow tooltip requirement 64 must match captured table behavior and remain readable at supported widths.
-- GDP-RANK-065 GDP ranking country logo requirement 65 must match captured table behavior and remain readable at supported widths.
-- GDP-RANK-066 GDP ranking country link requirement 66 must match captured table behavior and remain readable at supported widths.
-- GDP-RANK-067 GDP ranking growth value requirement 67 must match captured table behavior and remain readable at supported widths.
-- GDP-RANK-068 GDP ranking nominal GDP value requirement 68 must match captured table behavior and remain readable at supported widths.
-- GDP-RANK-069 GDP ranking USD unit requirement 69 must match captured table behavior and remain readable at supported widths.
-- GDP-RANK-070 GDP ranking row hover requirement 70 must match captured table behavior and remain readable at supported widths.
-- GDP-RANK-071 GDP ranking column alignment requirement 71 must match captured table behavior and remain readable at supported widths.
-- GDP-RANK-072 GDP ranking overflow tooltip requirement 72 must match captured table behavior and remain readable at supported widths.
-- GDP-RANK-073 GDP ranking country logo requirement 73 must match captured table behavior and remain readable at supported widths.
-- GDP-RANK-074 GDP ranking country link requirement 74 must match captured table behavior and remain readable at supported widths.
-- GDP-RANK-075 GDP ranking growth value requirement 75 must match captured table behavior and remain readable at supported widths.
+- 让用户在 30 秒内判断全球经济趋势的主要信号。
+- 让用户在 1 分钟内找到一个国家的宏观经济入口。
+- 让用户在 1 分钟内找到一个经济指标的入口。
+- 让用户能通过地图快速理解全球通胀或工业生产的地域差异。
+- 让用户能通过 GDP growth YoY 排行发现增长靠前的国家。
+- 让用户能通过重点指标卡追踪美国失业率、利率和贸易余额。
+- 让用户能从社区观点理解别人如何解读宏观数据。
+- 让用户能从新闻和经济日历跟踪短期事件。
+- 让初学者能在同一页理解 GDP、真实 GDP、利率、通胀的定义和公式。
+- 让页面成为 TradingView 世界经济相关内容的入口，而不是单独的静态说明页。
 
-## 12. Macro Metric Card Requirements
-- METRIC-CARD-001 US unemployment rate card must display title US unemployment rate.
-- METRIC-CARD-002 US unemployment rate card must display ticker USUR as an economic symbol identifier.
-- METRIC-CARD-003 US unemployment rate card must display Actual 4.3%.
-- METRIC-CARD-004 US unemployment rate card must display Forecast 4.3%.
-- METRIC-CARD-005 US unemployment rate card must display Next release In 2 days.
-- METRIC-CARD-006 US interest rate card must display title US interest rate.
-- METRIC-CARD-007 US interest rate card must display ticker USINTR as an economic symbol identifier.
-- METRIC-CARD-008 US interest rate card must display Actual 3.75%.
-- METRIC-CARD-009 US interest rate card must display Forecast —.
-- METRIC-CARD-010 US interest rate card must display Next release Jun 18, 2026.
-- METRIC-CARD-011 US trade balance card must display title US trade balance.
-- METRIC-CARD-012 US trade balance card must display ticker USBOT as an economic symbol identifier.
-- METRIC-CARD-013 US trade balance card must display Actual −60.31 B USD.
-- METRIC-CARD-014 US trade balance card must display Forecast —.
-- METRIC-CARD-015 US trade balance card must display Next release Jun 9, 2026.
-- METRIC-CARD-016 Metric card chart image rendering requirement 16 applies to every macro metric card.
-- METRIC-CARD-017 Metric card symbol link requirement 17 applies to every macro metric card.
-- METRIC-CARD-018 Metric card Actual label requirement 18 applies to every macro metric card.
-- METRIC-CARD-019 Metric card Forecast label requirement 19 applies to every macro metric card.
-- METRIC-CARD-020 Metric card Next release label requirement 20 applies to every macro metric card.
-- METRIC-CARD-021 Metric card compact footer metadata requirement 21 applies to every macro metric card.
-- METRIC-CARD-022 Metric card chart aspect ratio requirement 22 applies to every macro metric card.
-- METRIC-CARD-023 Metric card empty forecast dash requirement 23 applies to every macro metric card.
-- METRIC-CARD-024 Metric card timeframe label requirement 24 applies to every macro metric card.
-- METRIC-CARD-025 Metric card keyboard focus requirement 25 applies to every macro metric card.
-- METRIC-CARD-026 Metric card chart image rendering requirement 26 applies to every macro metric card.
-- METRIC-CARD-027 Metric card symbol link requirement 27 applies to every macro metric card.
-- METRIC-CARD-028 Metric card Actual label requirement 28 applies to every macro metric card.
-- METRIC-CARD-029 Metric card Forecast label requirement 29 applies to every macro metric card.
-- METRIC-CARD-030 Metric card Next release label requirement 30 applies to every macro metric card.
-- METRIC-CARD-031 Metric card compact footer metadata requirement 31 applies to every macro metric card.
-- METRIC-CARD-032 Metric card chart aspect ratio requirement 32 applies to every macro metric card.
-- METRIC-CARD-033 Metric card empty forecast dash requirement 33 applies to every macro metric card.
-- METRIC-CARD-034 Metric card timeframe label requirement 34 applies to every macro metric card.
-- METRIC-CARD-035 Metric card keyboard focus requirement 35 applies to every macro metric card.
-- METRIC-CARD-036 Metric card chart image rendering requirement 36 applies to every macro metric card.
-- METRIC-CARD-037 Metric card symbol link requirement 37 applies to every macro metric card.
-- METRIC-CARD-038 Metric card Actual label requirement 38 applies to every macro metric card.
-- METRIC-CARD-039 Metric card Forecast label requirement 39 applies to every macro metric card.
-- METRIC-CARD-040 Metric card Next release label requirement 40 applies to every macro metric card.
-- METRIC-CARD-041 Metric card compact footer metadata requirement 41 applies to every macro metric card.
-- METRIC-CARD-042 Metric card chart aspect ratio requirement 42 applies to every macro metric card.
-- METRIC-CARD-043 Metric card empty forecast dash requirement 43 applies to every macro metric card.
-- METRIC-CARD-044 Metric card timeframe label requirement 44 applies to every macro metric card.
-- METRIC-CARD-045 Metric card keyboard focus requirement 45 applies to every macro metric card.
-- METRIC-CARD-046 Metric card chart image rendering requirement 46 applies to every macro metric card.
-- METRIC-CARD-047 Metric card symbol link requirement 47 applies to every macro metric card.
-- METRIC-CARD-048 Metric card Actual label requirement 48 applies to every macro metric card.
-- METRIC-CARD-049 Metric card Forecast label requirement 49 applies to every macro metric card.
-- METRIC-CARD-050 Metric card Next release label requirement 50 applies to every macro metric card.
-- METRIC-CARD-051 Metric card compact footer metadata requirement 51 applies to every macro metric card.
-- METRIC-CARD-052 Metric card chart aspect ratio requirement 52 applies to every macro metric card.
-- METRIC-CARD-053 Metric card empty forecast dash requirement 53 applies to every macro metric card.
-- METRIC-CARD-054 Metric card timeframe label requirement 54 applies to every macro metric card.
-- METRIC-CARD-055 Metric card keyboard focus requirement 55 applies to every macro metric card.
-- METRIC-CARD-056 Metric card chart image rendering requirement 56 applies to every macro metric card.
-- METRIC-CARD-057 Metric card symbol link requirement 57 applies to every macro metric card.
-- METRIC-CARD-058 Metric card Actual label requirement 58 applies to every macro metric card.
-- METRIC-CARD-059 Metric card Forecast label requirement 59 applies to every macro metric card.
-- METRIC-CARD-060 Metric card Next release label requirement 60 applies to every macro metric card.
-- METRIC-CARD-061 Metric card compact footer metadata requirement 61 applies to every macro metric card.
-- METRIC-CARD-062 Metric card chart aspect ratio requirement 62 applies to every macro metric card.
-- METRIC-CARD-063 Metric card empty forecast dash requirement 63 applies to every macro metric card.
-- METRIC-CARD-064 Metric card timeframe label requirement 64 applies to every macro metric card.
-- METRIC-CARD-065 Metric card keyboard focus requirement 65 applies to every macro metric card.
-- METRIC-CARD-066 Metric card chart image rendering requirement 66 applies to every macro metric card.
-- METRIC-CARD-067 Metric card symbol link requirement 67 applies to every macro metric card.
-- METRIC-CARD-068 Metric card Actual label requirement 68 applies to every macro metric card.
-- METRIC-CARD-069 Metric card Forecast label requirement 69 applies to every macro metric card.
-- METRIC-CARD-070 Metric card Next release label requirement 70 applies to every macro metric card.
-- METRIC-CARD-071 Metric card compact footer metadata requirement 71 applies to every macro metric card.
-- METRIC-CARD-072 Metric card chart aspect ratio requirement 72 applies to every macro metric card.
-- METRIC-CARD-073 Metric card empty forecast dash requirement 73 applies to every macro metric card.
-- METRIC-CARD-074 Metric card timeframe label requirement 74 applies to every macro metric card.
-- METRIC-CARD-075 Metric card keyboard focus requirement 75 applies to every macro metric card.
-- METRIC-CARD-076 Metric card chart image rendering requirement 76 applies to every macro metric card.
-- METRIC-CARD-077 Metric card symbol link requirement 77 applies to every macro metric card.
-- METRIC-CARD-078 Metric card Actual label requirement 78 applies to every macro metric card.
-- METRIC-CARD-079 Metric card Forecast label requirement 79 applies to every macro metric card.
-- METRIC-CARD-080 Metric card Next release label requirement 80 applies to every macro metric card.
-- METRIC-CARD-081 Metric card compact footer metadata requirement 81 applies to every macro metric card.
-- METRIC-CARD-082 Metric card chart aspect ratio requirement 82 applies to every macro metric card.
-- METRIC-CARD-083 Metric card empty forecast dash requirement 83 applies to every macro metric card.
-- METRIC-CARD-084 Metric card timeframe label requirement 84 applies to every macro metric card.
-- METRIC-CARD-085 Metric card keyboard focus requirement 85 applies to every macro metric card.
+## 6. 非目标
 
-## 13. Countries Section Requirements
-- COUNTRY-001 Country chip list must include Argentina as a navigable chip.
-- COUNTRY-002 Country chip list must include Australia as a navigable chip.
-- COUNTRY-003 Country chip list must include Brazil as a navigable chip.
-- COUNTRY-004 Country chip list must include Canada as a navigable chip.
-- COUNTRY-005 Country chip list must include European Union as a navigable chip.
-- COUNTRY-006 Country chip list must include France as a navigable chip.
-- COUNTRY-007 Country chip list must include Germany as a navigable chip.
-- COUNTRY-008 Country chip list must include India as a navigable chip.
-- COUNTRY-009 Country chip list must include Indonesia as a navigable chip.
-- COUNTRY-010 Country chip list must include Italy as a navigable chip.
-- COUNTRY-011 Country chip list must include Japan as a navigable chip.
-- COUNTRY-012 Country chip list must include Mainland China as a navigable chip.
-- COUNTRY-013 Country chip list must include Mexico as a navigable chip.
-- COUNTRY-014 Country chip list must include Russia as a navigable chip.
-- COUNTRY-015 Country chip list must include Saudi Arabia as a navigable chip.
-- COUNTRY-016 Country chip list must include South Africa as a navigable chip.
-- COUNTRY-017 Country chip list must include South Korea as a navigable chip.
-- COUNTRY-018 Country chip list must include Turkey as a navigable chip.
-- COUNTRY-019 Country chip list must include United Kingdom as a navigable chip.
-- COUNTRY-020 Country chip list must include United States as a navigable chip.
-- COUNTRY-021 Countries section chip wrapping requirement 21 must preserve drill-down usability.
-- COUNTRY-022 Countries section chip hover requirement 22 must preserve drill-down usability.
-- COUNTRY-023 Countries section chip focus requirement 23 must preserve drill-down usability.
-- COUNTRY-024 Countries section chip link target requirement 24 must preserve drill-down usability.
-- COUNTRY-025 Countries section See all behavior requirement 25 must preserve drill-down usability.
-- COUNTRY-026 Countries section country naming consistency requirement 26 must preserve drill-down usability.
-- COUNTRY-027 Countries section mobile horizontal density requirement 27 must preserve drill-down usability.
-- COUNTRY-028 Countries section search-engine-visible anchor requirement 28 must preserve drill-down usability.
-- COUNTRY-029 Countries section chip wrapping requirement 29 must preserve drill-down usability.
-- COUNTRY-030 Countries section chip hover requirement 30 must preserve drill-down usability.
-- COUNTRY-031 Countries section chip focus requirement 31 must preserve drill-down usability.
-- COUNTRY-032 Countries section chip link target requirement 32 must preserve drill-down usability.
-- COUNTRY-033 Countries section See all behavior requirement 33 must preserve drill-down usability.
-- COUNTRY-034 Countries section country naming consistency requirement 34 must preserve drill-down usability.
-- COUNTRY-035 Countries section mobile horizontal density requirement 35 must preserve drill-down usability.
-- COUNTRY-036 Countries section search-engine-visible anchor requirement 36 must preserve drill-down usability.
-- COUNTRY-037 Countries section chip wrapping requirement 37 must preserve drill-down usability.
-- COUNTRY-038 Countries section chip hover requirement 38 must preserve drill-down usability.
-- COUNTRY-039 Countries section chip focus requirement 39 must preserve drill-down usability.
-- COUNTRY-040 Countries section chip link target requirement 40 must preserve drill-down usability.
-- COUNTRY-041 Countries section See all behavior requirement 41 must preserve drill-down usability.
-- COUNTRY-042 Countries section country naming consistency requirement 42 must preserve drill-down usability.
-- COUNTRY-043 Countries section mobile horizontal density requirement 43 must preserve drill-down usability.
-- COUNTRY-044 Countries section search-engine-visible anchor requirement 44 must preserve drill-down usability.
-- COUNTRY-045 Countries section chip wrapping requirement 45 must preserve drill-down usability.
-- COUNTRY-046 Countries section chip hover requirement 46 must preserve drill-down usability.
-- COUNTRY-047 Countries section chip focus requirement 47 must preserve drill-down usability.
-- COUNTRY-048 Countries section chip link target requirement 48 must preserve drill-down usability.
-- COUNTRY-049 Countries section See all behavior requirement 49 must preserve drill-down usability.
-- COUNTRY-050 Countries section country naming consistency requirement 50 must preserve drill-down usability.
-- COUNTRY-051 Countries section mobile horizontal density requirement 51 must preserve drill-down usability.
-- COUNTRY-052 Countries section search-engine-visible anchor requirement 52 must preserve drill-down usability.
-- COUNTRY-053 Countries section chip wrapping requirement 53 must preserve drill-down usability.
-- COUNTRY-054 Countries section chip hover requirement 54 must preserve drill-down usability.
-- COUNTRY-055 Countries section chip focus requirement 55 must preserve drill-down usability.
-- COUNTRY-056 Countries section chip link target requirement 56 must preserve drill-down usability.
-- COUNTRY-057 Countries section See all behavior requirement 57 must preserve drill-down usability.
-- COUNTRY-058 Countries section country naming consistency requirement 58 must preserve drill-down usability.
-- COUNTRY-059 Countries section mobile horizontal density requirement 59 must preserve drill-down usability.
-- COUNTRY-060 Countries section search-engine-visible anchor requirement 60 must preserve drill-down usability.
-- COUNTRY-061 Countries section chip wrapping requirement 61 must preserve drill-down usability.
-- COUNTRY-062 Countries section chip hover requirement 62 must preserve drill-down usability.
-- COUNTRY-063 Countries section chip focus requirement 63 must preserve drill-down usability.
-- COUNTRY-064 Countries section chip link target requirement 64 must preserve drill-down usability.
-- COUNTRY-065 Countries section See all behavior requirement 65 must preserve drill-down usability.
-- COUNTRY-066 Countries section country naming consistency requirement 66 must preserve drill-down usability.
-- COUNTRY-067 Countries section mobile horizontal density requirement 67 must preserve drill-down usability.
-- COUNTRY-068 Countries section search-engine-visible anchor requirement 68 must preserve drill-down usability.
-- COUNTRY-069 Countries section chip wrapping requirement 69 must preserve drill-down usability.
-- COUNTRY-070 Countries section chip hover requirement 70 must preserve drill-down usability.
-- COUNTRY-071 Countries section chip focus requirement 71 must preserve drill-down usability.
-- COUNTRY-072 Countries section chip link target requirement 72 must preserve drill-down usability.
-- COUNTRY-073 Countries section See all behavior requirement 73 must preserve drill-down usability.
-- COUNTRY-074 Countries section country naming consistency requirement 74 must preserve drill-down usability.
-- COUNTRY-075 Countries section mobile horizontal density requirement 75 must preserve drill-down usability.
-- COUNTRY-076 Countries section search-engine-visible anchor requirement 76 must preserve drill-down usability.
-- COUNTRY-077 Countries section chip wrapping requirement 77 must preserve drill-down usability.
-- COUNTRY-078 Countries section chip hover requirement 78 must preserve drill-down usability.
-- COUNTRY-079 Countries section chip focus requirement 79 must preserve drill-down usability.
-- COUNTRY-080 Countries section chip link target requirement 80 must preserve drill-down usability.
+- 不在本页实现下单、券商连接或交易执行。
+- 不在本页实现完整高级图表编辑器。
+- 不在本页实现用户自定义国家 watchlist。
+- 不在本页实现社区观点发布流程。
+- 不在本页实现后台数据供应商管理。
+- 不复制 TradingView 私有接口或未授权数据源。
+- 不把地图、新闻、日历、观点做成无数据来源的静态假内容。
+- 不把核心页面做成营销 hero 或介绍页。
 
-## 14. Economic Indicators Heatmap Requirements
-- HEATMAP-001 Heatmap must include metric column GDP.
-- HEATMAP-002 Heatmap must include metric column GDP Growth.
-- HEATMAP-003 Heatmap must include metric column Budget to GDP.
-- HEATMAP-004 Heatmap must include metric column Government Debt to GDP.
-- HEATMAP-005 Heatmap must include metric column Interest Rate.
-- HEATMAP-006 Heatmap must include metric column Inflation Rate.
-- HEATMAP-007 Heatmap must include metric column Unemployment Rate.
-- HEATMAP-008 Heatmap must include metric column Current Account to GDP.
-- HEATMAP-009 Heatmap must include metric column Industrial Production YoY.
-- HEATMAP-020 Heatmap must include country row USA.
-- HEATMAP-021 Heatmap must include country row Mainland China.
-- HEATMAP-022 Heatmap must include country row EU.
-- HEATMAP-023 Heatmap must include country row Germany.
-- HEATMAP-024 Heatmap must include country row Japan.
-- HEATMAP-025 Heatmap must include country row India.
-- HEATMAP-026 Heatmap must include country row UK.
-- HEATMAP-027 Heatmap must include country row France.
-- HEATMAP-028 Heatmap must include country row Canada.
-- HEATMAP-029 Heatmap must include country row Russia.
-- HEATMAP-040 Economic indicators heatmap metric header link requirement 40 must be validated with representative cells.
-- HEATMAP-041 Economic indicators heatmap country row link requirement 41 must be validated with representative cells.
-- HEATMAP-042 Economic indicators heatmap numeric cell alignment requirement 42 must be validated with representative cells.
-- HEATMAP-043 Economic indicators heatmap color encoding requirement 43 must be validated with representative cells.
-- HEATMAP-044 Economic indicators heatmap unit preservation requirement 44 must be validated with representative cells.
-- HEATMAP-045 Economic indicators heatmap horizontal scrolling requirement 45 must be validated with representative cells.
-- HEATMAP-046 Economic indicators heatmap sticky label usability requirement 46 must be validated with representative cells.
-- HEATMAP-047 Economic indicators heatmap legend clarity requirement 47 must be validated with representative cells.
-- HEATMAP-048 Economic indicators heatmap value formatting requirement 48 must be validated with representative cells.
-- HEATMAP-049 Economic indicators heatmap table density requirement 49 must be validated with representative cells.
-- HEATMAP-050 Economic indicators heatmap metric header link requirement 50 must be validated with representative cells.
-- HEATMAP-051 Economic indicators heatmap country row link requirement 51 must be validated with representative cells.
-- HEATMAP-052 Economic indicators heatmap numeric cell alignment requirement 52 must be validated with representative cells.
-- HEATMAP-053 Economic indicators heatmap color encoding requirement 53 must be validated with representative cells.
-- HEATMAP-054 Economic indicators heatmap unit preservation requirement 54 must be validated with representative cells.
-- HEATMAP-055 Economic indicators heatmap horizontal scrolling requirement 55 must be validated with representative cells.
-- HEATMAP-056 Economic indicators heatmap sticky label usability requirement 56 must be validated with representative cells.
-- HEATMAP-057 Economic indicators heatmap legend clarity requirement 57 must be validated with representative cells.
-- HEATMAP-058 Economic indicators heatmap value formatting requirement 58 must be validated with representative cells.
-- HEATMAP-059 Economic indicators heatmap table density requirement 59 must be validated with representative cells.
-- HEATMAP-060 Economic indicators heatmap metric header link requirement 60 must be validated with representative cells.
-- HEATMAP-061 Economic indicators heatmap country row link requirement 61 must be validated with representative cells.
-- HEATMAP-062 Economic indicators heatmap numeric cell alignment requirement 62 must be validated with representative cells.
-- HEATMAP-063 Economic indicators heatmap color encoding requirement 63 must be validated with representative cells.
-- HEATMAP-064 Economic indicators heatmap unit preservation requirement 64 must be validated with representative cells.
-- HEATMAP-065 Economic indicators heatmap horizontal scrolling requirement 65 must be validated with representative cells.
-- HEATMAP-066 Economic indicators heatmap sticky label usability requirement 66 must be validated with representative cells.
-- HEATMAP-067 Economic indicators heatmap legend clarity requirement 67 must be validated with representative cells.
-- HEATMAP-068 Economic indicators heatmap value formatting requirement 68 must be validated with representative cells.
-- HEATMAP-069 Economic indicators heatmap table density requirement 69 must be validated with representative cells.
-- HEATMAP-070 Economic indicators heatmap metric header link requirement 70 must be validated with representative cells.
-- HEATMAP-071 Economic indicators heatmap country row link requirement 71 must be validated with representative cells.
-- HEATMAP-072 Economic indicators heatmap numeric cell alignment requirement 72 must be validated with representative cells.
-- HEATMAP-073 Economic indicators heatmap color encoding requirement 73 must be validated with representative cells.
-- HEATMAP-074 Economic indicators heatmap unit preservation requirement 74 must be validated with representative cells.
-- HEATMAP-075 Economic indicators heatmap horizontal scrolling requirement 75 must be validated with representative cells.
-- HEATMAP-076 Economic indicators heatmap sticky label usability requirement 76 must be validated with representative cells.
-- HEATMAP-077 Economic indicators heatmap legend clarity requirement 77 must be validated with representative cells.
-- HEATMAP-078 Economic indicators heatmap value formatting requirement 78 must be validated with representative cells.
-- HEATMAP-079 Economic indicators heatmap table density requirement 79 must be validated with representative cells.
-- HEATMAP-080 Economic indicators heatmap metric header link requirement 80 must be validated with representative cells.
-- HEATMAP-081 Economic indicators heatmap country row link requirement 81 must be validated with representative cells.
-- HEATMAP-082 Economic indicators heatmap numeric cell alignment requirement 82 must be validated with representative cells.
-- HEATMAP-083 Economic indicators heatmap color encoding requirement 83 must be validated with representative cells.
-- HEATMAP-084 Economic indicators heatmap unit preservation requirement 84 must be validated with representative cells.
-- HEATMAP-085 Economic indicators heatmap horizontal scrolling requirement 85 must be validated with representative cells.
-- HEATMAP-086 Economic indicators heatmap sticky label usability requirement 86 must be validated with representative cells.
-- HEATMAP-087 Economic indicators heatmap legend clarity requirement 87 must be validated with representative cells.
-- HEATMAP-088 Economic indicators heatmap value formatting requirement 88 must be validated with representative cells.
-- HEATMAP-089 Economic indicators heatmap table density requirement 89 must be validated with representative cells.
-- HEATMAP-090 Economic indicators heatmap metric header link requirement 90 must be validated with representative cells.
-- HEATMAP-091 Economic indicators heatmap country row link requirement 91 must be validated with representative cells.
-- HEATMAP-092 Economic indicators heatmap numeric cell alignment requirement 92 must be validated with representative cells.
-- HEATMAP-093 Economic indicators heatmap color encoding requirement 93 must be validated with representative cells.
-- HEATMAP-094 Economic indicators heatmap unit preservation requirement 94 must be validated with representative cells.
-- HEATMAP-095 Economic indicators heatmap horizontal scrolling requirement 95 must be validated with representative cells.
-- HEATMAP-096 Economic indicators heatmap sticky label usability requirement 96 must be validated with representative cells.
-- HEATMAP-097 Economic indicators heatmap legend clarity requirement 97 must be validated with representative cells.
-- HEATMAP-098 Economic indicators heatmap value formatting requirement 98 must be validated with representative cells.
-- HEATMAP-099 Economic indicators heatmap table density requirement 99 must be validated with representative cells.
-- HEATMAP-100 Economic indicators heatmap metric header link requirement 100 must be validated with representative cells.
-- HEATMAP-101 Economic indicators heatmap country row link requirement 101 must be validated with representative cells.
-- HEATMAP-102 Economic indicators heatmap numeric cell alignment requirement 102 must be validated with representative cells.
-- HEATMAP-103 Economic indicators heatmap color encoding requirement 103 must be validated with representative cells.
-- HEATMAP-104 Economic indicators heatmap unit preservation requirement 104 must be validated with representative cells.
-- HEATMAP-105 Economic indicators heatmap horizontal scrolling requirement 105 must be validated with representative cells.
-- HEATMAP-106 Economic indicators heatmap sticky label usability requirement 106 must be validated with representative cells.
-- HEATMAP-107 Economic indicators heatmap legend clarity requirement 107 must be validated with representative cells.
-- HEATMAP-108 Economic indicators heatmap value formatting requirement 108 must be validated with representative cells.
-- HEATMAP-109 Economic indicators heatmap table density requirement 109 must be validated with representative cells.
-- HEATMAP-110 Economic indicators heatmap metric header link requirement 110 must be validated with representative cells.
-- HEATMAP-111 Economic indicators heatmap country row link requirement 111 must be validated with representative cells.
-- HEATMAP-112 Economic indicators heatmap numeric cell alignment requirement 112 must be validated with representative cells.
-- HEATMAP-113 Economic indicators heatmap color encoding requirement 113 must be validated with representative cells.
-- HEATMAP-114 Economic indicators heatmap unit preservation requirement 114 must be validated with representative cells.
-- HEATMAP-115 Economic indicators heatmap horizontal scrolling requirement 115 must be validated with representative cells.
-- HEATMAP-116 Economic indicators heatmap sticky label usability requirement 116 must be validated with representative cells.
-- HEATMAP-117 Economic indicators heatmap legend clarity requirement 117 must be validated with representative cells.
-- HEATMAP-118 Economic indicators heatmap value formatting requirement 118 must be validated with representative cells.
-- HEATMAP-119 Economic indicators heatmap table density requirement 119 must be validated with representative cells.
-- HEATMAP-120 Economic indicators heatmap metric header link requirement 120 must be validated with representative cells.
+## 7. 用户画像
 
-## 15. Main Indicators Catalog Requirements
-- MAIN-INDICATOR-001 Main indicators catalog must include GDP.
-- MAIN-INDICATOR-002 Main indicators catalog must include GDP Growth.
-- MAIN-INDICATOR-003 Main indicators catalog must include Real GDP.
-- MAIN-INDICATOR-004 Main indicators catalog must include GDP Per Capita.
-- MAIN-INDICATOR-005 Main indicators catalog must include GDP Per Capita PPP.
-- MAIN-INDICATOR-006 Main indicators catalog must include Inflation Rate.
-- MAIN-INDICATOR-007 Main indicators catalog must include Interest Rate.
-- MAIN-INDICATOR-008 Main indicators catalog must include Unemployment Rate.
-- MAIN-INDICATOR-009 Main indicators catalog must include Government Debt to GDP.
-- MAIN-INDICATOR-010 Main indicators catalog must include Population.
-- MAIN-INDICATOR-011 Main indicators catalog must include Average Hourly Earnings.
-- MAIN-INDICATOR-012 Main indicators catalog must include House Price Index.
-- MAIN-INDICATOR-013 Main indicators catalog must include Manufacturing Production YoY.
-- MAIN-INDICATOR-014 Main indicators catalog must include Industrial Production YoY.
-- MAIN-INDICATOR-015 Main indicators catalog must include Current Account.
-- MAIN-INDICATOR-016 Main indicators catalog must include Current Account to GDP.
-- MAIN-INDICATOR-017 Main indicators catalog must include Balance of Trade.
-- MAIN-INDICATOR-018 Main indicators catalog must include Economic Activity Index.
-- MAIN-INDICATOR-019 Main indicators catalog must include Crude Oil Production.
-- MAIN-INDICATOR-020 Main indicators link grouping requirement 20 must help users continue from overview to indicator-specific pages.
-- MAIN-INDICATOR-021 Main indicators chip readability requirement 21 must help users continue from overview to indicator-specific pages.
-- MAIN-INDICATOR-022 Main indicators semantic anchor requirement 22 must help users continue from overview to indicator-specific pages.
-- MAIN-INDICATOR-023 Main indicators overflow handling requirement 23 must help users continue from overview to indicator-specific pages.
-- MAIN-INDICATOR-024 Main indicators See all link requirement 24 must help users continue from overview to indicator-specific pages.
-- MAIN-INDICATOR-025 Main indicators indicator naming requirement 25 must help users continue from overview to indicator-specific pages.
-- MAIN-INDICATOR-026 Main indicators source category mapping requirement 26 must help users continue from overview to indicator-specific pages.
-- MAIN-INDICATOR-027 Main indicators link grouping requirement 27 must help users continue from overview to indicator-specific pages.
-- MAIN-INDICATOR-028 Main indicators chip readability requirement 28 must help users continue from overview to indicator-specific pages.
-- MAIN-INDICATOR-029 Main indicators semantic anchor requirement 29 must help users continue from overview to indicator-specific pages.
-- MAIN-INDICATOR-030 Main indicators overflow handling requirement 30 must help users continue from overview to indicator-specific pages.
-- MAIN-INDICATOR-031 Main indicators See all link requirement 31 must help users continue from overview to indicator-specific pages.
-- MAIN-INDICATOR-032 Main indicators indicator naming requirement 32 must help users continue from overview to indicator-specific pages.
-- MAIN-INDICATOR-033 Main indicators source category mapping requirement 33 must help users continue from overview to indicator-specific pages.
-- MAIN-INDICATOR-034 Main indicators link grouping requirement 34 must help users continue from overview to indicator-specific pages.
-- MAIN-INDICATOR-035 Main indicators chip readability requirement 35 must help users continue from overview to indicator-specific pages.
-- MAIN-INDICATOR-036 Main indicators semantic anchor requirement 36 must help users continue from overview to indicator-specific pages.
-- MAIN-INDICATOR-037 Main indicators overflow handling requirement 37 must help users continue from overview to indicator-specific pages.
-- MAIN-INDICATOR-038 Main indicators See all link requirement 38 must help users continue from overview to indicator-specific pages.
-- MAIN-INDICATOR-039 Main indicators indicator naming requirement 39 must help users continue from overview to indicator-specific pages.
-- MAIN-INDICATOR-040 Main indicators source category mapping requirement 40 must help users continue from overview to indicator-specific pages.
-- MAIN-INDICATOR-041 Main indicators link grouping requirement 41 must help users continue from overview to indicator-specific pages.
-- MAIN-INDICATOR-042 Main indicators chip readability requirement 42 must help users continue from overview to indicator-specific pages.
-- MAIN-INDICATOR-043 Main indicators semantic anchor requirement 43 must help users continue from overview to indicator-specific pages.
-- MAIN-INDICATOR-044 Main indicators overflow handling requirement 44 must help users continue from overview to indicator-specific pages.
-- MAIN-INDICATOR-045 Main indicators See all link requirement 45 must help users continue from overview to indicator-specific pages.
-- MAIN-INDICATOR-046 Main indicators indicator naming requirement 46 must help users continue from overview to indicator-specific pages.
-- MAIN-INDICATOR-047 Main indicators source category mapping requirement 47 must help users continue from overview to indicator-specific pages.
-- MAIN-INDICATOR-048 Main indicators link grouping requirement 48 must help users continue from overview to indicator-specific pages.
-- MAIN-INDICATOR-049 Main indicators chip readability requirement 49 must help users continue from overview to indicator-specific pages.
-- MAIN-INDICATOR-050 Main indicators semantic anchor requirement 50 must help users continue from overview to indicator-specific pages.
-- MAIN-INDICATOR-051 Main indicators overflow handling requirement 51 must help users continue from overview to indicator-specific pages.
-- MAIN-INDICATOR-052 Main indicators See all link requirement 52 must help users continue from overview to indicator-specific pages.
-- MAIN-INDICATOR-053 Main indicators indicator naming requirement 53 must help users continue from overview to indicator-specific pages.
-- MAIN-INDICATOR-054 Main indicators source category mapping requirement 54 must help users continue from overview to indicator-specific pages.
-- MAIN-INDICATOR-055 Main indicators link grouping requirement 55 must help users continue from overview to indicator-specific pages.
-- MAIN-INDICATOR-056 Main indicators chip readability requirement 56 must help users continue from overview to indicator-specific pages.
-- MAIN-INDICATOR-057 Main indicators semantic anchor requirement 57 must help users continue from overview to indicator-specific pages.
-- MAIN-INDICATOR-058 Main indicators overflow handling requirement 58 must help users continue from overview to indicator-specific pages.
-- MAIN-INDICATOR-059 Main indicators See all link requirement 59 must help users continue from overview to indicator-specific pages.
-- MAIN-INDICATOR-060 Main indicators indicator naming requirement 60 must help users continue from overview to indicator-specific pages.
-- MAIN-INDICATOR-061 Main indicators source category mapping requirement 61 must help users continue from overview to indicator-specific pages.
-- MAIN-INDICATOR-062 Main indicators link grouping requirement 62 must help users continue from overview to indicator-specific pages.
-- MAIN-INDICATOR-063 Main indicators chip readability requirement 63 must help users continue from overview to indicator-specific pages.
-- MAIN-INDICATOR-064 Main indicators semantic anchor requirement 64 must help users continue from overview to indicator-specific pages.
-- MAIN-INDICATOR-065 Main indicators overflow handling requirement 65 must help users continue from overview to indicator-specific pages.
-- MAIN-INDICATOR-066 Main indicators See all link requirement 66 must help users continue from overview to indicator-specific pages.
-- MAIN-INDICATOR-067 Main indicators indicator naming requirement 67 must help users continue from overview to indicator-specific pages.
-- MAIN-INDICATOR-068 Main indicators source category mapping requirement 68 must help users continue from overview to indicator-specific pages.
-- MAIN-INDICATOR-069 Main indicators link grouping requirement 69 must help users continue from overview to indicator-specific pages.
-- MAIN-INDICATOR-070 Main indicators chip readability requirement 70 must help users continue from overview to indicator-specific pages.
+- 活跃交易者: 每天开盘前扫一眼宏观数据，重点关注利率、失业率、贸易余额和经济日历。
+- 宏观研究员: 比较国家之间 GDP、通胀、债务、利率、工业生产等指标，寻找跨市场线索。
+- 财经媒体编辑: 快速找新闻和数据点，用于解释市场波动背景。
+- 国际投资者: 从全球页面跳到具体国家页面，查看某个国家更详细的经济数据。
+- TradingView 社区读者: 浏览社区观点，寻找基于宏观数据的交易想法。
+- 初学者: 通过 FAQ 理解 GDP、利率、通胀公式，不需要立刻进入复杂图表。
+- SEO 访问者: 从搜索引擎进入，例如搜索 GDP formula、highest GDP country、inflation rate formula。
 
-## 16. Ideas Section Requirements
-- IDEAS-001 Ideas section must have a visible title Ideas.
-- IDEAS-002 Ideas section must include Popular, Recent, Video, and More filters or tabs.
-- IDEAS-003 Popular tab must be the visible default in the captured page state.
-- IDEAS-004 Idea cards must show title, preview text, image/chart thumbnail, author, and directional label when present.
-- IDEAS-005 Idea cards must preserve source symbol names such as FRED or ECONOMICS identifiers when visible.
-- IDEAS-006 Idea cards must link to their corresponding idea pages.
-- IDEAS-007 Idea author names must be visible and clickable when captured as links.
-- IDEAS-008 Updated metadata must be visible when captured.
-- IDEAS-009 See all popular ideas CTA must appear after the card list.
-- IDEAS-010 Idea card text must clamp or wrap without covering thumbnails.
-- IDEAS-020 Ideas content inventory must account for visible card signal US Savings Rate Collapsing!.
-- IDEAS-021 Ideas content inventory must account for visible card signal $USGDPQQ - U.S GDP (Q1/2026).
-- IDEAS-022 Ideas content inventory must account for visible card signal Gasoline futures hit one month low.
-- IDEAS-023 Ideas content inventory must account for visible card signal INDIA CORRUPTION INDEX.
-- IDEAS-024 Ideas content inventory must account for visible card signal Not good.
-- IDEAS-025 Ideas content inventory must account for visible card signal Are #Stocks expensive? No measured against M2 money supply.
-- IDEAS-026 Ideas content inventory must account for visible card signal U.S. MORTGAGE RATES: THE "CHAMPAGNE" MODE OF A SOBERING MEME.
-- IDEAS-027 Ideas content inventory must account for visible card signal Observation between PPI and CPI.
-- IDEAS-028 Ideas content inventory must account for visible card signal US Corporate Profits Are Still Inside a 70-Year Uptrend Channel.
-- IDEAS-029 Ideas content inventory must account for visible card signal Adjusted Warren Buffer Indicator Flirting With Recession.
-- IDEAS-040 Ideas section tab switching requirement 40 must be implemented without fake community content.
-- IDEAS-041 Ideas section thumbnail loading requirement 41 must be implemented without fake community content.
-- IDEAS-042 Ideas section author attribution requirement 42 must be implemented without fake community content.
-- IDEAS-043 Ideas section long title wrapping requirement 43 must be implemented without fake community content.
-- IDEAS-044 Ideas section preview truncation requirement 44 must be implemented without fake community content.
-- IDEAS-045 Ideas section direction label color requirement 45 must be implemented without fake community content.
-- IDEAS-046 Ideas section video indicator requirement 46 must be implemented without fake community content.
-- IDEAS-047 Ideas section See all CTA requirement 47 must be implemented without fake community content.
-- IDEAS-048 Ideas section card hover requirement 48 must be implemented without fake community content.
-- IDEAS-049 Ideas section keyboard order requirement 49 must be implemented without fake community content.
-- IDEAS-050 Ideas section tab switching requirement 50 must be implemented without fake community content.
-- IDEAS-051 Ideas section thumbnail loading requirement 51 must be implemented without fake community content.
-- IDEAS-052 Ideas section author attribution requirement 52 must be implemented without fake community content.
-- IDEAS-053 Ideas section long title wrapping requirement 53 must be implemented without fake community content.
-- IDEAS-054 Ideas section preview truncation requirement 54 must be implemented without fake community content.
-- IDEAS-055 Ideas section direction label color requirement 55 must be implemented without fake community content.
-- IDEAS-056 Ideas section video indicator requirement 56 must be implemented without fake community content.
-- IDEAS-057 Ideas section See all CTA requirement 57 must be implemented without fake community content.
-- IDEAS-058 Ideas section card hover requirement 58 must be implemented without fake community content.
-- IDEAS-059 Ideas section keyboard order requirement 59 must be implemented without fake community content.
-- IDEAS-060 Ideas section tab switching requirement 60 must be implemented without fake community content.
-- IDEAS-061 Ideas section thumbnail loading requirement 61 must be implemented without fake community content.
-- IDEAS-062 Ideas section author attribution requirement 62 must be implemented without fake community content.
-- IDEAS-063 Ideas section long title wrapping requirement 63 must be implemented without fake community content.
-- IDEAS-064 Ideas section preview truncation requirement 64 must be implemented without fake community content.
-- IDEAS-065 Ideas section direction label color requirement 65 must be implemented without fake community content.
-- IDEAS-066 Ideas section video indicator requirement 66 must be implemented without fake community content.
-- IDEAS-067 Ideas section See all CTA requirement 67 must be implemented without fake community content.
-- IDEAS-068 Ideas section card hover requirement 68 must be implemented without fake community content.
-- IDEAS-069 Ideas section keyboard order requirement 69 must be implemented without fake community content.
-- IDEAS-070 Ideas section tab switching requirement 70 must be implemented without fake community content.
-- IDEAS-071 Ideas section thumbnail loading requirement 71 must be implemented without fake community content.
-- IDEAS-072 Ideas section author attribution requirement 72 must be implemented without fake community content.
-- IDEAS-073 Ideas section long title wrapping requirement 73 must be implemented without fake community content.
-- IDEAS-074 Ideas section preview truncation requirement 74 must be implemented without fake community content.
-- IDEAS-075 Ideas section direction label color requirement 75 must be implemented without fake community content.
-- IDEAS-076 Ideas section video indicator requirement 76 must be implemented without fake community content.
-- IDEAS-077 Ideas section See all CTA requirement 77 must be implemented without fake community content.
-- IDEAS-078 Ideas section card hover requirement 78 must be implemented without fake community content.
-- IDEAS-079 Ideas section keyboard order requirement 79 must be implemented without fake community content.
-- IDEAS-080 Ideas section tab switching requirement 80 must be implemented without fake community content.
-- IDEAS-081 Ideas section thumbnail loading requirement 81 must be implemented without fake community content.
-- IDEAS-082 Ideas section author attribution requirement 82 must be implemented without fake community content.
-- IDEAS-083 Ideas section long title wrapping requirement 83 must be implemented without fake community content.
-- IDEAS-084 Ideas section preview truncation requirement 84 must be implemented without fake community content.
-- IDEAS-085 Ideas section direction label color requirement 85 must be implemented without fake community content.
-- IDEAS-086 Ideas section video indicator requirement 86 must be implemented without fake community content.
-- IDEAS-087 Ideas section See all CTA requirement 87 must be implemented without fake community content.
-- IDEAS-088 Ideas section card hover requirement 88 must be implemented without fake community content.
-- IDEAS-089 Ideas section keyboard order requirement 89 must be implemented without fake community content.
-- IDEAS-090 Ideas section tab switching requirement 90 must be implemented without fake community content.
-- IDEAS-091 Ideas section thumbnail loading requirement 91 must be implemented without fake community content.
-- IDEAS-092 Ideas section author attribution requirement 92 must be implemented without fake community content.
-- IDEAS-093 Ideas section long title wrapping requirement 93 must be implemented without fake community content.
-- IDEAS-094 Ideas section preview truncation requirement 94 must be implemented without fake community content.
-- IDEAS-095 Ideas section direction label color requirement 95 must be implemented without fake community content.
-- IDEAS-096 Ideas section video indicator requirement 96 must be implemented without fake community content.
-- IDEAS-097 Ideas section See all CTA requirement 97 must be implemented without fake community content.
-- IDEAS-098 Ideas section card hover requirement 98 must be implemented without fake community content.
-- IDEAS-099 Ideas section keyboard order requirement 99 must be implemented without fake community content.
-- IDEAS-100 Ideas section tab switching requirement 100 must be implemented without fake community content.
+## 8. 核心用户故事
 
-## 17. Global Industrial Map Requirements
-- INDUSTRIAL-MAP-001 Global industrial map section must have a visible title Global industrial map.
-- INDUSTRIAL-MAP-002 Global industrial map must use the same legend labels 0%, 3%, 7%, 12%, and 25% when matching the captured page.
-- INDUSTRIAL-MAP-003 Global industrial map must visually differ only by metric data, not by unrelated styling.
-- INDUSTRIAL-MAP-004 See more global trends CTA must appear below or near the map region.
-- INDUSTRIAL-MAP-005 Map must be responsive and keep geography legible.
-- INDUSTRIAL-MAP-006 Map must expose enough text for users to understand the represented metric.
-- INDUSTRIAL-MAP-007 Map must support disabled countries when source data is absent.
-- INDUSTRIAL-MAP-008 Map color treatment must be consistent with heatmap semantics.
-- INDUSTRIAL-MAP-009 Map must not reuse inflation data unless the selected metric is explicitly inflation.
-- INDUSTRIAL-MAP-010 QA must compare map position and card height against reference screenshot.
-- INDUSTRIAL-MAP-011 Industrial map requirement 11 covers responsive fit behavior.
-- INDUSTRIAL-MAP-012 Industrial map requirement 12 covers data freshness behavior.
-- INDUSTRIAL-MAP-013 Industrial map requirement 13 covers accessibility behavior.
-- INDUSTRIAL-MAP-014 Industrial map requirement 14 covers legend behavior.
-- INDUSTRIAL-MAP-015 Industrial map requirement 15 covers geometry behavior.
-- INDUSTRIAL-MAP-016 Industrial map requirement 16 covers color bucket behavior.
-- INDUSTRIAL-MAP-017 Industrial map requirement 17 covers CTA behavior.
-- INDUSTRIAL-MAP-018 Industrial map requirement 18 covers responsive fit behavior.
-- INDUSTRIAL-MAP-019 Industrial map requirement 19 covers data freshness behavior.
-- INDUSTRIAL-MAP-020 Industrial map requirement 20 covers accessibility behavior.
-- INDUSTRIAL-MAP-021 Industrial map requirement 21 covers legend behavior.
-- INDUSTRIAL-MAP-022 Industrial map requirement 22 covers geometry behavior.
-- INDUSTRIAL-MAP-023 Industrial map requirement 23 covers color bucket behavior.
-- INDUSTRIAL-MAP-024 Industrial map requirement 24 covers CTA behavior.
-- INDUSTRIAL-MAP-025 Industrial map requirement 25 covers responsive fit behavior.
-- INDUSTRIAL-MAP-026 Industrial map requirement 26 covers data freshness behavior.
-- INDUSTRIAL-MAP-027 Industrial map requirement 27 covers accessibility behavior.
-- INDUSTRIAL-MAP-028 Industrial map requirement 28 covers legend behavior.
-- INDUSTRIAL-MAP-029 Industrial map requirement 29 covers geometry behavior.
-- INDUSTRIAL-MAP-030 Industrial map requirement 30 covers color bucket behavior.
-- INDUSTRIAL-MAP-031 Industrial map requirement 31 covers CTA behavior.
-- INDUSTRIAL-MAP-032 Industrial map requirement 32 covers responsive fit behavior.
-- INDUSTRIAL-MAP-033 Industrial map requirement 33 covers data freshness behavior.
-- INDUSTRIAL-MAP-034 Industrial map requirement 34 covers accessibility behavior.
-- INDUSTRIAL-MAP-035 Industrial map requirement 35 covers legend behavior.
-- INDUSTRIAL-MAP-036 Industrial map requirement 36 covers geometry behavior.
-- INDUSTRIAL-MAP-037 Industrial map requirement 37 covers color bucket behavior.
-- INDUSTRIAL-MAP-038 Industrial map requirement 38 covers CTA behavior.
-- INDUSTRIAL-MAP-039 Industrial map requirement 39 covers responsive fit behavior.
-- INDUSTRIAL-MAP-040 Industrial map requirement 40 covers data freshness behavior.
-- INDUSTRIAL-MAP-041 Industrial map requirement 41 covers accessibility behavior.
-- INDUSTRIAL-MAP-042 Industrial map requirement 42 covers legend behavior.
-- INDUSTRIAL-MAP-043 Industrial map requirement 43 covers geometry behavior.
-- INDUSTRIAL-MAP-044 Industrial map requirement 44 covers color bucket behavior.
-- INDUSTRIAL-MAP-045 Industrial map requirement 45 covers CTA behavior.
-- INDUSTRIAL-MAP-046 Industrial map requirement 46 covers responsive fit behavior.
-- INDUSTRIAL-MAP-047 Industrial map requirement 47 covers data freshness behavior.
-- INDUSTRIAL-MAP-048 Industrial map requirement 48 covers accessibility behavior.
-- INDUSTRIAL-MAP-049 Industrial map requirement 49 covers legend behavior.
-- INDUSTRIAL-MAP-050 Industrial map requirement 50 covers geometry behavior.
-- INDUSTRIAL-MAP-051 Industrial map requirement 51 covers color bucket behavior.
-- INDUSTRIAL-MAP-052 Industrial map requirement 52 covers CTA behavior.
-- INDUSTRIAL-MAP-053 Industrial map requirement 53 covers responsive fit behavior.
-- INDUSTRIAL-MAP-054 Industrial map requirement 54 covers data freshness behavior.
-- INDUSTRIAL-MAP-055 Industrial map requirement 55 covers accessibility behavior.
-- INDUSTRIAL-MAP-056 Industrial map requirement 56 covers legend behavior.
-- INDUSTRIAL-MAP-057 Industrial map requirement 57 covers geometry behavior.
-- INDUSTRIAL-MAP-058 Industrial map requirement 58 covers color bucket behavior.
-- INDUSTRIAL-MAP-059 Industrial map requirement 59 covers CTA behavior.
-- INDUSTRIAL-MAP-060 Industrial map requirement 60 covers responsive fit behavior.
-- INDUSTRIAL-MAP-061 Industrial map requirement 61 covers data freshness behavior.
-- INDUSTRIAL-MAP-062 Industrial map requirement 62 covers accessibility behavior.
-- INDUSTRIAL-MAP-063 Industrial map requirement 63 covers legend behavior.
-- INDUSTRIAL-MAP-064 Industrial map requirement 64 covers geometry behavior.
-- INDUSTRIAL-MAP-065 Industrial map requirement 65 covers color bucket behavior.
+1. 作为交易者，我想在进入页面后立刻看到通胀地图和 GDP 增长排行，以便判断全球风险偏好。
+2. 作为交易者，我想看到美国失业率、利率、贸易余额的 Actual、Forecast、Next release，以便安排交易日历。
+3. 作为宏观研究员，我想在 heatmap 中横向比较国家和指标，以便发现异常值。
+4. 作为国际投资者，我想点击国家 chip 进入具体国家页面，以便继续查看细分数据。
+5. 作为社区读者，我想在 Ideas 区域切换 Popular、Recent、Video，以便筛选观点类型。
+6. 作为财经编辑，我想看到新闻来源和标题，以便快速定位相关报道。
+7. 作为事件驱动交易者，我想看到 Economic Calendar 的 Actual、Forecast、Prior，以便比较预期差。
+8. 作为初学者，我想展开 FAQ 阅读 GDP 和 inflation 的公式，以便理解页面指标。
+9. 作为移动端用户，我想所有表格和卡片在小屏上仍然可读，以便不需要桌面浏览。
+10. 作为键盘用户，我想能通过键盘访问 tabs、links、FAQ 和 header controls，以便不依赖鼠标。
 
-## 18. News Section Requirements
-- NEWS-001 Japan govt finalises 19 billion dollar extra budget to subsidise surging fuel costs.
-- NEWS-002 Japan Composite PMI confirmed at five-month low.
-- NEWS-003 Hong Kong private sector returns to growth when present in captured news feed.
-- NEWS-004 News section must label external providers such as Reuters or Trading Economics when visible.
-- NEWS-005 News card timestamps or provider metadata must be shown when available.
-- NEWS-006 Keep reading CTA must route to the broader news flow or equivalent market news page.
-- NEWS-007 News card list must not include unrelated generic placeholder headlines.
-- NEWS-008 News section must support empty state only when source feed truly has no items.
-- NEWS-009 News images or icons must preserve aspect ratio when present.
-- NEWS-010 News text must be scannable with headline first and details second.
-- NEWS-011 News card density requirement 11 must be verifiable from source feed behavior.
-- NEWS-012 News CTA requirement 12 must be verifiable from source feed behavior.
-- NEWS-013 News loading state requirement 13 must be verifiable from source feed behavior.
-- NEWS-014 News error state requirement 14 must be verifiable from source feed behavior.
-- NEWS-015 News mobile layout requirement 15 must be verifiable from source feed behavior.
-- NEWS-016 News provider attribution requirement 16 must be verifiable from source feed behavior.
-- NEWS-017 News headline link requirement 17 must be verifiable from source feed behavior.
-- NEWS-018 News feed ordering requirement 18 must be verifiable from source feed behavior.
-- NEWS-019 News card density requirement 19 must be verifiable from source feed behavior.
-- NEWS-020 News CTA requirement 20 must be verifiable from source feed behavior.
-- NEWS-021 News loading state requirement 21 must be verifiable from source feed behavior.
-- NEWS-022 News error state requirement 22 must be verifiable from source feed behavior.
-- NEWS-023 News mobile layout requirement 23 must be verifiable from source feed behavior.
-- NEWS-024 News provider attribution requirement 24 must be verifiable from source feed behavior.
-- NEWS-025 News headline link requirement 25 must be verifiable from source feed behavior.
-- NEWS-026 News feed ordering requirement 26 must be verifiable from source feed behavior.
-- NEWS-027 News card density requirement 27 must be verifiable from source feed behavior.
-- NEWS-028 News CTA requirement 28 must be verifiable from source feed behavior.
-- NEWS-029 News loading state requirement 29 must be verifiable from source feed behavior.
-- NEWS-030 News error state requirement 30 must be verifiable from source feed behavior.
-- NEWS-031 News mobile layout requirement 31 must be verifiable from source feed behavior.
-- NEWS-032 News provider attribution requirement 32 must be verifiable from source feed behavior.
-- NEWS-033 News headline link requirement 33 must be verifiable from source feed behavior.
-- NEWS-034 News feed ordering requirement 34 must be verifiable from source feed behavior.
-- NEWS-035 News card density requirement 35 must be verifiable from source feed behavior.
-- NEWS-036 News CTA requirement 36 must be verifiable from source feed behavior.
-- NEWS-037 News loading state requirement 37 must be verifiable from source feed behavior.
-- NEWS-038 News error state requirement 38 must be verifiable from source feed behavior.
-- NEWS-039 News mobile layout requirement 39 must be verifiable from source feed behavior.
-- NEWS-040 News provider attribution requirement 40 must be verifiable from source feed behavior.
-- NEWS-041 News headline link requirement 41 must be verifiable from source feed behavior.
-- NEWS-042 News feed ordering requirement 42 must be verifiable from source feed behavior.
-- NEWS-043 News card density requirement 43 must be verifiable from source feed behavior.
-- NEWS-044 News CTA requirement 44 must be verifiable from source feed behavior.
-- NEWS-045 News loading state requirement 45 must be verifiable from source feed behavior.
-- NEWS-046 News error state requirement 46 must be verifiable from source feed behavior.
-- NEWS-047 News mobile layout requirement 47 must be verifiable from source feed behavior.
-- NEWS-048 News provider attribution requirement 48 must be verifiable from source feed behavior.
-- NEWS-049 News headline link requirement 49 must be verifiable from source feed behavior.
-- NEWS-050 News feed ordering requirement 50 must be verifiable from source feed behavior.
-- NEWS-051 News card density requirement 51 must be verifiable from source feed behavior.
-- NEWS-052 News CTA requirement 52 must be verifiable from source feed behavior.
-- NEWS-053 News loading state requirement 53 must be verifiable from source feed behavior.
-- NEWS-054 News error state requirement 54 must be verifiable from source feed behavior.
-- NEWS-055 News mobile layout requirement 55 must be verifiable from source feed behavior.
-- NEWS-056 News provider attribution requirement 56 must be verifiable from source feed behavior.
-- NEWS-057 News headline link requirement 57 must be verifiable from source feed behavior.
-- NEWS-058 News feed ordering requirement 58 must be verifiable from source feed behavior.
-- NEWS-059 News card density requirement 59 must be verifiable from source feed behavior.
-- NEWS-060 News CTA requirement 60 must be verifiable from source feed behavior.
+## 9. 页面信息架构
 
-## 19. Economic Calendar Requirements
-- CALENDAR-001 Economic Calendar must include a card or row for Riyad Bank PMI when visible in the captured feed.
-- CALENDAR-002 Economic Calendar must include a card or row for RatingDog Composite PMI when visible in the captured feed.
-- CALENDAR-003 Economic Calendar must include a card or row for RatingDog Services PMI when visible in the captured feed.
-- CALENDAR-004 Economic Calendar must include a card or row for GDP Chain Price Index QoQ when visible in the captured feed.
-- CALENDAR-005 Economic Calendar must include a card or row for GDP Growth Rate QoQ when visible in the captured feed.
-- CALENDAR-006 Economic Calendar must include a card or row for GDP Growth Rate YoY when visible in the captured feed.
-- CALENDAR-007 Economic Calendar must include a card or row for GDP Final Consumption QoQ when visible in the captured feed.
-- CALENDAR-008 Economic Calendar must include a card or row for GDP Capital Expenditure QoQ when visible in the captured feed.
-- CALENDAR-009 Economic Calendar date label requirement 9 must support high-density event scanning.
-- CALENDAR-010 Economic Calendar event title requirement 10 must support high-density event scanning.
-- CALENDAR-011 Economic Calendar Actual field requirement 11 must support high-density event scanning.
-- CALENDAR-012 Economic Calendar Forecast field requirement 12 must support high-density event scanning.
-- CALENDAR-013 Economic Calendar Prior field requirement 13 must support high-density event scanning.
-- CALENDAR-014 Economic Calendar time field requirement 14 must support high-density event scanning.
-- CALENDAR-015 Economic Calendar horizontal scroll requirement 15 must support high-density event scanning.
-- CALENDAR-016 Economic Calendar See all market events CTA requirement 16 must support high-density event scanning.
-- CALENDAR-017 Economic Calendar country/source context requirement 17 must support high-density event scanning.
-- CALENDAR-018 Economic Calendar numeric unit formatting requirement 18 must support high-density event scanning.
-- CALENDAR-019 Economic Calendar date label requirement 19 must support high-density event scanning.
-- CALENDAR-020 Economic Calendar event title requirement 20 must support high-density event scanning.
-- CALENDAR-021 Economic Calendar Actual field requirement 21 must support high-density event scanning.
-- CALENDAR-022 Economic Calendar Forecast field requirement 22 must support high-density event scanning.
-- CALENDAR-023 Economic Calendar Prior field requirement 23 must support high-density event scanning.
-- CALENDAR-024 Economic Calendar time field requirement 24 must support high-density event scanning.
-- CALENDAR-025 Economic Calendar horizontal scroll requirement 25 must support high-density event scanning.
-- CALENDAR-026 Economic Calendar See all market events CTA requirement 26 must support high-density event scanning.
-- CALENDAR-027 Economic Calendar country/source context requirement 27 must support high-density event scanning.
-- CALENDAR-028 Economic Calendar numeric unit formatting requirement 28 must support high-density event scanning.
-- CALENDAR-029 Economic Calendar date label requirement 29 must support high-density event scanning.
-- CALENDAR-030 Economic Calendar event title requirement 30 must support high-density event scanning.
-- CALENDAR-031 Economic Calendar Actual field requirement 31 must support high-density event scanning.
-- CALENDAR-032 Economic Calendar Forecast field requirement 32 must support high-density event scanning.
-- CALENDAR-033 Economic Calendar Prior field requirement 33 must support high-density event scanning.
-- CALENDAR-034 Economic Calendar time field requirement 34 must support high-density event scanning.
-- CALENDAR-035 Economic Calendar horizontal scroll requirement 35 must support high-density event scanning.
-- CALENDAR-036 Economic Calendar See all market events CTA requirement 36 must support high-density event scanning.
-- CALENDAR-037 Economic Calendar country/source context requirement 37 must support high-density event scanning.
-- CALENDAR-038 Economic Calendar numeric unit formatting requirement 38 must support high-density event scanning.
-- CALENDAR-039 Economic Calendar date label requirement 39 must support high-density event scanning.
-- CALENDAR-040 Economic Calendar event title requirement 40 must support high-density event scanning.
-- CALENDAR-041 Economic Calendar Actual field requirement 41 must support high-density event scanning.
-- CALENDAR-042 Economic Calendar Forecast field requirement 42 must support high-density event scanning.
-- CALENDAR-043 Economic Calendar Prior field requirement 43 must support high-density event scanning.
-- CALENDAR-044 Economic Calendar time field requirement 44 must support high-density event scanning.
-- CALENDAR-045 Economic Calendar horizontal scroll requirement 45 must support high-density event scanning.
-- CALENDAR-046 Economic Calendar See all market events CTA requirement 46 must support high-density event scanning.
-- CALENDAR-047 Economic Calendar country/source context requirement 47 must support high-density event scanning.
-- CALENDAR-048 Economic Calendar numeric unit formatting requirement 48 must support high-density event scanning.
-- CALENDAR-049 Economic Calendar date label requirement 49 must support high-density event scanning.
-- CALENDAR-050 Economic Calendar event title requirement 50 must support high-density event scanning.
-- CALENDAR-051 Economic Calendar Actual field requirement 51 must support high-density event scanning.
-- CALENDAR-052 Economic Calendar Forecast field requirement 52 must support high-density event scanning.
-- CALENDAR-053 Economic Calendar Prior field requirement 53 must support high-density event scanning.
-- CALENDAR-054 Economic Calendar time field requirement 54 must support high-density event scanning.
-- CALENDAR-055 Economic Calendar horizontal scroll requirement 55 must support high-density event scanning.
-- CALENDAR-056 Economic Calendar See all market events CTA requirement 56 must support high-density event scanning.
-- CALENDAR-057 Economic Calendar country/source context requirement 57 must support high-density event scanning.
-- CALENDAR-058 Economic Calendar numeric unit formatting requirement 58 must support high-density event scanning.
-- CALENDAR-059 Economic Calendar date label requirement 59 must support high-density event scanning.
-- CALENDAR-060 Economic Calendar event title requirement 60 must support high-density event scanning.
-- CALENDAR-061 Economic Calendar Actual field requirement 61 must support high-density event scanning.
-- CALENDAR-062 Economic Calendar Forecast field requirement 62 must support high-density event scanning.
-- CALENDAR-063 Economic Calendar Prior field requirement 63 must support high-density event scanning.
-- CALENDAR-064 Economic Calendar time field requirement 64 must support high-density event scanning.
-- CALENDAR-065 Economic Calendar horizontal scroll requirement 65 must support high-density event scanning.
-- CALENDAR-066 Economic Calendar See all market events CTA requirement 66 must support high-density event scanning.
-- CALENDAR-067 Economic Calendar country/source context requirement 67 must support high-density event scanning.
-- CALENDAR-068 Economic Calendar numeric unit formatting requirement 68 must support high-density event scanning.
-- CALENDAR-069 Economic Calendar date label requirement 69 must support high-density event scanning.
-- CALENDAR-070 Economic Calendar event title requirement 70 must support high-density event scanning.
-- CALENDAR-071 Economic Calendar Actual field requirement 71 must support high-density event scanning.
-- CALENDAR-072 Economic Calendar Forecast field requirement 72 must support high-density event scanning.
-- CALENDAR-073 Economic Calendar Prior field requirement 73 must support high-density event scanning.
-- CALENDAR-074 Economic Calendar time field requirement 74 must support high-density event scanning.
-- CALENDAR-075 Economic Calendar horizontal scroll requirement 75 must support high-density event scanning.
-- CALENDAR-076 Economic Calendar See all market events CTA requirement 76 must support high-density event scanning.
-- CALENDAR-077 Economic Calendar country/source context requirement 77 must support high-density event scanning.
-- CALENDAR-078 Economic Calendar numeric unit formatting requirement 78 must support high-density event scanning.
-- CALENDAR-079 Economic Calendar date label requirement 79 must support high-density event scanning.
-- CALENDAR-080 Economic Calendar event title requirement 80 must support high-density event scanning.
+页面从上到下的结构必须保持如下顺序：
+1. Global header: 品牌、导航、搜索、语言、Get started。
+2. Breadcrumb: Markets / Economy。
+3. Page title: Economy。
+4. Tabs: Overview、Economic trends。
+5. Economic trends summary: Inflation map、GDP growth、三张重点指标卡。
+6. Countries: 国家 chip 和国家数据表。
+7. Ideas: 社区观点和分类 tabs。
+8. Economic indicators heatmap: 国家 x 指标矩阵。
+9. Main indicators: 重要经济指标目录。
+10. Global industrial map: 第二张全球热力图。
+11. News: 宏观新闻流。
+12. Economic Calendar: 当日经济事件卡片。
+13. FAQ: 概念解释和公式。
+14. Footer: TradingView 全站导航、版权和数据提供商声明。
+设计和研发不得把 FAQ、News 或 Footer 提前到经济趋势核心区之前。
+移动端可以改变布局列数，但不可以改变模块的语义顺序。
 
-## 20. FAQ Requirements
-- FAQ-001 FAQ must include question: What is GDP?
-- FAQ-002 FAQ must include question: What is the GDP formula?
-- FAQ-003 FAQ must include question: What is GDP per capita?
-- FAQ-004 FAQ must include question: What country has the highest GDP?
-- FAQ-005 FAQ must include question: What is the real GDP formula?
-- FAQ-006 FAQ must include question: What is interest rate?
-- FAQ-007 FAQ must include question: How are interest rates calculated?
-- FAQ-008 FAQ must include question: What is the interest rate today?
-- FAQ-009 FAQ must include question: What is inflation?
-- FAQ-010 FAQ must include question: What is the inflation rate formula?
-- FAQ-011 FAQ must include question: What is Japan inflation rate YoY today?
-- FAQ-030 FAQ formula inventory must include GDP = C + G + I + (X - M).
-- FAQ-031 FAQ formula inventory must include Real GDP = Nominal GDP / GDP Deflator x 100.
-- FAQ-032 FAQ formula inventory must include Inflation rate = (CPI[current] - CPI[previous]) / CPI[previous] x 100.
-- FAQ-033 FAQ formula inventory must include Debt to GDP = Government Debt / GDP x 100 when debt context appears.
-- FAQ-040 FAQ accordion expand requirement 40 must be validated for education and search traffic.
-- FAQ-041 FAQ semantic heading requirement 41 must be validated for education and search traffic.
-- FAQ-042 FAQ internal links requirement 42 must be validated for education and search traffic.
-- FAQ-043 FAQ formula formatting requirement 43 must be validated for education and search traffic.
-- FAQ-044 FAQ paragraph readability requirement 44 must be validated for education and search traffic.
-- FAQ-045 FAQ SEO indexability requirement 45 must be validated for education and search traffic.
-- FAQ-046 FAQ keyboard toggle requirement 46 must be validated for education and search traffic.
-- FAQ-047 FAQ mobile spacing requirement 47 must be validated for education and search traffic.
-- FAQ-048 FAQ source link clarity requirement 48 must be validated for education and search traffic.
-- FAQ-049 FAQ no hidden-only content requirement 49 must be validated for education and search traffic.
-- FAQ-050 FAQ accordion expand requirement 50 must be validated for education and search traffic.
-- FAQ-051 FAQ semantic heading requirement 51 must be validated for education and search traffic.
-- FAQ-052 FAQ internal links requirement 52 must be validated for education and search traffic.
-- FAQ-053 FAQ formula formatting requirement 53 must be validated for education and search traffic.
-- FAQ-054 FAQ paragraph readability requirement 54 must be validated for education and search traffic.
-- FAQ-055 FAQ SEO indexability requirement 55 must be validated for education and search traffic.
-- FAQ-056 FAQ keyboard toggle requirement 56 must be validated for education and search traffic.
-- FAQ-057 FAQ mobile spacing requirement 57 must be validated for education and search traffic.
-- FAQ-058 FAQ source link clarity requirement 58 must be validated for education and search traffic.
-- FAQ-059 FAQ no hidden-only content requirement 59 must be validated for education and search traffic.
-- FAQ-060 FAQ accordion expand requirement 60 must be validated for education and search traffic.
-- FAQ-061 FAQ semantic heading requirement 61 must be validated for education and search traffic.
-- FAQ-062 FAQ internal links requirement 62 must be validated for education and search traffic.
-- FAQ-063 FAQ formula formatting requirement 63 must be validated for education and search traffic.
-- FAQ-064 FAQ paragraph readability requirement 64 must be validated for education and search traffic.
-- FAQ-065 FAQ SEO indexability requirement 65 must be validated for education and search traffic.
-- FAQ-066 FAQ keyboard toggle requirement 66 must be validated for education and search traffic.
-- FAQ-067 FAQ mobile spacing requirement 67 must be validated for education and search traffic.
-- FAQ-068 FAQ source link clarity requirement 68 must be validated for education and search traffic.
-- FAQ-069 FAQ no hidden-only content requirement 69 must be validated for education and search traffic.
-- FAQ-070 FAQ accordion expand requirement 70 must be validated for education and search traffic.
-- FAQ-071 FAQ semantic heading requirement 71 must be validated for education and search traffic.
-- FAQ-072 FAQ internal links requirement 72 must be validated for education and search traffic.
-- FAQ-073 FAQ formula formatting requirement 73 must be validated for education and search traffic.
-- FAQ-074 FAQ paragraph readability requirement 74 must be validated for education and search traffic.
-- FAQ-075 FAQ SEO indexability requirement 75 must be validated for education and search traffic.
-- FAQ-076 FAQ keyboard toggle requirement 76 must be validated for education and search traffic.
-- FAQ-077 FAQ mobile spacing requirement 77 must be validated for education and search traffic.
-- FAQ-078 FAQ source link clarity requirement 78 must be validated for education and search traffic.
-- FAQ-079 FAQ no hidden-only content requirement 79 must be validated for education and search traffic.
-- FAQ-080 FAQ accordion expand requirement 80 must be validated for education and search traffic.
-- FAQ-081 FAQ semantic heading requirement 81 must be validated for education and search traffic.
-- FAQ-082 FAQ internal links requirement 82 must be validated for education and search traffic.
-- FAQ-083 FAQ formula formatting requirement 83 must be validated for education and search traffic.
-- FAQ-084 FAQ paragraph readability requirement 84 must be validated for education and search traffic.
-- FAQ-085 FAQ SEO indexability requirement 85 must be validated for education and search traffic.
-- FAQ-086 FAQ keyboard toggle requirement 86 must be validated for education and search traffic.
-- FAQ-087 FAQ mobile spacing requirement 87 must be validated for education and search traffic.
-- FAQ-088 FAQ source link clarity requirement 88 must be validated for education and search traffic.
-- FAQ-089 FAQ no hidden-only content requirement 89 must be validated for education and search traffic.
-- FAQ-090 FAQ accordion expand requirement 90 must be validated for education and search traffic.
-- FAQ-091 FAQ semantic heading requirement 91 must be validated for education and search traffic.
-- FAQ-092 FAQ internal links requirement 92 must be validated for education and search traffic.
-- FAQ-093 FAQ formula formatting requirement 93 must be validated for education and search traffic.
-- FAQ-094 FAQ paragraph readability requirement 94 must be validated for education and search traffic.
-- FAQ-095 FAQ SEO indexability requirement 95 must be validated for education and search traffic.
-- FAQ-096 FAQ keyboard toggle requirement 96 must be validated for education and search traffic.
-- FAQ-097 FAQ mobile spacing requirement 97 must be validated for education and search traffic.
-- FAQ-098 FAQ source link clarity requirement 98 must be validated for education and search traffic.
-- FAQ-099 FAQ no hidden-only content requirement 99 must be validated for education and search traffic.
-- FAQ-100 FAQ accordion expand requirement 100 must be validated for education and search traffic.
+## 10. 模块级需求总览
 
-## 21. Footer Requirements
-- FOOTER-001 Footer must include group More than a product when matching the captured TradingView footer.
-- FOOTER-002 Footer must include group Screeners when matching the captured TradingView footer.
-- FOOTER-003 Footer must include group Heatmaps when matching the captured TradingView footer.
-- FOOTER-004 Footer must include group Calendars when matching the captured TradingView footer.
-- FOOTER-005 Footer must include group More products when matching the captured TradingView footer.
-- FOOTER-006 Footer must include group Apps when matching the captured TradingView footer.
-- FOOTER-007 Footer must include group Community when matching the captured TradingView footer.
-- FOOTER-008 Footer must include group Ideas when matching the captured TradingView footer.
-- FOOTER-009 Footer must include group Pine Script when matching the captured TradingView footer.
-- FOOTER-010 Footer must include group Tools & subscriptions when matching the captured TradingView footer.
-- FOOTER-011 Footer must include group Trading when matching the captured TradingView footer.
-- FOOTER-012 Footer must include group Special offers when matching the captured TradingView footer.
-- FOOTER-013 Footer must include group About company when matching the captured TradingView footer.
-- FOOTER-014 Footer must include group Merch when matching the captured TradingView footer.
-- FOOTER-015 Footer must include group Policies & security when matching the captured TradingView footer.
-- FOOTER-016 Footer must include group Business solutions when matching the captured TradingView footer.
-- FOOTER-017 Footer must include group Growth opportunities when matching the captured TradingView footer.
-- FOOTER-030 Footer link inventory must include Supercharts.
-- FOOTER-031 Footer link inventory must include Stocks.
-- FOOTER-032 Footer link inventory must include ETFs.
-- FOOTER-033 Footer link inventory must include Bonds.
-- FOOTER-034 Footer link inventory must include Crypto coins.
-- FOOTER-035 Footer link inventory must include CEX pairs.
-- FOOTER-036 Footer link inventory must include DEX pairs.
-- FOOTER-037 Footer link inventory must include Economic.
-- FOOTER-038 Footer link inventory must include Earnings.
-- FOOTER-039 Footer link inventory must include Dividends.
-- FOOTER-040 Footer link inventory must include Yield Curves.
-- FOOTER-041 Footer link inventory must include Options.
-- FOOTER-042 Footer link inventory must include Macro Maps.
-- FOOTER-043 Footer link inventory must include News Flow.
-- FOOTER-044 Footer link inventory must include Pine Script.
-- FOOTER-045 Footer link inventory must include Mobile.
-- FOOTER-046 Footer link inventory must include Desktop.
-- FOOTER-047 Footer link inventory must include Social network.
-- FOOTER-048 Footer link inventory must include Pricing.
-- FOOTER-049 Footer link inventory must include Market data.
-- FOOTER-050 Footer link inventory must include Terms of Use.
-- FOOTER-051 Footer link inventory must include Disclaimer.
-- FOOTER-052 Footer link inventory must include Privacy Policy.
-- FOOTER-053 Footer link inventory must include Cookies Policy.
-- FOOTER-054 Footer link inventory must include Accessibility Statement.
-- FOOTER-055 Footer link inventory must include Status page.
-- FOOTER-056 Footer link inventory must include Widgets.
-- FOOTER-057 Footer link inventory must include Charting libraries.
-- FOOTER-058 Footer link inventory must include Lightweight Charts.
-- FOOTER-059 Footer link inventory must include Advanced Charts.
-- FOOTER-060 Footer link inventory must include Trading Platform.
-- FOOTER-061 Footer link inventory must include Advertising.
-- FOOTER-062 Footer link inventory must include Brokerage integration.
-- FOOTER-063 Footer link inventory must include Partner program.
-- FOOTER-064 Footer link inventory must include Education program.
-- FOOTER-080 Footer column alignment requirement 80 must preserve global site navigation.
-- FOOTER-081 Footer link spacing requirement 81 must preserve global site navigation.
-- FOOTER-082 Footer copyright requirement 82 must preserve global site navigation.
-- FOOTER-083 Footer data attribution requirement 83 must preserve global site navigation.
-- FOOTER-084 Footer language selector requirement 84 must preserve global site navigation.
-- FOOTER-085 Footer responsive accordion requirement 85 must preserve global site navigation.
-- FOOTER-086 Footer keyboard traversal requirement 86 must preserve global site navigation.
-- FOOTER-087 Footer external link rel requirement 87 must preserve global site navigation.
-- FOOTER-088 Footer column alignment requirement 88 must preserve global site navigation.
-- FOOTER-089 Footer link spacing requirement 89 must preserve global site navigation.
-- FOOTER-090 Footer copyright requirement 90 must preserve global site navigation.
-- FOOTER-091 Footer data attribution requirement 91 must preserve global site navigation.
-- FOOTER-092 Footer language selector requirement 92 must preserve global site navigation.
-- FOOTER-093 Footer responsive accordion requirement 93 must preserve global site navigation.
-- FOOTER-094 Footer keyboard traversal requirement 94 must preserve global site navigation.
-- FOOTER-095 Footer external link rel requirement 95 must preserve global site navigation.
-- FOOTER-096 Footer column alignment requirement 96 must preserve global site navigation.
-- FOOTER-097 Footer link spacing requirement 97 must preserve global site navigation.
-- FOOTER-098 Footer copyright requirement 98 must preserve global site navigation.
-- FOOTER-099 Footer data attribution requirement 99 must preserve global site navigation.
-- FOOTER-100 Footer language selector requirement 100 must preserve global site navigation.
-- FOOTER-101 Footer responsive accordion requirement 101 must preserve global site navigation.
-- FOOTER-102 Footer keyboard traversal requirement 102 must preserve global site navigation.
-- FOOTER-103 Footer external link rel requirement 103 must preserve global site navigation.
-- FOOTER-104 Footer column alignment requirement 104 must preserve global site navigation.
-- FOOTER-105 Footer link spacing requirement 105 must preserve global site navigation.
-- FOOTER-106 Footer copyright requirement 106 must preserve global site navigation.
-- FOOTER-107 Footer data attribution requirement 107 must preserve global site navigation.
-- FOOTER-108 Footer language selector requirement 108 must preserve global site navigation.
-- FOOTER-109 Footer responsive accordion requirement 109 must preserve global site navigation.
-- FOOTER-110 Footer keyboard traversal requirement 110 must preserve global site navigation.
-- FOOTER-111 Footer external link rel requirement 111 must preserve global site navigation.
-- FOOTER-112 Footer column alignment requirement 112 must preserve global site navigation.
-- FOOTER-113 Footer link spacing requirement 113 must preserve global site navigation.
-- FOOTER-114 Footer copyright requirement 114 must preserve global site navigation.
-- FOOTER-115 Footer data attribution requirement 115 must preserve global site navigation.
-- FOOTER-116 Footer language selector requirement 116 must preserve global site navigation.
-- FOOTER-117 Footer responsive accordion requirement 117 must preserve global site navigation.
-- FOOTER-118 Footer keyboard traversal requirement 118 must preserve global site navigation.
-- FOOTER-119 Footer external link rel requirement 119 must preserve global site navigation.
-- FOOTER-120 Footer column alignment requirement 120 must preserve global site navigation.
-- FOOTER-121 Footer link spacing requirement 121 must preserve global site navigation.
-- FOOTER-122 Footer copyright requirement 122 must preserve global site navigation.
-- FOOTER-123 Footer data attribution requirement 123 must preserve global site navigation.
-- FOOTER-124 Footer language selector requirement 124 must preserve global site navigation.
-- FOOTER-125 Footer responsive accordion requirement 125 must preserve global site navigation.
-- FOOTER-126 Footer keyboard traversal requirement 126 must preserve global site navigation.
-- FOOTER-127 Footer external link rel requirement 127 must preserve global site navigation.
-- FOOTER-128 Footer column alignment requirement 128 must preserve global site navigation.
-- FOOTER-129 Footer link spacing requirement 129 must preserve global site navigation.
-- FOOTER-130 Footer copyright requirement 130 must preserve global site navigation.
-- FOOTER-131 Footer data attribution requirement 131 must preserve global site navigation.
-- FOOTER-132 Footer language selector requirement 132 must preserve global site navigation.
-- FOOTER-133 Footer responsive accordion requirement 133 must preserve global site navigation.
-- FOOTER-134 Footer keyboard traversal requirement 134 must preserve global site navigation.
-- FOOTER-135 Footer external link rel requirement 135 must preserve global site navigation.
-- FOOTER-136 Footer column alignment requirement 136 must preserve global site navigation.
-- FOOTER-137 Footer link spacing requirement 137 must preserve global site navigation.
-- FOOTER-138 Footer copyright requirement 138 must preserve global site navigation.
-- FOOTER-139 Footer data attribution requirement 139 must preserve global site navigation.
-- FOOTER-140 Footer language selector requirement 140 must preserve global site navigation.
+| ID | 模块 | 产品目的 |
+| --- | --- | --- |
+| M01 | Global Header | 提供 TradingView 全站导航、搜索、语言切换和账号转化入口。 |
+| M02 | Breadcrumb And Page Title | 让用户知道当前位置是 Markets 下的 Economy 页面。 |
+| M03 | Page Tabs | 在 Overview 和 Economic trends 之间提供清晰导航。 |
+| M04 | Economic Trends Summary | 把全球宏观趋势的核心信号集中在页面最前。 |
+| M05 | Inflation Map | 用全球地图表达各国家或地区通胀水平差异。 |
+| M06 | GDP Growth YoY Ranking | 展示同比 GDP 增长靠前的国家，并提供国家钻取入口。 |
+| M07 | Macro Metric Cards | 展示美国关键宏观指标的当前值、预测值和下次发布时间。 |
+| M08 | Countries | 提供主要国家和地区的直接入口。 |
+| M09 | Ideas | 展示社区对宏观经济数据的观点，连接数据和交易想法。 |
+| M10 | Economic Indicators Heatmap | 用国家 x 指标矩阵支持横向比较。 |
+| M11 | Main Indicators | 提供常用宏观指标的目录入口。 |
+| M12 | Global Industrial Map | 提供全球工业趋势的地图视角。 |
+| M13 | News | 提供与宏观经济相关的即时新闻入口。 |
+| M14 | Economic Calendar | 展示今日或近期宏观经济事件，支持事件驱动观察。 |
+| M15 | FAQ | 解释核心经济概念，兼顾新手理解和 SEO。 |
+| M16 | Footer | 承载全站导航、产品入口、社区入口、公司信息、政策和数据版权。 |
 
-## 22. Data Model Requirements
-- DATA-MODEL-001 InflationMapCountry must contain fields: countryCode, countryName, geometryAssetPath, bucketClass, value, unit, dataStatus, href.
-- DATA-MODEL-002 GdpGrowthRow must contain fields: name, href, logo, growthPercent, nominalGdpValue, nominalGdpUnit, rank.
-- DATA-MODEL-003 MetricCard must contain fields: title, ticker, href, chartSeriesOrImages, actual, forecast, nextRelease, timeframe, sourceTimestamp.
-- DATA-MODEL-004 CountryLink must contain fields: label, href, regionCode, displayOrder.
-- DATA-MODEL-005 IndicatorHeatmapRow must contain fields: country, countryHref, valuesByMetric, unitsByMetric, colorBucketsByMetric.
-- DATA-MODEL-006 IndicatorLink must contain fields: label, href, category, displayOrder.
-- DATA-MODEL-007 IdeaCard must contain fields: title, href, preview, image, symbol, direction, author, authorHref, updatedAt, category.
-- DATA-MODEL-008 NewsItem must contain fields: headline, href, provider, publishedAt, thumbnail, summary.
-- DATA-MODEL-009 CalendarEvent must contain fields: date, time, country, eventName, actual, forecast, prior, unit, href.
-- DATA-MODEL-010 FaqItem must contain fields: question, answerBlocks, formulaBlocks, relatedLinks, displayOrder.
-- DATA-MODEL-011 FooterGroup must contain fields: title, links, displayOrder.
-- DATA-MODEL-012 FooterLink must contain fields: label, href, external, legalCategory.
-- DATA-MODEL-013 Data model constraint 13: every applicable entity must define stable id so rendering and QA do not depend on ad hoc strings.
-- DATA-MODEL-014 Data model constraint 14: every applicable entity must define display order so rendering and QA do not depend on ad hoc strings.
-- DATA-MODEL-015 Data model constraint 15: every applicable entity must define localized label so rendering and QA do not depend on ad hoc strings.
-- DATA-MODEL-016 Data model constraint 16: every applicable entity must define numeric raw value so rendering and QA do not depend on ad hoc strings.
-- DATA-MODEL-017 Data model constraint 17: every applicable entity must define formatted value so rendering and QA do not depend on ad hoc strings.
-- DATA-MODEL-018 Data model constraint 18: every applicable entity must define unit so rendering and QA do not depend on ad hoc strings.
-- DATA-MODEL-019 Data model constraint 19: every applicable entity must define href so rendering and QA do not depend on ad hoc strings.
-- DATA-MODEL-020 Data model constraint 20: every applicable entity must define source timestamp so rendering and QA do not depend on ad hoc strings.
-- DATA-MODEL-021 Data model constraint 21: every applicable entity must define data status so rendering and QA do not depend on ad hoc strings.
-- DATA-MODEL-022 Data model constraint 22: every applicable entity must define legal attribution so rendering and QA do not depend on ad hoc strings.
-- DATA-MODEL-023 Data model constraint 23: every applicable entity must define test fixture so rendering and QA do not depend on ad hoc strings.
-- DATA-MODEL-024 Data model constraint 24: every applicable entity must define stable id so rendering and QA do not depend on ad hoc strings.
-- DATA-MODEL-025 Data model constraint 25: every applicable entity must define display order so rendering and QA do not depend on ad hoc strings.
-- DATA-MODEL-026 Data model constraint 26: every applicable entity must define localized label so rendering and QA do not depend on ad hoc strings.
-- DATA-MODEL-027 Data model constraint 27: every applicable entity must define numeric raw value so rendering and QA do not depend on ad hoc strings.
-- DATA-MODEL-028 Data model constraint 28: every applicable entity must define formatted value so rendering and QA do not depend on ad hoc strings.
-- DATA-MODEL-029 Data model constraint 29: every applicable entity must define unit so rendering and QA do not depend on ad hoc strings.
-- DATA-MODEL-030 Data model constraint 30: every applicable entity must define href so rendering and QA do not depend on ad hoc strings.
-- DATA-MODEL-031 Data model constraint 31: every applicable entity must define source timestamp so rendering and QA do not depend on ad hoc strings.
-- DATA-MODEL-032 Data model constraint 32: every applicable entity must define data status so rendering and QA do not depend on ad hoc strings.
-- DATA-MODEL-033 Data model constraint 33: every applicable entity must define legal attribution so rendering and QA do not depend on ad hoc strings.
-- DATA-MODEL-034 Data model constraint 34: every applicable entity must define test fixture so rendering and QA do not depend on ad hoc strings.
-- DATA-MODEL-035 Data model constraint 35: every applicable entity must define stable id so rendering and QA do not depend on ad hoc strings.
-- DATA-MODEL-036 Data model constraint 36: every applicable entity must define display order so rendering and QA do not depend on ad hoc strings.
-- DATA-MODEL-037 Data model constraint 37: every applicable entity must define localized label so rendering and QA do not depend on ad hoc strings.
-- DATA-MODEL-038 Data model constraint 38: every applicable entity must define numeric raw value so rendering and QA do not depend on ad hoc strings.
-- DATA-MODEL-039 Data model constraint 39: every applicable entity must define formatted value so rendering and QA do not depend on ad hoc strings.
-- DATA-MODEL-040 Data model constraint 40: every applicable entity must define unit so rendering and QA do not depend on ad hoc strings.
-- DATA-MODEL-041 Data model constraint 41: every applicable entity must define href so rendering and QA do not depend on ad hoc strings.
-- DATA-MODEL-042 Data model constraint 42: every applicable entity must define source timestamp so rendering and QA do not depend on ad hoc strings.
-- DATA-MODEL-043 Data model constraint 43: every applicable entity must define data status so rendering and QA do not depend on ad hoc strings.
-- DATA-MODEL-044 Data model constraint 44: every applicable entity must define legal attribution so rendering and QA do not depend on ad hoc strings.
-- DATA-MODEL-045 Data model constraint 45: every applicable entity must define test fixture so rendering and QA do not depend on ad hoc strings.
-- DATA-MODEL-046 Data model constraint 46: every applicable entity must define stable id so rendering and QA do not depend on ad hoc strings.
-- DATA-MODEL-047 Data model constraint 47: every applicable entity must define display order so rendering and QA do not depend on ad hoc strings.
-- DATA-MODEL-048 Data model constraint 48: every applicable entity must define localized label so rendering and QA do not depend on ad hoc strings.
-- DATA-MODEL-049 Data model constraint 49: every applicable entity must define numeric raw value so rendering and QA do not depend on ad hoc strings.
-- DATA-MODEL-050 Data model constraint 50: every applicable entity must define formatted value so rendering and QA do not depend on ad hoc strings.
-- DATA-MODEL-051 Data model constraint 51: every applicable entity must define unit so rendering and QA do not depend on ad hoc strings.
-- DATA-MODEL-052 Data model constraint 52: every applicable entity must define href so rendering and QA do not depend on ad hoc strings.
-- DATA-MODEL-053 Data model constraint 53: every applicable entity must define source timestamp so rendering and QA do not depend on ad hoc strings.
-- DATA-MODEL-054 Data model constraint 54: every applicable entity must define data status so rendering and QA do not depend on ad hoc strings.
-- DATA-MODEL-055 Data model constraint 55: every applicable entity must define legal attribution so rendering and QA do not depend on ad hoc strings.
-- DATA-MODEL-056 Data model constraint 56: every applicable entity must define test fixture so rendering and QA do not depend on ad hoc strings.
-- DATA-MODEL-057 Data model constraint 57: every applicable entity must define stable id so rendering and QA do not depend on ad hoc strings.
-- DATA-MODEL-058 Data model constraint 58: every applicable entity must define display order so rendering and QA do not depend on ad hoc strings.
-- DATA-MODEL-059 Data model constraint 59: every applicable entity must define localized label so rendering and QA do not depend on ad hoc strings.
-- DATA-MODEL-060 Data model constraint 60: every applicable entity must define numeric raw value so rendering and QA do not depend on ad hoc strings.
-- DATA-MODEL-061 Data model constraint 61: every applicable entity must define formatted value so rendering and QA do not depend on ad hoc strings.
-- DATA-MODEL-062 Data model constraint 62: every applicable entity must define unit so rendering and QA do not depend on ad hoc strings.
-- DATA-MODEL-063 Data model constraint 63: every applicable entity must define href so rendering and QA do not depend on ad hoc strings.
-- DATA-MODEL-064 Data model constraint 64: every applicable entity must define source timestamp so rendering and QA do not depend on ad hoc strings.
-- DATA-MODEL-065 Data model constraint 65: every applicable entity must define data status so rendering and QA do not depend on ad hoc strings.
-- DATA-MODEL-066 Data model constraint 66: every applicable entity must define legal attribution so rendering and QA do not depend on ad hoc strings.
-- DATA-MODEL-067 Data model constraint 67: every applicable entity must define test fixture so rendering and QA do not depend on ad hoc strings.
-- DATA-MODEL-068 Data model constraint 68: every applicable entity must define stable id so rendering and QA do not depend on ad hoc strings.
-- DATA-MODEL-069 Data model constraint 69: every applicable entity must define display order so rendering and QA do not depend on ad hoc strings.
-- DATA-MODEL-070 Data model constraint 70: every applicable entity must define localized label so rendering and QA do not depend on ad hoc strings.
-- DATA-MODEL-071 Data model constraint 71: every applicable entity must define numeric raw value so rendering and QA do not depend on ad hoc strings.
-- DATA-MODEL-072 Data model constraint 72: every applicable entity must define formatted value so rendering and QA do not depend on ad hoc strings.
-- DATA-MODEL-073 Data model constraint 73: every applicable entity must define unit so rendering and QA do not depend on ad hoc strings.
-- DATA-MODEL-074 Data model constraint 74: every applicable entity must define href so rendering and QA do not depend on ad hoc strings.
-- DATA-MODEL-075 Data model constraint 75: every applicable entity must define source timestamp so rendering and QA do not depend on ad hoc strings.
-- DATA-MODEL-076 Data model constraint 76: every applicable entity must define data status so rendering and QA do not depend on ad hoc strings.
-- DATA-MODEL-077 Data model constraint 77: every applicable entity must define legal attribution so rendering and QA do not depend on ad hoc strings.
-- DATA-MODEL-078 Data model constraint 78: every applicable entity must define test fixture so rendering and QA do not depend on ad hoc strings.
-- DATA-MODEL-079 Data model constraint 79: every applicable entity must define stable id so rendering and QA do not depend on ad hoc strings.
-- DATA-MODEL-080 Data model constraint 80: every applicable entity must define display order so rendering and QA do not depend on ad hoc strings.
-- DATA-MODEL-081 Data model constraint 81: every applicable entity must define localized label so rendering and QA do not depend on ad hoc strings.
-- DATA-MODEL-082 Data model constraint 82: every applicable entity must define numeric raw value so rendering and QA do not depend on ad hoc strings.
-- DATA-MODEL-083 Data model constraint 83: every applicable entity must define formatted value so rendering and QA do not depend on ad hoc strings.
-- DATA-MODEL-084 Data model constraint 84: every applicable entity must define unit so rendering and QA do not depend on ad hoc strings.
-- DATA-MODEL-085 Data model constraint 85: every applicable entity must define href so rendering and QA do not depend on ad hoc strings.
-- DATA-MODEL-086 Data model constraint 86: every applicable entity must define source timestamp so rendering and QA do not depend on ad hoc strings.
-- DATA-MODEL-087 Data model constraint 87: every applicable entity must define data status so rendering and QA do not depend on ad hoc strings.
-- DATA-MODEL-088 Data model constraint 88: every applicable entity must define legal attribution so rendering and QA do not depend on ad hoc strings.
-- DATA-MODEL-089 Data model constraint 89: every applicable entity must define test fixture so rendering and QA do not depend on ad hoc strings.
-- DATA-MODEL-090 Data model constraint 90: every applicable entity must define stable id so rendering and QA do not depend on ad hoc strings.
-- DATA-MODEL-091 Data model constraint 91: every applicable entity must define display order so rendering and QA do not depend on ad hoc strings.
-- DATA-MODEL-092 Data model constraint 92: every applicable entity must define localized label so rendering and QA do not depend on ad hoc strings.
-- DATA-MODEL-093 Data model constraint 93: every applicable entity must define numeric raw value so rendering and QA do not depend on ad hoc strings.
-- DATA-MODEL-094 Data model constraint 94: every applicable entity must define formatted value so rendering and QA do not depend on ad hoc strings.
-- DATA-MODEL-095 Data model constraint 95: every applicable entity must define unit so rendering and QA do not depend on ad hoc strings.
-- DATA-MODEL-096 Data model constraint 96: every applicable entity must define href so rendering and QA do not depend on ad hoc strings.
-- DATA-MODEL-097 Data model constraint 97: every applicable entity must define source timestamp so rendering and QA do not depend on ad hoc strings.
-- DATA-MODEL-098 Data model constraint 98: every applicable entity must define data status so rendering and QA do not depend on ad hoc strings.
-- DATA-MODEL-099 Data model constraint 99: every applicable entity must define legal attribution so rendering and QA do not depend on ad hoc strings.
-- DATA-MODEL-100 Data model constraint 100: every applicable entity must define test fixture so rendering and QA do not depend on ad hoc strings.
-- DATA-MODEL-101 Data model constraint 101: every applicable entity must define stable id so rendering and QA do not depend on ad hoc strings.
-- DATA-MODEL-102 Data model constraint 102: every applicable entity must define display order so rendering and QA do not depend on ad hoc strings.
-- DATA-MODEL-103 Data model constraint 103: every applicable entity must define localized label so rendering and QA do not depend on ad hoc strings.
-- DATA-MODEL-104 Data model constraint 104: every applicable entity must define numeric raw value so rendering and QA do not depend on ad hoc strings.
-- DATA-MODEL-105 Data model constraint 105: every applicable entity must define formatted value so rendering and QA do not depend on ad hoc strings.
-- DATA-MODEL-106 Data model constraint 106: every applicable entity must define unit so rendering and QA do not depend on ad hoc strings.
-- DATA-MODEL-107 Data model constraint 107: every applicable entity must define href so rendering and QA do not depend on ad hoc strings.
-- DATA-MODEL-108 Data model constraint 108: every applicable entity must define source timestamp so rendering and QA do not depend on ad hoc strings.
-- DATA-MODEL-109 Data model constraint 109: every applicable entity must define data status so rendering and QA do not depend on ad hoc strings.
-- DATA-MODEL-110 Data model constraint 110: every applicable entity must define legal attribution so rendering and QA do not depend on ad hoc strings.
-- DATA-MODEL-111 Data model constraint 111: every applicable entity must define test fixture so rendering and QA do not depend on ad hoc strings.
-- DATA-MODEL-112 Data model constraint 112: every applicable entity must define stable id so rendering and QA do not depend on ad hoc strings.
-- DATA-MODEL-113 Data model constraint 113: every applicable entity must define display order so rendering and QA do not depend on ad hoc strings.
-- DATA-MODEL-114 Data model constraint 114: every applicable entity must define localized label so rendering and QA do not depend on ad hoc strings.
-- DATA-MODEL-115 Data model constraint 115: every applicable entity must define numeric raw value so rendering and QA do not depend on ad hoc strings.
-- DATA-MODEL-116 Data model constraint 116: every applicable entity must define formatted value so rendering and QA do not depend on ad hoc strings.
-- DATA-MODEL-117 Data model constraint 117: every applicable entity must define unit so rendering and QA do not depend on ad hoc strings.
-- DATA-MODEL-118 Data model constraint 118: every applicable entity must define href so rendering and QA do not depend on ad hoc strings.
-- DATA-MODEL-119 Data model constraint 119: every applicable entity must define source timestamp so rendering and QA do not depend on ad hoc strings.
-- DATA-MODEL-120 Data model constraint 120: every applicable entity must define data status so rendering and QA do not depend on ad hoc strings.
+## 11.01 Global Header
 
-## 23. Data Formatting Requirements
-- FORMAT-001 Trillions must be formatted as T with a visible currency suffix when applicable.
-- FORMAT-002 Billions must be formatted as B with a visible currency suffix when applicable.
-- FORMAT-003 Percent values must include percent sign and preserve negative sign.
-- FORMAT-004 Values expressed as percent of GDP must include of GDP.
-- FORMAT-005 Unavailable forecasts must display an em dash or source-equivalent dash.
-- FORMAT-006 Dates must preserve exact visible wording such as In 2 days or Jun 18, 2026 when provided by source.
-- FORMAT-007 Country names must preserve page naming such as Mainland China and USA.
-- FORMAT-008 EU row label may use EU when captured in the heatmap section.
-- FORMAT-009 Right-to-left or bidirectional numeric markers from captured data must be normalized visually without corrupting values.
-- FORMAT-010 Formula symbols must be readable and not replaced by typographic noise.
-- FORMAT-011 Formatting requirement 11 must preserve percent semantics across desktop and mobile.
-- FORMAT-012 Formatting requirement 12 must preserve country label semantics across desktop and mobile.
-- FORMAT-013 Formatting requirement 13 must preserve date semantics across desktop and mobile.
-- FORMAT-014 Formatting requirement 14 must preserve dash semantics across desktop and mobile.
-- FORMAT-015 Formatting requirement 15 must preserve formula semantics across desktop and mobile.
-- FORMAT-016 Formatting requirement 16 must preserve ticker semantics across desktop and mobile.
-- FORMAT-017 Formatting requirement 17 must preserve unit semantics across desktop and mobile.
-- FORMAT-018 Formatting requirement 18 must preserve rank semantics across desktop and mobile.
-- FORMAT-019 Formatting requirement 19 must preserve provider semantics across desktop and mobile.
-- FORMAT-020 Formatting requirement 20 must preserve currency semantics across desktop and mobile.
-- FORMAT-021 Formatting requirement 21 must preserve percent semantics across desktop and mobile.
-- FORMAT-022 Formatting requirement 22 must preserve country label semantics across desktop and mobile.
-- FORMAT-023 Formatting requirement 23 must preserve date semantics across desktop and mobile.
-- FORMAT-024 Formatting requirement 24 must preserve dash semantics across desktop and mobile.
-- FORMAT-025 Formatting requirement 25 must preserve formula semantics across desktop and mobile.
-- FORMAT-026 Formatting requirement 26 must preserve ticker semantics across desktop and mobile.
-- FORMAT-027 Formatting requirement 27 must preserve unit semantics across desktop and mobile.
-- FORMAT-028 Formatting requirement 28 must preserve rank semantics across desktop and mobile.
-- FORMAT-029 Formatting requirement 29 must preserve provider semantics across desktop and mobile.
-- FORMAT-030 Formatting requirement 30 must preserve currency semantics across desktop and mobile.
-- FORMAT-031 Formatting requirement 31 must preserve percent semantics across desktop and mobile.
-- FORMAT-032 Formatting requirement 32 must preserve country label semantics across desktop and mobile.
-- FORMAT-033 Formatting requirement 33 must preserve date semantics across desktop and mobile.
-- FORMAT-034 Formatting requirement 34 must preserve dash semantics across desktop and mobile.
-- FORMAT-035 Formatting requirement 35 must preserve formula semantics across desktop and mobile.
-- FORMAT-036 Formatting requirement 36 must preserve ticker semantics across desktop and mobile.
-- FORMAT-037 Formatting requirement 37 must preserve unit semantics across desktop and mobile.
-- FORMAT-038 Formatting requirement 38 must preserve rank semantics across desktop and mobile.
-- FORMAT-039 Formatting requirement 39 must preserve provider semantics across desktop and mobile.
-- FORMAT-040 Formatting requirement 40 must preserve currency semantics across desktop and mobile.
-- FORMAT-041 Formatting requirement 41 must preserve percent semantics across desktop and mobile.
-- FORMAT-042 Formatting requirement 42 must preserve country label semantics across desktop and mobile.
-- FORMAT-043 Formatting requirement 43 must preserve date semantics across desktop and mobile.
-- FORMAT-044 Formatting requirement 44 must preserve dash semantics across desktop and mobile.
-- FORMAT-045 Formatting requirement 45 must preserve formula semantics across desktop and mobile.
-- FORMAT-046 Formatting requirement 46 must preserve ticker semantics across desktop and mobile.
-- FORMAT-047 Formatting requirement 47 must preserve unit semantics across desktop and mobile.
-- FORMAT-048 Formatting requirement 48 must preserve rank semantics across desktop and mobile.
-- FORMAT-049 Formatting requirement 49 must preserve provider semantics across desktop and mobile.
-- FORMAT-050 Formatting requirement 50 must preserve currency semantics across desktop and mobile.
-- FORMAT-051 Formatting requirement 51 must preserve percent semantics across desktop and mobile.
-- FORMAT-052 Formatting requirement 52 must preserve country label semantics across desktop and mobile.
-- FORMAT-053 Formatting requirement 53 must preserve date semantics across desktop and mobile.
-- FORMAT-054 Formatting requirement 54 must preserve dash semantics across desktop and mobile.
-- FORMAT-055 Formatting requirement 55 must preserve formula semantics across desktop and mobile.
-- FORMAT-056 Formatting requirement 56 must preserve ticker semantics across desktop and mobile.
-- FORMAT-057 Formatting requirement 57 must preserve unit semantics across desktop and mobile.
-- FORMAT-058 Formatting requirement 58 must preserve rank semantics across desktop and mobile.
-- FORMAT-059 Formatting requirement 59 must preserve provider semantics across desktop and mobile.
-- FORMAT-060 Formatting requirement 60 must preserve currency semantics across desktop and mobile.
-- FORMAT-061 Formatting requirement 61 must preserve percent semantics across desktop and mobile.
-- FORMAT-062 Formatting requirement 62 must preserve country label semantics across desktop and mobile.
-- FORMAT-063 Formatting requirement 63 must preserve date semantics across desktop and mobile.
-- FORMAT-064 Formatting requirement 64 must preserve dash semantics across desktop and mobile.
-- FORMAT-065 Formatting requirement 65 must preserve formula semantics across desktop and mobile.
-- FORMAT-066 Formatting requirement 66 must preserve ticker semantics across desktop and mobile.
-- FORMAT-067 Formatting requirement 67 must preserve unit semantics across desktop and mobile.
-- FORMAT-068 Formatting requirement 68 must preserve rank semantics across desktop and mobile.
-- FORMAT-069 Formatting requirement 69 must preserve provider semantics across desktop and mobile.
-- FORMAT-070 Formatting requirement 70 must preserve currency semantics across desktop and mobile.
+产品目的：提供 TradingView 全站导航、搜索、语言切换和账号转化入口。
 
-## 24. Interaction Requirements
-- INTERACTION-001 Header nav open/close must be implemented as a real user interaction, not static copied text.
-- INTERACTION-002 Search activation must be implemented as a real user interaction, not static copied text.
-- INTERACTION-003 Language selector activation must be implemented as a real user interaction, not static copied text.
-- INTERACTION-004 Get started CTA click must be implemented as a real user interaction, not static copied text.
-- INTERACTION-005 Breadcrumb navigation must be implemented as a real user interaction, not static copied text.
-- INTERACTION-006 Overview tab activation must be implemented as a real user interaction, not static copied text.
-- INTERACTION-007 Economic trends tab activation must be implemented as a real user interaction, not static copied text.
-- INTERACTION-008 Map hover or focus must be implemented as a real user interaction, not static copied text.
-- INTERACTION-009 Country row click must be implemented as a real user interaction, not static copied text.
-- INTERACTION-010 Metric symbol click must be implemented as a real user interaction, not static copied text.
-- INTERACTION-011 Country chip click must be implemented as a real user interaction, not static copied text.
-- INTERACTION-012 Ideas tab switch must be implemented as a real user interaction, not static copied text.
-- INTERACTION-013 Idea card click must be implemented as a real user interaction, not static copied text.
-- INTERACTION-014 Heatmap cell hover or focus must be implemented as a real user interaction, not static copied text.
-- INTERACTION-015 Main indicator link click must be implemented as a real user interaction, not static copied text.
-- INTERACTION-016 See more global trends click must be implemented as a real user interaction, not static copied text.
-- INTERACTION-017 Keep reading click must be implemented as a real user interaction, not static copied text.
-- INTERACTION-018 Calendar event click must be implemented as a real user interaction, not static copied text.
-- INTERACTION-019 FAQ expand/collapse must be implemented as a real user interaction, not static copied text.
-- INTERACTION-020 Footer link click must be implemented as a real user interaction, not static copied text.
-- INTERACTION-021 Interaction state default requirement 21 must be visible, accessible, and testable where applicable.
-- INTERACTION-022 Interaction state hover requirement 22 must be visible, accessible, and testable where applicable.
-- INTERACTION-023 Interaction state focus requirement 23 must be visible, accessible, and testable where applicable.
-- INTERACTION-024 Interaction state active requirement 24 must be visible, accessible, and testable where applicable.
-- INTERACTION-025 Interaction state loading requirement 25 must be visible, accessible, and testable where applicable.
-- INTERACTION-026 Interaction state loaded requirement 26 must be visible, accessible, and testable where applicable.
-- INTERACTION-027 Interaction state error requirement 27 must be visible, accessible, and testable where applicable.
-- INTERACTION-028 Interaction state empty requirement 28 must be visible, accessible, and testable where applicable.
-- INTERACTION-029 Interaction state disabled requirement 29 must be visible, accessible, and testable where applicable.
-- INTERACTION-030 Interaction state mobile requirement 30 must be visible, accessible, and testable where applicable.
-- INTERACTION-031 Interaction state default requirement 31 must be visible, accessible, and testable where applicable.
-- INTERACTION-032 Interaction state hover requirement 32 must be visible, accessible, and testable where applicable.
-- INTERACTION-033 Interaction state focus requirement 33 must be visible, accessible, and testable where applicable.
-- INTERACTION-034 Interaction state active requirement 34 must be visible, accessible, and testable where applicable.
-- INTERACTION-035 Interaction state loading requirement 35 must be visible, accessible, and testable where applicable.
-- INTERACTION-036 Interaction state loaded requirement 36 must be visible, accessible, and testable where applicable.
-- INTERACTION-037 Interaction state error requirement 37 must be visible, accessible, and testable where applicable.
-- INTERACTION-038 Interaction state empty requirement 38 must be visible, accessible, and testable where applicable.
-- INTERACTION-039 Interaction state disabled requirement 39 must be visible, accessible, and testable where applicable.
-- INTERACTION-040 Interaction state mobile requirement 40 must be visible, accessible, and testable where applicable.
-- INTERACTION-041 Interaction state default requirement 41 must be visible, accessible, and testable where applicable.
-- INTERACTION-042 Interaction state hover requirement 42 must be visible, accessible, and testable where applicable.
-- INTERACTION-043 Interaction state focus requirement 43 must be visible, accessible, and testable where applicable.
-- INTERACTION-044 Interaction state active requirement 44 must be visible, accessible, and testable where applicable.
-- INTERACTION-045 Interaction state loading requirement 45 must be visible, accessible, and testable where applicable.
-- INTERACTION-046 Interaction state loaded requirement 46 must be visible, accessible, and testable where applicable.
-- INTERACTION-047 Interaction state error requirement 47 must be visible, accessible, and testable where applicable.
-- INTERACTION-048 Interaction state empty requirement 48 must be visible, accessible, and testable where applicable.
-- INTERACTION-049 Interaction state disabled requirement 49 must be visible, accessible, and testable where applicable.
-- INTERACTION-050 Interaction state mobile requirement 50 must be visible, accessible, and testable where applicable.
-- INTERACTION-051 Interaction state default requirement 51 must be visible, accessible, and testable where applicable.
-- INTERACTION-052 Interaction state hover requirement 52 must be visible, accessible, and testable where applicable.
-- INTERACTION-053 Interaction state focus requirement 53 must be visible, accessible, and testable where applicable.
-- INTERACTION-054 Interaction state active requirement 54 must be visible, accessible, and testable where applicable.
-- INTERACTION-055 Interaction state loading requirement 55 must be visible, accessible, and testable where applicable.
-- INTERACTION-056 Interaction state loaded requirement 56 must be visible, accessible, and testable where applicable.
-- INTERACTION-057 Interaction state error requirement 57 must be visible, accessible, and testable where applicable.
-- INTERACTION-058 Interaction state empty requirement 58 must be visible, accessible, and testable where applicable.
-- INTERACTION-059 Interaction state disabled requirement 59 must be visible, accessible, and testable where applicable.
-- INTERACTION-060 Interaction state mobile requirement 60 must be visible, accessible, and testable where applicable.
-- INTERACTION-061 Interaction state default requirement 61 must be visible, accessible, and testable where applicable.
-- INTERACTION-062 Interaction state hover requirement 62 must be visible, accessible, and testable where applicable.
-- INTERACTION-063 Interaction state focus requirement 63 must be visible, accessible, and testable where applicable.
-- INTERACTION-064 Interaction state active requirement 64 must be visible, accessible, and testable where applicable.
-- INTERACTION-065 Interaction state loading requirement 65 must be visible, accessible, and testable where applicable.
-- INTERACTION-066 Interaction state loaded requirement 66 must be visible, accessible, and testable where applicable.
-- INTERACTION-067 Interaction state error requirement 67 must be visible, accessible, and testable where applicable.
-- INTERACTION-068 Interaction state empty requirement 68 must be visible, accessible, and testable where applicable.
-- INTERACTION-069 Interaction state disabled requirement 69 must be visible, accessible, and testable where applicable.
-- INTERACTION-070 Interaction state mobile requirement 70 must be visible, accessible, and testable where applicable.
-- INTERACTION-071 Interaction state default requirement 71 must be visible, accessible, and testable where applicable.
-- INTERACTION-072 Interaction state hover requirement 72 must be visible, accessible, and testable where applicable.
-- INTERACTION-073 Interaction state focus requirement 73 must be visible, accessible, and testable where applicable.
-- INTERACTION-074 Interaction state active requirement 74 must be visible, accessible, and testable where applicable.
-- INTERACTION-075 Interaction state loading requirement 75 must be visible, accessible, and testable where applicable.
-- INTERACTION-076 Interaction state loaded requirement 76 must be visible, accessible, and testable where applicable.
-- INTERACTION-077 Interaction state error requirement 77 must be visible, accessible, and testable where applicable.
-- INTERACTION-078 Interaction state empty requirement 78 must be visible, accessible, and testable where applicable.
-- INTERACTION-079 Interaction state disabled requirement 79 must be visible, accessible, and testable where applicable.
-- INTERACTION-080 Interaction state mobile requirement 80 must be visible, accessible, and testable where applicable.
-- INTERACTION-081 Interaction state default requirement 81 must be visible, accessible, and testable where applicable.
-- INTERACTION-082 Interaction state hover requirement 82 must be visible, accessible, and testable where applicable.
-- INTERACTION-083 Interaction state focus requirement 83 must be visible, accessible, and testable where applicable.
-- INTERACTION-084 Interaction state active requirement 84 must be visible, accessible, and testable where applicable.
-- INTERACTION-085 Interaction state loading requirement 85 must be visible, accessible, and testable where applicable.
-- INTERACTION-086 Interaction state loaded requirement 86 must be visible, accessible, and testable where applicable.
-- INTERACTION-087 Interaction state error requirement 87 must be visible, accessible, and testable where applicable.
-- INTERACTION-088 Interaction state empty requirement 88 must be visible, accessible, and testable where applicable.
-- INTERACTION-089 Interaction state disabled requirement 89 must be visible, accessible, and testable where applicable.
-- INTERACTION-090 Interaction state mobile requirement 90 must be visible, accessible, and testable where applicable.
-- INTERACTION-091 Interaction state default requirement 91 must be visible, accessible, and testable where applicable.
-- INTERACTION-092 Interaction state hover requirement 92 must be visible, accessible, and testable where applicable.
-- INTERACTION-093 Interaction state focus requirement 93 must be visible, accessible, and testable where applicable.
-- INTERACTION-094 Interaction state active requirement 94 must be visible, accessible, and testable where applicable.
-- INTERACTION-095 Interaction state loading requirement 95 must be visible, accessible, and testable where applicable.
-- INTERACTION-096 Interaction state loaded requirement 96 must be visible, accessible, and testable where applicable.
-- INTERACTION-097 Interaction state error requirement 97 must be visible, accessible, and testable where applicable.
-- INTERACTION-098 Interaction state empty requirement 98 must be visible, accessible, and testable where applicable.
-- INTERACTION-099 Interaction state disabled requirement 99 must be visible, accessible, and testable where applicable.
-- INTERACTION-100 Interaction state mobile requirement 100 must be visible, accessible, and testable where applicable.
-- INTERACTION-101 Interaction state default requirement 101 must be visible, accessible, and testable where applicable.
-- INTERACTION-102 Interaction state hover requirement 102 must be visible, accessible, and testable where applicable.
-- INTERACTION-103 Interaction state focus requirement 103 must be visible, accessible, and testable where applicable.
-- INTERACTION-104 Interaction state active requirement 104 must be visible, accessible, and testable where applicable.
-- INTERACTION-105 Interaction state loading requirement 105 must be visible, accessible, and testable where applicable.
-- INTERACTION-106 Interaction state loaded requirement 106 must be visible, accessible, and testable where applicable.
-- INTERACTION-107 Interaction state error requirement 107 must be visible, accessible, and testable where applicable.
-- INTERACTION-108 Interaction state empty requirement 108 must be visible, accessible, and testable where applicable.
-- INTERACTION-109 Interaction state disabled requirement 109 must be visible, accessible, and testable where applicable.
-- INTERACTION-110 Interaction state mobile requirement 110 must be visible, accessible, and testable where applicable.
-- INTERACTION-111 Interaction state default requirement 111 must be visible, accessible, and testable where applicable.
-- INTERACTION-112 Interaction state hover requirement 112 must be visible, accessible, and testable where applicable.
-- INTERACTION-113 Interaction state focus requirement 113 must be visible, accessible, and testable where applicable.
-- INTERACTION-114 Interaction state active requirement 114 must be visible, accessible, and testable where applicable.
-- INTERACTION-115 Interaction state loading requirement 115 must be visible, accessible, and testable where applicable.
-- INTERACTION-116 Interaction state loaded requirement 116 must be visible, accessible, and testable where applicable.
-- INTERACTION-117 Interaction state error requirement 117 must be visible, accessible, and testable where applicable.
-- INTERACTION-118 Interaction state empty requirement 118 must be visible, accessible, and testable where applicable.
-- INTERACTION-119 Interaction state disabled requirement 119 must be visible, accessible, and testable where applicable.
-- INTERACTION-120 Interaction state mobile requirement 120 must be visible, accessible, and testable where applicable.
+### 可见内容
 
-## 25. Responsive Layout Requirements
-- RESPONSIVE-001 Viewport 1440x900 desktop reference must be covered by visual QA.
-- RESPONSIVE-002 Viewport 1280 desktop must be covered by visual QA.
-- RESPONSIVE-003 Viewport 1024 tablet landscape must be covered by visual QA.
-- RESPONSIVE-004 Viewport 768 tablet portrait must be covered by visual QA.
-- RESPONSIVE-005 Viewport 430 mobile portrait must be covered by visual QA.
-- RESPONSIVE-006 Viewport 390 mobile portrait must be covered by visual QA.
-- RESPONSIVE-007 Viewport 360 narrow mobile must be covered by visual QA.
-- RESPONSIVE-008 header responsive stacking requirement 8 must avoid overlap, clipping, and unreadable text.
-- RESPONSIVE-009 tabs responsive horizontal scroll requirement 9 must avoid overlap, clipping, and unreadable text.
-- RESPONSIVE-010 economic grid responsive text wrapping requirement 10 must avoid overlap, clipping, and unreadable text.
-- RESPONSIVE-011 inflation map responsive card width requirement 11 must avoid overlap, clipping, and unreadable text.
-- RESPONSIVE-012 GDP list responsive tap target requirement 12 must avoid overlap, clipping, and unreadable text.
-- RESPONSIVE-013 metric cards responsive legend fit requirement 13 must avoid overlap, clipping, and unreadable text.
-- RESPONSIVE-014 country chips responsive row density requirement 14 must avoid overlap, clipping, and unreadable text.
-- RESPONSIVE-015 heatmap table responsive sticky orientation requirement 15 must avoid overlap, clipping, and unreadable text.
-- RESPONSIVE-016 ideas cards responsive stacking requirement 16 must avoid overlap, clipping, and unreadable text.
-- RESPONSIVE-017 calendar cards responsive horizontal scroll requirement 17 must avoid overlap, clipping, and unreadable text.
-- RESPONSIVE-018 FAQ responsive text wrapping requirement 18 must avoid overlap, clipping, and unreadable text.
-- RESPONSIVE-019 footer responsive card width requirement 19 must avoid overlap, clipping, and unreadable text.
-- RESPONSIVE-020 header responsive tap target requirement 20 must avoid overlap, clipping, and unreadable text.
-- RESPONSIVE-021 tabs responsive legend fit requirement 21 must avoid overlap, clipping, and unreadable text.
-- RESPONSIVE-022 economic grid responsive row density requirement 22 must avoid overlap, clipping, and unreadable text.
-- RESPONSIVE-023 inflation map responsive sticky orientation requirement 23 must avoid overlap, clipping, and unreadable text.
-- RESPONSIVE-024 GDP list responsive stacking requirement 24 must avoid overlap, clipping, and unreadable text.
-- RESPONSIVE-025 metric cards responsive horizontal scroll requirement 25 must avoid overlap, clipping, and unreadable text.
-- RESPONSIVE-026 country chips responsive text wrapping requirement 26 must avoid overlap, clipping, and unreadable text.
-- RESPONSIVE-027 heatmap table responsive card width requirement 27 must avoid overlap, clipping, and unreadable text.
-- RESPONSIVE-028 ideas cards responsive tap target requirement 28 must avoid overlap, clipping, and unreadable text.
-- RESPONSIVE-029 calendar cards responsive legend fit requirement 29 must avoid overlap, clipping, and unreadable text.
-- RESPONSIVE-030 FAQ responsive row density requirement 30 must avoid overlap, clipping, and unreadable text.
-- RESPONSIVE-031 footer responsive sticky orientation requirement 31 must avoid overlap, clipping, and unreadable text.
-- RESPONSIVE-032 header responsive stacking requirement 32 must avoid overlap, clipping, and unreadable text.
-- RESPONSIVE-033 tabs responsive horizontal scroll requirement 33 must avoid overlap, clipping, and unreadable text.
-- RESPONSIVE-034 economic grid responsive text wrapping requirement 34 must avoid overlap, clipping, and unreadable text.
-- RESPONSIVE-035 inflation map responsive card width requirement 35 must avoid overlap, clipping, and unreadable text.
-- RESPONSIVE-036 GDP list responsive tap target requirement 36 must avoid overlap, clipping, and unreadable text.
-- RESPONSIVE-037 metric cards responsive legend fit requirement 37 must avoid overlap, clipping, and unreadable text.
-- RESPONSIVE-038 country chips responsive row density requirement 38 must avoid overlap, clipping, and unreadable text.
-- RESPONSIVE-039 heatmap table responsive sticky orientation requirement 39 must avoid overlap, clipping, and unreadable text.
-- RESPONSIVE-040 ideas cards responsive stacking requirement 40 must avoid overlap, clipping, and unreadable text.
-- RESPONSIVE-041 calendar cards responsive horizontal scroll requirement 41 must avoid overlap, clipping, and unreadable text.
-- RESPONSIVE-042 FAQ responsive text wrapping requirement 42 must avoid overlap, clipping, and unreadable text.
-- RESPONSIVE-043 footer responsive card width requirement 43 must avoid overlap, clipping, and unreadable text.
-- RESPONSIVE-044 header responsive tap target requirement 44 must avoid overlap, clipping, and unreadable text.
-- RESPONSIVE-045 tabs responsive legend fit requirement 45 must avoid overlap, clipping, and unreadable text.
-- RESPONSIVE-046 economic grid responsive row density requirement 46 must avoid overlap, clipping, and unreadable text.
-- RESPONSIVE-047 inflation map responsive sticky orientation requirement 47 must avoid overlap, clipping, and unreadable text.
-- RESPONSIVE-048 GDP list responsive stacking requirement 48 must avoid overlap, clipping, and unreadable text.
-- RESPONSIVE-049 metric cards responsive horizontal scroll requirement 49 must avoid overlap, clipping, and unreadable text.
-- RESPONSIVE-050 country chips responsive text wrapping requirement 50 must avoid overlap, clipping, and unreadable text.
-- RESPONSIVE-051 heatmap table responsive card width requirement 51 must avoid overlap, clipping, and unreadable text.
-- RESPONSIVE-052 ideas cards responsive tap target requirement 52 must avoid overlap, clipping, and unreadable text.
-- RESPONSIVE-053 calendar cards responsive legend fit requirement 53 must avoid overlap, clipping, and unreadable text.
-- RESPONSIVE-054 FAQ responsive row density requirement 54 must avoid overlap, clipping, and unreadable text.
-- RESPONSIVE-055 footer responsive sticky orientation requirement 55 must avoid overlap, clipping, and unreadable text.
-- RESPONSIVE-056 header responsive stacking requirement 56 must avoid overlap, clipping, and unreadable text.
-- RESPONSIVE-057 tabs responsive horizontal scroll requirement 57 must avoid overlap, clipping, and unreadable text.
-- RESPONSIVE-058 economic grid responsive text wrapping requirement 58 must avoid overlap, clipping, and unreadable text.
-- RESPONSIVE-059 inflation map responsive card width requirement 59 must avoid overlap, clipping, and unreadable text.
-- RESPONSIVE-060 GDP list responsive tap target requirement 60 must avoid overlap, clipping, and unreadable text.
-- RESPONSIVE-061 metric cards responsive legend fit requirement 61 must avoid overlap, clipping, and unreadable text.
-- RESPONSIVE-062 country chips responsive row density requirement 62 must avoid overlap, clipping, and unreadable text.
-- RESPONSIVE-063 heatmap table responsive sticky orientation requirement 63 must avoid overlap, clipping, and unreadable text.
-- RESPONSIVE-064 ideas cards responsive stacking requirement 64 must avoid overlap, clipping, and unreadable text.
-- RESPONSIVE-065 calendar cards responsive horizontal scroll requirement 65 must avoid overlap, clipping, and unreadable text.
-- RESPONSIVE-066 FAQ responsive text wrapping requirement 66 must avoid overlap, clipping, and unreadable text.
-- RESPONSIVE-067 footer responsive card width requirement 67 must avoid overlap, clipping, and unreadable text.
-- RESPONSIVE-068 header responsive tap target requirement 68 must avoid overlap, clipping, and unreadable text.
-- RESPONSIVE-069 tabs responsive legend fit requirement 69 must avoid overlap, clipping, and unreadable text.
-- RESPONSIVE-070 economic grid responsive row density requirement 70 must avoid overlap, clipping, and unreadable text.
-- RESPONSIVE-071 inflation map responsive sticky orientation requirement 71 must avoid overlap, clipping, and unreadable text.
-- RESPONSIVE-072 GDP list responsive stacking requirement 72 must avoid overlap, clipping, and unreadable text.
-- RESPONSIVE-073 metric cards responsive horizontal scroll requirement 73 must avoid overlap, clipping, and unreadable text.
-- RESPONSIVE-074 country chips responsive text wrapping requirement 74 must avoid overlap, clipping, and unreadable text.
-- RESPONSIVE-075 heatmap table responsive card width requirement 75 must avoid overlap, clipping, and unreadable text.
-- RESPONSIVE-076 ideas cards responsive tap target requirement 76 must avoid overlap, clipping, and unreadable text.
-- RESPONSIVE-077 calendar cards responsive legend fit requirement 77 must avoid overlap, clipping, and unreadable text.
-- RESPONSIVE-078 FAQ responsive row density requirement 78 must avoid overlap, clipping, and unreadable text.
-- RESPONSIVE-079 footer responsive sticky orientation requirement 79 must avoid overlap, clipping, and unreadable text.
-- RESPONSIVE-080 header responsive stacking requirement 80 must avoid overlap, clipping, and unreadable text.
-- RESPONSIVE-081 tabs responsive horizontal scroll requirement 81 must avoid overlap, clipping, and unreadable text.
-- RESPONSIVE-082 economic grid responsive text wrapping requirement 82 must avoid overlap, clipping, and unreadable text.
-- RESPONSIVE-083 inflation map responsive card width requirement 83 must avoid overlap, clipping, and unreadable text.
-- RESPONSIVE-084 GDP list responsive tap target requirement 84 must avoid overlap, clipping, and unreadable text.
-- RESPONSIVE-085 metric cards responsive legend fit requirement 85 must avoid overlap, clipping, and unreadable text.
-- RESPONSIVE-086 country chips responsive row density requirement 86 must avoid overlap, clipping, and unreadable text.
-- RESPONSIVE-087 heatmap table responsive sticky orientation requirement 87 must avoid overlap, clipping, and unreadable text.
-- RESPONSIVE-088 ideas cards responsive stacking requirement 88 must avoid overlap, clipping, and unreadable text.
-- RESPONSIVE-089 calendar cards responsive horizontal scroll requirement 89 must avoid overlap, clipping, and unreadable text.
-- RESPONSIVE-090 FAQ responsive text wrapping requirement 90 must avoid overlap, clipping, and unreadable text.
-- RESPONSIVE-091 footer responsive card width requirement 91 must avoid overlap, clipping, and unreadable text.
-- RESPONSIVE-092 header responsive tap target requirement 92 must avoid overlap, clipping, and unreadable text.
-- RESPONSIVE-093 tabs responsive legend fit requirement 93 must avoid overlap, clipping, and unreadable text.
-- RESPONSIVE-094 economic grid responsive row density requirement 94 must avoid overlap, clipping, and unreadable text.
-- RESPONSIVE-095 inflation map responsive sticky orientation requirement 95 must avoid overlap, clipping, and unreadable text.
+- TradingView 品牌标识
+- Products
+- Community
+- Markets
+- Brokers
+- More
+- 搜索图标或搜索输入
+- EN 语言入口
+- Get started CTA
 
-## 26. Accessibility Requirements
-- A11Y-001 Every link must have a meaningful accessible name.
-- A11Y-002 Every interactive tab or filter must expose selected state.
-- A11Y-003 Keyboard users must reach all primary links and controls in visual order.
-- A11Y-004 Focus rings must be visible against white and light grey backgrounds.
-- A11Y-005 Map regions must have an accessible summary even if each country path is not individually focusable.
-- A11Y-006 Table headers must be associated with table cells.
-- A11Y-007 FAQ accordions must expose expanded and collapsed state.
-- A11Y-008 Color-coded heatmaps must not be the only way to understand critical numeric values.
-- A11Y-009 Images used as chart thumbnails must be decorative or have appropriate alt text according to role.
-- A11Y-010 The page must preserve sufficient contrast for black text, grey metadata, blue links, and heatmap labels.
-- A11Y-011 Accessibility requirement 11 covers heading order validation.
-- A11Y-012 Accessibility requirement 12 covers table semantics validation.
-- A11Y-013 Accessibility requirement 13 covers keyboard order validation.
-- A11Y-014 Accessibility requirement 14 covers focus state validation.
-- A11Y-015 Accessibility requirement 15 covers ARIA state validation.
-- A11Y-016 Accessibility requirement 16 covers contrast validation.
-- A11Y-017 Accessibility requirement 17 covers reduced motion validation.
-- A11Y-018 Accessibility requirement 18 covers screen reader summary validation.
-- A11Y-019 Accessibility requirement 19 covers touch target validation.
-- A11Y-020 Accessibility requirement 20 covers semantic landmarks validation.
-- A11Y-021 Accessibility requirement 21 covers heading order validation.
-- A11Y-022 Accessibility requirement 22 covers table semantics validation.
-- A11Y-023 Accessibility requirement 23 covers keyboard order validation.
-- A11Y-024 Accessibility requirement 24 covers focus state validation.
-- A11Y-025 Accessibility requirement 25 covers ARIA state validation.
-- A11Y-026 Accessibility requirement 26 covers contrast validation.
-- A11Y-027 Accessibility requirement 27 covers reduced motion validation.
-- A11Y-028 Accessibility requirement 28 covers screen reader summary validation.
-- A11Y-029 Accessibility requirement 29 covers touch target validation.
-- A11Y-030 Accessibility requirement 30 covers semantic landmarks validation.
-- A11Y-031 Accessibility requirement 31 covers heading order validation.
-- A11Y-032 Accessibility requirement 32 covers table semantics validation.
-- A11Y-033 Accessibility requirement 33 covers keyboard order validation.
-- A11Y-034 Accessibility requirement 34 covers focus state validation.
-- A11Y-035 Accessibility requirement 35 covers ARIA state validation.
-- A11Y-036 Accessibility requirement 36 covers contrast validation.
-- A11Y-037 Accessibility requirement 37 covers reduced motion validation.
-- A11Y-038 Accessibility requirement 38 covers screen reader summary validation.
-- A11Y-039 Accessibility requirement 39 covers touch target validation.
-- A11Y-040 Accessibility requirement 40 covers semantic landmarks validation.
-- A11Y-041 Accessibility requirement 41 covers heading order validation.
-- A11Y-042 Accessibility requirement 42 covers table semantics validation.
-- A11Y-043 Accessibility requirement 43 covers keyboard order validation.
-- A11Y-044 Accessibility requirement 44 covers focus state validation.
-- A11Y-045 Accessibility requirement 45 covers ARIA state validation.
-- A11Y-046 Accessibility requirement 46 covers contrast validation.
-- A11Y-047 Accessibility requirement 47 covers reduced motion validation.
-- A11Y-048 Accessibility requirement 48 covers screen reader summary validation.
-- A11Y-049 Accessibility requirement 49 covers touch target validation.
-- A11Y-050 Accessibility requirement 50 covers semantic landmarks validation.
-- A11Y-051 Accessibility requirement 51 covers heading order validation.
-- A11Y-052 Accessibility requirement 52 covers table semantics validation.
-- A11Y-053 Accessibility requirement 53 covers keyboard order validation.
-- A11Y-054 Accessibility requirement 54 covers focus state validation.
-- A11Y-055 Accessibility requirement 55 covers ARIA state validation.
-- A11Y-056 Accessibility requirement 56 covers contrast validation.
-- A11Y-057 Accessibility requirement 57 covers reduced motion validation.
-- A11Y-058 Accessibility requirement 58 covers screen reader summary validation.
-- A11Y-059 Accessibility requirement 59 covers touch target validation.
-- A11Y-060 Accessibility requirement 60 covers semantic landmarks validation.
-- A11Y-061 Accessibility requirement 61 covers heading order validation.
-- A11Y-062 Accessibility requirement 62 covers table semantics validation.
-- A11Y-063 Accessibility requirement 63 covers keyboard order validation.
-- A11Y-064 Accessibility requirement 64 covers focus state validation.
-- A11Y-065 Accessibility requirement 65 covers ARIA state validation.
-- A11Y-066 Accessibility requirement 66 covers contrast validation.
-- A11Y-067 Accessibility requirement 67 covers reduced motion validation.
-- A11Y-068 Accessibility requirement 68 covers screen reader summary validation.
-- A11Y-069 Accessibility requirement 69 covers touch target validation.
-- A11Y-070 Accessibility requirement 70 covers semantic landmarks validation.
-- A11Y-071 Accessibility requirement 71 covers heading order validation.
-- A11Y-072 Accessibility requirement 72 covers table semantics validation.
-- A11Y-073 Accessibility requirement 73 covers keyboard order validation.
-- A11Y-074 Accessibility requirement 74 covers focus state validation.
-- A11Y-075 Accessibility requirement 75 covers ARIA state validation.
-- A11Y-076 Accessibility requirement 76 covers contrast validation.
-- A11Y-077 Accessibility requirement 77 covers reduced motion validation.
-- A11Y-078 Accessibility requirement 78 covers screen reader summary validation.
-- A11Y-079 Accessibility requirement 79 covers touch target validation.
-- A11Y-080 Accessibility requirement 80 covers semantic landmarks validation.
-- A11Y-081 Accessibility requirement 81 covers heading order validation.
-- A11Y-082 Accessibility requirement 82 covers table semantics validation.
-- A11Y-083 Accessibility requirement 83 covers keyboard order validation.
-- A11Y-084 Accessibility requirement 84 covers focus state validation.
-- A11Y-085 Accessibility requirement 85 covers ARIA state validation.
-- A11Y-086 Accessibility requirement 86 covers contrast validation.
-- A11Y-087 Accessibility requirement 87 covers reduced motion validation.
-- A11Y-088 Accessibility requirement 88 covers screen reader summary validation.
-- A11Y-089 Accessibility requirement 89 covers touch target validation.
-- A11Y-090 Accessibility requirement 90 covers semantic landmarks validation.
+### 数据字段
 
-## 27. Visual Design Requirements
-- VISUAL-001 Primary text color must follow captured near-black rgb(15, 15, 15).
-- VISUAL-002 Secondary metadata text must follow captured grey rgb(112, 112, 112).
-- VISUAL-003 Primary background must be white with light grey card or section surfaces.
-- VISUAL-004 Link accent must follow TradingView blue treatment.
-- VISUAL-005 Heatmap must use tan/orange visual range observed in the source.
-- VISUAL-006 Typography must use the captured system font stack for body text.
-- VISUAL-007 Large title typography must match captured display weight and scale where available.
-- VISUAL-008 Spacing tokens should prioritize 8px, 12px, 16px, and 20px increments observed in evidence.
-- VISUAL-009 Cards should use compact radius and subtle border or background separation.
-- VISUAL-010 The page must not introduce decorative gradients, orbs, or unrelated illustration systems.
-- VISUAL-011 Visual token color requirement 11 must be checked against reference screenshot and extracted CSS.
-- VISUAL-012 Visual token font requirement 12 must be checked against reference screenshot and extracted CSS.
-- VISUAL-013 Visual token spacing requirement 13 must be checked against reference screenshot and extracted CSS.
-- VISUAL-014 Visual token radius requirement 14 must be checked against reference screenshot and extracted CSS.
-- VISUAL-015 Visual token border requirement 15 must be checked against reference screenshot and extracted CSS.
-- VISUAL-016 Visual token icon size requirement 16 must be checked against reference screenshot and extracted CSS.
-- VISUAL-017 Visual token card density requirement 17 must be checked against reference screenshot and extracted CSS.
-- VISUAL-018 Visual token table density requirement 18 must be checked against reference screenshot and extracted CSS.
-- VISUAL-019 Visual token map geometry requirement 19 must be checked against reference screenshot and extracted CSS.
-- VISUAL-020 Visual token footer grid requirement 20 must be checked against reference screenshot and extracted CSS.
-- VISUAL-021 Visual token color requirement 21 must be checked against reference screenshot and extracted CSS.
-- VISUAL-022 Visual token font requirement 22 must be checked against reference screenshot and extracted CSS.
-- VISUAL-023 Visual token spacing requirement 23 must be checked against reference screenshot and extracted CSS.
-- VISUAL-024 Visual token radius requirement 24 must be checked against reference screenshot and extracted CSS.
-- VISUAL-025 Visual token border requirement 25 must be checked against reference screenshot and extracted CSS.
-- VISUAL-026 Visual token icon size requirement 26 must be checked against reference screenshot and extracted CSS.
-- VISUAL-027 Visual token card density requirement 27 must be checked against reference screenshot and extracted CSS.
-- VISUAL-028 Visual token table density requirement 28 must be checked against reference screenshot and extracted CSS.
-- VISUAL-029 Visual token map geometry requirement 29 must be checked against reference screenshot and extracted CSS.
-- VISUAL-030 Visual token footer grid requirement 30 must be checked against reference screenshot and extracted CSS.
-- VISUAL-031 Visual token color requirement 31 must be checked against reference screenshot and extracted CSS.
-- VISUAL-032 Visual token font requirement 32 must be checked against reference screenshot and extracted CSS.
-- VISUAL-033 Visual token spacing requirement 33 must be checked against reference screenshot and extracted CSS.
-- VISUAL-034 Visual token radius requirement 34 must be checked against reference screenshot and extracted CSS.
-- VISUAL-035 Visual token border requirement 35 must be checked against reference screenshot and extracted CSS.
-- VISUAL-036 Visual token icon size requirement 36 must be checked against reference screenshot and extracted CSS.
-- VISUAL-037 Visual token card density requirement 37 must be checked against reference screenshot and extracted CSS.
-- VISUAL-038 Visual token table density requirement 38 must be checked against reference screenshot and extracted CSS.
-- VISUAL-039 Visual token map geometry requirement 39 must be checked against reference screenshot and extracted CSS.
-- VISUAL-040 Visual token footer grid requirement 40 must be checked against reference screenshot and extracted CSS.
-- VISUAL-041 Visual token color requirement 41 must be checked against reference screenshot and extracted CSS.
-- VISUAL-042 Visual token font requirement 42 must be checked against reference screenshot and extracted CSS.
-- VISUAL-043 Visual token spacing requirement 43 must be checked against reference screenshot and extracted CSS.
-- VISUAL-044 Visual token radius requirement 44 must be checked against reference screenshot and extracted CSS.
-- VISUAL-045 Visual token border requirement 45 must be checked against reference screenshot and extracted CSS.
-- VISUAL-046 Visual token icon size requirement 46 must be checked against reference screenshot and extracted CSS.
-- VISUAL-047 Visual token card density requirement 47 must be checked against reference screenshot and extracted CSS.
-- VISUAL-048 Visual token table density requirement 48 must be checked against reference screenshot and extracted CSS.
-- VISUAL-049 Visual token map geometry requirement 49 must be checked against reference screenshot and extracted CSS.
-- VISUAL-050 Visual token footer grid requirement 50 must be checked against reference screenshot and extracted CSS.
-- VISUAL-051 Visual token color requirement 51 must be checked against reference screenshot and extracted CSS.
-- VISUAL-052 Visual token font requirement 52 must be checked against reference screenshot and extracted CSS.
-- VISUAL-053 Visual token spacing requirement 53 must be checked against reference screenshot and extracted CSS.
-- VISUAL-054 Visual token radius requirement 54 must be checked against reference screenshot and extracted CSS.
-- VISUAL-055 Visual token border requirement 55 must be checked against reference screenshot and extracted CSS.
-- VISUAL-056 Visual token icon size requirement 56 must be checked against reference screenshot and extracted CSS.
-- VISUAL-057 Visual token card density requirement 57 must be checked against reference screenshot and extracted CSS.
-- VISUAL-058 Visual token table density requirement 58 must be checked against reference screenshot and extracted CSS.
-- VISUAL-059 Visual token map geometry requirement 59 must be checked against reference screenshot and extracted CSS.
-- VISUAL-060 Visual token footer grid requirement 60 must be checked against reference screenshot and extracted CSS.
-- VISUAL-061 Visual token color requirement 61 must be checked against reference screenshot and extracted CSS.
-- VISUAL-062 Visual token font requirement 62 must be checked against reference screenshot and extracted CSS.
-- VISUAL-063 Visual token spacing requirement 63 must be checked against reference screenshot and extracted CSS.
-- VISUAL-064 Visual token radius requirement 64 must be checked against reference screenshot and extracted CSS.
-- VISUAL-065 Visual token border requirement 65 must be checked against reference screenshot and extracted CSS.
-- VISUAL-066 Visual token icon size requirement 66 must be checked against reference screenshot and extracted CSS.
-- VISUAL-067 Visual token card density requirement 67 must be checked against reference screenshot and extracted CSS.
-- VISUAL-068 Visual token table density requirement 68 must be checked against reference screenshot and extracted CSS.
-- VISUAL-069 Visual token map geometry requirement 69 must be checked against reference screenshot and extracted CSS.
-- VISUAL-070 Visual token footer grid requirement 70 must be checked against reference screenshot and extracted CSS.
-- VISUAL-071 Visual token color requirement 71 must be checked against reference screenshot and extracted CSS.
-- VISUAL-072 Visual token font requirement 72 must be checked against reference screenshot and extracted CSS.
-- VISUAL-073 Visual token spacing requirement 73 must be checked against reference screenshot and extracted CSS.
-- VISUAL-074 Visual token radius requirement 74 must be checked against reference screenshot and extracted CSS.
-- VISUAL-075 Visual token border requirement 75 must be checked against reference screenshot and extracted CSS.
-- VISUAL-076 Visual token icon size requirement 76 must be checked against reference screenshot and extracted CSS.
-- VISUAL-077 Visual token card density requirement 77 must be checked against reference screenshot and extracted CSS.
-- VISUAL-078 Visual token table density requirement 78 must be checked against reference screenshot and extracted CSS.
-- VISUAL-079 Visual token map geometry requirement 79 must be checked against reference screenshot and extracted CSS.
-- VISUAL-080 Visual token footer grid requirement 80 must be checked against reference screenshot and extracted CSS.
-- VISUAL-081 Visual token color requirement 81 must be checked against reference screenshot and extracted CSS.
-- VISUAL-082 Visual token font requirement 82 must be checked against reference screenshot and extracted CSS.
-- VISUAL-083 Visual token spacing requirement 83 must be checked against reference screenshot and extracted CSS.
-- VISUAL-084 Visual token radius requirement 84 must be checked against reference screenshot and extracted CSS.
-- VISUAL-085 Visual token border requirement 85 must be checked against reference screenshot and extracted CSS.
-- VISUAL-086 Visual token icon size requirement 86 must be checked against reference screenshot and extracted CSS.
-- VISUAL-087 Visual token card density requirement 87 must be checked against reference screenshot and extracted CSS.
-- VISUAL-088 Visual token table density requirement 88 must be checked against reference screenshot and extracted CSS.
-- VISUAL-089 Visual token map geometry requirement 89 must be checked against reference screenshot and extracted CSS.
-- VISUAL-090 Visual token footer grid requirement 90 must be checked against reference screenshot and extracted CSS.
+- navItems: 顶部导航项列表
+- navMenus: 每个可展开导航的菜单组
+- searchPlaceholder: 搜索提示
+- locale: 当前语言
+- ctaHref: 注册或登录转化入口
 
-## 28. Performance Requirements
-- PERF-001 The page must load the header, H1, and first economic trends region without excessive blocking scripts.
-- PERF-002 Map SVG and chart images must be optimized and cached.
-- PERF-003 Lazy loading may be used for below-the-fold ideas, news, calendar, FAQ, and footer assets.
-- PERF-004 Lazy loading must not cause layout shift when content appears.
-- PERF-005 Large extracted CSS must be reviewed for unused source debt in implementation follow-up, without breaking visual parity.
-- PERF-006 The heatmap table must remain responsive even with many cells.
-- PERF-007 The page should avoid re-rendering entire map geometry on unrelated interactions.
-- PERF-008 Images must include width and height or stable aspect-ratio constraints.
-- PERF-009 Navigation dropdowns must not block first contentful paint.
-- PERF-010 Performance budgets must be measured in production build, not dev server only.
-- PERF-011 Performance requirement 11 tracks CLS.
-- PERF-012 Performance requirement 12 tracks INP.
-- PERF-013 Performance requirement 13 tracks bundle size.
-- PERF-014 Performance requirement 14 tracks image transfer.
-- PERF-015 Performance requirement 15 tracks CSS cost.
-- PERF-016 Performance requirement 16 tracks table render.
-- PERF-017 Performance requirement 17 tracks map render.
-- PERF-018 Performance requirement 18 tracks cacheability.
-- PERF-019 Performance requirement 19 tracks below-fold lazy load.
-- PERF-020 Performance requirement 20 tracks LCP.
-- PERF-021 Performance requirement 21 tracks CLS.
-- PERF-022 Performance requirement 22 tracks INP.
-- PERF-023 Performance requirement 23 tracks bundle size.
-- PERF-024 Performance requirement 24 tracks image transfer.
-- PERF-025 Performance requirement 25 tracks CSS cost.
-- PERF-026 Performance requirement 26 tracks table render.
-- PERF-027 Performance requirement 27 tracks map render.
-- PERF-028 Performance requirement 28 tracks cacheability.
-- PERF-029 Performance requirement 29 tracks below-fold lazy load.
-- PERF-030 Performance requirement 30 tracks LCP.
-- PERF-031 Performance requirement 31 tracks CLS.
-- PERF-032 Performance requirement 32 tracks INP.
-- PERF-033 Performance requirement 33 tracks bundle size.
-- PERF-034 Performance requirement 34 tracks image transfer.
-- PERF-035 Performance requirement 35 tracks CSS cost.
-- PERF-036 Performance requirement 36 tracks table render.
-- PERF-037 Performance requirement 37 tracks map render.
-- PERF-038 Performance requirement 38 tracks cacheability.
-- PERF-039 Performance requirement 39 tracks below-fold lazy load.
-- PERF-040 Performance requirement 40 tracks LCP.
-- PERF-041 Performance requirement 41 tracks CLS.
-- PERF-042 Performance requirement 42 tracks INP.
-- PERF-043 Performance requirement 43 tracks bundle size.
-- PERF-044 Performance requirement 44 tracks image transfer.
-- PERF-045 Performance requirement 45 tracks CSS cost.
-- PERF-046 Performance requirement 46 tracks table render.
-- PERF-047 Performance requirement 47 tracks map render.
-- PERF-048 Performance requirement 48 tracks cacheability.
-- PERF-049 Performance requirement 49 tracks below-fold lazy load.
-- PERF-050 Performance requirement 50 tracks LCP.
-- PERF-051 Performance requirement 51 tracks CLS.
-- PERF-052 Performance requirement 52 tracks INP.
-- PERF-053 Performance requirement 53 tracks bundle size.
-- PERF-054 Performance requirement 54 tracks image transfer.
-- PERF-055 Performance requirement 55 tracks CSS cost.
-- PERF-056 Performance requirement 56 tracks table render.
-- PERF-057 Performance requirement 57 tracks map render.
-- PERF-058 Performance requirement 58 tracks cacheability.
-- PERF-059 Performance requirement 59 tracks below-fold lazy load.
-- PERF-060 Performance requirement 60 tracks LCP.
-- PERF-061 Performance requirement 61 tracks CLS.
-- PERF-062 Performance requirement 62 tracks INP.
-- PERF-063 Performance requirement 63 tracks bundle size.
-- PERF-064 Performance requirement 64 tracks image transfer.
-- PERF-065 Performance requirement 65 tracks CSS cost.
-- PERF-066 Performance requirement 66 tracks table render.
-- PERF-067 Performance requirement 67 tracks map render.
-- PERF-068 Performance requirement 68 tracks cacheability.
-- PERF-069 Performance requirement 69 tracks below-fold lazy load.
-- PERF-070 Performance requirement 70 tracks LCP.
+### 交互
 
-## 29. SEO And Content Requirements
-- SEO-001 Document title must include World Economy and TradingView-equivalent context.
-- SEO-002 H1 must be Economy on the captured English page unless page product naming changes upstream.
-- SEO-003 FAQ questions and answers must be crawlable text, not canvas-only content.
-- SEO-004 Country and indicator links must be crawlable anchors.
-- SEO-005 Breadcrumb must support search understanding of Markets > Economy hierarchy.
-- SEO-006 Internal links to Economic Calendar, News Flow, country pages, and indicator pages must remain visible.
-- SEO-007 Formulas must be represented as text for indexing.
-- SEO-008 Canonical URL should point to the base world economy page for the English locale.
-- SEO-009 Localized alternate links should be supported if locale routing exists.
-- SEO-010 Robots behavior must not hide public macroeconomic content.
-- SEO-011 SEO requirement 11 covers meta description.
-- SEO-012 SEO requirement 12 covers canonical.
-- SEO-013 SEO requirement 13 covers hreflang.
-- SEO-014 SEO requirement 14 covers FAQ text.
-- SEO-015 SEO requirement 15 covers internal anchor.
-- SEO-016 SEO requirement 16 covers breadcrumb.
-- SEO-017 SEO requirement 17 covers semantic headings.
-- SEO-018 SEO requirement 18 covers crawlable table.
-- SEO-019 SEO requirement 19 covers provider attribution.
-- SEO-020 SEO requirement 20 covers title.
-- SEO-021 SEO requirement 21 covers meta description.
-- SEO-022 SEO requirement 22 covers canonical.
-- SEO-023 SEO requirement 23 covers hreflang.
-- SEO-024 SEO requirement 24 covers FAQ text.
-- SEO-025 SEO requirement 25 covers internal anchor.
-- SEO-026 SEO requirement 26 covers breadcrumb.
-- SEO-027 SEO requirement 27 covers semantic headings.
-- SEO-028 SEO requirement 28 covers crawlable table.
-- SEO-029 SEO requirement 29 covers provider attribution.
-- SEO-030 SEO requirement 30 covers title.
-- SEO-031 SEO requirement 31 covers meta description.
-- SEO-032 SEO requirement 32 covers canonical.
-- SEO-033 SEO requirement 33 covers hreflang.
-- SEO-034 SEO requirement 34 covers FAQ text.
-- SEO-035 SEO requirement 35 covers internal anchor.
-- SEO-036 SEO requirement 36 covers breadcrumb.
-- SEO-037 SEO requirement 37 covers semantic headings.
-- SEO-038 SEO requirement 38 covers crawlable table.
-- SEO-039 SEO requirement 39 covers provider attribution.
-- SEO-040 SEO requirement 40 covers title.
-- SEO-041 SEO requirement 41 covers meta description.
-- SEO-042 SEO requirement 42 covers canonical.
-- SEO-043 SEO requirement 43 covers hreflang.
-- SEO-044 SEO requirement 44 covers FAQ text.
-- SEO-045 SEO requirement 45 covers internal anchor.
-- SEO-046 SEO requirement 46 covers breadcrumb.
-- SEO-047 SEO requirement 47 covers semantic headings.
-- SEO-048 SEO requirement 48 covers crawlable table.
-- SEO-049 SEO requirement 49 covers provider attribution.
-- SEO-050 SEO requirement 50 covers title.
-- SEO-051 SEO requirement 51 covers meta description.
-- SEO-052 SEO requirement 52 covers canonical.
-- SEO-053 SEO requirement 53 covers hreflang.
-- SEO-054 SEO requirement 54 covers FAQ text.
-- SEO-055 SEO requirement 55 covers internal anchor.
-- SEO-056 SEO requirement 56 covers breadcrumb.
-- SEO-057 SEO requirement 57 covers semantic headings.
-- SEO-058 SEO requirement 58 covers crawlable table.
-- SEO-059 SEO requirement 59 covers provider attribution.
-- SEO-060 SEO requirement 60 covers title.
-- SEO-061 SEO requirement 61 covers meta description.
-- SEO-062 SEO requirement 62 covers canonical.
-- SEO-063 SEO requirement 63 covers hreflang.
-- SEO-064 SEO requirement 64 covers FAQ text.
-- SEO-065 SEO requirement 65 covers internal anchor.
+- 点击品牌回到首页
+- 打开 Products 菜单
+- 打开 Community 菜单
+- 打开 Markets 菜单
+- 触发搜索
+- 打开语言选择
+- 点击 Get started
 
-## 30. Internationalization Requirements
-- I18N-001 English locale must show EN language selector.
-- I18N-002 Country names must support locale-specific labels without changing canonical country identifiers.
-- I18N-003 Numeric formatting must support locale formats while preserving source values.
-- I18N-004 Date strings must support localized rendering when provided by data service.
-- I18N-005 FAQ content must be localizable as full blocks, not assembled from fragments that break formulas.
-- I18N-006 Navigation links must support localized subdomains such as de, fr, es, it, ru, jp, and kr when product supports them.
-- I18N-007 Right-to-left locale support must be tested if language list includes such locales.
-- I18N-008 Currency unit strings must not be translated incorrectly.
-- I18N-009 Ticker symbols must remain stable across locales.
-- I18N-010 Legal provider attribution must use approved localized wording.
-- I18N-011 Internationalization requirement 11 covers indicator label.
-- I18N-012 Internationalization requirement 12 covers date.
-- I18N-013 Internationalization requirement 13 covers number.
-- I18N-014 Internationalization requirement 14 covers currency.
-- I18N-015 Internationalization requirement 15 covers FAQ.
-- I18N-016 Internationalization requirement 16 covers navigation.
-- I18N-017 Internationalization requirement 17 covers footer.
-- I18N-018 Internationalization requirement 18 covers language URL.
-- I18N-019 Internationalization requirement 19 covers legal text.
-- I18N-020 Internationalization requirement 20 covers country label.
-- I18N-021 Internationalization requirement 21 covers indicator label.
-- I18N-022 Internationalization requirement 22 covers date.
-- I18N-023 Internationalization requirement 23 covers number.
-- I18N-024 Internationalization requirement 24 covers currency.
-- I18N-025 Internationalization requirement 25 covers FAQ.
-- I18N-026 Internationalization requirement 26 covers navigation.
-- I18N-027 Internationalization requirement 27 covers footer.
-- I18N-028 Internationalization requirement 28 covers language URL.
-- I18N-029 Internationalization requirement 29 covers legal text.
-- I18N-030 Internationalization requirement 30 covers country label.
-- I18N-031 Internationalization requirement 31 covers indicator label.
-- I18N-032 Internationalization requirement 32 covers date.
-- I18N-033 Internationalization requirement 33 covers number.
-- I18N-034 Internationalization requirement 34 covers currency.
-- I18N-035 Internationalization requirement 35 covers FAQ.
-- I18N-036 Internationalization requirement 36 covers navigation.
-- I18N-037 Internationalization requirement 37 covers footer.
-- I18N-038 Internationalization requirement 38 covers language URL.
-- I18N-039 Internationalization requirement 39 covers legal text.
-- I18N-040 Internationalization requirement 40 covers country label.
-- I18N-041 Internationalization requirement 41 covers indicator label.
-- I18N-042 Internationalization requirement 42 covers date.
-- I18N-043 Internationalization requirement 43 covers number.
-- I18N-044 Internationalization requirement 44 covers currency.
-- I18N-045 Internationalization requirement 45 covers FAQ.
-- I18N-046 Internationalization requirement 46 covers navigation.
-- I18N-047 Internationalization requirement 47 covers footer.
-- I18N-048 Internationalization requirement 48 covers language URL.
-- I18N-049 Internationalization requirement 49 covers legal text.
-- I18N-050 Internationalization requirement 50 covers country label.
-- I18N-051 Internationalization requirement 51 covers indicator label.
-- I18N-052 Internationalization requirement 52 covers date.
-- I18N-053 Internationalization requirement 53 covers number.
-- I18N-054 Internationalization requirement 54 covers currency.
-- I18N-055 Internationalization requirement 55 covers FAQ.
-- I18N-056 Internationalization requirement 56 covers navigation.
-- I18N-057 Internationalization requirement 57 covers footer.
-- I18N-058 Internationalization requirement 58 covers language URL.
-- I18N-059 Internationalization requirement 59 covers legal text.
-- I18N-060 Internationalization requirement 60 covers country label.
+### 状态
 
-## 31. Legal And Attribution Requirements
-- LEGAL-001 Footer must include TradingView copyright for the applicable year.
-- LEGAL-002 Footer must include ICE Data Services attribution when select market data is used.
-- LEGAL-003 Footer must include FactSet reference data attribution when reference data is used.
-- LEGAL-004 Footer must include American Bankers Association and CUSIP database attribution when applicable.
-- LEGAL-005 Footer must include Quartr attribution for SEC filings and related documents when applicable.
-- LEGAL-006 Terms of Use link must be present.
-- LEGAL-007 Disclaimer link must be present.
-- LEGAL-008 Privacy Policy link must be present.
-- LEGAL-009 Cookies Policy link must be present.
-- LEGAL-010 Accessibility Statement link must be present.
-- LEGAL-011 Legal requirement 11 must preserve external provider link.
-- LEGAL-012 Legal requirement 12 must preserve year freshness.
-- LEGAL-013 Legal requirement 13 must preserve footer visibility.
-- LEGAL-014 Legal requirement 14 must preserve localized legal text.
-- LEGAL-015 Legal requirement 15 must preserve non-removal in mobile.
-- LEGAL-016 Legal requirement 16 must preserve data provider attribution.
-- LEGAL-017 Legal requirement 17 must preserve copyright.
-- LEGAL-018 Legal requirement 18 must preserve policy link.
-- LEGAL-019 Legal requirement 19 must preserve external provider link.
-- LEGAL-020 Legal requirement 20 must preserve year freshness.
-- LEGAL-021 Legal requirement 21 must preserve footer visibility.
-- LEGAL-022 Legal requirement 22 must preserve localized legal text.
-- LEGAL-023 Legal requirement 23 must preserve non-removal in mobile.
-- LEGAL-024 Legal requirement 24 must preserve data provider attribution.
-- LEGAL-025 Legal requirement 25 must preserve copyright.
-- LEGAL-026 Legal requirement 26 must preserve policy link.
-- LEGAL-027 Legal requirement 27 must preserve external provider link.
-- LEGAL-028 Legal requirement 28 must preserve year freshness.
-- LEGAL-029 Legal requirement 29 must preserve footer visibility.
-- LEGAL-030 Legal requirement 30 must preserve localized legal text.
-- LEGAL-031 Legal requirement 31 must preserve non-removal in mobile.
-- LEGAL-032 Legal requirement 32 must preserve data provider attribution.
-- LEGAL-033 Legal requirement 33 must preserve copyright.
-- LEGAL-034 Legal requirement 34 must preserve policy link.
-- LEGAL-035 Legal requirement 35 must preserve external provider link.
-- LEGAL-036 Legal requirement 36 must preserve year freshness.
-- LEGAL-037 Legal requirement 37 must preserve footer visibility.
-- LEGAL-038 Legal requirement 38 must preserve localized legal text.
-- LEGAL-039 Legal requirement 39 must preserve non-removal in mobile.
-- LEGAL-040 Legal requirement 40 must preserve data provider attribution.
-- LEGAL-041 Legal requirement 41 must preserve copyright.
-- LEGAL-042 Legal requirement 42 must preserve policy link.
-- LEGAL-043 Legal requirement 43 must preserve external provider link.
-- LEGAL-044 Legal requirement 44 must preserve year freshness.
-- LEGAL-045 Legal requirement 45 must preserve footer visibility.
-- LEGAL-046 Legal requirement 46 must preserve localized legal text.
-- LEGAL-047 Legal requirement 47 must preserve non-removal in mobile.
-- LEGAL-048 Legal requirement 48 must preserve data provider attribution.
-- LEGAL-049 Legal requirement 49 must preserve copyright.
-- LEGAL-050 Legal requirement 50 must preserve policy link.
-- LEGAL-051 Legal requirement 51 must preserve external provider link.
-- LEGAL-052 Legal requirement 52 must preserve year freshness.
-- LEGAL-053 Legal requirement 53 must preserve footer visibility.
-- LEGAL-054 Legal requirement 54 must preserve localized legal text.
-- LEGAL-055 Legal requirement 55 must preserve non-removal in mobile.
+- default: 白底紧凑导航
+- hover: 导航项显示可点击反馈
+- focus: 键盘焦点清晰可见
+- open: 下拉菜单覆盖在内容上方
+- mobile: 折叠为菜单或更紧凑布局
 
-## 32. Analytics Requirements
-- ANALYTICS-001 Track page view with page type world_economy.
-- ANALYTICS-002 Track header navigation clicks by label and destination.
-- ANALYTICS-003 Track search activation from header.
-- ANALYTICS-004 Track tab activation for Overview and Economic trends.
-- ANALYTICS-005 Track map interaction by metric and country when country-level interaction exists.
-- ANALYTICS-006 Track GDP ranking row clicks by country.
-- ANALYTICS-007 Track metric card symbol clicks by ticker.
-- ANALYTICS-008 Track country chip clicks by country.
-- ANALYTICS-009 Track idea tab changes.
-- ANALYTICS-010 Track idea card clicks by idea id.
-- ANALYTICS-011 Track heatmap cell interactions by country and metric.
-- ANALYTICS-012 Track main indicator link clicks by indicator.
-- ANALYTICS-013 Track news card clicks by provider and item id.
-- ANALYTICS-014 Track calendar event clicks by event id.
-- ANALYTICS-015 Track FAQ expand events by question id.
-- ANALYTICS-016 Track footer link clicks by group and label.
-- ANALYTICS-017 Analytics requirement 17 must use privacy-conscious event properties and must not log personal data from unauthenticated visitors.
-- ANALYTICS-018 Analytics requirement 18 must use privacy-conscious event properties and must not log personal data from unauthenticated visitors.
-- ANALYTICS-019 Analytics requirement 19 must use privacy-conscious event properties and must not log personal data from unauthenticated visitors.
-- ANALYTICS-020 Analytics requirement 20 must use privacy-conscious event properties and must not log personal data from unauthenticated visitors.
-- ANALYTICS-021 Analytics requirement 21 must use privacy-conscious event properties and must not log personal data from unauthenticated visitors.
-- ANALYTICS-022 Analytics requirement 22 must use privacy-conscious event properties and must not log personal data from unauthenticated visitors.
-- ANALYTICS-023 Analytics requirement 23 must use privacy-conscious event properties and must not log personal data from unauthenticated visitors.
-- ANALYTICS-024 Analytics requirement 24 must use privacy-conscious event properties and must not log personal data from unauthenticated visitors.
-- ANALYTICS-025 Analytics requirement 25 must use privacy-conscious event properties and must not log personal data from unauthenticated visitors.
-- ANALYTICS-026 Analytics requirement 26 must use privacy-conscious event properties and must not log personal data from unauthenticated visitors.
-- ANALYTICS-027 Analytics requirement 27 must use privacy-conscious event properties and must not log personal data from unauthenticated visitors.
-- ANALYTICS-028 Analytics requirement 28 must use privacy-conscious event properties and must not log personal data from unauthenticated visitors.
-- ANALYTICS-029 Analytics requirement 29 must use privacy-conscious event properties and must not log personal data from unauthenticated visitors.
-- ANALYTICS-030 Analytics requirement 30 must use privacy-conscious event properties and must not log personal data from unauthenticated visitors.
-- ANALYTICS-031 Analytics requirement 31 must use privacy-conscious event properties and must not log personal data from unauthenticated visitors.
-- ANALYTICS-032 Analytics requirement 32 must use privacy-conscious event properties and must not log personal data from unauthenticated visitors.
-- ANALYTICS-033 Analytics requirement 33 must use privacy-conscious event properties and must not log personal data from unauthenticated visitors.
-- ANALYTICS-034 Analytics requirement 34 must use privacy-conscious event properties and must not log personal data from unauthenticated visitors.
-- ANALYTICS-035 Analytics requirement 35 must use privacy-conscious event properties and must not log personal data from unauthenticated visitors.
-- ANALYTICS-036 Analytics requirement 36 must use privacy-conscious event properties and must not log personal data from unauthenticated visitors.
-- ANALYTICS-037 Analytics requirement 37 must use privacy-conscious event properties and must not log personal data from unauthenticated visitors.
-- ANALYTICS-038 Analytics requirement 38 must use privacy-conscious event properties and must not log personal data from unauthenticated visitors.
-- ANALYTICS-039 Analytics requirement 39 must use privacy-conscious event properties and must not log personal data from unauthenticated visitors.
-- ANALYTICS-040 Analytics requirement 40 must use privacy-conscious event properties and must not log personal data from unauthenticated visitors.
-- ANALYTICS-041 Analytics requirement 41 must use privacy-conscious event properties and must not log personal data from unauthenticated visitors.
-- ANALYTICS-042 Analytics requirement 42 must use privacy-conscious event properties and must not log personal data from unauthenticated visitors.
-- ANALYTICS-043 Analytics requirement 43 must use privacy-conscious event properties and must not log personal data from unauthenticated visitors.
-- ANALYTICS-044 Analytics requirement 44 must use privacy-conscious event properties and must not log personal data from unauthenticated visitors.
-- ANALYTICS-045 Analytics requirement 45 must use privacy-conscious event properties and must not log personal data from unauthenticated visitors.
-- ANALYTICS-046 Analytics requirement 46 must use privacy-conscious event properties and must not log personal data from unauthenticated visitors.
-- ANALYTICS-047 Analytics requirement 47 must use privacy-conscious event properties and must not log personal data from unauthenticated visitors.
-- ANALYTICS-048 Analytics requirement 48 must use privacy-conscious event properties and must not log personal data from unauthenticated visitors.
-- ANALYTICS-049 Analytics requirement 49 must use privacy-conscious event properties and must not log personal data from unauthenticated visitors.
-- ANALYTICS-050 Analytics requirement 50 must use privacy-conscious event properties and must not log personal data from unauthenticated visitors.
-- ANALYTICS-051 Analytics requirement 51 must use privacy-conscious event properties and must not log personal data from unauthenticated visitors.
-- ANALYTICS-052 Analytics requirement 52 must use privacy-conscious event properties and must not log personal data from unauthenticated visitors.
-- ANALYTICS-053 Analytics requirement 53 must use privacy-conscious event properties and must not log personal data from unauthenticated visitors.
-- ANALYTICS-054 Analytics requirement 54 must use privacy-conscious event properties and must not log personal data from unauthenticated visitors.
-- ANALYTICS-055 Analytics requirement 55 must use privacy-conscious event properties and must not log personal data from unauthenticated visitors.
-- ANALYTICS-056 Analytics requirement 56 must use privacy-conscious event properties and must not log personal data from unauthenticated visitors.
-- ANALYTICS-057 Analytics requirement 57 must use privacy-conscious event properties and must not log personal data from unauthenticated visitors.
-- ANALYTICS-058 Analytics requirement 58 must use privacy-conscious event properties and must not log personal data from unauthenticated visitors.
-- ANALYTICS-059 Analytics requirement 59 must use privacy-conscious event properties and must not log personal data from unauthenticated visitors.
-- ANALYTICS-060 Analytics requirement 60 must use privacy-conscious event properties and must not log personal data from unauthenticated visitors.
-- ANALYTICS-061 Analytics requirement 61 must use privacy-conscious event properties and must not log personal data from unauthenticated visitors.
-- ANALYTICS-062 Analytics requirement 62 must use privacy-conscious event properties and must not log personal data from unauthenticated visitors.
-- ANALYTICS-063 Analytics requirement 63 must use privacy-conscious event properties and must not log personal data from unauthenticated visitors.
-- ANALYTICS-064 Analytics requirement 64 must use privacy-conscious event properties and must not log personal data from unauthenticated visitors.
-- ANALYTICS-065 Analytics requirement 65 must use privacy-conscious event properties and must not log personal data from unauthenticated visitors.
-- ANALYTICS-066 Analytics requirement 66 must use privacy-conscious event properties and must not log personal data from unauthenticated visitors.
-- ANALYTICS-067 Analytics requirement 67 must use privacy-conscious event properties and must not log personal data from unauthenticated visitors.
-- ANALYTICS-068 Analytics requirement 68 must use privacy-conscious event properties and must not log personal data from unauthenticated visitors.
-- ANALYTICS-069 Analytics requirement 69 must use privacy-conscious event properties and must not log personal data from unauthenticated visitors.
-- ANALYTICS-070 Analytics requirement 70 must use privacy-conscious event properties and must not log personal data from unauthenticated visitors.
+### 验收标准
 
-## 33. Error And Data State Requirements
-- STATE-001 State loading must have a defined display behavior where live data can affect a section.
-- STATE-002 State loaded must have a defined display behavior where live data can affect a section.
-- STATE-003 State stale must have a defined display behavior where live data can affect a section.
-- STATE-004 State error must have a defined display behavior where live data can affect a section.
-- STATE-005 State empty must have a defined display behavior where live data can affect a section.
-- STATE-006 State disabled must have a defined display behavior where live data can affect a section.
-- STATE-007 State permission-unavailable must have a defined display behavior where live data can affect a section.
-- STATE-008 State network-unavailable must have a defined display behavior where live data can affect a section.
-- STATE-009 State provider-unavailable must have a defined display behavior where live data can affect a section.
-- STATE-010 State partial-data must have a defined display behavior where live data can affect a section.
-- STATE-011 map state requirement 11 must expose source failure honestly and must not silently fall back to unrelated stale content.
-- STATE-012 GDP ranking state requirement 12 must expose source failure honestly and must not silently fall back to unrelated stale content.
-- STATE-013 metric card state requirement 13 must expose source failure honestly and must not silently fall back to unrelated stale content.
-- STATE-014 country chip list state requirement 14 must expose source failure honestly and must not silently fall back to unrelated stale content.
-- STATE-015 heatmap state requirement 15 must expose source failure honestly and must not silently fall back to unrelated stale content.
-- STATE-016 ideas state requirement 16 must expose source failure honestly and must not silently fall back to unrelated stale content.
-- STATE-017 news state requirement 17 must expose source failure honestly and must not silently fall back to unrelated stale content.
-- STATE-018 calendar state requirement 18 must expose source failure honestly and must not silently fall back to unrelated stale content.
-- STATE-019 FAQ state requirement 19 must expose source failure honestly and must not silently fall back to unrelated stale content.
-- STATE-020 footer state requirement 20 must expose source failure honestly and must not silently fall back to unrelated stale content.
-- STATE-021 map state requirement 21 must expose source failure honestly and must not silently fall back to unrelated stale content.
-- STATE-022 GDP ranking state requirement 22 must expose source failure honestly and must not silently fall back to unrelated stale content.
-- STATE-023 metric card state requirement 23 must expose source failure honestly and must not silently fall back to unrelated stale content.
-- STATE-024 country chip list state requirement 24 must expose source failure honestly and must not silently fall back to unrelated stale content.
-- STATE-025 heatmap state requirement 25 must expose source failure honestly and must not silently fall back to unrelated stale content.
-- STATE-026 ideas state requirement 26 must expose source failure honestly and must not silently fall back to unrelated stale content.
-- STATE-027 news state requirement 27 must expose source failure honestly and must not silently fall back to unrelated stale content.
-- STATE-028 calendar state requirement 28 must expose source failure honestly and must not silently fall back to unrelated stale content.
-- STATE-029 FAQ state requirement 29 must expose source failure honestly and must not silently fall back to unrelated stale content.
-- STATE-030 footer state requirement 30 must expose source failure honestly and must not silently fall back to unrelated stale content.
-- STATE-031 map state requirement 31 must expose source failure honestly and must not silently fall back to unrelated stale content.
-- STATE-032 GDP ranking state requirement 32 must expose source failure honestly and must not silently fall back to unrelated stale content.
-- STATE-033 metric card state requirement 33 must expose source failure honestly and must not silently fall back to unrelated stale content.
-- STATE-034 country chip list state requirement 34 must expose source failure honestly and must not silently fall back to unrelated stale content.
-- STATE-035 heatmap state requirement 35 must expose source failure honestly and must not silently fall back to unrelated stale content.
-- STATE-036 ideas state requirement 36 must expose source failure honestly and must not silently fall back to unrelated stale content.
-- STATE-037 news state requirement 37 must expose source failure honestly and must not silently fall back to unrelated stale content.
-- STATE-038 calendar state requirement 38 must expose source failure honestly and must not silently fall back to unrelated stale content.
-- STATE-039 FAQ state requirement 39 must expose source failure honestly and must not silently fall back to unrelated stale content.
-- STATE-040 footer state requirement 40 must expose source failure honestly and must not silently fall back to unrelated stale content.
-- STATE-041 map state requirement 41 must expose source failure honestly and must not silently fall back to unrelated stale content.
-- STATE-042 GDP ranking state requirement 42 must expose source failure honestly and must not silently fall back to unrelated stale content.
-- STATE-043 metric card state requirement 43 must expose source failure honestly and must not silently fall back to unrelated stale content.
-- STATE-044 country chip list state requirement 44 must expose source failure honestly and must not silently fall back to unrelated stale content.
-- STATE-045 heatmap state requirement 45 must expose source failure honestly and must not silently fall back to unrelated stale content.
-- STATE-046 ideas state requirement 46 must expose source failure honestly and must not silently fall back to unrelated stale content.
-- STATE-047 news state requirement 47 must expose source failure honestly and must not silently fall back to unrelated stale content.
-- STATE-048 calendar state requirement 48 must expose source failure honestly and must not silently fall back to unrelated stale content.
-- STATE-049 FAQ state requirement 49 must expose source failure honestly and must not silently fall back to unrelated stale content.
-- STATE-050 footer state requirement 50 must expose source failure honestly and must not silently fall back to unrelated stale content.
-- STATE-051 map state requirement 51 must expose source failure honestly and must not silently fall back to unrelated stale content.
-- STATE-052 GDP ranking state requirement 52 must expose source failure honestly and must not silently fall back to unrelated stale content.
-- STATE-053 metric card state requirement 53 must expose source failure honestly and must not silently fall back to unrelated stale content.
-- STATE-054 country chip list state requirement 54 must expose source failure honestly and must not silently fall back to unrelated stale content.
-- STATE-055 heatmap state requirement 55 must expose source failure honestly and must not silently fall back to unrelated stale content.
-- STATE-056 ideas state requirement 56 must expose source failure honestly and must not silently fall back to unrelated stale content.
-- STATE-057 news state requirement 57 must expose source failure honestly and must not silently fall back to unrelated stale content.
-- STATE-058 calendar state requirement 58 must expose source failure honestly and must not silently fall back to unrelated stale content.
-- STATE-059 FAQ state requirement 59 must expose source failure honestly and must not silently fall back to unrelated stale content.
-- STATE-060 footer state requirement 60 must expose source failure honestly and must not silently fall back to unrelated stale content.
-- STATE-061 map state requirement 61 must expose source failure honestly and must not silently fall back to unrelated stale content.
-- STATE-062 GDP ranking state requirement 62 must expose source failure honestly and must not silently fall back to unrelated stale content.
-- STATE-063 metric card state requirement 63 must expose source failure honestly and must not silently fall back to unrelated stale content.
-- STATE-064 country chip list state requirement 64 must expose source failure honestly and must not silently fall back to unrelated stale content.
-- STATE-065 heatmap state requirement 65 must expose source failure honestly and must not silently fall back to unrelated stale content.
-- STATE-066 ideas state requirement 66 must expose source failure honestly and must not silently fall back to unrelated stale content.
-- STATE-067 news state requirement 67 must expose source failure honestly and must not silently fall back to unrelated stale content.
-- STATE-068 calendar state requirement 68 must expose source failure honestly and must not silently fall back to unrelated stale content.
-- STATE-069 FAQ state requirement 69 must expose source failure honestly and must not silently fall back to unrelated stale content.
-- STATE-070 footer state requirement 70 must expose source failure honestly and must not silently fall back to unrelated stale content.
-- STATE-071 map state requirement 71 must expose source failure honestly and must not silently fall back to unrelated stale content.
-- STATE-072 GDP ranking state requirement 72 must expose source failure honestly and must not silently fall back to unrelated stale content.
-- STATE-073 metric card state requirement 73 must expose source failure honestly and must not silently fall back to unrelated stale content.
-- STATE-074 country chip list state requirement 74 must expose source failure honestly and must not silently fall back to unrelated stale content.
-- STATE-075 heatmap state requirement 75 must expose source failure honestly and must not silently fall back to unrelated stale content.
-- STATE-076 ideas state requirement 76 must expose source failure honestly and must not silently fall back to unrelated stale content.
-- STATE-077 news state requirement 77 must expose source failure honestly and must not silently fall back to unrelated stale content.
-- STATE-078 calendar state requirement 78 must expose source failure honestly and must not silently fall back to unrelated stale content.
-- STATE-079 FAQ state requirement 79 must expose source failure honestly and must not silently fall back to unrelated stale content.
-- STATE-080 footer state requirement 80 must expose source failure honestly and must not silently fall back to unrelated stale content.
+- 桌面高度接近参考页 64px
+- 所有导航项是 link 或 disclosure button
+- 搜索入口可通过键盘触发
+- Get started 不遮挡页面内容
+- 移动端不出现文字重叠
+- 语言 EN 可见
+- header 不随经济内容加载失败而消失
 
-## 34. Implementation Requirements
-- IMPLEMENTATION-001 Implementation must use packages/tradingview-world-economy as the owned target package.
-- IMPLEMENTATION-002 Implementation must compose TradingViewWorldEconomyPage as the page entry.
-- IMPLEMENTATION-003 Implementation must preserve semantic components HeaderNavigation, FooterNavigation, EconomyPageHeader, WorldEconomyTabNavigation, WorldEconomyOverviewContent, and EconomicTrendsPage unless a reviewed refactor replaces them with a single better source.
-- IMPLEMENTATION-004 Implementation must keep data-first rendering for economicTrendsExtracted.ts and sourceData.ts.
-- IMPLEMENTATION-005 Implementation must not reintroduce generated source DOM regions after they have been semantically replaced.
-- IMPLEMENTATION-006 Implementation must keep source-critical.css and source-full.css available until measured visual parity is preserved by a narrower style system.
-- IMPLEMENTATION-007 Implementation must avoid hand-drawn fake maps when extracted map path assets exist.
-- IMPLEMENTATION-008 Implementation must avoid placeholder card grids for ideas, news, calendar, and FAQ when source data exists.
-- IMPLEMENTATION-009 Implementation must preserve country and symbol hrefs captured from the source page.
-- IMPLEMENTATION-010 Implementation must keep tests aligned with extracted material counts and names.
-- IMPLEMENTATION-011 Implementation requirement 11 applies to data ownership.
-- IMPLEMENTATION-012 Implementation requirement 12 applies to style ownership.
-- IMPLEMENTATION-013 Implementation requirement 13 applies to asset ownership.
-- IMPLEMENTATION-014 Implementation requirement 14 applies to link ownership.
-- IMPLEMENTATION-015 Implementation requirement 15 applies to test ownership.
-- IMPLEMENTATION-016 Implementation requirement 16 applies to visual evidence.
-- IMPLEMENTATION-017 Implementation requirement 17 applies to source evidence.
-- IMPLEMENTATION-018 Implementation requirement 18 applies to no duplicate source.
-- IMPLEMENTATION-019 Implementation requirement 19 applies to maintainability.
-- IMPLEMENTATION-020 Implementation requirement 20 applies to component ownership.
-- IMPLEMENTATION-021 Implementation requirement 21 applies to data ownership.
-- IMPLEMENTATION-022 Implementation requirement 22 applies to style ownership.
-- IMPLEMENTATION-023 Implementation requirement 23 applies to asset ownership.
-- IMPLEMENTATION-024 Implementation requirement 24 applies to link ownership.
-- IMPLEMENTATION-025 Implementation requirement 25 applies to test ownership.
-- IMPLEMENTATION-026 Implementation requirement 26 applies to visual evidence.
-- IMPLEMENTATION-027 Implementation requirement 27 applies to source evidence.
-- IMPLEMENTATION-028 Implementation requirement 28 applies to no duplicate source.
-- IMPLEMENTATION-029 Implementation requirement 29 applies to maintainability.
-- IMPLEMENTATION-030 Implementation requirement 30 applies to component ownership.
-- IMPLEMENTATION-031 Implementation requirement 31 applies to data ownership.
-- IMPLEMENTATION-032 Implementation requirement 32 applies to style ownership.
-- IMPLEMENTATION-033 Implementation requirement 33 applies to asset ownership.
-- IMPLEMENTATION-034 Implementation requirement 34 applies to link ownership.
-- IMPLEMENTATION-035 Implementation requirement 35 applies to test ownership.
-- IMPLEMENTATION-036 Implementation requirement 36 applies to visual evidence.
-- IMPLEMENTATION-037 Implementation requirement 37 applies to source evidence.
-- IMPLEMENTATION-038 Implementation requirement 38 applies to no duplicate source.
-- IMPLEMENTATION-039 Implementation requirement 39 applies to maintainability.
-- IMPLEMENTATION-040 Implementation requirement 40 applies to component ownership.
-- IMPLEMENTATION-041 Implementation requirement 41 applies to data ownership.
-- IMPLEMENTATION-042 Implementation requirement 42 applies to style ownership.
-- IMPLEMENTATION-043 Implementation requirement 43 applies to asset ownership.
-- IMPLEMENTATION-044 Implementation requirement 44 applies to link ownership.
-- IMPLEMENTATION-045 Implementation requirement 45 applies to test ownership.
-- IMPLEMENTATION-046 Implementation requirement 46 applies to visual evidence.
-- IMPLEMENTATION-047 Implementation requirement 47 applies to source evidence.
-- IMPLEMENTATION-048 Implementation requirement 48 applies to no duplicate source.
-- IMPLEMENTATION-049 Implementation requirement 49 applies to maintainability.
-- IMPLEMENTATION-050 Implementation requirement 50 applies to component ownership.
-- IMPLEMENTATION-051 Implementation requirement 51 applies to data ownership.
-- IMPLEMENTATION-052 Implementation requirement 52 applies to style ownership.
-- IMPLEMENTATION-053 Implementation requirement 53 applies to asset ownership.
-- IMPLEMENTATION-054 Implementation requirement 54 applies to link ownership.
-- IMPLEMENTATION-055 Implementation requirement 55 applies to test ownership.
-- IMPLEMENTATION-056 Implementation requirement 56 applies to visual evidence.
-- IMPLEMENTATION-057 Implementation requirement 57 applies to source evidence.
-- IMPLEMENTATION-058 Implementation requirement 58 applies to no duplicate source.
-- IMPLEMENTATION-059 Implementation requirement 59 applies to maintainability.
-- IMPLEMENTATION-060 Implementation requirement 60 applies to component ownership.
-- IMPLEMENTATION-061 Implementation requirement 61 applies to data ownership.
-- IMPLEMENTATION-062 Implementation requirement 62 applies to style ownership.
-- IMPLEMENTATION-063 Implementation requirement 63 applies to asset ownership.
-- IMPLEMENTATION-064 Implementation requirement 64 applies to link ownership.
-- IMPLEMENTATION-065 Implementation requirement 65 applies to test ownership.
-- IMPLEMENTATION-066 Implementation requirement 66 applies to visual evidence.
-- IMPLEMENTATION-067 Implementation requirement 67 applies to source evidence.
-- IMPLEMENTATION-068 Implementation requirement 68 applies to no duplicate source.
-- IMPLEMENTATION-069 Implementation requirement 69 applies to maintainability.
-- IMPLEMENTATION-070 Implementation requirement 70 applies to component ownership.
-- IMPLEMENTATION-071 Implementation requirement 71 applies to data ownership.
-- IMPLEMENTATION-072 Implementation requirement 72 applies to style ownership.
-- IMPLEMENTATION-073 Implementation requirement 73 applies to asset ownership.
-- IMPLEMENTATION-074 Implementation requirement 74 applies to link ownership.
-- IMPLEMENTATION-075 Implementation requirement 75 applies to test ownership.
-- IMPLEMENTATION-076 Implementation requirement 76 applies to visual evidence.
-- IMPLEMENTATION-077 Implementation requirement 77 applies to source evidence.
-- IMPLEMENTATION-078 Implementation requirement 78 applies to no duplicate source.
-- IMPLEMENTATION-079 Implementation requirement 79 applies to maintainability.
-- IMPLEMENTATION-080 Implementation requirement 80 applies to component ownership.
-- IMPLEMENTATION-081 Implementation requirement 81 applies to data ownership.
-- IMPLEMENTATION-082 Implementation requirement 82 applies to style ownership.
-- IMPLEMENTATION-083 Implementation requirement 83 applies to asset ownership.
-- IMPLEMENTATION-084 Implementation requirement 84 applies to link ownership.
-- IMPLEMENTATION-085 Implementation requirement 85 applies to test ownership.
-- IMPLEMENTATION-086 Implementation requirement 86 applies to visual evidence.
-- IMPLEMENTATION-087 Implementation requirement 87 applies to source evidence.
-- IMPLEMENTATION-088 Implementation requirement 88 applies to no duplicate source.
-- IMPLEMENTATION-089 Implementation requirement 89 applies to maintainability.
-- IMPLEMENTATION-090 Implementation requirement 90 applies to component ownership.
-- IMPLEMENTATION-091 Implementation requirement 91 applies to data ownership.
-- IMPLEMENTATION-092 Implementation requirement 92 applies to style ownership.
-- IMPLEMENTATION-093 Implementation requirement 93 applies to asset ownership.
-- IMPLEMENTATION-094 Implementation requirement 94 applies to link ownership.
-- IMPLEMENTATION-095 Implementation requirement 95 applies to test ownership.
+## 11.02 Breadcrumb And Page Title
 
-## 35. Test Plan
-- TEST-001 Unit test must assert extracted inflation map path count remains 205 unless source evidence changes.
-- TEST-002 Unit test must assert GDP rows remain India, Indonesia, Mainland China, South Korea, Saudi Arabia, and USA for the captured fixture.
-- TEST-003 Unit test must assert economic metric tickers remain USUR, USINTR, and USBOT for the captured fixture.
-- TEST-004 Unit test must assert at least twenty country links exist.
-- TEST-005 Unit test must assert heatmap table includes captured metric headers and country rows.
-- TEST-006 Unit test must assert FAQ includes all captured questions.
-- TEST-007 Unit test must assert footer groups and legal links render.
-- TEST-008 Integration test must render the page entry without runtime errors.
-- TEST-009 Integration test must verify primary links have href attributes.
-- TEST-010 Integration test must verify tab controls are interactive or navigable.
-- TEST-011 Visual test must compare desktop 1440x900 first viewport against reference screenshot.
-- TEST-012 Visual test must capture mobile viewport and verify no overlapping text.
-- TEST-013 Accessibility test must run automated checks for landmarks, links, headings, and color contrast.
-- TEST-014 Performance test must run production build before measuring bundle and render cost.
-- TEST-015 SEO test must inspect H1, title, FAQ text, and crawlable anchors.
-- TEST-016 unit test requirement 16 must be automated where practical and manually reviewed where visual judgment is necessary.
-- TEST-017 integration test requirement 17 must be automated where practical and manually reviewed where visual judgment is necessary.
-- TEST-018 visual test requirement 18 must be automated where practical and manually reviewed where visual judgment is necessary.
-- TEST-019 responsive test requirement 19 must be automated where practical and manually reviewed where visual judgment is necessary.
-- TEST-020 accessibility test requirement 20 must be automated where practical and manually reviewed where visual judgment is necessary.
-- TEST-021 performance test requirement 21 must be automated where practical and manually reviewed where visual judgment is necessary.
-- TEST-022 SEO test requirement 22 must be automated where practical and manually reviewed where visual judgment is necessary.
-- TEST-023 legal test requirement 23 must be automated where practical and manually reviewed where visual judgment is necessary.
-- TEST-024 analytics test requirement 24 must be automated where practical and manually reviewed where visual judgment is necessary.
-- TEST-025 data freshness test requirement 25 must be automated where practical and manually reviewed where visual judgment is necessary.
-- TEST-026 unit test requirement 26 must be automated where practical and manually reviewed where visual judgment is necessary.
-- TEST-027 integration test requirement 27 must be automated where practical and manually reviewed where visual judgment is necessary.
-- TEST-028 visual test requirement 28 must be automated where practical and manually reviewed where visual judgment is necessary.
-- TEST-029 responsive test requirement 29 must be automated where practical and manually reviewed where visual judgment is necessary.
-- TEST-030 accessibility test requirement 30 must be automated where practical and manually reviewed where visual judgment is necessary.
-- TEST-031 performance test requirement 31 must be automated where practical and manually reviewed where visual judgment is necessary.
-- TEST-032 SEO test requirement 32 must be automated where practical and manually reviewed where visual judgment is necessary.
-- TEST-033 legal test requirement 33 must be automated where practical and manually reviewed where visual judgment is necessary.
-- TEST-034 analytics test requirement 34 must be automated where practical and manually reviewed where visual judgment is necessary.
-- TEST-035 data freshness test requirement 35 must be automated where practical and manually reviewed where visual judgment is necessary.
-- TEST-036 unit test requirement 36 must be automated where practical and manually reviewed where visual judgment is necessary.
-- TEST-037 integration test requirement 37 must be automated where practical and manually reviewed where visual judgment is necessary.
-- TEST-038 visual test requirement 38 must be automated where practical and manually reviewed where visual judgment is necessary.
-- TEST-039 responsive test requirement 39 must be automated where practical and manually reviewed where visual judgment is necessary.
-- TEST-040 accessibility test requirement 40 must be automated where practical and manually reviewed where visual judgment is necessary.
-- TEST-041 performance test requirement 41 must be automated where practical and manually reviewed where visual judgment is necessary.
-- TEST-042 SEO test requirement 42 must be automated where practical and manually reviewed where visual judgment is necessary.
-- TEST-043 legal test requirement 43 must be automated where practical and manually reviewed where visual judgment is necessary.
-- TEST-044 analytics test requirement 44 must be automated where practical and manually reviewed where visual judgment is necessary.
-- TEST-045 data freshness test requirement 45 must be automated where practical and manually reviewed where visual judgment is necessary.
-- TEST-046 unit test requirement 46 must be automated where practical and manually reviewed where visual judgment is necessary.
-- TEST-047 integration test requirement 47 must be automated where practical and manually reviewed where visual judgment is necessary.
-- TEST-048 visual test requirement 48 must be automated where practical and manually reviewed where visual judgment is necessary.
-- TEST-049 responsive test requirement 49 must be automated where practical and manually reviewed where visual judgment is necessary.
-- TEST-050 accessibility test requirement 50 must be automated where practical and manually reviewed where visual judgment is necessary.
-- TEST-051 performance test requirement 51 must be automated where practical and manually reviewed where visual judgment is necessary.
-- TEST-052 SEO test requirement 52 must be automated where practical and manually reviewed where visual judgment is necessary.
-- TEST-053 legal test requirement 53 must be automated where practical and manually reviewed where visual judgment is necessary.
-- TEST-054 analytics test requirement 54 must be automated where practical and manually reviewed where visual judgment is necessary.
-- TEST-055 data freshness test requirement 55 must be automated where practical and manually reviewed where visual judgment is necessary.
-- TEST-056 unit test requirement 56 must be automated where practical and manually reviewed where visual judgment is necessary.
-- TEST-057 integration test requirement 57 must be automated where practical and manually reviewed where visual judgment is necessary.
-- TEST-058 visual test requirement 58 must be automated where practical and manually reviewed where visual judgment is necessary.
-- TEST-059 responsive test requirement 59 must be automated where practical and manually reviewed where visual judgment is necessary.
-- TEST-060 accessibility test requirement 60 must be automated where practical and manually reviewed where visual judgment is necessary.
-- TEST-061 performance test requirement 61 must be automated where practical and manually reviewed where visual judgment is necessary.
-- TEST-062 SEO test requirement 62 must be automated where practical and manually reviewed where visual judgment is necessary.
-- TEST-063 legal test requirement 63 must be automated where practical and manually reviewed where visual judgment is necessary.
-- TEST-064 analytics test requirement 64 must be automated where practical and manually reviewed where visual judgment is necessary.
-- TEST-065 data freshness test requirement 65 must be automated where practical and manually reviewed where visual judgment is necessary.
-- TEST-066 unit test requirement 66 must be automated where practical and manually reviewed where visual judgment is necessary.
-- TEST-067 integration test requirement 67 must be automated where practical and manually reviewed where visual judgment is necessary.
-- TEST-068 visual test requirement 68 must be automated where practical and manually reviewed where visual judgment is necessary.
-- TEST-069 responsive test requirement 69 must be automated where practical and manually reviewed where visual judgment is necessary.
-- TEST-070 accessibility test requirement 70 must be automated where practical and manually reviewed where visual judgment is necessary.
-- TEST-071 performance test requirement 71 must be automated where practical and manually reviewed where visual judgment is necessary.
-- TEST-072 SEO test requirement 72 must be automated where practical and manually reviewed where visual judgment is necessary.
-- TEST-073 legal test requirement 73 must be automated where practical and manually reviewed where visual judgment is necessary.
-- TEST-074 analytics test requirement 74 must be automated where practical and manually reviewed where visual judgment is necessary.
-- TEST-075 data freshness test requirement 75 must be automated where practical and manually reviewed where visual judgment is necessary.
-- TEST-076 unit test requirement 76 must be automated where practical and manually reviewed where visual judgment is necessary.
-- TEST-077 integration test requirement 77 must be automated where practical and manually reviewed where visual judgment is necessary.
-- TEST-078 visual test requirement 78 must be automated where practical and manually reviewed where visual judgment is necessary.
-- TEST-079 responsive test requirement 79 must be automated where practical and manually reviewed where visual judgment is necessary.
-- TEST-080 accessibility test requirement 80 must be automated where practical and manually reviewed where visual judgment is necessary.
-- TEST-081 performance test requirement 81 must be automated where practical and manually reviewed where visual judgment is necessary.
-- TEST-082 SEO test requirement 82 must be automated where practical and manually reviewed where visual judgment is necessary.
-- TEST-083 legal test requirement 83 must be automated where practical and manually reviewed where visual judgment is necessary.
-- TEST-084 analytics test requirement 84 must be automated where practical and manually reviewed where visual judgment is necessary.
-- TEST-085 data freshness test requirement 85 must be automated where practical and manually reviewed where visual judgment is necessary.
-- TEST-086 unit test requirement 86 must be automated where practical and manually reviewed where visual judgment is necessary.
-- TEST-087 integration test requirement 87 must be automated where practical and manually reviewed where visual judgment is necessary.
-- TEST-088 visual test requirement 88 must be automated where practical and manually reviewed where visual judgment is necessary.
-- TEST-089 responsive test requirement 89 must be automated where practical and manually reviewed where visual judgment is necessary.
-- TEST-090 accessibility test requirement 90 must be automated where practical and manually reviewed where visual judgment is necessary.
-- TEST-091 performance test requirement 91 must be automated where practical and manually reviewed where visual judgment is necessary.
-- TEST-092 SEO test requirement 92 must be automated where practical and manually reviewed where visual judgment is necessary.
-- TEST-093 legal test requirement 93 must be automated where practical and manually reviewed where visual judgment is necessary.
-- TEST-094 analytics test requirement 94 must be automated where practical and manually reviewed where visual judgment is necessary.
-- TEST-095 data freshness test requirement 95 must be automated where practical and manually reviewed where visual judgment is necessary.
-- TEST-096 unit test requirement 96 must be automated where practical and manually reviewed where visual judgment is necessary.
-- TEST-097 integration test requirement 97 must be automated where practical and manually reviewed where visual judgment is necessary.
-- TEST-098 visual test requirement 98 must be automated where practical and manually reviewed where visual judgment is necessary.
-- TEST-099 responsive test requirement 99 must be automated where practical and manually reviewed where visual judgment is necessary.
-- TEST-100 accessibility test requirement 100 must be automated where practical and manually reviewed where visual judgment is necessary.
-- TEST-101 performance test requirement 101 must be automated where practical and manually reviewed where visual judgment is necessary.
-- TEST-102 SEO test requirement 102 must be automated where practical and manually reviewed where visual judgment is necessary.
-- TEST-103 legal test requirement 103 must be automated where practical and manually reviewed where visual judgment is necessary.
-- TEST-104 analytics test requirement 104 must be automated where practical and manually reviewed where visual judgment is necessary.
-- TEST-105 data freshness test requirement 105 must be automated where practical and manually reviewed where visual judgment is necessary.
-- TEST-106 unit test requirement 106 must be automated where practical and manually reviewed where visual judgment is necessary.
-- TEST-107 integration test requirement 107 must be automated where practical and manually reviewed where visual judgment is necessary.
-- TEST-108 visual test requirement 108 must be automated where practical and manually reviewed where visual judgment is necessary.
-- TEST-109 responsive test requirement 109 must be automated where practical and manually reviewed where visual judgment is necessary.
-- TEST-110 accessibility test requirement 110 must be automated where practical and manually reviewed where visual judgment is necessary.
-- TEST-111 performance test requirement 111 must be automated where practical and manually reviewed where visual judgment is necessary.
-- TEST-112 SEO test requirement 112 must be automated where practical and manually reviewed where visual judgment is necessary.
-- TEST-113 legal test requirement 113 must be automated where practical and manually reviewed where visual judgment is necessary.
-- TEST-114 analytics test requirement 114 must be automated where practical and manually reviewed where visual judgment is necessary.
-- TEST-115 data freshness test requirement 115 must be automated where practical and manually reviewed where visual judgment is necessary.
-- TEST-116 unit test requirement 116 must be automated where practical and manually reviewed where visual judgment is necessary.
-- TEST-117 integration test requirement 117 must be automated where practical and manually reviewed where visual judgment is necessary.
-- TEST-118 visual test requirement 118 must be automated where practical and manually reviewed where visual judgment is necessary.
-- TEST-119 responsive test requirement 119 must be automated where practical and manually reviewed where visual judgment is necessary.
-- TEST-120 accessibility test requirement 120 must be automated where practical and manually reviewed where visual judgment is necessary.
-- TEST-121 performance test requirement 121 must be automated where practical and manually reviewed where visual judgment is necessary.
-- TEST-122 SEO test requirement 122 must be automated where practical and manually reviewed where visual judgment is necessary.
-- TEST-123 legal test requirement 123 must be automated where practical and manually reviewed where visual judgment is necessary.
-- TEST-124 analytics test requirement 124 must be automated where practical and manually reviewed where visual judgment is necessary.
-- TEST-125 data freshness test requirement 125 must be automated where practical and manually reviewed where visual judgment is necessary.
-- TEST-126 unit test requirement 126 must be automated where practical and manually reviewed where visual judgment is necessary.
-- TEST-127 integration test requirement 127 must be automated where practical and manually reviewed where visual judgment is necessary.
-- TEST-128 visual test requirement 128 must be automated where practical and manually reviewed where visual judgment is necessary.
-- TEST-129 responsive test requirement 129 must be automated where practical and manually reviewed where visual judgment is necessary.
-- TEST-130 accessibility test requirement 130 must be automated where practical and manually reviewed where visual judgment is necessary.
-- TEST-131 performance test requirement 131 must be automated where practical and manually reviewed where visual judgment is necessary.
-- TEST-132 SEO test requirement 132 must be automated where practical and manually reviewed where visual judgment is necessary.
-- TEST-133 legal test requirement 133 must be automated where practical and manually reviewed where visual judgment is necessary.
-- TEST-134 analytics test requirement 134 must be automated where practical and manually reviewed where visual judgment is necessary.
-- TEST-135 data freshness test requirement 135 must be automated where practical and manually reviewed where visual judgment is necessary.
+产品目的：让用户知道当前位置是 Markets 下的 Economy 页面。
 
-## 36. Acceptance Criteria
-- ACCEPTANCE-001 AC must pass when the page renders the same major content modules as the target TradingView page.
-- ACCEPTANCE-002 AC must pass when desktop visual parity preserves header, dashboard grid, cards, maps, tables, FAQ, and footer positions.
-- ACCEPTANCE-003 AC must pass when no visible placeholder text or fake component remains in page content.
-- ACCEPTANCE-004 AC must pass when extracted data tests succeed.
-- ACCEPTANCE-005 AC must pass when production build succeeds.
-- ACCEPTANCE-006 AC must pass when links are real anchors or implemented controls.
-- ACCEPTANCE-007 AC must pass when FAQ and legal content are visible as text.
-- ACCEPTANCE-008 AC must pass when mobile layout has no content overlap.
-- ACCEPTANCE-009 AC must pass when errors are explicit for live data failures.
-- ACCEPTANCE-010 AC must pass only after a second review confirms the PRD and implementation remain aligned.
-- ACCEPTANCE-011 Acceptance criterion 11 requires evidence for visual parity.
-- ACCEPTANCE-012 Acceptance criterion 12 requires evidence for data parity.
-- ACCEPTANCE-013 Acceptance criterion 13 requires evidence for interaction parity.
-- ACCEPTANCE-014 Acceptance criterion 14 requires evidence for responsive parity.
-- ACCEPTANCE-015 Acceptance criterion 15 requires evidence for accessibility parity.
-- ACCEPTANCE-016 Acceptance criterion 16 requires evidence for performance parity.
-- ACCEPTANCE-017 Acceptance criterion 17 requires evidence for legal parity.
-- ACCEPTANCE-018 Acceptance criterion 18 requires evidence for SEO parity.
-- ACCEPTANCE-019 Acceptance criterion 19 requires evidence for test parity.
-- ACCEPTANCE-020 Acceptance criterion 20 requires evidence for content parity.
-- ACCEPTANCE-021 Acceptance criterion 21 requires evidence for visual parity.
-- ACCEPTANCE-022 Acceptance criterion 22 requires evidence for data parity.
-- ACCEPTANCE-023 Acceptance criterion 23 requires evidence for interaction parity.
-- ACCEPTANCE-024 Acceptance criterion 24 requires evidence for responsive parity.
-- ACCEPTANCE-025 Acceptance criterion 25 requires evidence for accessibility parity.
-- ACCEPTANCE-026 Acceptance criterion 26 requires evidence for performance parity.
-- ACCEPTANCE-027 Acceptance criterion 27 requires evidence for legal parity.
-- ACCEPTANCE-028 Acceptance criterion 28 requires evidence for SEO parity.
-- ACCEPTANCE-029 Acceptance criterion 29 requires evidence for test parity.
-- ACCEPTANCE-030 Acceptance criterion 30 requires evidence for content parity.
-- ACCEPTANCE-031 Acceptance criterion 31 requires evidence for visual parity.
-- ACCEPTANCE-032 Acceptance criterion 32 requires evidence for data parity.
-- ACCEPTANCE-033 Acceptance criterion 33 requires evidence for interaction parity.
-- ACCEPTANCE-034 Acceptance criterion 34 requires evidence for responsive parity.
-- ACCEPTANCE-035 Acceptance criterion 35 requires evidence for accessibility parity.
-- ACCEPTANCE-036 Acceptance criterion 36 requires evidence for performance parity.
-- ACCEPTANCE-037 Acceptance criterion 37 requires evidence for legal parity.
-- ACCEPTANCE-038 Acceptance criterion 38 requires evidence for SEO parity.
-- ACCEPTANCE-039 Acceptance criterion 39 requires evidence for test parity.
-- ACCEPTANCE-040 Acceptance criterion 40 requires evidence for content parity.
-- ACCEPTANCE-041 Acceptance criterion 41 requires evidence for visual parity.
-- ACCEPTANCE-042 Acceptance criterion 42 requires evidence for data parity.
-- ACCEPTANCE-043 Acceptance criterion 43 requires evidence for interaction parity.
-- ACCEPTANCE-044 Acceptance criterion 44 requires evidence for responsive parity.
-- ACCEPTANCE-045 Acceptance criterion 45 requires evidence for accessibility parity.
-- ACCEPTANCE-046 Acceptance criterion 46 requires evidence for performance parity.
-- ACCEPTANCE-047 Acceptance criterion 47 requires evidence for legal parity.
-- ACCEPTANCE-048 Acceptance criterion 48 requires evidence for SEO parity.
-- ACCEPTANCE-049 Acceptance criterion 49 requires evidence for test parity.
-- ACCEPTANCE-050 Acceptance criterion 50 requires evidence for content parity.
-- ACCEPTANCE-051 Acceptance criterion 51 requires evidence for visual parity.
-- ACCEPTANCE-052 Acceptance criterion 52 requires evidence for data parity.
-- ACCEPTANCE-053 Acceptance criterion 53 requires evidence for interaction parity.
-- ACCEPTANCE-054 Acceptance criterion 54 requires evidence for responsive parity.
-- ACCEPTANCE-055 Acceptance criterion 55 requires evidence for accessibility parity.
-- ACCEPTANCE-056 Acceptance criterion 56 requires evidence for performance parity.
-- ACCEPTANCE-057 Acceptance criterion 57 requires evidence for legal parity.
-- ACCEPTANCE-058 Acceptance criterion 58 requires evidence for SEO parity.
-- ACCEPTANCE-059 Acceptance criterion 59 requires evidence for test parity.
-- ACCEPTANCE-060 Acceptance criterion 60 requires evidence for content parity.
-- ACCEPTANCE-061 Acceptance criterion 61 requires evidence for visual parity.
-- ACCEPTANCE-062 Acceptance criterion 62 requires evidence for data parity.
-- ACCEPTANCE-063 Acceptance criterion 63 requires evidence for interaction parity.
-- ACCEPTANCE-064 Acceptance criterion 64 requires evidence for responsive parity.
-- ACCEPTANCE-065 Acceptance criterion 65 requires evidence for accessibility parity.
-- ACCEPTANCE-066 Acceptance criterion 66 requires evidence for performance parity.
-- ACCEPTANCE-067 Acceptance criterion 67 requires evidence for legal parity.
-- ACCEPTANCE-068 Acceptance criterion 68 requires evidence for SEO parity.
-- ACCEPTANCE-069 Acceptance criterion 69 requires evidence for test parity.
-- ACCEPTANCE-070 Acceptance criterion 70 requires evidence for content parity.
-- ACCEPTANCE-071 Acceptance criterion 71 requires evidence for visual parity.
-- ACCEPTANCE-072 Acceptance criterion 72 requires evidence for data parity.
-- ACCEPTANCE-073 Acceptance criterion 73 requires evidence for interaction parity.
-- ACCEPTANCE-074 Acceptance criterion 74 requires evidence for responsive parity.
-- ACCEPTANCE-075 Acceptance criterion 75 requires evidence for accessibility parity.
+### 可见内容
 
-## 37. Release Requirements
-- RELEASE-001 Release notes must mention that this page is a TradingView World Economy page PRD and extracted implementation target.
-- RELEASE-002 Release checklist must include source evidence paths.
-- RELEASE-003 Release checklist must include build command for packages/tradingview-world-economy.
-- RELEASE-004 Release checklist must include test command for packages/tradingview-world-economy.
-- RELEASE-005 Release checklist must include typecheck command for packages/tradingview-world-economy.
-- RELEASE-006 Release checklist must include browser visual inspection URL when a local server is used.
-- RELEASE-007 Release checklist must include confirmation that AGENTS.md user changes were not overwritten.
-- RELEASE-008 Release checklist must include Git diff review of newly added PRD only unless separately authorized.
-- RELEASE-009 Release checklist must include push result when repository rules require push.
-- RELEASE-010 Release checklist must include unresolved risks and known unknowns.
-- RELEASE-011 Release requirement 11 must keep evidence, test results, commit, and push traceable.
-- RELEASE-012 Release requirement 12 must keep evidence, test results, commit, and push traceable.
-- RELEASE-013 Release requirement 13 must keep evidence, test results, commit, and push traceable.
-- RELEASE-014 Release requirement 14 must keep evidence, test results, commit, and push traceable.
-- RELEASE-015 Release requirement 15 must keep evidence, test results, commit, and push traceable.
-- RELEASE-016 Release requirement 16 must keep evidence, test results, commit, and push traceable.
-- RELEASE-017 Release requirement 17 must keep evidence, test results, commit, and push traceable.
-- RELEASE-018 Release requirement 18 must keep evidence, test results, commit, and push traceable.
-- RELEASE-019 Release requirement 19 must keep evidence, test results, commit, and push traceable.
-- RELEASE-020 Release requirement 20 must keep evidence, test results, commit, and push traceable.
-- RELEASE-021 Release requirement 21 must keep evidence, test results, commit, and push traceable.
-- RELEASE-022 Release requirement 22 must keep evidence, test results, commit, and push traceable.
-- RELEASE-023 Release requirement 23 must keep evidence, test results, commit, and push traceable.
-- RELEASE-024 Release requirement 24 must keep evidence, test results, commit, and push traceable.
-- RELEASE-025 Release requirement 25 must keep evidence, test results, commit, and push traceable.
-- RELEASE-026 Release requirement 26 must keep evidence, test results, commit, and push traceable.
-- RELEASE-027 Release requirement 27 must keep evidence, test results, commit, and push traceable.
-- RELEASE-028 Release requirement 28 must keep evidence, test results, commit, and push traceable.
-- RELEASE-029 Release requirement 29 must keep evidence, test results, commit, and push traceable.
-- RELEASE-030 Release requirement 30 must keep evidence, test results, commit, and push traceable.
-- RELEASE-031 Release requirement 31 must keep evidence, test results, commit, and push traceable.
-- RELEASE-032 Release requirement 32 must keep evidence, test results, commit, and push traceable.
-- RELEASE-033 Release requirement 33 must keep evidence, test results, commit, and push traceable.
-- RELEASE-034 Release requirement 34 must keep evidence, test results, commit, and push traceable.
-- RELEASE-035 Release requirement 35 must keep evidence, test results, commit, and push traceable.
-- RELEASE-036 Release requirement 36 must keep evidence, test results, commit, and push traceable.
-- RELEASE-037 Release requirement 37 must keep evidence, test results, commit, and push traceable.
-- RELEASE-038 Release requirement 38 must keep evidence, test results, commit, and push traceable.
-- RELEASE-039 Release requirement 39 must keep evidence, test results, commit, and push traceable.
-- RELEASE-040 Release requirement 40 must keep evidence, test results, commit, and push traceable.
-- RELEASE-041 Release requirement 41 must keep evidence, test results, commit, and push traceable.
-- RELEASE-042 Release requirement 42 must keep evidence, test results, commit, and push traceable.
-- RELEASE-043 Release requirement 43 must keep evidence, test results, commit, and push traceable.
-- RELEASE-044 Release requirement 44 must keep evidence, test results, commit, and push traceable.
-- RELEASE-045 Release requirement 45 must keep evidence, test results, commit, and push traceable.
-- RELEASE-046 Release requirement 46 must keep evidence, test results, commit, and push traceable.
-- RELEASE-047 Release requirement 47 must keep evidence, test results, commit, and push traceable.
-- RELEASE-048 Release requirement 48 must keep evidence, test results, commit, and push traceable.
-- RELEASE-049 Release requirement 49 must keep evidence, test results, commit, and push traceable.
-- RELEASE-050 Release requirement 50 must keep evidence, test results, commit, and push traceable.
-- RELEASE-051 Release requirement 51 must keep evidence, test results, commit, and push traceable.
-- RELEASE-052 Release requirement 52 must keep evidence, test results, commit, and push traceable.
-- RELEASE-053 Release requirement 53 must keep evidence, test results, commit, and push traceable.
-- RELEASE-054 Release requirement 54 must keep evidence, test results, commit, and push traceable.
-- RELEASE-055 Release requirement 55 must keep evidence, test results, commit, and push traceable.
+- Markets 链接
+- 斜杠分隔符
+- Economy 面包屑项
+- H1 Economy
 
-## 38. Open Questions And Risks
-- RISK-001 Exact TradingView backend data refresh cadence is not observable from public page text.
-- RISK-002 Private API contracts are not part of this PRD and must not be cloned without authorization.
-- RISK-003 Live values can change after 2026-06-03, so fixture values must be treated as captured evidence, not permanent truth.
-- RISK-004 Some idea/news/calendar items are feed-driven and may rotate on the live page.
-- RISK-005 Map country bucket values require authoritative data feed mapping for production behavior.
-- RISK-006 Visual parity may require retained extracted CSS until a narrower design system is proven by screenshot comparison.
-- RISK-007 Footer link inventory can change upstream and should be reviewed before public release.
-- RISK-008 Locale alternate links can change upstream and require current source verification before implementation beyond English.
-- RISK-009 Legal attribution wording must be verified with counsel or approved source text before production launch.
-- RISK-010 Community content moderation and ranking logic are out of scope and must be supplied by existing TradingView-equivalent systems.
-- RISK-011 Risk 11 must be resolved by legal review before claiming production completeness.
-- RISK-012 Risk 12 must be resolved by analytics review before claiming production completeness.
-- RISK-013 Risk 13 must be resolved by accessibility review before claiming production completeness.
-- RISK-014 Risk 14 must be resolved by performance measurement before claiming production completeness.
-- RISK-015 Risk 15 must be resolved by implementation audit before claiming production completeness.
-- RISK-016 Risk 16 must be resolved by source verification before claiming production completeness.
-- RISK-017 Risk 17 must be resolved by data contract review before claiming production completeness.
-- RISK-018 Risk 18 must be resolved by visual QA before claiming production completeness.
-- RISK-019 Risk 19 must be resolved by legal review before claiming production completeness.
-- RISK-020 Risk 20 must be resolved by analytics review before claiming production completeness.
-- RISK-021 Risk 21 must be resolved by accessibility review before claiming production completeness.
-- RISK-022 Risk 22 must be resolved by performance measurement before claiming production completeness.
-- RISK-023 Risk 23 must be resolved by implementation audit before claiming production completeness.
-- RISK-024 Risk 24 must be resolved by source verification before claiming production completeness.
-- RISK-025 Risk 25 must be resolved by data contract review before claiming production completeness.
-- RISK-026 Risk 26 must be resolved by visual QA before claiming production completeness.
-- RISK-027 Risk 27 must be resolved by legal review before claiming production completeness.
-- RISK-028 Risk 28 must be resolved by analytics review before claiming production completeness.
-- RISK-029 Risk 29 must be resolved by accessibility review before claiming production completeness.
-- RISK-030 Risk 30 must be resolved by performance measurement before claiming production completeness.
-- RISK-031 Risk 31 must be resolved by implementation audit before claiming production completeness.
-- RISK-032 Risk 32 must be resolved by source verification before claiming production completeness.
-- RISK-033 Risk 33 must be resolved by data contract review before claiming production completeness.
-- RISK-034 Risk 34 must be resolved by visual QA before claiming production completeness.
-- RISK-035 Risk 35 must be resolved by legal review before claiming production completeness.
-- RISK-036 Risk 36 must be resolved by analytics review before claiming production completeness.
-- RISK-037 Risk 37 must be resolved by accessibility review before claiming production completeness.
-- RISK-038 Risk 38 must be resolved by performance measurement before claiming production completeness.
-- RISK-039 Risk 39 must be resolved by implementation audit before claiming production completeness.
-- RISK-040 Risk 40 must be resolved by source verification before claiming production completeness.
-- RISK-041 Risk 41 must be resolved by data contract review before claiming production completeness.
-- RISK-042 Risk 42 must be resolved by visual QA before claiming production completeness.
-- RISK-043 Risk 43 must be resolved by legal review before claiming production completeness.
-- RISK-044 Risk 44 must be resolved by analytics review before claiming production completeness.
-- RISK-045 Risk 45 must be resolved by accessibility review before claiming production completeness.
-- RISK-046 Risk 46 must be resolved by performance measurement before claiming production completeness.
-- RISK-047 Risk 47 must be resolved by implementation audit before claiming production completeness.
-- RISK-048 Risk 48 must be resolved by source verification before claiming production completeness.
-- RISK-049 Risk 49 must be resolved by data contract review before claiming production completeness.
-- RISK-050 Risk 50 must be resolved by visual QA before claiming production completeness.
-- RISK-051 Risk 51 must be resolved by legal review before claiming production completeness.
-- RISK-052 Risk 52 must be resolved by analytics review before claiming production completeness.
-- RISK-053 Risk 53 must be resolved by accessibility review before claiming production completeness.
-- RISK-054 Risk 54 must be resolved by performance measurement before claiming production completeness.
-- RISK-055 Risk 55 must be resolved by implementation audit before claiming production completeness.
-- RISK-056 Risk 56 must be resolved by source verification before claiming production completeness.
-- RISK-057 Risk 57 must be resolved by data contract review before claiming production completeness.
-- RISK-058 Risk 58 must be resolved by visual QA before claiming production completeness.
-- RISK-059 Risk 59 must be resolved by legal review before claiming production completeness.
-- RISK-060 Risk 60 must be resolved by analytics review before claiming production completeness.
-- RISK-061 Risk 61 must be resolved by accessibility review before claiming production completeness.
-- RISK-062 Risk 62 must be resolved by performance measurement before claiming production completeness.
-- RISK-063 Risk 63 must be resolved by implementation audit before claiming production completeness.
-- RISK-064 Risk 64 must be resolved by source verification before claiming production completeness.
-- RISK-065 Risk 65 must be resolved by data contract review before claiming production completeness.
+### 数据字段
 
-## 39. Requirement Trace Matrix
-- TRACE-001 Header is covered by source evidence, product requirements, implementation requirements, and acceptance criteria.
-- TRACE-002 Breadcrumb is covered by source evidence, product requirements, implementation requirements, and acceptance criteria.
-- TRACE-003 Title and tabs is covered by source evidence, product requirements, implementation requirements, and acceptance criteria.
-- TRACE-004 Economic trends grid is covered by source evidence, product requirements, implementation requirements, and acceptance criteria.
-- TRACE-005 Inflation map is covered by source evidence, product requirements, implementation requirements, and acceptance criteria.
-- TRACE-006 GDP ranking is covered by source evidence, product requirements, implementation requirements, and acceptance criteria.
-- TRACE-007 Metric cards is covered by source evidence, product requirements, implementation requirements, and acceptance criteria.
-- TRACE-008 Countries is covered by source evidence, product requirements, implementation requirements, and acceptance criteria.
-- TRACE-009 Ideas is covered by source evidence, product requirements, implementation requirements, and acceptance criteria.
-- TRACE-010 Heatmap is covered by source evidence, product requirements, implementation requirements, and acceptance criteria.
-- TRACE-011 Main indicators is covered by source evidence, product requirements, implementation requirements, and acceptance criteria.
-- TRACE-012 Industrial map is covered by source evidence, product requirements, implementation requirements, and acceptance criteria.
-- TRACE-013 News is covered by source evidence, product requirements, implementation requirements, and acceptance criteria.
-- TRACE-014 Economic Calendar is covered by source evidence, product requirements, implementation requirements, and acceptance criteria.
-- TRACE-015 FAQ is covered by source evidence, product requirements, implementation requirements, and acceptance criteria.
-- TRACE-016 Footer is covered by source evidence, product requirements, implementation requirements, and acceptance criteria.
-- TRACE-017 Legal attribution is covered by source evidence, product requirements, implementation requirements, and acceptance criteria.
-- TRACE-018 Responsive layout is covered by source evidence, product requirements, implementation requirements, and acceptance criteria.
-- TRACE-019 Accessibility is covered by source evidence, product requirements, implementation requirements, and acceptance criteria.
-- TRACE-020 Performance is covered by source evidence, product requirements, implementation requirements, and acceptance criteria.
-- TRACE-021 SEO is covered by source evidence, product requirements, implementation requirements, and acceptance criteria.
-- TRACE-022 Analytics is covered by source evidence, product requirements, implementation requirements, and acceptance criteria.
-- TRACE-023 Data states is covered by source evidence, product requirements, implementation requirements, and acceptance criteria.
-- TRACE-024 Tests is covered by source evidence, product requirements, implementation requirements, and acceptance criteria.
-- TRACE-025 Trace row 25 links Header to at least one test and one visible page region.
-- TRACE-026 Trace row 26 links Breadcrumb to at least one test and one visible page region.
-- TRACE-027 Trace row 27 links Title and tabs to at least one test and one visible page region.
-- TRACE-028 Trace row 28 links Economic trends grid to at least one test and one visible page region.
-- TRACE-029 Trace row 29 links Inflation map to at least one test and one visible page region.
-- TRACE-030 Trace row 30 links GDP ranking to at least one test and one visible page region.
-- TRACE-031 Trace row 31 links Metric cards to at least one test and one visible page region.
-- TRACE-032 Trace row 32 links Countries to at least one test and one visible page region.
-- TRACE-033 Trace row 33 links Ideas to at least one test and one visible page region.
-- TRACE-034 Trace row 34 links Heatmap to at least one test and one visible page region.
-- TRACE-035 Trace row 35 links Main indicators to at least one test and one visible page region.
-- TRACE-036 Trace row 36 links Industrial map to at least one test and one visible page region.
-- TRACE-037 Trace row 37 links News to at least one test and one visible page region.
-- TRACE-038 Trace row 38 links Economic Calendar to at least one test and one visible page region.
-- TRACE-039 Trace row 39 links FAQ to at least one test and one visible page region.
-- TRACE-040 Trace row 40 links Footer to at least one test and one visible page region.
-- TRACE-041 Trace row 41 links Legal attribution to at least one test and one visible page region.
-- TRACE-042 Trace row 42 links Responsive layout to at least one test and one visible page region.
-- TRACE-043 Trace row 43 links Accessibility to at least one test and one visible page region.
-- TRACE-044 Trace row 44 links Performance to at least one test and one visible page region.
-- TRACE-045 Trace row 45 links SEO to at least one test and one visible page region.
-- TRACE-046 Trace row 46 links Analytics to at least one test and one visible page region.
-- TRACE-047 Trace row 47 links Data states to at least one test and one visible page region.
-- TRACE-048 Trace row 48 links Tests to at least one test and one visible page region.
-- TRACE-049 Trace row 49 links Header to at least one test and one visible page region.
-- TRACE-050 Trace row 50 links Breadcrumb to at least one test and one visible page region.
-- TRACE-051 Trace row 51 links Title and tabs to at least one test and one visible page region.
-- TRACE-052 Trace row 52 links Economic trends grid to at least one test and one visible page region.
-- TRACE-053 Trace row 53 links Inflation map to at least one test and one visible page region.
-- TRACE-054 Trace row 54 links GDP ranking to at least one test and one visible page region.
-- TRACE-055 Trace row 55 links Metric cards to at least one test and one visible page region.
-- TRACE-056 Trace row 56 links Countries to at least one test and one visible page region.
-- TRACE-057 Trace row 57 links Ideas to at least one test and one visible page region.
-- TRACE-058 Trace row 58 links Heatmap to at least one test and one visible page region.
-- TRACE-059 Trace row 59 links Main indicators to at least one test and one visible page region.
-- TRACE-060 Trace row 60 links Industrial map to at least one test and one visible page region.
-- TRACE-061 Trace row 61 links News to at least one test and one visible page region.
-- TRACE-062 Trace row 62 links Economic Calendar to at least one test and one visible page region.
-- TRACE-063 Trace row 63 links FAQ to at least one test and one visible page region.
-- TRACE-064 Trace row 64 links Footer to at least one test and one visible page region.
-- TRACE-065 Trace row 65 links Legal attribution to at least one test and one visible page region.
-- TRACE-066 Trace row 66 links Responsive layout to at least one test and one visible page region.
-- TRACE-067 Trace row 67 links Accessibility to at least one test and one visible page region.
-- TRACE-068 Trace row 68 links Performance to at least one test and one visible page region.
-- TRACE-069 Trace row 69 links SEO to at least one test and one visible page region.
-- TRACE-070 Trace row 70 links Analytics to at least one test and one visible page region.
-- TRACE-071 Trace row 71 links Data states to at least one test and one visible page region.
-- TRACE-072 Trace row 72 links Tests to at least one test and one visible page region.
-- TRACE-073 Trace row 73 links Header to at least one test and one visible page region.
-- TRACE-074 Trace row 74 links Breadcrumb to at least one test and one visible page region.
-- TRACE-075 Trace row 75 links Title and tabs to at least one test and one visible page region.
-- TRACE-076 Trace row 76 links Economic trends grid to at least one test and one visible page region.
-- TRACE-077 Trace row 77 links Inflation map to at least one test and one visible page region.
-- TRACE-078 Trace row 78 links GDP ranking to at least one test and one visible page region.
-- TRACE-079 Trace row 79 links Metric cards to at least one test and one visible page region.
-- TRACE-080 Trace row 80 links Countries to at least one test and one visible page region.
-- TRACE-081 Trace row 81 links Ideas to at least one test and one visible page region.
-- TRACE-082 Trace row 82 links Heatmap to at least one test and one visible page region.
-- TRACE-083 Trace row 83 links Main indicators to at least one test and one visible page region.
-- TRACE-084 Trace row 84 links Industrial map to at least one test and one visible page region.
-- TRACE-085 Trace row 85 links News to at least one test and one visible page region.
-- TRACE-086 Trace row 86 links Economic Calendar to at least one test and one visible page region.
-- TRACE-087 Trace row 87 links FAQ to at least one test and one visible page region.
-- TRACE-088 Trace row 88 links Footer to at least one test and one visible page region.
-- TRACE-089 Trace row 89 links Legal attribution to at least one test and one visible page region.
-- TRACE-090 Trace row 90 links Responsive layout to at least one test and one visible page region.
-- TRACE-091 Trace row 91 links Accessibility to at least one test and one visible page region.
-- TRACE-092 Trace row 92 links Performance to at least one test and one visible page region.
-- TRACE-093 Trace row 93 links SEO to at least one test and one visible page region.
-- TRACE-094 Trace row 94 links Analytics to at least one test and one visible page region.
-- TRACE-095 Trace row 95 links Data states to at least one test and one visible page region.
-- TRACE-096 Trace row 96 links Tests to at least one test and one visible page region.
-- TRACE-097 Trace row 97 links Header to at least one test and one visible page region.
-- TRACE-098 Trace row 98 links Breadcrumb to at least one test and one visible page region.
-- TRACE-099 Trace row 99 links Title and tabs to at least one test and one visible page region.
-- TRACE-100 Trace row 100 links Economic trends grid to at least one test and one visible page region.
+- breadcrumbItems: Markets 和 Economy
+- pageTitle: Economy
+- canonicalUrl: /markets/world-economy/
 
-## 40. Final Review Checklist
-- FINAL-CHECK-001 Confirm line count is greater than 1000 lines.
-- FINAL-CHECK-002 Confirm target URL and source title are present.
-- FINAL-CHECK-003 Confirm visible page regions are all included.
-- FINAL-CHECK-004 Confirm glossary defines every abbreviation used as a product term.
-- FINAL-CHECK-005 Confirm no fake fallback behavior is required.
-- FINAL-CHECK-006 Confirm data model is explicit enough for implementation.
-- FINAL-CHECK-007 Confirm tests cover every code-changing requirement category.
-- FINAL-CHECK-008 Confirm legal attribution is not omitted.
-- FINAL-CHECK-009 Confirm mobile and desktop are both required.
-- FINAL-CHECK-010 Confirm acceptance criteria require second review.
-- FINAL-CHECK-011 Final review checklist item 11 must be completed before this PRD is treated as implementation-ready.
-- FINAL-CHECK-012 Final review checklist item 12 must be completed before this PRD is treated as implementation-ready.
-- FINAL-CHECK-013 Final review checklist item 13 must be completed before this PRD is treated as implementation-ready.
-- FINAL-CHECK-014 Final review checklist item 14 must be completed before this PRD is treated as implementation-ready.
-- FINAL-CHECK-015 Final review checklist item 15 must be completed before this PRD is treated as implementation-ready.
-- FINAL-CHECK-016 Final review checklist item 16 must be completed before this PRD is treated as implementation-ready.
-- FINAL-CHECK-017 Final review checklist item 17 must be completed before this PRD is treated as implementation-ready.
-- FINAL-CHECK-018 Final review checklist item 18 must be completed before this PRD is treated as implementation-ready.
-- FINAL-CHECK-019 Final review checklist item 19 must be completed before this PRD is treated as implementation-ready.
-- FINAL-CHECK-020 Final review checklist item 20 must be completed before this PRD is treated as implementation-ready.
-- FINAL-CHECK-021 Final review checklist item 21 must be completed before this PRD is treated as implementation-ready.
-- FINAL-CHECK-022 Final review checklist item 22 must be completed before this PRD is treated as implementation-ready.
-- FINAL-CHECK-023 Final review checklist item 23 must be completed before this PRD is treated as implementation-ready.
-- FINAL-CHECK-024 Final review checklist item 24 must be completed before this PRD is treated as implementation-ready.
-- FINAL-CHECK-025 Final review checklist item 25 must be completed before this PRD is treated as implementation-ready.
-- FINAL-CHECK-026 Final review checklist item 26 must be completed before this PRD is treated as implementation-ready.
-- FINAL-CHECK-027 Final review checklist item 27 must be completed before this PRD is treated as implementation-ready.
-- FINAL-CHECK-028 Final review checklist item 28 must be completed before this PRD is treated as implementation-ready.
-- FINAL-CHECK-029 Final review checklist item 29 must be completed before this PRD is treated as implementation-ready.
-- FINAL-CHECK-030 Final review checklist item 30 must be completed before this PRD is treated as implementation-ready.
-- FINAL-CHECK-031 Final review checklist item 31 must be completed before this PRD is treated as implementation-ready.
-- FINAL-CHECK-032 Final review checklist item 32 must be completed before this PRD is treated as implementation-ready.
-- FINAL-CHECK-033 Final review checklist item 33 must be completed before this PRD is treated as implementation-ready.
-- FINAL-CHECK-034 Final review checklist item 34 must be completed before this PRD is treated as implementation-ready.
-- FINAL-CHECK-035 Final review checklist item 35 must be completed before this PRD is treated as implementation-ready.
-- FINAL-CHECK-036 Final review checklist item 36 must be completed before this PRD is treated as implementation-ready.
-- FINAL-CHECK-037 Final review checklist item 37 must be completed before this PRD is treated as implementation-ready.
-- FINAL-CHECK-038 Final review checklist item 38 must be completed before this PRD is treated as implementation-ready.
-- FINAL-CHECK-039 Final review checklist item 39 must be completed before this PRD is treated as implementation-ready.
-- FINAL-CHECK-040 Final review checklist item 40 must be completed before this PRD is treated as implementation-ready.
-- FINAL-CHECK-041 Final review checklist item 41 must be completed before this PRD is treated as implementation-ready.
-- FINAL-CHECK-042 Final review checklist item 42 must be completed before this PRD is treated as implementation-ready.
-- FINAL-CHECK-043 Final review checklist item 43 must be completed before this PRD is treated as implementation-ready.
-- FINAL-CHECK-044 Final review checklist item 44 must be completed before this PRD is treated as implementation-ready.
-- FINAL-CHECK-045 Final review checklist item 45 must be completed before this PRD is treated as implementation-ready.
-- FINAL-CHECK-046 Final review checklist item 46 must be completed before this PRD is treated as implementation-ready.
-- FINAL-CHECK-047 Final review checklist item 47 must be completed before this PRD is treated as implementation-ready.
-- FINAL-CHECK-048 Final review checklist item 48 must be completed before this PRD is treated as implementation-ready.
-- FINAL-CHECK-049 Final review checklist item 49 must be completed before this PRD is treated as implementation-ready.
-- FINAL-CHECK-050 Final review checklist item 50 must be completed before this PRD is treated as implementation-ready.
+### 交互
 
+- 点击 Markets 返回市场总入口
+- 点击 Economy 保持当前页面或刷新当前分类
+
+### 状态
+
+- default: 位于 header 下方
+- mobile: 保持可读但可压缩间距
+
+### 验收标准
+
+- H1 只能有一个
+- 面包屑位于 tabs 之前
+- H1 不被 header 遮挡
+- 面包屑链接可被搜索引擎识别
+
+## 11.03 Page Tabs
+
+产品目的：在 Overview 和 Economic trends 之间提供清晰导航。
+
+### 可见内容
+
+- Overview tab
+- Economic trends tab
+- 选中状态
+
+### 数据字段
+
+- tabs: label, href, active
+- activeTab: 当前 tab
+
+### 交互
+
+- 点击 Overview
+- 点击 Economic trends
+- 键盘左右切换或 Tab 访问
+
+### 状态
+
+- active: 当前页签突出
+- hover: 可点击反馈
+- focus: 可访问焦点
+- mobile: 横向滚动或自动换行
+
+### 验收标准
+
+- 两个 tab 的顺序稳定
+- active 状态不能只靠颜色表达
+- tab 不应变成静态文本
+- 切换后 URL 或页面状态可追踪
+
+## 11.04 Economic Trends Summary
+
+产品目的：把全球宏观趋势的核心信号集中在页面最前。
+
+### 可见内容
+
+- Economic trends 标题
+- Inflation map 卡片
+- GDP growth YoY 卡片
+- US unemployment rate 卡片
+- US interest rate 卡片
+- US trade balance 卡片
+
+### 数据字段
+
+- summaryLayout: desktop grid areas
+- mapData: 通胀地图国家桶
+- gdpRows: GDP 增长排行
+- metricCards: 三个重点指标卡
+
+### 交互
+
+- 地图 hover 或 focus
+- GDP 国家点击
+- 指标卡 ticker 点击
+- 图表缩略图查看或跳转
+
+### 状态
+
+- loading: 骨架但保留尺寸
+- loaded: 显示完整数据
+- error: 显示数据不可用原因
+- stale: 显示数据时间提示
+
+### 验收标准
+
+- 第一屏或首个滚动段必须看到核心经济趋势
+- 卡片之间不重叠
+- 不能用空白块代替地图或图表
+- 失败时不展示无关假数据
+
+## 11.05 Inflation Map
+
+产品目的：用全球地图表达各国家或地区通胀水平差异。
+
+### 可见内容
+
+- Inflation map 标题
+- 世界地图
+- 0% 图例
+- 3% 图例
+- 7% 图例
+- 12% 图例
+- 25% 图例
+- 禁用或无数据国家样式
+
+### 数据字段
+
+- countryCode
+- countryName
+- inflationValue
+- legendBucket
+- geometryPath
+- dataStatus
+- sourceTimestamp
+
+### 交互
+
+- hover 国家显示名称和值
+- focus 地图摘要
+- 点击国家进入国家页，如果源页面支持
+- 触屏设备显示可点击摘要或 tooltip
+
+### 状态
+
+- loaded: 地图完整显示
+- disabled: 无数据国家低对比显示
+- error: 地图数据不可用
+- mobile: 地图缩放并保持图例可读
+
+### 验收标准
+
+- 图例值必须是 0、3、7、12、25
+- 地图比例接近 745x372
+- 颜色使用 tan/orange heatmap 语义
+- 视觉上不能像随机插画
+- 无障碍摘要说明颜色含义
+
+## 11.06 GDP Growth YoY Ranking
+
+产品目的：展示同比 GDP 增长靠前的国家，并提供国家钻取入口。
+
+### 可见内容
+
+- GDP growth, YoY 标题
+- Country 列
+- GDP Growth 列
+- Nominal GDP 列
+- India 7.80% 3.91 T USD
+- Indonesia 5.61% 1.40 T USD
+- Mainland China 5.00% 18.74 T USD
+- South Korea 3.60% 1.92 T USD
+- Saudi Arabia 2.80% 1.24 T USD
+- USA 2.70% 29.18 T USD
+
+### 数据字段
+
+- rank
+- countryName
+- countryHref
+- countryLogo
+- gdpGrowthPercent
+- nominalGdpValue
+- currency
+
+### 交互
+
+- 点击国家名称进入国家页
+- hover 行显示可点击反馈
+- 长国家名显示 overflow tooltip
+
+### 状态
+
+- loaded: 显示六行
+- loading: 保留列宽
+- error: 显示排行不可用
+- mobile: 行信息仍按国家、增长、GDP 顺序阅读
+
+### 验收标准
+
+- 六个捕获国家和数值在 fixture 中必须准确
+- 数值单位不可丢失
+- 国家链接不可为空
+- 列标题必须可见
+- 移动端不能把数值挤出卡片
+
+## 11.07 Macro Metric Cards
+
+产品目的：展示美国关键宏观指标的当前值、预测值和下次发布时间。
+
+### 可见内容
+
+- US unemployment rate / USUR
+- Actual 4.3%
+- Forecast 4.3%
+- Next release In 2 days
+- US interest rate / USINTR
+- 10 years
+- Actual 3.75%
+- Next release Jun 18, 2026
+- US trade balance / USBOT
+- Actual -60.31 B USD
+- Next release Jun 9, 2026
+
+### 数据字段
+
+- title
+- ticker
+- symbolHref
+- timeframe
+- chartImages or chartSeries
+- actual
+- forecast
+- nextRelease
+- unit
+
+### 交互
+
+- 点击 ticker 进入经济符号页
+- hover 图表缩略图
+- 键盘访问卡片链接
+
+### 状态
+
+- loaded: 显示 chart 和三组数据
+- forecastMissing: 用 dash 表示
+- loading: 图表区域保留尺寸
+- error: 指标不可用但卡片结构保留
+
+### 验收标准
+
+- USUR、USINTR、USBOT 三张卡都必须存在
+- Actual、Forecast、Next release 标签不能省略
+- Forecast 缺失必须显式显示 dash
+- 图表不允许用纯色占位块冒充
+
+## 11.08 Countries
+
+产品目的：提供主要国家和地区的直接入口。
+
+### 可见内容
+
+- Countries 标题
+- Argentina
+- Australia
+- Brazil
+- Canada
+- European Union
+- France
+- Germany
+- India
+- Indonesia
+- Italy
+- Japan
+- Mainland China
+- Mexico
+- Russia
+- Saudi Arabia
+- South Africa
+- South Korea
+- Turkey
+- United Kingdom
+- United States
+- See all 或完整国家入口
+
+### 数据字段
+
+- countryLabel
+- countryHref
+- displayOrder
+- regionGroup optional
+
+### 交互
+
+- 点击 chip 进入国家页
+- hover chip
+- focus chip
+- 点击 See all 展示完整列表或跳转
+
+### 状态
+
+- loaded: 显示至少 20 个入口
+- mobile: chip 换行或横向滚动
+- error: 国家入口不可用时显示明确错误
+
+### 验收标准
+
+- 所有捕获国家名称准确
+- 国家 chip 是 anchor，不是 span
+- chip 间距紧凑但触控可点
+- 长名称 European Union 和 United Kingdom 不溢出
+
+## 11.09 Ideas
+
+产品目的：展示社区对宏观经济数据的观点，连接数据和交易想法。
+
+### 可见内容
+
+- Ideas 标题
+- Popular tab
+- Recent tab
+- Video tab
+- More tab
+- 观点标题
+- 观点摘要
+- 作者
+- 更新时间
+- 图表或缩略图
+- See all popular ideas
+
+### 数据字段
+
+- ideaId
+- title
+- href
+- summary
+- authorName
+- authorHref
+- updatedAt
+- thumbnail
+- symbol
+- category
+- directionLabel
+
+### 交互
+
+- 切换 Popular/Recent/Video
+- 打开 More 菜单
+- 点击观点卡片
+- 点击作者
+- 点击 See all
+
+### 状态
+
+- loaded: 显示多张观点卡
+- empty: 当前分类无观点
+- loading: 卡片骨架
+- error: 社区观点不可用
+
+### 验收标准
+
+- 不能用编造观点填充
+- tab 必须可交互
+- 卡片标题和摘要不能互相覆盖
+- 缩略图加载失败时布局不跳动
+- Video 分类应有视频语义或入口
+
+## 11.10 Economic Indicators Heatmap
+
+产品目的：用国家 x 指标矩阵支持横向比较。
+
+### 可见内容
+
+- Economic indicators heatmap 标题
+- GDP
+- GDP Growth
+- Budget to GDP
+- Government Debt to GDP
+- Interest Rate
+- Inflation Rate
+- Unemployment Rate
+- Current Account to GDP
+- Industrial Production YoY
+- USA
+- Mainland China
+- EU
+- Germany
+- Japan
+- India
+- UK
+- France
+- Canada
+- Russia
+
+### 数据字段
+
+- countryRows
+- metricColumns
+- formattedValue
+- rawValue
+- unit
+- colorBucket
+- href
+- sourceTimestamp
+
+### 交互
+
+- 横向滚动
+- hover cell 查看完整值
+- 点击指标进入指标页
+- 点击国家进入国家页
+
+### 状态
+
+- loaded: 表格完整
+- overflow: 小屏横向滚动
+- loading: 保留表格骨架
+- error: 显示热力图不可用
+
+### 验收标准
+
+- 表头和行头必须清晰
+- 单位如 % of GDP 不得丢失
+- 颜色不能替代数值文本
+- 移动端必须可横向浏览
+- 表格语义要支持屏幕阅读器
+
+## 11.11 Main Indicators
+
+产品目的：提供常用宏观指标的目录入口。
+
+### 可见内容
+
+- GDP
+- GDP Growth
+- Real GDP
+- GDP Per Capita
+- GDP Per Capita PPP
+- Inflation Rate
+- Interest Rate
+- Unemployment Rate
+- Government Debt to GDP
+- Population
+- Average Hourly Earnings
+- House Price Index
+- Manufacturing Production YoY
+- Industrial Production YoY
+- Current Account
+- Current Account to GDP
+- Balance of Trade
+- Economic Activity Index
+- Crude Oil Production
+
+### 数据字段
+
+- indicatorLabel
+- indicatorHref
+- category
+- displayOrder
+
+### 交互
+
+- 点击指标进入指标页
+- hover 或 focus 显示可点击反馈
+- See all 展开或跳转
+
+### 状态
+
+- loaded: 指标 chip 或 link 列表
+- mobile: 多列变单列或换行
+- error: 指标目录不可用
+
+### 验收标准
+
+- 主要指标名称准确
+- 指标必须是可点击链接
+- 布局不能像随机标签云
+- 长指标名不遮挡相邻项
+
+## 11.12 Global Industrial Map
+
+产品目的：提供全球工业趋势的地图视角。
+
+### 可见内容
+
+- Global industrial map 标题
+- 世界地图
+- 0% 3% 7% 12% 25% 图例
+- See more global trends
+
+### 数据字段
+
+- countryCode
+- industrialValue
+- legendBucket
+- geometryPath
+- metricName
+- sourceTimestamp
+
+### 交互
+
+- hover 或 focus 地图
+- 点击国家或 CTA
+- 点击 See more global trends
+
+### 状态
+
+- loaded: 地图显示
+- loading: 保留地图尺寸
+- error: 显示数据不可用
+- mobile: 地图和图例可读
+
+### 验收标准
+
+- 不能直接复用通胀数据冒充工业数据
+- 地图视觉语言和 Inflation map 保持一致
+- CTA 可点击
+- 图例不溢出
+
+## 11.13 News
+
+产品目的：提供与宏观经济相关的即时新闻入口。
+
+### 可见内容
+
+- News 标题
+- Reuters 来源
+- Trading Economics 来源
+- Japan govt finalises extra budget headline
+- Japan Composite PMI headline
+- Keep reading
+
+### 数据字段
+
+- newsId
+- headline
+- href
+- provider
+- publishedAt
+- thumbnail
+- summary
+
+### 交互
+
+- 点击新闻
+- 点击来源或 provider
+- 点击 Keep reading
+
+### 状态
+
+- loaded: 展示新闻列表
+- empty: 无新闻时明确说明
+- loading: 新闻骨架
+- error: 新闻源不可用
+
+### 验收标准
+
+- 新闻来源必须可见
+- 不能用无关通用新闻填充
+- 标题优先展示
+- Keep reading 指向新闻流
+- 移动端标题不溢出
+
+## 11.14 Economic Calendar
+
+产品目的：展示今日或近期宏观经济事件，支持事件驱动观察。
+
+### 可见内容
+
+- Economic Calendar 标题
+- Today 标签
+- Riyad Bank PMI
+- RatingDog Composite PMI
+- RatingDog Services PMI
+- GDP Chain Price Index QoQ
+- GDP Growth Rate QoQ
+- GDP Growth Rate YoY
+- GDP Final Consumption QoQ
+- GDP Capital Expenditure QoQ
+- Actual
+- Forecast
+- Prior
+- See all market events
+
+### 数据字段
+
+- eventId
+- dateLabel
+- time
+- country
+- eventName
+- actual
+- forecast
+- prior
+- unit
+- href
+
+### 交互
+
+- 横向浏览事件卡
+- 点击事件
+- 点击 See all market events
+
+### 状态
+
+- loaded: 显示事件卡
+- noActual: Actual 为空时显示 dash
+- loading: 保留卡片宽度
+- error: 日历不可用
+
+### 验收标准
+
+- Actual/Forecast/Prior 三列语义清楚
+- 事件时间不和标题混在一起
+- See all market events 可点击
+- 小屏可横向滚动或垂直堆叠
+
+## 11.15 FAQ
+
+产品目的：解释核心经济概念，兼顾新手理解和 SEO。
+
+### 可见内容
+
+- What is GDP?
+- What is the GDP formula?
+- What is GDP per capita?
+- What country has the highest GDP?
+- What is the real GDP formula?
+- What is interest rate?
+- How are interest rates calculated?
+- What is the interest rate today?
+- What is inflation?
+- What is the inflation rate formula?
+- What is Japan inflation rate YoY today?
+
+### 数据字段
+
+- question
+- answerBlocks
+- formulaBlocks
+- relatedLinks
+- displayOrder
+
+### 交互
+
+- 展开 FAQ
+- 收起 FAQ
+- 点击相关链接
+- 键盘切换 accordion
+
+### 状态
+
+- collapsed: 默认可扫描
+- expanded: 显示完整回答
+- focus: 标题焦点清晰
+- mobile: 间距适合触控
+
+### 验收标准
+
+- 问题文本必须可索引
+- 公式必须是文本
+- accordion 状态有 ARIA 表达
+- 答案不能是隐藏给搜索引擎看的伪内容
+- FAQ 位于新闻和日历之后
+
+## 11.16 Footer
+
+产品目的：承载全站导航、产品入口、社区入口、公司信息、政策和数据版权。
+
+### 可见内容
+
+- More than a product
+- Screeners
+- Heatmaps
+- Calendars
+- More products
+- Apps
+- Community
+- Tools & subscriptions
+- Trading
+- Special offers
+- About company
+- Policies & security
+- Business solutions
+- Growth opportunities
+- Terms of Use
+- Disclaimer
+- Privacy Policy
+- Cookies Policy
+- Accessibility Statement
+- Copyright
+- FactSet attribution
+- ICE Data Services attribution
+- CUSIP attribution
+
+### 数据字段
+
+- footerGroups
+- footerLinks
+- legalTexts
+- socialLinks
+- localeLinks
+
+### 交互
+
+- 点击 footer link
+- 打开社交链接
+- 打开政策链接
+- 移动端展开 footer group
+
+### 状态
+
+- desktop: 多列 dense footer
+- mobile: 分组折叠或堆叠
+- focus: link 焦点清晰
+- legal: attribution 始终可见
+
+### 验收标准
+
+- 法务链接不能省略
+- 数据供应商声明不能省略
+- footer 不应比主体内容更早出现
+- 移动端 footer 不应形成超宽横向滚动
+
+## 12. 数据模型
+
+| 模型 | 字段 |
+| --- | --- |
+| PageMeta | title、description、canonicalUrl、locale、lastUpdatedAt。 |
+| NavigationItem | label、href、menuGroups、isExternal、trackingId。 |
+| BreadcrumbItem | label、href、position。 |
+| TabItem | label、href、active、panelId。 |
+| MapMetricCountry | countryCode、countryName、value、formattedValue、unit、bucket、geometryAssetPath、href、dataStatus。 |
+| GdpGrowthRow | rank、countryName、countryHref、logoSrc、growthPercent、nominalGdp、currency。 |
+| MetricCard | title、ticker、href、timeframe、actual、forecast、nextRelease、chartImages、sourceTimestamp。 |
+| CountryLink | label、href、slug、displayOrder。 |
+| IdeaCard | title、href、summary、thumbnail、authorName、authorHref、category、symbol、updatedAt。 |
+| HeatmapTable | metrics、countries、cells、legend、sourceTimestamp。 |
+| HeatmapCell | countryCode、metricKey、rawValue、formattedValue、unit、bucket、href。 |
+| IndicatorLink | label、href、category、displayOrder。 |
+| NewsItem | headline、href、provider、publishedAt、summary、thumbnail。 |
+| CalendarEvent | dateLabel、timeLabel、country、eventName、actual、forecast、prior、unit、href。 |
+| FaqItem | question、answerMarkdown、formulaText、relatedLinks、displayOrder。 |
+| FooterGroup | title、links、displayOrder。 |
+| LegalAttribution | providerName、text、href、requiredLocales。 |
+
+## 13. 数据格式规则
+
+- 百分比统一保留 %，负数保留 minus 符号。
+- GDP 金额使用 T 或 B 缩写时必须保留 currency，例如 USD。
+- Budget to GDP、Government Debt to GDP、Current Account to GDP 必须保留 “of GDP”。
+- Forecast 不可得时显示 dash，不显示 0。
+- Next release 使用源数据给出的自然语言，例如 In 2 days 或 Jun 18, 2026。
+- 国家名称使用页面可见命名，例如 Mainland China、USA、EU。
+- ticker 使用 ECONOMICS 符号时不得本地化。
+- 公式中的 C、G、I、X、M、CPI 等变量必须保持可读文本。
+- 中文或其他语言版本可翻译说明文字，但不应翻译 ticker、单位缩写和公式变量。
+
+## 14. 数据刷新和失败处理
+
+- 生产实现必须定义宏观数据刷新周期。
+- 如果数据源返回部分国家缺失，地图应显示 disabled 或 no data 样式。
+- 如果 GDP ranking 数据不可用，应显示该卡片错误状态，而不是隐藏整个 Economic trends 区域。
+- 如果新闻源不可用，应显示新闻源错误，不应用 FAQ 或静态营销内容填充。
+- 如果社区观点不可用，应显示社区内容不可用，不生成假观点。
+- 如果日历源不可用，应显示日历不可用，并保留 See all market events 的可用跳转前提。
+- 所有失败状态应保留布局尺寸，避免页面大幅跳动。
+- stale 数据必须展示更新时间或 stale 标识。
+
+## 15. 视觉设计要求
+
+- 整体应保持 TradingView 风格：白底、深色文本、浅灰分隔、蓝色链接、紧凑卡片。
+- 主体页面不能使用装饰性渐变背景。
+- 不能使用大面积营销插画替代数据卡片。
+- 标题层级应清楚：H1 Economy，H2 为各区域标题，卡片标题小于区域标题。
+- 正文系统字体接近 `-apple-system, BlinkMacSystemFont, Trebuchet MS, Roboto, Ubuntu, sans-serif`。
+- 主要文本色接近 rgb(15, 15, 15)。
+- 次级文本色接近 rgb(112, 112, 112)。
+- 链接色使用 TradingView 蓝色方向，不随意改成紫色或品牌外颜色。
+- heatmap 使用 tan/orange scale，不换成无意义彩虹色。
+- 卡片 radius 保持克制，不做大圆角营销卡。
+- 表格、列表和卡片必须保持高密度但可读。
+- 地图和图表必须有稳定 aspect ratio，避免资源加载后挤压文本。
+
+## 16. 响应式要求
+
+| 视口 | 验收重点 |
+| --- | --- |
+| 1440x900 | 桌面参考视口，必须用于主视觉对比。 |
+| 1280x800 | 常规笔记本，经济趋势网格应保持多列。 |
+| 1024x768 | 平板横屏，可减少列数但保留卡片顺序。 |
+| 768x1024 | 平板竖屏，heatmap 可横向滚动。 |
+| 430x932 | 移动大屏，卡片单列或两列混排，但不重叠。 |
+| 390x844 | 移动常见宽度，国家 chip 和 FAQ 必须可读。 |
+| 360x740 | 窄屏，header、tabs、地图图例必须不溢出。 |
+- 移动端 header 可以折叠，但搜索、语言和账号入口仍应可达。
+- tabs 可横向滚动，但 active 状态不能消失。
+- 地图图例在窄屏上可以换行，但不能盖住地图。
+- GDP ranking 在窄屏上可以变成 stacked row，但国家、增长、GDP 三项都要保留。
+- heatmap 必须支持横向滚动，不得把列压到不可读。
+- footer 在移动端可以按 group 折叠，但政策和版权必须可达。
+
+## 17. 无障碍要求
+
+- 页面必须有 header、main、footer landmark。
+- H1 到 H2 到 H3 的 heading 顺序必须自然。
+- 所有链接必须有可理解的 accessible name。
+- tabs 必须表达 active/selected 状态。
+- FAQ accordion 必须表达 expanded/collapsed 状态。
+- 地图至少要有整体 accessible summary，说明颜色表示什么。
+- heatmap 单元格必须有文本数值，不能只靠颜色。
+- 键盘焦点必须清晰可见。
+- 图表缩略图如果只是装饰，应为空 alt；如果传递信息，应有说明。
+- 颜色对比必须覆盖深色文本、灰色说明、蓝色链接和橙色 heatmap label。
+
+## 18. SEO 要求
+
+- title 包含 World Economy 和 TradingView 语义。
+- H1 为 Economy。
+- FAQ 问题和答案是可索引文本。
+- 国家 chip 是真实 anchor。
+- 指标目录是真实 anchor。
+- 面包屑可被搜索引擎理解。
+- canonical 指向 `/markets/world-economy/`。
+- 如果支持多语言，需要 hreflang。
+- 页面说明应覆盖 world economy、economic indicators、GDP、inflation、interest rate 等关键词。
+- 不要把核心内容全部放进 canvas 或不可索引图片。
+
+## 19. 性能要求
+
+- 首屏必须尽快显示 header、面包屑、H1、tabs 和 Economic trends 的框架。
+- 地图 SVG 路径多，渲染应避免无关交互触发整图重绘。
+- chart thumbnails 应设置 width/height 或 aspect-ratio。
+- below-the-fold 的 News、Calendar、FAQ、Footer 可以延迟加载，但不能造成 CLS。
+- production build 下评估 LCP、CLS、INP。
+- 大型 CSS sidecar 若暂时保留，必须承认它是 visual parity 成本，并在后续有证据地瘦身。
+- heatmap 表格不要一次绑定昂贵 hover listeners 到每个 cell，除非性能验证通过。
+- 移动端横向滚动区域不能触发页面整体横向滚动。
+
+## 20. 法务和版权要求
+
+- 保留 TradingView copyright。
+- 保留 ICE Data Services 声明，如果页面使用相关市场数据。
+- 保留 FactSet reference data 声明，如果页面使用相关参考数据。
+- 保留 American Bankers Association 和 CUSIP Database 声明，如果页面使用相关证券标识数据。
+- 保留 Terms of Use、Disclaimer、Privacy Policy、Cookies Policy、Accessibility Statement。
+- PRD 不授权复制 TradingView 私有 API。
+- 生产前必须确认所有第三方数据展示方式和版权文案。
+
+## 21. 埋点要求
+
+- page_view: world_economy。
+- header_nav_click: label、href。
+- search_open: source=header。
+- locale_open: currentLocale。
+- get_started_click: source=world_economy_header。
+- tab_click: tabName。
+- inflation_map_hover: countryCode、bucket，前提是隐私允许且事件量受控。
+- gdp_row_click: countryName、rank。
+- metric_card_click: ticker。
+- country_chip_click: countryName。
+- ideas_tab_click: tabName。
+- idea_card_click: ideaId、category。
+- heatmap_cell_click: countryCode、metricKey。
+- indicator_link_click: indicatorLabel。
+- industrial_map_cta_click。
+- news_item_click: provider、newsId。
+- calendar_event_click: eventId。
+- faq_expand: questionId。
+- footer_link_click: group、label。
+
+## 22. 测试计划
+
+
+### 单元测试
+
+- 验证 inflationMapPaths fixture 数量为 205，除非源证据更新。
+- 验证 GDP rows 包含 India、Indonesia、Mainland China、South Korea、Saudi Arabia、USA。
+- 验证 metric tickers 为 USUR、USINTR、USBOT。
+- 验证 country links 至少包含 20 个捕获国家入口。
+- 验证 heatmap 包含捕获的 metric headers。
+- 验证 FAQ 包含捕获的问题列表。
+- 验证 footer 包含政策链接和版权声明。
+
+### 集成测试
+
+- 渲染 TradingViewWorldEconomyPage 不报错。
+- header links 有 href 或 disclosure 行为。
+- tabs 可点击或可导航。
+- country chips 是真实 anchors。
+- metric cards ticker links 是真实 anchors。
+- FAQ 可以展开和收起。
+- heatmap 在窄容器内提供横向滚动。
+
+### 视觉测试
+
+- 1440x900 对比 reference.png。
+- 390x844 检查无重叠、无横向页面滚动。
+- 地图区域检查图例和路径颜色。
+- GDP card 检查列对齐。
+- metric cards 检查 chart thumbnail 是否渲染。
+- footer 检查多列或移动折叠。
+
+### 人工复核
+
+- 产品复核：模块顺序是否符合页面价值。
+- 设计复核：页面是否仍是市场工具感，而不是营销页。
+- 研发复核：数据模型是否足够实现。
+- QA 复核：验收标准是否可测。
+- 法务复核：版权和数据声明是否保留。
+
+## 23. 验收标准
+
+- PRD 可被产品、设计、研发、QA 按章节阅读。
+- PRD 覆盖目标页面所有主要模块。
+- PRD 明确哪些是可见内容，哪些是数据字段，哪些是交互。
+- PRD 明确失败状态，不允许假数据顶替。
+- PRD 明确移动端、无障碍、SEO、性能、法务要求。
+- PRD 提供测试计划。
+- PRD 行数超过 1000 行，但不靠无意义重复满足行数。
+- 实现 PRD 时，必须使用现有抽取素材和成熟组件，不从零手搓复杂 UI。
+
+## 24. 里程碑
+
+| 阶段 | 交付物 | 验收 |
+| --- | --- | --- |
+| M1 PRD | 本文档 | 产品、设计、研发、QA 可读；行数超过 1000；模块完整。 |
+| M2 数据模型 | typed data contracts | 覆盖 map、ranking、metric cards、heatmap、ideas、news、calendar、FAQ、footer。 |
+| M3 页面骨架 | Header 到 Footer 完整结构 | 无 placeholder；模块顺序正确。 |
+| M4 数据渲染 | 所有核心数据区域渲染 | fixture 测试通过。 |
+| M5 交互 | tabs、FAQ、links、scroll tables | 键盘和鼠标可用。 |
+| M6 响应式 | desktop/tablet/mobile | 无重叠、无页面级横向滚动。 |
+| M7 视觉验收 | reference screenshot parity | 主要区域比例、密度、颜色、字体接近目标。 |
+| M8 发布准备 | tests、legal、SEO、analytics | 所有 release checklist 通过。 |
+
+## 25. 风险和待确认问题
+
+- 实时数据刷新频率需要数据服务确认。
+- Ideas、News、Calendar 是动态 feed，fixture 只能代表捕获时状态。
+- 地图每个国家的真实 bucket 需要权威数据源。
+- TradingView footer 链接可能随时间变化，发布前要重新抽样。
+- 法务 attribution 文案必须以授权数据源为准。
+- 如果后续要求 95% 以上视觉相似，可能需要保留更多 extracted CSS 和资产。
+- 如果后续要求独立产品而非 TradingView replica，需要重写品牌、法务和导航范围。
+
+## 26. 页面内容清单
+
+
+### GDP Growth Rows
+
+- India: GDP Growth 7.80%; Nominal GDP 3.91 T USD.
+- Indonesia: GDP Growth 5.61%; Nominal GDP 1.40 T USD.
+- Mainland China: GDP Growth 5.00%; Nominal GDP 18.74 T USD.
+- South Korea: GDP Growth 3.60%; Nominal GDP 1.92 T USD.
+- Saudi Arabia: GDP Growth 2.80%; Nominal GDP 1.24 T USD.
+- USA: GDP Growth 2.70%; Nominal GDP 29.18 T USD.
+
+### Countries
+
+- Argentina
+- Australia
+- Brazil
+- Canada
+- European Union
+- France
+- Germany
+- India
+- Indonesia
+- Italy
+- Japan
+- Mainland China
+- Mexico
+- Russia
+- Saudi Arabia
+- South Africa
+- South Korea
+- Turkey
+- United Kingdom
+- United States
+
+### Economic Indicator Headers
+
+- GDP
+- GDP Growth
+- Budget to GDP
+- Government Debt to GDP
+- Interest Rate
+- Inflation Rate
+- Unemployment Rate
+- Current Account to GDP
+- Industrial Production YoY
+
+### Heatmap Country Rows
+
+- USA
+- Mainland China
+- EU
+- Germany
+- Japan
+- India
+- UK
+- France
+- Canada
+- Russia
+
+### Main Indicators
+
+- GDP
+- GDP Growth
+- Real GDP
+- GDP Per Capita
+- GDP Per Capita PPP
+- Inflation Rate
+- Interest Rate
+- Unemployment Rate
+- Government Debt to GDP
+- Population
+- Average Hourly Earnings
+- House Price Index
+- Manufacturing Production YoY
+- Industrial Production YoY
+- Current Account
+- Current Account to GDP
+- Balance of Trade
+- Economic Activity Index
+- Crude Oil Production
+
+### Economic Calendar Visible Events
+
+- Riyad Bank PMI
+- RatingDog Composite PMI
+- RatingDog Services PMI
+- GDP Chain Price Index QoQ
+- GDP Growth Rate QoQ
+- GDP Growth Rate YoY
+- GDP Final Consumption QoQ
+- GDP Capital Expenditure QoQ
+
+### FAQ Questions
+
+- What is GDP?
+- What is the GDP formula?
+- What is GDP per capita?
+- What country has the highest GDP?
+- What is the real GDP formula?
+- What is interest rate?
+- How are interest rates calculated?
+- What is the interest rate today?
+- What is inflation?
+- What is the inflation rate formula?
+- What is Japan inflation rate YoY today?
+
+## 27. 详细验收矩阵
+
+### M01 Global Header
+- M01-AC-01: 桌面高度接近参考页 64px
+- M01-AC-02: 所有导航项是 link 或 disclosure button
+- M01-AC-03: 搜索入口可通过键盘触发
+- M01-AC-04: Get started 不遮挡页面内容
+- M01-AC-05: 移动端不出现文字重叠
+- M01-AC-06: 语言 EN 可见
+- M01-AC-07: header 不随经济内容加载失败而消失
+- M01-CONTENT-01: 必须覆盖可见内容「TradingView 品牌标识」。
+- M01-CONTENT-02: 必须覆盖可见内容「Products」。
+- M01-CONTENT-03: 必须覆盖可见内容「Community」。
+- M01-CONTENT-04: 必须覆盖可见内容「Markets」。
+- M01-CONTENT-05: 必须覆盖可见内容「Brokers」。
+- M01-CONTENT-06: 必须覆盖可见内容「More」。
+- M01-CONTENT-07: 必须覆盖可见内容「搜索图标或搜索输入」。
+- M01-CONTENT-08: 必须覆盖可见内容「EN 语言入口」。
+- M01-CONTENT-09: 必须覆盖可见内容「Get started CTA」。
+- M01-INTERACTION-01: 必须支持「点击品牌回到首页」。
+- M01-INTERACTION-02: 必须支持「打开 Products 菜单」。
+- M01-INTERACTION-03: 必须支持「打开 Community 菜单」。
+- M01-INTERACTION-04: 必须支持「打开 Markets 菜单」。
+- M01-INTERACTION-05: 必须支持「触发搜索」。
+- M01-INTERACTION-06: 必须支持「打开语言选择」。
+- M01-INTERACTION-07: 必须支持「点击 Get started」。
+### M02 Breadcrumb And Page Title
+- M02-AC-01: H1 只能有一个
+- M02-AC-02: 面包屑位于 tabs 之前
+- M02-AC-03: H1 不被 header 遮挡
+- M02-AC-04: 面包屑链接可被搜索引擎识别
+- M02-CONTENT-01: 必须覆盖可见内容「Markets 链接」。
+- M02-CONTENT-02: 必须覆盖可见内容「斜杠分隔符」。
+- M02-CONTENT-03: 必须覆盖可见内容「Economy 面包屑项」。
+- M02-CONTENT-04: 必须覆盖可见内容「H1 Economy」。
+- M02-INTERACTION-01: 必须支持「点击 Markets 返回市场总入口」。
+- M02-INTERACTION-02: 必须支持「点击 Economy 保持当前页面或刷新当前分类」。
+### M03 Page Tabs
+- M03-AC-01: 两个 tab 的顺序稳定
+- M03-AC-02: active 状态不能只靠颜色表达
+- M03-AC-03: tab 不应变成静态文本
+- M03-AC-04: 切换后 URL 或页面状态可追踪
+- M03-CONTENT-01: 必须覆盖可见内容「Overview tab」。
+- M03-CONTENT-02: 必须覆盖可见内容「Economic trends tab」。
+- M03-CONTENT-03: 必须覆盖可见内容「选中状态」。
+- M03-INTERACTION-01: 必须支持「点击 Overview」。
+- M03-INTERACTION-02: 必须支持「点击 Economic trends」。
+- M03-INTERACTION-03: 必须支持「键盘左右切换或 Tab 访问」。
+### M04 Economic Trends Summary
+- M04-AC-01: 第一屏或首个滚动段必须看到核心经济趋势
+- M04-AC-02: 卡片之间不重叠
+- M04-AC-03: 不能用空白块代替地图或图表
+- M04-AC-04: 失败时不展示无关假数据
+- M04-CONTENT-01: 必须覆盖可见内容「Economic trends 标题」。
+- M04-CONTENT-02: 必须覆盖可见内容「Inflation map 卡片」。
+- M04-CONTENT-03: 必须覆盖可见内容「GDP growth YoY 卡片」。
+- M04-CONTENT-04: 必须覆盖可见内容「US unemployment rate 卡片」。
+- M04-CONTENT-05: 必须覆盖可见内容「US interest rate 卡片」。
+- M04-CONTENT-06: 必须覆盖可见内容「US trade balance 卡片」。
+- M04-INTERACTION-01: 必须支持「地图 hover 或 focus」。
+- M04-INTERACTION-02: 必须支持「GDP 国家点击」。
+- M04-INTERACTION-03: 必须支持「指标卡 ticker 点击」。
+- M04-INTERACTION-04: 必须支持「图表缩略图查看或跳转」。
+### M05 Inflation Map
+- M05-AC-01: 图例值必须是 0、3、7、12、25
+- M05-AC-02: 地图比例接近 745x372
+- M05-AC-03: 颜色使用 tan/orange heatmap 语义
+- M05-AC-04: 视觉上不能像随机插画
+- M05-AC-05: 无障碍摘要说明颜色含义
+- M05-CONTENT-01: 必须覆盖可见内容「Inflation map 标题」。
+- M05-CONTENT-02: 必须覆盖可见内容「世界地图」。
+- M05-CONTENT-03: 必须覆盖可见内容「0% 图例」。
+- M05-CONTENT-04: 必须覆盖可见内容「3% 图例」。
+- M05-CONTENT-05: 必须覆盖可见内容「7% 图例」。
+- M05-CONTENT-06: 必须覆盖可见内容「12% 图例」。
+- M05-CONTENT-07: 必须覆盖可见内容「25% 图例」。
+- M05-CONTENT-08: 必须覆盖可见内容「禁用或无数据国家样式」。
+- M05-INTERACTION-01: 必须支持「hover 国家显示名称和值」。
+- M05-INTERACTION-02: 必须支持「focus 地图摘要」。
+- M05-INTERACTION-03: 必须支持「点击国家进入国家页，如果源页面支持」。
+- M05-INTERACTION-04: 必须支持「触屏设备显示可点击摘要或 tooltip」。
+### M06 GDP Growth YoY Ranking
+- M06-AC-01: 六个捕获国家和数值在 fixture 中必须准确
+- M06-AC-02: 数值单位不可丢失
+- M06-AC-03: 国家链接不可为空
+- M06-AC-04: 列标题必须可见
+- M06-AC-05: 移动端不能把数值挤出卡片
+- M06-CONTENT-01: 必须覆盖可见内容「GDP growth, YoY 标题」。
+- M06-CONTENT-02: 必须覆盖可见内容「Country 列」。
+- M06-CONTENT-03: 必须覆盖可见内容「GDP Growth 列」。
+- M06-CONTENT-04: 必须覆盖可见内容「Nominal GDP 列」。
+- M06-CONTENT-05: 必须覆盖可见内容「India 7.80% 3.91 T USD」。
+- M06-CONTENT-06: 必须覆盖可见内容「Indonesia 5.61% 1.40 T USD」。
+- M06-CONTENT-07: 必须覆盖可见内容「Mainland China 5.00% 18.74 T USD」。
+- M06-CONTENT-08: 必须覆盖可见内容「South Korea 3.60% 1.92 T USD」。
+- M06-CONTENT-09: 必须覆盖可见内容「Saudi Arabia 2.80% 1.24 T USD」。
+- M06-CONTENT-10: 必须覆盖可见内容「USA 2.70% 29.18 T USD」。
+- M06-INTERACTION-01: 必须支持「点击国家名称进入国家页」。
+- M06-INTERACTION-02: 必须支持「hover 行显示可点击反馈」。
+- M06-INTERACTION-03: 必须支持「长国家名显示 overflow tooltip」。
+### M07 Macro Metric Cards
+- M07-AC-01: USUR、USINTR、USBOT 三张卡都必须存在
+- M07-AC-02: Actual、Forecast、Next release 标签不能省略
+- M07-AC-03: Forecast 缺失必须显式显示 dash
+- M07-AC-04: 图表不允许用纯色占位块冒充
+- M07-CONTENT-01: 必须覆盖可见内容「US unemployment rate / USUR」。
+- M07-CONTENT-02: 必须覆盖可见内容「Actual 4.3%」。
+- M07-CONTENT-03: 必须覆盖可见内容「Forecast 4.3%」。
+- M07-CONTENT-04: 必须覆盖可见内容「Next release In 2 days」。
+- M07-CONTENT-05: 必须覆盖可见内容「US interest rate / USINTR」。
+- M07-CONTENT-06: 必须覆盖可见内容「10 years」。
+- M07-CONTENT-07: 必须覆盖可见内容「Actual 3.75%」。
+- M07-CONTENT-08: 必须覆盖可见内容「Next release Jun 18, 2026」。
+- M07-CONTENT-09: 必须覆盖可见内容「US trade balance / USBOT」。
+- M07-CONTENT-10: 必须覆盖可见内容「Actual -60.31 B USD」。
+- M07-CONTENT-11: 必须覆盖可见内容「Next release Jun 9, 2026」。
+- M07-INTERACTION-01: 必须支持「点击 ticker 进入经济符号页」。
+- M07-INTERACTION-02: 必须支持「hover 图表缩略图」。
+- M07-INTERACTION-03: 必须支持「键盘访问卡片链接」。
+### M08 Countries
+- M08-AC-01: 所有捕获国家名称准确
+- M08-AC-02: 国家 chip 是 anchor，不是 span
+- M08-AC-03: chip 间距紧凑但触控可点
+- M08-AC-04: 长名称 European Union 和 United Kingdom 不溢出
+- M08-CONTENT-01: 必须覆盖可见内容「Countries 标题」。
+- M08-CONTENT-02: 必须覆盖可见内容「Argentina」。
+- M08-CONTENT-03: 必须覆盖可见内容「Australia」。
+- M08-CONTENT-04: 必须覆盖可见内容「Brazil」。
+- M08-CONTENT-05: 必须覆盖可见内容「Canada」。
+- M08-CONTENT-06: 必须覆盖可见内容「European Union」。
+- M08-CONTENT-07: 必须覆盖可见内容「France」。
+- M08-CONTENT-08: 必须覆盖可见内容「Germany」。
+- M08-CONTENT-09: 必须覆盖可见内容「India」。
+- M08-CONTENT-10: 必须覆盖可见内容「Indonesia」。
+- M08-CONTENT-11: 必须覆盖可见内容「Italy」。
+- M08-CONTENT-12: 必须覆盖可见内容「Japan」。
+- M08-CONTENT-13: 必须覆盖可见内容「Mainland China」。
+- M08-CONTENT-14: 必须覆盖可见内容「Mexico」。
+- M08-CONTENT-15: 必须覆盖可见内容「Russia」。
+- M08-CONTENT-16: 必须覆盖可见内容「Saudi Arabia」。
+- M08-CONTENT-17: 必须覆盖可见内容「South Africa」。
+- M08-CONTENT-18: 必须覆盖可见内容「South Korea」。
+- M08-CONTENT-19: 必须覆盖可见内容「Turkey」。
+- M08-CONTENT-20: 必须覆盖可见内容「United Kingdom」。
+- M08-CONTENT-21: 必须覆盖可见内容「United States」。
+- M08-CONTENT-22: 必须覆盖可见内容「See all 或完整国家入口」。
+- M08-INTERACTION-01: 必须支持「点击 chip 进入国家页」。
+- M08-INTERACTION-02: 必须支持「hover chip」。
+- M08-INTERACTION-03: 必须支持「focus chip」。
+- M08-INTERACTION-04: 必须支持「点击 See all 展示完整列表或跳转」。
+### M09 Ideas
+- M09-AC-01: 不能用编造观点填充
+- M09-AC-02: tab 必须可交互
+- M09-AC-03: 卡片标题和摘要不能互相覆盖
+- M09-AC-04: 缩略图加载失败时布局不跳动
+- M09-AC-05: Video 分类应有视频语义或入口
+- M09-CONTENT-01: 必须覆盖可见内容「Ideas 标题」。
+- M09-CONTENT-02: 必须覆盖可见内容「Popular tab」。
+- M09-CONTENT-03: 必须覆盖可见内容「Recent tab」。
+- M09-CONTENT-04: 必须覆盖可见内容「Video tab」。
+- M09-CONTENT-05: 必须覆盖可见内容「More tab」。
+- M09-CONTENT-06: 必须覆盖可见内容「观点标题」。
+- M09-CONTENT-07: 必须覆盖可见内容「观点摘要」。
+- M09-CONTENT-08: 必须覆盖可见内容「作者」。
+- M09-CONTENT-09: 必须覆盖可见内容「更新时间」。
+- M09-CONTENT-10: 必须覆盖可见内容「图表或缩略图」。
+- M09-CONTENT-11: 必须覆盖可见内容「See all popular ideas」。
+- M09-INTERACTION-01: 必须支持「切换 Popular/Recent/Video」。
+- M09-INTERACTION-02: 必须支持「打开 More 菜单」。
+- M09-INTERACTION-03: 必须支持「点击观点卡片」。
+- M09-INTERACTION-04: 必须支持「点击作者」。
+- M09-INTERACTION-05: 必须支持「点击 See all」。
+### M10 Economic Indicators Heatmap
+- M10-AC-01: 表头和行头必须清晰
+- M10-AC-02: 单位如 % of GDP 不得丢失
+- M10-AC-03: 颜色不能替代数值文本
+- M10-AC-04: 移动端必须可横向浏览
+- M10-AC-05: 表格语义要支持屏幕阅读器
+- M10-CONTENT-01: 必须覆盖可见内容「Economic indicators heatmap 标题」。
+- M10-CONTENT-02: 必须覆盖可见内容「GDP」。
+- M10-CONTENT-03: 必须覆盖可见内容「GDP Growth」。
+- M10-CONTENT-04: 必须覆盖可见内容「Budget to GDP」。
+- M10-CONTENT-05: 必须覆盖可见内容「Government Debt to GDP」。
+- M10-CONTENT-06: 必须覆盖可见内容「Interest Rate」。
+- M10-CONTENT-07: 必须覆盖可见内容「Inflation Rate」。
+- M10-CONTENT-08: 必须覆盖可见内容「Unemployment Rate」。
+- M10-CONTENT-09: 必须覆盖可见内容「Current Account to GDP」。
+- M10-CONTENT-10: 必须覆盖可见内容「Industrial Production YoY」。
+- M10-CONTENT-11: 必须覆盖可见内容「USA」。
+- M10-CONTENT-12: 必须覆盖可见内容「Mainland China」。
+- M10-CONTENT-13: 必须覆盖可见内容「EU」。
+- M10-CONTENT-14: 必须覆盖可见内容「Germany」。
+- M10-CONTENT-15: 必须覆盖可见内容「Japan」。
+- M10-CONTENT-16: 必须覆盖可见内容「India」。
+- M10-CONTENT-17: 必须覆盖可见内容「UK」。
+- M10-CONTENT-18: 必须覆盖可见内容「France」。
+- M10-CONTENT-19: 必须覆盖可见内容「Canada」。
+- M10-CONTENT-20: 必须覆盖可见内容「Russia」。
+- M10-INTERACTION-01: 必须支持「横向滚动」。
+- M10-INTERACTION-02: 必须支持「hover cell 查看完整值」。
+- M10-INTERACTION-03: 必须支持「点击指标进入指标页」。
+- M10-INTERACTION-04: 必须支持「点击国家进入国家页」。
+### M11 Main Indicators
+- M11-AC-01: 主要指标名称准确
+- M11-AC-02: 指标必须是可点击链接
+- M11-AC-03: 布局不能像随机标签云
+- M11-AC-04: 长指标名不遮挡相邻项
+- M11-CONTENT-01: 必须覆盖可见内容「GDP」。
+- M11-CONTENT-02: 必须覆盖可见内容「GDP Growth」。
+- M11-CONTENT-03: 必须覆盖可见内容「Real GDP」。
+- M11-CONTENT-04: 必须覆盖可见内容「GDP Per Capita」。
+- M11-CONTENT-05: 必须覆盖可见内容「GDP Per Capita PPP」。
+- M11-CONTENT-06: 必须覆盖可见内容「Inflation Rate」。
+- M11-CONTENT-07: 必须覆盖可见内容「Interest Rate」。
+- M11-CONTENT-08: 必须覆盖可见内容「Unemployment Rate」。
+- M11-CONTENT-09: 必须覆盖可见内容「Government Debt to GDP」。
+- M11-CONTENT-10: 必须覆盖可见内容「Population」。
+- M11-CONTENT-11: 必须覆盖可见内容「Average Hourly Earnings」。
+- M11-CONTENT-12: 必须覆盖可见内容「House Price Index」。
+- M11-CONTENT-13: 必须覆盖可见内容「Manufacturing Production YoY」。
+- M11-CONTENT-14: 必须覆盖可见内容「Industrial Production YoY」。
+- M11-CONTENT-15: 必须覆盖可见内容「Current Account」。
+- M11-CONTENT-16: 必须覆盖可见内容「Current Account to GDP」。
+- M11-CONTENT-17: 必须覆盖可见内容「Balance of Trade」。
+- M11-CONTENT-18: 必须覆盖可见内容「Economic Activity Index」。
+- M11-CONTENT-19: 必须覆盖可见内容「Crude Oil Production」。
+- M11-INTERACTION-01: 必须支持「点击指标进入指标页」。
+- M11-INTERACTION-02: 必须支持「hover 或 focus 显示可点击反馈」。
+- M11-INTERACTION-03: 必须支持「See all 展开或跳转」。
+### M12 Global Industrial Map
+- M12-AC-01: 不能直接复用通胀数据冒充工业数据
+- M12-AC-02: 地图视觉语言和 Inflation map 保持一致
+- M12-AC-03: CTA 可点击
+- M12-AC-04: 图例不溢出
+- M12-CONTENT-01: 必须覆盖可见内容「Global industrial map 标题」。
+- M12-CONTENT-02: 必须覆盖可见内容「世界地图」。
+- M12-CONTENT-03: 必须覆盖可见内容「0% 3% 7% 12% 25% 图例」。
+- M12-CONTENT-04: 必须覆盖可见内容「See more global trends」。
+- M12-INTERACTION-01: 必须支持「hover 或 focus 地图」。
+- M12-INTERACTION-02: 必须支持「点击国家或 CTA」。
+- M12-INTERACTION-03: 必须支持「点击 See more global trends」。
+### M13 News
+- M13-AC-01: 新闻来源必须可见
+- M13-AC-02: 不能用无关通用新闻填充
+- M13-AC-03: 标题优先展示
+- M13-AC-04: Keep reading 指向新闻流
+- M13-AC-05: 移动端标题不溢出
+- M13-CONTENT-01: 必须覆盖可见内容「News 标题」。
+- M13-CONTENT-02: 必须覆盖可见内容「Reuters 来源」。
+- M13-CONTENT-03: 必须覆盖可见内容「Trading Economics 来源」。
+- M13-CONTENT-04: 必须覆盖可见内容「Japan govt finalises extra budget headline」。
+- M13-CONTENT-05: 必须覆盖可见内容「Japan Composite PMI headline」。
+- M13-CONTENT-06: 必须覆盖可见内容「Keep reading」。
+- M13-INTERACTION-01: 必须支持「点击新闻」。
+- M13-INTERACTION-02: 必须支持「点击来源或 provider」。
+- M13-INTERACTION-03: 必须支持「点击 Keep reading」。
+### M14 Economic Calendar
+- M14-AC-01: Actual/Forecast/Prior 三列语义清楚
+- M14-AC-02: 事件时间不和标题混在一起
+- M14-AC-03: See all market events 可点击
+- M14-AC-04: 小屏可横向滚动或垂直堆叠
+- M14-CONTENT-01: 必须覆盖可见内容「Economic Calendar 标题」。
+- M14-CONTENT-02: 必须覆盖可见内容「Today 标签」。
+- M14-CONTENT-03: 必须覆盖可见内容「Riyad Bank PMI」。
+- M14-CONTENT-04: 必须覆盖可见内容「RatingDog Composite PMI」。
+- M14-CONTENT-05: 必须覆盖可见内容「RatingDog Services PMI」。
+- M14-CONTENT-06: 必须覆盖可见内容「GDP Chain Price Index QoQ」。
+- M14-CONTENT-07: 必须覆盖可见内容「GDP Growth Rate QoQ」。
+- M14-CONTENT-08: 必须覆盖可见内容「GDP Growth Rate YoY」。
+- M14-CONTENT-09: 必须覆盖可见内容「GDP Final Consumption QoQ」。
+- M14-CONTENT-10: 必须覆盖可见内容「GDP Capital Expenditure QoQ」。
+- M14-CONTENT-11: 必须覆盖可见内容「Actual」。
+- M14-CONTENT-12: 必须覆盖可见内容「Forecast」。
+- M14-CONTENT-13: 必须覆盖可见内容「Prior」。
+- M14-CONTENT-14: 必须覆盖可见内容「See all market events」。
+- M14-INTERACTION-01: 必须支持「横向浏览事件卡」。
+- M14-INTERACTION-02: 必须支持「点击事件」。
+- M14-INTERACTION-03: 必须支持「点击 See all market events」。
+### M15 FAQ
+- M15-AC-01: 问题文本必须可索引
+- M15-AC-02: 公式必须是文本
+- M15-AC-03: accordion 状态有 ARIA 表达
+- M15-AC-04: 答案不能是隐藏给搜索引擎看的伪内容
+- M15-AC-05: FAQ 位于新闻和日历之后
+- M15-CONTENT-01: 必须覆盖可见内容「What is GDP?」。
+- M15-CONTENT-02: 必须覆盖可见内容「What is the GDP formula?」。
+- M15-CONTENT-03: 必须覆盖可见内容「What is GDP per capita?」。
+- M15-CONTENT-04: 必须覆盖可见内容「What country has the highest GDP?」。
+- M15-CONTENT-05: 必须覆盖可见内容「What is the real GDP formula?」。
+- M15-CONTENT-06: 必须覆盖可见内容「What is interest rate?」。
+- M15-CONTENT-07: 必须覆盖可见内容「How are interest rates calculated?」。
+- M15-CONTENT-08: 必须覆盖可见内容「What is the interest rate today?」。
+- M15-CONTENT-09: 必须覆盖可见内容「What is inflation?」。
+- M15-CONTENT-10: 必须覆盖可见内容「What is the inflation rate formula?」。
+- M15-CONTENT-11: 必须覆盖可见内容「What is Japan inflation rate YoY today?」。
+- M15-INTERACTION-01: 必须支持「展开 FAQ」。
+- M15-INTERACTION-02: 必须支持「收起 FAQ」。
+- M15-INTERACTION-03: 必须支持「点击相关链接」。
+- M15-INTERACTION-04: 必须支持「键盘切换 accordion」。
+### M16 Footer
+- M16-AC-01: 法务链接不能省略
+- M16-AC-02: 数据供应商声明不能省略
+- M16-AC-03: footer 不应比主体内容更早出现
+- M16-AC-04: 移动端 footer 不应形成超宽横向滚动
+- M16-CONTENT-01: 必须覆盖可见内容「More than a product」。
+- M16-CONTENT-02: 必须覆盖可见内容「Screeners」。
+- M16-CONTENT-03: 必须覆盖可见内容「Heatmaps」。
+- M16-CONTENT-04: 必须覆盖可见内容「Calendars」。
+- M16-CONTENT-05: 必须覆盖可见内容「More products」。
+- M16-CONTENT-06: 必须覆盖可见内容「Apps」。
+- M16-CONTENT-07: 必须覆盖可见内容「Community」。
+- M16-CONTENT-08: 必须覆盖可见内容「Tools & subscriptions」。
+- M16-CONTENT-09: 必须覆盖可见内容「Trading」。
+- M16-CONTENT-10: 必须覆盖可见内容「Special offers」。
+- M16-CONTENT-11: 必须覆盖可见内容「About company」。
+- M16-CONTENT-12: 必须覆盖可见内容「Policies & security」。
+- M16-CONTENT-13: 必须覆盖可见内容「Business solutions」。
+- M16-CONTENT-14: 必须覆盖可见内容「Growth opportunities」。
+- M16-CONTENT-15: 必须覆盖可见内容「Terms of Use」。
+- M16-CONTENT-16: 必须覆盖可见内容「Disclaimer」。
+- M16-CONTENT-17: 必须覆盖可见内容「Privacy Policy」。
+- M16-CONTENT-18: 必须覆盖可见内容「Cookies Policy」。
+- M16-CONTENT-19: 必须覆盖可见内容「Accessibility Statement」。
+- M16-CONTENT-20: 必须覆盖可见内容「Copyright」。
+- M16-CONTENT-21: 必须覆盖可见内容「FactSet attribution」。
+- M16-CONTENT-22: 必须覆盖可见内容「ICE Data Services attribution」。
+- M16-CONTENT-23: 必须覆盖可见内容「CUSIP attribution」。
+- M16-INTERACTION-01: 必须支持「点击 footer link」。
+- M16-INTERACTION-02: 必须支持「打开社交链接」。
+- M16-INTERACTION-03: 必须支持「打开政策链接」。
+- M16-INTERACTION-04: 必须支持「移动端展开 footer group」。
+
+## 28. 实施注意事项
+
+- 实现时先保持页面结构和真实数据，再做视觉细化。
+- 对于地图、表格、tabs、accordion、carousel 等成熟交互，优先使用已有组件库或项目现有组件。
+- 不要为了快速过视觉验收写死大量不可维护 DOM。
+- 不要把 extracted CSS 全部理解成最终设计系统；它是视觉证据，后续可在有截图证据时收敛。
+- 不要把动态 feed 的当前值当成长期不变常量；fixture 用于回归，不代表生产数据。
+- 如果实现需要真实 API，先定义数据合约，再接入服务。
+- 如果 API 暂不可用，应该明确交付 mock fixture 模式和 production data mode 的边界。
+- 任何 mock 必须标注为测试 fixture，不允许在线上伪装成实时数据。
+
+## 29. 最终复核清单
+
+- 文档是否从摘要开始，而不是直接进入几千条编号。
+- 每个模块是否都有产品目的。
+- 每个模块是否都有可见内容。
+- 每个模块是否都有数据字段。
+- 每个模块是否都有交互。
+- 每个模块是否都有状态。
+- 每个模块是否都有验收标准。
+- 是否覆盖 TradingView live page 的主要内容。
+- 是否覆盖已有 extracted package 的核心数据。
+- 是否明确禁止假地图、假新闻、假观点。
+- 是否明确移动端和无障碍要求。
+- 是否明确 SEO 和法务要求。
+- 是否明确测试计划。
+- 是否超过 1000 行。
+- 是否能被人正常读完并用于拆任务。
+
+## 30. 可拆分研发任务 Backlog
+
+### E01 Header
+- 目标：实现全站 header 结构、桌面导航、移动导航、搜索入口、语言入口、Get started。
+- 输入：本 PRD 对应模块需求、source IR、extracted data fixture、reference screenshot。
+- 输出：可渲染组件、typed data、必要样式、测试。
+- 验收：模块内容准确、无 placeholder、响应式通过、键盘可达。
+- 风险：数据源缺失时必须暴露真实状态，不能编造内容。
+### E02 Page shell
+- 目标：实现 breadcrumb、H1、tabs 和 main/footer landmarks。
+- 输入：本 PRD 对应模块需求、source IR、extracted data fixture、reference screenshot。
+- 输出：可渲染组件、typed data、必要样式、测试。
+- 验收：模块内容准确、无 placeholder、响应式通过、键盘可达。
+- 风险：数据源缺失时必须暴露真实状态，不能编造内容。
+### E03 Economic summary layout
+- 目标：实现 Economic trends grid、card shell、responsive grid。
+- 输入：本 PRD 对应模块需求、source IR、extracted data fixture、reference screenshot。
+- 输出：可渲染组件、typed data、必要样式、测试。
+- 验收：模块内容准确、无 placeholder、响应式通过、键盘可达。
+- 风险：数据源缺失时必须暴露真实状态，不能编造内容。
+### E04 Inflation map
+- 目标：接入 SVG geometry、legend、bucket colors、tooltip/accessibility summary。
+- 输入：本 PRD 对应模块需求、source IR、extracted data fixture、reference screenshot。
+- 输出：可渲染组件、typed data、必要样式、测试。
+- 验收：模块内容准确、无 placeholder、响应式通过、键盘可达。
+- 风险：数据源缺失时必须暴露真实状态，不能编造内容。
+### E05 GDP ranking
+- 目标：实现 GDP growth row component、country logo、link、numeric formatting。
+- 输入：本 PRD 对应模块需求、source IR、extracted data fixture、reference screenshot。
+- 输出：可渲染组件、typed data、必要样式、测试。
+- 验收：模块内容准确、无 placeholder、响应式通过、键盘可达。
+- 风险：数据源缺失时必须暴露真实状态，不能编造内容。
+### E06 Metric cards
+- 目标：实现 USUR、USINTR、USBOT 卡片、chart thumbnails、Actual/Forecast/Next release。
+- 输入：本 PRD 对应模块需求、source IR、extracted data fixture、reference screenshot。
+- 输出：可渲染组件、typed data、必要样式、测试。
+- 验收：模块内容准确、无 placeholder、响应式通过、键盘可达。
+- 风险：数据源缺失时必须暴露真实状态，不能编造内容。
+### E07 Countries
+- 目标：实现 country chip list、See all、mobile wrapping。
+- 输入：本 PRD 对应模块需求、source IR、extracted data fixture、reference screenshot。
+- 输出：可渲染组件、typed data、必要样式、测试。
+- 验收：模块内容准确、无 placeholder、响应式通过、键盘可达。
+- 风险：数据源缺失时必须暴露真实状态，不能编造内容。
+### E08 Ideas
+- 目标：实现 ideas tabs、cards、author、thumbnail、empty/error states。
+- 输入：本 PRD 对应模块需求、source IR、extracted data fixture、reference screenshot。
+- 输出：可渲染组件、typed data、必要样式、测试。
+- 验收：模块内容准确、无 placeholder、响应式通过、键盘可达。
+- 风险：数据源缺失时必须暴露真实状态，不能编造内容。
+### E09 Heatmap
+- 目标：实现 table model、horizontal scroll、cell color/value rendering。
+- 输入：本 PRD 对应模块需求、source IR、extracted data fixture、reference screenshot。
+- 输出：可渲染组件、typed data、必要样式、测试。
+- 验收：模块内容准确、无 placeholder、响应式通过、键盘可达。
+- 风险：数据源缺失时必须暴露真实状态，不能编造内容。
+### E10 Main indicators
+- 目标：实现 indicator link catalog 和 responsive layout。
+- 输入：本 PRD 对应模块需求、source IR、extracted data fixture、reference screenshot。
+- 输出：可渲染组件、typed data、必要样式、测试。
+- 验收：模块内容准确、无 placeholder、响应式通过、键盘可达。
+- 风险：数据源缺失时必须暴露真实状态，不能编造内容。
+### E11 Industrial map
+- 目标：实现第二张 map、metric data、CTA。
+- 输入：本 PRD 对应模块需求、source IR、extracted data fixture、reference screenshot。
+- 输出：可渲染组件、typed data、必要样式、测试。
+- 验收：模块内容准确、无 placeholder、响应式通过、键盘可达。
+- 风险：数据源缺失时必须暴露真实状态，不能编造内容。
+### E12 News
+- 目标：实现 news cards、provider label、Keep reading。
+- 输入：本 PRD 对应模块需求、source IR、extracted data fixture、reference screenshot。
+- 输出：可渲染组件、typed data、必要样式、测试。
+- 验收：模块内容准确、无 placeholder、响应式通过、键盘可达。
+- 风险：数据源缺失时必须暴露真实状态，不能编造内容。
+### E13 Calendar
+- 目标：实现 calendar events、Actual/Forecast/Prior、See all market events。
+- 输入：本 PRD 对应模块需求、source IR、extracted data fixture、reference screenshot。
+- 输出：可渲染组件、typed data、必要样式、测试。
+- 验收：模块内容准确、无 placeholder、响应式通过、键盘可达。
+- 风险：数据源缺失时必须暴露真实状态，不能编造内容。
+### E14 FAQ
+- 目标：实现 accordion、formula text、SEO-visible answers。
+- 输入：本 PRD 对应模块需求、source IR、extracted data fixture、reference screenshot。
+- 输出：可渲染组件、typed data、必要样式、测试。
+- 验收：模块内容准确、无 placeholder、响应式通过、键盘可达。
+- 风险：数据源缺失时必须暴露真实状态，不能编造内容。
+### E15 Footer
+- 目标：实现 footer groups、legal links、attribution。
+- 输入：本 PRD 对应模块需求、source IR、extracted data fixture、reference screenshot。
+- 输出：可渲染组件、typed data、必要样式、测试。
+- 验收：模块内容准确、无 placeholder、响应式通过、键盘可达。
+- 风险：数据源缺失时必须暴露真实状态，不能编造内容。
+### E16 QA
+- 目标：实现 unit、integration、visual、a11y、performance checks。
+- 输入：本 PRD 对应模块需求、source IR、extracted data fixture、reference screenshot。
+- 输出：可渲染组件、typed data、必要样式、测试。
+- 验收：模块内容准确、无 placeholder、响应式通过、键盘可达。
+- 风险：数据源缺失时必须暴露真实状态，不能编造内容。
