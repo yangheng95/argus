@@ -28,7 +28,7 @@ describe("terminal client", () => {
 
     expect(listTerminalProfiles).toBeFunction();
     expect(openSystemTerminal).toBeFunction();
-    expect(service).toContain('"terminal/profiles"');
+    expect(service).toContain("terminal/profiles?directory=");
     expect(service).toContain('"terminal/open"');
     expect(service).not.toContain("connectTerminal");
     expect(service).not.toContain("apiWebSocketUrl");

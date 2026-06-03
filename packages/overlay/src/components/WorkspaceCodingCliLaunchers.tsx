@@ -44,7 +44,8 @@ export function WorkspaceCodingCliLaunchers() {
   });
 
   async function reloadProfiles() {
-    if (!activeDirectory()) {
+    const directory = activeDirectory();
+    if (!directory) {
       setProfiles([]);
       return;
     }
@@ -52,8 +53,9 @@ export function WorkspaceCodingCliLaunchers() {
     setError("");
     try {
       const [response] = await Promise.all([
-        listCodingCliProfiles(),
+        listCodingCliProfiles(directory),
         reloadTerminalProfileSelection({
+          directory,
           defaultProfileMissingMessage: t("terminal.default_profile_missing"),
         }),
       ]);

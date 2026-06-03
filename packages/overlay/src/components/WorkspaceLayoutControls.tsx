@@ -51,7 +51,8 @@ export function WorkspaceLayoutControls() {
   }
 
   async function reloadProfiles() {
-    if (!activeDirectory()) {
+    const directory = activeDirectory();
+    if (!directory) {
       clearTerminalProfileSelection();
       return;
     }
@@ -59,6 +60,7 @@ export function WorkspaceLayoutControls() {
     setError("");
     try {
       await reloadTerminalProfileSelection({
+        directory,
         defaultProfileMissingMessage: t("terminal.default_profile_missing"),
       });
     } catch (reason) {
