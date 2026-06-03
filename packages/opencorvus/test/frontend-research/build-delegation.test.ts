@@ -68,6 +68,13 @@ describe("frontend-research build delegation", () => {
 
     expect(captured.parentSessionID).toBe("ses_frontend_research")
     expect(captured.autoIteration).toBe(false)
+    expect(captured.includeMcpTools).toBe(false)
+    expect(captured.toolSwitches).toMatchObject({
+      edit: false,
+      write: false,
+      todowrite: false,
+      merge_back: false,
+    })
     expect(captured.target.kind).toBe("request")
     expect(captured.target.text).toContain("no-change research packet")
     expect(captured.target.text).toContain("bounded no-change research packet")

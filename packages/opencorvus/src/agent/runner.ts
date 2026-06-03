@@ -175,7 +175,11 @@ export interface RunAgentSessionInput<C> {
     goalRunID?: string
     attemptID?: string
     contractKind?: "stage-attempt" | "orchestrator-wake"
+    /** Controls Model Context Protocol tool loading for this worker session. */
+    includeMcpTools?: boolean
   }
+  /** Additional per-run registry/runtime tool switches merged after defaults. */
+  toolSwitches?: Record<string, boolean>
   /** Stage-specific extra tool surface + collector. */
   toolKit: AgentToolKit<C>
   /** Stage-specific user-message text. */
@@ -812,10 +816,13 @@ export async function runAgentSession<C>(
   input.signal?.addEventListener("abort", abortPrompt, { once: true })
 
   // ── 6. Invoke SessionPrompt with the agent's extra tools ─────────────
-  const enableMap = promptToolSwitchesForAgentRun({
-    extraToolNames: Object.keys(input.toolKit.tools),
-    kind,
-  })
+  const enableMap = {
+    ...promptToolSwitchesForAgentRun({
+      extraToolNames: Object.keys(input.toolKit.tools),
+      kind,
+    }),
+    ...(input.toolSwitches ?? {}),
+  }
   if (
     input.terminalTool &&
     !(input.terminalTool.toolName in input.toolKit.tools)
@@ -893,6 +900,7 @@ export async function runAgentSession<C>(
     terminalToolContract,
     structuredOutputGuard: input.format?.validate,
     stream: input.stream,
+    includeMcpTools: input.runtimeContract?.includeMcpTools,
   })
   try {
     try {

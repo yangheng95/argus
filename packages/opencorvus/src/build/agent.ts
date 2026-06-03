@@ -281,6 +281,10 @@ export namespace BuildAgent {
     model?: { providerID: string; modelID: string }
     /** Overrides the engine auto-iteration prompt mode for bounded one-pass callers. */
     autoIteration?: boolean
+    /** False disables Model Context Protocol tools for bounded research-only callers. */
+    includeMcpTools?: boolean
+    /** Additional per-run tool switches merged after the build defaults. */
+    toolSwitches?: Record<string, boolean>
     signal?: AbortSignal
     /** Fires after the child build session exists, before model work starts.
      *  Goal builds return the newly opened logical goal_run_id so the runtime
@@ -816,7 +820,9 @@ export namespace BuildAgent {
               goalRunID: runtimeGoalRunID,
               attemptID: runtimeGoalRunID,
               contractKind: "stage-attempt",
+              includeMcpTools: input.includeMcpTools,
             },
+            toolSwitches: input.toolSwitches,
             terminalTool: {
               toolName: "report_build_result",
               isSatisfied: (collector) => Boolean(collector.result),
