@@ -19,6 +19,7 @@ const KNOWN_STAGES = [
   "spec",
   "requirements",
   "frontend-design",
+  "frontend-research",
   "architect",
   "planner",
   "goal",

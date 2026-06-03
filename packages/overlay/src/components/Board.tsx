@@ -17,10 +17,11 @@ import { statusIconName } from "../utils/status-mapping";
 import { activeTone, verdictTone } from "../utils/verdict-tone";
 import { GoalWorkflowList } from "./GoalWorkflowGroup";
 import { RequirementsPanel } from "./RequirementsPanel";
+import { FrontendResearchPanel } from "./FrontendResearchPanel";
 import { ArchitectPanel } from "./ArchitectPanel";
 import { EvaluationCriteriaPanel } from "./EvaluationCriteriaPanel";
 import { InteractionCardList, type InteractionData } from "./InteractionCard";
-import { taskScopeSectionVisibility } from "../utils/task-scope-sections";
+import { taskScopeSectionVisibility, taskScopeWorkflowSectionID } from "../utils/task-scope-sections";
 import { Button } from "./ui/Button";
 import { Icon, type IconName } from "./Icon";
 import { Section } from "./primitives/Section";
@@ -496,6 +497,12 @@ export function Board(props: BoardProps) {
     const reqStep = wf.steps.find((s: any) => s.id === "requirements");
     return reqStep?.status === "running";
   });
+  const frontendResearchStatus = createMemo(() => {
+    const wf = workflow();
+    if (!wf) return "";
+    const step = wf.steps.find((s: any) => s.id === "frontend_research");
+    return String(step?.status || "");
+  });
   const isArchitectGenerating = createMemo(() => {
     const wf = workflow();
     if (!wf) return false;
@@ -514,16 +521,6 @@ export function Board(props: BoardProps) {
   // Map the workflow's current (running) step to a right-pane section id so
   // the section gets `data-phase-state="active"` highlighting. Falls back to
   // the most recently completed/failed step when nothing is running.
-  // Step ID → right-pane section. Pipeline workflow has exactly ONE goal-scope
-  // step now: `build`.
-  const STEP_TO_SECTION: Record<string, string> = {
-    frontend_design: "requirements",
-    requirements: "requirements",
-    architect: "architect",
-    build: "goalWorkflows",
-    deliver: "acceptance",
-    refine: "acceptance",
-  };
   const activeSection = createMemo<string>(() => {
     const interactionsPending = interactions().some(
       (i: any) => i.status === "pending",
@@ -532,17 +529,23 @@ export function Board(props: BoardProps) {
     const wf = workflow();
     if (!wf || !Array.isArray(wf.steps)) return "";
     const running = wf.steps.find((s: any) => s.status === "running");
-    if (running) return STEP_TO_SECTION[running.id] ?? "";
+    if (running) return taskScopeWorkflowSectionID(running.id);
     if (hasActiveAcceptanceRun(board())) return "acceptance";
     let lastDone: any = null;
     for (const s of wf.steps) {
       if (s.status === "completed" || s.status === "failed") lastDone = s;
     }
-    if (lastDone) return STEP_TO_SECTION[lastDone.id] ?? "";
+    if (lastDone) return taskScopeWorkflowSectionID(lastDone.id);
     return "";
   });
   const phaseFor = (id: string): "active" | "" =>
     activeSection() === id ? "active" : "";
+  const workflowStatusTone = (status: string): "" | "accent" | "good" | "bad" => {
+    if (status === "failed") return "bad";
+    if (status === "completed") return "good";
+    if (status === "running") return "accent";
+    return "";
+  };
 
   // Messages feeding the RequirementsPanel / GoalWorkflowList live-stream
   // surfaces. Single source of truth: `cardTreeStore.cards` — the same
@@ -600,6 +603,15 @@ export function Board(props: BoardProps) {
     }
     return out;
   });
+  const frontendResearchMessages = createMemo(() => {
+    const out: any[] = [];
+    for (const stage of ["frontend-research"]) {
+      for (const card of agentCardsForStage(stage)) {
+        out.push(...cardToMessageSegments(card));
+      }
+    }
+    return out;
+  });
 
   return (
     <>
@@ -624,6 +636,24 @@ export function Board(props: BoardProps) {
           to dump the JSON dump into a log viewer or LLM. */}
 
       <div class="workflow-section-stack" data-ui="workflow-section-stack">
+        <Show when={taskScopeSections().frontendResearch}>
+          <SectionFrame
+            id="frontendResearchSection"
+            title={t("workflow.frontend_research")}
+            icon="spec"
+            bodyId="frontendResearchBody"
+            badgeId="frontendResearchBadge"
+            phaseState={phaseFor("frontendResearch")}
+            badgeText={frontendResearchStatus() ? statusLabel(frontendResearchStatus()) : ""}
+            badgeTone={workflowStatusTone(frontendResearchStatus())}
+          >
+            <FrontendResearchPanel
+              status={frontendResearchStatus()}
+              streamingMessages={frontendResearchMessages()}
+            />
+          </SectionFrame>
+        </Show>
+
         <Show when={taskScopeSections().requirements}>
           <SectionFrame
             id="requirementsSection"
