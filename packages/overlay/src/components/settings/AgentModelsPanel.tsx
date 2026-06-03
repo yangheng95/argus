@@ -61,10 +61,6 @@ export default function AgentModelsPanel(props: { scope?: "project" | "session";
   const providerCatalogVersion = createMemo(() =>
     JSON.stringify({
       connected: [...(appStore.providerCatalog?.connected ?? [])].sort(),
-      all: (appStore.providerCatalog?.all ?? []).map((provider: any) => ({
-        id: provider?.id ?? "",
-        models: Object.keys(provider?.models ?? {}).sort(),
-      })),
     }),
   )
 
