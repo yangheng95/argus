@@ -215,9 +215,17 @@ export default function ProvidersPanel() {
     )
   }
 
+  function disabledProviderIds(): Set<string> {
+    const disabled = appStore.config?.disabled_providers
+    if (!Array.isArray(disabled)) return new Set()
+    return new Set(disabled.filter((id: unknown): id is string => typeof id === "string"))
+  }
+
   function configProviders(): Record<string, CustomProvider> {
     const out: Record<string, CustomProvider> = {}
+    const disabled = disabledProviderIds()
     for (const [id, value] of Object.entries(providerConfigs())) {
+      if (disabled.has(id)) continue
       if (isCustomProviderConfig(value)) out[id] = value
     }
     return out
@@ -387,6 +395,7 @@ export default function ProvidersPanel() {
       if (provider.options && Object.keys(provider.options).length === 0) delete provider.options
 
       await updateConfig((cfg) => {
+        removeDisabledProvider(cfg, id)
         cfg.provider = cfg.provider || {}
         cfg.provider[id] = provider
       })
@@ -447,6 +456,41 @@ export default function ProvidersPanel() {
     if (Object.keys(current).length === 0) delete providers[providerId]
     else providers[providerId] = current
     if (Object.keys(providers).length === 0) delete cfg.provider
+  }
+
+  function removeDisabledProvider(cfg: Record<string, any>, providerId: string): void {
+    if (!Array.isArray(cfg.disabled_providers)) return
+    cfg.disabled_providers = cfg.disabled_providers.filter((id: unknown) => id !== providerId)
+    if (cfg.disabled_providers.length === 0) delete cfg.disabled_providers
+  }
+
+  function addDisabledProvider(cfg: Record<string, any>, providerId: string): void {
+    const disabled = Array.isArray(cfg.disabled_providers)
+      ? cfg.disabled_providers.filter((id: unknown): id is string => typeof id === "string")
+      : []
+    if (!disabled.includes(providerId)) disabled.push(providerId)
+    cfg.disabled_providers = disabled
+  }
+
+  function modelBelongsToProvider(value: unknown, providerId: string): boolean {
+    return typeof value === "string" && value.startsWith(`${providerId}/`)
+  }
+
+  function removeProviderModelReferences(cfg: Record<string, any>, providerId: string): void {
+    if (modelBelongsToProvider(cfg.model, providerId)) delete cfg.model
+    if (modelBelongsToProvider(cfg.small_model, providerId)) delete cfg.small_model
+    const agents = cfg.agent && typeof cfg.agent === "object" && !Array.isArray(cfg.agent) ? cfg.agent : null
+    if (!agents) return
+    for (const [agentId, agent] of Object.entries(agents)) {
+      if (!agent || typeof agent !== "object" || Array.isArray(agent)) continue
+      if (modelBelongsToProvider((agent as Record<string, unknown>).model, providerId)) {
+        const next = { ...(agent as Record<string, unknown>) }
+        delete next.model
+        if (Object.keys(next).length === 0) delete agents[agentId]
+        else agents[agentId] = next
+      }
+    }
+    if (Object.keys(agents).length === 0) delete cfg.agent
   }
 
   function providerHasSavedApiKey(id: string): boolean {
@@ -560,6 +604,16 @@ export default function ProvidersPanel() {
           delete cfg.provider[id]
           if (Object.keys(cfg.provider).length === 0) delete cfg.provider
         }
+        addDisabledProvider(cfg, id)
+        removeProviderModelReferences(cfg, id)
+      })
+      await apiJson(`auth/${id}`, { method: "DELETE" })
+      await refreshAuthState()
+      clearApiKeyInput(id)
+      setTestResults((prev) => {
+        const next = new Map(prev)
+        next.delete(id)
+        return next
       })
     } catch (e) {
       console.error("[providers] delete failed", e)
