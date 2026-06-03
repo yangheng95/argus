@@ -76,6 +76,10 @@ function findSchemaDrift(sqlite: BunDatabase): string | undefined {
   }
 }
 
+function hasOrdinaryTables(sqlite: BunDatabase) {
+  return readOrdinaryTableShape(sqlite).size > 0
+}
+
 function configureSqlite(sqlite: BunDatabase) {
   // auto_vacuum must be set before any table is created. For existing DBs
   // opened with auto_vacuum=NONE this pragma is silently ignored — delete
@@ -104,19 +108,7 @@ function openSqlite(dbPath: string) {
   return sqlite
 }
 
-function ensureCurrentSchema(sqlite: BunDatabase, dbPath: string): BunDatabase {
-  try {
-    sqlite.exec(SCHEMA_DDL)
-    const drift = findSchemaDrift(sqlite)
-    if (!drift) return sqlite
-    log.warn("database schema drift detected; recreating database", { path: dbPath, reason: drift })
-  } catch (err) {
-    log.warn("database schema apply failed; recreating database", {
-      path: dbPath,
-      error: err instanceof Error ? err.message : String(err),
-    })
-  }
-
+function recreateWithCurrentSchema(sqlite: BunDatabase, dbPath: string): BunDatabase {
   sqlite.close()
   removeDatabaseFiles(dbPath)
 
@@ -128,6 +120,33 @@ function ensureCurrentSchema(sqlite: BunDatabase, dbPath: string): BunDatabase {
     throw new Error(`Fresh database schema does not match SCHEMA_DDL: ${drift}`)
   }
   return fresh
+}
+
+function ensureCurrentSchema(sqlite: BunDatabase, dbPath: string): BunDatabase {
+  if (hasOrdinaryTables(sqlite)) {
+    const drift = findSchemaDrift(sqlite)
+    if (drift) {
+      log.warn("database schema drift detected; recreating database", { path: dbPath, reason: drift })
+      return recreateWithCurrentSchema(sqlite, dbPath)
+    }
+  }
+
+  try {
+    sqlite.exec(SCHEMA_DDL)
+  } catch (err) {
+    log.warn("database schema apply failed on empty/current database; recreating database", {
+      path: dbPath,
+      error: err instanceof Error ? err.message : String(err),
+    })
+    return recreateWithCurrentSchema(sqlite, dbPath)
+  }
+
+  const drift = findSchemaDrift(sqlite)
+  if (drift) {
+    log.warn("database schema drift detected after schema apply; recreating database", { path: dbPath, reason: drift })
+    return recreateWithCurrentSchema(sqlite, dbPath)
+  }
+  return sqlite
 }
 
 export namespace Database {
