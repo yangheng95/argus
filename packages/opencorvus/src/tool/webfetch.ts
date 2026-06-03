@@ -3,163 +3,224 @@ import { Tool } from "./tool"
 import TurndownService from "turndown"
 import DESCRIPTION from "./webfetch.txt"
 import { abortAfterAny } from "../util/abort"
+import { Truncate } from "./truncation"
 
 const MAX_RESPONSE_SIZE = 5 * 1024 * 1024 // 5MB
 const DEFAULT_TIMEOUT = 30 * 1000 // 30 seconds
 const MAX_TIMEOUT = 120 * 1000 // 2 minutes
+const TEXT_OUTPUT_MARKER_RESERVE_BYTES = 512
+const TEXT_OUTPUT_MAX_BYTES = Truncate.MAX_BYTES - TEXT_OUTPUT_MARKER_RESERVE_BYTES
+
+export const WebFetchDescription = DESCRIPTION
+
+export const WebFetchParameters = z.object({
+  url: z.string().describe("The URL to fetch content from"),
+  format: z
+    .enum(["text", "markdown", "html"])
+    .default("markdown")
+    .describe("The format to return the content in (text, markdown, or html). Defaults to markdown."),
+  timeout: z.number().describe("Optional timeout in seconds (max 120)").optional(),
+})
 
 export const WebFetchTool = Tool.define("webfetch", {
-  description: DESCRIPTION,
-  parameters: z.object({
-    url: z.string().describe("The URL to fetch content from"),
-    format: z
-      .enum(["text", "markdown", "html"])
-      .default("markdown")
-      .describe("The format to return the content in (text, markdown, or html). Defaults to markdown."),
-    timeout: z.number().describe("Optional timeout in seconds (max 120)").optional(),
-  }),
-  async execute(params, ctx) {
-    // Validate URL
-    if (!params.url.startsWith("http://") && !params.url.startsWith("https://")) {
-      throw new Error("URL must start with http:// or https://")
-    }
-
-    await ctx.ask({
-      permission: "webfetch",
-      patterns: [params.url],
-      always: ["*"],
-      metadata: {
-        url: params.url,
-        format: params.format,
-        timeout: params.timeout,
-      },
-    })
-
-    const timeout = Math.min((params.timeout ?? DEFAULT_TIMEOUT / 1000) * 1000, MAX_TIMEOUT)
-
-    const { signal, clearTimeout } = abortAfterAny(timeout, ctx.abort)
-
-    // Build Accept header based on requested format with q parameters for fallbacks
-    let acceptHeader = "*/*"
-    switch (params.format) {
-      case "markdown":
-        acceptHeader = "text/markdown;q=1.0, text/x-markdown;q=0.9, text/plain;q=0.8, text/html;q=0.7, */*;q=0.1"
-        break
-      case "text":
-        acceptHeader = "text/plain;q=1.0, text/markdown;q=0.9, text/html;q=0.8, */*;q=0.1"
-        break
-      case "html":
-        acceptHeader = "text/html;q=1.0, application/xhtml+xml;q=0.9, text/plain;q=0.8, text/markdown;q=0.7, */*;q=0.1"
-        break
-      default:
-        acceptHeader =
-          "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8"
-    }
-    const headers = {
-      "User-Agent":
-        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/143.0.0.0 Safari/537.36",
-      Accept: acceptHeader,
-      "Accept-Language": "en-US,en;q=0.9",
-    }
-
-    const initial = await fetch(params.url, { signal, headers })
-
-    // Retry with honest UA if blocked by Cloudflare bot detection (TLS fingerprint mismatch)
-    const response =
-      initial.status === 403 && initial.headers.get("cf-mitigated") === "challenge"
-        ? await fetch(params.url, { signal, headers: { ...headers, "User-Agent": "opencorvus" } })
-        : initial
-
-    clearTimeout()
-
-    if (!response.ok) {
-      throw new Error(`Request failed with status code: ${response.status}`)
-    }
-
-    // Check content length
-    const contentLength = response.headers.get("content-length")
-    if (contentLength && parseInt(contentLength) > MAX_RESPONSE_SIZE) {
-      throw new Error("Response too large (exceeds 5MB limit)")
-    }
-
-    const arrayBuffer = await response.arrayBuffer()
-    if (arrayBuffer.byteLength > MAX_RESPONSE_SIZE) {
-      throw new Error("Response too large (exceeds 5MB limit)")
-    }
-
-    const contentType = response.headers.get("content-type") || ""
-    const mime = contentType.split(";")[0]?.trim().toLowerCase() || ""
-    const title = `${params.url} (${contentType})`
-
-    // Check if response is an image
-    const isImage = mime.startsWith("image/") && mime !== "image/svg+xml" && mime !== "image/vnd.fastbidsheet"
-
-    if (isImage) {
-      const base64Content = Buffer.from(arrayBuffer).toString("base64")
-      return {
-        title,
-        output: "Image fetched successfully",
-        metadata: {},
-        attachments: [
-          {
-            type: "file",
-            mime,
-            url: `data:${mime};base64,${base64Content}`,
-          },
-        ],
-      }
-    }
-
-    const content = new TextDecoder().decode(arrayBuffer)
-
-    // Handle content based on requested format and actual content type
-    switch (params.format) {
-      case "markdown":
-        if (contentType.includes("text/html")) {
-          const markdown = convertHTMLToMarkdown(content)
-          return {
-            output: markdown,
-            title,
-            metadata: {},
-          }
-        }
-        return {
-          output: content,
-          title,
-          metadata: {},
-        }
-
-      case "text":
-        if (contentType.includes("text/html")) {
-          const text = await extractTextFromHTML(content)
-          return {
-            output: text,
-            title,
-            metadata: {},
-          }
-        }
-        return {
-          output: content,
-          title,
-          metadata: {},
-        }
-
-      case "html":
-        return {
-          output: content,
-          title,
-          metadata: {},
-        }
-
-      default:
-        return {
-          output: content,
-          title,
-          metadata: {},
-        }
-    }
-  },
+  description: WebFetchDescription,
+  parameters: WebFetchParameters,
+  execute: executeWebFetch,
 })
+
+export async function executeWebFetch(params: z.infer<typeof WebFetchParameters>, ctx: Tool.Context) {
+  // Validate URL
+  if (!params.url.startsWith("http://") && !params.url.startsWith("https://")) {
+    throw new Error("URL must start with http:// or https://")
+  }
+
+  await ctx.ask({
+    permission: "webfetch",
+    patterns: [params.url],
+    always: ["*"],
+    metadata: {
+      url: params.url,
+      format: params.format,
+      timeout: params.timeout,
+    },
+  })
+
+  const timeout = Math.min((params.timeout ?? DEFAULT_TIMEOUT / 1000) * 1000, MAX_TIMEOUT)
+
+  const { signal, clearTimeout } = abortAfterAny(timeout, ctx.abort)
+
+  // Build Accept header based on requested format with q parameters for fallbacks
+  let acceptHeader = "*/*"
+  switch (params.format) {
+    case "markdown":
+      acceptHeader = "text/markdown;q=1.0, text/x-markdown;q=0.9, text/plain;q=0.8, text/html;q=0.7, */*;q=0.1"
+      break
+    case "text":
+      acceptHeader = "text/plain;q=1.0, text/markdown;q=0.9, text/html;q=0.8, */*;q=0.1"
+      break
+    case "html":
+      acceptHeader = "text/html;q=1.0, application/xhtml+xml;q=0.9, text/plain;q=0.8, text/markdown;q=0.7, */*;q=0.1"
+      break
+    default:
+      acceptHeader =
+        "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8"
+  }
+  const headers = {
+    "User-Agent":
+      "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/143.0.0.0 Safari/537.36",
+    Accept: acceptHeader,
+    "Accept-Language": "en-US,en;q=0.9",
+  }
+
+  const initial = await fetch(params.url, { signal, headers })
+
+  // Retry with honest UA if blocked by Cloudflare bot detection (TLS fingerprint mismatch)
+  const response =
+    initial.status === 403 && initial.headers.get("cf-mitigated") === "challenge"
+      ? await fetch(params.url, { signal, headers: { ...headers, "User-Agent": "opencorvus" } })
+      : initial
+
+  clearTimeout()
+
+  if (!response.ok) {
+    throw new Error(`Request failed with status code: ${response.status}`)
+  }
+
+  // Check content length
+  const contentLength = response.headers.get("content-length")
+  if (contentLength && parseInt(contentLength) > MAX_RESPONSE_SIZE) {
+    throw new Error("Response too large (exceeds 5MB limit)")
+  }
+
+  const arrayBuffer = await response.arrayBuffer()
+  if (arrayBuffer.byteLength > MAX_RESPONSE_SIZE) {
+    throw new Error("Response too large (exceeds 5MB limit)")
+  }
+
+  const contentType = response.headers.get("content-type") || ""
+  const mime = contentType.split(";")[0]?.trim().toLowerCase() || ""
+  const title = `${params.url} (${contentType})`
+
+  // Check if response is an image
+  const isImage = mime.startsWith("image/") && mime !== "image/svg+xml" && mime !== "image/vnd.fastbidsheet"
+
+  if (isImage) {
+    const base64Content = Buffer.from(arrayBuffer).toString("base64")
+    return {
+      title,
+      output: "Image fetched successfully",
+      metadata: {},
+      attachments: [
+        {
+          type: "file" as const,
+          mime,
+          url: `data:${mime};base64,${base64Content}`,
+        },
+      ],
+    }
+  }
+
+  const content = new TextDecoder().decode(arrayBuffer)
+
+  // Handle content based on requested format and actual content type
+  switch (params.format) {
+    case "markdown":
+      if (contentType.includes("text/html")) {
+        const markdown = formatFetchedText(convertHTMLToMarkdown(content))
+        return {
+          output: markdown.output,
+          title,
+          metadata: markdown.metadata,
+        }
+      }
+      const markdown = formatFetchedText(content)
+      return {
+        output: markdown.output,
+        title,
+        metadata: markdown.metadata,
+      }
+
+    case "text":
+      if (contentType.includes("text/html")) {
+        const text = formatFetchedText(await extractTextFromHTML(content))
+        return {
+          output: text.output,
+          title,
+          metadata: text.metadata,
+        }
+      }
+      const text = formatFetchedText(content)
+      return {
+        output: text.output,
+        title,
+        metadata: text.metadata,
+      }
+
+    case "html":
+      const html = formatFetchedText(content)
+      return {
+        output: html.output,
+        title,
+        metadata: html.metadata,
+      }
+
+    default:
+      const output = formatFetchedText(content)
+      return {
+        output: output.output,
+        title,
+        metadata: output.metadata,
+      }
+  }
+}
+
+function formatFetchedText(text: string) {
+  const normalized = text
+    .replace(/\r\n?/g, "\n")
+    .replace(/[ \t]+\n/g, "\n")
+    .replace(/\n{4,}/g, "\n\n\n")
+    .trim()
+  const originalBytes = Buffer.byteLength(normalized, "utf8")
+  if (originalBytes <= TEXT_OUTPUT_MAX_BYTES) {
+    return {
+      output: normalized,
+      metadata: {
+        originalBytes,
+        shownBytes: originalBytes,
+        webfetchOutputClipped: false,
+      },
+    }
+  }
+
+  const lines = normalized.split("\n")
+  const shown: string[] = []
+  let shownBytes = 0
+  for (const line of lines) {
+    const lineBytes = Buffer.byteLength(line, "utf8")
+    const separatorBytes = shown.length === 0 ? 0 : 1
+    if (shownBytes + separatorBytes + lineBytes > TEXT_OUTPUT_MAX_BYTES) break
+    shown.push(line)
+    shownBytes += separatorBytes + lineBytes
+  }
+  if (shown.length === 0) {
+    const head = Buffer.from(normalized, "utf8").subarray(0, TEXT_OUTPUT_MAX_BYTES).toString("utf8")
+    shown.push(head)
+    shownBytes = Buffer.byteLength(head, "utf8")
+  }
+  const prefix = shown.join("\n")
+  const omittedBytes = originalBytes - shownBytes
+  return {
+    output:
+      prefix +
+      `\n\n[webfetch output clipped: ${shownBytes} of ${originalBytes} bytes shown, ${omittedBytes} bytes omitted from model context]`,
+    metadata: {
+      originalBytes,
+      shownBytes,
+      omittedBytes,
+      webfetchOutputClipped: true,
+    },
+  }
+}
 
 async function extractTextFromHTML(html: string) {
   let text = ""

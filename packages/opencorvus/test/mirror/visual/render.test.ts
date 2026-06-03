@@ -8,6 +8,7 @@ import {
   SCREENSHOT_STABILIZATION_CSS,
   renderFiles,
   RenderOutputSchema,
+  resolveNodeRenderSidecarRuntime,
 } from "../../../src/mirror/visual/render"
 
 describe("render helpers", () => {
@@ -15,6 +16,30 @@ describe("render helpers", () => {
     expect(SCREENSHOT_STABILIZATION_CSS).toContain("animation")
     expect(SCREENSHOT_STABILIZATION_CSS).toContain("transition")
     expect(SCREENSHOT_STABILIZATION_CSS).toContain("caret-color")
+  })
+
+  test("prefers packaged browser MCP node runtime and npm Playwright modules", async () => {
+    const dir = resolve(os.tmpdir(), "mirror-render-packaged-runtime-" + process.pid)
+    const runtimeDir = resolve(dir, "browser-mcp-node")
+    const moduleDir = resolve(runtimeDir, "node_modules", "playwright")
+    mkdirSync(moduleDir, { recursive: true })
+    const nodeName = process.platform === "win32" ? "node.exe" : "node"
+    const nodePath = resolve(runtimeDir, nodeName)
+    const playwrightPath = resolve(moduleDir, "index.js")
+    writeFileSync(resolve(dir, process.platform === "win32" ? "opencorvus.exe" : "opencorvus"), "")
+    writeFileSync(nodePath, "")
+    writeFileSync(playwrightPath, "")
+
+    try {
+      const result = await resolveNodeRenderSidecarRuntime({
+        execPath: resolve(dir, process.platform === "win32" ? "opencorvus.exe" : "opencorvus"),
+        platform: process.platform,
+      })
+      expect(result.nodeExecutable).toBe(nodePath)
+      expect(result.playwrightRequirePath).toBe(playwrightPath)
+    } finally {
+      rmSync(dir, { recursive: true, force: true })
+    }
   })
 })
 

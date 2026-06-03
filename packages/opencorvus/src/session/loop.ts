@@ -1868,6 +1868,10 @@ export namespace SessionLoop {
         })
         return "stop" as const
       }
+      await Session.removeMessage({
+        sessionID: input.sessionID,
+        messageID: processor.message.id,
+      })
       await SessionCompaction.create({
         sessionID: input.sessionID,
         source: input.lastUser,
@@ -2519,10 +2523,12 @@ export namespace SessionLoop {
     }
     const exactStageAgents = new Set([
       "architect",
+      "fact-check",
       "frontend-design",
       "goal-workload-analyst",
       "intent-analysis",
       "requirements",
+      "research",
     ])
     return exactStageAgents.has(agentName) && contract.identity.agentKind === agentName
   }

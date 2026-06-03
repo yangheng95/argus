@@ -53,7 +53,7 @@ function placementOf(board: any, stage: string, goalID: string): ConversationSes
   return "top_level"
 }
 
-function partHasDisplay(part: any): boolean {
+export function conversationPartHasDisplay(part: any): boolean {
   const type = String(part?.type || "")
   if (!type || type === "step-start" || type === "step-finish" || type === "boundary") return false
   if (type === "text" || type === "reasoning") {
@@ -62,8 +62,8 @@ function partHasDisplay(part: any): boolean {
   return true
 }
 
-function messageHasDisplay(message: any): boolean {
-  return Array.isArray(message?.parts) && message.parts.some(partHasDisplay)
+export function conversationMessageHasDisplay(message: any): boolean {
+  return Array.isArray(message?.parts) && message.parts.some(conversationPartHasDisplay)
 }
 
 export function projectConversationView(board: any, transcript: any[]): ConversationView {
@@ -87,7 +87,7 @@ export function projectConversationView(board: any, transcript: any[]): Conversa
     const stage = stageFromChannel(info?.channel)
     const parentSessionID = String(info?.parentSessionID || "")
     const goalID = String(info?.goalID || "")
-    const displayMessageID = messageHasDisplay(message) ? messageID : ""
+    const displayMessageID = conversationMessageHasDisplay(message) ? messageID : ""
     const existing = bySession.get(sessionID)
     if (existing) {
       existing.messageIDs.push(messageID)

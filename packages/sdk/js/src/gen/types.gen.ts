@@ -2504,7 +2504,7 @@ export type Config = {
    */
   enabled_providers?: Array<string>
   /**
-   * Model to use in the format of provider/model, eg deepseek/deepseek-v4-pro
+   * Model to use in the format of provider/model, eg hexin/kimi-k2.6
    */
   model?: string
   /**

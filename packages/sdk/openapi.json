@@ -35137,7 +35137,7 @@
             }
           },
           "model": {
-            "description": "Model to use in the format of provider/model, eg deepseek/deepseek-v4-pro",
+            "description": "Model to use in the format of provider/model, eg hexin/kimi-k2.6",
             "type": "string"
           },
           "small_model": {

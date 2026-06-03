@@ -7,6 +7,8 @@ import type { Message } from "../../src/session/message"
 import type { Config } from "../../src/config/config"
 import type { Provider } from "../../src/provider/provider"
 
+const sessionLoopSourcePath = new URL("../../src/session/loop.ts", import.meta.url)
+
 function model(input: Partial<Provider.Model["limit"]> = {}): Provider.Model {
   return {
     id: "test-model",
@@ -273,7 +275,7 @@ describe("SessionLoop prompt final message selection", () => {
 
 describe("SessionLoop predictive compaction transcript hygiene", () => {
   test("removes the preflight assistant placeholder before creating compaction", async () => {
-    const source = await fs.readFile("packages/opencorvus/src/session/loop.ts", "utf8")
+    const source = await fs.readFile(sessionLoopSourcePath, "utf8")
     const trigger = source.indexOf('if (decision.kind === "compact")')
     const create = source.indexOf("await SessionCompaction.create", trigger)
     const remove = source.indexOf("await Session.removeMessage", trigger)
@@ -283,8 +285,20 @@ describe("SessionLoop predictive compaction transcript hygiene", () => {
     expect(remove).toBeLessThan(create)
   })
 
+  test("removes the reactive overflow assistant placeholder before creating compaction", async () => {
+    const source = await fs.readFile(sessionLoopSourcePath, "utf8")
+    const trigger = source.indexOf('if (result === "compact")')
+    const enabledBranch = source.indexOf("overflow: true", trigger)
+    const create = source.lastIndexOf("await SessionCompaction.create", enabledBranch)
+    const remove = source.lastIndexOf("await Session.removeMessage", create)
+
+    expect(trigger).toBeGreaterThan(0)
+    expect(remove).toBeGreaterThan(trigger)
+    expect(remove).toBeLessThan(create)
+  })
+
   test("fail-fast branches persist visible assistant errors instead of throwing past the placeholder", async () => {
-    const source = await fs.readFile("packages/opencorvus/src/session/loop.ts", "utf8")
+    const source = await fs.readFile(sessionLoopSourcePath, "utf8")
 
     expect(source).not.toContain("throw new Message.ToolSchemaBudgetError")
     expect(source).not.toContain("throw new Message.PromptBudgetOverflowError")

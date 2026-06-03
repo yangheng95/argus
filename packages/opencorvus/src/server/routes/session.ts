@@ -4,7 +4,7 @@ import { describeRoute, validator, resolver } from "hono-openapi"
 import z from "zod"
 import { Session } from "../../session"
 import { SessionStatus } from "@/session"
-import { projectConversationView } from "@/conversation/view"
+import { conversationMessageHasDisplay, projectConversationView } from "@/conversation/view"
 import { Config } from "@/config/config"
 import { EffectiveConfig } from "@/config/effective"
 import { validateConfigModelReferences } from "@/config/model-reference-validation"
@@ -324,6 +324,7 @@ export const SessionRoutes = lazy(() =>
         const sessionID = c.req.valid("param").sessionID
         const session = await Session.get(sessionID)
         const transcript = enrichMissionSessionTranscript(await Session.messages({ sessionID }))
+          .filter(conversationMessageHasDisplay)
         const board = {
           kind: "session" as const,
           sessionID,

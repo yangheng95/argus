@@ -15,6 +15,7 @@ import { ToolRegistry } from "../../src/tool/registry"
 import { WebClonePrepareContextTool } from "../../src/tool/web-clone-prepare-context"
 import { WebCloneSourceAuditTool } from "../../src/tool/web-clone-source-audit"
 import { loadBenchmarkEnv } from "../../script/benchmark/env"
+import { taskIDForSession } from "../../src/orchestrator/task-event"
 
 await loadBenchmarkEnv(import.meta.dir)
 
@@ -123,7 +124,7 @@ describe("web clone source project E2E", () => {
     expect(audit.findings.join("\n")).toContain("frontend_design_source_edit")
     expect(audit.findings.join("\n")).toContain("frontend_design_replacement_result")
     expect(audit.findings.join("\n")).toContain("frontend_design iteration state artifact")
-    expect(audit.findings.join("\n")).toContain("sourceDomReplacementPlan.ts")
+    expect(audit.findings.join("\n")).toContain("frontend_design_region_selection")
     expect(audit.findings.join("\n")).toContain("maintainable_replacement_required")
   })
 
@@ -133,10 +134,10 @@ describe("web clone source project E2E", () => {
       outputDir: "frontend-design-skeleton",
     })
     trace.sourceProjectEvidence = {
-      sourceDomPageExists: true,
-      replacementPlanExists: true,
-      iterationStateExists: true,
-      sourceRegionsExists: true,
+      sourceDomPageExists: false,
+      replacementPlanExists: false,
+      iterationStateExists: false,
+      sourceRegionsExists: false,
       referenceImageExists: true,
       sourceDomRegionFileCount: 0,
       semanticReplacementFileCount: 4,
@@ -193,10 +194,10 @@ describe("web clone source project E2E", () => {
       outputDir: "frontend-design-skeleton",
     })
     trace.sourceProjectEvidence = {
-      sourceDomPageExists: true,
-      replacementPlanExists: true,
-      iterationStateExists: true,
-      sourceRegionsExists: true,
+      sourceDomPageExists: false,
+      replacementPlanExists: false,
+      iterationStateExists: false,
+      sourceRegionsExists: false,
       referenceImageExists: true,
       sourceDomRegionFileCount: 0,
       semanticReplacementFileCount: 3,
@@ -230,10 +231,10 @@ describe("web clone source project E2E", () => {
       outputDir: "frontend-design-skeleton",
     })
     trace.sourceProjectEvidence = {
-      sourceDomPageExists: true,
-      replacementPlanExists: true,
-      iterationStateExists: true,
-      sourceRegionsExists: true,
+      sourceDomPageExists: false,
+      replacementPlanExists: false,
+      iterationStateExists: false,
+      sourceRegionsExists: false,
       referenceImageExists: true,
       sourceDomRegionFileCount: 0,
       semanticReplacementFileCount: 4,
@@ -285,10 +286,10 @@ describe("web clone source project E2E", () => {
       outputDir: "frontend-design-skeleton",
     })
     trace.sourceProjectEvidence = {
-      sourceDomPageExists: true,
-      replacementPlanExists: true,
-      iterationStateExists: true,
-      sourceRegionsExists: true,
+      sourceDomPageExists: false,
+      replacementPlanExists: false,
+      iterationStateExists: false,
+      sourceRegionsExists: false,
       referenceImageExists: true,
       sourceDomRegionFileCount: 0,
       semanticReplacementFileCount: 4,
@@ -327,7 +328,8 @@ describe("web clone source project E2E", () => {
   test("frontend_design agent benchmark request points at runtime source project boundaries", () => {
     const request = buildFrontendDesignAgentBenchmarkRequest({
       sourcePackageDir: ".opencorvus/runtime/tasks/tsk_test/frontend-design/web-clone-source",
-      projectDir: ".opencorvus/runtime/tasks/tsk_test/frontend-design/frontend-design-skeleton",
+      skeletonProjectDir: ".opencorvus/runtime/tasks/tsk_test/frontend-design/frontend-design-skeleton",
+      targetProjectDir: ".opencorvus/runtime/tasks/tsk_test/frontend-design/frontend-design-target",
       mirrorDir: ".tmp/mirror",
     })
 
@@ -335,11 +337,35 @@ describe("web clone source project E2E", () => {
     expect(request).toContain("overwrite=true")
     expect(request).toContain(".opencorvus/runtime/tasks/tsk_test/frontend-design/web-clone-source")
     expect(request).toContain(".opencorvus/runtime/tasks/tsk_test/frontend-design/frontend-design-skeleton")
+    expect(request).toContain(".opencorvus/runtime/tasks/tsk_test/frontend-design/frontend-design-target")
+    expect(request).toContain("editing only the target delivery project, not frontend-design-skeleton")
+    expect(request).toContain("Do not run install/build/render/dev-server commands inside the skeleton evidence project")
+    expect(request).toContain("Create or populate the target delivery project before any runnable project command")
     expect(request).toContain("record_frontend_region_selection")
     expect(request).toContain("record_frontend_replacement_result")
     expect(request).toContain("frontend-design-process-trace.json")
     expect(request).toContain("frontend-design-iteration-state.json")
+    expect(request).toContain("These files are written by frontend-design tools")
+    expect(request).not.toContain("make those artifacts prove")
     expect(request).not.toContain("from scratch")
+  })
+
+  test("frontend_design benchmark task root owns child agent sessions", async () => {
+    await Instance.provide({
+      directory: repoRoot,
+      fn: async () => {
+        const taskID = `tsk_web_clone_frontend_design_parent_${Date.now().toString(16)}`
+        const parentSessionID = await ensureFrontendDesignBenchmarkTask(taskID)
+        const child = await Session.createNext({
+          kind: "frontend-design",
+          parentID: parentSessionID,
+          title: "frontend-design benchmark child",
+          directory: Instance.directory,
+        })
+
+        expect(taskIDForSession(child.id)).toBe(taskID)
+      },
+    })
   })
 
   e2eTest("runs the OpenCorvus tool chain and enforces the visual threshold", async () => {
@@ -354,10 +380,13 @@ describe("web clone source project E2E", () => {
           ? await resolveFrontendDesignBenchmarkModel()
           : undefined
         const frontendDesignPaths = ProjectRuntimePaths.frontendDesignPaths(repoRoot, frontendDesignBenchmarkTaskID)
-        const projectDir = runFrontendDesignAgentE2E
+        const skeletonProjectDir = runFrontendDesignAgentE2E
           ? frontendDesignPaths.skeletonProjectAbsolute
           : frontendDesignProjectDir ?? outputDir
-        const trace = createBenchmarkProcessTrace({ sourcePackageDir: mirrorDir, outputDir: projectDir })
+        const targetProjectDir = runFrontendDesignAgentE2E
+          ? path.join(path.dirname(frontendDesignPaths.skeletonProjectAbsolute), "frontend-design-target")
+          : frontendDesignProjectDir ?? outputDir
+        const trace = createBenchmarkProcessTrace({ sourcePackageDir: mirrorDir, outputDir: targetProjectDir })
         const toolIds = await ToolRegistry.ids()
         expect(toolIds).toContain("web_clone_prepare_context")
         expect(toolIds).toContain("web_clone_source_audit")
@@ -391,16 +420,19 @@ describe("web clone source project E2E", () => {
 
         if (runFrontendDesignAgentE2E) {
           await resetFrontendDesignBenchmarkSkeletonDir(frontendDesignPaths.skeletonProjectAbsolute)
-          await ensureFrontendDesignBenchmarkTask(frontendDesignBenchmarkTaskID)
+          await resetFrontendDesignBenchmarkTargetDir(targetProjectDir)
+          const frontendDesignParentSessionID = await ensureFrontendDesignBenchmarkTask(frontendDesignBenchmarkTaskID)
           const parsedModel = Provider.parseModel(frontendDesignModel!)
           const analysis = await FrontendDesignAgent.analyze({
             title: "Web clone rawproject refinement benchmark",
             request: buildFrontendDesignAgentBenchmarkRequest({
               sourcePackageDir: context.metadata.sourcePackageDir,
-              projectDir,
+              skeletonProjectDir,
+              targetProjectDir,
               mirrorDir,
             }),
             taskID: frontendDesignBenchmarkTaskID,
+            parentSessionID: frontendDesignParentSessionID,
             model: { providerID: parsedModel.providerID, modelID: parsedModel.modelID },
           })
           expect(analysis.processTraceArtifact).toBeTruthy()
@@ -426,12 +458,12 @@ describe("web clone source project E2E", () => {
           })
           const created = await (skeletonTrace.create_frontend_skeleton_project as any).execute({
             sourcePackageDir: context.metadata.sourcePackageDir,
-            outputDir: projectDir,
+            outputDir: skeletonProjectDir,
             overwrite: true,
           })
           expect(created.title).toBe("Frontend source skeleton project created")
         }
-        trace.sourceProjectEvidence = await inspectSourceProjectEvidence(projectDir)
+        trace.sourceProjectEvidence = await inspectSourceProjectEvidence(targetProjectDir)
         recordTraceEvent(trace, {
           step: "inspect-source-project-sidecars",
           kind: "inspection",
@@ -440,28 +472,28 @@ describe("web clone source project E2E", () => {
           details: trace.sourceProjectEvidence,
         })
 
-        await run("bun", ["install"], projectDir)
+        await run("bun", ["install"], targetProjectDir)
         recordTraceEvent(trace, {
           step: "install-source-project",
           kind: "command",
           name: "bun install",
           status: "passed",
-          details: { cwd: projectDir },
+          details: { cwd: targetProjectDir },
         })
-        await run("bun", ["run", "build"], projectDir)
+        await run("bun", ["run", "build"], targetProjectDir)
         recordTraceEvent(trace, {
           step: "build-source-project",
           kind: "command",
           name: "bun run build",
           status: "passed",
-          details: { cwd: projectDir },
+          details: { cwd: targetProjectDir },
         })
 
         const auditTool = await WebCloneSourceAuditTool.init()
         const audit = await auditTool.execute({
-          projectDir,
+          projectDir: targetProjectDir,
           sourcePackageDir: context.metadata.sourcePackageDir,
-          outputPath: path.join(projectDir, "acceptance", "web-clone-source-skeleton-consumption-audit.json"),
+          outputPath: path.join(targetProjectDir, "acceptance", "web-clone-source-skeleton-consumption-audit.json"),
         }, ctx)
         expect(audit.metadata.audit.passed).toBe(true)
         trace.audits.visualBaselineAllowed = audit.metadata.audit
@@ -473,10 +505,10 @@ describe("web clone source project E2E", () => {
           details: { finalDeliveryMode: "visual_baseline_allowed", passed: audit.metadata.audit.passed },
         })
 
-        const acceptanceDir = path.join(projectDir, "acceptance")
+        const acceptanceDir = path.join(targetProjectDir, "acceptance")
         await fs.mkdir(acceptanceDir, { recursive: true })
         const maintainableAudit = await auditTool.execute({
-          projectDir,
+          projectDir: targetProjectDir,
           sourcePackageDir: context.metadata.sourcePackageDir,
           finalDeliveryMode: "maintainable_replacement_required",
           outputPath: path.join(acceptanceDir, "web-clone-source-maintainable-audit.json"),
@@ -495,7 +527,7 @@ describe("web clone source project E2E", () => {
         })
         const visualOutDir = path.join(acceptanceDir, "overlay-visual-diff")
         const visualExitCode = await runVisualDiffCli({
-          renderedDir: projectDir,
+          renderedDir: targetProjectDir,
           reference: path.join(context.metadata.sourcePackageDir, "reference.png"),
           outDir: visualOutDir,
           threshold,
@@ -529,7 +561,8 @@ describe("web clone source project E2E", () => {
           threshold,
           worstThreshold,
           mirrorDir,
-          outputDir: projectDir,
+          outputDir: targetProjectDir,
+          skeletonProjectDir,
           processTrace: path.join(acceptanceDir, "web-clone-benchmark-process-trace.json"),
           visualBaselineAudit: audit.metadata.audit,
           maintainableAudit: maintainableAudit.metadata.audit,
@@ -577,7 +610,8 @@ function createBenchmarkProcessTrace(input: {
 
 function buildFrontendDesignAgentBenchmarkRequest(input: {
   sourcePackageDir: string
-  projectDir: string
+  skeletonProjectDir: string
+  targetProjectDir: string
   mirrorDir: string
 }): string {
   return [
@@ -585,14 +619,17 @@ function buildFrontendDesignAgentBenchmarkRequest(input: {
     "",
     `Mirror evidence: ${input.mirrorDir}`,
     `Prepared web-clone-source package: ${input.sourcePackageDir}`,
-    `Frontend-design project target: ${input.projectDir}`,
+    `Frontend-design skeleton evidence project: ${input.skeletonProjectDir}`,
+    `Frontend-design target delivery project: ${input.targetProjectDir}`,
     "",
-    "Call `create_frontend_skeleton_project` with that source package, that project target, and overwrite=true.",
-    "Then inspect sourceDomIterationState.ts, sourceDomReplacementPlan.ts, sourceDomRegions.ts, sourceData.ts, assets, and the generated page/components.",
-    "Use normal frontend-design source-edit tools to replace generated source-dom/rawcode regions with semantic project-owned components, extracted data modules, and scoped styles while preserving visual parity.",
+    "Call `create_frontend_skeleton_project` with that source package, the skeleton evidence project path, and overwrite=true.",
+    "Then inspect skeleton sourceDomIterationState.ts, sourceDomReplacementPlan.ts, sourceDomRegions.ts, sourceData.ts, assets, and generated page/components as evidence only.",
+    "Do not run install/build/render/dev-server commands inside the skeleton evidence project.",
+    "Create or populate the target delivery project before any runnable project command.",
+    "Use normal frontend-design source-edit tools to extract generated source-dom/rawcode evidence into the target delivery project as semantic project-owned components, extracted mock/API data modules, and scoped styles while preserving visual parity.",
     "Before each replacement, call `record_frontend_region_selection`; after each replacement attempt, call `record_frontend_replacement_result` with completed/blocked/deferred status and exact remaining source debt.",
-    "Run build plus web_clone_source_audit in maintainable_replacement_required mode before claiming completion.",
-    "The benchmark consumes frontend-design-process-trace.json and frontend-design-iteration-state.json; make those artifacts prove the internal process did not drift.",
+    "Run build plus web_clone_source_audit in maintainable_replacement_required mode on the target delivery project before claiming completion.",
+    "The benchmark consumes frontend-design-process-trace.json and frontend-design-iteration-state.json. These files are written by frontend-design tools from your normal tool calls; do not edit them directly. Make the normal agent work visible by calling the region-selection/replacement tools and editing only the target delivery project, not frontend-design-skeleton.",
   ].join("\n")
 }
 
@@ -606,7 +643,17 @@ async function resetFrontendDesignBenchmarkSkeletonDir(projectDir: string): Prom
   await fs.rm(target, { recursive: true, force: true })
 }
 
-async function ensureFrontendDesignBenchmarkTask(taskID: string): Promise<void> {
+async function resetFrontendDesignBenchmarkTargetDir(projectDir: string): Promise<void> {
+  const runtimeTasksRoot = path.resolve(repoRoot, ".opencorvus", "runtime", "tasks")
+  const target = path.resolve(projectDir)
+  const relative = path.relative(runtimeTasksRoot, target)
+  if (!relative || relative.startsWith("..") || path.isAbsolute(relative)) {
+    throw new Error(`Refusing to reset frontend-design benchmark target outside runtime tasks: ${projectDir}`)
+  }
+  await fs.rm(target, { recursive: true, force: true })
+}
+
+async function ensureFrontendDesignBenchmarkTask(taskID: string): Promise<string> {
   const rootSession = await Session.create({ kind: "root", title: "frontend-design benchmark root" })
   const now = Date.now()
   Database.use((db) =>
@@ -623,6 +670,7 @@ async function ensureFrontendDesignBenchmarkTask(taskID: string): Promise<void> 
       time_started: now,
     }).run(),
   )
+  return rootSession.id
 }
 
 async function resolveFrontendDesignBenchmarkModel(): Promise<string> {
@@ -650,10 +698,6 @@ function resolveModelRefFromProviders(
   input: string,
 ): string {
   if (input.includes("/")) {
-    const parsed = Provider.parseModel(input)
-    if (!providers[parsed.providerID]?.models[parsed.modelID]) {
-      throw new Error(`frontend-design benchmark model not found in current project: ${input}`)
-    }
     return input
   }
   for (const providerID of ["hexin", "moonshotai-cn", "moonshotai", "kimik26", "glm51", "huggingface"]) {
@@ -831,13 +875,21 @@ function evaluateBenchmarkProcessTrace(trace: BenchmarkProcessTrace): BenchmarkP
   if (!maintainableAudit) findings.push("Missing web_clone_source_audit event for maintainable_replacement_required.")
 
   const evidence = trace.sourceProjectEvidence
-  if (!evidence?.sourceDomPageExists) findings.push("Generated source project is missing SourceDomPage.tsx.")
-  if (!evidence?.replacementPlanExists) findings.push("Generated source project is missing sourceDomReplacementPlan.ts.")
-  if (!evidence?.iterationStateExists) findings.push("Generated source project is missing sourceDomIterationState.ts.")
-  if (!evidence?.sourceRegionsExists) findings.push("Generated source project is missing sourceDomRegions.ts.")
   if (!evidence?.referenceImageExists) findings.push("Generated source project is missing reference.png.")
   if ((evidence?.semanticReplacementFileCount ?? 0) <= 0) {
     findings.push("Frontend-design source project has no semantic replacement components; rawproject refinement did not start.")
+  }
+  if (evidence?.sourceDomPageExists) {
+    findings.push("Final target project still contains SourceDomPage.tsx; skeleton rawcode must be extracted into semantic target-project source, not delivered.")
+  }
+  if (evidence?.replacementPlanExists) {
+    findings.push("Final target project still contains sourceDomReplacementPlan.ts; this skeleton planning sidecar must not remain in app source.")
+  }
+  if (evidence?.iterationStateExists) {
+    findings.push("Final target project still contains sourceDomIterationState.ts; frontend_design iteration state belongs in the process artifact, not app source.")
+  }
+  if (evidence?.sourceRegionsExists) {
+    findings.push("Final target project still contains sourceDomRegions.ts; source-region metrics are skeleton evidence, not app source.")
   }
   if ((evidence?.sourceDomRegionFileCount ?? 0) > 0) {
     findings.push("Frontend-design source project still contains generated source-dom regions; rawproject refinement is incomplete.")

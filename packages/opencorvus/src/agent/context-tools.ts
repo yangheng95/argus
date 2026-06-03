@@ -16,6 +16,7 @@ import { Memory } from "@/memory"
 import { Instance } from "@/project/instance"
 import { Log } from "@/util/log"
 import { exaMcpCall } from "@/tool/exa-mcp"
+import { executeWebFetch, WebFetchDescription, WebFetchParameters } from "@/tool/webfetch"
 
 const log = Log.create({ service: "agent-context-tools" })
 
@@ -107,6 +108,24 @@ export function createAgentContextTools(taskWorkDir?: string) {
     // intentionally no enable/disable env switch — disabling websearch for an
     // agent is done by leaving it out of that agent's include list (rule 7/10:
     // one mechanism, no dead parallel switch).
+    webfetch: tool({
+      description: WebFetchDescription,
+      inputSchema: WebFetchParameters,
+      execute: async (params, options) => {
+        return executeWebFetch(params, {
+          sessionID: "",
+          messageID: "",
+          agent: "context-tools",
+          abort: options?.abortSignal ?? new AbortController().signal,
+          callID: options?.toolCallId,
+          extra: {},
+          messages: [],
+          metadata: () => {},
+          ask: async () => {},
+        })
+      },
+    }),
+
     websearch: tool({
       description:
         "Search the web for current documentation, API references, changelogs, best practices, " +

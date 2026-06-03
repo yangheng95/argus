@@ -4,7 +4,7 @@ import os from "os"
 import path from "path"
 import { PassThrough } from "stream"
 import { BashTool, DEFAULT_TIMEOUT, disposeSyntaxTree } from "../../src/tool/bash"
-import { DEFAULT_BASH_TIMEOUT_MS } from "../../src/shell/timeout"
+import { DEFAULT_BASH_BACKGROUND_LEASE_MS, DEFAULT_BASH_TIMEOUT_MS } from "../../src/shell/timeout"
 import { Instance } from "../../src/project/instance"
 import { Filesystem } from "../../src/util/filesystem"
 import { tmpdir } from "../fixture/fixture"
@@ -96,15 +96,17 @@ describe("tool.bash", () => {
     })
   })
 
-  test("defaults commands and background leases to two minutes", async () => {
+  test("defaults foreground commands to two minutes and background leases to one hour", async () => {
     await Instance.provide({
       directory: projectRoot,
       fn: async () => {
         const bash = await BashTool.init()
         expect(DEFAULT_BASH_TIMEOUT_MS).toBe(120_000)
+        expect(DEFAULT_BASH_BACKGROUND_LEASE_MS).toBe(3_600_000)
         expect(DEFAULT_TIMEOUT).toBe(DEFAULT_BASH_TIMEOUT_MS)
         expect(bash.description).toContain("120000ms (2 minutes)")
-        expect(bash.description).toContain("For `background: true`, the same timeout is the process lease")
+        expect(bash.description).toContain("background process lease defaults to 3600000ms (1 hour)")
+        expect(bash.description).toContain("`timeout` only controls the tool/readiness wait")
       },
     })
   })
@@ -119,7 +121,7 @@ describe("tool.bash", () => {
             command: "sleep 30",
             description: "Start sleeping background process",
             background: true,
-            timeout: 2_000,
+            leaseTimeout: 2_000,
           },
           ctx,
         )
@@ -128,6 +130,28 @@ describe("tool.bash", () => {
         expect(result.output).toContain("background process lease timeout: 2000 ms")
         expect(isPidAlive(pid as number)).toBe(true)
         expect(await waitForPidExit(pid as number, 4_000)).toBe(true)
+      },
+    })
+  }, 10_000)
+
+  test("background timeout does not shorten the default one hour lease", async () => {
+    await Instance.provide({
+      directory: projectRoot,
+      fn: async () => {
+        const bash = await BashTool.init()
+        const result = await bash.execute(
+          {
+            command: "echo started; sleep 3",
+            description: "Start short background process",
+            background: true,
+            timeout: 500,
+          },
+          ctx,
+        )
+        const pid = result.metadata.pid
+        expect(typeof pid).toBe("number")
+        expect(result.output).toContain("background process lease timeout: 3600000 ms")
+        expect(await waitForPidExit(pid as number, 5_000)).toBe(true)
       },
     })
   }, 10_000)
@@ -196,7 +220,7 @@ describe("tool.bash", () => {
               command: "echo background-cleanup",
               description: "Exit quickly in background",
               background: true,
-              timeout: 50,
+              leaseTimeout: 50,
             },
             ctx,
           )

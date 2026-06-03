@@ -2,8 +2,10 @@ import { describe, expect, test } from "bun:test"
 import path from "path"
 import { Instance } from "../../src/project/instance"
 import { WebFetchTool } from "../../src/tool/webfetch"
+import { Truncate } from "../../src/tool/truncation"
 
 const projectRoot = path.join(import.meta.dir, "../..")
+const INSTANCE_STARTUP_TIMEOUT_MS = 60_000
 
 const ctx = {
   sessionID: "test",
@@ -53,7 +55,7 @@ describe("tool.webfetch", () => {
         })
       },
     )
-  })
+  }, { timeout: INSTANCE_STARTUP_TIMEOUT_MS })
 
   test("keeps svg as text output", async () => {
     const svg = '<svg xmlns="http://www.w3.org/2000/svg"><text>hello</text></svg>'
@@ -75,7 +77,7 @@ describe("tool.webfetch", () => {
         })
       },
     )
-  })
+  }, { timeout: INSTANCE_STARTUP_TIMEOUT_MS })
 
   test("keeps text responses as text output", async () => {
     await withFetch(
@@ -96,5 +98,52 @@ describe("tool.webfetch", () => {
         })
       },
     )
-  })
+  }, { timeout: INSTANCE_STARTUP_TIMEOUT_MS })
+
+  test("clips large html output before it enters agent context", async () => {
+    const html = `<html><body><main><h1>World Economy</h1><p>${"market data ".repeat(20_000)}</p></main></body></html>`
+    await withFetch(
+      async () =>
+        new Response(html, {
+          status: 200,
+          headers: { "content-type": "text/html; charset=utf-8" },
+        }),
+      async () => {
+        await Instance.provide({
+          directory: projectRoot,
+          fn: async () => {
+            const webfetch = await WebFetchTool.init()
+            const result = await webfetch.execute({ url: "https://example.com/markets/world-economy/", format: "markdown" }, ctx)
+            expect(result.output).toContain("World Economy")
+            expect(result.output).toContain("[webfetch output clipped:")
+            expect(Buffer.byteLength(result.output, "utf8")).toBeLessThan(Truncate.MAX_BYTES + 200)
+            expect(result.metadata.webfetchOutputClipped).toBe(true)
+          },
+        })
+      },
+    )
+  }, { timeout: INSTANCE_STARTUP_TIMEOUT_MS })
+
+  test("clips single-line text without returning an empty preview", async () => {
+    const text = "A".repeat(Truncate.MAX_BYTES * 2)
+    await withFetch(
+      async () =>
+        new Response(text, {
+          status: 200,
+          headers: { "content-type": "text/plain; charset=utf-8" },
+        }),
+      async () => {
+        await Instance.provide({
+          directory: projectRoot,
+          fn: async () => {
+            const webfetch = await WebFetchTool.init()
+            const result = await webfetch.execute({ url: "https://example.com/long.txt", format: "text" }, ctx)
+            expect(result.output.startsWith("A".repeat(100))).toBe(true)
+            expect(result.output).toContain("[webfetch output clipped:")
+            expect(result.metadata.webfetchOutputClipped).toBe(true)
+          },
+        })
+      },
+    )
+  }, { timeout: INSTANCE_STARTUP_TIMEOUT_MS })
 })

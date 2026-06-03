@@ -1,0 +1,274 @@
+import { createHash } from "node:crypto"
+import { z } from "zod"
+import { Identifier } from "@/id/id"
+
+export const RESEARCH_VOLATILE_STALE_AFTER_MS = 7 * 24 * 60 * 60 * 1000
+export const RESEARCH_PROMPT_LIMITS = {
+  summaryChars: 1800,
+  itemChars: 600,
+  evidenceItems: 40,
+  factItems: 80,
+  problemItems: 40,
+  needItems: 40,
+  constraintItems: 40,
+  documentOutlineItems: 80,
+  openQuestionItems: 40,
+} as const
+export const RESEARCH_BUNDLE_LIMITS = {
+  fullMarkdownChars: 200_000,
+  evidenceJsonChars: 100_000,
+  citationMapJsonChars: 100_000,
+} as const
+
+const PROJECT_RELATIVE_RUNTIME_RESEARCH_PATH = /^\.opencorvus\/runtime\/tasks\/[^/]+\/research\/[^/]+\/[^/]+$/
+
+export const ResearchEvidenceRefSchema = z.object({
+  id: z.string().min(1),
+  kind: z.enum(["web", "code", "memory", "user"]),
+  pointer: z.string().min(1),
+  title: z.string().min(1),
+  retrieved_at: z.string().min(1),
+  reliability: z.enum(["primary", "secondary", "community", "unknown"]),
+  excerpt: z.string().min(1).max(800),
+  bundle_ref: z.string().min(1),
+  volatile: z.boolean().default(false),
+})
+export type ResearchEvidenceRef = z.infer<typeof ResearchEvidenceRefSchema>
+
+export const ResearchFactSchema = z.object({
+  id: z.string().min(1),
+  statement: z.string().min(1),
+  evidence_ids: z.array(z.string().min(1)).min(1),
+})
+export type ResearchFact = z.infer<typeof ResearchFactSchema>
+
+export const ResearchInferenceSchema = z.object({
+  id: z.string().min(1),
+  inference: z.string().min(1),
+  based_on_fact_ids: z.array(z.string().min(1)).min(1),
+  confidence: z.enum(["low", "medium", "high"]).default("medium"),
+})
+export type ResearchInference = z.infer<typeof ResearchInferenceSchema>
+
+export const ResearchProblemStatementSchema = z.object({
+  id: z.string().min(1),
+  statement: z.string().min(1),
+  fact_ids: z.array(z.string().min(1)).default([]),
+})
+export type ResearchProblemStatement = z.infer<typeof ResearchProblemStatementSchema>
+
+export const ResearchUserNeedSchema = z.object({
+  id: z.string().min(1),
+  need: z.string().min(1),
+  fact_ids: z.array(z.string().min(1)).default([]),
+})
+export type ResearchUserNeed = z.infer<typeof ResearchUserNeedSchema>
+
+export const ResearchConstraintSchema = z.object({
+  id: z.string().min(1),
+  constraint: z.string().min(1),
+  fact_ids: z.array(z.string().min(1)).default([]),
+})
+export type ResearchConstraint = z.infer<typeof ResearchConstraintSchema>
+
+export const ResearchDocumentSectionSchema = z.object({
+  id: z.string().min(1),
+  title: z.string().min(1),
+  purpose: z.string().min(1),
+  evidence_ids: z.array(z.string().min(1)).default([]),
+})
+export type ResearchDocumentSection = z.infer<typeof ResearchDocumentSectionSchema>
+
+export const ResearchSubpageTaskSchema = z.object({
+  id: z.string().min(1),
+  parent_url: z.string().min(1),
+  url: z.string().min(1),
+  title: z.string().min(1),
+  reason: z.string().min(1),
+  suggested_focus: z.string().min(1),
+  priority: z.enum(["high", "medium", "low"]).default("medium"),
+  evidence_ids: z.array(z.string().min(1)).default([]),
+})
+export type ResearchSubpageTask = z.infer<typeof ResearchSubpageTaskSchema>
+
+export const ResearchOpenQuestionSchema = z.object({
+  id: z.string().min(1),
+  question: z.string().min(1),
+  blocking: z.boolean().default(false),
+  related_fact_ids: z.array(z.string().min(1)).default([]),
+})
+export type ResearchOpenQuestion = z.infer<typeof ResearchOpenQuestionSchema>
+
+export const ResearchBriefSchema = z.object({
+  metadata: z.object({
+    research_session_id: z.string().min(1),
+    created_for_message_id: z.string().min(1),
+    request_hash: z.string().min(1),
+    source_digest: z.string().min(1),
+    created_at: z.string().min(1),
+    stale_after: z.string().optional(),
+  }),
+  scope: z.object({
+    user_goal: z.string().min(1),
+    deliverable_type: z.enum(["prd", "spec", "research_report", "implementation_input", "mixed"]),
+    audience: z.string().min(1),
+    explicit_non_goals: z.array(z.string()).default([]),
+    assumed_non_goals: z.array(z.string()).default([]),
+  }),
+  bundle: z.object({
+    full_markdown_path: z.string().min(1),
+    evidence_json_path: z.string().min(1),
+    citation_map_path: z.string().min(1),
+  }),
+  summary: z.string().min(1),
+  evidence_index: z.array(ResearchEvidenceRefSchema),
+  facts: z.array(ResearchFactSchema),
+  inferences: z.array(ResearchInferenceSchema),
+  problem_statements: z.array(ResearchProblemStatementSchema),
+  user_needs: z.array(ResearchUserNeedSchema),
+  constraints: z.array(ResearchConstraintSchema),
+  document_outline: z.array(ResearchDocumentSectionSchema),
+  subpage_research_tasks: z.array(ResearchSubpageTaskSchema).default([]),
+  open_questions: z.array(ResearchOpenQuestionSchema),
+})
+export type ResearchBrief = z.infer<typeof ResearchBriefSchema>
+
+export const ResearchBundleSchema = z.object({
+  full_markdown: z.string().min(1).max(RESEARCH_BUNDLE_LIMITS.fullMarkdownChars),
+  evidence_json: z.string().min(1).max(RESEARCH_BUNDLE_LIMITS.evidenceJsonChars),
+  citation_map_json: z.string().min(1).max(RESEARCH_BUNDLE_LIMITS.citationMapJsonChars),
+})
+export type ResearchBundle = z.infer<typeof ResearchBundleSchema>
+
+export type ResearchStaleness = {
+  stale: boolean
+  reasons: string[]
+}
+
+function ensureUnique(ids: string[], label: string): string | undefined {
+  const seen = new Set<string>()
+  for (const id of ids) {
+    if (seen.has(id)) return `${label} id "${id}" is duplicated.`
+    seen.add(id)
+  }
+  return undefined
+}
+
+function ensureRefs(ids: string[], known: Set<string>, label: string): string | undefined {
+  const missing = ids.filter((id) => !known.has(id))
+  if (missing.length > 0) return `${label} references unknown id(s): ${missing.join(", ")}.`
+  return undefined
+}
+
+export function validateResearchBriefSemantics(brief: ResearchBrief): string | undefined {
+  const evidenceIDs = new Set(brief.evidence_index.map((item) => item.id))
+  const factIDs = new Set(brief.facts.map((item) => item.id))
+
+  const uniqueError =
+    ensureUnique(brief.evidence_index.map((item) => item.id), "evidence") ??
+    ensureUnique(brief.facts.map((item) => item.id), "fact") ??
+    ensureUnique(brief.inferences.map((item) => item.id), "inference") ??
+    ensureUnique(brief.problem_statements.map((item) => item.id), "problem_statement") ??
+    ensureUnique(brief.user_needs.map((item) => item.id), "user_need") ??
+    ensureUnique(brief.constraints.map((item) => item.id), "constraint") ??
+    ensureUnique(brief.document_outline.map((item) => item.id), "document_outline") ??
+    ensureUnique(brief.subpage_research_tasks.map((item) => item.id), "subpage_research_task") ??
+    ensureUnique(brief.open_questions.map((item) => item.id), "open_question")
+  if (uniqueError) return uniqueError
+
+  for (const fact of brief.facts) {
+    const err = ensureRefs(fact.evidence_ids, evidenceIDs, `fact ${fact.id}.evidence_ids`)
+    if (err) return err
+  }
+  for (const inference of brief.inferences) {
+    const err = ensureRefs(inference.based_on_fact_ids, factIDs, `inference ${inference.id}.based_on_fact_ids`)
+    if (err) return err
+  }
+  for (const item of brief.problem_statements) {
+    const err = ensureRefs(item.fact_ids, factIDs, `problem_statement ${item.id}.fact_ids`)
+    if (err) return err
+  }
+  for (const item of brief.user_needs) {
+    const err = ensureRefs(item.fact_ids, factIDs, `user_need ${item.id}.fact_ids`)
+    if (err) return err
+  }
+  for (const item of brief.constraints) {
+    const err = ensureRefs(item.fact_ids, factIDs, `constraint ${item.id}.fact_ids`)
+    if (err) return err
+  }
+  for (const item of brief.document_outline) {
+    const err = ensureRefs(item.evidence_ids, evidenceIDs, `document_outline ${item.id}.evidence_ids`)
+    if (err) return err
+  }
+  for (const item of brief.subpage_research_tasks) {
+    const err = ensureRefs(item.evidence_ids, evidenceIDs, `subpage_research_task ${item.id}.evidence_ids`)
+    if (err) return err
+  }
+  for (const item of brief.open_questions) {
+    const err = ensureRefs(item.related_fact_ids, factIDs, `open_question ${item.id}.related_fact_ids`)
+    if (err) return err
+  }
+  return undefined
+}
+
+export function validateResearchBriefIntegrity(brief: ResearchBrief): string | undefined {
+  const semanticError = validateResearchBriefSemantics(brief)
+  if (semanticError) return semanticError
+
+  const expectedDigest = researchSourceDigest(brief.evidence_index)
+  if (brief.metadata.source_digest !== expectedDigest) {
+    return `source_digest mismatch: expected ${expectedDigest}.`
+  }
+
+  const bundlePaths = [
+    brief.bundle.full_markdown_path,
+    brief.bundle.evidence_json_path,
+    brief.bundle.citation_map_path,
+  ]
+  for (const bundlePath of bundlePaths) {
+    const normalized = bundlePath.replaceAll("\\", "/")
+    if (
+      normalized.startsWith("/") ||
+      normalized.includes("..") ||
+      !PROJECT_RELATIVE_RUNTIME_RESEARCH_PATH.test(normalized)
+    ) {
+      return `bundle path is outside the task research runtime boundary: ${bundlePath}.`
+    }
+  }
+  return undefined
+}
+
+export function validateResearchBriefTaskBoundary(brief: ResearchBrief, taskID: string): string | undefined {
+  const expectedPrefix = `.opencorvus/runtime/tasks/${Identifier.shortPath(taskID)}/research/`
+  const bundlePaths = [
+    brief.bundle.full_markdown_path,
+    brief.bundle.evidence_json_path,
+    brief.bundle.citation_map_path,
+  ]
+  for (const bundlePath of bundlePaths) {
+    const normalized = bundlePath.replaceAll("\\", "/")
+    if (!normalized.startsWith(expectedPrefix)) {
+      return `bundle path does not belong to task ${taskID}: ${bundlePath}.`
+    }
+  }
+  return undefined
+}
+
+export function researchRequestHash(input: string): string {
+  return createHash("sha256").update(input).digest("hex")
+}
+
+export function researchSourceDigest(evidence: ResearchEvidenceRef[]): string {
+  const normalized = evidence
+    .map((item) => ({
+      id: item.id,
+      kind: item.kind,
+      pointer: item.pointer,
+      title: item.title,
+      retrieved_at: item.retrieved_at,
+      reliability: item.reliability,
+      volatile: item.volatile,
+    }))
+    .sort((a, b) => a.id.localeCompare(b.id))
+  return createHash("sha256").update(JSON.stringify(normalized)).digest("hex")
+}
