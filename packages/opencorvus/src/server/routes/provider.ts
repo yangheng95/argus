@@ -162,6 +162,136 @@ export const ProviderRoutes = lazy(() =>
       },
     )
     .post(
+      "/discover-models",
+      describeRoute({
+        summary: "Discover OpenAI-compatible provider models",
+        description:
+          "Fetches the explicit OpenAI-compatible /models endpoint for a user-supplied base URL. This route only runs when requested by the operator; provider startup remains offline-first.",
+        operationId: "provider.discover.models",
+        responses: {
+          200: {
+            description: "Discovered model IDs",
+            content: {
+              "application/json": {
+                schema: resolver(
+                  z.object({
+                    ok: z.boolean(),
+                    models: z.array(z.string()),
+                    count: z.number(),
+                    error: z.string().optional(),
+                  }),
+                ),
+              },
+            },
+          },
+          ...errors(400),
+        },
+      }),
+      validator(
+        "json",
+        z.object({
+          api: z.string().min(1).meta({ description: "OpenAI-compatible base URL, usually ending in /v1" }),
+          apiKey: z.string().optional().meta({ description: "Optional API key used as a Bearer token" }),
+          providerID: z.string().optional().meta({ description: "Optional provider ID whose saved auth key may be used" }),
+        }),
+      ),
+      async (c) => {
+        const body = c.req.valid("json")
+        let base: URL
+        try {
+          base = new URL(body.api.trim())
+        } catch {
+          return c.json(
+            {
+              ok: false,
+              models: [],
+              count: 0,
+              error: "API URL must be an absolute http:// or https:// URL.",
+            },
+            400,
+          )
+        }
+        if (base.protocol !== "http:" && base.protocol !== "https:") {
+          return c.json(
+            {
+              ok: false,
+              models: [],
+              count: 0,
+              error: "API URL must use http:// or https://.",
+            },
+            400,
+          )
+        }
+
+        const modelsURL = `${body.api.trim().replace(/\/+$/, "")}/models`
+        const explicitKey = body.apiKey?.trim()
+        const savedAuth = body.providerID ? await Auth.get(body.providerID).catch(() => undefined) : undefined
+        const savedKey = savedAuth?.type === "api" ? savedAuth.key.trim() : ""
+        const apiKey = explicitKey || savedKey
+
+        try {
+          const response = await fetch(modelsURL, {
+            headers: apiKey ? { Authorization: `Bearer ${apiKey}` } : undefined,
+            signal: AbortSignal.timeout(15_000),
+          })
+          const text = await response.text()
+          if (!response.ok) {
+            return c.json({
+              ok: false,
+              models: [],
+              count: 0,
+              error: `GET ${modelsURL} returned HTTP ${response.status}: ${text || response.statusText}`,
+            })
+          }
+          let json: unknown
+          try {
+            json = JSON.parse(text)
+          } catch {
+            return c.json({
+              ok: false,
+              models: [],
+              count: 0,
+              error: `GET ${modelsURL} did not return JSON.`,
+            })
+          }
+          const data = (json as { data?: unknown }).data
+          if (!Array.isArray(data)) {
+            return c.json({
+              ok: false,
+              models: [],
+              count: 0,
+              error: `GET ${modelsURL} response must contain a data array.`,
+            })
+          }
+          const models = Array.from(
+            new Set(
+              data
+                .map((item) => (item && typeof item === "object" ? (item as { id?: unknown }).id : undefined))
+                .filter((id): id is string => typeof id === "string" && id.trim().length > 0)
+                .map((id) => id.trim()),
+            ),
+          ).sort((a, b) => a.localeCompare(b))
+          if (models.length === 0) {
+            return c.json({
+              ok: false,
+              models: [],
+              count: 0,
+              error: `GET ${modelsURL} returned no model ids.`,
+            })
+          }
+          return c.json({ ok: true, models, count: models.length })
+        } catch (error) {
+          const message = error instanceof Error ? error.message : String(error)
+          return c.json({
+            ok: false,
+            models: [],
+            count: 0,
+            error: `GET ${modelsURL} failed: ${message}`,
+          })
+        }
+      },
+    )
+    .post(
       "/:providerID/test",
       describeRoute({
         summary: "Test provider connection",

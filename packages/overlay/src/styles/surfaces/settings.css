@@ -2110,6 +2110,58 @@
   font-size: var(--ui-font-control);
   resize: vertical;
 }
+.provider-model-field-head {
+  display: flex;
+  justify-content: flex-end;
+  align-items: center;
+  min-width: 0;
+  margin-bottom: var(--ui-gap-xs);
+}
+.provider-advanced-fields {
+  border: var(--oc-border-width) solid color-mix(in srgb, var(--border) 62%, transparent);
+  border-radius: var(--oc-radius-soft);
+  background: var(--surface-inset);
+}
+.provider-advanced-summary {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--ui-gap-md);
+  min-width: 0;
+  padding: var(--ui-gap-sm) var(--ui-gap-md);
+  cursor: pointer;
+  color: var(--text-muted);
+  font-size: var(--ui-font-control);
+}
+.provider-advanced-summary::-webkit-details-marker {
+  display: none;
+}
+.provider-advanced-summary::before {
+  content: "";
+  width: calc(7px * var(--ui-scale));
+  height: calc(7px * var(--ui-scale));
+  border-right: var(--oc-border-width-strong) solid currentColor;
+  border-bottom: var(--oc-border-width-strong) solid currentColor;
+  transform: rotate(-45deg);
+  transition: transform var(--ui-duration-fast) var(--ui-timing-standard);
+  flex: none;
+}
+.provider-advanced-fields[open] .provider-advanced-summary::before {
+  transform: rotate(45deg);
+}
+.provider-advanced-derived {
+  min-width: 0;
+  color: var(--text-subtle);
+  font-family: var(--mono);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.provider-advanced-grid {
+  display: grid;
+  gap: var(--ui-gap-sm);
+  padding: 0 var(--ui-gap-md) var(--ui-gap-md);
+}
 .provider-form-actions {
   margin-top: var(--ui-gap-md);
 }
@@ -2241,6 +2293,16 @@
 .provider-test-result-msg {
   min-width: 0;
   overflow-wrap: break-word;
+}
+.provider-form-notice {
+  margin-top: var(--ui-gap-sm);
+  padding: var(--ui-gap-xs) var(--ui-gap-md);
+  border-radius: var(--oc-radius-soft);
+  font-size: var(--ui-font-control);
+  line-height: 1.4;
+  border: var(--oc-border-width) solid color-mix(in srgb, var(--good) 36%, transparent);
+  background: var(--good-dim);
+  color: var(--good);
 }
 
 .provider-head-actions {

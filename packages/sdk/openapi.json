@@ -6630,6 +6630,99 @@
         ]
       }
     },
+    "/provider/discover-models": {
+      "post": {
+        "operationId": "provider.discover.models",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "directory",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "summary": "Discover OpenAI-compatible provider models",
+        "description": "Fetches the explicit OpenAI-compatible /models endpoint for a user-supplied base URL. This route only runs when requested by the operator; provider startup remains offline-first.",
+        "responses": {
+          "200": {
+            "description": "Discovered model IDs",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "ok": {
+                      "type": "boolean"
+                    },
+                    "models": {
+                      "type": "array",
+                      "items": {
+                        "type": "string"
+                      }
+                    },
+                    "count": {
+                      "type": "number"
+                    },
+                    "error": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "ok",
+                    "models",
+                    "count"
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BadRequestError"
+                }
+              }
+            }
+          }
+        },
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "api": {
+                    "description": "OpenAI-compatible base URL, usually ending in /v1",
+                    "type": "string",
+                    "minLength": 1
+                  },
+                  "apiKey": {
+                    "description": "Optional API key used as a Bearer token",
+                    "type": "string"
+                  },
+                  "providerID": {
+                    "description": "Optional provider ID whose saved auth key may be used",
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "api"
+                ]
+              }
+            }
+          }
+        },
+        "x-codeSamples": [
+          {
+            "lang": "js",
+            "source": "import { createOpenCorvusClient } from \"@opencorvus-ai/sdk\"\n\nconst client = createOpenCorvusClient()\nawait client.provider.discover.models({\n  ...\n})"
+          }
+        ]
+      }
+    },
     "/provider/{providerID}/test": {
       "post": {
         "operationId": "provider.test",

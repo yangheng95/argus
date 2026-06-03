@@ -143,6 +143,8 @@ import type {
   ProviderAuthPromptsErrors,
   ProviderAuthPromptsResponses,
   ProviderAuthResponses,
+  ProviderDiscoverModelsErrors,
+  ProviderDiscoverModelsResponses,
   ProviderHexinRefreshResponses,
   ProviderListResponses,
   ProviderOauthAuthorizeErrors,
@@ -3030,6 +3032,51 @@ export class Hexin extends HeyApiClient {
   }
 }
 
+export class Discover extends HeyApiClient {
+  /**
+   * Discover OpenAI-compatible provider models
+   *
+   * Fetches the explicit OpenAI-compatible /models endpoint for a user-supplied base URL. This route only runs when requested by the operator; provider startup remains offline-first.
+   */
+  public models<ThrowOnError extends boolean = false>(
+    parameters?: {
+      directory?: string
+      api?: string
+      apiKey?: string
+      providerID?: string
+    },
+    options?: Options<never, ThrowOnError>,
+  ) {
+    const params = buildClientParams(
+      [parameters],
+      [
+        {
+          args: [
+            { in: "query", key: "directory" },
+            { in: "body", key: "api" },
+            { in: "body", key: "apiKey" },
+            { in: "body", key: "providerID" },
+          ],
+        },
+      ],
+    )
+    return (options?.client ?? this.client).post<
+      ProviderDiscoverModelsResponses,
+      ProviderDiscoverModelsErrors,
+      ThrowOnError
+    >({
+      url: "/provider/discover-models",
+      ...options,
+      ...params,
+      headers: {
+        "Content-Type": "application/json",
+        ...options?.headers,
+        ...params.headers,
+      },
+    })
+  }
+}
+
 export class Auth2 extends HeyApiClient {
   /**
    * Get auth prompts
@@ -3306,6 +3353,11 @@ export class Provider extends HeyApiClient {
   private _hexin?: Hexin
   get hexin(): Hexin {
     return (this._hexin ??= new Hexin({ client: this.client }))
+  }
+
+  private _discover?: Discover
+  get discover(): Discover {
+    return (this._discover ??= new Discover({ client: this.client }))
   }
 
   private _auth?: Auth2
