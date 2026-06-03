@@ -161,54 +161,6 @@ export const sourceTextSignals = [
   "2.8 %"
 ] as const
 
-export const sourceComponents = [
-  {
-    "name": "WEBCLONECSSSkeleton",
-    "kind": "navigation",
-    "tag": "main",
-    "classNames": [
-      "tv-content"
-    ],
-    "textPreview": [
-      "__WEB_CLONE_CSS_ASSET_219__",
-      "__WEB_CLONE_CSS_ASSET_220__",
-      "__WEB_CLONE_CSS_ASSET_221__",
-      "__WEB_CLONE_CSS_ASSET_222__",
-      "__WEB_CLONE_CSS_ASSET_223__",
-      "__WEB_CLONE_CSS_ASSET_224__",
-      "__WEB_CLONE_CSS_ASSET_225__",
-      "__WEB_CLONE_CSS_ASSET_226__",
-      "Markets",
-      "/",
-      "Economy",
-      "Economy"
-    ]
-  },
-  {
-    "name": "EnglishSkeleton",
-    "kind": "controls",
-    "tag": "footer",
-    "classNames": [
-      "tv-footer",
-      "js-footer"
-    ],
-    "textPreview": [
-      "English",
-      "English",
-      "Select market data provided by",
-      "ICE Data Services",
-      ".",
-      "Select reference data provided by FactSet. Copyright © 2026 FactSet Research Systems Inc.",
-      "Copyright © 2026, American Bankers Association. CUSIP Database provided by FactSet Research Systems Inc. All rights rese",
-      "SEC fillings and other documents provided by",
-      "Quartr",
-      ".",
-      "© 2026 TradingView, Inc.",
-      "More than a product"
-    ]
-  }
-] as const
-
 export const sourceTables = [
   {
     "title": "Table 4",

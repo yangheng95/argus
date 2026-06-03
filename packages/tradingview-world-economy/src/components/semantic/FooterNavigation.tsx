@@ -1,10 +1,9 @@
 // @ts-nocheck
-// semantic-source-replacement: generated from source footer structure, navigation groups, social links, assets, and legal text with data loops.
+// semantic-extracted-materials: generated from extracted footer structure, navigation groups, social links, assets, and legal text with data loops.
 
 const footerNavigationData = {
   "componentName": "FooterNavigation",
   "rootClassName": "tv-footer js-footer",
-  "rootSourceNodeId": "node_004314",
   "dataNosnippet": "",
   "promoClassName": "js-promo-footer-init-ssr",
   "visualRootClassName": "root-_gnlNXvh",
@@ -735,7 +734,7 @@ const footerNavigationData = {
 export function FooterNavigation() {
   const footer = footerNavigationData
   return (
-    <footer className={footer.rootClassName} data-source-region={footer.rootSourceNodeId} data-nosnippet={footer.dataNosnippet}>
+    <footer className={footer.rootClassName} data-nosnippet={footer.dataNosnippet}>
       <div className={footer.promoClassName}>
         <div className={footer.visualRootClassName}>
           <div className={footer.containerClassName}>

@@ -2,14 +2,9 @@ import { FooterNavigation } from "./semantic/FooterNavigation"
 import { HeaderNavigation } from "./semantic/HeaderNavigation"
 import { WorldEconomyOverviewContent } from "./semantic/WorldEconomyOverviewContent"
 
-export interface SourceDomPageProps {
-  sourceComponentNames: string
-  tableCount: number
-}
-
-export function SourceDomPage({ sourceComponentNames, tableCount }: SourceDomPageProps) {
+export function TradingViewWorldEconomyPage() {
   return (
-    <div className="source-dom-page theme-light feature-no-touch" data-theme="light" data-source-component-names={sourceComponentNames} data-source-table-count={tableCount}>
+    <div className="tradingview-world-economy-page theme-light feature-no-touch" data-theme="light">
       <div>
         <div className={"skipNavigationItemWrapper-wCFzoXZN"} data-name={"skip-navigation"} style={{ "top": "120px", "left": "24px" }}>
           <div className={"background-OxBZfgw8 large-OxBZfgw8 neutral-OxBZfgw8"}>
@@ -30,7 +25,7 @@ export function SourceDomPage({ sourceComponentNames, tableCount }: SourceDomPag
         <div className={"js-container-android-notification"} />
         <div className={"js-container-ios-notification"} />
         <HeaderNavigation />
-        <main data-source-role={"main"} className={"tv-content"} id={"tv-content"} aria-label={"Main content"} data-sf-nesting-track-id={"1.6.6"}>
+        <main data-page-role={"main"} className={"tv-content"} id={"tv-content"} aria-label={"Main content"} data-sf-nesting-track-id={"1.6.6"}>
           <WorldEconomyOverviewContent />
         </main>
         <FooterNavigation />

@@ -1,7 +1,7 @@
 export interface SourceTable {
   title?: string
-  headers: string[]
-  rows: string[][]
+  headers: readonly string[]
+  rows: readonly (readonly string[])[]
 }
 
 export function ContentTable({ table }: { table: SourceTable }) {
