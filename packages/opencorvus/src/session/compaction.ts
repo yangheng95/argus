@@ -29,6 +29,7 @@ import type { ModelMessage, StopCondition, ToolSet } from "ai"
 import { SessionLoop } from "./loop"
 import { Todo } from "./todo"
 import { SessionControl } from "./control"
+import { AutomaticCompaction } from "./auto-compaction"
 
 export namespace SessionCompaction {
   const log = Log.create({ service: "session.compaction" })
@@ -931,7 +932,7 @@ export namespace SessionCompaction {
         )
       }
       const session = await Session.get(input.sessionID)
-      if (input.auto && disablesAutomaticCompactionKind(session.kind)) {
+      if (input.auto && AutomaticCompaction.isDisabledForKind(session.kind)) {
         throw new Error(`Automatic compaction is disabled for workflow session kind ${session.kind}`)
       }
       SessionControl.create({
@@ -957,19 +958,4 @@ export namespace SessionCompaction {
     prunableToolParts,
   }
 
-  const workflowAutoCompactionDisabledSessionKinds = new Set([
-    "architect",
-    "delivery",
-    "fact-check",
-    "goal-workload-analyst",
-    "intent-analysis",
-    "orchestrator",
-    "research",
-    "frontend-research",
-    "requirements",
-  ])
-
-  function disablesAutomaticCompactionKind(kind: string): boolean {
-    return workflowAutoCompactionDisabledSessionKinds.has(kind)
-  }
 }
