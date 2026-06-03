@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test"
-import { mkdirSync, rmSync, statSync } from "node:fs"
+import { mkdirSync, readFileSync, rmSync, statSync } from "node:fs"
 import os from "node:os"
 import path from "node:path"
 import {
@@ -65,6 +65,18 @@ describe("capture reference diagnostics", () => {
       if (previous === undefined) delete process.env.OPENCORVUS_CAPTURE_BROWSER_IN_PROCESS
       else process.env.OPENCORVUS_CAPTURE_BROWSER_IN_PROCESS = previous
     }
+  })
+
+  test("node capture script uses the shared launch timeout instead of a hard-coded Chrome startup cap", () => {
+    const source = readFileSync(
+      path.join(import.meta.dir, "../../src/frontend-design/capture-gate.ts"),
+      "utf8",
+    )
+
+    expect(source).toContain("timeout: input.launchTimeoutMs")
+    expect(source).not.toContain("timeout: 15000")
+    expect(source).not.toContain("timeout: 15_000")
+    expect(source).not.toContain("timeoutMs ?? 90_000")
   })
 
   test("captures a local HTTP visual reference through the browser runtime", async () => {

@@ -60,7 +60,7 @@ describe("BrowserRuntime", () => {
 
     try {
       delete process.env.OPENCORVUS_BROWSER_LAUNCH_TIMEOUT_MS
-      expect(BrowserRuntime.resolveBrowserLaunchTimeoutMs()).toBe(60_000)
+      expect(BrowserRuntime.resolveBrowserLaunchTimeoutMs()).toBe(300_000)
       expect(BrowserRuntime.resolveBrowserLaunchTimeoutMs(12_345)).toBe(12_345)
 
       process.env.OPENCORVUS_BROWSER_LAUNCH_TIMEOUT_MS = "90000"
@@ -68,7 +68,7 @@ describe("BrowserRuntime", () => {
       expect(BrowserRuntime.resolveBrowserLaunchTimeoutMs(7_000)).toBe(7_000)
 
       process.env.OPENCORVUS_BROWSER_LAUNCH_TIMEOUT_MS = "not-a-number"
-      expect(BrowserRuntime.resolveBrowserLaunchTimeoutMs()).toBe(60_000)
+      expect(BrowserRuntime.resolveBrowserLaunchTimeoutMs()).toBe(300_000)
     } finally {
       if (previous === undefined) delete process.env.OPENCORVUS_BROWSER_LAUNCH_TIMEOUT_MS
       else process.env.OPENCORVUS_BROWSER_LAUNCH_TIMEOUT_MS = previous

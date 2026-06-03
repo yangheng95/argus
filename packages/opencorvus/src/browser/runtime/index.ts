@@ -48,7 +48,7 @@ export namespace BrowserRuntime {
 
   export const RECOVERY_COMMAND =
     "Install Chrome/Edge or set OPENCORVUS_BROWSER_EXECUTABLE to the browser executable path."
-  export const DEFAULT_BROWSER_LAUNCH_TIMEOUT_MS = 60_000
+  export const DEFAULT_BROWSER_LAUNCH_TIMEOUT_MS = 300_000
 
   export function resolveBrowserLaunchTimeoutMs(explicit?: number): number {
     if (typeof explicit === "number" && Number.isFinite(explicit) && explicit > 0) return explicit

@@ -179,7 +179,7 @@ export async function captureReferenceManifest(input: {
 
   const viewport = input.viewport ?? { width: 1440, height: 900 }
   const deviceScaleFactor = input.viewport?.deviceScaleFactor ?? 1
-  const timeoutMs = input.timeoutMs ?? 90_000
+  const timeoutMs = BrowserRuntime.resolveBrowserLaunchTimeoutMs(input.timeoutMs)
   const startedAt = Date.now()
 
   const evidence = await captureBrowserEvidence({
@@ -426,7 +426,8 @@ async function captureBrowserEvidenceViaNode(input: {
   browserExecutable?: string
 }): Promise<BrowserEvidence> {
   const executablePath = await BrowserRuntime.findBrowserExecutable(input.browserExecutable)
-  const hardTimeoutMs = input.timeoutMs + 30_000
+  const launchTimeoutMs = BrowserRuntime.resolveBrowserLaunchTimeoutMs(input.timeoutMs)
+  const hardTimeoutMs = launchTimeoutMs + input.timeoutMs + 30_000
   const runtime = await resolveBrowserNodeSidecarRuntime()
   const run = await runBrowserNodeSidecar<
     | { ok: true; screenshotBase64: string; domOuter: string; innerText: string; layoutRaw: BrowserEvidence["layoutRaw"]; harByteSize: number; chromeVersion?: string }
@@ -434,7 +435,7 @@ async function captureBrowserEvidenceViaNode(input: {
   >({
     runtime,
     script: NODE_CAPTURE_SCRIPT,
-    payload: { ...input, executablePath },
+    payload: { ...input, executablePath, launchTimeoutMs },
     payloadEnvName: "OPENCORVUS_CAPTURE_INPUT",
     hardTimeoutMs,
     label: "Node browser capture",
@@ -481,7 +482,7 @@ async function main() {
     browser = await chromium.launch({
       executablePath: input.executablePath,
       headless: true,
-      timeout: 15000,
+      timeout: input.launchTimeoutMs,
       args: ["--no-sandbox", "--disable-gpu", "--disable-dev-shm-usage"],
     });
     const context = await browser.newContext({
