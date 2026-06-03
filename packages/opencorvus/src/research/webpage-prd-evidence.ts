@@ -121,7 +121,7 @@ export async function readPreparedWebpagePrdEvidence(input: {
   ])
   if (!hasMirror || !hasSourcePackage) {
     throw new Error(
-      "frontend-research requires existing frontend-design webpage evidence; run frontend_design before frontend_research for webpage PRD evidence",
+      "prepared webpage PRD evidence requires a complete frontend-design runtime evidence package",
     )
   }
   const excerpts = await Promise.all(PROMPT_ARTIFACTS.map((artifact) => readPromptArtifact(paths.relativeDir, paths, artifact)))

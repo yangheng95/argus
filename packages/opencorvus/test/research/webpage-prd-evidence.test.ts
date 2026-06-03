@@ -102,14 +102,14 @@ describe("research webpage PRD evidence", () => {
     expect(evidence.excerpts.some((item) => item.excerpt.includes("Economic trends"))).toBe(true)
   }, { timeout: WEBPAGE_PRD_EVIDENCE_TIMEOUT_MS })
 
-  test("rejects frontend-research evidence reads when frontend-design has not prepared the runtime package", async () => {
+  test("rejects prepared evidence reads when frontend-design has not prepared the runtime package", async () => {
     await using tmp = await tmpdir()
 
     await expect(readPreparedWebpagePrdEvidence({
       projectDir: tmp.path,
       taskID: "tsk_research_webpage_prd_missing",
       url: "https://example.com/markets/world-economy/",
-    })).rejects.toThrow("requires existing frontend-design webpage evidence")
+    })).rejects.toThrow("requires a complete frontend-design runtime evidence package")
   })
 })
 
