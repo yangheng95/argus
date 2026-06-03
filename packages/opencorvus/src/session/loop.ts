@@ -2510,6 +2510,7 @@ export namespace SessionLoop {
       "architect",
       "fact-check",
       "frontend-design",
+      "frontend-research",
       "goal-workload-analyst",
       "intent-analysis",
       "requirements",

@@ -346,6 +346,21 @@ describe("extras execute-return normalisation (integration via resolveTools)", (
     expect(SessionLoop.usesExactRuntimeContractTools("build", contract)).toBe(false)
   })
 
+  test("frontend-research runtime contract uses exact delegation tools instead of registry or MCP inheritance", () => {
+    const contract = runtimeContract("ses_frontend_research_exact", {
+      identity: {
+        sessionID: "ses_frontend_research_exact",
+        agentKind: "frontend-research",
+        contractKind: "stage-attempt",
+      },
+      tools: { delegate_deep_research_to_build: dummyTool(), submit_research_brief: dummyTool() },
+    })
+
+    expect(SessionLoop.usesExactRuntimeContractTools("frontend-research", contract)).toBe(true)
+    expect(SessionLoop.usesExactRuntimeContractTools("research", contract)).toBe(false)
+    expect(SessionLoop.usesExactRuntimeContractTools("frontend-research", undefined)).toBe(false)
+  })
+
   test("orchestrator-wake runtime contract does not require a worker descriptor", () => {
     const sessionID = `ses_runtime_${Date.now()}_orchestrator_descriptor_exempt`
     SessionLoop.setSessionRuntimeContract(
