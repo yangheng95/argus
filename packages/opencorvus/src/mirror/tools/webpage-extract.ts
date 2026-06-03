@@ -134,7 +134,6 @@ Use this only when URL evidence is missing for the requested output directory. D
         images: page.assets.images.length,
         icons: page.assets.icons.length,
         imagesDownloaded: page.assets.imageMap ? Object.keys(page.assets.imageMap).length : 0,
-        imageDownloadFailures: page.assets.imageDownloadFailures?.length ?? 0,
       },
     }
 
@@ -148,8 +147,7 @@ Use this only when URL evidence is missing for the requested output directory. D
         `- Elements: ${page.stats.extractedElements} / ${page.stats.totalElements}`,
         `- Tokens: ${summary.tokens.colors} colors, ${summary.tokens.fonts} fonts, ${summary.tokens.customProperties} CSS vars`,
         `- Assets: ${summary.assets.images} images, ${summary.assets.icons} icons` +
-          (summary.assets.imagesDownloaded > 0 ? `, ${summary.assets.imagesDownloaded} downloaded` : "") +
-          (summary.assets.imageDownloadFailures > 0 ? `, ${summary.assets.imageDownloadFailures} download failures recorded` : ""),
+          (summary.assets.imagesDownloaded > 0 ? `, ${summary.assets.imagesDownloaded} downloaded` : ""),
         "",
         `**Reference screenshot:** \`${referencePath}\``,
         `**HTML capture:** \`${captureHtmlPath}\``,

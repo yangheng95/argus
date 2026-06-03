@@ -44,12 +44,6 @@ describe("ExtractedPageSchema", () => {
     page.assets.imageMap = { "https://cdn/a.png": "images/img-0.png" }
     expect(() => ExtractedPageSchema.parse(page)).not.toThrow()
   })
-
-  test("accepts recorded image download failures in assets", () => {
-    const page = minimalPage()
-    page.assets.imageDownloadFailures = [{ src: "https://cdn/missing.svg", reason: "unknown certificate verification error" }]
-    expect(() => ExtractedPageSchema.parse(page)).not.toThrow()
-  })
 })
 
 describe("ExtractedElementSchema — recursive", () => {
