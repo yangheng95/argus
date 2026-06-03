@@ -141,6 +141,8 @@ export function renderWebpagePrdEvidencePromptSection(evidence: WebpagePrdEviden
     "Use this rendered webpage evidence as the primary source for page layout, visible content, responsive behavior, style tokens, interactions, maps, charts, cards, tables, and footer/header inventory.",
     "Do not call `webfetch` against this same URL for visual layout or content extraction. Use `webfetch` only for narrow metadata or linked-source confirmation when these artifacts identify a missing fact.",
     "Return `document_outline` as the PRD major module list for downstream agent splitting. Order modules by visible page flow and include evidence ids for each module.",
+    "Also submit `webpage_contract`. It must be faithful to the rendered page and must cover functional_surfaces, visual_layout, style_requirements, interaction_states, data_content_inventory, fidelity_acceptance, and fidelity_risks. Do not substitute a raw artifact/material list for this contract.",
+    "If the evidence is insufficient to describe an original-page function, layout, or style faithfully, preserve that uncertainty in fidelity_risks and open_questions instead of inventing a design.",
     "",
     "## Canonical Artifact Paths",
     artifactList || "- none",

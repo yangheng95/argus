@@ -80,14 +80,25 @@ export function buildResearchReport(collector: ResearchCollector) {
   }
   const blocking = draft.open_questions.filter((item) => item.blocking)
   const subpageTasks = draft.subpage_research_tasks ?? []
+  const webpageContract = draft.webpage_contract
   return {
     summary: limitSummary(
-      `research brief submitted: sources=${draft.evidence_index.length}, facts=${draft.facts.length}, subpage_research_tasks=${subpageTasks.length}, blocking_open_questions=${blocking.length}`,
+      `research brief submitted: sources=${draft.evidence_index.length}, facts=${draft.facts.length}, webpage_contract=${webpageContract ? "yes" : "no"}, subpage_research_tasks=${subpageTasks.length}, blocking_open_questions=${blocking.length}`,
     ),
     detail: [
       `## Summary\n${draft.summary}`,
       `## Sources\n${markdownList(draft.evidence_index.map((item) => `${item.id} [${item.kind}/${item.reliability}] ${item.title} — ${item.pointer}`))}`,
       `## Problem Statements\n${markdownList(draft.problem_statements.map((item) => `${item.id}: ${item.statement}`))}`,
+      webpageContract
+        ? `## Webpage Contract\n${markdownList([
+          `source_url: ${webpageContract.source_url}`,
+          `functional_surfaces=${webpageContract.functional_surfaces.length}`,
+          `visual_layout=${webpageContract.visual_layout.length}`,
+          `style_requirements=${webpageContract.style_requirements.length}`,
+          `fidelity_acceptance=${webpageContract.fidelity_acceptance.length}`,
+          `fidelity_risks=${webpageContract.fidelity_risks.length}`,
+        ])}`
+        : "## Webpage Contract\n- none",
       subpageTasks.length > 0
         ? `## Subpage Research Tasks\n${markdownList(subpageTasks.map((item) => `${item.id}: ${item.url} - ${item.suggested_focus}`))}`
         : "## Subpage Research Tasks\n- none",
@@ -135,9 +146,10 @@ export function createResearchOutputTools() {
         collector.semantic_error = undefined
         const subpageTasks = draft.subpage_research_tasks?.length ?? 0
         const blocking = draft.open_questions.filter((item) => item.blocking).length
+        const webpageContract = draft.webpage_contract ? "yes" : "no"
         return (
           `PASS: research brief submitted (sources=${draft.evidence_index.length}, facts=${draft.facts.length}, ` +
-          `subpage_research_tasks=${subpageTasks}, blocking_open_questions=${blocking}, fact_check_items=${collector.fact_check_items.length}).`
+          `webpage_contract=${webpageContract}, subpage_research_tasks=${subpageTasks}, blocking_open_questions=${blocking}, fact_check_items=${collector.fact_check_items.length}).`
         )
       },
     }),
