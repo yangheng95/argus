@@ -1,8 +1,8 @@
-import { spawn } from "node:child_process"
 import fs from "node:fs/promises"
 import path from "node:path"
 
 import { BrowserRuntime } from "@/browser/runtime"
+import { runBrowserNodeSidecar } from "@/browser/runtime/node-executor"
 import { resolveBrowserNodeSidecarRuntime } from "@/browser/runtime/node-sidecar"
 
 export interface RuntimeStateViewport {
@@ -174,75 +174,25 @@ async function captureRuntimeStateSnapshotsViaNode(input: {
     captureFunctionSource: browserCaptureRuntimeState.toString(),
     statePoints: STATE_POINTS,
   }
-  const payload = Buffer.from(JSON.stringify(payloadInput), "utf8").toString("base64")
-  const child = spawn(runtime.nodeExecutable, ["-"], {
-    cwd: process.cwd(),
-    env: {
-      ...process.env,
-      OPENCORVUS_RUNTIME_STATE_INPUT: payload,
-      OPENCORVUS_PLAYWRIGHT_REQUIRE_PATH: runtime.playwrightRequirePath,
-    },
-    stdio: ["pipe", "pipe", "pipe"],
-    windowsHide: true,
-  })
-  child.stdin.end(NODE_RUNTIME_STATE_SCRIPT)
-
-  let stdout = ""
-  let stderr = ""
-  child.stdout.setEncoding("utf8")
-  child.stderr.setEncoding("utf8")
-  child.stdout.on("data", (chunk) => {
-    stdout += chunk
-  })
-  child.stderr.on("data", (chunk) => {
-    stderr += chunk
-  })
-
   const hardTimeoutMs = launchTimeoutMs + 60_000 + 30_000
-  const abortHandler = () => child.kill()
-  input.signal?.addEventListener("abort", abortHandler, { once: true })
-  const exit = await new Promise<{ code: number | null; signal: NodeJS.Signals | null }>((resolve, reject) => {
-    const timer = setTimeout(() => {
-      child.kill()
-      reject(new Error(`Node runtime state capture timed out after ${hardTimeoutMs}ms. stderr=${stderr.slice(-2000)}`))
-    }, hardTimeoutMs)
-    child.once("error", (error) => {
-      clearTimeout(timer)
-      reject(error)
-    })
-    child.once("exit", (code, signal) => {
-      clearTimeout(timer)
-      resolve({ code, signal })
-    })
-  }).catch((error) => ({
-    code: 1,
-    signal: null,
-    error,
-  })).finally(() => {
-    input.signal?.removeEventListener("abort", abortHandler)
+  const run = await runBrowserNodeSidecar<NodeRuntimeStateResult>({
+    runtime,
+    script: NODE_RUNTIME_STATE_SCRIPT,
+    payload: payloadInput,
+    payloadEnvName: "OPENCORVUS_RUNTIME_STATE_INPUT",
+    hardTimeoutMs,
+    signal: input.signal,
+    label: "Node runtime state capture",
   })
-
-  if ("error" in exit) {
-    const error = exit.error
-    throw new Error(error instanceof Error ? error.message : String(error), { cause: error })
-  }
-
-  let result: NodeRuntimeStateResult
-  try {
-    result = JSON.parse(stdout) as NodeRuntimeStateResult
-  } catch (error) {
-    throw new Error(`Node runtime state capture returned invalid JSON. stderr=${stderr.trim()} stdout=${stdout.slice(0, 500)}`, {
-      cause: error,
-    })
-  }
+  const { result } = run
 
   if (!result.ok) {
     throw new Error(`Node runtime state capture failed during ${result.phase}: ${result.message}`, {
       cause: result.stack ? new Error(result.stack) : undefined,
     })
   }
-  if (exit.code !== 0) {
-    throw new Error(`Node runtime state capture exited with ${exit.signal ?? exit.code}. stderr=${stderr.trim()}`)
+  if (run.exitCode !== 0) {
+    throw new Error(`Node runtime state capture exited with ${run.signal ?? run.exitCode}. stderr=${run.stderr.trim()}`)
   }
   return result.snapshots
 }
