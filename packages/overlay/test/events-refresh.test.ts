@@ -593,7 +593,7 @@ test("consumed sequenced run progress advances selected cursor and avoids false 
   expect(boardStore.taskSequence).toBe(6);
 
   const event = {
-    type: "goal.updated",
+    type: "goal.progress",
     taskID: "tsk_refresh",
     sequence: 7,
   };
@@ -630,7 +630,7 @@ test("consumed sequenced run output advances selected cursor and avoids false re
   expect(boardStore.taskSequence).toBe(6);
 
   const event = {
-    type: "goal.updated",
+    type: "goal.progress",
     taskID: "tsk_refresh",
     sequence: 7,
   };
@@ -664,7 +664,7 @@ test("consumed sequenced task rewound advances selected cursor and avoids false 
   expect(boardStore.taskSequence).toBe(6);
 
   const event = {
-    type: "goal.updated",
+    type: "goal.progress",
     taskID: "tsk_refresh",
     sequence: 7,
   };
@@ -685,7 +685,7 @@ test("selected task sequence gap triggers recovery without advancing cursor", as
   setBoardStore("taskSequence", 5);
 
   handleEventStreamEvent({
-    type: "goal.updated",
+    type: "goal.progress",
     taskID: "tsk_refresh",
     sequence: 7,
   });

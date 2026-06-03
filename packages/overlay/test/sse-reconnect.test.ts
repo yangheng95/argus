@@ -9,6 +9,7 @@ import {
   stopSSE,
   stopTaskListSSE,
   type SseReconnectDeps,
+  type SseStartOptions,
 } from "../src/services/sse"
 import {
   __setHostTransportForTest,
@@ -17,7 +18,7 @@ import {
   type StreamOpenRequest,
   type TransportRequest,
 } from "../src/services/host-transport"
-import { setBoardStore } from "../src/store/board"
+import { setBoardStore, type BoardSource } from "../src/store/board"
 import { messageStore } from "../src/store/messages"
 import { setSettingsStore } from "../src/store/settings"
 import { resetSelectedLiveCursor } from "../src/services/selected-stream-cursor"
@@ -38,7 +39,7 @@ import { selectTask } from "../src/services/task"
 
 interface Spy {
   resumeAfterCalls: number
-  restartCalls: Array<[string, number]>
+  restartCalls: Array<[BoardSource, number, SseStartOptions | undefined]>
   retryCalls: number
   consoleErrors: unknown[][]
 }
@@ -48,7 +49,7 @@ function makeDeps(opts: {
   after: number
   currentTaskID: () => string
   resumeAfter: () => number
-  restart?: (taskID: string, after: number) => void
+  restart?: (source: BoardSource, after: number, options?: SseStartOptions) => void
   retryDelayMs?: number
   fireRetry?: boolean
 }): { deps: SseReconnectDeps; spy: Spy } {
@@ -66,9 +67,9 @@ function makeDeps(opts: {
       spy.resumeAfterCalls++
       return opts.resumeAfter()
     },
-    restart: (id, after) => {
-      spy.restartCalls.push([id, after])
-      opts.restart?.(id, after)
+    restart: (source, after, options) => {
+      spy.restartCalls.push([source, after, options])
+      opts.restart?.(source, after, options)
     },
     scheduleRetry: (fn, _ms) => {
       spy.retryCalls++
@@ -102,6 +103,7 @@ function conversationPayload(taskID: string, lastSequence: number) {
     history: { oldestTimestamp: null, oldestMessageID: null, hasMore: false, limit: 160 },
     view: { sessions: [] },
     agentView: { sessions: [] },
+    messageWatermark: lastSequence,
   }
 }
 
@@ -115,7 +117,7 @@ describe("performSseReconnect (audit W2-V10)", () => {
     })
     await performSseReconnect(deps)
     expect(spy.resumeAfterCalls).toBe(1)
-    expect(spy.restartCalls).toEqual([["tsk_a", 42]])
+    expect(spy.restartCalls).toEqual([[{ kind: "task", id: "tsk_a" }, 42, undefined]])
     expect(spy.retryCalls).toBe(0)
     expect(spy.consoleErrors.length).toBe(0)
   })
@@ -141,7 +143,7 @@ describe("performSseReconnect (audit W2-V10)", () => {
       // Retry was scheduled.
       expect(spy.retryCalls).toBe(1)
       await new Promise((r) => setTimeout(r, 0))
-      expect(spy.restartCalls).toEqual([["tsk_b", 100]])
+      expect(spy.restartCalls).toEqual([[{ kind: "task", id: "tsk_b" }, 100, undefined]])
       // The throw was logged (not silently swallowed).
       expect(errs.length).toBeGreaterThanOrEqual(1)
       const msg = errs[0]!.map(String).join(" ")
@@ -175,7 +177,10 @@ describe("performSseReconnect (audit W2-V10)", () => {
 
       expect(spy.resumeAfterCalls).toBe(2)
       expect(spy.retryCalls).toBe(1)
-      expect(spy.restartCalls).toEqual([["tsk_retry", 100], ["tsk_retry", 123]])
+      expect(spy.restartCalls).toEqual([
+        [{ kind: "task", id: "tsk_retry" }, 100, undefined],
+        [{ kind: "task", id: "tsk_retry" }, 123, undefined],
+      ])
     } finally {
       console.error = orig
     }
@@ -236,7 +241,7 @@ describe("performSseReconnect (audit W2-V10)", () => {
       // and returns without scheduling. No restart, no retry.
       expect(spy.resumeAfterCalls).toBe(1)
       expect(spy.retryCalls).toBe(0)
-      expect(spy.restartCalls).toEqual([["tsk_f", 8]])
+      expect(spy.restartCalls).toEqual([[{ kind: "task", id: "tsk_f" }, 8, undefined]])
     } finally {
       console.error = orig
     }
@@ -250,6 +255,7 @@ describe("startSSE stream error handling", () => {
     resetSelectedLiveCursor()
     __setHostTransportForTest(undefined)
     setBoardStore("selectedTaskID", "")
+    setBoardStore("selectedSource", null)
     setBoardStore("taskSequence", 0)
     setBoardStore("board", null)
     setBoardStore("taskSwitching", false)
@@ -278,8 +284,9 @@ describe("startSSE stream error handling", () => {
 
       __setHostTransportForTest(transport)
       setBoardStore("selectedTaskID", "tsk_error")
+      setBoardStore("selectedSource", { kind: "task", id: "tsk_error" })
 
-      startSSE("tsk_error")
+      startSSE({ kind: "task", id: "tsk_error" })
       handlers!.onOpen?.()
       expect(messageStore.sseConnected).toBe(true)
 
@@ -325,9 +332,10 @@ describe("startSSE stream error handling", () => {
       try {
         __setHostTransportForTest(transport)
         setBoardStore("selectedTaskID", "tsk_expired")
+        setBoardStore("selectedSource", { kind: "task", id: "tsk_expired" })
         setBoardStore("taskSequence", 6)
 
-        startSSE("tsk_expired", 5)
+        startSSE({ kind: "task", id: "tsk_expired" }, 5)
         handlers!.onEvent(JSON.stringify({
           type: "task.live_replay_expired",
           task_id: "tsk_expired",
@@ -420,9 +428,10 @@ describe("startSSE stream error handling", () => {
       try {
         __setHostTransportForTest(transport)
         setBoardStore("selectedTaskID", "tsk_watchdog")
+        setBoardStore("selectedSource", { kind: "task", id: "tsk_watchdog" })
         setBoardStore("taskSequence", 41)
 
-        startSSE("tsk_watchdog", 40)
+        startSSE({ kind: "task", id: "tsk_watchdog" }, 40)
         handlers!.onOpen?.()
         expect(messageStore.sseConnected).toBe(true)
 
@@ -447,7 +456,14 @@ describe("startSSE stream error handling", () => {
     const streams: StreamOpenRequest[] = []
     const transport = {
       kind: "tauri",
-      request: async <T>(_input: TransportRequest) => ({ status: 200, ok: true, headers: {}, body: null as T }),
+      request: async <T>(input: TransportRequest) => ({
+        status: 200,
+        ok: true,
+        headers: {},
+        body: input.path === "task/tsk_same/conversation"
+          ? conversationPayload("tsk_same", 77) as T
+          : null as T,
+      }),
       openStream: (input: StreamOpenRequest, _h: StreamHandlers) => {
         streams.push(input)
         return { close() {} }
@@ -458,6 +474,7 @@ describe("startSSE stream error handling", () => {
 
     __setHostTransportForTest(transport)
     setBoardStore("selectedTaskID", "tsk_same")
+    setBoardStore("selectedSource", { kind: "task", id: "tsk_same" })
     setBoardStore("taskSequence", 77)
     setBoardStore("board", {
       snapshotVersion: "board:same",
