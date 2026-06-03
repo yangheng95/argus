@@ -89,15 +89,14 @@ import { Question } from "@/question"
 import { buildBuildAgentReport } from "./report"
 import { InstructionPrompt } from "@/session/instruction"
 import { renderBuildPromptOverlays } from "./prompt-context"
+import { createBuildScreenshotTool } from "./screenshot-tool"
 
 import BUILD_CORE from "@/prompt/core/build-core.txt"
 import ENGINEERING_CRAFT from "@/prompt/core/engineering-craft.txt"
 
 const log = Log.create({ service: "build-agent" })
 
-export function createMergeBackSingleFlight<T extends { status: string }>(
-  execute: () => Promise<T>,
-): () => Promise<T> {
+export function createMergeBackSingleFlight<T extends { status: string }>(execute: () => Promise<T>): () => Promise<T> {
   let inFlight: Promise<T> | undefined
   let merged: T | undefined
   return async () => {
@@ -474,7 +473,7 @@ export namespace BuildAgent {
         }).catch((error) => {
           throw new Error(
             `BuildAgent.run: failed to materialize task runtime artifacts in ${worktreeDir}: ` +
-            `${error instanceof Error ? error.message : String(error)}`,
+              `${error instanceof Error ? error.message : String(error)}`,
             { cause: error instanceof Error ? error : undefined },
           )
         })
@@ -483,15 +482,17 @@ export namespace BuildAgent {
       const buildSession = input.existingSessionID
         ? await Session.get(input.existingSessionID)
         : await Session.createNext({
-          id: buildSessionID,
-          kind: "build",
-          parentID: input.parentSessionID,
-          goalID: input.target.kind === "goal" ? input.target.id : undefined,
-          title: buildSessionTitle(input.target),
-          directory: worktreeDir,
-        })
+            id: buildSessionID,
+            kind: "build",
+            parentID: input.parentSessionID,
+            goalID: input.target.kind === "goal" ? input.target.id : undefined,
+            title: buildSessionTitle(input.target),
+            directory: worktreeDir,
+          })
       if (buildSession.kind !== "build") {
-        throw new Error(`BuildAgent.run: existing session ${buildSession.id} has kind=${buildSession.kind}, expected build`)
+        throw new Error(
+          `BuildAgent.run: existing session ${buildSession.id} has kind=${buildSession.kind}, expected build`,
+        )
       }
       if ((buildSession.goalID ?? undefined) !== (input.target.kind === "goal" ? input.target.id : undefined)) {
         throw new Error(
@@ -639,9 +640,7 @@ export namespace BuildAgent {
             status: "merged" as const,
             primary_head: outcome.primaryHead,
             primary_branch: outcome.primaryBranch,
-            ...(outcome.primaryRecoveryCommit
-              ? { primary_recovery_commit: outcome.primaryRecoveryCommit }
-              : {}),
+            ...(outcome.primaryRecoveryCommit ? { primary_recovery_commit: outcome.primaryRecoveryCommit } : {}),
           }
         }
         if (outcome.status === "conflict") {
@@ -687,7 +686,12 @@ export namespace BuildAgent {
       }
       const buildCollector: BuildCollector = {}
       const buildBuildReport = () => buildBuildAgentReport(buildCollector)
-      const createBuildReportTools = (): ToolSet => ({
+      const createBuildRuntimeTools = (): ToolSet => ({
+        screenshot: createBuildScreenshotTool({
+          projectID: Instance.project.id,
+          projectDir: Instance.project.worktree,
+          taskID: input.task.id,
+        }),
         report_build_result: tool({
           description:
             "Finalize this build session with status='passed' or status='failed'. " +
@@ -762,7 +766,7 @@ export namespace BuildAgent {
                   inputSchema: z.object({}),
                   execute: executeMergeBack,
                 }),
-                ...createBuildReportTools(),
+                ...createBuildRuntimeTools(),
               },
               getCollector: () => buildCollector,
               buildReport: buildBuildReport,
@@ -771,7 +775,7 @@ export namespace BuildAgent {
               // Caller-owned worktrees (input.workDir set) skip merge_back — the
               // caller manages publishing. The agent prompt is gated on the
               // tool's presence so the LLM does not invent the call.
-              tools: createBuildReportTools(),
+              tools: createBuildRuntimeTools(),
               getCollector: () => buildCollector,
               buildReport: buildBuildReport,
             }
@@ -1348,7 +1352,7 @@ export function renderBuildAutoIterationMode(autoIteration: boolean): string {
     "## Auto Iteration Mode",
     autoIteration
       ? "- assistant.auto_iteration=true: after verification failures, continue focused repair attempts, including assigned dependency, toolchain, port, script, test, and worktree merge repairs, until every acceptance spec is satisfied or a concrete blocker remains."
-      : "- assistant.auto_iteration=false: make one focused repair/verification pass, including any explicitly assigned stuck-state repair in this worktree, then report the exact remaining owner/action blocker through report_build_result(status=\"failed\") if failures remain.",
+      : '- assistant.auto_iteration=false: make one focused repair/verification pass, including any explicitly assigned stuck-state repair in this worktree, then report the exact remaining owner/action blocker through report_build_result(status="failed") if failures remain.',
   ].join("\n")
 }
 
@@ -1707,9 +1711,9 @@ async function runWithExternalProviderImpl(args: {
   }
   const providerInput = args.resumeExistingProviderSession
     ? {
-      ...runInput,
-      sessionID: resolveNativeResumeRef(args.executor, await readExecutorSessionRef(session.id)),
-    }
+        ...runInput,
+        sessionID: resolveNativeResumeRef(args.executor, await readExecutorSessionRef(session.id)),
+      }
     : runInput
 
   log.info("build agent (external) provider input ready", {
@@ -1725,9 +1729,7 @@ async function runWithExternalProviderImpl(args: {
   })
 
   try {
-    const stream = args.resumeExistingProviderSession
-      ? provider.resume(providerInput)
-      : provider.run(providerInput)
+    const stream = args.resumeExistingProviderSession ? provider.resume(providerInput) : provider.run(providerInput)
     for await (const event of abortableIterable(stream, gate.signal)) {
       gate.observe()
       events.push(event)
@@ -2694,7 +2696,7 @@ export function buildUserPrompt(target: BuildTarget, context?: BuildAgent.BuildC
     "Orchestrator is asking build to implement this request, verify it, and report the result.",
     "Use task-specific build overlays and supplied artifacts when present; do not import scenario policy that this request did not supply.",
     "If the request is a port, migration, rewrite, clone, parity restoration, or component translation, complete investigation of the named source surface and existing target conventions is required implementation work before writing.",
-    "This direct request path is for implementation/rework. If the prompt is only repository investigation and does not ask you to change project behavior, fail through the terminal build report with a concrete error that says Build is the wrong stage.",
+    "This direct request path is for implementation, rework, and concrete deliverables such as investigation reports, Product Requirements Documents (PRDs), research briefs, audits, or documentation updates. If the prompt is only ad-hoc exploration and asks for no deliverable or behavior change, fail through the terminal build report with a concrete error that says Build is the wrong stage.",
     "",
     ...contextLines,
     renderUserRequestSection({ heading: "# Request", request: target.text, taskID }),
@@ -2751,7 +2753,9 @@ export function buildRetryFeedbackPrompt(target: BuildTarget, context?: BuildAge
   ) {
     lines.push("## Required Fix")
     lines.push("")
-    lines.push("The previous build attempt did not pass. Inspect the current worktree state, identify the concrete blocker, fix it in place, verify, and report the result.")
+    lines.push(
+      "The previous build attempt did not pass. Inspect the current worktree state, identify the concrete blocker, fix it in place, verify, and report the result.",
+    )
     lines.push("")
   }
   lines.push("## Instructions")

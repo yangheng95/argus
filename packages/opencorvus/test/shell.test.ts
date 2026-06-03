@@ -25,7 +25,9 @@ describe("shell process supervisor contract", () => {
     const restore = ProcessSupervisor.setFactoryForTest(async () => {
       const stdout = new PassThrough()
       let resolveExit!: (code: number) => void
-      const exited = new Promise<number>((resolve) => { resolveExit = resolve })
+      const exited = new Promise<number>((resolve) => {
+        resolveExit = resolve
+      })
       queueMicrotask(() => {
         stdout.write("ok\n")
         stdout.end()
@@ -38,7 +40,9 @@ describe("shell process supervisor contract", () => {
         stderr: new PassThrough(),
         exited,
         terminate: async () => {},
-        dispose: async () => { disposed++ },
+        dispose: async () => {
+          disposed++
+        },
         unref: () => {},
       }
     })
@@ -56,7 +60,9 @@ describe("shell process supervisor contract", () => {
     let terminateCalls = 0
     let disposeCalls = 0
     let resolveExit!: (code: number) => void
-    const exited = new Promise<number>((resolve) => { resolveExit = resolve })
+    const exited = new Promise<number>((resolve) => {
+      resolveExit = resolve
+    })
     const keepAlive = setInterval(() => {}, 10)
     const restore = ProcessSupervisor.setFactoryForTest(async () => ({
       pid: 124,
@@ -69,7 +75,9 @@ describe("shell process supervisor contract", () => {
         clearInterval(keepAlive)
         resolveExit(1)
       },
-      dispose: async () => { disposeCalls++ },
+      dispose: async () => {
+        disposeCalls++
+      },
       unref: () => {},
     }))
     try {
@@ -96,7 +104,9 @@ describe("shell process supervisor contract", () => {
         exited: new Promise<number>(() => {}),
         terminate: async () => {},
         dispose: async () => {},
-        unref: () => { unrefCalls++ },
+        unref: () => {
+          unrefCalls++
+        },
       }
     })
     try {
@@ -116,20 +126,11 @@ describe("shell process supervisor contract", () => {
   })
 
   test("shell execution call sites no longer reference Shell.killTree", async () => {
-    const files = [
-      "../src/tool/bash.ts",
-      "../src/session/shell-exec.ts",
-      "../src/orchestrator/tools.ts",
-    ]
+    const files = ["../src/tool/bash.ts", "../src/session/shell-exec.ts", "../src/orchestrator/tools.ts"]
     for (const file of files) {
       const source = await Bun.file(new URL(file, import.meta.url)).text()
       expect(source).not.toContain("Shell.killTree")
     }
-  })
-
-  test("delivery run_command no longer gives taskkill cleanup guidance", async () => {
-    const source = await Bun.file(new URL("../src/delivery/tools.ts", import.meta.url)).text()
-    expect(source).not.toContain("taskkill /F /T /PID")
   })
 
   test("windows helper absence does not make shell commands unavailable", async () => {

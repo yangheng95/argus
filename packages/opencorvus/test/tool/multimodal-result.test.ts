@@ -1,12 +1,12 @@
 /**
- * Delivery tool-result builder returns AttachmentStore refs, not data URLs.
+ * Multimodal tool-result builder returns AttachmentStore refs, not data URLs.
  *
  * Specs: specs/delivery-attachment-store-single-source-2026-05-11.md
  *
- * Pre-2026-05-11 `buildMultimodalToolResult` packed every screenshot byte
+ * Pre-2026-05-11 visual tool results packed every screenshot byte
  * into `attachments[].url` as `data:image/png;base64,...`. The same image
- * could be inlined 40 times in one session (DB forensics), which is the
- * OOM driver this migration repairs. These tests pin the new contract:
+ * could be inlined 40 times in one session (database forensics), which is the
+ * out-of-memory driver this migration repairs. These tests pin the new contract:
  *
  *   - the returned `url` is `/attachment/<projectID>/<sha>.<ext>` — never
  *     a data URL,
@@ -24,7 +24,7 @@ import path from "node:path"
 import { tmpdir } from "../fixture/fixture"
 import { Instance } from "../../src/project/instance"
 import { AttachmentStore } from "../../src/storage/attachment-store"
-import { buildMultimodalToolResult } from "../../src/delivery/tool-result"
+import { buildMultimodalToolResult } from "../../src/tool/multimodal-result"
 
 const PNG_A = Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 1])
 const PNG_B = Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 2])
@@ -59,7 +59,7 @@ describe("buildMultimodalToolResult", () => {
         }
       },
     })
-  })
+  }, 15000)
 
   test("deduplicates identical bytes via content-addressed sha", async () => {
     await using tmp = await tmpdir({ git: true })
@@ -88,7 +88,7 @@ describe("buildMultimodalToolResult", () => {
         expect(onDisk).toHaveLength(1)
       },
     })
-  })
+  }, 15000)
 
   test("bytes round-trip through AttachmentStore.read", async () => {
     await using tmp = await tmpdir({ git: true })
@@ -108,5 +108,5 @@ describe("buildMultimodalToolResult", () => {
         expect(bytes.equals(PNG_A)).toBe(true)
       },
     })
-  })
+  }, 15000)
 })

@@ -5,8 +5,8 @@
  *
  * The store is content-addressed and write-only — every part / session /
  * task that ever referenced a file leaves its bytes behind on disk
- * forever. Now that compare_visual_artifacts persists through
- * the store instead of inlining base64 into part.data, an unswept store
+ * forever. Now that visual tools persist through the store instead of
+ * inlining base64 into part.data, an unswept store
  * just moves the unbounded growth from DB to FS. These tests pin the
  * sweep contract:
  *
@@ -56,18 +56,20 @@ function seedTaskWithFileRefs(input: {
 }) {
   const now = Date.now()
   Database.use((db) => {
-    db.insert(EngineTaskTable).values({
-      id: input.taskID,
-      project_id: input.projectID,
-      source: "test",
-      title: "Sweep retain fixture",
-      request: "retain-fixture",
-      kind: "workflow",
-      attachments: input.attachments ?? [],
-      system_artifacts: input.systemArtifacts ?? [],
-      time_created: now,
-      time_updated: now,
-    }).run()
+    db.insert(EngineTaskTable)
+      .values({
+        id: input.taskID,
+        project_id: input.projectID,
+        source: "test",
+        title: "Sweep retain fixture",
+        request: "retain-fixture",
+        kind: "workflow",
+        attachments: input.attachments ?? [],
+        system_artifacts: input.systemArtifacts ?? [],
+        time_created: now,
+        time_updated: now,
+      })
+      .run()
   })
 }
 
@@ -83,8 +85,14 @@ describe("AttachmentStore.sweep", () => {
 
         // Backdate both files past the 60s skip-young gate so sweep
         // considers them deletable.
-        await ageFile(AttachmentStore.resolveAbsolute(projectID, AttachmentStore.nameFromUrl(orphanA.url)!.name)!, 120_000)
-        await ageFile(AttachmentStore.resolveAbsolute(projectID, AttachmentStore.nameFromUrl(orphanB.url)!.name)!, 120_000)
+        await ageFile(
+          AttachmentStore.resolveAbsolute(projectID, AttachmentStore.nameFromUrl(orphanA.url)!.name)!,
+          120_000,
+        )
+        await ageFile(
+          AttachmentStore.resolveAbsolute(projectID, AttachmentStore.nameFromUrl(orphanB.url)!.name)!,
+          120_000,
+        )
 
         const before = await AttachmentStore.listOnDisk(projectID)
         expect(before).toHaveLength(2)
@@ -135,7 +143,10 @@ describe("AttachmentStore.sweep", () => {
 
         // Backdate both attachments past the min-age gate.
         await ageFile(AttachmentStore.resolveAbsolute(projectID, AttachmentStore.nameFromUrl(kept.url)!.name)!, 120_000)
-        await ageFile(AttachmentStore.resolveAbsolute(projectID, AttachmentStore.nameFromUrl(orphan.url)!.name)!, 120_000)
+        await ageFile(
+          AttachmentStore.resolveAbsolute(projectID, AttachmentStore.nameFromUrl(orphan.url)!.name)!,
+          120_000,
+        )
 
         const result = await AttachmentStore.sweep(projectID)
         expect(result.kept).toBe(1)
@@ -171,7 +182,10 @@ describe("AttachmentStore.sweep", () => {
       fn: async () => {
         const projectID = Instance.project.id
         const orphan = await AttachmentStore.write(projectID, differentBytes(6), "image/png", "o.png")
-        await ageFile(AttachmentStore.resolveAbsolute(projectID, AttachmentStore.nameFromUrl(orphan.url)!.name)!, 120_000)
+        await ageFile(
+          AttachmentStore.resolveAbsolute(projectID, AttachmentStore.nameFromUrl(orphan.url)!.name)!,
+          120_000,
+        )
         const first = await AttachmentStore.sweep(projectID)
         expect(first.deleted).toBe(1)
         const second = await AttachmentStore.sweep(projectID)
@@ -282,8 +296,12 @@ describe("AttachmentStore.sweep", () => {
         seedTaskWithFileRefs({
           projectID,
           taskID: Identifier.ascending("task"),
-          attachments: [{ sha: userAttachment.sha, url: userAttachment.url, mime: "image/png", size: userAttachment.size }],
-          systemArtifacts: [{ sha: systemArtifact.sha, url: systemArtifact.url, mime: "image/png", size: systemArtifact.size }],
+          attachments: [
+            { sha: userAttachment.sha, url: userAttachment.url, mime: "image/png", size: userAttachment.size },
+          ],
+          systemArtifacts: [
+            { sha: systemArtifact.sha, url: systemArtifact.url, mime: "image/png", size: systemArtifact.size },
+          ],
         })
 
         // Sanity: the helper actually returns the union we expect, not just
@@ -291,9 +309,7 @@ describe("AttachmentStore.sweep", () => {
         // drops one source still fails fast even if sweep() somehow still
         // passes.
         const retain = AttachmentStore.collectReferencedShas().get(projectID) ?? new Set<string>()
-        expect([...retain].sort()).toEqual(
-          [partRef.sha, userAttachment.sha, systemArtifact.sha].sort(),
-        )
+        expect([...retain].sort()).toEqual([partRef.sha, userAttachment.sha, systemArtifact.sha].sort())
 
         for (const ref of [partRef, userAttachment, systemArtifact, orphan]) {
           await ageFile(attachmentAbs(projectID, ref.url), 120_000)

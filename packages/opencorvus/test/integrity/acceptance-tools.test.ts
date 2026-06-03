@@ -48,7 +48,9 @@ test("integrity evidence tools expose scoped drilldown without upstream full-con
       expect(Object.keys(tools)).not.toContain("edit_file")
       expect(Object.keys(tools)).not.toContain("write_file")
       expect(Object.keys(tools)).not.toContain("memory_write")
-      expect(Object.keys(tools)).not.toContain("run_integrity_review")
+      expect(Object.keys(tools).some((name) => name.includes("review") && name !== "inspect_integrity_evidence")).toBe(
+        false,
+      )
       expect(Object.keys(tools)).toContain("inspect_integrity_evidence")
       expect(Object.keys(tools)).toContain("run_command")
       expect(Object.keys(tools)).toContain("read_file")

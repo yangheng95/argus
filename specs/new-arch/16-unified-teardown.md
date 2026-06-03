@@ -9,6 +9,7 @@
 > orphan observation 落在 `engine/orphan.ts`，`pipeline/executor.ts` 已删，`engine/goal-pool.ts`
 > 已删，`task.status / active_run_id / workflow_state / blocking_reason` 等 FSM 列已移除），
 > 但 teardown 调用图仍有两处残留：
+>
 > - `engine/writer.ts:234` `abortRuns` 与 `engine/ownership.ts` `cleanup` 仍是两条独立清理
 >   路径，待统一到一个入口（本文 §1.5 / §12 的目标）。
 > - `engine/runtime.ts:123,182,193` 仍按 `run.status === "completed" / "failed" / "aborted"`
@@ -16,7 +17,7 @@
 >   两处 FSM-shaped residue 是 [15-no-fsm.md](15-no-fsm.md) 拆除清单的尾巴。
 > - `session/revert.ts` 此路径已不存在（仓库当前只有 `engine/rewind.ts`）；本节遗留的
 >   "禁动 goal worktree 边界注释"目标需重新定位到 `engine/rewind.ts`。
-> 上述项作为 follow-up ticket 单独推进，不阻塞本文档主线结论。
+>   上述项作为 follow-up ticket 单独推进，不阻塞本文档主线结论。
 
 ---
 
@@ -90,20 +91,20 @@ opencorvus 长出 5 张状态表 + AgentRuntime + Orchestrator trigger 枚举 + 
 
 ## 2. 对照表
 
-| 现状 | 目标 | 删除动作 |
-| --- | --- | --- |
-| 5 张状态表 + ~74 处 `.status === "X"` | session + artifact 两张已有表 | 全删 |
-| `recovery.ts` / `recoverOrphanRuns` / `abortRuns` | 不存在；进程启动只清 OS 级孤儿（worktree 目录、僵尸子进程） | 删整个文件 |
-| `AgentRuntime.run()`（stage 专用运行时） | `SessionPrompt.prompt()` 统一运行时 | 删 `packages/opencorvus/src/agent/runtime/` 整个目录 |
-| `Orchestrator` 基于 trigger 枚举 switch 重入 | Orchestrator = 长跑 SessionLoop；外部"事件"变成给 orchestrator session 发一条 user/tool 消息 | 删 `OrchestratorTrigger` 枚举 + 对应 switch |
-| 每个 stage agent 的 `finalize_*` 私有工具 | SessionLoop 标配 `StructuredOutput` tool | 删 `finalize_*` |
-| stage agent 可能继续长独立入口 / 临时 runtime | orchestrator 是唯一入口 agent；其余 agent 只通过 tool 打开 child session | 删独立入口 / 禁新增第二套 agent 基建 |
-| `engine/queue.ts` / `engine/runtime.ts` / `orchestrator/tools.ts` 直接依赖 `active_run_id` | queue / runtime / tool gate 全部从 session + artifact / in-flight tool context 推导 | 先拆 gate，再删 `active_run_id` |
-| GoalPool 跨进程 dispatch + 持久登记 | `build(goal, cwd)` = 一个 tool，内部 await 子 session；多 goal 并行 = parallel tool call | 删 GoalPool 的 dispatch 调度 + 相关表 |
-| `task.active_run_id / active_plan_version_id / workflow_state` | 不存在；orchestrator 读 session + artifact 自知 | 删列 |
-| `workbench/board.ts` / overlay / verification 直读 `engine_run / engine_delivery / engine_evaluation` | 单一 projection 入口，从 session + artifact 现算 UI/API 视图 | 先换读路径，再删表 |
-| DB 行上反查 worktree / executor 存活性 | worktree ownership marker + child-process registry | 先建 registry，再切纯 OS 清理 |
-| "batch_complete re-trigger" 这种伪事件 | build tool 返回后 orchestrator 继续下一步，不需要"再被触发一次" | 删 |
+| 现状                                                                                                  | 目标                                                                                         | 删除动作                                             |
+| ----------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------- | ---------------------------------------------------- |
+| 5 张状态表 + ~74 处 `.status === "X"`                                                                 | session + artifact 两张已有表                                                                | 全删                                                 |
+| `recovery.ts` / `recoverOrphanRuns` / `abortRuns`                                                     | 不存在；进程启动只清 OS 级孤儿（worktree 目录、僵尸子进程）                                  | 删整个文件                                           |
+| `AgentRuntime.run()`（stage 专用运行时）                                                              | `SessionPrompt.prompt()` 统一运行时                                                          | 删 `packages/opencorvus/src/agent/runtime/` 整个目录 |
+| `Orchestrator` 基于 trigger 枚举 switch 重入                                                          | Orchestrator = 长跑 SessionLoop；外部"事件"变成给 orchestrator session 发一条 user/tool 消息 | 删 `OrchestratorTrigger` 枚举 + 对应 switch          |
+| 每个 stage agent 的 `finalize_*` 私有工具                                                             | SessionLoop 标配 `StructuredOutput` tool                                                     | 删 `finalize_*`                                      |
+| stage agent 可能继续长独立入口 / 临时 runtime                                                         | orchestrator 是唯一入口 agent；其余 agent 只通过 tool 打开 child session                     | 删独立入口 / 禁新增第二套 agent 基建                 |
+| `engine/queue.ts` / `engine/runtime.ts` / `orchestrator/tools.ts` 直接依赖 `active_run_id`            | queue / runtime / tool gate 全部从 session + artifact / in-flight tool context 推导          | 先拆 gate，再删 `active_run_id`                      |
+| GoalPool 跨进程 dispatch + 持久登记                                                                   | `build(goal, cwd)` = 一个 tool，内部 await 子 session；多 goal 并行 = parallel tool call     | 删 GoalPool 的 dispatch 调度 + 相关表                |
+| `task.active_run_id / active_plan_version_id / workflow_state`                                        | 不存在；orchestrator 读 session + artifact 自知                                              | 删列                                                 |
+| `workbench/board.ts` / overlay / verification 直读 `engine_run / engine_delivery / engine_evaluation` | 单一 projection 入口，从 session + artifact 现算 UI/API 视图                                 | 先换读路径，再删表                                   |
+| DB 行上反查 worktree / executor 存活性                                                                | worktree ownership marker + child-process registry                                           | 先建 registry，再切纯 OS 清理                        |
+| "batch_complete re-trigger" 这种伪事件                                                                | build tool 返回后 orchestrator 继续下一步，不需要"再被触发一次"                              | 删                                                   |
 
 ---
 
@@ -262,6 +263,7 @@ Claude Code 的答案：重启 = 新会话。opencorvus 采用相同语义：
 - [x] 全量 engine 测试（85 pass / 0 fail）确认无退化
 
 **阶段 2 后续收口**：
+
 - [x] orchestrator 子 session 已改为每个 task root 下唯一持久 session；每次唤醒向同一 `kind="orchestrator"` session 追加真实 user message，避免异常恢复时产生 0ms 重试 session。
 - `ORCHESTRATOR_INSTRUCTIONS` 中仍有少量 “batch” / “rejection” 描述性语言（不再是 trigger 枚举名），作为行为说明保留
 
@@ -285,6 +287,7 @@ Claude Code 的答案：重启 = 新会话。opencorvus 采用相同语义：
 2. （备选）以 `SessionLoop.LoopInput` + 直接 `SessionLoop.loop` 跳过 `SessionPrompt.prompt`，在调用方完全接管 user message 构造 + tool 注入。但这样会回到"每个 agent 再写一套 runtime"的老路，**违反本阶段"统一基建"的核心约束**。
 
 选定方案 1 后，阶段 3b 的模板：
+
 ```ts
 await SessionPrompt.prompt({
   sessionID: child.id,
@@ -308,7 +311,7 @@ await SessionPrompt.prompt({
   - `AgentRuntime.run(...)` → `SessionPrompt.prompt(child, { extraTools, format, system, parts })`
   - `finalize_*` 删除；结果从 `child` 会话最新 assistant message 的 `.info.structured` 取。
   - 保持 incremental 工具（extract_slot 等）不变；它们通过 `extraTools` 注入。返回值必须按 `{ output: string, title: string, metadata: object }` 形态——SessionLoop 持久化 Message.ToolPart 时强校验。
-  - 测试：原本覆盖 agent 行为的测试全部通过；新增一条「finalize_* 调用不被识别」回归。
+  - 测试：原本覆盖 agent 行为的测试全部通过；新增一条「finalize\_\* 调用不被识别」回归。
   - 每个 agent 迁移必须附**真实 LLM smoke test**（仿 `test/intent-analysis/smoke.test.ts`）：`loadBenchmarkEnv` + `Server.listen({port:0})` + 调用 agent + 断言 `structured` 字段。gated by `OPENCORVUS_RUN_*_SMOKE=1` 避免 CI 阻塞。
 
   **完成状态**：
@@ -326,6 +329,7 @@ await SessionPrompt.prompt({
     - 多模态 userContent → `PromptInput.parts[]`（FilePart data URL）
     - orchestrator 不需 json_schema：终态通过工具调用发出
     - typecheck 通过；216 session+engine 测试通过（5 failures 预存）
+
 - orchestrator 仍是唯一入口 agent；迁移后的 `requirements / architect / frontend_design / build / deliver` 只允许作为 tool-opened child session 存在。
 - **阶段 3-c**：`architect` 与 **fidelity reviewer** 单独迁移；`submit_fidelity_verdict` 及其 session/event 语义必须在新运行时下逐项复核，禁止和普通 `finalize_*` 一锅端。
 - **阶段 3-d**（✅ 2026-04-24）：`packages/opencorvus/src/agent/runtime/` 目录整体删除
@@ -338,17 +342,17 @@ await SessionPrompt.prompt({
 
 **交付**：
 
-  - `rg "AgentRuntime|agent/runtime/" packages/opencorvus/src/` = 0
-  - `rg "finalize_" packages/opencorvus/src/(agent|orchestrator|delivery|requirements|architect|planner|design)` = 0
-  - 新增 stage agent 的模板 / 脚手架 / 文档只指向 session agent 基建 + `extraTools` 通道，不再示范专用 runtime
-  - fidelity session 仍能正确产出 verdict，并被 overlay / event 流消费
-  - 每次 stage agent 迁移前后，该 agent 的单测（以及其在 integration test / benchmark 中的下游行为）都必须 pass
+- `rg "AgentRuntime|agent/runtime/" packages/opencorvus/src/` = 0
+- `rg "finalize_" packages/opencorvus/src/(agent|orchestrator|delivery|requirements|architect|planner|design)` = 0
+- 新增 stage agent 的模板 / 脚手架 / 文档只指向 session agent 基建 + `extraTools` 通道，不再示范专用 runtime
+- fidelity session 仍能正确产出 verdict，并被 overlay / event 流消费
+- 每次 stage agent 迁移前后，该 agent 的单测（以及其在 integration test / benchmark 中的下游行为）都必须 pass
 
 ### 阶段 4（`active_run_id` / queue / runtime / restart gate 退场）— ✅ 2026-04-24
 
 - [x] `task.active_run_id` 不再是控制面真相：phase 2 已把 queue 的 `deriveQueuedTrigger` / `deriveResumeTrigger` 删除；orchestrator loop 的等待判据 100% 基于 `listActiveGoalRunsForRun` 而非 `active_run_id`；phase 6 将删列
 - [x] `engine/runtime.ts` 不主动轮询：`syncTask` / `syncRun` 只从 task-api / interaction 被动调用，不做后台 polling；orphan run 流经此函数时走 `queueTaskID?` 短路或 executor.status 自然超时，不死循环
-- [x] `engine/queue.ts` 只负责 cwd 串行化：phase 2 删除 derive* 后当前 309 行 0 处 active_run_id 引用
+- [x] `engine/queue.ts` 只负责 cwd 串行化：phase 2 删除 derive\* 后当前 309 行 0 处 active_run_id 引用
 - [x] `orchestrator/tools.ts` 中依赖 active run 的 LLM 工具（`create_run / submit_execution / retry_goal / restart_from_stage`）**保持原样**：这些是 LLM-invoked tools，不是自动 gate。它们读 active_run_id 作为"当前 run 指针"（describe 层已派生 `run_orphan` 告诉 LLM 是否 stale），由 LLM 决策调用哪条路径；phase 6 删列时再全量切换到 session + artifact projection
 - [x] **启动恢复降级完成**：`cleanupOrphanExecutionArtifacts` 的 `enableAbortBrake` 默认翻成 `false`；legacy abort 行为成为显式 opt-in（`enableAbortBrake: true`）给历史回归 fixture 使用
 - [x] `test/engine/recovery.test.ts` 按新契约重写：默认路径断言 orphan live 行**未被 abort**（LLM 通过 `run_orphan=true` 自行决策）；新增 legacy opt-in 回归 test 确保 `enableAbortBrake: true` 仍复现旧行为
@@ -402,7 +406,7 @@ await SessionPrompt.prompt({
   - 剩余 `EngineDeliveryTable / EngineEvaluationTable` 引用均为 `typeof ...$inferSelect` 类型注解（只读类型，不是 SQL 查询），这部分在 phase 6 reset DB 后可自然替换为 store 层返回类型
   - typecheck clean，232 session+engine+build-agent 测试通过；0 regression
 - **5-f**（✅ 2026-04-24 cutover 标注）：verification 模块的长期证据读写语义已由前置 DAM Phase 5 移出 `engine_evaluation`（convergence → `metrics/arbiter.ts`；`engine_evaluation` 仅剩 "verdict wrapper" 角色）。phase 5-f 做了三件事：
-  - `verification/persist.ts` + `verification/index.ts` 头部注释明示 `engine_evaluation` 下 phase 6 删表、evidence 将切到 artifact stream；public API（`persistEvidence / queryEvidence / findLatestGoalRunEvidence / ...`）承诺签名不变，callers（`delivery/tools.ts`）不需要改
+  - `verification/persist.ts` + `verification/index.ts` 头部注释明示 `engine_evaluation` 下 phase 6 删表、evidence 将切到 artifact stream；public API（`persistEvidence / queryEvidence / findLatestGoalRunEvidence / ...`）承诺签名不变，旧 callers 不需要改
   - 运行时不改，避免在 phase 6 reset DB 前引入双源（rule 22）
   - 实际 artifact 迁移（`persistEvidence` body 切到 `engine_artifact` label=verification-evidence）与 `engine_evaluation` 删表一起在 phase 6 完成
 - **5-g**（✅ 2026-04-24）：
@@ -414,29 +418,32 @@ await SessionPrompt.prompt({
   - `orchestrator/tools.ts` 3453→3165 行（-288）；typecheck clean，232 session+engine+build-agent 测试通过，0 regression
 
 **关键风险**：
-  - `build` 内部 SessionLoop 必须**流式**（CLAUDE.md rule 27）。SessionPrompt.prompt 已是流式基建（LLM.stream + processor）；禁止在 build 内部再写一套 ProviderLLM.stream 调用
-  - 并行多 goal：AI-SDK parallel tool_calls 天然支持同一 step 发 N 个 tool_call，orchestrator prompt 需显式引导；semaphore 在 build 工具内部用 `p-limit` 或自建 AsyncSemaphore 实现
-  - worktree 生命周期：现在由 goal-pool.ts::executeAndEval 在 `acquireGoalWorkspace` 与 `cleanupGoalWorkspace` 之间管理；build 内部 try/finally 复刻
-  - 读模型切换触发 overlay 前端改造，属**跨包** PR，与 engine 改动分开提交
+
+- `build` 内部 SessionLoop 必须**流式**（CLAUDE.md rule 27）。SessionPrompt.prompt 已是流式基建（LLM.stream + processor）；禁止在 build 内部再写一套 ProviderLLM.stream 调用
+- 并行多 goal：AI-SDK parallel tool_calls 天然支持同一 step 发 N 个 tool_call，orchestrator prompt 需显式引导；semaphore 在 build 工具内部用 `p-limit` 或自建 AsyncSemaphore 实现
+- worktree 生命周期：现在由 goal-pool.ts::executeAndEval 在 `acquireGoalWorkspace` 与 `cleanupGoalWorkspace` 之间管理；build 内部 try/finally 复刻
+- 读模型切换触发 overlay 前端改造，属**跨包** PR，与 engine 改动分开提交
 
 **交付**：
-  - `rg "dispatch_goal|exec_goal|submit_execution|retry_goal" packages/opencorvus/src/orchestrator/tools.ts` = 0
-  - `packages/opencorvus/src/engine/goal-pool.ts` 不存在或只剩 worktree 生命周期 helper
-  - overlay 只消费 describe/projection 接口，不直接 SQL 查 engine_*
-  - `rg "engine_evaluation" packages/opencorvus/src/verification` = 0 (改为 artifact 查询)
+
+- `rg "dispatch_goal|exec_goal|submit_execution|retry_goal" packages/opencorvus/src/orchestrator/tools.ts` = 0
+- `packages/opencorvus/src/engine/goal-pool.ts` 不存在或只剩 worktree 生命周期 helper
+- overlay 只消费 describe/projection 接口，不直接 SQL 查 engine\_\*
+- `rg "engine_evaluation" packages/opencorvus/src/verification` = 0 (改为 artifact 查询)
 - 保留物理 worktree 生命周期（由 build tool 内部管理）
 
 ### 阶段 6（schema 清零）[reset DB]
 
 **规模审计**（2026-04-24）：
-  - `EngineRunTable / EngineGoalRunTable / EngineDeliveryTable / EngineEvaluationTable` 引用分布：store.ts (79 refs) / persist.ts (38) / verification/persist.ts (33) / workbench/board.ts (20) / engine.sql.ts (16) / runtime.ts (10) / writer.ts (6) / state.ts (6)，其他 ≤ 5
-  - `engine_evaluation` 3 处写：engine/persist.ts::persistFailedRunEvaluation / engine/persist.ts::persistGoalDelivery / verification/persist.ts::persistEvidence
-  - 跨越 engine/storage/verification/workbench/task-api/delivery/metrics/protocol 八个模块。单 PR 全删不可行
+
+- `EngineRunTable / EngineGoalRunTable / EngineDeliveryTable / EngineEvaluationTable` 引用分布：store.ts (79 refs) / persist.ts (38) / verification/persist.ts (33) / workbench/board.ts (20) / engine.sql.ts (16) / runtime.ts (10) / writer.ts (6) / state.ts (6)，其他 ≤ 5
+- `engine_evaluation` 3 处写：engine/persist.ts::persistFailedRunEvaluation / engine/persist.ts::persistGoalDelivery / verification/persist.ts::persistEvidence
+- 跨越 engine/storage/verification/workbench/task-api/delivery/metrics/protocol 八个模块。单 PR 全删不可行
 
 **子阶段分解**（顺序执行，每步独立 PR）：
 
 - **6-a**（✅ 2026-04-24）：`opencorvus db reset [--force]` CLI 命令（`src/cli/cmd/db.ts`）— 按 rule 13 原子清零 SQLite（db + WAL + SHM）+ 磁盘 scratch（`<cwd>/.opencorvus/worktrees/` + `<cwd>/.opencorvus/ownership/`）+ `snapshot/` 目录；`Instance.disposeAll` + `Database.close` 前置以保证 WAL flush 干净；无 `--force` 打印 warning 并退出非零码防误触
-- **6-b**（✅ 2026-04-24）：`verification/persist.ts` 重写为 artifact-backed — `persistEvidence` 写 `engine_artifact`（`kind="verification-evidence"` + `label="evidence-<scope>"`），payload 承载 `{scope,status,verdict,summary,checks,time_completed}`；5 个 `find*Evidence` helper 全部从 `EngineArtifactTable` 读 + `rowToEvidence` 重建；`EngineEvaluationTable` 定义删除（`engine/engine.sql.ts` + DDL `engine_evaluation` CREATE），9 处 import 清理（`storage/schema.ts`、`engine/index.ts`、`workbench/board.ts`、`task-api/index.ts`、`tool/analytics.ts`、`test/engine/state-invariants.test.ts`、`test/server/export-routes.test.ts` 全改读 artifact；3 个 test fixture insert 改写 artifact shape）；`engine/persist.ts::persistTaskDelivery` / `updateEvaluationFromDeliveryVerdict` 改为 append-only（`persistEvidence` 再插一行，`time_created desc` 自动 pick latest）；`persistFailedRunEvaluation` 不再写 DB 行（`run.error` + snapshot doc 已覆盖）；`store.ts::EvaluationRow` 改为手写类型（保留 snake_case 字段给老消费者），`artifactRowToEvaluationRow` 做 payload→row 映射；`findLatestFailedEvalForGoal` 死代码删除；`delivery/tools.ts` 签名不变（无 churn）；`EngineArtifactKind` 加 `"verification-evidence"`；typecheck + `test/engine/` (92 pass) + `test/server/export-routes.test.ts` 全绿
+- **6-b**（✅ 2026-04-24）：`verification/persist.ts` 重写为 artifact-backed — `persistEvidence` 写 `engine_artifact`（`kind="verification-evidence"` + `label="evidence-<scope>"`），payload 承载 `{scope,status,verdict,summary,checks,time_completed}`；5 个 `find*Evidence` helper 全部从 `EngineArtifactTable` 读 + `rowToEvidence` 重建；`EngineEvaluationTable` 定义删除（`engine/engine.sql.ts` + DDL `engine_evaluation` CREATE），9 处 import 清理（`storage/schema.ts`、`engine/index.ts`、`workbench/board.ts`、`task-api/index.ts`、`tool/analytics.ts`、`test/engine/state-invariants.test.ts`、`test/server/export-routes.test.ts` 全改读 artifact；3 个 test fixture insert 改写 artifact shape）；`engine/persist.ts::persistTaskDelivery` / `updateEvaluationFromDeliveryVerdict` 改为 append-only（`persistEvidence` 再插一行，`time_created desc` 自动 pick latest）；`persistFailedRunEvaluation` 不再写 DB 行（`run.error` + snapshot doc 已覆盖）；`store.ts::EvaluationRow` 改为手写类型（保留 snake_case 字段给老消费者），`artifactRowToEvaluationRow` 做 payload→row 映射；`findLatestFailedEvalForGoal` 死代码删除；旧 delivery tool 签名不变（无 churn）；`EngineArtifactKind` 加 `"verification-evidence"`；typecheck + `test/engine/` (92 pass) + `test/server/export-routes.test.ts` 全绿
 - **6-c**（✅ 2026-04-24）：`EngineDeliveryTable` + `EngineDeliveryRoundTable` 双表删除。拆成 2 个 commit：
   - **6-c-1**（`330fffebd`）：`engine_delivery_round` + `delivery/round-store.ts` + `script/delivery/replay.ts` + `delivery/delivery.sql.ts` 四处一齐删 — 该表是 P2 观测侧信道（写入方仅 `orchestrator/tools.ts:2427` 一点，读取方仅 replay script），rule 22 禁双源；picky-loop verdict signal 已由 `decision_log` + artifact stream 承载。orchestrator 调用点 + schema export + 相关注释清理同步完成
   - **6-c-2**（本 commit）：`EngineDeliveryTable` → `engine_artifact` kind="delivery"。`writeDeliveryRow` 写单行 artifact（id=deliveryID, label="delivery-task"/"delivery-goal_run"），payload 承载 status/summary/result；`markDeliveryPublishing` + `finalizeDeliveryResult` 改为 append-only（新写一行，`time_created desc` 取最新），引入 `findLatestDeliveryArtifact` 内部 helper；`DeliveryRow` 改手写类型 + `artifactRowToDeliveryRow` / `latestPerDelivery` 读模型 helper；4 个 `findDelivery*` 全部 artifact-derived；`EngineArtifactTable.delivery_id` FK 解耦为普通 text 列；`EngineDeliveryTable` 定义 + DDL `engine_delivery` CREATE + 5 处 import 清理（`engine/index.ts`、`storage/schema.ts`、`task-api/index.ts`、`workbench/board.ts`、2 个 test）；`workbench/board.ts::viewBoardDelivery` + `boardOverview` typeof 切到 `DeliveryRow`；`script/benchmark/inspect-db.sh` SQL 改读 artifact；test fixture insert 改写 artifact shape。typecheck 绿；`test/engine/` (92 pass) + `test/server/export-routes.test.ts` 绿
@@ -467,15 +474,17 @@ await SessionPrompt.prompt({
 - **6-g**：`describe.ts` 全文重写 — 基于 session + artifact projection 现算所有派生状态；冷启动空库回 empty；最终 `rg "status:|phase:|verdict:|blocking_reason:" packages/opencorvus/src/engine/*.sql.ts` = 0；`bun test` 通过 reset-DB 冷启动路径的 regression
 
 **风险**：
-  - 每一步（6-b..6-g）都是 ≥100 行级别的改动；贸然合并会导致 typecheck 大范围失败或 runtime 死路
-  - 6-d 最危险：goal_run chain 是多个 consumer（describe / goal-status / merge-resolver / persist / dispatch）的核心事实；删除前必须先让它们全部改读 goal row 的现算视图
-  - phase 6 执行期间，`bun test` 会持续红（直到子步骤打完才能全绿）—— 这是已知状态，每步的 commit 只要保证 typecheck pass 即可
+
+- 每一步（6-b..6-g）都是 ≥100 行级别的改动；贸然合并会导致 typecheck 大范围失败或 runtime 死路
+- 6-d 最危险：goal_run chain 是多个 consumer（describe / goal-status / merge-resolver / persist / dispatch）的核心事实；删除前必须先让它们全部改读 goal row 的现算视图
+- phase 6 执行期间，`bun test` 会持续红（直到子步骤打完才能全绿）—— 这是已知状态，每步的 commit 只要保证 typecheck pass 即可
 
 **交付**：
-  - DB schema 中不存在 status / phase / verdict / blocking_reason 任何列
-  - 冷启动后 `describe.ts` 对空库返回 empty 而不是崩溃
-  - 不存在引用旧表名的遗留 SQL 或类型
-  - `opencorvus db reset --force` 真实清空并重建 schema，后续 task 创建正常工作
+
+- DB schema 中不存在 status / phase / verdict / blocking_reason 任何列
+- 冷启动后 `describe.ts` 对空库返回 empty 而不是崩溃
+- 不存在引用旧表名的遗留 SQL 或类型
+- `opencorvus db reset --force` 真实清空并重建 schema，后续 task 创建正常工作
 
 ### 阶段 7（recovery.ts 整文件删除 + 收尾）— ✅ 2026-04-25
 

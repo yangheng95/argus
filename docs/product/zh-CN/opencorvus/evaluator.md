@@ -14,7 +14,7 @@ Delivery agent 通过 `delivery/checks/discovery.ts` 解析当前 task 的 check
 
 ### 阶段 2：LLM judge
 
-仅当确定性检查**不足以裁定**（例如没有可执行的测试，或 UI 视觉 fidelity 判断）时，LLM judge 才出场——通过 `delivery/checks/visual.ts`（视觉 / 截图对比）、`delivery/checks/walkthrough/`（交互式 walkthrough）、`delivery/checks/content-fingerprint.ts`（内容指纹）等子模块产出证据，再由 delivery agent 的 `verdict.ts` 汇总成最终 verdict。
+仅当确定性检查**不足以裁定**（例如没有可执行的测试，或 UI 视觉 fidelity 判断）时，LLM judge 才出场。视觉渲染证据使用 `runtime/visual-page.ts`；内容指纹 helper 位于 `delivery/checks/content-fingerprint.ts`；最终验收 verdict 由 integrity review 汇总。
 
 ## CheckSelector
 
@@ -53,11 +53,11 @@ code_review · dead_code_review · startup · spec_check
 
 verdict 以 `engine_artifact[kind="verdict"]` 形式落盘：
 
-| verdict        | 后续动作                                                                                                       |
-| -------------- | -------------------------------------------------------------------------------------------------------------- |
+| verdict        | 后续动作                                                                                                                       |
+| -------------- | ------------------------------------------------------------------------------------------------------------------------------ |
 | `accepted`     | `deliver` 直接完成 task；如需补充 patch / git preview 等交付物，可显式调用 `publish_delivery` 做 post-delivery artifact export |
-| `rejected`     | 走 `delivery-retry-feedback.ts` 回修；超过 `delivery.max_retries` 后由 Orchestrator 决定 retry / replan / fail |
-| `inconclusive` | 视为 rejected，但优先 replan（无法判决通常意味着信息不全或 doom-loop）                                         |
+| `rejected`     | 走 `delivery-retry-feedback.ts` 回修；超过 `delivery.max_retries` 后由 Orchestrator 决定 retry / replan / fail                 |
+| `inconclusive` | 视为 rejected，但优先 replan（无法判决通常意味着信息不全或 doom-loop）                                                         |
 
 Delivery agent 只负责 verdict 和证据。启动 / 停止 / retry / cancel / fail 当前 task，以及发布新的 follow-up task，是 Orchestrator 的 lifecycle 权限；Delivery 如果发现应拆成新 task，只能在 verdict evidence 中提出建议，不能直接创建 task。
 

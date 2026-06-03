@@ -306,7 +306,9 @@ description: Skill for resolved-tool visibility tests.
       expect(requirements).toBeDefined()
 
       expect(await SystemPrompt.skills(requirements!, { availableToolNames: ["read_file"] })).toBeUndefined()
-      expect(await SystemPrompt.skills(requirements!, { availableToolNames: ["read_file", "skill"] })).toContain("tool-skill")
+      expect(await SystemPrompt.skills(requirements!, { availableToolNames: ["read_file", "skill"] })).toContain(
+        "tool-skill",
+      )
     },
   })
 })
@@ -396,18 +398,20 @@ test("native stage agent registry tool surfaces match role boundaries", async ()
 
       const research = await Agent.get("research")
       expect(research).toBeDefined()
-      expect(research?.tools?.include?.sort()).toEqual([
-        "external_code_search",
-        "find_files",
-        "list_directory",
-        "memory_get",
-        "memory_search",
-        "read_file",
-        "search_code",
-        "todoread",
-        "todowrite",
-        "webfetch",
-      ].sort())
+      expect(research?.tools?.include?.sort()).toEqual(
+        [
+          "external_code_search",
+          "find_files",
+          "list_directory",
+          "memory_get",
+          "memory_search",
+          "read_file",
+          "search_code",
+          "todoread",
+          "todowrite",
+          "webfetch",
+        ].sort(),
+      )
       expect(research?.tools?.include).not.toContain("websearch")
       for (const tool of [
         "bash",
@@ -426,8 +430,9 @@ test("native stage agent registry tool surfaces match role boundaries", async ()
 
       const frontendResearch = await Agent.get("frontend-research")
       expect(frontendResearch).toBeDefined()
-      expect(frontendResearch?.tools?.include?.sort()).toEqual(research?.tools?.include?.sort())
+      expect(frontendResearch?.tools?.include).toEqual([])
       expect(frontendResearch?.tools?.include).not.toContain("websearch")
+      expect(frontendResearch?.tools?.include).not.toContain("webfetch")
       expect(frontendResearch?.tools?.include).not.toContain("task")
 
       const integrity = await Agent.get("integrity")
@@ -585,18 +590,16 @@ test("integrity agent does not expose registry tools", async () => {
   })
 })
 
-test("orchestrator include list excludes the dead query_metric_trajectory reference", async () => {
+test("orchestrator include list excludes dead tool references", async () => {
   await using tmp = await tmpdir()
   await Instance.provide({
     directory: tmp.path,
     fn: async () => {
       const orchestrator = await Agent.get("orchestrator")
       expect(orchestrator).toBeDefined()
-      // query_metric_trajectory was defined inside delivery toolkits and never
-      // injected into the orchestrator. Naming it in the include list misled
-      // readers (and prior prompt drafts) into thinking the orchestrator
-      // could call it. Keep the list aligned with reality.
-      expect(orchestrator?.tools?.include).not.toContain("query_metric_trajectory")
+      // Dead tool names in the include list mislead readers and prompt drafts
+      // into thinking the orchestrator can call tools that are not mounted.
+      expect(orchestrator?.tools?.include).not.toContain("retired_metric_probe")
     },
   })
 })
@@ -765,12 +768,14 @@ test("agent name override is rejected because the config key is the identity", a
       },
     },
   })
-  await expect(Instance.provide({
-    directory: tmp.path,
-    fn: async () => {
-      await Agent.get("build")
-    },
-  })).rejects.toThrow("config.agent.build.name cannot rename the agent identity")
+  await expect(
+    Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        await Agent.get("build")
+      },
+    }),
+  ).rejects.toThrow("config.agent.build.name cannot rename the agent identity")
 })
 
 test("coding prompt can be overridden from config", async () => {
@@ -816,12 +821,14 @@ test("workflow build prompt rejects prompt override instead of ignoring it", asy
       },
     },
   })
-  await expect(Instance.provide({
-    directory: tmp.path,
-    fn: async () => {
-      await Agent.get("build")
-    },
-  })).rejects.toThrow("config.agent.build.prompt is invalid for append-mode agents")
+  await expect(
+    Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        await Agent.get("build")
+      },
+    }),
+  ).rejects.toThrow("config.agent.build.prompt is invalid for append-mode agents")
 })
 
 test("unknown agent properties are placed into options", async () => {

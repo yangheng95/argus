@@ -73,32 +73,31 @@ orchestrator/loop.ts — runTaskLoop()  (line 117)
 
 ## MiniWorkflow — 两种声明式模板
 
-| ID | 适合 | 推荐步骤 |
-|---|---|---|
-| `direct` | 单文件 / bugfix / 配置 / 短调试 | `build` → `deliver` |
+| ID         | 适合                              | 推荐步骤                                                                         |
+| ---------- | --------------------------------- | -------------------------------------------------------------------------------- |
+| `direct`   | 单文件 / bugfix / 配置 / 短调试   | `build` → `deliver`                                                              |
 | `pipeline` | 多文件功能 / UI 复刻 / 跨模块重构 | `frontend_design?` → `requirements` → `architect` → per-goal `build` → `deliver` |
 
 定义在 `engine/workflow.ts`，用户可在 `opencorvus.jsonc` 自定义；Orchestrator 通过 `WorkflowRegistry.resolve(id)` 取模板，仍可根据推理偏离。
 
 ## Sub-agent 一览
 
-| Agent | 代码 | 职责 |
-|---|---|---|
-| **Orchestrator** | `orchestrator/agent.ts` + `orchestrator/loop.ts` | 唯一决策者；通过 21 个 tool 推进任务 |
-| **Intent Analysis** | `intent-analysis/agent.ts` | 解读简短 / 模糊请求，输出 intent class / complexity / clarifications |
-| **Requirements** | `requirements/agent.ts` | Zod tool 输出 REQ-N + foundational decisions；不产出 goals |
-| **Architect** | `architect/agent.ts` | 先分析边界，再产出至少 2 个小型、可独立执行/验收的 goals；禁止单个大型 all-in-one goal；同时负责接口契约、追溯与 fidelity |
-| **Frontend Design** | `frontend-design/agent.ts` | 视觉参考（Figma / 图片 / URL）→ 前端模板 / 待填充模块 / 视觉一致性契约 |
-| **Build** | `build/agent.ts` + `build/index.ts` + `build/report.ts` + `build/types.ts` + `goal/runner.ts` + `agent/sub-agent-protocol.ts` | 在 worktree 中实际写代码；由 Orchestrator 通过 `build` tool 调起 |
-| **Integrity Reviewer** | `integrity/agent.ts` | 多维 integrity review（requirement_fidelity / technical_feasibility / hallucination / solution_quality） |
-| **Prosecutor** | `prosecutor/agent.ts` | 对交付候选发起对抗性复核 |
-| **Delivery** | `delivery/agent.ts` + `delivery/checks/` + `delivery/specialists/` | diff 验收 + 触发回修 + 确定性 / LLM judge 检查；可按交付证据触发 `run_integrity_review` 语义完整性复核 |
+| Agent                  | 代码                                                                                                                                                       | 职责                                                                                                                              |
+| ---------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------- |
+| **Orchestrator**       | `orchestrator/agent.ts` + `orchestrator/loop.ts`                                                                                                           | 唯一决策者；通过 21 个 tool 推进任务                                                                                              |
+| **Intent Analysis**    | `intent-analysis/agent.ts`                                                                                                                                 | 解读简短 / 模糊请求，输出 intent class / complexity / clarifications                                                              |
+| **Requirements**       | `requirements/agent.ts`                                                                                                                                    | Zod tool 输出 REQ-N + foundational decisions；不产出 goals                                                                        |
+| **Architect**          | `architect/agent.ts`                                                                                                                                       | 先分析边界，再产出至少 2 个小型、可独立执行/验收的 goals；禁止单个大型 all-in-one goal；同时负责接口契约、追溯与 fidelity         |
+| **Frontend Design**    | `frontend-design/agent.ts`                                                                                                                                 | 视觉参考（Figma / 图片 / URL）→ 前端模板 / 待填充模块 / 视觉一致性契约                                                            |
+| **Build**              | `build/agent.ts` + `build/index.ts` + `build/report.ts` + `build/types.ts` + `build/screenshot-tool.ts` + `goal/runner.ts` + `agent/sub-agent-protocol.ts` | 在 worktree 中实际写代码；由 Orchestrator 通过 `build` tool 调起；拥有运行时截图证据                                              |
+| **Integrity Reviewer** | `integrity/agent.ts`                                                                                                                                       | 多维 integrity review（requirement_fidelity / technical_feasibility / hallucination / solution_quality）；最终 workflow 验收 gate |
+| **Prosecutor**         | `prosecutor/agent.ts`                                                                                                                                      | 对交付候选发起对抗性复核                                                                                                          |
 
-Task 生命周期的 agent-side 权限只属于 **Orchestrator**：启动 / 停止 / retry / cancel / fail 当前 task，以及发布新的 follow-up task，都必须通过 Orchestrator 的显式 lifecycle tools（例如 `propose_task`）。Delivery 只能输出验收 verdict、证据和建议，不能直接创建、取消、重试或终止 engine task。
+Task 生命周期的 agent-side 权限只属于 **Orchestrator**：启动 / 停止 / retry / cancel / fail 当前 task，以及发布新的 follow-up task，都必须通过 Orchestrator 的显式 lifecycle tools（例如 `propose_task`）。Integrity review 产出最终验收 verdict；Build 产出实现和运行时证据。
 
 > **Planner agent 已删**。session 级的 `src/tool/planner.ts` 是 working-memory 工具（`add_task / update_task / scratchpad_*`），任何 agent 均可挂载来管自己的子任务树；它**不是**旧 per-goal planner 的替代。
 >
-> **Evaluator agent 已删**。验证职责并入 `delivery/checks/`（`discovery.ts` 解析 check family → `per-goal.ts` / `llm-judge-runner.ts` / `visual.ts`）。
+> **Delivery agent 已删**。workflow 验收归属 `integrity`；运行时截图证据归属 Build。
 
 ## 两层循环
 

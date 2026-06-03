@@ -103,12 +103,7 @@ export namespace AttachmentStore {
    * `project.worktree`, leaving registered-but-missing files when the two
    * diverged.
    */
-  export async function write(
-    projectID: string,
-    data: Buffer,
-    mime: string,
-    filename?: string,
-  ): Promise<Reference> {
+  export async function write(projectID: string, data: Buffer, mime: string, filename?: string): Promise<Reference> {
     if (!mime) throw new Error("AttachmentStore.write requires a non-empty mime type")
     const project = Project.get(projectID)
     if (!project) throw new Error(`AttachmentStore.write: unknown project ${projectID}`)
@@ -233,7 +228,9 @@ export namespace AttachmentStore {
    *     URL (or the attachment:<sha>.<ext> shorthand), since openai-compatible
    *     providers reject non-multimodal MIMEs as inline file parts.
    */
-  export function partition<T extends AttachmentLike>(attachments: readonly T[] | undefined): {
+  export function partition<T extends AttachmentLike>(
+    attachments: readonly T[] | undefined,
+  ): {
     multimodal: T[]
     referenceOnly: T[]
   } {
@@ -285,9 +282,10 @@ export namespace AttachmentStore {
     if (!attachments?.length) return ""
     const { multimodal, referenceOnly } = partition(attachments)
     const header = opts.header ?? "## Task Attachments"
-    const hint = opts.hint
-      ?? "Multimodal attachments (image / pdf / audio / video) are already in your context as file parts. " +
-         "Reference-only attachments (text / json) are not inlined — fetch them via the `read` tool using the listed url."
+    const hint =
+      opts.hint ??
+      "Multimodal attachments (image / pdf / audio / video) are already in your context as file parts. " +
+        "Reference-only attachments (text / json) are not inlined — fetch them via the `read` tool using the listed url."
     const formatRow = (a: AttachmentLike, kind: "inline" | "reference", index: number) => {
       const sizeKb = typeof a.size === "number" ? `${Math.max(1, Math.round(a.size / 1024))} KB, ` : ""
       // displayFilename gives a readable name even when the upload path
@@ -375,19 +373,21 @@ export namespace AttachmentStore {
           return ok
         })
       : multimodal
-    return Promise.all(accepted.map(async (a) => {
-      const located = nameFromUrl(String(a.url ?? ""))
-      if (!located) throw new Error(`attachment has no resolvable url: ${a.filename ?? a.sha}`)
-      const mime = String(a.mime)
-      const url = await dataUrlFromReference(String(a.url ?? ""), mime)
-      if (!url) throw new Error(`attachment has no resolvable url: ${a.filename ?? a.sha}`)
-      return {
-        type: "file" as const,
-        url,
-        mime,
-        ...(a.filename ? { filename: a.filename } : {}),
-      }
-    }))
+    return Promise.all(
+      accepted.map(async (a) => {
+        const located = nameFromUrl(String(a.url ?? ""))
+        if (!located) throw new Error(`attachment has no resolvable url: ${a.filename ?? a.sha}`)
+        const mime = String(a.mime)
+        const url = await dataUrlFromReference(String(a.url ?? ""), mime)
+        if (!url) throw new Error(`attachment has no resolvable url: ${a.filename ?? a.sha}`)
+        return {
+          type: "file" as const,
+          url,
+          mime,
+          ...(a.filename ? { filename: a.filename } : {}),
+        }
+      }),
+    )
   }
 
   /** A staged attachment — the result of copying a content-addressed task
@@ -492,7 +492,9 @@ export namespace AttachmentStore {
   export function renderStagedList(staged: readonly StagedAttachment[]): string {
     if (staged.length === 0) return ""
     const lines = staged
-      .map((s) => `- \`${s.relPath}\` — ${s.mime}` + (s.originalFilename ? ` (originally \`${s.originalFilename}\`)` : ""))
+      .map(
+        (s) => `- \`${s.relPath}\` — ${s.mime}` + (s.originalFilename ? ` (originally \`${s.originalFilename}\`)` : ""),
+      )
       .join("\n")
     return (
       `\n\n## Staged Reference Files (already inside this worktree)\n` +
@@ -508,9 +510,8 @@ export namespace AttachmentStore {
    * Single source of truth for "what name should the LLM / user see for
    * this attachment?" (CLAUDE.md rule 9). Use this everywhere a sha-based
    * fallback would otherwise show through — `renderAttachmentInventory`
-   * for sub-agent prompts, `task-api` for user-facing message lists,
-   * `delivery/tools.ts` for the visual reference inventory, and the
-   * `stageToWorktree` copy step (a stable name for tools that resolve
+   * for sub-agent prompts, `task-api` for user-facing message lists, and
+   * the `stageToWorktree` copy step (a stable name for tools that resolve
    * paths inside the worktree).
    *
    * Fallback ladder when `original` is missing or contains shell-unsafe
@@ -524,12 +525,7 @@ export namespace AttachmentStore {
    * a UI / LLM filename, and surfacing it directly was the bug a previous
    * commit tried to fix only for the staging path.
    */
-  export function displayFilename(input: {
-    filename?: string
-    mime?: string
-    sha?: string
-    index?: number
-  }): string {
+  export function displayFilename(input: { filename?: string; mime?: string; sha?: string; index?: number }): string {
     if (input.filename && SAFE_FILENAME_RE.test(input.filename)) return input.filename
     const ext = extensionFor(input.mime ?? "", input.filename)
     const shaPrefix = (input.sha ?? "").slice(0, 8) || "noref"
@@ -579,13 +575,15 @@ export namespace AttachmentStore {
    * `.opencorvus/runtime/blobs/attachments/` directory. Returns `[]` when the directory
    * does not exist (no attachments have ever been written for this project).
    */
-  export async function listOnDisk(projectID: string): Promise<{
-    sha: string
-    name: string
-    abs: string
-    size: number
-    mtimeMs: number
-  }[]> {
+  export async function listOnDisk(projectID: string): Promise<
+    {
+      sha: string
+      name: string
+      abs: string
+      size: number
+      mtimeMs: number
+    }[]
+  > {
     const project = Project.get(projectID)
     if (!project) throw new Error(`AttachmentStore.listOnDisk: unknown project ${projectID}`)
     const dir = storageDir(project.worktree)

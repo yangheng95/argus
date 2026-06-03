@@ -50,9 +50,12 @@ const runtimeContract = (
 describe("SessionLoop session runtime contract", () => {
   test("round-trips a registered stage tool map", () => {
     const sessionID = `ses_runtime_${Date.now()}_visible`
-    SessionLoop.setSessionRuntimeContract(sessionID, runtimeContract(sessionID, {
-      tools: { persistent: dummyTool() },
-    }))
+    SessionLoop.setSessionRuntimeContract(
+      sessionID,
+      runtimeContract(sessionID, {
+        tools: { persistent: dummyTool() },
+      }),
+    )
     expect(Object.keys(SessionLoop.getSessionRuntimeContract(sessionID)?.tools ?? {})).toEqual(["persistent"])
     SessionLoop.clearSessionRuntimeContract(sessionID)
     expect(SessionLoop.getSessionRuntimeContract(sessionID)).toBeUndefined()
@@ -60,12 +63,18 @@ describe("SessionLoop session runtime contract", () => {
 
   test("a second runtime contract replaces the map wholesale", () => {
     const sessionID = `ses_runtime_${Date.now()}_replace`
-    SessionLoop.setSessionRuntimeContract(sessionID, runtimeContract(sessionID, {
-      tools: { first: dummyTool() },
-    }))
-    SessionLoop.setSessionRuntimeContract(sessionID, runtimeContract(sessionID, {
-      tools: { second: dummyTool() },
-    }))
+    SessionLoop.setSessionRuntimeContract(
+      sessionID,
+      runtimeContract(sessionID, {
+        tools: { first: dummyTool() },
+      }),
+    )
+    SessionLoop.setSessionRuntimeContract(
+      sessionID,
+      runtimeContract(sessionID, {
+        tools: { second: dummyTool() },
+      }),
+    )
     expect(Object.keys(SessionLoop.getSessionRuntimeContract(sessionID)?.tools ?? {})).toEqual(["second"])
   })
 
@@ -75,9 +84,12 @@ describe("SessionLoop session runtime contract", () => {
     await Instance.provide({
       directory: tmp.path,
       fn: async () => {
-        SessionPrompt.setSessionRuntimeContract(sessionID, runtimeContract(sessionID, {
-          tools: { persistent: dummyTool() },
-        }))
+        SessionPrompt.setSessionRuntimeContract(
+          sessionID,
+          runtimeContract(sessionID, {
+            tools: { persistent: dummyTool() },
+          }),
+        )
         expect(SessionPrompt.getSessionRuntimeContract(sessionID)?.tools).toBeDefined()
         SessionPrompt.cancel(sessionID)
         expect(SessionPrompt.getSessionRuntimeContract(sessionID)?.tools).toBeDefined()
@@ -110,9 +122,12 @@ describe("SessionLoop session runtime contract", () => {
   test("rejects a contract whose identity belongs to another session", () => {
     const sessionID = `ses_runtime_${Date.now()}_mismatch`
     expect(() =>
-      SessionLoop.setSessionRuntimeContract(sessionID, runtimeContract("ses_other_runtime", {
-        tools: { persistent: dummyTool() },
-      })),
+      SessionLoop.setSessionRuntimeContract(
+        sessionID,
+        runtimeContract("ses_other_runtime", {
+          tools: { persistent: dummyTool() },
+        }),
+      ),
     ).toThrow("identity mismatch")
     expect(SessionLoop.getSessionRuntimeContract(sessionID)).toBeUndefined()
   })
@@ -131,9 +146,12 @@ describe("SessionLoop session runtime contract", () => {
 
   test("validation rejects runtime-required contracts without worker descriptors", () => {
     const sessionID = `ses_runtime_${Date.now()}_missing_descriptor`
-    SessionLoop.setSessionRuntimeContract(sessionID, runtimeContract(sessionID, {
-      tools: { persistent: dummyTool() },
-    }))
+    SessionLoop.setSessionRuntimeContract(
+      sessionID,
+      runtimeContract(sessionID, {
+        tools: { persistent: dummyTool() },
+      }),
+    )
     expect(() =>
       SessionLoop.validateSessionRuntimeContractForContinuation({
         sessionID,
@@ -148,13 +166,16 @@ describe("SessionLoop session runtime contract", () => {
 
   test("validation rejects stale agent, goal, goal_run, attempt, and satisfied terminal collector", () => {
     const sessionID = `ses_runtime_${Date.now()}_stale`
-    SessionLoop.setSessionRuntimeContract(sessionID, runtimeContract(sessionID, {
-      terminalToolContract: {
-        toolName: "report_build_result",
-        isSatisfied: () => true,
-        shouldExposeOnlyTerminalTool: () => false,
-      },
-    }))
+    SessionLoop.setSessionRuntimeContract(
+      sessionID,
+      runtimeContract(sessionID, {
+        terminalToolContract: {
+          toolName: "report_build_result",
+          isSatisfied: () => true,
+          shouldExposeOnlyTerminalTool: () => false,
+        },
+      }),
+    )
     expect(() =>
       SessionLoop.validateSessionRuntimeContractForContinuation({
         sessionID,
@@ -221,13 +242,16 @@ describe("SessionLoop session runtime contract", () => {
             },
           },
         })
-        SessionLoop.setSessionRuntimeContract(sessionID, runtimeContract(sessionID, {
-          identity: {
-            workerTurnDescriptorID: descriptor.id,
-            workerTurnDescriptorHash: descriptor.hash,
-          },
-          tools: { persistent: dummyTool() },
-        }))
+        SessionLoop.setSessionRuntimeContract(
+          sessionID,
+          runtimeContract(sessionID, {
+            identity: {
+              workerTurnDescriptorID: descriptor.id,
+              workerTurnDescriptorHash: descriptor.hash,
+            },
+            tools: { persistent: dummyTool() },
+          }),
+        )
         expect(
           SessionLoop.validateSessionRuntimeContractForContinuation({
             sessionID,
@@ -293,13 +317,16 @@ describe("extras execute-return normalisation (integration via resolveTools)", (
     // intent-analysis smoke test, which used to fail with a ZodError on
     // Message.ToolPart persistence before the wrapper was added.
     const sessionID = `ses_runtime_${Date.now()}_wrap_smoke`
-    SessionLoop.setSessionRuntimeContract(sessionID, runtimeContract(sessionID, {
-      tools: {
-        plain: plainStringTool(),
-        partial: partialObjectTool(),
-        full: fullObjectTool(),
-      },
-    }))
+    SessionLoop.setSessionRuntimeContract(
+      sessionID,
+      runtimeContract(sessionID, {
+        tools: {
+          plain: plainStringTool(),
+          partial: partialObjectTool(),
+          full: fullObjectTool(),
+        },
+      }),
+    )
     const extras = SessionLoop.getSessionRuntimeContract(sessionID)?.tools ?? {}
     expect(Object.keys(extras).sort()).toEqual(["full", "partial", "plain"])
     SessionLoop.clearSessionRuntimeContract(sessionID)
@@ -321,14 +348,17 @@ describe("extras execute-return normalisation (integration via resolveTools)", (
 
   test("orchestrator-wake runtime contract does not require a worker descriptor", () => {
     const sessionID = `ses_runtime_${Date.now()}_orchestrator_descriptor_exempt`
-    SessionLoop.setSessionRuntimeContract(sessionID, runtimeContract(sessionID, {
-      identity: {
-        sessionID,
-        agentKind: "orchestrator",
-        contractKind: "orchestrator-wake",
-      },
-      tools: { requirements: dummyTool() },
-    }))
+    SessionLoop.setSessionRuntimeContract(
+      sessionID,
+      runtimeContract(sessionID, {
+        identity: {
+          sessionID,
+          agentKind: "orchestrator",
+          contractKind: "orchestrator-wake",
+        },
+        tools: { requirements: dummyTool() },
+      }),
+    )
     expect(
       SessionLoop.validateSessionRuntimeContractForContinuation({
         sessionID,
@@ -358,14 +388,17 @@ describe("extras execute-return normalisation (integration via resolveTools)", (
       directory: tmp.path,
       fn: async () => {
         const sessionID = `ses_runtime_${Date.now()}_orchestrator_exact`
-        SessionLoop.setSessionRuntimeContract(sessionID, runtimeContract(sessionID, {
-          identity: {
-            sessionID,
-            agentKind: "orchestrator",
-            contractKind: "orchestrator-wake",
-          },
-          tools: { requirements: dummyTool() },
-        }))
+        SessionLoop.setSessionRuntimeContract(
+          sessionID,
+          runtimeContract(sessionID, {
+            identity: {
+              sessionID,
+              agentKind: "orchestrator",
+              contractKind: "orchestrator-wake",
+            },
+            tools: { requirements: dummyTool() },
+          }),
+        )
         const resolved = await SessionLoop.resolveTools({
           agent: (await Agent.get("orchestrator"))!,
           model: {
@@ -394,11 +427,11 @@ describe("extras execute-return normalisation (integration via resolveTools)", (
   test("normalizes multimodal extra-tool results without stringifying attachments into output", () => {
     const dataUrl = "data:image/png;base64," + "a".repeat(1024)
     const normalized = SessionLoop.normalizeExtraToolResult({
-      text: "{\"ok\":true,\"path\":\"shot.png\"}",
+      text: '{"ok":true,"path":"shot.png"}',
       attachments: [{ type: "file", mime: "image/png", url: dataUrl }],
     })
 
-    expect(normalized.output).toBe("{\"ok\":true,\"path\":\"shot.png\"}")
+    expect(normalized.output).toBe('{"ok":true,"path":"shot.png"}')
     expect(normalized.output).not.toContain("data:image/png;base64")
     expect(normalized.attachments).toEqual([{ type: "file", mime: "image/png", url: dataUrl }])
   })
@@ -496,11 +529,13 @@ describe("extra tool provider schema preparation", () => {
       }),
     }) as any
 
-    expect(prepared.toModelOutput({
-      toolCallId: "call_submit",
-      input: { final: true },
-      output: { output: "accepted", title: "Submit", metadata: { ok: true } },
-    })).toEqual({ type: "text", value: "accepted" })
+    expect(
+      prepared.toModelOutput({
+        toolCallId: "call_submit",
+        input: { final: true },
+        output: { output: "accepted", title: "Submit", metadata: { ok: true } },
+      }),
+    ).toEqual({ type: "text", value: "accepted" })
   })
 
   test("preserves explicit tool model output conversion", () => {
@@ -546,7 +581,7 @@ describe("SessionLoop.summarizeModelMessagePayloads", () => {
         content: [
           {
             type: "tool-result",
-            toolName: "verify_page_integrity",
+            toolName: "runtime_screenshot",
             toolCallId: "call-1",
             output: { type: "text", value: "x".repeat(500) },
           },
@@ -562,7 +597,7 @@ describe("SessionLoop.summarizeModelMessagePayloads", () => {
     expect(rows[0]).toMatchObject({
       role: "tool",
       type: "tool-result",
-      toolName: "verify_page_integrity",
+      toolName: "runtime_screenshot",
       toolCallId: "call-1",
     })
     expect(rows[1]).toMatchObject({
@@ -600,14 +635,18 @@ describe("SessionLoop.setStepHook / withStepHook", () => {
   test("setStepHook round-trips via withStepHook (hook cleared on completion)", async () => {
     const sessionID = `ses_step_${Date.now()}_ok`
     const calls: Array<{ step: number; turn: string }> = []
-    await SessionLoop.withStepHook(sessionID, async (event) => {
-      calls.push({ step: event.step, turn: event.turn })
-    }, async () => {
-      // Inside the wrapper, a hook is registered — we can't directly assert
-      // registration without exposing a getter, but we assert clearing via
-      // an indirect contract: a post-exit setStepHook(undefined) is a no-op.
-      expect(true).toBe(true)
-    })
+    await SessionLoop.withStepHook(
+      sessionID,
+      async (event) => {
+        calls.push({ step: event.step, turn: event.turn })
+      },
+      async () => {
+        // Inside the wrapper, a hook is registered — we can't directly assert
+        // registration without exposing a getter, but we assert clearing via
+        // an indirect contract: a post-exit setStepHook(undefined) is a no-op.
+        expect(true).toBe(true)
+      },
+    )
     // Post-callback: setting undefined on an empty slot is a no-op — this
     // throws if the cleanup was skipped (the Map remembers the fn).
     expect(() => SessionLoop.setStepHook(sessionID, undefined)).not.toThrow()

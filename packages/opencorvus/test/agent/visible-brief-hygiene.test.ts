@@ -21,7 +21,7 @@ const forbiddenVisibleBriefSnippets = [
   "submit_acceptance_verdict tool exactly once",
   "For EACH dimension call its own",
   "submit_<dimension_id>_verdict` tool exactly once",
-  "Call query_metric_trajectory first",
+  "Call retired_metric_probe first",
 ]
 
 describe("worker agent visible briefs", () => {

@@ -6,7 +6,7 @@
  * Adaptations:
  *   - `findChromePath()` → opencorvus `findBrowserExecutable` (single
  *     browser-lifecycle policy shared with `visual/render.ts`,
- *     `frontend-design/url-screenshot.ts`, `delivery/checks/visual.ts`).
+ *     `frontend-design/url-screenshot.ts`, `runtime/visual-page.ts`).
  *   - Silent `catch` → `Log.create({ service: "mirror.url.extract" })`
  *     with structured fields.
  *   - Throws `UrlExtractError` (typed) on 401/403/429 + infra/asset failures.
@@ -36,12 +36,7 @@ type Browser = any
 type HTTPResponse = any
 
 type PuppeteerCore = {
-  launch(input: {
-    executablePath: string
-    headless: boolean
-    args: string[]
-    timeout: number
-  }): Promise<Browser>
+  launch(input: { executablePath: string; headless: boolean; args: string[]; timeout: number }): Promise<Browser>
 }
 
 // ─── Mirror's `infra/config.ts` image-download constants (inlined) ───────
@@ -165,7 +160,13 @@ function browserExtract(args: {
     const tag = el.tagName.toLowerCase()
     const id = el.id ? `#${el.id}` : ""
     const cls =
-      el.className?.toString?.().split(/\s+/).filter(Boolean).slice(0, 2).map((c: string) => `.${c}`).join("") || ""
+      el.className
+        ?.toString?.()
+        .split(/\s+/)
+        .filter(Boolean)
+        .slice(0, 2)
+        .map((c: string) => `.${c}`)
+        .join("") || ""
     return `${tag}${id}${cls}`
   }
 
@@ -207,7 +208,15 @@ function browserExtract(args: {
     const styles: Record<string, string | undefined> = {}
     for (const prop of styleProps) {
       const val = cs.getPropertyValue(prop.replace(/[A-Z]/g, (m: string) => `-${m.toLowerCase()}`))
-      if (val && val !== "" && val !== "normal" && val !== "none" && val !== "auto" && val !== "0px" && val !== "rgba(0, 0, 0, 0)") {
+      if (
+        val &&
+        val !== "" &&
+        val !== "normal" &&
+        val !== "none" &&
+        val !== "auto" &&
+        val !== "0px" &&
+        val !== "rgba(0, 0, 0, 0)"
+      ) {
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         ;(styles as any)[prop] = val
       }
@@ -258,8 +267,7 @@ function browserExtract(args: {
       imageSrc = videoPoster || videoSrc
       imageAlt = videoPoster ? `video: ${videoPoster}` : "video"
       if (videoSrc) imageList.push({ src: videoSrc, alt: imageAlt })
-      if (videoPoster && videoPoster !== videoSrc)
-        imageList.push({ src: videoPoster, alt: `poster: ${videoPoster}` })
+      if (videoPoster && videoPoster !== videoSrc) imageList.push({ src: videoPoster, alt: `poster: ${videoPoster}` })
     }
 
     if (tag === "canvas") {
@@ -455,7 +463,8 @@ async function nodeDownloadImages(
           })
           if (!resp.ok) return { url, error: `HTTP ${resp.status}` }
           const contentType = resp.headers.get("content-type") || ""
-          if (!contentType.startsWith("image/")) return { url, error: `non-image content-type ${contentType || "(missing)"}` }
+          if (!contentType.startsWith("image/"))
+            return { url, error: `non-image content-type ${contentType || "(missing)"}` }
           const buf = Buffer.from(await resp.arrayBuffer())
           if (buf.length === 0) return { url, error: "empty image response" }
           if (buf.length > IMAGE_DOWNLOAD_MAX_SIZE_BYTES) {
@@ -632,23 +641,25 @@ export function materializeInlineExtractedPageAssets(page: ExtractedPage, output
     src: imageMap[`${classifyInlineImage(image.alt)}:${image.src}`] ?? imageMap[image.src] ?? image.src,
   }))
   const persistedImageMap = Object.fromEntries(
-    Object.entries(imageMap).filter(([source, target]) =>
-      !source.includes("data:image/") && !target.includes("data:image/"),
+    Object.entries(imageMap).filter(
+      ([source, target]) => !source.includes("data:image/") && !target.includes("data:image/"),
     ),
   )
 
   return ExtractedPageSchema.parse({
     ...page,
-    screenshotUrl: materializeScreenshot({
-      outputDir,
-      dataUrl: page.screenshotUrl,
-      relPath: "screenshots/full.png",
-    }) ?? page.screenshotUrl,
-    screenshotAboveFold: materializeScreenshot({
-      outputDir,
-      dataUrl: page.screenshotAboveFold,
-      relPath: "screenshots/above-fold.png",
-    }) ?? page.screenshotAboveFold,
+    screenshotUrl:
+      materializeScreenshot({
+        outputDir,
+        dataUrl: page.screenshotUrl,
+        relPath: "screenshots/full.png",
+      }) ?? page.screenshotUrl,
+    screenshotAboveFold:
+      materializeScreenshot({
+        outputDir,
+        dataUrl: page.screenshotAboveFold,
+        relPath: "screenshots/above-fold.png",
+      }) ?? page.screenshotAboveFold,
     tree,
     assets: {
       ...page.assets,
@@ -727,7 +738,9 @@ export async function extractPage(input: ExtractPageInput): Promise<ExtractedPag
   try {
     const page = await browser.newPage()
     await page.setViewport({ width: viewport.width, height: viewport.height })
-    await page.setUserAgent("Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36")
+    await page.setUserAgent(
+      "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36",
+    )
     await page.setExtraHTTPHeaders({ "Accept-Language": "zh-CN,zh;q=0.9,en;q=0.8" })
 
     onProgress?.("Loading page...")
@@ -920,9 +933,7 @@ export async function extractPage(input: ExtractPageInput): Promise<ExtractedPag
       },
     }
 
-    const materializedPage = outputDir
-      ? materializeInlineExtractedPageAssets(extractedPage, outputDir)
-      : extractedPage
+    const materializedPage = outputDir ? materializeInlineExtractedPageAssets(extractedPage, outputDir) : extractedPage
 
     onProgress?.(`Extracted: ${result.extractedElements}/${result.totalElements} elements`)
     onProgress?.(`Colors: ${colorEntries.length}, Fonts: ${result.fonts.length}`)

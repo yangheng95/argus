@@ -65,8 +65,8 @@ The old contract is not isolated. It is hard-coded through:
 
 - `orchestrator/tools.ts`: integrity tool description, `perDimension`
   labels, decision-log text, completion/blocked summaries, read_context output.
-- `delivery/tools.ts`: `run_integrity_review` calls the same review function
-  and persists the same dimension payload.
+- Delivery-triggered review dispatch has been removed; post-build semantic
+  review enters through the orchestrator `integrity` tool.
 - `engine/persist.ts`: `recordIntegrityAttempt` stores `per_dimension`,
   counts, corrections, graph corrections, missing goals, acceptance, and
   markdown.
@@ -171,11 +171,11 @@ Reviewer sessions should reuse the evidence-oriented subset from
 `createIntegrityAcceptanceTools`, with stricter runtime boundaries:
 
 - allowed reading: `read_file`, `find_files`, `search_code`, `list_directory`,
-  `inspect_delivery_context`, memory search;
-- allowed testing: `run_command`, `screenshot`, `verify_page_integrity`,
-  `compare_visual_artifacts`, `query_metric_trajectory`, `query_evidence`;
+  `inspect_integrity_evidence`;
+- allowed testing: `run_command` plus build-owned screenshot evidence already
+  present in the integrity evidence bundle;
 - denied mutation: `edit_file`, `write_file`, `memory_write`, recursive
-  `run_integrity_review`, `task`, goal mutation, task lifecycle tools.
+  review dispatch, `task`, goal mutation, task lifecycle tools.
 
 `run_command` is the main remaining risk because shell commands can modify the
 workspace. Implementation must add one of these protections before reviewers
@@ -319,7 +319,8 @@ Core runtime:
 - `packages/opencorvus/src/prompt/core/acceptance-review-core.txt`
 - `packages/opencorvus/src/prompt/core/orchestrator-core.txt`
 - `packages/opencorvus/src/orchestrator/tools.ts`
-- `packages/opencorvus/src/delivery/tools.ts`
+- `packages/opencorvus/src/build/screenshot-tool.ts`
+- `packages/opencorvus/src/runtime/page-capture.ts`
 - `packages/opencorvus/src/engine/persist.ts`
 - `packages/opencorvus/src/engine/model.ts`
 - `packages/opencorvus/src/engine/store.ts`
@@ -376,7 +377,7 @@ Tests:
 
 - Create a reviewer toolKit from the evidence tools.
 - Remove all mutation tools, including `memory_write`, `edit_file`,
-  `write_file`, `run_integrity_review`, `task`, goal mutation, and lifecycle
+  `write_file`, recursive review dispatch, `task`, goal mutation, and lifecycle
   tools.
 - Add runtime protection for `run_command` so reviewer commands cannot mutate
   project files silently.
@@ -393,9 +394,8 @@ Tests:
 
 - Update `runIntegrityReviewOnce`, `renderIntegrityOutcome`, decision-log
   summaries, and post-build completion gating.
-- Update or remove delivery-triggered `run_integrity_review` depending on the
-  delivery retirement branch; if kept, share the same evidence dossier builder
-  as orchestrator.
+- Remove delivery-triggered review paths; semantic review enters through
+  orchestrator `integrity`.
 - Remove old `perDimension` strings from orchestrator output.
 - Update `orchestrator-core.txt` to remove mandatory separate final acceptance
   review language and fixed pre-integrity audit ritual language.

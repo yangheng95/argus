@@ -50,7 +50,7 @@ describe("build-artifact", () => {
 
   test("overlay browser automation modules do not statically import browser drivers", () => {
     const files = [
-      "src/delivery/checks/visual.ts",
+      "src/runtime/visual-page.ts",
       "src/delivery/checks/walkthrough/run.ts",
       "src/mcp/browser/guard.ts",
       "src/mcp/browser/perf.ts",
@@ -109,11 +109,8 @@ describe("build-artifact", () => {
         { platform: "linux", arch: "x64", linuxLibc: "glibc" },
       ),
     ).toBe(true)
-    expect(
-      artifactHostCanProvideNodeRuntime(
-        { os: "win32", arch: "x64" },
-        { platform: "win32", arch: "x64" },
-      ),
-    ).toBe(true)
+    expect(artifactHostCanProvideNodeRuntime({ os: "win32", arch: "x64" }, { platform: "win32", arch: "x64" })).toBe(
+      true,
+    )
   })
 })

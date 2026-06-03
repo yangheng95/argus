@@ -345,9 +345,9 @@ Built-in config materialization:
     "browser": {
       "type": "local",
       "command": ["opencorvus", "mcp", "browser"],
-      "timeout": 30000
-    }
-  }
+      "timeout": 30000,
+    },
+  },
 }
 ```
 
@@ -363,9 +363,9 @@ Disable form:
 {
   "mcp": {
     "browser": {
-      "enabled": false
-    }
-  }
+      "enabled": false,
+    },
+  },
 }
 ```
 
@@ -433,7 +433,7 @@ These are the known browser-related call points that must be unified or reviewed
 
 ### Existing browser execution users
 
-- `packages/opencorvus/src/delivery/checks/visual.ts`
+- `packages/opencorvus/src/runtime/visual-page.ts`
 - `packages/opencorvus/src/delivery/checks/walkthrough/run.ts`
 - `packages/opencorvus/src/frontend-design/capture-gate.ts`
 - `packages/opencorvus/src/mirror/visual/render.ts`
@@ -535,4 +535,3 @@ Before continuing feature work, fix these current gaps:
 4. Add a source-mode stdio functional smoke test that calls `session_create`.
 5. Start extracting Browser Runtime from existing `puppeteer-core` browser discovery users.
 6. Remove direct Playwright launch from the MCP implementation once Browser Runtime exists.
-

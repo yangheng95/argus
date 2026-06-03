@@ -39,10 +39,10 @@
 
 ### 两个入站入口的分工
 
-| 入口 | 场景 | 是否过 LLM |
-|---|---|---|
+| 入口                       | 场景                                                         | 是否过 LLM                                                               |
+| -------------------------- | ------------------------------------------------------------ | ------------------------------------------------------------------------ |
 | **ChannelIngress.message** | 外部 bot / HTTP webhook；消息已有明确语义（reply / 新 task） | 否（确定性路由；命中 binding 且 task 有 pending interaction 则直接回填） |
-| **ControlMessage.handle** | 用户自然语言对话；需要理解意图；panel / slack / local | 是（一次 LLM 推理，产出一个或多个 capability action） |
+| **ControlMessage.handle**  | 用户自然语言对话；需要理解意图；panel / slack / local        | 是（一次 LLM 推理，产出一个或多个 capability action）                    |
 
 两者最终都汇入 `EngineService.createTask` 或 `Session` / `Question` 等既有 API。`ChannelIngress.message` 在无命中时也会 `ControlMessage.handle`（`surface = <platform>`）来创建任务。
 
@@ -59,9 +59,9 @@
 
 `engine/workflow.ts` 定义两种 Orchestrator 可跟随的工作流（声明式 hint，不是硬状态机）：
 
-| ID | 适合 | 步骤 |
-|---|---|---|
-| `direct` | 单文件 / bugfix / 配置 / 短调试 | `build` → `deliver` |
+| ID         | 适合                              | 步骤                                                                                                    |
+| ---------- | --------------------------------- | ------------------------------------------------------------------------------------------------------- |
+| `direct`   | 单文件 / bugfix / 配置 / 短调试   | `build` → `deliver`                                                                                     |
 | `pipeline` | 多文件功能 / UI 复刻 / 跨模块重构 | `frontend_design?` + `frontend_research?` → `requirements` → `architect` → per-goal `build` → `deliver` |
 
 用户可在 `opencorvus.jsonc` 自定义，通过 `WorkflowRegistry.resolve(id)` 解析。Orchestrator 基于推理仍可偏离推荐步骤。
@@ -112,6 +112,7 @@ orchestrator/loop.ts — runTaskLoop()
 **Loop 触发**：早期版本使用 `trigger.kind ∈ {created, batch_complete, delivery_rejected, retry}` 枚举，已在 Phase 2 移除。当前 `runTaskLoop` 接受任意自由形式事件，由 LLM 读 `engine_*` + decision-log 事实后自行判断（参见 [15-no-fsm.md](15-no-fsm.md)）。
 
 **Loop 消灭的旧机制**（不要再引入）：
+
 - `recoverOrphanedTasks`（loop 本身就是生命周期；孤儿 task 由 `EngineService.init` 里的 serial-queue recovery 统一重启）
 - `notifyGoalResult` fire-and-forget
 - `agentNotifiedRuns` dedup
@@ -120,26 +121,26 @@ orchestrator/loop.ts — runTaskLoop()
 
 ## Sub-agents
 
-| Agent | 代码 | 职责 | 何时被调用 |
-|---|---|---|---|
-| Intent Analysis | `intent-analysis/agent.ts` | 解读用户的简短/模糊请求，输出 `IntentAnalysisResult`（intent class / complexity band / missing-info / clarifications） | 由 `analyze_intent` orchestrator tool 调起；可选 stage（已接线，旧 13 号文档"not wired yet"已过期） |
-| Requirements | `requirements/agent.ts` | Zod tool 输出 REQ-N + foundational decisions；不产出 goals | pipeline workflow 或 Orchestrator 判断需要 |
-| Architect | `architect/agent.ts` | 权威 goal 分解者：必须先分析边界，再产出至少 2 个小型、可独立执行/验收的 goals；禁止单个大型 all-in-one goal；同时负责接口契约、追溯、fidelity / contract IR / linker | 跨目标协调需要时 |
-| Frontend Design | `frontend-design/agent.ts` | 视觉参考（Figma / 图片 / URL）→ 前端模板 / 待填充模块 / 视觉一致性契约 | 有视觉参考的前端任务 |
-| Frontend Research | `frontend-research/agent.ts` | 网页 URL → 功能/视觉/layout/style/interaction/content/fidelity evidence brief；与 frontend-design 并行供 requirements/architect 消费 | 有网页功能/视觉研究需求的前端或 PRD/SPEC/report 任务 |
-| Integrity Reviewer | `integrity/agent.ts` | 多维 integrity review：requirement_fidelity / technical_feasibility / hallucination / solution_quality | 由 `integrity` orchestrator tool 调起（旧 `fidelity` kind 已并入此 agent） |
-| Prosecutor | `prosecutor/agent.ts` | 对交付候选发起对抗性复核 | 由 `prosecute` orchestrator tool 调起 |
-| Delivery | `delivery/agent.ts` | diff 验收 + 触发回修（通过 deliver→重新 call build 的循环）；可在交付证据触发语义疑问时调用 `run_integrity_review` 记录 integrity_attempt，但不是固定 pre-delivery gate；新增 arbiter / specialist-review / specialists / verdict / visual-metric | 每个 workflow 末尾 |
-| Build | `build/agent.ts`（独立包：`agent.ts` / `index.ts` / `report.ts` / `types.ts`） + `goal/runner.ts`（worktree + executor 执行体）+ `agent/sub-agent-protocol.ts`（共享 subagent 协议） | 在 worktree 中实际写代码；通过 `Agent.get("build")` 暴露给 orchestrator | Orchestrator 通过 `build` tool 调起 |
+| Agent              | 代码                                                                                                                                                                                                        | 职责                                                                                                                                                                  | 何时被调用                                                                                          |
+| ------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------- |
+| Intent Analysis    | `intent-analysis/agent.ts`                                                                                                                                                                                  | 解读用户的简短/模糊请求，输出 `IntentAnalysisResult`（intent class / complexity band / missing-info / clarifications）                                                | 由 `analyze_intent` orchestrator tool 调起；可选 stage（已接线，旧 13 号文档"not wired yet"已过期） |
+| Requirements       | `requirements/agent.ts`                                                                                                                                                                                     | Zod tool 输出 REQ-N + foundational decisions；不产出 goals                                                                                                            | pipeline workflow 或 Orchestrator 判断需要                                                          |
+| Architect          | `architect/agent.ts`                                                                                                                                                                                        | 权威 goal 分解者：必须先分析边界，再产出至少 2 个小型、可独立执行/验收的 goals；禁止单个大型 all-in-one goal；同时负责接口契约、追溯、fidelity / contract IR / linker | 跨目标协调需要时                                                                                    |
+| Frontend Design    | `frontend-design/agent.ts`                                                                                                                                                                                  | 视觉参考（Figma / 图片 / URL）→ 前端模板 / 待填充模块 / 视觉一致性契约                                                                                                | 有视觉参考的前端任务                                                                                |
+| Frontend Research  | `frontend-research/agent.ts`                                                                                                                                                                                | 网页 URL → 组织 prepared evidence、委派 build 深度调查、汇总功能/视觉/layout/style/interaction/content/fidelity evidence brief；与 frontend-design 并行供 requirements/architect 消费 | 有网页功能/视觉研究需求的前端或 PRD/SPEC/report 任务                                                |
+| Integrity Reviewer | `integrity/agent.ts`                                                                                                                                                                                        | 多维 integrity review：requirement_fidelity / technical_feasibility / hallucination / solution_quality；最终 workflow 验收 gate                                       | 由 `integrity` orchestrator tool 调起（旧 `fidelity` kind 已并入此 agent）                          |
+| Prosecutor         | `prosecutor/agent.ts`                                                                                                                                                                                       | 对交付候选发起对抗性复核                                                                                                                                              | 由 `prosecute` orchestrator tool 调起                                                               |
+| Build              | `build/agent.ts`（独立包：`agent.ts` / `index.ts` / `report.ts` / `types.ts` / `screenshot-tool.ts`） + `goal/runner.ts`（worktree + executor 执行体）+ `agent/sub-agent-protocol.ts`（共享 subagent 协议） | 在 worktree 中实际写代码；拥有运行时截图证据；通过 `Agent.get("build")` 暴露给 orchestrator                                                                           | Orchestrator 通过 `build` tool 调起                                                                 |
 
 > Planner-as-agent 已删除。session 级的 `src/tool/planner.ts` 是一个 working-memory
-> 工具（add_task / update_task / scratchpad_*），任何 agent 都可以挂载它来管理自己的子
+> 工具（add*task / update_task / scratchpad*\*），任何 agent 都可以挂载它来管理自己的子
 > 任务树，**不是** 旧 per-goal planner 的替代。pipeline 流程里 "per-goal 实现步骤" 的职责
 > 已归并到 build agent 自身（结合 architect 写的 contract）。
 
-**Checks（原 evaluator 模块）**：移到 `delivery/checks/`，不再是独立 sub-agent。delivery agent 通过 `discovery.ts` 解析 check family，调 `visual.ts` / `runtime-evidence.ts` / `runtime-readiness.ts` / `walkthrough/` / `content-fingerprint.ts` / `contract-audit-review.ts` / `project-gate.ts` 执行确定性或 LLM judge 验证。旧 `src/evaluator/` 目录已删除。
+**Delivery agent 已删除**：最终验收归属 `integrity`，运行时截图证据归属 Build；旧 delivery tool/service surface 不再存在。
 
 **`orchestrator/tools.ts` 当前导出 22 个 tool**（2026-05-18，下面按职责分组；文件内的实际出现顺序为 `requirements` · `frontend_design` · `architect` · `integrity` · `prosecute` · `analyze_intent` · `modify_goal` · `query_failed_goals` · `read_context` · `fail_task` · `cancel_task` · `retry_task` · `inject_operator_message` · `steer_subagent` · `cancel_subagent` · `restart_from_stage` · `deliver` · `publish_delivery` · `refine` · `question` · `propose_task` · `build`）：
+
 1. **Stage 调用**：`requirements`、`frontend_design`、`frontend_research`、`architect`、`build`、`deliver`
 2. **Post-delivery artifact export**：`publish_delivery`（不决定 task lifecycle；accepted `deliver` 已完成 task）
 3. **审查 / 复核**：`integrity`（integrity reviewer）、`prosecute`（prosecutor）、`analyze_intent`

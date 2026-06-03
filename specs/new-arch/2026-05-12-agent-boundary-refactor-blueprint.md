@@ -15,7 +15,7 @@ invent a new parallel set of agent concepts. The current code already contains
 several real single-source candidates:
 
 - `DeliveryEvidenceManifest` is the existing delivery evidence snapshot.
-- `DeliveryService.verify` plus `arbitrateDeliveryVerdict` is the current
+- The retired delivery verifier plus `arbitrateDeliveryVerdict` was the current
   delivery-stage finalization path.
 - `requirements` already avoids goal generation.
 - `architect` already owns goal graph and contracts.
@@ -29,7 +29,7 @@ or second role definition table.
 Observed problems:
 
 1. Delivery-stage responsibility is split across manifest assembly, delivery
-   tools, `DeliveryAgent`, `DeliveryService`, `arbiter`, and orchestrator
+   tools, retired delivery agent/verifier, `arbiter`, and orchestrator
    `deliver` side effects.
 2. `prosecutor` is positioned as an adversarial reviewer, but it does not yet
    consume the same delivery evidence manifest as delivery, and failures can be
@@ -75,7 +75,7 @@ Current final persisted verdict is produced by:
 
 1. `DeliveryAgent.verify` submitting a semantic verdict.
 2. `arbitrateDeliveryVerdict` applying deterministic host gates.
-3. `DeliveryService.verify` returning the final stage verdict.
+3. The retired delivery verifier returning the final stage verdict.
 
 This is acceptable only if treated as one delivery-stage finalization mechanism.
 The arbiter is not a second agent and must not become a second subjective judge.
@@ -114,17 +114,17 @@ review that found no issue.
 This table documents the target, but the implementation source must be the code
 role contract.
 
-| Role | Owns | Must not own |
-|---|---|---|
-| `orchestrator` | task wake decisions, stage ordering, retry/fail/restart, task mutation tool use | requirement extraction, goal graph authoring, subjective final delivery verdict |
-| `requirements` | requirement extraction and foundational technical decisions | goals, contracts, retry strategy |
-| `architect` | goal graph, traceability, assembly ownership, cross-goal contracts | runtime evidence, delivery verdict |
-| `integrity` | requirement/goal integrity review, including post-build requirement-status fidelity | delivery runtime verification, delivery verdict, direct goal mutation |
-| `build` | implementation in worktree | final acceptance |
-| `delivery-manifest` | deterministic delivery evidence assembly and persisted evidence manifest | subjective verdict authorship |
-| `delivery-agent` | semantic accept/reject judgment over delivery evidence and on-demand inspection results | manifest assembly, hidden integrity routing |
-| `delivery-arbiter` | deterministic finalization of delivery-stage verdict from agent verdict plus host gates | subjective review, new evidence creation |
-| `prosecutor` | counterexamples and diagnostic challenge metrics over delivery evidence | accept/reject verdict, delivery truth mutation |
+| Role                | Owns                                                                                    | Must not own                                                                    |
+| ------------------- | --------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------- |
+| `orchestrator`      | task wake decisions, stage ordering, retry/fail/restart, task mutation tool use         | requirement extraction, goal graph authoring, subjective final delivery verdict |
+| `requirements`      | requirement extraction and foundational technical decisions                             | goals, contracts, retry strategy                                                |
+| `architect`         | goal graph, traceability, assembly ownership, cross-goal contracts                      | runtime evidence, delivery verdict                                              |
+| `integrity`         | requirement/goal integrity review, including post-build requirement-status fidelity     | delivery runtime verification, delivery verdict, direct goal mutation           |
+| `build`             | implementation in worktree                                                              | final acceptance                                                                |
+| `delivery-manifest` | deterministic delivery evidence assembly and persisted evidence manifest                | subjective verdict authorship                                                   |
+| `delivery-agent`    | semantic accept/reject judgment over delivery evidence and on-demand inspection results | manifest assembly, hidden integrity routing                                     |
+| `delivery-arbiter`  | deterministic finalization of delivery-stage verdict from agent verdict plus host gates | subjective review, new evidence creation                                        |
+| `prosecutor`        | counterexamples and diagnostic challenge metrics over delivery evidence                 | accept/reject verdict, delivery truth mutation                                  |
 
 ## 3. Current Reality Inventory
 
@@ -136,7 +136,7 @@ role contract.
 - `DeliveryEvidenceManifest` already persists required checks, runtime
   readiness, coverage, runtime flows, specialist reviews, review evidence, and
   final gate.
-- `DeliveryService.verify` already centralizes delivery verification and
+- The retired delivery verifier centralized delivery verification and
   arbitration.
 - Prosecutor challenge metrics are forced to `gate_class="diagnostic"` at the
   store layer.
@@ -148,7 +148,7 @@ role contract.
 - Prompt catalog can expose empty default prompts for native editable agents
   such as `integrity` / `prosecutor`.
 - Historical: `deliver` auto-publish could bypass the intended `deliver ->
-  prosecute -> publish_delivery` review window. Superseded on 2026-05-16:
+prosecute -> publish_delivery` review window. Superseded on 2026-05-16:
   accepted `deliver` completes the task; `prosecute` is post-delivery evidence.
 - `prosecutor.query_diff` is still a stub and its prompt still contains phase
   wording that describes incomplete wiring.
@@ -255,7 +255,7 @@ Files to change:
 - `packages/opencorvus/src/delivery/checks/project-gate.ts`
 - `packages/opencorvus/src/delivery/service.ts`
 - `packages/opencorvus/src/orchestrator/tools.ts`
-- `packages/opencorvus/src/delivery/agent.ts`
+- retired delivery agent source
 
 Optional helper files:
 
@@ -272,7 +272,7 @@ Work:
    - the manifest,
    - an explicit pointer from the manifest,
    - or a separately named non-evidence prompt context.
-3. Audit `DeliveryService.verify` fields currently computed outside the
+3. Audit retired delivery verifier fields currently computed outside the
    manifest, especially runtime/visual gates passed into arbiter.
 4. Audit `orchestrator/tools.ts` delivery side effects:
    - merged worktree render
@@ -349,8 +349,8 @@ is a pure static reader.
 
 Files to change:
 
-- `packages/opencorvus/src/delivery/tools.ts`
-- `packages/opencorvus/src/delivery/agent.ts`
+- retired delivery tool source
+- retired delivery agent source
 - `packages/opencorvus/src/delivery/output-tools.ts`
 - `packages/opencorvus/test/delivery/tools-readonly.test.ts`
 
@@ -571,7 +571,7 @@ This refactor is complete only when all items below are true:
 2. `DeliveryEvidenceManifest` is the only persisted delivery evidence source.
 3. Delivery-stage final verdict is produced by one path:
    `DeliveryAgent.verify` semantic verdict plus deterministic arbiter
-   finalization in `DeliveryService.verify`.
+   finalization in the retired delivery verifier.
 4. `prosecutor` reads the same manifest-backed evidence as delivery and cannot
    write acceptance verdicts.
 5. `integrity` may use requirement-status completion evidence but does not run

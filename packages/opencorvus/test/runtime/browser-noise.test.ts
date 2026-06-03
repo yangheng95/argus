@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test"
-import { isBrowserImplicitAssetRequest, isResourceLoadConsoleError } from "./browser-noise"
+import { isBrowserImplicitAssetRequest, isResourceLoadConsoleError } from "../../src/runtime/browser-noise"
 
 describe("browser-implicit asset request", () => {
   test("treats the conventional root favicon as browser-implicit on any origin", () => {

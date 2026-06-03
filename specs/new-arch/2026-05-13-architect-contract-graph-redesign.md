@@ -370,7 +370,7 @@ are switched.
 | `delivery/checks/types.ts`                                                   | GoalInfo carries imports/exports                   | remove fields; add graph refs                        |
 | `delivery/checks/contract-audit-review.ts`                                   | boundary detection uses imports/exports            | use graph audit criteria                             |
 | `delivery/specialists/backend-client.ts`                                     | client contract gate uses imports/exports          | use route/static graph contracts                     |
-| `delivery/tools.ts`                                                          | renders imports/exports in goal detail             | render graph contracts                               |
+| retired delivery tool surface                                                | renders imports/exports in goal detail             | render graph contracts                               |
 | `prompt/upstream-context.ts`                                                 | delivery catalog says exports/imports are gating   | render graph catalog                                 |
 | `prompt/core/build-core.txt` / `delivery-core.txt` / `orchestrator-core.txt` | system prompts name imports/exports                | switch to graph vocabulary                           |
 | `overlay/src/main.tsx`                                                       | debug SQL template selects exports/imports         | select graph artifact                                |
