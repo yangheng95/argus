@@ -366,7 +366,10 @@ export async function apiJsonWithTimeout<T = unknown>(
   try {
     return (await apiJson(path, { ...init, signal })) as T;
   } catch (error) {
-    throw new Error(`${path}: ${errorMessage(error)}`);
+    if (error instanceof ApiError) throw error;
+    throw new Error(`${path}: ${errorMessage(error)}`, {
+      cause: error instanceof Error ? error : undefined,
+    });
   }
 }
 

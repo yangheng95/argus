@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, test } from "bun:test";
-import { apiJson, ApiError } from "../src/services/api";
+import { apiJson, apiJsonWithTimeout, ApiError } from "../src/services/api";
 import { __setHostTransportForTest } from "../src/services/host-transport";
 import type {
   HostTransport,
@@ -117,5 +117,30 @@ describe("apiJson + ApiError", () => {
       caught = e as ApiError;
     }
     expect(caught?.message).toContain("Bad Gateway");
+  });
+
+  test("apiJsonWithTimeout preserves ApiError status / path / body", async () => {
+    __setHostTransportForTest(
+      fakeTransport(() => ({
+        status: 400,
+        ok: false,
+        headers: {},
+        body: { message: "provider config failed before model list loaded" },
+      })),
+    );
+
+    let caught: unknown;
+    try {
+      await apiJsonWithTimeout("config/providers", 100);
+    } catch (e) {
+      caught = e;
+    }
+
+    expect(caught).toBeInstanceOf(ApiError);
+    const err = caught as ApiError;
+    expect(err.status).toBe(400);
+    expect(err.path).toBe("config/providers");
+    expect(err.body).toEqual({ message: "provider config failed before model list loaded" });
+    expect(err.message).toContain("provider config failed");
   });
 });
