@@ -92,6 +92,15 @@ describe("SessionLoop session runtime contract", () => {
     SessionLoop.clearSessionRuntimeContract(sessionID)
   })
 
+  test("runtime contract can request an exact worker tool surface", () => {
+    const contract = runtimeContract("ses_exact_runtime_tools", {
+      exactTools: true,
+      tools: { persistent: dummyTool() },
+    })
+
+    expect(SessionLoop.usesExactRuntimeContractTools("build", contract)).toBe(true)
+  })
+
   test("SessionPrompt.cancel preserves runtime contract until the owning loop settles", async () => {
     const sessionID = `ses_runtime_${Date.now()}_cancel`
     await using tmp = await tmpdir({ git: true })
