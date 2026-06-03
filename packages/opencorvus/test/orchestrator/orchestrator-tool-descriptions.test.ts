@@ -35,9 +35,10 @@ describe("orchestrator tool descriptions for integrity stuck loops", () => {
 
     expect(tools.research.description).toContain("PRD/SPEC/report source material")
     expect(tools.research.description).toContain("use `frontend_research` instead")
-    expect(tools.frontend_research.description).toContain("stage coordinator for webpage/UI reference research")
-    expect(tools.frontend_research.description).toContain("delegates deep investigation packets to build workers")
+    expect(tools.frontend_research.description).toContain("read-only stage agent for webpage/UI reference research")
+    expect(tools.frontend_research.description).toContain("investigates rendered webpage evidence and source pages itself")
     expect(tools.frontend_research.description).toContain("frontend_research_brief/webpage_contract")
+    expect(tools.frontend_research.description).toContain("NOT build")
     expect(tools.frontend_research.description).toContain("NOT the frontend implementation template owner")
   })
 })

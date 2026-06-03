@@ -618,17 +618,18 @@ describe("core prompt hygiene", () => {
     expect(normalized).toContain("custom components only for truly page-specific surfaces")
   })
 
-  test("frontend-research coordinates build-delegated PRD-grade webpage research", async () => {
+  test("frontend-research performs direct PRD-grade webpage research", async () => {
     const research = await readPrompt("frontendResearch")
     const normalized = research.replace(/\s+/g, " ")
 
-    expect(normalized).toContain("webpage research organizer and evidence hub")
-    expect(normalized).toContain("delegate_deep_research_to_build")
-    expect(normalized).toContain("Do not write code, edit files, execute shell commands, webfetch, search code, read repository files")
-    expect(normalized).toContain("Delegate deep investigation to build in scoped packets")
-    expect(normalized).toContain("Read build results before submitting the final brief")
+    expect(normalized).toContain("webpage research agent and evidence hub")
+    expect(normalized).not.toContain("delegate_deep_research_to_build")
+    expect(normalized).toContain("Do not write code, edit files, execute shell commands, search implementation code, or call build")
+    expect(normalized).toContain("Use prepared webpage evidence, read-only artifact reads, and source-page `webfetch`")
+    expect(normalized).toContain("Do not delegate investigation packets to build")
+    expect(normalized).toContain("Investigate the primary page plus supplied source URLs or known subpage gaps yourself")
     expect(normalized).toContain("A short page outline is insufficient for webpage replica work")
-    expect(normalized).toContain("Produce a PRD-grade webpage research bundle from delegated build findings")
+    expect(normalized).toContain("Produce a PRD-grade webpage research bundle from your direct findings")
     expect(normalized).toContain("usable by requirements and architect without reopening the live page")
     expect(normalized).toContain("Treat PRD evidence as the primary implementation source")
     expect(normalized).toContain("about 70% of the downstream reconstruction signal")

@@ -4080,14 +4080,14 @@ export function createOrchestratorTools(input: {
 
     frontend_research: tool({
       description:
-        "OPTIONAL stage coordinator for webpage/UI reference research. Use alongside `frontend_design` for supplied page URLs when downstream requirements and architect need faithful source-backed facts about page functions, visual layout, style requirements, interactions, content/data inventory, responsive behavior, fidelity acceptance, and risks. It organizes rendered webpage evidence, delegates deep investigation packets to build workers, and persists a frontend_research_brief/webpage_contract artifact. It is NOT the frontend implementation template owner, NOT requirements, NOT architect, NOT a route selector, and NOT final PRD/SPEC/report acceptance.",
+        "OPTIONAL read-only stage agent for webpage/UI reference research. Use alongside `frontend_design` for supplied page URLs when downstream requirements and architect need faithful source-backed facts about page functions, visual layout, style requirements, interactions, content/data inventory, responsive behavior, fidelity acceptance, and risks. It investigates rendered webpage evidence and source pages itself, then persists a frontend_research_brief/webpage_contract artifact. It is NOT the frontend implementation template owner, NOT requirements, NOT architect, NOT build, NOT a route selector, and NOT final PRD/SPEC/report acceptance.",
       inputSchema: z.object({
         reason: z.string().min(1).describe("Why frontend webpage research is needed for this task."),
         source_urls: z
           .array(z.string().min(1))
           .min(1)
-          .describe("Source page URLs the frontend-research coordinator must cover through prepared evidence and delegated build investigation."),
-        focus: z.string().optional().describe("Optional narrow focus for the frontend-research coordinator."),
+          .describe("Source page URLs the frontend-research agent must cover through prepared evidence and read-only source investigation."),
+        focus: z.string().optional().describe("Optional narrow focus for the frontend-research agent."),
       }),
       execute: async ({ reason, source_urls, focus }) => {
         const task = requireTask(taskID)

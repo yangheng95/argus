@@ -162,7 +162,7 @@ export namespace AgentRoleContract {
     "frontend-research": {
       id: "frontend-research",
       description:
-        "Frontend research coordinator. Organizes webpage functional and visual research, delegates deep investigation packets to build, and emits a source-backed frontend_research_brief with webpage_contract covering functions, layout, styles, interactions, content inventory, fidelity acceptance, risks, document outlines, constraints, and open questions. It does not directly investigate pages, does not create the frontend implementation template, and never chooses routes or delivers final documents.",
+        "Frontend research agent. Directly performs read-only webpage functional and visual research from prepared evidence and source retrieval, then emits a source-backed frontend_research_brief with webpage_contract covering functions, layout, styles, interactions, content inventory, fidelity acceptance, risks, document outlines, constraints, and open questions. It does not create the frontend implementation template, does not call build, and never chooses routes or delivers final documents.",
       promptEditable: true,
       defaultPromptRequired: true,
       promptConfigMode: "append",
