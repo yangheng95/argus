@@ -10,9 +10,9 @@ import z from "zod"
 import path from "node:path"
 import fs from "node:fs/promises"
 import { createHash } from "node:crypto"
-import { spawn } from "node:child_process"
-import { createRequire } from "node:module"
 import { BrowserRuntime } from "@/browser/runtime"
+import { runBrowserNodeSidecar } from "@/browser/runtime/node-executor"
+import { resolveBrowserNodeSidecarRuntime } from "@/browser/runtime/node-sidecar"
 import {
   decodePNGBuffer,
   nonWhiteDensity,
@@ -264,10 +264,6 @@ export function shouldUseNodeCaptureSidecar(): boolean {
   return process.platform === "win32" && typeof Bun !== "undefined"
 }
 
-export function resolveNodeSidecarPlaywrightRequirePath(): string {
-  return createRequire(import.meta.url).resolve("playwright")
-}
-
 async function captureBrowserEvidence(input: {
   url: string
   viewport: { width: number; height: number }
@@ -430,73 +426,33 @@ async function captureBrowserEvidenceViaNode(input: {
   browserExecutable?: string
 }): Promise<BrowserEvidence> {
   const executablePath = await BrowserRuntime.findBrowserExecutable(input.browserExecutable)
-  const node = process.env.OPENCORVUS_BROWSER_MCP_NODE ?? "node.exe"
-  const payload = Buffer.from(JSON.stringify({ ...input, executablePath }), "utf8").toString("base64")
-  const playwrightRequirePath = resolveNodeSidecarPlaywrightRequirePath()
-  const child = spawn(node, ["-"], {
-    cwd: process.cwd(),
-    env: {
-      ...process.env,
-      OPENCORVUS_CAPTURE_INPUT: payload,
-      OPENCORVUS_PLAYWRIGHT_REQUIRE_PATH: playwrightRequirePath,
-    },
-    stdio: ["pipe", "pipe", "pipe"],
-    windowsHide: true,
-  })
-  child.stdin.end(NODE_CAPTURE_SCRIPT)
-
-  let stdout = ""
-  let stderr = ""
-  child.stdout.setEncoding("utf8")
-  child.stderr.setEncoding("utf8")
-  child.stdout.on("data", (chunk) => {
-    stdout += chunk
-  })
-  child.stderr.on("data", (chunk) => {
-    stderr += chunk
-  })
-
   const hardTimeoutMs = input.timeoutMs + 30_000
-  const exit = await new Promise<{ code: number | null; signal: NodeJS.Signals | null }>((resolve, reject) => {
-    const timer = setTimeout(() => {
-      child.kill()
-      reject(new Error(`Node browser capture timed out after ${hardTimeoutMs}ms. stderr=${stderr.slice(-2000)}`))
-    }, hardTimeoutMs)
-    child.once("error", (error) => {
-      clearTimeout(timer)
-      reject(error)
-    })
-    child.once("exit", (code, signal) => {
-      clearTimeout(timer)
-      resolve({ code, signal })
-    })
+  const runtime = await resolveBrowserNodeSidecarRuntime()
+  const run = await runBrowserNodeSidecar<
+    | { ok: true; screenshotBase64: string; domOuter: string; innerText: string; layoutRaw: BrowserEvidence["layoutRaw"]; harByteSize: number; chromeVersion?: string }
+    | { ok: false; message: string; stack?: string }
+  >({
+    runtime,
+    script: NODE_CAPTURE_SCRIPT,
+    payload: { ...input, executablePath },
+    payloadEnvName: "OPENCORVUS_CAPTURE_INPUT",
+    hardTimeoutMs,
+    label: "Node browser capture",
   }).catch((e) => {
     throw new CaptureReferenceError(`browser runtime launch failed via Node sidecar: ${formatBrowserRuntimeError(e)}`, "browser", e)
   })
 
-  let parsed: unknown
-  try {
-    parsed = JSON.parse(stdout)
-  } catch (e) {
-    if (exit.code !== 0) {
-      throw new CaptureReferenceError(
-        `browser runtime launch failed via Node sidecar: node exited with ${exit.signal ?? exit.code}. ${stderr.trim()}`,
-        "browser",
-      )
-    }
-    throw new CaptureReferenceError(
-      `browser runtime launch failed via Node sidecar: invalid JSON output. stderr=${stderr.trim()} stdout=${stdout.slice(0, 500)}`,
-      "browser",
-      e,
-    )
-  }
-
-  const result = parsed as
-    | { ok: true; screenshotBase64: string; domOuter: string; innerText: string; layoutRaw: BrowserEvidence["layoutRaw"]; harByteSize: number; chromeVersion?: string }
-    | { ok: false; message: string; stack?: string }
+  const result = run.result
   if (!result.ok) {
     throw new CaptureReferenceError(
       `browser runtime launch failed via Node sidecar: ${result.message}${result.stack ? `\n${result.stack}` : ""}`,
+      "browser",
+    )
+  }
+
+  if (run.exitCode !== 0) {
+    throw new CaptureReferenceError(
+      `browser runtime launch failed via Node sidecar: node exited with ${run.signal ?? run.exitCode}. ${run.stderr.trim()}`,
       "browser",
     )
   }
@@ -658,4 +614,3 @@ async function readBrowserRuntimeVersion(): Promise<string | undefined> {
     return undefined
   }
 }
-

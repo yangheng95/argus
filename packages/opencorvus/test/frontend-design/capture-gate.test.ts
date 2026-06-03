@@ -1,7 +1,10 @@
 import { describe, expect, test } from "bun:test"
+import { mkdirSync, rmSync, statSync } from "node:fs"
+import os from "node:os"
+import path from "node:path"
 import {
   assessCaptureDiagnostics,
-  resolveNodeSidecarPlaywrightRequirePath,
+  captureReferenceManifest,
   shouldUseNodeCaptureSidecar,
   type CaptureManifestType,
 } from "../../src/frontend-design/capture-gate"
@@ -64,10 +67,38 @@ describe("capture reference diagnostics", () => {
     }
   })
 
-  test("resolves Playwright for the Node sidecar independently of cwd", () => {
-    const resolved = resolveNodeSidecarPlaywrightRequirePath().replace(/\\/g, "/")
+  test("captures a local HTTP visual reference through the browser runtime", async () => {
+    const outDir = path.join(os.tmpdir(), `capture-gate-runtime-${process.pid}-${Date.now()}`)
+    mkdirSync(outDir, { recursive: true })
+    const server = Bun.serve({
+      port: 0,
+      fetch() {
+        return new Response(
+          `<!doctype html><html><body style="margin:0;background:#fff">
+            <main style="width:640px;height:360px;background:#4e6ef2;color:white">
+              <h1>Runtime capture fixture</h1>
+              <p>Visible reference copy</p>
+            </main>
+          </body></html>`,
+          { headers: { "content-type": "text/html" } },
+        )
+      },
+    })
 
-    expect(resolved).toContain("/node_modules/playwright/")
-    expect(resolved.endsWith("/index.js")).toBe(true)
-  })
+    try {
+      const result = await captureReferenceManifest({
+        url: `http://127.0.0.1:${server.port}/`,
+        outDir,
+        viewport: { width: 640, height: 360 },
+        timeoutMs: 20_000,
+      })
+
+      expect(result.manifest.reference_strings).toContain("Runtime capture fixture")
+      expect(statSync(result.artifactPaths.screenshotPng).size).toBeGreaterThan(0)
+      expect(statSync(result.artifactPaths.domHtml).size).toBeGreaterThan(0)
+    } finally {
+      server.stop(true)
+      rmSync(outDir, { recursive: true, force: true })
+    }
+  }, 60_000)
 })
