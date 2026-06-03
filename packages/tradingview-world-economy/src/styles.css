@@ -1,0 +1,25 @@
+@import "./styles/source-critical.css";
+@import "./styles/source-full.css";
+
+html,
+body,
+#root {
+  margin: 0;
+  min-width: 320px;
+}
+
+.source-dom-page {
+  min-height: 100vh;
+}
+
+.semantic-source-header-logo-text {
+  display: inline-flex;
+  align-items: center;
+  margin-inline-start: 2px;
+  color: currentColor;
+  font-family: -apple-system, BlinkMacSystemFont, Trebuchet MS, Roboto, Ubuntu, sans-serif;
+  font-size: 26px;
+  font-weight: 700;
+  line-height: 28px;
+  letter-spacing: 0;
+}
