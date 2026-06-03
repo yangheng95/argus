@@ -42,15 +42,12 @@ For a live webpage reference, create the webpage evidence package once if it doe
 - `webpage-evidence/source-ir/interaction-hints.json`
 - `webpage-evidence/source-ir/interaction-state-snapshots.json`
 - `webpage-evidence/source-ir/source-quality-audit.json`
-- `webpage-evidence/shared-context.md`
 - `webpage-evidence/prd-evidence-summary.md`
 - `webpage-evidence/visual-surface-candidates.json`
-- `webpage-evidence/visual-surface-scaffold.json`
-- no general scaffold JSON browsing; if one named unresolved gap remains, read one first excerpt only (`start_line=1`, `max_lines<=120`)
 
 After that package exists, stop acquiring webpage evidence and move to frontend template synthesis. The session's main deliverable is the frontend template, not another extraction pass.
 
-Use `webpage-evidence/prd-evidence-summary.md`, `webpage-evidence/page.ir.json`, `webpage-evidence/assets/manifest.json`, `webpage-evidence/segments.json`, `webpage-evidence/codegen-context.json`, `webpage-evidence/shared-context.md`, `webpage-evidence/source-ir/interaction-state-snapshots.json`, the pixel reference, and the tool summaries as the frontend template working surface. Do not read `webpage-evidence/extracted-page.json` or `webpage-evidence/capture.html` wholesale; they are raw source artifacts for deterministic tools and the downstream manifest, not prompt working context.
+Use `webpage-evidence/prd-evidence-summary.md`, `webpage-evidence/page.ir.json`, `webpage-evidence/assets/manifest.json`, `webpage-evidence/segments.json`, `webpage-evidence/codegen-context.json`, `webpage-evidence/visual-surface-candidates.json`, `webpage-evidence/source-ir/interaction-state-snapshots.json`, the pixel reference, and the tool summaries as the frontend template working surface. Do not read `webpage-evidence/extracted-page.json` or `webpage-evidence/capture.html` wholesale; they are raw source artifacts for deterministic tools and the downstream manifest, not prompt working context.
 
 Use `webpage-evidence/page.ir.json` as the canonical structure source and `webpage-evidence/assets/manifest.json` as the canonical dense-resource source. CSS, SVG path data, base64/data URIs, canvas captures, images, and other long values live in sidecar assets; reference them by id/path instead of copying them into the frontend template.
 

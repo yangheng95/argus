@@ -10,7 +10,6 @@ import path from "path"
 import fs from "fs"
 import { Instance } from "@/project/instance"
 
-const DENSE_MIRROR_ARTIFACT_MAX_LINES = 120
 const READ_FILE_MAX_LINE_CHARS = 1200
 const INLINE_BASE64_DATA_URI_RE = /data:([a-zA-Z0-9.+-]+\/[a-zA-Z0-9.+-]+);base64,([A-Za-z0-9+/=_-]+)/g
 
@@ -52,58 +51,51 @@ async function collectLimitedLines(input: ReadableStream<Uint8Array>, limit: num
   return { text: lines.slice(0, limit).join("\n"), limited: lines.length > limit }
 }
 
-function rawMirrorArtifactReason(relPath: string): string | null {
+function evidencePathMatches(normalized: string, relative: string): boolean {
+  return (
+    normalized.endsWith(`/webpage-evidence/${relative}`) ||
+    normalized === `webpage-evidence/${relative}` ||
+    normalized.endsWith(`/mirror/${relative}`) ||
+    normalized === `mirror/${relative}`
+  )
+}
+
+function evidencePathIncludes(normalized: string, relativeDir: string): boolean {
+  return (
+    normalized.includes(`/webpage-evidence/${relativeDir}/`) ||
+    normalized.startsWith(`webpage-evidence/${relativeDir}/`) ||
+    normalized.includes(`/mirror/${relativeDir}/`) ||
+    normalized.startsWith(`mirror/${relativeDir}/`)
+  )
+}
+
+function rawWebpageEvidenceArtifactReason(relPath: string): string | null {
   const normalized = relPath.replace(/\\/g, "/")
   if (
-    normalized.endsWith("/mirror/extracted-page.json") ||
-    normalized === "mirror/extracted-page.json" ||
-    normalized.endsWith("/mirror/capture.html") ||
-    normalized === "mirror/capture.html" ||
-    normalized.endsWith("/mirror/image-analysis.json") ||
-    normalized === "mirror/image-analysis.json" ||
-    normalized.endsWith("/mirror/figma-design.json") ||
-    normalized === "mirror/figma-design.json"
+    evidencePathMatches(normalized, "extracted-page.json") ||
+    evidencePathMatches(normalized, "capture.html")
   ) {
     return "raw webpage evidence extraction JSON"
   }
   return null
 }
 
-function denseMirrorArtifactReason(relPath: string): string | null {
-  const normalized = relPath.replace(/\\/g, "/")
-  if (normalized.endsWith("/mirror/scaffold.json") || normalized === "mirror/scaffold.json") {
-    return "dense mirror scaffold JSON"
-  }
-  return null
-}
-
-function isMirrorPromptExcerpt(relPath: string): boolean {
+function isWebpageEvidencePromptExcerpt(relPath: string): boolean {
   const normalized = relPath.replace(/\\/g, "/")
   return (
-    normalized.endsWith("/mirror/page-ir.xml") ||
-    normalized === "mirror/page-ir.xml" ||
-    normalized.endsWith("/mirror/page.ir.json") ||
-    normalized === "mirror/page.ir.json" ||
-    normalized.endsWith("/mirror/assets/manifest.json") ||
-    normalized === "mirror/assets/manifest.json" ||
-    normalized.endsWith("/mirror/segments.json") ||
-    normalized === "mirror/segments.json" ||
-    normalized.endsWith("/mirror/codegen-context.json") ||
-    normalized === "mirror/codegen-context.json" ||
-    normalized.endsWith("/mirror/shared-context.md") ||
-    normalized === "mirror/shared-context.md" ||
-    normalized.endsWith("/mirror/prd-evidence-summary.md") ||
-    normalized === "mirror/prd-evidence-summary.md" ||
-    normalized.includes("/mirror/source-ir/") ||
-    normalized.startsWith("mirror/source-ir/") ||
-    normalized.includes("/mirror/source-skeleton/") ||
-    normalized.startsWith("mirror/source-skeleton/") ||
+    evidencePathMatches(normalized, "page.ir.json") ||
+    evidencePathMatches(normalized, "assets/manifest.json") ||
+    evidencePathMatches(normalized, "segments.json") ||
+    evidencePathMatches(normalized, "codegen-context.json") ||
+    evidencePathMatches(normalized, "prd-evidence-summary.md") ||
+    evidencePathIncludes(normalized, "source-ir") ||
+    evidencePathIncludes(normalized, "source-skeleton") ||
     normalized.includes("/web-clone-source/") ||
     normalized.startsWith("web-clone-source/")
   )
 }
 
-function mirrorPromptWorkingSurface(): string {
+function webpageEvidencePromptWorkingSurface(): string {
   return [
     "web-clone-source/README.md",
     "web-clone-source/implementation-blueprint.md",
@@ -111,21 +103,13 @@ function mirrorPromptWorkingSurface(): string {
     "web-clone-source/source-ir/*.json",
     "web-clone-source/source-skeleton/critical.css",
     "web-clone-source/reference.png",
-    "mirror/prd-evidence-summary.md",
-    "mirror/source-ir/*.json",
-    "mirror/source-skeleton/critical.css",
-    "mirror/source-skeleton/index.html as raw evidence only",
-    "mirror/page.ir.json",
-    "mirror/assets/manifest.json",
+    "webpage-evidence/prd-evidence-summary.md",
+    "webpage-evidence/source-ir/*.json",
+    "webpage-evidence/source-skeleton/critical.css",
+    "webpage-evidence/source-skeleton/index.html as raw evidence only",
+    "webpage-evidence/page.ir.json",
+    "webpage-evidence/assets/manifest.json",
   ].join(", ")
-}
-
-function renderMirrorArtifactBoundary(filePath: string): string {
-  return (
-    `Error: ${filePath} is a bounded mirror artifact. ` +
-    "Do not page dense mirror artifacts through read_file. " +
-    `Use the returned excerpt plus ${mirrorPromptWorkingSurface()}, mirror tool summaries, and the evidence manifest to finalize the frontend design/replica contract.`
-  )
 }
 
 function detectBinaryKind(buf: Buffer, filePath: string): string | null {
@@ -178,24 +162,12 @@ export function createCodebaseTools(projectDir?: string) {
       execute: async ({ path: filePath, start_line, max_lines }) => {
         const abs = safePath(filePath)
         if (!abs) return "Error: path is outside the project boundary."
-        const rawMirrorArtifact = rawMirrorArtifactReason(filePath)
-        if (rawMirrorArtifact) {
+        const rawWebpageEvidenceArtifact = rawWebpageEvidenceArtifactReason(filePath)
+        if (rawWebpageEvidenceArtifact) {
           return (
-            `Error: ${filePath} is ${rawMirrorArtifact}. ` +
+            `Error: ${filePath} is ${rawWebpageEvidenceArtifact}. ` +
             "It is a tool input and evidence-manifest source, not a prompt-readable artifact. " +
-            `Use ${mirrorPromptWorkingSurface()}, bounded targeted scaffold reads, and mirror tool summaries instead.`
-          )
-        }
-        const denseMirrorArtifact = denseMirrorArtifactReason(filePath)
-        if (denseMirrorArtifact && (start_line ?? 1) > 1) {
-          return renderMirrorArtifactBoundary(filePath)
-        }
-        if (denseMirrorArtifact && (max_lines ?? 300) > DENSE_MIRROR_ARTIFACT_MAX_LINES) {
-          return (
-            `Error: ${filePath} is ${denseMirrorArtifact}. ` +
-            `Use ${mirrorPromptWorkingSurface()} and mirror tool summaries as the frontend design/replica working surface. ` +
-            `Do not retry this read for general page discovery. Finalize the frontend template unless you can name a specific unresolved scaffold gap; ` +
-            `for that one gap only, read a single excerpt from line 1 with max_lines <= ${DENSE_MIRROR_ARTIFACT_MAX_LINES}.`
+            `Use ${webpageEvidencePromptWorkingSurface()} and webpage evidence tool summaries instead.`
           )
         }
         try {
@@ -226,11 +198,11 @@ export function createCodebaseTools(projectDir?: string) {
           }).join("\n")
           const remaining = lines.length - (startIndex + slice.length)
           if (remaining > 0) {
-            if (denseMirrorArtifact || isMirrorPromptExcerpt(filePath)) {
+            if (isWebpageEvidencePromptExcerpt(filePath)) {
               return (
                 numbered +
-                `\n... (${remaining} more lines, total ${lines.length}; bounded mirror artifact excerpt returned. ` +
-                "Do not page this artifact repeatedly. Use this excerpt with web-clone-source/source-ir evidence, mirror summaries, and finalize the frontend design/replica contract.)"
+                `\n... (${remaining} more lines, total ${lines.length}; bounded webpage evidence artifact excerpt returned. ` +
+                "Do not page this artifact repeatedly. Use this excerpt with web-clone-source/source-ir evidence, webpage evidence summaries, and finalize the frontend design/replica contract.)"
               )
             }
             return (

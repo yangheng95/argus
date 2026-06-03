@@ -103,7 +103,7 @@ export const CheckConfig = z.object({
       mode: z.enum(["soft", "strict"]).optional(),
     })
     .optional(),
-  puppeteer: z
+  playwright: z
     .object({
       target: z.literal("web"),
       url: z.string().url(),

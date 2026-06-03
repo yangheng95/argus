@@ -18,9 +18,6 @@ export const FRONTEND_DESIGN_STATIC_TOOL_IDS = [
   "webpage_compile",
   "webpage_analyze",
   "webpage_runtime_state",
-  "webpage_image_extract",
-  "webpage_image_compile",
-  "webpage_image_analyze",
   "webpage_render",
   "webpage_evaluate",
   "webpage_text_diff",
@@ -47,9 +44,6 @@ export const FRONTEND_DESIGN_SESSION_TOOL_IDS = [
   "webpage_compile",
   "webpage_analyze",
   "webpage_runtime_state",
-  "webpage_image_extract",
-  "webpage_image_compile",
-  "webpage_image_analyze",
   "webpage_render",
   "webpage_evaluate",
   "webpage_text_diff",
@@ -72,9 +66,6 @@ export const FRONTEND_DESIGN_WEBPAGE_EVIDENCE_TOOL_IDS = [
   "webpage_compile",
   "webpage_analyze",
   "webpage_runtime_state",
-  "webpage_image_extract",
-  "webpage_image_compile",
-  "webpage_image_analyze",
 ] as const
 
 export const FRONTEND_DESIGN_IMPLEMENTATION_TOOL_IDS = [

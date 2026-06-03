@@ -33,14 +33,14 @@ describe("tool.web_clone_generate_source_project", () => {
 
   test("writes editable React source from source-skeleton and passes the source audit", async () => {
     await using tmp = await tmpdir()
-    const mirrorDir = await writeFixtureMirror(tmp.path)
+    const webpageEvidenceDir = await writeFixtureMirror(tmp.path)
     const outputDir = path.join(tmp.path, "generated-react")
 
     await Instance.provide({
       directory: tmp.path,
       fn: async () => {
         const generateTool = await WebCloneGenerateSourceProjectTool.init()
-        const generated = await generateTool.execute({ mirrorDir, outputDir }, ctx)
+        const generated = await generateTool.execute({ webpageEvidenceDir, outputDir }, ctx)
 
         expect(generated.title).toBe("Web clone source project generated")
         expect(generated.output).toContain("Visual iteration matrix")
@@ -145,7 +145,7 @@ describe("tool.web_clone_generate_source_project", () => {
         expect(sourceFullCss).not.toContain(":after:dir")
 
         const auditTool = await WebCloneSourceAuditTool.init()
-        const audit = await auditTool.execute({ projectDir: outputDir, sourcePackageDir: mirrorDir }, ctx)
+        const audit = await auditTool.execute({ projectDir: outputDir, sourcePackageDir: webpageEvidenceDir }, ctx)
         expect(audit.title).toBe("Source-skeleton consumption audit passed")
         expect(audit.metadata.audit.passed).toBe(true)
         expect(audit.metadata.audit.risk.generatedBaselineDetected).toBe(false)
@@ -159,9 +159,9 @@ describe("tool.web_clone_generate_source_project", () => {
 
   test("prefers source package capture viewport over raw extracted-page viewport", async () => {
     await using tmp = await tmpdir()
-    const mirrorDir = await writeFixtureMirror(tmp.path)
+    const webpageEvidenceDir = await writeFixtureMirror(tmp.path)
     const outputDir = path.join(tmp.path, "generated-react")
-    await Bun.write(path.join(mirrorDir, "web-clone-source-manifest.json"), JSON.stringify({
+    await Bun.write(path.join(webpageEvidenceDir, "web-clone-source-manifest.json"), JSON.stringify({
       version: 1,
       purpose: "web-clone-visible-source-package",
       provenance: {
@@ -169,7 +169,7 @@ describe("tool.web_clone_generate_source_project", () => {
         reference: { path: "reference.png", width: 1440, height: 2400 },
       },
     }, null, 2))
-    await Bun.write(path.join(mirrorDir, "extracted-page.json"), JSON.stringify({
+    await Bun.write(path.join(webpageEvidenceDir, "extracted-page.json"), JSON.stringify({
       url: "https://example.com/markets",
       viewport: { width: 1280, height: 720 },
     }, null, 2))
@@ -178,7 +178,7 @@ describe("tool.web_clone_generate_source_project", () => {
       directory: tmp.path,
       fn: async () => {
         const tool = await WebCloneGenerateSourceProjectTool.init()
-        await tool.execute({ mirrorDir, outputDir }, ctx)
+        await tool.execute({ webpageEvidenceDir, outputDir }, ctx)
         const sourceProjectManifest = JSON.parse(await Bun.file(path.join(outputDir, "src", "data", "sourceProjectManifest.json")).text())
 
         expect(sourceProjectManifest.visualIteration.viewportMatrix[0]).toMatchObject({
@@ -193,7 +193,7 @@ describe("tool.web_clone_generate_source_project", () => {
 
   test("does not overwrite an existing output directory unless requested", async () => {
     await using tmp = await tmpdir()
-    const mirrorDir = await writeFixtureMirror(tmp.path)
+    const webpageEvidenceDir = await writeFixtureMirror(tmp.path)
     const outputDir = path.join(tmp.path, "generated-react")
     await Bun.write(path.join(outputDir, "keep.txt"), "existing")
 
@@ -201,9 +201,9 @@ describe("tool.web_clone_generate_source_project", () => {
       directory: tmp.path,
       fn: async () => {
         const tool = await WebCloneGenerateSourceProjectTool.init()
-        await expect(tool.execute({ mirrorDir, outputDir }, ctx)).rejects.toThrow("Output directory is not empty")
+        await expect(tool.execute({ webpageEvidenceDir, outputDir }, ctx)).rejects.toThrow("Output directory is not empty")
 
-        const result = await tool.execute({ mirrorDir, outputDir, overwrite: true }, ctx)
+        const result = await tool.execute({ webpageEvidenceDir, outputDir, overwrite: true }, ctx)
         expect(result.title).toBe("Web clone source project generated")
         expect(await Bun.file(path.join(outputDir, "keep.txt")).exists()).toBe(false)
       },
@@ -212,14 +212,14 @@ describe("tool.web_clone_generate_source_project", () => {
 
   test("splits large generated DOM baselines into source-region components", async () => {
     await using tmp = await tmpdir()
-    const mirrorDir = await writeRegionizedFixtureMirror(tmp.path)
+    const webpageEvidenceDir = await writeRegionizedFixtureMirror(tmp.path)
     const outputDir = path.join(tmp.path, "generated-react")
 
     await Instance.provide({
       directory: tmp.path,
       fn: async () => {
         const tool = await WebCloneGenerateSourceProjectTool.init()
-        await tool.execute({ mirrorDir, outputDir }, ctx)
+        await tool.execute({ webpageEvidenceDir, outputDir }, ctx)
 
         const sourceDomPage = await Bun.file(path.join(outputDir, "src", "components", "SourceDomPage.tsx")).text()
         const sourceDomRegions = await Bun.file(path.join(outputDir, "src", "data", "sourceDomRegions.ts")).text()
@@ -292,14 +292,14 @@ describe("tool.web_clone_generate_source_project", () => {
 
   test("turns repeated news card regions into semantic data-loop components", async () => {
     await using tmp = await tmpdir()
-    const mirrorDir = await writeSemanticNewsFixtureMirror(tmp.path)
+    const webpageEvidenceDir = await writeSemanticNewsFixtureMirror(tmp.path)
     const outputDir = path.join(tmp.path, "generated-news-react")
 
     await Instance.provide({
       directory: tmp.path,
       fn: async () => {
         const generateTool = await WebCloneGenerateSourceProjectTool.init()
-        await generateTool.execute({ mirrorDir, outputDir }, ctx)
+        await generateTool.execute({ webpageEvidenceDir, outputDir }, ctx)
 
         const sourceDomPage = await Bun.file(path.join(outputDir, "src", "components", "SourceDomPage.tsx")).text()
         const semanticDir = path.join(outputDir, "src", "components", "semantic")
@@ -328,7 +328,7 @@ describe("tool.web_clone_generate_source_project", () => {
         const auditTool = await WebCloneSourceAuditTool.init()
         const audit = await auditTool.execute({
           projectDir: outputDir,
-          sourcePackageDir: mirrorDir,
+          sourcePackageDir: webpageEvidenceDir,
           finalAcceptanceMode: "visual_baseline_allowed",
         }, ctx)
         expect(audit.title).toBe("Source-skeleton consumption audit passed")
@@ -341,14 +341,14 @@ describe("tool.web_clone_generate_source_project", () => {
 
   test("turns BBC-style promo lists into semantic data-loop components", async () => {
     await using tmp = await tmpdir()
-    const mirrorDir = await writeBbcPromoFixtureMirror(tmp.path)
+    const webpageEvidenceDir = await writeBbcPromoFixtureMirror(tmp.path)
     const outputDir = path.join(tmp.path, "generated-bbc-promo-react")
 
     await Instance.provide({
       directory: tmp.path,
       fn: async () => {
         const generateTool = await WebCloneGenerateSourceProjectTool.init()
-        await generateTool.execute({ mirrorDir, outputDir }, ctx)
+        await generateTool.execute({ webpageEvidenceDir, outputDir }, ctx)
 
         const sourceDomPage = await Bun.file(path.join(outputDir, "src", "components", "SourceDomPage.tsx")).text()
         const semanticDir = path.join(outputDir, "src", "components", "semantic")
@@ -377,14 +377,14 @@ describe("tool.web_clone_generate_source_project", () => {
 
   test("turns source table heatmap regions into semantic data-loop components", async () => {
     await using tmp = await tmpdir()
-    const mirrorDir = await writeSemanticTableFixtureMirror(tmp.path)
+    const webpageEvidenceDir = await writeSemanticTableFixtureMirror(tmp.path)
     const outputDir = path.join(tmp.path, "generated-table-react")
 
     await Instance.provide({
       directory: tmp.path,
       fn: async () => {
         const generateTool = await WebCloneGenerateSourceProjectTool.init()
-        await generateTool.execute({ mirrorDir, outputDir }, ctx)
+        await generateTool.execute({ webpageEvidenceDir, outputDir }, ctx)
 
         const sourceDomPage = await Bun.file(path.join(outputDir, "src", "components", "SourceDomPage.tsx")).text()
         const semanticDir = path.join(outputDir, "src", "components", "semantic")
@@ -411,7 +411,7 @@ describe("tool.web_clone_generate_source_project", () => {
         const auditTool = await WebCloneSourceAuditTool.init()
         const audit = await auditTool.execute({
           projectDir: outputDir,
-          sourcePackageDir: mirrorDir,
+          sourcePackageDir: webpageEvidenceDir,
           finalAcceptanceMode: "visual_baseline_allowed",
         }, ctx)
         expect(audit.title).toBe("Source-skeleton consumption audit passed")
@@ -424,14 +424,14 @@ describe("tool.web_clone_generate_source_project", () => {
 
   test("extracts structurally equivalent table, list, and navigation surfaces without business words", async () => {
     await using tmp = await tmpdir()
-    const mirrorDir = await writeGenericStructureFixtureMirror(tmp.path)
+    const webpageEvidenceDir = await writeGenericStructureFixtureMirror(tmp.path)
     const outputDir = path.join(tmp.path, "generated-generic-react")
 
     await Instance.provide({
       directory: tmp.path,
       fn: async () => {
         const generateTool = await WebCloneGenerateSourceProjectTool.init()
-        await generateTool.execute({ mirrorDir, outputDir }, ctx)
+        await generateTool.execute({ webpageEvidenceDir, outputDir }, ctx)
 
         const sourceDomPage = await Bun.file(path.join(outputDir, "src", "components", "SourceDomPage.tsx")).text()
         const semanticDir = path.join(outputDir, "src", "components", "semantic")
@@ -461,14 +461,14 @@ describe("tool.web_clone_generate_source_project", () => {
 
   test("turns repeated economic event card regions into semantic data-loop components", async () => {
     await using tmp = await tmpdir()
-    const mirrorDir = await writeSemanticEventFixtureMirror(tmp.path)
+    const webpageEvidenceDir = await writeSemanticEventFixtureMirror(tmp.path)
     const outputDir = path.join(tmp.path, "generated-events-react")
 
     await Instance.provide({
       directory: tmp.path,
       fn: async () => {
         const generateTool = await WebCloneGenerateSourceProjectTool.init()
-        await generateTool.execute({ mirrorDir, outputDir }, ctx)
+        await generateTool.execute({ webpageEvidenceDir, outputDir }, ctx)
 
         const sourceDomPage = await Bun.file(path.join(outputDir, "src", "components", "SourceDomPage.tsx")).text()
         const semanticDir = path.join(outputDir, "src", "components", "semantic")
@@ -494,7 +494,7 @@ describe("tool.web_clone_generate_source_project", () => {
         const auditTool = await WebCloneSourceAuditTool.init()
         const audit = await auditTool.execute({
           projectDir: outputDir,
-          sourcePackageDir: mirrorDir,
+          sourcePackageDir: webpageEvidenceDir,
           finalAcceptanceMode: "visual_baseline_allowed",
         }, ctx)
         expect(audit.title).toBe("Source-skeleton consumption audit passed")
@@ -507,14 +507,14 @@ describe("tool.web_clone_generate_source_project", () => {
 
   test("turns repeated idea card regions into semantic data-loop components", async () => {
     await using tmp = await tmpdir()
-    const mirrorDir = await writeSemanticIdeaCardsFixtureMirror(tmp.path)
+    const webpageEvidenceDir = await writeSemanticIdeaCardsFixtureMirror(tmp.path)
     const outputDir = path.join(tmp.path, "generated-ideas-react")
 
     await Instance.provide({
       directory: tmp.path,
       fn: async () => {
         const generateTool = await WebCloneGenerateSourceProjectTool.init()
-        await generateTool.execute({ mirrorDir, outputDir }, ctx)
+        await generateTool.execute({ webpageEvidenceDir, outputDir }, ctx)
 
         const sourceDomPage = await Bun.file(path.join(outputDir, "src", "components", "SourceDomPage.tsx")).text()
         const semanticDir = path.join(outputDir, "src", "components", "semantic")
@@ -540,7 +540,7 @@ describe("tool.web_clone_generate_source_project", () => {
         const auditTool = await WebCloneSourceAuditTool.init()
         const audit = await auditTool.execute({
           projectDir: outputDir,
-          sourcePackageDir: mirrorDir,
+          sourcePackageDir: webpageEvidenceDir,
           finalAcceptanceMode: "visual_baseline_allowed",
         }, ctx)
         expect(audit.title).toBe("Source-skeleton consumption audit passed")
@@ -553,14 +553,14 @@ describe("tool.web_clone_generate_source_project", () => {
 
   test("does not turn page shell regions into semantic news lists", async () => {
     await using tmp = await tmpdir()
-    const mirrorDir = await writeSemanticNewsFixtureMirror(tmp.path, { pageShell: true })
+    const webpageEvidenceDir = await writeSemanticNewsFixtureMirror(tmp.path, { pageShell: true })
     const outputDir = path.join(tmp.path, "generated-news-page-shell-react")
 
     await Instance.provide({
       directory: tmp.path,
       fn: async () => {
         const generateTool = await WebCloneGenerateSourceProjectTool.init()
-        await generateTool.execute({ mirrorDir, outputDir }, ctx)
+        await generateTool.execute({ webpageEvidenceDir, outputDir }, ctx)
 
         const sourceDomPage = await Bun.file(path.join(outputDir, "src", "components", "SourceDomPage.tsx")).text()
         const sourceDomIterationState = await Bun.file(path.join(outputDir, "src", "data", "sourceDomIterationState.ts")).text()
@@ -587,14 +587,14 @@ describe("tool.web_clone_generate_source_project", () => {
 
   test("keeps composite widget shells out of the replacement queue and extracts their child surfaces", async () => {
     await using tmp = await tmpdir()
-    const mirrorDir = await writeCompositeWidgetFixtureMirror(tmp.path)
+    const webpageEvidenceDir = await writeCompositeWidgetFixtureMirror(tmp.path)
     const outputDir = path.join(tmp.path, "generated-composite-react")
 
     await Instance.provide({
       directory: tmp.path,
       fn: async () => {
         const generateTool = await WebCloneGenerateSourceProjectTool.init()
-        await generateTool.execute({ mirrorDir, outputDir }, ctx)
+        await generateTool.execute({ webpageEvidenceDir, outputDir }, ctx)
 
         const sourceDomPage = await Bun.file(path.join(outputDir, "src", "components", "SourceDomPage.tsx")).text()
         const sourceDomIterationState = await Bun.file(path.join(outputDir, "src", "data", "sourceDomIterationState.ts")).text()
@@ -612,14 +612,14 @@ describe("tool.web_clone_generate_source_project", () => {
 
   test("turns footer navigation regions into semantic data-loop components", async () => {
     await using tmp = await tmpdir()
-    const mirrorDir = await writeSemanticFooterFixtureMirror(tmp.path)
+    const webpageEvidenceDir = await writeSemanticFooterFixtureMirror(tmp.path)
     const outputDir = path.join(tmp.path, "generated-footer-react")
 
     await Instance.provide({
       directory: tmp.path,
       fn: async () => {
         const generateTool = await WebCloneGenerateSourceProjectTool.init()
-        await generateTool.execute({ mirrorDir, outputDir }, ctx)
+        await generateTool.execute({ webpageEvidenceDir, outputDir }, ctx)
 
         const sourceDomPage = await Bun.file(path.join(outputDir, "src", "components", "SourceDomPage.tsx")).text()
         const semanticDir = path.join(outputDir, "src", "components", "semantic")
@@ -651,7 +651,7 @@ describe("tool.web_clone_generate_source_project", () => {
         const auditTool = await WebCloneSourceAuditTool.init()
         const audit = await auditTool.execute({
           projectDir: outputDir,
-          sourcePackageDir: mirrorDir,
+          sourcePackageDir: webpageEvidenceDir,
           finalAcceptanceMode: "visual_baseline_allowed",
         }, ctx)
         expect(audit.title).toBe("Source-skeleton consumption audit passed")
@@ -664,14 +664,14 @@ describe("tool.web_clone_generate_source_project", () => {
 
   test("turns SVG map asset regions into semantic data-loop components", async () => {
     await using tmp = await tmpdir()
-    const mirrorDir = await writeSemanticMapFixtureMirror(tmp.path)
+    const webpageEvidenceDir = await writeSemanticMapFixtureMirror(tmp.path)
     const outputDir = path.join(tmp.path, "generated-map-react")
 
     await Instance.provide({
       directory: tmp.path,
       fn: async () => {
         const generateTool = await WebCloneGenerateSourceProjectTool.init()
-        await generateTool.execute({ mirrorDir, outputDir }, ctx)
+        await generateTool.execute({ webpageEvidenceDir, outputDir }, ctx)
 
         const sourceDomPage = await Bun.file(path.join(outputDir, "src", "components", "SourceDomPage.tsx")).text()
         const semanticDir = path.join(outputDir, "src", "components", "semantic")
@@ -711,7 +711,7 @@ describe("tool.web_clone_generate_source_project", () => {
         const auditTool = await WebCloneSourceAuditTool.init()
         const audit = await auditTool.execute({
           projectDir: outputDir,
-          sourcePackageDir: mirrorDir,
+          sourcePackageDir: webpageEvidenceDir,
           finalAcceptanceMode: "visual_baseline_allowed",
         }, ctx)
         expect(audit.title).toBe("Source-skeleton consumption audit passed")
@@ -724,14 +724,14 @@ describe("tool.web_clone_generate_source_project", () => {
 
   test("keeps mixed semantic section siblings when only part of the section can be replaced", async () => {
     await using tmp = await tmpdir()
-    const mirrorDir = await writeMixedEconomicTrendsFixtureMirror(tmp.path)
+    const webpageEvidenceDir = await writeMixedEconomicTrendsFixtureMirror(tmp.path)
     const outputDir = path.join(tmp.path, "generated-mixed-economic-trends-react")
 
     await Instance.provide({
       directory: tmp.path,
       fn: async () => {
         const generateTool = await WebCloneGenerateSourceProjectTool.init()
-        await generateTool.execute({ mirrorDir, outputDir }, ctx)
+        await generateTool.execute({ webpageEvidenceDir, outputDir }, ctx)
 
         const sourceDomPage = await Bun.file(path.join(outputDir, "src", "components", "SourceDomPage.tsx")).text()
         const sourceDomDir = path.join(outputDir, "src", "components", "source-dom")
@@ -761,14 +761,14 @@ describe("tool.web_clone_generate_source_project", () => {
 
   test("turns metric ranking cards into semantic data-loop components", async () => {
     await using tmp = await tmpdir()
-    const mirrorDir = await writeSemanticMetricRankingFixtureMirror(tmp.path)
+    const webpageEvidenceDir = await writeSemanticMetricRankingFixtureMirror(tmp.path)
     const outputDir = path.join(tmp.path, "generated-ranking-react")
 
     await Instance.provide({
       directory: tmp.path,
       fn: async () => {
         const generateTool = await WebCloneGenerateSourceProjectTool.init()
-        await generateTool.execute({ mirrorDir, outputDir }, ctx)
+        await generateTool.execute({ webpageEvidenceDir, outputDir }, ctx)
 
         const sourceDomPage = await Bun.file(path.join(outputDir, "src", "components", "SourceDomPage.tsx")).text()
         const semanticDir = path.join(outputDir, "src", "components", "semantic")
@@ -796,7 +796,7 @@ describe("tool.web_clone_generate_source_project", () => {
         const auditTool = await WebCloneSourceAuditTool.init()
         const audit = await auditTool.execute({
           projectDir: outputDir,
-          sourcePackageDir: mirrorDir,
+          sourcePackageDir: webpageEvidenceDir,
           finalAcceptanceMode: "visual_baseline_allowed",
         }, ctx)
         expect(audit.title).toBe("Source-skeleton consumption audit passed")
@@ -809,14 +809,14 @@ describe("tool.web_clone_generate_source_project", () => {
 
   test("turns repeated link-grid regions into semantic data-loop components", async () => {
     await using tmp = await tmpdir()
-    const mirrorDir = await writeSemanticLinkGridFixtureMirror(tmp.path)
+    const webpageEvidenceDir = await writeSemanticLinkGridFixtureMirror(tmp.path)
     const outputDir = path.join(tmp.path, "generated-link-grid-react")
 
     await Instance.provide({
       directory: tmp.path,
       fn: async () => {
         const generateTool = await WebCloneGenerateSourceProjectTool.init()
-        await generateTool.execute({ mirrorDir, outputDir }, ctx)
+        await generateTool.execute({ webpageEvidenceDir, outputDir }, ctx)
 
         const sourceDomPage = await Bun.file(path.join(outputDir, "src", "components", "SourceDomPage.tsx")).text()
         const semanticDir = path.join(outputDir, "src", "components", "semantic")
@@ -841,7 +841,7 @@ describe("tool.web_clone_generate_source_project", () => {
         const auditTool = await WebCloneSourceAuditTool.init()
         const audit = await auditTool.execute({
           projectDir: outputDir,
-          sourcePackageDir: mirrorDir,
+          sourcePackageDir: webpageEvidenceDir,
           finalAcceptanceMode: "visual_baseline_allowed",
         }, ctx)
         expect(audit.title).toBe("Source-skeleton consumption audit passed")
@@ -854,14 +854,14 @@ describe("tool.web_clone_generate_source_project", () => {
 
   test("turns source header navigation into a semantic menu component", async () => {
     await using tmp = await tmpdir()
-    const mirrorDir = await writeSemanticHeaderFixtureMirror(tmp.path)
+    const webpageEvidenceDir = await writeSemanticHeaderFixtureMirror(tmp.path)
     const outputDir = path.join(tmp.path, "generated-header-react")
 
     await Instance.provide({
       directory: tmp.path,
       fn: async () => {
         const generateTool = await WebCloneGenerateSourceProjectTool.init()
-        await generateTool.execute({ mirrorDir, outputDir }, ctx)
+        await generateTool.execute({ webpageEvidenceDir, outputDir }, ctx)
 
         const sourceDomPage = await Bun.file(path.join(outputDir, "src", "components", "SourceDomPage.tsx")).text()
         const semanticDir = path.join(outputDir, "src", "components", "semantic")
@@ -892,7 +892,7 @@ describe("tool.web_clone_generate_source_project", () => {
         const auditTool = await WebCloneSourceAuditTool.init()
         const audit = await auditTool.execute({
           projectDir: outputDir,
-          sourcePackageDir: mirrorDir,
+          sourcePackageDir: webpageEvidenceDir,
           finalAcceptanceMode: "visual_baseline_allowed",
         }, ctx)
         expect(audit.title).toBe("Source-skeleton consumption audit passed")
@@ -905,14 +905,14 @@ describe("tool.web_clone_generate_source_project", () => {
 
   test("turns section chrome around semantic child surfaces into semantic shell components", async () => {
     await using tmp = await tmpdir()
-    const mirrorDir = await writeSemanticSectionShellFixtureMirror(tmp.path)
+    const webpageEvidenceDir = await writeSemanticSectionShellFixtureMirror(tmp.path)
     const outputDir = path.join(tmp.path, "generated-section-shell-react")
 
     await Instance.provide({
       directory: tmp.path,
       fn: async () => {
         const generateTool = await WebCloneGenerateSourceProjectTool.init()
-        await generateTool.execute({ mirrorDir, outputDir }, ctx)
+        await generateTool.execute({ webpageEvidenceDir, outputDir }, ctx)
 
         const sourceDomPage = await Bun.file(path.join(outputDir, "src", "components", "SourceDomPage.tsx")).text()
         const semanticDir = path.join(outputDir, "src", "components", "semantic")
@@ -937,7 +937,7 @@ describe("tool.web_clone_generate_source_project", () => {
         const auditTool = await WebCloneSourceAuditTool.init()
         const audit = await auditTool.execute({
           projectDir: outputDir,
-          sourcePackageDir: mirrorDir,
+          sourcePackageDir: webpageEvidenceDir,
           finalAcceptanceMode: "visual_baseline_allowed",
         }, ctx)
         expect(audit.title).toBe("Source-skeleton consumption audit passed")
@@ -969,13 +969,13 @@ async function generatedSourceFiles(dir: string): Promise<string[]> {
 }
 
 async function writeFixtureMirror(root: string): Promise<string> {
-  const mirrorDir = path.join(root, "mirror")
-  await Bun.write(path.join(mirrorDir, "reference.png"), minimalPngBytes())
-  await Bun.write(path.join(mirrorDir, "extracted-page.json"), JSON.stringify({
+  const webpageEvidenceDir = path.join(root, "mirror")
+  await Bun.write(path.join(webpageEvidenceDir, "reference.png"), minimalPngBytes())
+  await Bun.write(path.join(webpageEvidenceDir, "extracted-page.json"), JSON.stringify({
     url: "https://example.com/markets",
     viewport: { width: 1366, height: 768 },
   }, null, 2))
-  await Bun.write(path.join(mirrorDir, "source-skeleton", "index.html"), `
+  await Bun.write(path.join(webpageEvidenceDir, "source-skeleton", "index.html"), `
     <main class="economic-calendar">
       <nav><a href="/markets">Markets</a></nav>
       <h1>Economic calendar</h1>
@@ -1006,9 +1006,9 @@ async function writeFixtureMirror(root: string): Promise<string> {
       </table>
     </main>
   `)
-  await Bun.write(path.join(mirrorDir, "source-skeleton", "critical.css"), ".economic-calendar { display: grid; background-image: url(data:image/png;base64,AAAA); } [data-source-node-id=\"style-1\"] { outline: 1px solid red; } [data-theme=dark] .background-test {background-position: 100% 100%,100%0}&:dir(rtl):after{background: red;};}")
-  await Bun.write(path.join(mirrorDir, "source-skeleton", "full-source.css"), ".economic-calendar table { width: 100%; } [data-theme=dark] .background-test{&:dir(rtl):before{background: blue}&:dir(rtl):after{background: red}} .fade-test:after:dir(rtl){transform: rotate(-180deg);}")
-  await Bun.write(path.join(mirrorDir, "page.ir.json"), JSON.stringify({
+  await Bun.write(path.join(webpageEvidenceDir, "source-skeleton", "critical.css"), ".economic-calendar { display: grid; background-image: url(data:image/png;base64,AAAA); } [data-source-node-id=\"style-1\"] { outline: 1px solid red; } [data-theme=dark] .background-test {background-position: 100% 100%,100%0}&:dir(rtl):after{background: red;};}")
+  await Bun.write(path.join(webpageEvidenceDir, "source-skeleton", "full-source.css"), ".economic-calendar table { width: 100%; } [data-theme=dark] .background-test{&:dir(rtl):before{background: blue}&:dir(rtl):after{background: red}} .fade-test:after:dir(rtl){transform: rotate(-180deg);}")
+  await Bun.write(path.join(webpageEvidenceDir, "page.ir.json"), JSON.stringify({
     root: {
       id: "root",
       tag: "body",
@@ -1064,8 +1064,8 @@ async function writeFixtureMirror(root: string): Promise<string> {
       ],
     },
   }, null, 2))
-  await Bun.write(path.join(mirrorDir, "assets", "images", "asset_000002.webp.txt"), "data:image/webp;base64,UklGRiIAAABXRUJQVlA4IBYAAAAwAQCdASoBAAEADsD+JaQAA3AAAAAA")
-  await Bun.write(path.join(mirrorDir, "assets", "manifest.json"), JSON.stringify({
+  await Bun.write(path.join(webpageEvidenceDir, "assets", "images", "asset_000002.webp.txt"), "data:image/webp;base64,UklGRiIAAABXRUJQVlA4IBYAAAAwAQCdASoBAAEADsD+JaQAA3AAAAAA")
+  await Bun.write(path.join(webpageEvidenceDir, "assets", "manifest.json"), JSON.stringify({
     version: 1,
     assets: [
       {
@@ -1092,13 +1092,13 @@ async function writeFixtureMirror(root: string): Promise<string> {
       },
     ],
   }, null, 2))
-  await Bun.write(path.join(mirrorDir, "source-ir", "component-tree.json"), JSON.stringify({
+  await Bun.write(path.join(webpageEvidenceDir, "source-ir", "component-tree.json"), JSON.stringify({
     components: [
       { name: "EconomicCalendarShell", kind: "navigation", tag: "main", classNames: ["economic-calendar"], textPreview: ["Markets", "Economic calendar"] },
       { name: "EconomicCalendarTable", kind: "table", tag: "table", classNames: ["calendar-table"], textPreview: ["08:30", "GDP Growth Rate"] },
     ],
   }, null, 2))
-  await Bun.write(path.join(mirrorDir, "source-ir", "content-model.json"), JSON.stringify({
+  await Bun.write(path.join(webpageEvidenceDir, "source-ir", "content-model.json"), JSON.stringify({
     tables: [{
       title: "Economic data",
       headers: ["Time", "Country", "Event", "Actual"],
@@ -1110,12 +1110,12 @@ async function writeFixtureMirror(root: string): Promise<string> {
     repeatedGroups: [{ title: "Calendar rows", sampleTexts: ["08:30 US GDP Growth Rate 2.1%", "09:45 US Manufacturing PMI 51.3"] }],
     stats: { totalTables: 1, totalLists: 0, totalCards: 0, totalRepeatedGroups: 1 },
   }, null, 2))
-  return mirrorDir
+  return webpageEvidenceDir
 }
 
 async function writeRegionizedFixtureMirror(root: string): Promise<string> {
-  const mirrorDir = path.join(root, "mirror-regionized")
-  await Bun.write(path.join(mirrorDir, "reference.png"), minimalPngBytes())
+  const webpageEvidenceDir = path.join(root, "mirror-regionized")
+  await Bun.write(path.join(webpageEvidenceDir, "reference.png"), minimalPngBytes())
   const mapPaths = Array.from({ length: 36 }, (_, index) => {
     const assetId = `asset_${String(index + 1).padStart(6, "0")}`
     return `<path data-source-node-id="map-${index + 1}" data-asset-d="../assets/svg/${assetId}.path.txt" id="land-${index + 1}" class="positive-s"></path>`
@@ -1134,7 +1134,7 @@ async function writeRegionizedFixtureMirror(root: string): Promise<string> {
         </div>
       </section>
     `).join("")
-  await Bun.write(path.join(mirrorDir, "source-skeleton", "index.html"), `
+  await Bun.write(path.join(webpageEvidenceDir, "source-skeleton", "index.html"), `
     <main class="dashboard">
       ${sections}
       <section class="dashboard-section map-section">
@@ -1164,9 +1164,9 @@ async function writeRegionizedFixtureMirror(root: string): Promise<string> {
       </section>
     </main>
   `)
-  await Bun.write(path.join(mirrorDir, "source-skeleton", "critical.css"), ".dashboard { display: grid; gap: 24px; } .cards { display: grid; grid-template-columns: repeat(3, 1fr); }")
-  await Bun.write(path.join(mirrorDir, "source-skeleton", "full-source.css"), ".card { border: 1px solid #ddd; padding: 12px; }")
-  await Bun.write(path.join(mirrorDir, "page.ir.json"), JSON.stringify({
+  await Bun.write(path.join(webpageEvidenceDir, "source-skeleton", "critical.css"), ".dashboard { display: grid; gap: 24px; } .cards { display: grid; grid-template-columns: repeat(3, 1fr); }")
+  await Bun.write(path.join(webpageEvidenceDir, "source-skeleton", "full-source.css"), ".card { border: 1px solid #ddd; padding: 12px; }")
+  await Bun.write(path.join(webpageEvidenceDir, "page.ir.json"), JSON.stringify({
     root: {
       id: "root",
       type: "element",
@@ -1180,7 +1180,7 @@ async function writeRegionizedFixtureMirror(root: string): Promise<string> {
       })),
     },
   }, null, 2))
-  await Bun.write(path.join(mirrorDir, "source-ir", "component-tree.json"), JSON.stringify({
+  await Bun.write(path.join(webpageEvidenceDir, "source-ir", "component-tree.json"), JSON.stringify({
     components: [
       { name: "DashboardShell", kind: "page", tag: "main", classNames: ["dashboard"], textPreview: ["Overview", "Markets"] },
       ...["Overview", "Markets", "Ideas", "Indicators", "News", "Calendar"].map((name) => ({
@@ -1192,7 +1192,7 @@ async function writeRegionizedFixtureMirror(root: string): Promise<string> {
       })),
     ],
   }, null, 2))
-  await Bun.write(path.join(mirrorDir, "source-ir", "content-model.json"), JSON.stringify({
+  await Bun.write(path.join(webpageEvidenceDir, "source-ir", "content-model.json"), JSON.stringify({
     lists: ["Overview", "Markets", "Ideas", "Indicators", "News", "Calendar"].map((title) => ({
       title,
       items: Array.from({ length: 18 }, (_, index) => `${title} item ${index + 1}`),
@@ -1202,15 +1202,15 @@ async function writeRegionizedFixtureMirror(root: string): Promise<string> {
   }, null, 2))
   for (let index = 0; index < 36; index += 1) {
     const assetId = `asset_${String(index + 1).padStart(6, "0")}`
-    await Bun.write(path.join(mirrorDir, "assets", "svg", `${assetId}.path.txt`), `M${index} ${index}h1v1z`)
+    await Bun.write(path.join(webpageEvidenceDir, "assets", "svg", `${assetId}.path.txt`), `M${index} ${index}h1v1z`)
   }
-  await Bun.write(path.join(mirrorDir, "assets", "manifest.json"), JSON.stringify({ version: 1, assets: [] }, null, 2))
-  return mirrorDir
+  await Bun.write(path.join(webpageEvidenceDir, "assets", "manifest.json"), JSON.stringify({ version: 1, assets: [] }, null, 2))
+  return webpageEvidenceDir
 }
 
 async function writeSemanticNewsFixtureMirror(root: string, options: { pageShell?: boolean } = {}): Promise<string> {
-  const mirrorDir = path.join(root, "mirror-news")
-  await Bun.write(path.join(mirrorDir, "reference.png"), minimalPngBytes())
+  const webpageEvidenceDir = path.join(root, "mirror-news")
+  await Bun.write(path.join(webpageEvidenceDir, "reference.png"), minimalPngBytes())
   const cards = [
     ["Dow Jones Newswires", "Factory Activity Expands in May", "https://example.com/news/1"],
     ["dpa-AFX", "U.S. Construction Spending Increases", "https://example.com/news/2"],
@@ -1245,10 +1245,10 @@ async function writeSemanticNewsFixtureMirror(root: string, options: { pageShell
       </section>
     </main>
   `
-  await Bun.write(path.join(mirrorDir, "source-skeleton", "index.html"), options.pageShell
+  await Bun.write(path.join(webpageEvidenceDir, "source-skeleton", "index.html"), options.pageShell
     ? `<div class="tv-main" data-source-node-id="page-shell">${mainHtml}</div>`
     : mainHtml)
-  await Bun.write(path.join(mirrorDir, "source-skeleton", "critical.css"), `
+  await Bun.write(path.join(webpageEvidenceDir, "source-skeleton", "critical.css"), `
     .news-page { display: block; }
     .content-news { color: #111827; }
     .grid-news { display: grid; gap: 8px; }
@@ -1257,13 +1257,13 @@ async function writeSemanticNewsFixtureMirror(root: string, options: { pageShell
     .header-news { display: flex; gap: 8px; font-size: 12px; color: #6b7280; }
     .title-news { font-size: 14px; font-weight: 600; }
   `)
-  await Bun.write(path.join(mirrorDir, "source-ir", "component-tree.json"), JSON.stringify({
+  await Bun.write(path.join(webpageEvidenceDir, "source-ir", "component-tree.json"), JSON.stringify({
     components: [
       { name: "NewsPage", kind: "page", tag: "main", classNames: ["news-page"], textPreview: ["Factory Activity Expands in May"] },
       { name: "NewsList", kind: "list", tag: "section", classNames: ["content-news"], textPreview: ["Dow Jones Newswires", "Construction Spending Increases"] },
     ],
   }, null, 2))
-  await Bun.write(path.join(mirrorDir, "source-ir", "content-model.json"), JSON.stringify({
+  await Bun.write(path.join(webpageEvidenceDir, "source-ir", "content-model.json"), JSON.stringify({
     lists: [{
       title: "News",
       items: [
@@ -1276,12 +1276,12 @@ async function writeSemanticNewsFixtureMirror(root: string, options: { pageShell
     repeatedGroups: [{ title: "News cards", sampleTexts: ["Factory Activity Expands in May", "Construction Spending Increases"] }],
     stats: { totalTables: 0, totalLists: 1, totalCards: 4, totalRepeatedGroups: 1 },
   }, null, 2))
-  return mirrorDir
+  return webpageEvidenceDir
 }
 
 async function writeBbcPromoFixtureMirror(root: string): Promise<string> {
-  const mirrorDir = path.join(root, "mirror-bbc-promo")
-  await Bun.write(path.join(mirrorDir, "reference.png"), minimalPngBytes())
+  const webpageEvidenceDir = path.join(root, "mirror-bbc-promo")
+  await Bun.write(path.join(webpageEvidenceDir, "reference.png"), minimalPngBytes())
   const rows = [
     ["Massive Russian attack on cities across Ukraine kills at least 13 people", "https://www.bbc.co.uk/news/articles/cx20p1", "asset_000001.webp", "People walk past a damaged building", "Europe"],
     ["Prepare for El Nino - it could be the strongest in decades, UN warns", "https://www.bbc.co.uk/news/articles/cx20p2", "asset_000002.webp", "Firefighters stand in front of smoke", "Climate"],
@@ -1323,14 +1323,14 @@ async function writeBbcPromoFixtureMirror(root: string): Promise<string> {
       </div>
     </li>
   `).join("")
-  await Bun.write(path.join(mirrorDir, "source-skeleton", "index.html"), `
+  await Bun.write(path.join(webpageEvidenceDir, "source-skeleton", "index.html"), `
     <main class="bbc-page">
       <ul data-source-node-id="bbc-promo-list" data-source-role="list" role="list" class="ssrcss-60rlar-Grid e12imr580">
         ${cards}
       </ul>
     </main>
   `)
-  await Bun.write(path.join(mirrorDir, "source-skeleton", "critical.css"), `
+  await Bun.write(path.join(webpageEvidenceDir, "source-skeleton", "critical.css"), `
     .bbc-page { display: block; }
     .ssrcss-60rlar-Grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; }
     .ssrcss-1dr5icq-ListItem { list-style: none; }
@@ -1340,28 +1340,28 @@ async function writeBbcPromoFixtureMirror(root: string): Promise<string> {
     .ssrcss-z60stg-PromoImageContainer { order: -1; }
     .ssrcss-egie1y-Image { display: block; width: 100%; height: auto; }
   `)
-  await Bun.write(path.join(mirrorDir, "source-ir", "component-tree.json"), JSON.stringify({
+  await Bun.write(path.join(webpageEvidenceDir, "source-ir", "component-tree.json"), JSON.stringify({
     components: [
       { name: "BbcPage", kind: "page", tag: "main", classNames: ["bbc-page"], textPreview: ["Massive Russian attack"] },
       { name: "BbcPromoList", kind: "list", tag: "ul", classNames: ["ssrcss-60rlar-Grid"], textPreview: rows.map((row) => row[0]) },
     ],
   }, null, 2))
-  await Bun.write(path.join(mirrorDir, "source-ir", "content-model.json"), JSON.stringify({
+  await Bun.write(path.join(webpageEvidenceDir, "source-ir", "content-model.json"), JSON.stringify({
     lists: [{ title: "BBC promos", items: rows.map((row) => `${row[4]} ${row[0]}`) }],
     repeatedGroups: [{ title: "BBC promo cards", sampleTexts: rows.slice(0, 2).map((row) => row[0]) }],
     stats: { totalTables: 0, totalLists: 1, totalCards: rows.length, totalRepeatedGroups: 1 },
   }, null, 2))
   for (const [, , image] of rows) {
-    await Bun.write(path.join(mirrorDir, "assets", "images", image), minimalPngBytes())
+    await Bun.write(path.join(webpageEvidenceDir, "assets", "images", image), minimalPngBytes())
   }
-  await Bun.write(path.join(mirrorDir, "assets", "manifest.json"), JSON.stringify({ version: 1, assets: [] }, null, 2))
-  return mirrorDir
+  await Bun.write(path.join(webpageEvidenceDir, "assets", "manifest.json"), JSON.stringify({ version: 1, assets: [] }, null, 2))
+  return webpageEvidenceDir
 }
 
 async function writeSemanticTableFixtureMirror(root: string): Promise<string> {
-  const mirrorDir = path.join(root, "mirror-table")
-  await Bun.write(path.join(mirrorDir, "reference.png"), minimalPngBytes())
-  await Bun.write(path.join(mirrorDir, "source-skeleton", "index.html"), `
+  const webpageEvidenceDir = path.join(root, "mirror-table")
+  await Bun.write(path.join(webpageEvidenceDir, "reference.png"), minimalPngBytes())
+  await Bun.write(path.join(webpageEvidenceDir, "source-skeleton", "index.html"), `
     <main class="economy-page">
       <section data-source-node-id="heatmap-region" data-base-widget="true" data-container-name="economic-indicators-heatmap" data-an-widget-id="economic-indicators-heatmap" class="container-Gvxnai7n">
         <div data-source-node-id="heatmap-header" data-source-role="header" class="header-Gvxnai7n header-m-Gvxnai7n">
@@ -1406,18 +1406,18 @@ async function writeSemanticTableFixtureMirror(root: string): Promise<string> {
       </section>
     </main>
   `)
-  await Bun.write(path.join(mirrorDir, "source-skeleton", "critical.css"), `
+  await Bun.write(path.join(webpageEvidenceDir, "source-skeleton", "critical.css"), `
     .economy-page { display: block; }
     .table-ae3EQWDL { border-collapse: collapse; width: 100%; }
     .table-ae3EQWDL th, .table-ae3EQWDL td { padding: 6px; }
   `)
-  await Bun.write(path.join(mirrorDir, "source-ir", "component-tree.json"), JSON.stringify({
+  await Bun.write(path.join(webpageEvidenceDir, "source-ir", "component-tree.json"), JSON.stringify({
     components: [
       { name: "EconomyPage", kind: "page", tag: "main", classNames: ["economy-page"], textPreview: ["Economic indicators heatmap"] },
       { name: "EconomicIndicatorsHeatmap", kind: "table", tag: "section", classNames: ["container-Gvxnai7n"], textPreview: ["GDP", "Government Debt to GDP"] },
     ],
   }, null, 2))
-  await Bun.write(path.join(mirrorDir, "source-ir", "content-model.json"), JSON.stringify({
+  await Bun.write(path.join(webpageEvidenceDir, "source-ir", "content-model.json"), JSON.stringify({
     tables: [{
       title: "Economic indicators heatmap",
       headers: ["Country", "GDP", "Government Debt to GDP", "Inflation Rate"],
@@ -1429,13 +1429,13 @@ async function writeSemanticTableFixtureMirror(root: string): Promise<string> {
     repeatedGroups: [{ title: "Heatmap rows", sampleTexts: ["USA 29.18 T USD", "India 3.91 T USD"] }],
     stats: { totalTables: 1, totalLists: 0, totalCards: 0, totalRepeatedGroups: 1 },
   }, null, 2))
-  await Bun.write(path.join(mirrorDir, "assets", "manifest.json"), JSON.stringify({ version: 1, assets: [] }, null, 2))
-  return mirrorDir
+  await Bun.write(path.join(webpageEvidenceDir, "assets", "manifest.json"), JSON.stringify({ version: 1, assets: [] }, null, 2))
+  return webpageEvidenceDir
 }
 
 async function writeSemanticEventFixtureMirror(root: string): Promise<string> {
-  const mirrorDir = path.join(root, "mirror-events")
-  await Bun.write(path.join(mirrorDir, "reference.png"), minimalPngBytes())
+  const webpageEvidenceDir = path.join(root, "mirror-events")
+  await Bun.write(path.join(webpageEvidenceDir, "reference.png"), minimalPngBytes())
   const cards = [
     ["Today", "Jun 1, 2026, 23:30 GMT+8", "USA", "3-Month Bill Auction", "18:59", "—", "3.595", "%"],
     ["Today", "Jun 1, 2026, 23:30 GMT+8", "USA", "6-Month Bill Auction", "18:59", "—", "3.65", "%"],
@@ -1466,7 +1466,7 @@ async function writeSemanticEventFixtureMirror(root: string): Promise<string> {
       </div>
     </a>
   `).join("")
-  await Bun.write(path.join(mirrorDir, "source-skeleton", "index.html"), `
+  await Bun.write(path.join(webpageEvidenceDir, "source-skeleton", "index.html"), `
     <main class="events-page">
       <section data-source-node-id="calendar-region" data-base-widget="true" data-container-name="economic-calendar" data-an-widget-id="economic-calendar" class="container-Gvxnai7n">
         <div data-source-role="header" class="header-Gvxnai7n header-m-Gvxnai7n">
@@ -1493,30 +1493,30 @@ async function writeSemanticEventFixtureMirror(root: string): Promise<string> {
       </section>
     </main>
   `)
-  await Bun.write(path.join(mirrorDir, "source-skeleton", "critical.css"), `
+  await Bun.write(path.join(webpageEvidenceDir, "source-skeleton", "critical.css"), `
     .events-page { display: block; }
     .items-VfuW0jXu { display: flex; gap: 8px; }
     .wrap-nj94V3ds { display: block; min-width: 160px; }
   `)
-  await Bun.write(path.join(mirrorDir, "source-ir", "component-tree.json"), JSON.stringify({
+  await Bun.write(path.join(webpageEvidenceDir, "source-ir", "component-tree.json"), JSON.stringify({
     components: [
       { name: "EventsPage", kind: "page", tag: "main", classNames: ["events-page"], textPreview: ["Economic Calendar"] },
       { name: "EconomicCalendar", kind: "list", tag: "section", classNames: ["container-Gvxnai7n"], textPreview: ["3-Month Bill Auction", "6-Month Bill Auction"] },
     ],
   }, null, 2))
-  await Bun.write(path.join(mirrorDir, "source-ir", "content-model.json"), JSON.stringify({
+  await Bun.write(path.join(webpageEvidenceDir, "source-ir", "content-model.json"), JSON.stringify({
     lists: [{ title: "Economic Calendar", items: ["3-Month Bill Auction", "6-Month Bill Auction", "Tax Revenue"] }],
     repeatedGroups: [{ title: "Calendar cards", sampleTexts: ["Today 3-Month Bill Auction", "Today 6-Month Bill Auction"] }],
     stats: { totalTables: 0, totalLists: 1, totalCards: 3, totalRepeatedGroups: 1 },
   }, null, 2))
-  await Bun.write(path.join(mirrorDir, "assets", "manifest.json"), JSON.stringify({ version: 1, assets: [] }, null, 2))
-  return mirrorDir
+  await Bun.write(path.join(webpageEvidenceDir, "assets", "manifest.json"), JSON.stringify({ version: 1, assets: [] }, null, 2))
+  return webpageEvidenceDir
 }
 
 async function writeSemanticIdeaCardsFixtureMirror(root: string): Promise<string> {
-  const mirrorDir = path.join(root, "mirror-ideas")
-  await Bun.write(path.join(mirrorDir, "reference.png"), minimalPngBytes())
-  await Bun.write(path.join(mirrorDir, "source-skeleton", "index.html"), `
+  const webpageEvidenceDir = path.join(root, "mirror-ideas")
+  await Bun.write(path.join(webpageEvidenceDir, "reference.png"), minimalPngBytes())
+  await Bun.write(path.join(webpageEvidenceDir, "source-skeleton", "index.html"), `
     <main class="ideas-page">
       <section data-source-node-id="ideas-region" data-base-widget="true" data-container-name="ideas" data-an-widget-id="ideas" class="container-Gvxnai7n">
         <div data-source-role="header" class="header-Gvxnai7n header-m-Gvxnai7n">
@@ -1593,19 +1593,19 @@ async function writeSemanticIdeaCardsFixtureMirror(root: string): Promise<string
       </section>
     </main>
   `)
-  await Bun.write(path.join(mirrorDir, "source-skeleton", "critical.css"), [
+  await Bun.write(path.join(webpageEvidenceDir, "source-skeleton", "critical.css"), [
     ".container-Gvxnai7n { display: block; }",
     ".items-VfuW0jXu { display: flex; gap: 12px; }",
     ".ideaCard-KRH6UCDh { width: 260px; }",
     ".preview-fSver7BK { position: relative; }",
   ].join("\n"))
-  await Bun.write(path.join(mirrorDir, "source-ir", "component-tree.json"), JSON.stringify({
+  await Bun.write(path.join(webpageEvidenceDir, "source-ir", "component-tree.json"), JSON.stringify({
     components: [
       { name: "IdeasPage", kind: "page", tag: "main", classNames: ["ideas-page"], textPreview: ["Ideas"] },
       { name: "Ideas", kind: "section", tag: "section", classNames: ["container-Gvxnai7n"], textPreview: ["Popular", "US Savings Rate Collapsing!"] },
     ],
   }, null, 2))
-  await Bun.write(path.join(mirrorDir, "source-ir", "content-model.json"), JSON.stringify({
+  await Bun.write(path.join(webpageEvidenceDir, "source-ir", "content-model.json"), JSON.stringify({
     cards: [
       { title: "US Savings Rate Collapsing!", text: ["Personal savings are collapsing"], fields: [{ label: "author", value: "by RealMacro" }] },
       { title: "$USGDPQQ - U.S GDP (Q1/2026)", text: ["The US economy expanded"], fields: [{ label: "author", value: "by Mr_J__fx" }] },
@@ -1615,14 +1615,14 @@ async function writeSemanticIdeaCardsFixtureMirror(root: string): Promise<string
     stats: { totalTables: 0, totalLists: 1, totalCards: 3, totalRepeatedGroups: 1 },
   }, null, 2))
   for (const name of ["asset_000001.svg.txt", "asset_000003.svg.txt", "asset_000005.svg.txt"]) {
-    await Bun.write(path.join(mirrorDir, "assets", "images", name), "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Ccircle cx='8' cy='8' r='8' fill='%230680ff'/%3E%3C/svg%3E")
+    await Bun.write(path.join(webpageEvidenceDir, "assets", "images", name), "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Ccircle cx='8' cy='8' r='8' fill='%230680ff'/%3E%3C/svg%3E")
   }
   for (const name of ["asset_000002.webp.txt", "asset_000004.webp.txt", "asset_000006.webp.txt"]) {
-    await Bun.write(path.join(mirrorDir, "assets", "images", name), "data:image/webp;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAACklEQVR4nGMAAQAABQABDQottAAAAABJRU5ErkJggg==")
+    await Bun.write(path.join(webpageEvidenceDir, "assets", "images", name), "data:image/webp;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAACklEQVR4nGMAAQAABQABDQottAAAAABJRU5ErkJggg==")
   }
-  await Bun.write(path.join(mirrorDir, "assets", "svg", "asset_000101.path.txt"), "M0 0l6 5.5L0 11z")
-  await Bun.write(path.join(mirrorDir, "assets", "manifest.json"), JSON.stringify({ version: 1, assets: [] }, null, 2))
-  return mirrorDir
+  await Bun.write(path.join(webpageEvidenceDir, "assets", "svg", "asset_000101.path.txt"), "M0 0l6 5.5L0 11z")
+  await Bun.write(path.join(webpageEvidenceDir, "assets", "manifest.json"), JSON.stringify({ version: 1, assets: [] }, null, 2))
+  return webpageEvidenceDir
 }
 
 function renderFixtureIdeaCard(input: {
@@ -1685,9 +1685,9 @@ function renderFixtureIdeaCard(input: {
 }
 
 async function writeCompositeWidgetFixtureMirror(root: string): Promise<string> {
-  const mirrorDir = path.join(root, "mirror-composite")
-  await Bun.write(path.join(mirrorDir, "reference.png"), minimalPngBytes())
-  await Bun.write(path.join(mirrorDir, "source-skeleton", "index.html"), `
+  const webpageEvidenceDir = path.join(root, "mirror-composite")
+  await Bun.write(path.join(webpageEvidenceDir, "reference.png"), minimalPngBytes())
+  await Bun.write(path.join(webpageEvidenceDir, "source-skeleton", "index.html"), `
     <main class="composite-page">
       <section data-source-node-id="composite-widget" data-base-widget="true" data-container-name="composite-widget" class="container-Gvxnai7n">
         <div data-source-role="header" class="header-Gvxnai7n header-m-Gvxnai7n">
@@ -1710,21 +1710,21 @@ async function writeCompositeWidgetFixtureMirror(root: string): Promise<string> 
       </section>
     </main>
   `)
-  await Bun.write(path.join(mirrorDir, "source-skeleton", "critical.css"), ".container-KqgCoGM1 { display: grid; gap: 12px; } .manual-card { padding: 8px; }")
-  await Bun.write(path.join(mirrorDir, "source-ir", "component-tree.json"), JSON.stringify({
+  await Bun.write(path.join(webpageEvidenceDir, "source-skeleton", "critical.css"), ".container-KqgCoGM1 { display: grid; gap: 12px; } .manual-card { padding: 8px; }")
+  await Bun.write(path.join(webpageEvidenceDir, "source-ir", "component-tree.json"), JSON.stringify({
     components: [
       { name: "CompositePage", kind: "page", tag: "main", classNames: ["composite-page"], textPreview: ["Composite widget"] },
       { name: "CompositeWidget", kind: "section", tag: "section", classNames: ["container-Gvxnai7n"], textPreview: ["Composite widget"] },
     ],
   }, null, 2))
-  await Bun.write(path.join(mirrorDir, "source-ir", "content-model.json"), JSON.stringify({
+  await Bun.write(path.join(webpageEvidenceDir, "source-ir", "content-model.json"), JSON.stringify({
     tables: [{ title: "Composite heatmap", headers: ["Country", "GDP", "Inflation"], rows: [["USA", "29.18 T USD", "3.8 %"], ["India", "3.91 T USD", "3.48 %"]] }],
     lists: [{ title: "Composite events", items: ["3-Month Bill Auction", "6-Month Bill Auction", "Tax Revenue"] }],
     repeatedGroups: [{ title: "Composite surfaces", sampleTexts: ["Composite heatmap", "Composite events"] }],
     stats: { totalTables: 1, totalLists: 1, totalCards: 4, totalRepeatedGroups: 1 },
   }, null, 2))
-  await Bun.write(path.join(mirrorDir, "assets", "manifest.json"), JSON.stringify({ version: 1, assets: [] }, null, 2))
-  return mirrorDir
+  await Bun.write(path.join(webpageEvidenceDir, "assets", "manifest.json"), JSON.stringify({ version: 1, assets: [] }, null, 2))
+  return webpageEvidenceDir
 }
 
 function renderCompositeFixtureTable(): string {
@@ -1757,9 +1757,9 @@ function renderCompositeFixtureEvents(): string {
 }
 
 async function writeSemanticFooterFixtureMirror(root: string): Promise<string> {
-  const mirrorDir = path.join(root, "mirror-footer")
-  await Bun.write(path.join(mirrorDir, "reference.png"), minimalPngBytes())
-  await Bun.write(path.join(mirrorDir, "source-skeleton", "index.html"), `
+  const webpageEvidenceDir = path.join(root, "mirror-footer")
+  await Bun.write(path.join(webpageEvidenceDir, "reference.png"), minimalPngBytes())
+  await Bun.write(path.join(webpageEvidenceDir, "source-skeleton", "index.html"), `
     <footer data-source-node-id="footer-region" data-source-role="footer" class="tv-footer js-footer" data-nosnippet="">
       <div class="js-promo-footer-init-ssr">
         <div class="root-_gnlNXvh">
@@ -1821,24 +1821,24 @@ async function writeSemanticFooterFixtureMirror(root: string): Promise<string> {
       </div>
     </footer>
   `)
-  await Bun.write(path.join(mirrorDir, "source-skeleton", "critical.css"), ".tv-footer { padding: 24px; } .footerLinks-hezxxKBJ { display: flex; gap: 8px; }")
-  await Bun.write(path.join(mirrorDir, "source-ir", "component-tree.json"), JSON.stringify({
+  await Bun.write(path.join(webpageEvidenceDir, "source-skeleton", "critical.css"), ".tv-footer { padding: 24px; } .footerLinks-hezxxKBJ { display: flex; gap: 8px; }")
+  await Bun.write(path.join(webpageEvidenceDir, "source-ir", "component-tree.json"), JSON.stringify({
     components: [
       { name: "Footer", kind: "footer", tag: "footer", classNames: ["tv-footer"], textPreview: ["TradingView", "Supercharts", "Select market data provided"] },
     ],
   }, null, 2))
-  await Bun.write(path.join(mirrorDir, "source-ir", "content-model.json"), JSON.stringify({
+  await Bun.write(path.join(webpageEvidenceDir, "source-ir", "content-model.json"), JSON.stringify({
     lists: [{ title: "Footer links", items: ["Supercharts", "Screener", "Pricing", "Widgets"] }],
     repeatedGroups: [{ title: "Footer links", sampleTexts: ["Supercharts", "Screener"] }],
     stats: { totalTables: 0, totalLists: 1, totalCards: 0, totalRepeatedGroups: 1 },
   }, null, 2))
-  await Bun.write(path.join(mirrorDir, "assets", "manifest.json"), JSON.stringify({ version: 1, assets: [] }, null, 2))
-  return mirrorDir
+  await Bun.write(path.join(webpageEvidenceDir, "assets", "manifest.json"), JSON.stringify({ version: 1, assets: [] }, null, 2))
+  return webpageEvidenceDir
 }
 
 async function writeSemanticMapFixtureMirror(root: string): Promise<string> {
-  const mirrorDir = path.join(root, "mirror-map")
-  await Bun.write(path.join(mirrorDir, "reference.png"), minimalPngBytes())
+  const webpageEvidenceDir = path.join(root, "mirror-map")
+  await Bun.write(path.join(webpageEvidenceDir, "reference.png"), minimalPngBytes())
   const mapPaths = Array.from({ length: 24 }, (_, index) => {
     const assetId = `asset_${String(index + 1).padStart(6, "0")}`
     const colorClass = index % 2 === 0 ? "country-positive" : "country-neutral"
@@ -1848,7 +1848,7 @@ async function writeSemanticMapFixtureMirror(root: string): Promise<string> {
     const assetId = `asset_${String(index + 101).padStart(6, "0")}`
     return `<path data-source-node-id="legend-path-${index + 1}" data-asset-d="../assets/svg/${assetId}.path.txt" class="legend-swatch" fill="currentColor"></path>`
   }).join("")
-  await Bun.write(path.join(mirrorDir, "source-skeleton", "index.html"), `
+  await Bun.write(path.join(webpageEvidenceDir, "source-skeleton", "index.html"), `
     <main class="map-page">
       <section data-source-node-id="global-map-region" data-base-widget="true" data-container-name="global-industrial-map" data-an-widget-id="global-industrial-map" class="container-Gvxnai7n">
         <div data-source-role="header" class="header-Gvxnai7n header-m-Gvxnai7n">
@@ -1894,39 +1894,39 @@ async function writeSemanticMapFixtureMirror(root: string): Promise<string> {
       </section>
     </main>
   `)
-  await Bun.write(path.join(mirrorDir, "source-skeleton", "critical.css"), `
+  await Bun.write(path.join(webpageEvidenceDir, "source-skeleton", "critical.css"), `
     .map-page { display: block; }
     .map-PucT6CA9 { display: block; }
     .world-map { width: 100%; }
     .country-positive { color: #22ab94; }
     .country-neutral { color: #9598a1; }
   `)
-  await Bun.write(path.join(mirrorDir, "source-ir", "component-tree.json"), JSON.stringify({
+  await Bun.write(path.join(webpageEvidenceDir, "source-ir", "component-tree.json"), JSON.stringify({
     components: [
       { name: "MapPage", kind: "page", tag: "main", classNames: ["map-page"], textPreview: ["Global industrial map"] },
       { name: "GlobalIndustrialMap", kind: "map", tag: "section", classNames: ["container-Gvxnai7n"], textPreview: ["Global industrial map", "See more global trends"] },
     ],
   }, null, 2))
-  await Bun.write(path.join(mirrorDir, "source-ir", "content-model.json"), JSON.stringify({
+  await Bun.write(path.join(webpageEvidenceDir, "source-ir", "content-model.json"), JSON.stringify({
     lists: [{ title: "Global industrial map", items: ["0 to 3%", "3 to 7%", "See more global trends"] }],
     repeatedGroups: [{ title: "Map paths", sampleTexts: ["country-1", "country-2"] }],
     stats: { totalTables: 0, totalLists: 1, totalCards: 0, totalRepeatedGroups: 1 },
   }, null, 2))
   for (let index = 0; index < 24; index += 1) {
     const assetId = `asset_${String(index + 1).padStart(6, "0")}`
-    await Bun.write(path.join(mirrorDir, "assets", "svg", `${assetId}.path.txt`), `M${index} ${index}h4v4z`)
+    await Bun.write(path.join(webpageEvidenceDir, "assets", "svg", `${assetId}.path.txt`), `M${index} ${index}h4v4z`)
   }
   for (let index = 0; index < 16; index += 1) {
     const assetId = `asset_${String(index + 101).padStart(6, "0")}`
-    await Bun.write(path.join(mirrorDir, "assets", "svg", `${assetId}.path.txt`), `M${index} 0h2v2z`)
+    await Bun.write(path.join(webpageEvidenceDir, "assets", "svg", `${assetId}.path.txt`), `M${index} 0h2v2z`)
   }
-  await Bun.write(path.join(mirrorDir, "assets", "manifest.json"), JSON.stringify({ version: 1, assets: [] }, null, 2))
-  return mirrorDir
+  await Bun.write(path.join(webpageEvidenceDir, "assets", "manifest.json"), JSON.stringify({ version: 1, assets: [] }, null, 2))
+  return webpageEvidenceDir
 }
 
 async function writeSemanticMetricRankingFixtureMirror(root: string): Promise<string> {
-  const mirrorDir = path.join(root, "mirror-ranking")
-  await Bun.write(path.join(mirrorDir, "reference.png"), minimalPngBytes())
+  const webpageEvidenceDir = path.join(root, "mirror-ranking")
+  await Bun.write(path.join(webpageEvidenceDir, "reference.png"), minimalPngBytes())
   const rows = [
     ["India", "india", "7.80%", "3.91 T", "USD", "asset_000449.svg.txt"],
     ["Indonesia", "indonesia", "5.61%", "1.40 T", "USD", "asset_000450.svg.txt"],
@@ -1947,7 +1947,7 @@ async function writeSemanticMetricRankingFixtureMirror(root: string): Promise<st
       </div>
     </li>
   `).join("")
-  await Bun.write(path.join(mirrorDir, "source-skeleton", "index.html"), `
+  await Bun.write(path.join(webpageEvidenceDir, "source-skeleton", "index.html"), `
     <main class="ranking-page">
       <div data-source-node-id="ranking-card" data-source-role="card" class="card-_bHcdE9E">
         <div class="wrapper-LBIMiZWE">
@@ -1964,32 +1964,32 @@ async function writeSemanticMetricRankingFixtureMirror(root: string): Promise<st
       </div>
     </main>
   `)
-  await Bun.write(path.join(mirrorDir, "source-skeleton", "critical.css"), `
+  await Bun.write(path.join(webpageEvidenceDir, "source-skeleton", "critical.css"), `
     .ranking-page { display: block; }
     .card-_bHcdE9E { border: 1px solid #e0e3eb; border-radius: 8px; }
     .container-zBPPLXWm { display: grid; grid-template-columns: 40px 1fr 96px 110px; }
   `)
-  await Bun.write(path.join(mirrorDir, "source-ir", "component-tree.json"), JSON.stringify({
+  await Bun.write(path.join(webpageEvidenceDir, "source-ir", "component-tree.json"), JSON.stringify({
     components: [
       { name: "RankingPage", kind: "page", tag: "main", classNames: ["ranking-page"], textPreview: ["GDP growth, YoY"] },
       { name: "GdpGrowthYoy", kind: "ranking-card", tag: "div", classNames: ["card-_bHcdE9E"], textPreview: ["India", "Indonesia", "Nominal GDP"] },
     ],
   }, null, 2))
-  await Bun.write(path.join(mirrorDir, "source-ir", "content-model.json"), JSON.stringify({
+  await Bun.write(path.join(webpageEvidenceDir, "source-ir", "content-model.json"), JSON.stringify({
     lists: [{ title: "GDP growth, YoY", items: ["India", "Indonesia", "Mainland China"] }],
     repeatedGroups: [{ title: "GDP growth rows", sampleTexts: ["India 7.80%", "Indonesia 5.61%"] }],
     stats: { totalTables: 0, totalLists: 1, totalCards: 1, totalRepeatedGroups: 1 },
   }, null, 2))
   for (const asset of ["asset_000449.svg.txt", "asset_000450.svg.txt", "asset_000451.svg.txt"]) {
-    await Bun.write(path.join(mirrorDir, "assets", "images", asset), `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32"><circle cx="16" cy="16" r="16" fill="#2962ff"/></svg>`)
+    await Bun.write(path.join(webpageEvidenceDir, "assets", "images", asset), `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32"><circle cx="16" cy="16" r="16" fill="#2962ff"/></svg>`)
   }
-  await Bun.write(path.join(mirrorDir, "assets", "manifest.json"), JSON.stringify({ version: 1, assets: [] }, null, 2))
-  return mirrorDir
+  await Bun.write(path.join(webpageEvidenceDir, "assets", "manifest.json"), JSON.stringify({ version: 1, assets: [] }, null, 2))
+  return webpageEvidenceDir
 }
 
 async function writeMixedEconomicTrendsFixtureMirror(root: string): Promise<string> {
-  const mirrorDir = path.join(root, "mirror-mixed-economic-trends")
-  await Bun.write(path.join(mirrorDir, "reference.png"), minimalPngBytes())
+  const webpageEvidenceDir = path.join(root, "mirror-mixed-economic-trends")
+  await Bun.write(path.join(webpageEvidenceDir, "reference.png"), minimalPngBytes())
   const mapPaths = Array.from({ length: 20 }, (_, index) => {
     const assetId = `asset_${String(index + 1).padStart(6, "0")}`
     return `<path data-source-node-id="map-path-${index}" data-asset-d="../assets/svg/${assetId}.path.txt" id="country-${index}" class="positive-s" fill="currentColor"></path>`
@@ -2003,7 +2003,7 @@ async function writeMixedEconomicTrendsFixtureMirror(root: string): Promise<stri
       </div></div>
     </li>
   `).join("")
-  await Bun.write(path.join(mirrorDir, "source-skeleton", "index.html"), `
+  await Bun.write(path.join(webpageEvidenceDir, "source-skeleton", "index.html"), `
     <main class="mixed-page">
       <section data-source-node-id="economic-trends-region" data-base-widget="true" data-container-name="economy-market-summary" data-an-widget-id="economy-market-summary" class="container-Gvxnai7n">
         <div data-source-role="header" class="header-Gvxnai7n"><div class="wrapper-BQZK4DnU"><span class="titleAndHintWrapper-BQZK4DnU"><div class="container-BQZK4DnU"><h2 class="title-BQZK4DnU">Economic trends</h2></div></span></div></div>
@@ -2031,26 +2031,26 @@ async function writeMixedEconomicTrendsFixtureMirror(root: string): Promise<stri
       </section>
     </main>
   `)
-  await Bun.write(path.join(mirrorDir, "source-skeleton", "critical.css"), ".container-KqgCoGM1 { display: grid; grid-template-columns: 2fr 1fr; gap: 16px; } .card-_bHcdE9E { border: 1px solid #eee; }")
-  await Bun.write(path.join(mirrorDir, "source-ir", "component-tree.json"), JSON.stringify({
+  await Bun.write(path.join(webpageEvidenceDir, "source-skeleton", "critical.css"), ".container-KqgCoGM1 { display: grid; grid-template-columns: 2fr 1fr; gap: 16px; } .card-_bHcdE9E { border: 1px solid #eee; }")
+  await Bun.write(path.join(webpageEvidenceDir, "source-ir", "component-tree.json"), JSON.stringify({
     components: [{ name: "EconomicTrends", kind: "section", tag: "section", textPreview: ["Inflation map", "GDP growth, YoY", "US unemployment rate"] }],
   }, null, 2))
-  await Bun.write(path.join(mirrorDir, "source-ir", "content-model.json"), JSON.stringify({
+  await Bun.write(path.join(webpageEvidenceDir, "source-ir", "content-model.json"), JSON.stringify({
     cards: [{ title: "Inflation map" }, { title: "GDP growth, YoY" }, { title: "US unemployment rate" }],
     stats: { totalTables: 0, totalLists: 1, totalCards: 3, totalRepeatedGroups: 0 },
   }, null, 2))
   for (let index = 0; index < 20; index += 1) {
     const assetId = `asset_${String(index + 1).padStart(6, "0")}`
-    await Bun.write(path.join(mirrorDir, "assets", "svg", `${assetId}.path.txt`), `M${index} ${index}h2v2z`)
+    await Bun.write(path.join(webpageEvidenceDir, "assets", "svg", `${assetId}.path.txt`), `M${index} ${index}h2v2z`)
   }
-  await Bun.write(path.join(mirrorDir, "assets", "images", "asset_000100.png"), minimalPngBytes())
-  await Bun.write(path.join(mirrorDir, "assets", "manifest.json"), JSON.stringify({ version: 1, assets: [] }, null, 2))
-  return mirrorDir
+  await Bun.write(path.join(webpageEvidenceDir, "assets", "images", "asset_000100.png"), minimalPngBytes())
+  await Bun.write(path.join(webpageEvidenceDir, "assets", "manifest.json"), JSON.stringify({ version: 1, assets: [] }, null, 2))
+  return webpageEvidenceDir
 }
 
 async function writeSemanticLinkGridFixtureMirror(root: string): Promise<string> {
-  const mirrorDir = path.join(root, "mirror-link-grid")
-  await Bun.write(path.join(mirrorDir, "reference.png"), minimalPngBytes())
+  const webpageEvidenceDir = path.join(root, "mirror-link-grid")
+  await Bun.write(path.join(webpageEvidenceDir, "reference.png"), minimalPngBytes())
   const countries = [
     ["Argentina", "argentina"],
     ["Australia", "australia"],
@@ -2067,7 +2067,7 @@ async function writeSemanticLinkGridFixtureMirror(root: string): Promise<string>
       <span class="content-wc15_bxY">${label}</span>
     </a>
   `).join("")
-  await Bun.write(path.join(mirrorDir, "source-skeleton", "index.html"), `
+  await Bun.write(path.join(webpageEvidenceDir, "source-skeleton", "index.html"), `
     <main class="countries-page">
       <section data-source-node-id="countries-region" data-base-widget="true" data-container-name="countries" data-an-widget-id="countries" class="container-Gvxnai7n">
         <div data-source-role="header" class="header-Gvxnai7n header-m-Gvxnai7n">
@@ -2089,30 +2089,30 @@ async function writeSemanticLinkGridFixtureMirror(root: string): Promise<string>
       </section>
     </main>
   `)
-  await Bun.write(path.join(mirrorDir, "source-skeleton", "critical.css"), ".container-A2DTx07J { display: flex; flex-wrap: wrap; gap: 8px; }")
-  await Bun.write(path.join(mirrorDir, "source-ir", "component-tree.json"), JSON.stringify({
+  await Bun.write(path.join(webpageEvidenceDir, "source-skeleton", "critical.css"), ".container-A2DTx07J { display: flex; flex-wrap: wrap; gap: 8px; }")
+  await Bun.write(path.join(webpageEvidenceDir, "source-ir", "component-tree.json"), JSON.stringify({
     components: [
       { name: "CountriesPage", kind: "page", tag: "main", classNames: ["countries-page"], textPreview: ["Countries"] },
       { name: "Countries", kind: "navigation", tag: "section", classNames: ["container-Gvxnai7n"], textPreview: ["Argentina", "United States"] },
     ],
   }, null, 2))
-  await Bun.write(path.join(mirrorDir, "source-ir", "content-model.json"), JSON.stringify({
+  await Bun.write(path.join(webpageEvidenceDir, "source-ir", "content-model.json"), JSON.stringify({
     lists: [{ title: "Countries", items: countries.map(([label]) => label) }],
     repeatedGroups: [{ title: "Country links", sampleTexts: ["Argentina", "Australia"] }],
     stats: { totalTables: 0, totalLists: 1, totalCards: 0, totalRepeatedGroups: 1 },
   }, null, 2))
-  await Bun.write(path.join(mirrorDir, "assets", "manifest.json"), JSON.stringify({ version: 1, assets: [] }, null, 2))
-  return mirrorDir
+  await Bun.write(path.join(webpageEvidenceDir, "assets", "manifest.json"), JSON.stringify({ version: 1, assets: [] }, null, 2))
+  return webpageEvidenceDir
 }
 
 async function writeSemanticHeaderFixtureMirror(root: string): Promise<string> {
-  const mirrorDir = path.join(root, "mirror-header")
-  await Bun.write(path.join(mirrorDir, "reference.png"), minimalPngBytes())
+  const webpageEvidenceDir = path.join(root, "mirror-header")
+  await Bun.write(path.join(webpageEvidenceDir, "reference.png"), minimalPngBytes())
   const iconPaths = Array.from({ length: 8 }, (_, index) => {
     const assetId = `asset_${String(index + 1).padStart(6, "0")}`
     return `<path data-source-node-id="header-icon-${index + 1}" data-asset-d="../assets/svg/${assetId}.path.txt" fill="currentColor"></path>`
   })
-  await Bun.write(path.join(mirrorDir, "source-skeleton", "index.html"), `
+  await Bun.write(path.join(webpageEvidenceDir, "source-skeleton", "index.html"), `
     <main class="header-page">
       <div data-source-node-id="header-region" data-source-role="header" class="tv-header tv-header__top js-site-header-container tv-header--sticky">
         <div data-source-node-id="header-backdrop" class="tv-header__backdrop sf-hidden"></div>
@@ -2175,34 +2175,34 @@ async function writeSemanticHeaderFixtureMirror(root: string): Promise<string> {
       </div>
     </main>
   `)
-  await Bun.write(path.join(mirrorDir, "source-skeleton", "critical.css"), ".tv-header__inner { display: flex; align-items: center; } .tv-header__main-menu { display: flex; gap: 12px; }")
-  await Bun.write(path.join(mirrorDir, "source-ir", "component-tree.json"), JSON.stringify({
+  await Bun.write(path.join(webpageEvidenceDir, "source-skeleton", "critical.css"), ".tv-header__inner { display: flex; align-items: center; } .tv-header__main-menu { display: flex; gap: 12px; }")
+  await Bun.write(path.join(webpageEvidenceDir, "source-ir", "component-tree.json"), JSON.stringify({
     components: [
       { name: "HeaderPage", kind: "page", tag: "main", classNames: ["header-page"], textPreview: ["Products", "Get started"] },
       { name: "Header", kind: "navigation", tag: "div", classNames: ["tv-header"], textPreview: ["Products", "Community", "Markets"] },
     ],
   }, null, 2))
-  await Bun.write(path.join(mirrorDir, "source-ir", "content-model.json"), JSON.stringify({
+  await Bun.write(path.join(webpageEvidenceDir, "source-ir", "content-model.json"), JSON.stringify({
     lists: [{ title: "Header menu", items: ["Products", "Community", "Markets", "Brokers", "More"] }],
     repeatedGroups: [{ title: "Header links", sampleTexts: ["Products", "Community"] }],
     stats: { totalTables: 0, totalLists: 1, totalCards: 0, totalRepeatedGroups: 1 },
   }, null, 2))
   for (let index = 0; index < 8; index += 1) {
     const assetId = `asset_${String(index + 1).padStart(6, "0")}`
-    await Bun.write(path.join(mirrorDir, "assets", "svg", `${assetId}.path.txt`), `M${index} ${index}h4v4z`)
+    await Bun.write(path.join(webpageEvidenceDir, "assets", "svg", `${assetId}.path.txt`), `M${index} ${index}h4v4z`)
   }
-  await Bun.write(path.join(mirrorDir, "assets", "manifest.json"), JSON.stringify({ version: 1, assets: [] }, null, 2))
-  return mirrorDir
+  await Bun.write(path.join(webpageEvidenceDir, "assets", "manifest.json"), JSON.stringify({ version: 1, assets: [] }, null, 2))
+  return webpageEvidenceDir
 }
 
 async function writeSemanticSectionShellFixtureMirror(root: string): Promise<string> {
-  const mirrorDir = path.join(root, "mirror-section-shell")
-  await Bun.write(path.join(mirrorDir, "reference.png"), minimalPngBytes())
+  const webpageEvidenceDir = path.join(root, "mirror-section-shell")
+  await Bun.write(path.join(webpageEvidenceDir, "reference.png"), minimalPngBytes())
   const chartPaths = Array.from({ length: 18 }, (_, index) => {
     const assetId = `asset_${String(index + 1).padStart(6, "0")}`
     return `<path data-source-node-id="idea-path-${index + 1}" data-asset-d="../assets/svg/${assetId}.path.txt" id="series-${index + 1}" class="series-path" fill="currentColor"></path>`
   }).join("")
-  await Bun.write(path.join(mirrorDir, "source-skeleton", "index.html"), `
+  await Bun.write(path.join(webpageEvidenceDir, "source-skeleton", "index.html"), `
     <main class="ideas-page">
       <div data-source-node-id="ideas-wrapper" style="--filmstrip-right-button-order: 11">
       <section data-source-node-id="ideas-region" data-base-widget="true" data-container-name="ideas" data-an-widget-id="ideas" class="container-Gvxnai7n">
@@ -2239,24 +2239,24 @@ async function writeSemanticSectionShellFixtureMirror(root: string): Promise<str
       </div>
     </main>
   `)
-  await Bun.write(path.join(mirrorDir, "source-skeleton", "critical.css"), ".content-Gvxnai7n { display: grid; gap: 12px; } .squareTabs-h5ZKzylb { display: flex; gap: 8px; }")
-  await Bun.write(path.join(mirrorDir, "source-ir", "component-tree.json"), JSON.stringify({
+  await Bun.write(path.join(webpageEvidenceDir, "source-skeleton", "critical.css"), ".content-Gvxnai7n { display: grid; gap: 12px; } .squareTabs-h5ZKzylb { display: flex; gap: 8px; }")
+  await Bun.write(path.join(webpageEvidenceDir, "source-ir", "component-tree.json"), JSON.stringify({
     components: [
       { name: "IdeasPage", kind: "page", tag: "main", classNames: ["ideas-page"], textPreview: ["Ideas"] },
       { name: "Ideas", kind: "section", tag: "section", classNames: ["container-Gvxnai7n"], textPreview: ["Popular", "US Savings Rate Collapsing"] },
     ],
   }, null, 2))
-  await Bun.write(path.join(mirrorDir, "source-ir", "content-model.json"), JSON.stringify({
+  await Bun.write(path.join(webpageEvidenceDir, "source-ir", "content-model.json"), JSON.stringify({
     lists: [{ title: "Idea tabs", items: ["Popular", "Recent", "Video"] }],
     repeatedGroups: [{ title: "Chart paths", sampleTexts: ["series-1", "series-2"] }],
     stats: { totalTables: 0, totalLists: 1, totalCards: 1, totalRepeatedGroups: 1 },
   }, null, 2))
   for (let index = 0; index < 18; index += 1) {
     const assetId = `asset_${String(index + 1).padStart(6, "0")}`
-    await Bun.write(path.join(mirrorDir, "assets", "svg", `${assetId}.path.txt`), `M${index} ${index}h5v5z`)
+    await Bun.write(path.join(webpageEvidenceDir, "assets", "svg", `${assetId}.path.txt`), `M${index} ${index}h5v5z`)
   }
-  await Bun.write(path.join(mirrorDir, "assets", "manifest.json"), JSON.stringify({ version: 1, assets: [] }, null, 2))
-  return mirrorDir
+  await Bun.write(path.join(webpageEvidenceDir, "assets", "manifest.json"), JSON.stringify({ version: 1, assets: [] }, null, 2))
+  return webpageEvidenceDir
 }
 
 function renderFixtureFaqItems(startOrder: number, questions: string[]): string {
@@ -2288,9 +2288,9 @@ function renderFixtureFaqItems(startOrder: number, questions: string[]): string 
 }
 
 async function writeGenericStructureFixtureMirror(root: string): Promise<string> {
-  const mirrorDir = path.join(root, "mirror-generic-structure")
-  await Bun.write(path.join(mirrorDir, "reference.png"), minimalPngBytes())
-  await Bun.write(path.join(mirrorDir, "source-skeleton", "index.html"), `
+  const webpageEvidenceDir = path.join(root, "mirror-generic-structure")
+  await Bun.write(path.join(webpageEvidenceDir, "reference.png"), minimalPngBytes())
+  await Bun.write(path.join(webpageEvidenceDir, "source-skeleton", "index.html"), `
     <main class="operations-page">
       <section data-source-node-id="plan-table" class="surface alpha-table">
         <header class="surface-head"><h2>Plan comparison</h2></header>
@@ -2327,15 +2327,15 @@ async function writeGenericStructureFixtureMirror(root: string): Promise<string>
       </section>
     </main>
   `)
-  await Bun.write(path.join(mirrorDir, "source-skeleton", "critical.css"), ".surface { padding: 16px; } .links-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; } .items-lane { display: grid; gap: 8px; }")
-  await Bun.write(path.join(mirrorDir, "source-ir", "component-tree.json"), JSON.stringify({
+  await Bun.write(path.join(webpageEvidenceDir, "source-skeleton", "critical.css"), ".surface { padding: 16px; } .links-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; } .items-lane { display: grid; gap: 8px; }")
+  await Bun.write(path.join(webpageEvidenceDir, "source-ir", "component-tree.json"), JSON.stringify({
     components: [
       { name: "PlanComparison", kind: "section", tag: "section", classNames: ["surface"], textPreview: ["Plan comparison", "Starter", "Team"] },
       { name: "DeploymentQueue", kind: "section", tag: "section", classNames: ["surface"], textPreview: ["Deployment queue", "Package review"] },
       { name: "ResourceHub", kind: "navigation", tag: "section", classNames: ["surface"], textPreview: ["Resource hub", "Docs", "Support"] },
     ],
   }, null, 2))
-  await Bun.write(path.join(mirrorDir, "source-ir", "content-model.json"), JSON.stringify({
+  await Bun.write(path.join(webpageEvidenceDir, "source-ir", "content-model.json"), JSON.stringify({
     tables: [{ title: "Plan comparison", headers: ["Starter", "Pro", "Team"], rows: [["Storage", "20 GB", "100 GB", "500 GB"], ["Seats", "3", "12", "50"], ["Support", "Email", "Priority", "Dedicated"]] }],
     lists: [{ title: "Deployment queue", items: ["Package review", "Access rollout", "Design sync"] }, { title: "Resource hub", items: ["Docs", "Templates", "Changelog", "Status", "Examples", "Support"] }],
     repeatedGroups: [{ title: "Deployment rows", sampleTexts: ["Package review Ready", "Access rollout Queued"] }, { title: "Resource links", sampleTexts: ["Docs", "Templates"] }],
@@ -2361,8 +2361,8 @@ async function writeGenericStructureFixtureMirror(root: string): Promise<string>
     ],
     stats: { totalTables: 1, totalLists: 2, totalCards: 0, totalRepeatedGroups: 2, totalSourceComponentPatterns: 3 },
   }, null, 2))
-  await Bun.write(path.join(mirrorDir, "assets", "manifest.json"), JSON.stringify({ version: 1, assets: [] }, null, 2))
-  return mirrorDir
+  await Bun.write(path.join(webpageEvidenceDir, "assets", "manifest.json"), JSON.stringify({ version: 1, assets: [] }, null, 2))
+  return webpageEvidenceDir
 }
 
 function minimalPngBytes(): Uint8Array {

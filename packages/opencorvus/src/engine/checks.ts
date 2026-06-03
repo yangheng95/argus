@@ -78,6 +78,6 @@ function checkSelectionConfig(key: string, current: unknown) {
   if (["code_quality", "code_review", "dead_code_review", "judge", "spec_check"].includes(key)) {
     return { ...(base ?? {}), enabled: true }
   }
-  if (["startup", "visual", "puppeteer"].includes(key)) return base
+  if (["startup", "visual", "playwright"].includes(key)) return base
   return { ...(base ?? {}), enabled: true }
 }

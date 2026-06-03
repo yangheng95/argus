@@ -10,7 +10,7 @@ import { ToolRegistry } from "../../src/tool/registry"
 import {
   WEBPAGE_EVIDENCE_ACCEPTANCE_TOOL_IDS,
   WEBPAGE_EVIDENCE_ANALYSIS_TOOL_IDS,
-} from "../../src/webpage-evidence/tools/ids"
+} from "../../src/frontend-design/tools/ids"
 import { FRONTEND_DESIGN_STATIC_TOOL_IDS } from "../../src/frontend-design/static-tools"
 import BUILD_CORE from "../../src/prompt/core/build-core.txt"
 import VISUAL_QA_CORE from "../../src/prompt/core/visual-qa-core.txt"
@@ -124,7 +124,7 @@ test("visual-qa webpage evidence analysis denial cannot be reopened by per-agent
         "visual-qa": {
           permission: {
             webpage_extract: "allow",
-            webpage_image_extract: "allow",
+            webpage_runtime_state: "allow",
           },
         },
       },
@@ -136,13 +136,13 @@ test("visual-qa webpage evidence analysis denial cannot be reopened by per-agent
       const visualQa = await Agent.get("visual-qa")
       expect(visualQa).toBeDefined()
       expect(evalPerm(visualQa, "webpage_extract")).toBe("deny")
-      expect(evalPerm(visualQa, "webpage_image_extract")).toBe("deny")
+      expect(evalPerm(visualQa, "webpage_runtime_state")).toBe("deny")
       expect(evalPerm(visualQa, "webpage_render")).toBe("allow")
 
       const tools = await ToolRegistry.tools({ providerID: "", modelID: "" }, visualQa)
       const ids = new Set(tools.map((tool) => tool.id))
       expect(ids.has("webpage_extract")).toBe(false)
-      expect(ids.has("webpage_image_extract")).toBe(false)
+      expect(ids.has("webpage_runtime_state")).toBe(false)
       expect(ids.has("webpage_render")).toBe(true)
     },
   })
@@ -389,7 +389,7 @@ test("native stage agent registry tool surfaces match role boundaries", async ()
         expect(intent?.tools?.include).not.toContain(tool)
       }
 
-      // frontend-design owns mirror extraction (URL/Figma/pixels); generic
+      // frontend-design owns webpage evidence extraction (URL/Figma/pixels); generic
       // websearch is redundant with that chain and risks score loops.
       const design = await Agent.get("frontend-design")
       expect(design?.tools?.include).toEqual([...FRONTEND_DESIGN_STATIC_TOOL_IDS])

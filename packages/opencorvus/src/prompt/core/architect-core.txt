@@ -32,7 +32,7 @@ contract. Keep the boundary explicit:
 - Requirements owns REQ-N extraction and foundational decisions; do not rewrite
   them unless the Orchestrator explicitly re-enters requirements.
 - Frontend Design owns the visual frontend template. Reference-driven UI goals should
-  consume its visual contract instead of reopening mirror extraction.
+  consume its visual contract instead of reopening webpage evidence extraction.
 - Research owns advisory evidence bundles for external facts and PRD/SPEC input
   material. Consume research evidence IDs when a goal or graph contract depends
   on external facts; do not invent new external facts, and do not treat research

@@ -25,7 +25,7 @@ import { MCP } from "@/mcp"
 import { Bus } from "@/bus"
 import path from "path"
 import z from "zod"
-import { WEBPAGE_EVIDENCE_TOOL_IDS } from "@/webpage-evidence/tools/ids"
+import { WEBPAGE_EVIDENCE_TOOL_IDS } from "@/frontend-design/tools/ids"
 
 const log = Log.create({ service: "mcp.serve" })
 
@@ -37,8 +37,8 @@ const DEFAULT_SERVER_NAME = "opencorvus"
 // shell/read/edit/write/glob/grep/web-fetch/web-search tools. Re-exposing
 // those over MCP creates a double-source surface (CLAUDE.md rule 22) and
 // confuses the LLM about which one to call. Only expose the OpenCorvus
-// toolset that the host environment doesn't provide natively. Mirror tools are
-// intentionally absent here: frontend-design owns mirror extraction, and
+// toolset that the host environment doesn't provide natively. Webpage evidence tools are
+// intentionally absent here: frontend-design owns webpage evidence extraction, and
 // external coding executors implement the persisted frontend template rather than calling
 // webpage_* / figma_* through MCP.
 const EXECUTOR_TOOLS = {
@@ -119,7 +119,7 @@ export namespace MCPServe {
       "",
       aliases,
       "",
-      "Mirror extraction artifacts are produced by the upstream frontend_design stage. If the build prompt needs facts that are absent from the persisted frontend template, report the missing frontend-design evidence instead of fabricating mirror artifacts.",
+      "Webpage evidence artifacts are produced by the upstream frontend_design stage. If the build prompt needs facts that are absent from the persisted frontend template, report the missing frontend-design evidence instead of fabricating webpage evidence artifacts.",
     ].join("\n")
   }
 

@@ -581,7 +581,7 @@ describe("build agent prompt context", () => {
     expect(prompt).toContain("web-clone-source/source-skeleton/critical.css")
     expect(prompt).toContain("web-clone-source-skeleton-consumption-audit.json passed")
     expect(prompt).toContain("Treat `.opencorvus/runtime/tasks/<taskID>/frontend-design/` as read-only input")
-    expect(prompt).toContain("Do not copy `web-clone-source/`, `frontend-design-skeleton/`, `mirror/`, `references/`, or top-level `reference.png`")
+    expect(prompt).toContain("Do not copy `web-clone-source/`, `frontend-design-skeleton/`, `webpage-evidence/`, `references/`, or top-level `reference.png`")
     expect(prompt).toContain("work from the frontend_design refined source first")
     expect(prompt).toContain("use the mismatch report for source-backed precision repair")
     expect(prompt).toContain("CSS repair must be source-backed")

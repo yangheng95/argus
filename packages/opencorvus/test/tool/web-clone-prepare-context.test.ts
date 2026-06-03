@@ -32,13 +32,13 @@ describe("tool.web_clone_prepare_context", () => {
 
   test("writes compact context and implementation contract from webpage evidence", async () => {
     await using tmp = await tmpdir()
-    const mirrorDir = await writeFixtureMirror(tmp.path)
+    const webpageEvidenceDir = await writeFixtureMirror(tmp.path)
 
     await Instance.provide({
       directory: tmp.path,
       fn: async () => {
         const tool = await WebClonePrepareContextTool.init()
-        const result = await tool.execute({ mirrorDir }, ctx)
+        const result = await tool.execute({ webpageEvidenceDir }, ctx)
         const sourcePackageDir = path.join(tmp.path, "web-clone-source")
 
         expect(result.title).toBe("Web clone context prepared")
@@ -83,16 +83,16 @@ describe("tool.web_clone_prepare_context", () => {
 
   test("accepts a compiled source-skeleton handoff without raw extraction diagnostics", async () => {
     await using tmp = await tmpdir()
-    const mirrorDir = await writeFixtureMirror(tmp.path)
+    const webpageEvidenceDir = await writeFixtureMirror(tmp.path)
     for (const file of ["capture.html", "singlefile.html", "extracted-page.json", "segments.json", "codegen-context.json"]) {
-      await fs.rm(path.join(mirrorDir, file), { force: true })
+      await fs.rm(path.join(webpageEvidenceDir, file), { force: true })
     }
 
     await Instance.provide({
       directory: tmp.path,
       fn: async () => {
         const tool = await WebClonePrepareContextTool.init()
-        const result = await tool.execute({ mirrorDir }, ctx)
+        const result = await tool.execute({ webpageEvidenceDir }, ctx)
         const sourcePackageDir = path.join(tmp.path, "web-clone-source")
 
         expect(result.title).toBe("Web clone context prepared")
@@ -108,64 +108,64 @@ describe("tool.web_clone_prepare_context", () => {
 
   test("rejects outputDir outside the worktree", async () => {
     await using tmp = await tmpdir()
-    const mirrorDir = await writeFixtureMirror(tmp.path)
+    const webpageEvidenceDir = await writeFixtureMirror(tmp.path)
 
     await Instance.provide({
       directory: tmp.path,
       fn: async () => {
         const tool = await WebClonePrepareContextTool.init()
-        await expect(tool.execute({ mirrorDir, outputDir: "../outside" }, ctx)).rejects.toThrow(
+        await expect(tool.execute({ webpageEvidenceDir, outputDir: "../outside" }, ctx)).rejects.toThrow(
           "outputDir must stay inside the current project directory",
         )
       },
     })
   })
 
-  test("rejects mirrorDir outside the current project", async () => {
+  test("rejects webpageEvidenceDir outside the current project", async () => {
     await using tmp = await tmpdir()
     await using outside = await tmpdir()
-    const outsideMirrorDir = await writeFixtureMirror(outside.path)
+    const outsideWebpageEvidenceDir = await writeFixtureMirror(outside.path)
 
     await Instance.provide({
       directory: tmp.path,
       fn: async () => {
         const tool = await WebClonePrepareContextTool.init()
-        await expect(tool.execute({ mirrorDir: outsideMirrorDir }, ctx)).rejects.toThrow(
-          "mirrorDir must stay inside the current project directory",
+        await expect(tool.execute({ webpageEvidenceDir: outsideWebpageEvidenceDir }, ctx)).rejects.toThrow(
+          "webpageEvidenceDir must stay inside the current project directory",
         )
       },
     })
   })
 
-  test("rejects a mirror package whose reference image has a fake PNG header", async () => {
+  test("rejects a webpage evidence package whose reference image has a fake PNG header", async () => {
     await using tmp = await tmpdir()
-    const mirrorDir = await writeFixtureMirror(tmp.path)
-    await Bun.write(path.join(mirrorDir, "reference.png"), fakePngWithoutIhdr())
+    const webpageEvidenceDir = await writeFixtureMirror(tmp.path)
+    await Bun.write(path.join(webpageEvidenceDir, "reference.png"), fakePngWithoutIhdr())
 
     await Instance.provide({
       directory: tmp.path,
       fn: async () => {
         const tool = await WebClonePrepareContextTool.init()
-        await expect(tool.execute({ mirrorDir }, ctx)).rejects.toThrow("IHDR")
+        await expect(tool.execute({ webpageEvidenceDir }, ctx)).rejects.toThrow("IHDR")
       },
     })
   })
 })
 
 async function writeFixtureMirror(root: string): Promise<string> {
-  const mirrorDir = path.join(root, "mirror")
-  await Bun.write(path.join(mirrorDir, "reference.png"), minimalPngBytes())
-  await Bun.write(path.join(mirrorDir, "capture.html"), "<!doctype html><main>Economic calendar</main>")
-  await Bun.write(path.join(mirrorDir, "singlefile.html"), "<!doctype html><main>Economic calendar SingleFile</main>")
-  await Bun.write(path.join(mirrorDir, "extracted-page.json"), JSON.stringify({
+  const webpageEvidenceDir = path.join(root, "mirror")
+  await Bun.write(path.join(webpageEvidenceDir, "reference.png"), minimalPngBytes())
+  await Bun.write(path.join(webpageEvidenceDir, "capture.html"), "<!doctype html><main>Economic calendar</main>")
+  await Bun.write(path.join(webpageEvidenceDir, "singlefile.html"), "<!doctype html><main>Economic calendar SingleFile</main>")
+  await Bun.write(path.join(webpageEvidenceDir, "extracted-page.json"), JSON.stringify({
     url: "https://example.com/markets",
     viewport: { width: 1366, height: 768 },
   }, null, 2))
-  await Bun.write(path.join(mirrorDir, "page.ir.json"), JSON.stringify({ version: 1 }, null, 2))
-  await Bun.write(path.join(mirrorDir, "segments.json"), JSON.stringify({ segments: [] }, null, 2))
-  await Bun.write(path.join(mirrorDir, "codegen-context.json"), JSON.stringify({ version: 1 }, null, 2))
-  await Bun.write(path.join(mirrorDir, "source-skeleton", "README.md"), "Use this source skeleton as the implementation handoff.")
-  await Bun.write(path.join(mirrorDir, "source-skeleton", "index.html"), `
+  await Bun.write(path.join(webpageEvidenceDir, "page.ir.json"), JSON.stringify({ version: 1 }, null, 2))
+  await Bun.write(path.join(webpageEvidenceDir, "segments.json"), JSON.stringify({ segments: [] }, null, 2))
+  await Bun.write(path.join(webpageEvidenceDir, "codegen-context.json"), JSON.stringify({ version: 1 }, null, 2))
+  await Bun.write(path.join(webpageEvidenceDir, "source-skeleton", "README.md"), "Use this source skeleton as the implementation handoff.")
+  await Bun.write(path.join(webpageEvidenceDir, "source-skeleton", "index.html"), `
     <main class="economic-calendar">
       <nav><a href="/markets">Markets</a></nav>
       <h1>Economic calendar</h1>
@@ -178,19 +178,19 @@ async function writeFixtureMirror(root: string): Promise<string> {
       </table>
     </main>
   `)
-  await Bun.write(path.join(mirrorDir, "source-skeleton", "critical.css"), ".economic-calendar { display: grid; }")
-  await Bun.write(path.join(mirrorDir, "source-skeleton", "full-source.css"), ".economic-calendar { display: grid; }")
-  await Bun.write(path.join(mirrorDir, "source-skeleton", "used-selectors.json"), JSON.stringify({ rules: [] }, null, 2))
-  await Bun.write(path.join(mirrorDir, "source-skeleton", "skeleton-manifest.json"), JSON.stringify({ version: 1 }, null, 2))
-  await Bun.write(path.join(mirrorDir, "source-skeleton", "source-skeleton-audit.json"), JSON.stringify({ passed: true }, null, 2))
-  await Bun.write(path.join(mirrorDir, "source-ir", "source-quality-audit.json"), JSON.stringify({ passed: true }, null, 2))
-  await Bun.write(path.join(mirrorDir, "source-ir", "component-tree.json"), JSON.stringify({
+  await Bun.write(path.join(webpageEvidenceDir, "source-skeleton", "critical.css"), ".economic-calendar { display: grid; }")
+  await Bun.write(path.join(webpageEvidenceDir, "source-skeleton", "full-source.css"), ".economic-calendar { display: grid; }")
+  await Bun.write(path.join(webpageEvidenceDir, "source-skeleton", "used-selectors.json"), JSON.stringify({ rules: [] }, null, 2))
+  await Bun.write(path.join(webpageEvidenceDir, "source-skeleton", "skeleton-manifest.json"), JSON.stringify({ version: 1 }, null, 2))
+  await Bun.write(path.join(webpageEvidenceDir, "source-skeleton", "source-skeleton-audit.json"), JSON.stringify({ passed: true }, null, 2))
+  await Bun.write(path.join(webpageEvidenceDir, "source-ir", "source-quality-audit.json"), JSON.stringify({ passed: true }, null, 2))
+  await Bun.write(path.join(webpageEvidenceDir, "source-ir", "component-tree.json"), JSON.stringify({
     components: [
       { name: "EconomicCalendarShell", kind: "navigation", tag: "main", textPreview: ["Markets", "Economic calendar"] },
       { name: "EconomicCalendarTable", kind: "table", tag: "table", textPreview: ["08:30", "GDP Growth Rate"] },
     ],
   }, null, 2))
-  await Bun.write(path.join(mirrorDir, "source-ir", "content-model.json"), JSON.stringify({
+  await Bun.write(path.join(webpageEvidenceDir, "source-ir", "content-model.json"), JSON.stringify({
     tables: [{
       title: "Economic data",
       headers: ["Time", "Country", "Event", "Actual"],
@@ -201,18 +201,18 @@ async function writeFixtureMirror(root: string): Promise<string> {
     }],
     repeatedGroups: [{ title: "Calendar rows", sampleTexts: ["08:30 US GDP Growth Rate 2.1%", "09:45 US Manufacturing PMI 51.3"] }],
   }, null, 2))
-  await Bun.write(path.join(mirrorDir, "source-ir", "style-tokens.json"), JSON.stringify({ colors: [{ name: "text", value: "#111827" }] }, null, 2))
-  await Bun.write(path.join(mirrorDir, "source-ir", "interaction-hints.json"), JSON.stringify({ controls: [{ type: "link", label: "Markets", href: "/markets" }] }, null, 2))
-  await Bun.write(path.join(mirrorDir, "source-ir", "interaction-state-snapshots.json"), JSON.stringify({
+  await Bun.write(path.join(webpageEvidenceDir, "source-ir", "style-tokens.json"), JSON.stringify({ colors: [{ name: "text", value: "#111827" }] }, null, 2))
+  await Bun.write(path.join(webpageEvidenceDir, "source-ir", "interaction-hints.json"), JSON.stringify({ controls: [{ type: "link", label: "Markets", href: "/markets" }] }, null, 2))
+  await Bun.write(path.join(webpageEvidenceDir, "source-ir", "interaction-state-snapshots.json"), JSON.stringify({
     version: 1,
     source: { url: "https://example.com/markets", viewport: { width: 1366, height: 768 } },
     snapshots: [{ id: "initial", scrollY: 0 }],
   }, null, 2))
-  await Bun.write(path.join(mirrorDir, "source-ir", "layout-map.json"), JSON.stringify({ regions: [] }, null, 2))
-  await Bun.write(path.join(mirrorDir, "assets", "manifest.json"), JSON.stringify({
+  await Bun.write(path.join(webpageEvidenceDir, "source-ir", "layout-map.json"), JSON.stringify({ regions: [] }, null, 2))
+  await Bun.write(path.join(webpageEvidenceDir, "assets", "manifest.json"), JSON.stringify({
     assets: [{ id: "asset_000001", kind: "svg-path-data", path: "assets/svg/asset_000001.path.txt", semanticRole: "svg-geometry" }],
   }, null, 2))
-  return mirrorDir
+  return webpageEvidenceDir
 }
 
 function minimalPngBytes(): Uint8Array {

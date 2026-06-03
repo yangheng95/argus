@@ -131,7 +131,7 @@ Use this skill.
     }
   })
 
-  test("mirror extraction skills are visible only to frontend-design", async () => {
+  test("webpage evidence extraction skills are visible only to frontend-design", async () => {
     await using tmp = await tmpdir({ git: true })
     const home = process.env.OPENCORVUS_TEST_HOME
     process.env.OPENCORVUS_TEST_HOME = tmp.path

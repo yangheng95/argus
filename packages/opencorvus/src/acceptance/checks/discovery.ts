@@ -46,7 +46,7 @@ export function resolvedChecks(
     ...(config.startup ? { startup: config.startup } : {}),
     ...(config.artifact ? { artifact: config.artifact } : autoArtifact()),
     ...(config.visual ? { visual: config.visual } : {}),
-    ...(config.puppeteer ? { puppeteer: config.puppeteer } : {}),
+    ...(config.playwright ? { playwright: config.playwright } : {}),
     ...(config.ui_review ? { ui_review: config.ui_review } : {}),
     ...(config.code_quality ? { code_quality: config.code_quality } : {}),
     ...(config.code_review ? { code_review: config.code_review } : {}),

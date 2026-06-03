@@ -24,7 +24,7 @@ describe("agent context tools", () => {
   // matrix locked 2026-05-19 after intent-analysis abused websearch ×8 at the
   // classification stage:
   //   requirements / architect  → keep  (durable greenfield tech decisions)
-  //   frontend-design            → drop  (owns mirror extraction; redundant)
+  //   frontend-design            → drop  (owns webpage evidence extraction; redundant)
   //   intent-analysis           → drop  (first cheap classifier; must not research)
   //   research                  → drop  (starts from source URLs with webfetch; search costs are avoided)
   //   frontend-research         → drop  (starts from source URLs and prepared evidence with webfetch; search costs are avoided)

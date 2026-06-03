@@ -37,7 +37,7 @@ describe("tool.web_clone_source_audit", () => {
 
   test("writes a failing audit for default framework scaffold output", async () => {
     await using tmp = await tmpdir()
-    const mirrorDir = await writeFixtureMirror(tmp.path)
+    const webpageEvidenceDir = await writeFixtureMirror(tmp.path)
     const projectDir = path.join(tmp.path, "app")
     await Bun.write(path.join(projectDir, "src", "App.tsx"), `
       import reactLogo from './assets/react.svg'
@@ -52,7 +52,7 @@ describe("tool.web_clone_source_audit", () => {
       directory: tmp.path,
       fn: async () => {
         const tool = await WebCloneSourceAuditTool.init()
-        const result = await tool.execute({ projectDir, sourcePackageDir: mirrorDir }, ctx)
+        const result = await tool.execute({ projectDir, sourcePackageDir: webpageEvidenceDir }, ctx)
 
         expect(result.title).toBe("Source-skeleton consumption audit failed")
         expect(result.output).toContain("Passed: false")
@@ -66,7 +66,7 @@ describe("tool.web_clone_source_audit", () => {
 
   test("writes a passing audit for a component/data-loop implementation", async () => {
     await using tmp = await tmpdir()
-    const mirrorDir = await writeFixtureMirror(tmp.path)
+    const webpageEvidenceDir = await writeFixtureMirror(tmp.path)
     const projectDir = path.join(tmp.path, "app")
     await Bun.write(path.join(projectDir, "src", "data", "calendar.ts"), `
       export const calendarEvents = [
@@ -91,7 +91,7 @@ describe("tool.web_clone_source_audit", () => {
       directory: tmp.path,
       fn: async () => {
         const tool = await WebCloneSourceAuditTool.init()
-        const result = await tool.execute({ projectDir, sourcePackageDir: mirrorDir }, ctx)
+        const result = await tool.execute({ projectDir, sourcePackageDir: webpageEvidenceDir }, ctx)
 
         expect(result.title).toBe("Source-skeleton consumption audit passed")
         expect(result.output).toContain("Passed: true")
@@ -102,7 +102,7 @@ describe("tool.web_clone_source_audit", () => {
 
   test("rejects outputPath outside the audited project directory", async () => {
     await using tmp = await tmpdir()
-    const mirrorDir = await writeFixtureMirror(tmp.path)
+    const webpageEvidenceDir = await writeFixtureMirror(tmp.path)
     const projectDir = path.join(tmp.path, "app")
     await writePassingProject(projectDir)
 
@@ -111,7 +111,7 @@ describe("tool.web_clone_source_audit", () => {
       fn: async () => {
         const tool = await WebCloneSourceAuditTool.init()
         await expect(
-          tool.execute({ projectDir, sourcePackageDir: mirrorDir, outputPath: "../audit.json" }, ctx),
+          tool.execute({ projectDir, sourcePackageDir: webpageEvidenceDir, outputPath: "../audit.json" }, ctx),
         ).rejects.toThrow("outputPath must stay inside the audited project directory")
       },
     })
@@ -140,9 +140,9 @@ async function writePassingProject(projectDir: string): Promise<void> {
 }
 
 async function writeFixtureMirror(root: string): Promise<string> {
-  const mirrorDir = path.join(root, "web-clone-source")
-  await Bun.write(path.join(mirrorDir, "reference.png"), minimalPngBytes())
-  await Bun.write(path.join(mirrorDir, "source-skeleton", "index.html"), `
+  const webpageEvidenceDir = path.join(root, "web-clone-source")
+  await Bun.write(path.join(webpageEvidenceDir, "reference.png"), minimalPngBytes())
+  await Bun.write(path.join(webpageEvidenceDir, "source-skeleton", "index.html"), `
     <main class="economic-calendar">
       <nav><a href="/markets">Markets</a></nav>
       <h1>Economic calendar</h1>
@@ -155,14 +155,14 @@ async function writeFixtureMirror(root: string): Promise<string> {
       </table>
     </main>
   `)
-  await Bun.write(path.join(mirrorDir, "source-skeleton", "critical.css"), ".economic-calendar { display: grid; }")
-  await Bun.write(path.join(mirrorDir, "source-ir", "component-tree.json"), JSON.stringify({
+  await Bun.write(path.join(webpageEvidenceDir, "source-skeleton", "critical.css"), ".economic-calendar { display: grid; }")
+  await Bun.write(path.join(webpageEvidenceDir, "source-ir", "component-tree.json"), JSON.stringify({
     components: [
       { name: "EconomicCalendarShell", textPreview: ["Markets", "Economic calendar"] },
       { name: "EconomicCalendarTable", textPreview: ["08:30", "GDP Growth Rate"] },
     ],
   }, null, 2))
-  await Bun.write(path.join(mirrorDir, "source-ir", "content-model.json"), JSON.stringify({
+  await Bun.write(path.join(webpageEvidenceDir, "source-ir", "content-model.json"), JSON.stringify({
     tables: [{
       headers: ["Time", "Country", "Event", "Actual"],
       rows: [
@@ -173,8 +173,8 @@ async function writeFixtureMirror(root: string): Promise<string> {
     repeatedGroups: [{ sampleTexts: ["08:30 US GDP Growth Rate 2.1%", "09:45 US Manufacturing PMI 51.3"] }],
     stats: { totalTables: 1, totalLists: 0, totalCards: 0, totalRepeatedGroups: 1 },
   }, null, 2))
-  await writeMinimalSourceManifest(mirrorDir)
-  return mirrorDir
+  await writeMinimalSourceManifest(webpageEvidenceDir)
+  return webpageEvidenceDir
 }
 
 async function writeMinimalSourceManifest(sourcePackageDir: string): Promise<void> {
@@ -183,8 +183,8 @@ async function writeMinimalSourceManifest(sourcePackageDir: string): Promise<voi
     version: 1,
     purpose: "web-clone-visible-source-package",
     provenance: {
-      source: "mirror",
-      mirrorDir: sourcePackageDir,
+      source: "webpage-evidence",
+      webpageEvidenceDir: sourcePackageDir,
       reference: { path: "reference.png", sha256: referenceSha256, width: 1, height: 1, bytes: minimalPngBytes().length },
     },
     files: [{ path: "reference.png", sha256: referenceSha256, bytes: minimalPngBytes().length, source: "mirror/reference.png" }],

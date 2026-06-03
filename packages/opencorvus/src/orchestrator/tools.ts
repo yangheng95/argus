@@ -2935,7 +2935,7 @@ export function createOrchestratorTools(input: {
             key: "fillable_modules",
             value: analysis.fillableModules,
             reason:
-              "Fillable module and slot plan derived from visual evidence, mirror artifacts, and the task-runtime web-clone-source package.",
+              "Fillable module and slot plan derived from visual evidence, webpage evidence artifacts, and the task-runtime web-clone-source package.",
           })
           decisionLog.append({
             phase: "frontend_design",
@@ -3013,7 +3013,7 @@ export function createOrchestratorTools(input: {
             key: "evidence_source_manifest",
             value: evidenceSourceManifest,
             reason:
-              "Source manifest naming the frontend template origin, task files, materialized images, mirror artifacts, and task-runtime web-clone-source package downstream agents can read.",
+              "Source manifest naming the frontend template origin, task files, materialized images, webpage evidence artifacts, and task-runtime web-clone-source package downstream agents can read.",
           })
           if (analysis.referenceArtifacts.length > 0) {
             decisionLog.append({

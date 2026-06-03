@@ -5,13 +5,13 @@ import { Tool } from "./tool"
 import { prepareWebCloneContext } from "../web-clone/context"
 
 export const WebClonePrepareContextTool = Tool.define("web_clone_prepare_context", {
-  description: `Prepare a visible, mandatory webpage-clone source package from an existing mirror handoff.
+  description: `Prepare a visible, mandatory webpage-clone source package from an existing webpage evidence handoff.
 
 This is a same-worktree host repair tool. It reads the current project/worktree's webpage-evidence/source-skeleton, webpage-evidence/source-ir, and webpage-evidence/assets summaries (legacy mirror/ paths are accepted only as compatibility aliases), then writes a project-root web-clone-source/ handoff containing implementation-blueprint.md, web-clone-context.md, web-clone-implementation-contract.json, source-skeleton/, source-ir/, reference.png, and reusable asset sidecars. Do not use it to chase primary-project paths, sibling worktrees, or absolute external directories. It does not re-extract webpages and does not generate application source.`,
   parameters: z.object({
-    mirrorDir: z
+    webpageEvidenceDir: z
       .string()
-      .describe("Directory containing reference.png, source-skeleton/, source-ir/, and optional assets/. Defaults to <execution directory>/mirror.")
+      .describe("Directory containing reference.png, source-skeleton/, source-ir/, and optional assets/. Defaults to <execution directory>/webpage-evidence.")
       .optional(),
     outputDir: z
       .string()
@@ -19,17 +19,17 @@ This is a same-worktree host repair tool. It reads the current project/worktree'
       .optional(),
   }),
   async execute(params) {
-    const mirrorDir = resolveInputPath(params.mirrorDir ?? path.join(Instance.directory, "mirror"))
+    const webpageEvidenceDir = resolveInputPath(params.webpageEvidenceDir ?? path.join(Instance.directory, "webpage-evidence"))
     const outputDir = params.outputDir
       ? resolveOutputPath(params.outputDir)
-      : path.join(path.dirname(mirrorDir), "web-clone-source")
-    assertInsideProject(mirrorDir, "mirrorDir")
+      : path.join(path.dirname(webpageEvidenceDir), "web-clone-source")
+    assertInsideProject(webpageEvidenceDir, "webpageEvidenceDir")
     assertInsideProject(outputDir, "outputDir")
-    const result = await prepareWebCloneContext({ mirrorDir, outputDir })
+    const result = await prepareWebCloneContext({ webpageEvidenceDir, outputDir })
     const output = [
       "# Web clone context prepared",
       "",
-      `- Mirror: ${result.mirrorDir}`,
+      `- Webpage evidence: ${result.webpageEvidenceDir}`,
       `- Visible source package: ${result.sourcePackageDir}`,
       `- Start here: ${result.sourceReadmePath}`,
       `- Context: ${result.contextPath}`,

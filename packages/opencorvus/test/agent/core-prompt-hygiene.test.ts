@@ -841,16 +841,16 @@ describe("core prompt hygiene", () => {
     expect(design).toContain("`webpage-evidence/assets/manifest.json` for dense CSS")
     expect(design).toContain("`webpage-evidence/segments.json` for implementation chunks")
     expect(design).toContain("`webpage-evidence/source-skeleton/index.html` as raw semantic HTML evidence")
-    expect(design).toContain("`webpage-evidence/shared-context.md` for compact design-token")
+    expect(design).toContain("`webpage-evidence/visual-surface-candidates.json` for deterministic candidate boundaries")
     expect(design).toContain(
-      "Do not read `webpage-evidence/extracted-page.json`, `webpage-evidence/capture.html`, or `webpage-evidence/image-analysis.json` wholesale",
+      "Do not read `webpage-evidence/extracted-page.json` or `webpage-evidence/capture.html` wholesale",
     )
     expect(design).not.toContain(
       "`webpage-evidence/extracted-page.json` or image/Figma analysis JSON for structure and style facts",
     )
   })
 
-  test("frontend-design core prompt does not repeat raw webpage mirror workflow", async () => {
+  test("frontend-design core prompt does not repeat raw webpage webpage evidence workflow", async () => {
     const design = await readPrompt("frontendDesign")
     expect(design).not.toContain("webpage_extract")
     expect(design).not.toContain("webpage_compile")

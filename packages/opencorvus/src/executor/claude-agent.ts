@@ -249,12 +249,13 @@ export namespace ClaudeAgentExecutor {
 
 function opencorvusMcpServers(input: z.infer<typeof CodingRunInput> | z.infer<typeof CodingResumeInput>) {
   const mcp = MCPServe.command(input.cwd ?? process.cwd())
+  const env = codingRuntimeEnv(input)
   return {
     [mcp.name]: {
       type: "stdio" as const,
       command: mcp.command,
       args: mcp.args,
-      env: codingRuntimeEnv(input),
+      ...(Object.keys(env).length > 0 ? { env } : {}),
     },
   }
 }
@@ -284,6 +285,10 @@ async function* execute(
 
   const run = client.run({
     prompt: input.prompt,
+    taskID: input.taskID,
+    logicalSessionID: input.logicalSessionID,
+    runtimeDir: input.runtimeDir,
+    worktreeDir: input.worktreeDir,
     model: input.model,
     cwd: input.cwd,
     system: input.system,

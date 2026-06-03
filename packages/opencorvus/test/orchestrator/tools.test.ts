@@ -518,8 +518,8 @@ async function writeMinimalSourceManifest(sourcePackageDir: string): Promise<voi
         version: 1,
         purpose: "web-clone-visible-source-package",
         provenance: {
-          source: "mirror",
-          mirrorDir: sourcePackageDir,
+          source: "webpage-evidence",
+          webpageEvidenceDir: sourcePackageDir,
           reference: {
             path: "reference.png",
             sha256: referenceSha256,
@@ -533,7 +533,7 @@ async function writeMinimalSourceManifest(sourcePackageDir: string): Promise<voi
             path: "reference.png",
             sha256: referenceSha256,
             bytes: minimalPngBytes().length,
-            source: "mirror/reference.png",
+            source: "webpage-evidence/reference.png",
           },
         ],
       },
@@ -2985,7 +2985,7 @@ describe("orchestrator tools", () => {
       frontendTemplate: "Frontend replica scope body",
       finalAcceptanceMode: "maintainable_replacement_required",
       fillableModules:
-        "Frontend fillable modules body. Use web-clone-source/README.md, web-clone-source/implementation-blueprint.md, web-clone-source/source-ir/component-tree.json, web-clone-source/source-ir/content-model.json, web-clone-source/source-skeleton/critical.css, and web-clone-source/reference.png as the development handoff; use raw mirror only as diagnostics for named gaps.",
+        "Frontend fillable modules body. Use web-clone-source/README.md, web-clone-source/implementation-blueprint.md, web-clone-source/source-ir/component-tree.json, web-clone-source/source-ir/content-model.json, web-clone-source/source-skeleton/critical.css, and web-clone-source/reference.png as the development handoff; use raw webpage evidence only as diagnostics for named gaps.",
       componentInventory: "Component inventory body.",
       qualityProjectContract:
         "High-quality target project body. Build semantic React source from the source skeleton, component modules, data modules, style modules, CSS sidecars, and verification commands.",
@@ -3032,25 +3032,25 @@ describe("orchestrator tools", () => {
         "web-clone-source/source-skeleton/critical.css",
         "web-clone-source/visual-surface-candidates.json",
         "web-clone-source/reference.png",
-        "mirror/reference.png",
-        "mirror/page.ir.json",
-        "mirror/assets/manifest.json",
-        "mirror/segments.json",
-        "mirror/codegen-context.json",
-        "mirror/source-skeleton/",
-        "mirror/source-skeleton/README.md",
-        "mirror/source-skeleton/index.html",
-        "mirror/source-skeleton/critical.css",
-        "mirror/source-skeleton/full-source.css",
-        "mirror/source-skeleton/used-selectors.json",
-        "mirror/source-skeleton/skeleton-manifest.json",
-        "mirror/source-skeleton/source-skeleton-audit.json",
-        "mirror/source-ir/component-tree.json",
-        "mirror/source-ir/content-model.json",
-        "mirror/source-ir/layout-map.json",
-        "mirror/source-ir/style-tokens.json",
-        "mirror/source-ir/interaction-hints.json",
-        "mirror/source-ir/source-quality-audit.json",
+        "webpage-evidence/reference.png",
+        "webpage-evidence/page.ir.json",
+        "webpage-evidence/assets/manifest.json",
+        "webpage-evidence/segments.json",
+        "webpage-evidence/codegen-context.json",
+        "webpage-evidence/source-skeleton/",
+        "webpage-evidence/source-skeleton/README.md",
+        "webpage-evidence/source-skeleton/index.html",
+        "webpage-evidence/source-skeleton/critical.css",
+        "webpage-evidence/source-skeleton/full-source.css",
+        "webpage-evidence/source-skeleton/used-selectors.json",
+        "webpage-evidence/source-skeleton/skeleton-manifest.json",
+        "webpage-evidence/source-skeleton/source-skeleton-audit.json",
+        "webpage-evidence/source-ir/component-tree.json",
+        "webpage-evidence/source-ir/content-model.json",
+        "webpage-evidence/source-ir/layout-map.json",
+        "webpage-evidence/source-ir/style-tokens.json",
+        "webpage-evidence/source-ir/interaction-hints.json",
+        "webpage-evidence/source-ir/source-quality-audit.json",
       ],
       openQuestions: ["Live feed authentication is unknown."],
       report: {
@@ -3063,7 +3063,7 @@ describe("orchestrator tools", () => {
           "maintainable_replacement_required",
           "",
           "## Fillable Modules",
-          "Frontend fillable modules body. Use web-clone-source/README.md, web-clone-source/implementation-blueprint.md, web-clone-source/source-ir/component-tree.json, web-clone-source/source-ir/content-model.json, web-clone-source/source-skeleton/critical.css, and web-clone-source/reference.png as the development handoff; use raw mirror only as diagnostics for named gaps.",
+          "Frontend fillable modules body. Use web-clone-source/README.md, web-clone-source/implementation-blueprint.md, web-clone-source/source-ir/component-tree.json, web-clone-source/source-ir/content-model.json, web-clone-source/source-skeleton/critical.css, and web-clone-source/reference.png as the development handoff; use raw webpage evidence only as diagnostics for named gaps.",
           "",
           "## Implementation Problems And Agent Handoff",
           "Complete enough for downstream implementation.",
@@ -3149,11 +3149,11 @@ describe("orchestrator tools", () => {
         expect(template).toContain("measured visual comparison")
         expect(manifest).toContain(`Canonical frontend_design public report file: ${paths.templateRelative}`)
         expect(manifest).toContain("design-reference.png")
-        expect(manifest).toContain("mirror/reference.png")
-        expect(manifest).toContain("mirror/page.ir.json")
-        expect(manifest).toContain("mirror/assets/manifest.json")
-        expect(manifest).toContain("mirror/segments.json")
-        expect(manifest).toContain("mirror/codegen-context.json")
+        expect(manifest).toContain("webpage-evidence/reference.png")
+        expect(manifest).toContain("webpage-evidence/page.ir.json")
+        expect(manifest).toContain("webpage-evidence/assets/manifest.json")
+        expect(manifest).toContain("webpage-evidence/segments.json")
+        expect(manifest).toContain("webpage-evidence/codegen-context.json")
         expect(manifest).toContain("web-clone-source/implementation-blueprint.md")
         expect(manifest).toContain("web-clone-source/source-skeleton/critical.css")
         expect(manifest).toContain("web-clone-source/source-ir/content-model.json")
@@ -3369,20 +3369,20 @@ describe("orchestrator tools", () => {
           phase: "frontend_design",
           key: "reference_artifacts",
           value:
-            "mirror/reference.png\n" +
-            "mirror/source-skeleton/README.md\n" +
-            "mirror/source-skeleton/index.html\n" +
-            "mirror/source-skeleton/styles.css\n" +
-            "mirror/source-skeleton/critical.css\n" +
-            "mirror/source-skeleton/full-source.css\n" +
-            "mirror/source-skeleton/used-selectors.json\n" +
-            "mirror/source-skeleton/source-skeleton-audit.json\n" +
-            "mirror/source-ir/component-tree.json\n" +
-            "mirror/source-ir/content-model.json\n" +
-            "mirror/source-ir/layout-map.json\n" +
-            "mirror/source-ir/style-tokens.json\n" +
-            "mirror/source-ir/interaction-hints.json\n" +
-            "mirror/source-ir/source-quality-audit.json",
+            "webpage-evidence/reference.png\n" +
+            "webpage-evidence/source-skeleton/README.md\n" +
+            "webpage-evidence/source-skeleton/index.html\n" +
+            "webpage-evidence/source-skeleton/styles.css\n" +
+            "webpage-evidence/source-skeleton/critical.css\n" +
+            "webpage-evidence/source-skeleton/full-source.css\n" +
+            "webpage-evidence/source-skeleton/used-selectors.json\n" +
+            "webpage-evidence/source-skeleton/source-skeleton-audit.json\n" +
+            "webpage-evidence/source-ir/component-tree.json\n" +
+            "webpage-evidence/source-ir/content-model.json\n" +
+            "webpage-evidence/source-ir/layout-map.json\n" +
+            "webpage-evidence/source-ir/style-tokens.json\n" +
+            "webpage-evidence/source-ir/interaction-hints.json\n" +
+            "webpage-evidence/source-ir/source-quality-audit.json",
           reason: "web_clone_source_skeleton",
         })
 

@@ -210,7 +210,7 @@ export const EngineTaskTable = sqliteTable(
      *  user's behalf — never part of the user's contract:
      *    `source: "url-screenshot"`  — frontend_design URL captures
      *    `source: "material"`        — frontend_design local file reads
-     *    `source: "puppeteer"`       — acceptance rendered.png captures
+     *    `source: "playwright"`      — acceptance rendered.png captures
      *  Read ONLY by acceptance (visual diff against user attachments). Never
      *  fed to requirements/frontend-design as user intent. Losing one of these
      *  on disk is a soft failure: the consuming agent skips it; it does NOT

@@ -408,15 +408,13 @@ export namespace AttachmentStore {
   }
 
   /** Subdirectory under each build worktree where staged user-contract
-   *  attachments live. Single source — all callers (build agent, skill
-   *  text, image-generate prompt) reference this constant. */
+   *  attachments live. Single source for build-reference staging. */
   export const STAGED_REFERENCES_SUBDIR = "references"
 
   /**
    * Copy each multimodal task attachment into `<worktreeDir>/references/<file>`
    * so the build agent can pass worktree-LOCAL relative paths to sandboxed
-   * tools (e.g. `webpage_image_extract` rejects any path outside the worktree
-   * via `loadImage`'s sandbox check).
+   * tools that require worktree-local paths.
    *
    * Why copy not symlink: cross-FS robustness on Windows (symlinks need admin
    * by default) and content-addressed inputs are small enough that a copy

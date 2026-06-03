@@ -23,8 +23,8 @@ const runE2E = process.env.OPENCORVUS_RUN_WEB_CLONE_E2E === "1" || process.env.O
 const runFrontendDesignAgentE2E = process.env.OPENCORVUS_RUN_FRONTEND_DESIGN_AGENT_E2E === "1" || process.env.OPENCORVUS_RUN_FRONTEND_DESIGN_AGENT_E2E === "true"
 const e2eTest = runE2E ? test : test.skip
 const repoRoot = path.resolve(import.meta.dir, "../../../..")
-const defaultMirrorDir = path.join(repoRoot, ".tmp", "source-skeleton-tradingview-v2h", "mirror")
-const mirrorDir = path.resolve(process.env.OPENCORVUS_WEB_CLONE_E2E_MIRROR ?? defaultMirrorDir)
+const defaultWebpageEvidenceDir = path.join(repoRoot, ".tmp", "source-skeleton-tradingview-v2h", "mirror")
+const webpageEvidenceDir = path.resolve(process.env.OPENCORVUS_WEB_CLONE_E2E_WEBPAGE_EVIDENCE ?? defaultWebpageEvidenceDir)
 const outputDir = path.resolve(process.env.OPENCORVUS_WEB_CLONE_E2E_OUTPUT ?? path.join(repoRoot, ".tmp", "opencorvus-web-clone-e2e-output"))
 const frontendDesignBenchmarkTaskID = process.env.OPENCORVUS_FRONTEND_DESIGN_TASK_ID ?? `tsk_web_clone_frontend_design_e2e_${Date.now().toString(16)}`
 const frontendDesignProjectDir = process.env.OPENCORVUS_FRONTEND_DESIGN_PROJECT_DIR ? path.resolve(process.env.OPENCORVUS_FRONTEND_DESIGN_PROJECT_DIR) : undefined
@@ -330,7 +330,7 @@ describe("web clone source project E2E", () => {
       sourcePackageDir: ".opencorvus/runtime/tasks/tsk_test/frontend-design/web-clone-source",
       skeletonProjectDir: ".opencorvus/runtime/tasks/tsk_test/frontend-design/frontend-design-skeleton",
       targetProjectDir: ".opencorvus/runtime/tasks/tsk_test/frontend-design/frontend-design-target",
-      mirrorDir: ".tmp/mirror",
+      webpageEvidenceDir: ".tmp/mirror",
     })
 
     expect(request).toContain("Call `create_frontend_skeleton_project`")
@@ -369,7 +369,7 @@ describe("web clone source project E2E", () => {
   })
 
   e2eTest("runs the OpenCorvus tool chain and enforces the visual threshold", async () => {
-    await assertDirectory(mirrorDir)
+    await assertDirectory(webpageEvidenceDir)
     if (frontendDesignProjectDir) await assertDirectory(frontendDesignProjectDir)
     if (frontendDesignProcessTracePath) await assertFile(frontendDesignProcessTracePath)
     if (frontendDesignIterationStatePath) await assertFile(frontendDesignIterationStatePath)
@@ -386,7 +386,7 @@ describe("web clone source project E2E", () => {
         const targetProjectDir = runFrontendDesignAgentE2E
           ? path.join(path.dirname(frontendDesignPaths.skeletonProjectAbsolute), "frontend-design-target")
           : frontendDesignProjectDir ?? outputDir
-        const trace = createBenchmarkProcessTrace({ sourcePackageDir: mirrorDir, outputDir: targetProjectDir })
+        const trace = createBenchmarkProcessTrace({ sourcePackageDir: webpageEvidenceDir, outputDir: targetProjectDir })
         const toolIds = await ToolRegistry.ids()
         expect(toolIds).toContain("web_clone_prepare_context")
         expect(toolIds).toContain("web_clone_source_audit")
@@ -406,7 +406,7 @@ describe("web clone source project E2E", () => {
 
         const prepareTool = await WebClonePrepareContextTool.init()
         const context = await prepareTool.execute({
-          mirrorDir,
+          webpageEvidenceDir,
           outputDir: runFrontendDesignAgentE2E ? frontendDesignPaths.sourcePackageAbsolute : undefined,
         }, ctx)
         expect(context.title).toBe("Web clone context prepared")
@@ -415,7 +415,7 @@ describe("web clone source project E2E", () => {
           kind: "tool",
           name: "web_clone_prepare_context",
           status: "passed",
-          details: { mirrorDir, title: context.title },
+          details: { webpageEvidenceDir, title: context.title },
         })
 
         if (runFrontendDesignAgentE2E) {
@@ -429,7 +429,7 @@ describe("web clone source project E2E", () => {
               sourcePackageDir: context.metadata.sourcePackageDir,
               skeletonProjectDir,
               targetProjectDir,
-              mirrorDir,
+              webpageEvidenceDir,
             }),
             taskID: frontendDesignBenchmarkTaskID,
             parentSessionID: frontendDesignParentSessionID,
@@ -560,7 +560,7 @@ describe("web clone source project E2E", () => {
             trace.processAudit.passed === true,
           threshold,
           worstThreshold,
-          mirrorDir,
+          webpageEvidenceDir,
           outputDir: targetProjectDir,
           skeletonProjectDir,
           processTrace: path.join(acceptanceDir, "web-clone-benchmark-process-trace.json"),
@@ -612,12 +612,12 @@ function buildFrontendDesignAgentBenchmarkRequest(input: {
   sourcePackageDir: string
   skeletonProjectDir: string
   targetProjectDir: string
-  mirrorDir: string
+  webpageEvidenceDir: string
 }): string {
   return [
     "Run the frontend-design rawproject refinement benchmark for the prepared webpage clone source package.",
     "",
-    `Mirror evidence: ${input.mirrorDir}`,
+    `Mirror evidence: ${input.webpageEvidenceDir}`,
     `Prepared web-clone-source package: ${input.sourcePackageDir}`,
     `Frontend-design skeleton evidence project: ${input.skeletonProjectDir}`,
     `Frontend-design target acceptance project: ${input.targetProjectDir}`,
@@ -932,7 +932,7 @@ function evaluateBenchmarkProcessTrace(trace: BenchmarkProcessTrace): BenchmarkP
 
 async function assertDirectory(dir: string): Promise<void> {
   const stat = await fs.stat(dir).catch(() => undefined)
-  if (!stat?.isDirectory()) throw new Error(`web clone e2e mirror directory does not exist: ${dir}`)
+  if (!stat?.isDirectory()) throw new Error(`web clone e2e webpage evidence directory does not exist: ${dir}`)
 }
 
 async function assertFile(file: string): Promise<void> {

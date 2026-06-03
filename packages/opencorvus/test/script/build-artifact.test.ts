@@ -56,7 +56,7 @@ describe("build-artifact", () => {
       "src/mcp/browser/perf.ts",
       "src/mcp/browser/sessions.ts",
       "src/mcp/browser/tools.ts",
-      "src/mirror/url/extract.ts",
+      "src/browser/webpage/extract.ts",
     ]
     for (const file of files) {
       const source = readFileSync(resolve(import.meta.dir, "../../", file), "utf8")
