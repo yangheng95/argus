@@ -109,9 +109,29 @@ if ((import.meta as any).hot) {
 }
 const listenerOpts = { signal: moduleTeardown.signal } as const
 
+const BROWSER_RESIZE_OBSERVER_DELIVERY_MESSAGES = new Set([
+  "ResizeObserver loop completed with undelivered notifications.",
+  "ResizeObserver loop limit exceeded",
+])
+
+function runtimeErrorMessage(error: unknown): string {
+  return error instanceof Error ? error.message : String(error)
+}
+
+function isBrowserResizeObserverDeliveryError(error: unknown): boolean {
+  return BROWSER_RESIZE_OBSERVER_DELIVERY_MESSAGES.has(runtimeErrorMessage(error))
+}
+
 function reportOverlayRuntimeError(scope: string, error: unknown): void {
   const details = formatErrorDetails(error)
-  const message = error instanceof Error ? error.message : String(error)
+  const message = runtimeErrorMessage(error)
+  if (isBrowserResizeObserverDeliveryError(error)) {
+    AppLog.debug("runtime", scope, {
+      message,
+      details,
+    })
+    return
+  }
   AppLog.error("runtime", scope, {
     message,
     details,
