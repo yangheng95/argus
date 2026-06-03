@@ -37230,6 +37230,18 @@
           "status"
         ]
       },
+      "MCPStatusDisconnected": {
+        "type": "object",
+        "properties": {
+          "status": {
+            "type": "string",
+            "const": "disconnected"
+          }
+        },
+        "required": [
+          "status"
+        ]
+      },
       "MCPStatusFailed": {
         "type": "object",
         "properties": {
@@ -37281,6 +37293,9 @@
           },
           {
             "$ref": "#/components/schemas/MCPStatusDisabled"
+          },
+          {
+            "$ref": "#/components/schemas/MCPStatusDisconnected"
           },
           {
             "$ref": "#/components/schemas/MCPStatusFailed"

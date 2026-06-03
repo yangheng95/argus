@@ -3288,6 +3288,10 @@ export type McpStatusDisabled = {
   status: "disabled"
 }
 
+export type McpStatusDisconnected = {
+  status: "disconnected"
+}
+
 export type McpStatusFailed = {
   status: "failed"
   error: string
@@ -3305,6 +3309,7 @@ export type McpStatusNeedsClientRegistration = {
 export type McpStatus =
   | McpStatusConnected
   | McpStatusDisabled
+  | McpStatusDisconnected
   | McpStatusFailed
   | McpStatusNeedsAuth
   | McpStatusNeedsClientRegistration

@@ -161,6 +161,9 @@ export const McpListCommand = cmd({
           } else if (status.status === "disabled") {
             statusIcon = "○"
             statusText = "disabled"
+          } else if (status.status === "disconnected") {
+            statusIcon = "○"
+            statusText = "disconnected"
           } else if (status.status === "needs_auth") {
             statusIcon = "⚠"
             statusText = "needs authentication"
