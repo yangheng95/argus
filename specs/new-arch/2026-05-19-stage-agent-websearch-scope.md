@@ -74,7 +74,7 @@ orchestrator（agent.ts diff: include 新增 `explore`）现在会主动派 expl
   `websearch` 亲自下场。host 守门正确拦截（agent.ts:278-296 故意不给编排器 websearch）。
 - 真根因是编排器**角色纪律**（rule 6.1：host 守门已正确工作，修 prompt 不修 host）。
 - 原方案给 intent-analysis / frontend-design 加 websearch 属**过度扩张**（rule 5）：
-  intent-analysis 实测在分类阶段 `websearch ×8` = 反模式；frontend-design 本职 mirror
+  intent-analysis 实测在分类阶段 `websearch ×8` = 反模式；frontend-design 本职网页证据
   提取，通用 web 搜索与其证据链冗余且诱发 score loop。
 
 修订（保留 §1-4 的单源收敛 + exa-mcp + explore/requirements/architect websearch）：
@@ -84,7 +84,7 @@ orchestrator（agent.ts diff: include 新增 `explore`）现在会主动派 expl
 | explore | 加 websearch | **保留** | 名副其实调研子 agent，webfetch 被反爬不够 |
 | requirements / architect | 加 websearch | **保留** | 产出持久技术决策，greenfield 核实选型是本职 |
 | intent-analysis | 加 websearch | **回退** | 首个廉价分类步，研究违背职责（×8 实证） |
-| frontend-design | 加 websearch | **回退** | 本职 mirror 提取，通用 web 搜索冗余 |
+| frontend-design | 加 websearch | **回退** | 本职网页证据提取，通用 web 搜索冗余 |
 | orchestrator | 未涉及 | **新增 prompt 纪律** | `orchestrator-core.txt` Mission 段：deliverable-shape-agnostic 禁止自产；显式禁 skill/websearch/webfetch/todowrite 自干，一律 dispatch |
 
 context-tools.ts / exa-mcp.ts 单源收敛与 explore/requirements/architect websearch **不回退**

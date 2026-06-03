@@ -13,7 +13,7 @@ import {
 describe("web-clone source skeleton consumption audit", () => {
   test("rejects a default Vite/React scaffold that ignores the skeleton", async () => {
     await using tmp = await tmpdir()
-    const webpageEvidenceDir = await writeFixtureMirror(tmp.path)
+    const webpageEvidenceDir = await writeFixtureEvidence(tmp.path)
     const projectDir = path.join(tmp.path, "app")
     await Bun.write(path.join(projectDir, "src", "App.tsx"), `
       import reactLogo from './assets/react.svg'
@@ -46,7 +46,7 @@ describe("web-clone source skeleton consumption audit", () => {
 
   test("does not count the web-clone-source handoff as implementation source", async () => {
     await using tmp = await tmpdir()
-    const webpageEvidenceDir = await writeFixtureMirror(tmp.path)
+    const webpageEvidenceDir = await writeFixtureEvidence(tmp.path)
     const projectDir = path.join(tmp.path, "app")
     await Bun.write(path.join(projectDir, "web-clone-source", "source-skeleton", "index.html"), `
       <main><h1>Economic calendar</h1><p>GDP Growth Rate</p></main>
@@ -64,7 +64,7 @@ describe("web-clone source skeleton consumption audit", () => {
 
   test("does not count the frontend-design skeleton sidecar as implementation source", async () => {
     await using tmp = await tmpdir()
-    const webpageEvidenceDir = await writeFixtureMirror(tmp.path)
+    const webpageEvidenceDir = await writeFixtureEvidence(tmp.path)
     const projectDir = path.join(tmp.path, "app")
     await writePassingProject(projectDir)
     await Bun.write(
@@ -86,7 +86,7 @@ describe("web-clone source skeleton consumption audit", () => {
 
   test("counts source JSON data modules as skeleton coverage and data arrays", async () => {
     await using tmp = await tmpdir()
-    const webpageEvidenceDir = await writeFixtureMirror(tmp.path)
+    const webpageEvidenceDir = await writeFixtureEvidence(tmp.path)
     const projectDir = path.join(tmp.path, "app")
     await Bun.write(path.join(projectDir, "src", "data", "calendar.json"), JSON.stringify([
       { time: "08:30", country: "US", event: "GDP Growth Rate", actual: "2.1%" },
@@ -120,7 +120,7 @@ describe("web-clone source skeleton consumption audit", () => {
 
   test("accepts a maintainable React implementation that consumes text, components, and repeated data", async () => {
     await using tmp = await tmpdir()
-    const webpageEvidenceDir = await writeFixtureMirror(tmp.path)
+    const webpageEvidenceDir = await writeFixtureEvidence(tmp.path)
     const projectDir = path.join(tmp.path, "app")
     await Bun.write(path.join(projectDir, "src", "data", "calendar.ts"), `
       export const calendarEvents = [
@@ -182,7 +182,7 @@ describe("web-clone source skeleton consumption audit", () => {
 
   test("accepts the frontend-design generated DOM/CSS baseline before component replacement", async () => {
     await using tmp = await tmpdir()
-    const sourcePackageDir = await writeFixtureMirror(tmp.path)
+    const sourcePackageDir = await writeFixtureEvidence(tmp.path)
     const projectDir = path.join(tmp.path, "frontend-design-skeleton")
 
     await generateWebCloneSkeletonProject({
@@ -208,7 +208,7 @@ describe("web-clone source skeleton consumption audit", () => {
 
   test("rejects frontend-design generated baseline as final maintainable replacement", async () => {
     await using tmp = await tmpdir()
-    const sourcePackageDir = await writeFixtureMirror(tmp.path)
+    const sourcePackageDir = await writeFixtureEvidence(tmp.path)
     const projectDir = path.join(tmp.path, "frontend-design-skeleton")
 
     await generateWebCloneSkeletonProject({
@@ -239,7 +239,7 @@ describe("web-clone source skeleton consumption audit", () => {
 
   test("rejects source-dom skeleton sidecars left in target app source", async () => {
     await using tmp = await tmpdir()
-    const sourcePackageDir = await writeFixtureMirror(tmp.path)
+    const sourcePackageDir = await writeFixtureEvidence(tmp.path)
     const projectDir = path.join(tmp.path, "app")
     await writePassingProject(projectDir)
     await Bun.write(path.join(projectDir, "src", "data", "sourceDomReplacementPlan.ts"), `
@@ -262,24 +262,24 @@ describe("web-clone source skeleton consumption audit", () => {
     expect(audit.findings.join("\n")).toContain("sourceDomReplacementPlan.ts")
   })
 
-  test("does not require the provenance mirror to be reachable after source package handoff", async () => {
+  test("does not require the provenance evidence package to be reachable after source package handoff", async () => {
     await using tmp = await tmpdir()
-    const sourcePackageDir = await writeFixtureMirror(tmp.path)
-    const staleWebpageEvidenceDir = path.join(tmp.path, "stale-runtime-mirror")
+    const sourcePackageDir = await writeFixtureEvidence(tmp.path)
+    const staleWebpageEvidenceDir = path.join(tmp.path, "stale-runtime-webpage-evidence")
     await Bun.write(path.join(staleWebpageEvidenceDir, ".keep"), "")
-    await writeSelfContainedManifestWithStaleMirror(sourcePackageDir, staleWebpageEvidenceDir)
+    await writeSelfContainedManifestWithStaleEvidence(sourcePackageDir, staleWebpageEvidenceDir)
     const projectDir = path.join(tmp.path, "app")
     await writePassingProject(projectDir)
 
     const audit = await auditWebCloneSourceSkeletonConsumption({ projectDir, sourcePackageDir })
 
     expect(audit.passed).toBe(true)
-    expect(audit.findings.join("\n")).not.toContain("Manifest source mirror file is missing")
+    expect(audit.findings.join("\n")).not.toContain("Manifest source evidence file is missing")
   })
 
   test("rejects a reference screenshot replay even when text coverage is perfect", async () => {
     await using tmp = await tmpdir()
-    const webpageEvidenceDir = await writeFixtureMirror(tmp.path)
+    const webpageEvidenceDir = await writeFixtureEvidence(tmp.path)
     const projectDir = path.join(tmp.path, "app")
     await Bun.write(path.join(projectDir, "src", "data", "calendar.ts"), `
       export const calendarEvents = [
@@ -316,7 +316,7 @@ describe("web-clone source skeleton consumption audit", () => {
 
   test("rejects hidden semantic layers used only to satisfy source coverage", async () => {
     await using tmp = await tmpdir()
-    const webpageEvidenceDir = await writeFixtureMirror(tmp.path)
+    const webpageEvidenceDir = await writeFixtureEvidence(tmp.path)
     const projectDir = path.join(tmp.path, "app")
     await writePassingProject(projectDir)
     await Bun.write(path.join(projectDir, "src", "components", "HiddenSourceCoverage.tsx"), `
@@ -356,7 +356,7 @@ describe("web-clone source skeleton consumption audit", () => {
 
   test("rejects dense inline SVG path payloads", async () => {
     await using tmp = await tmpdir()
-    const webpageEvidenceDir = await writeFixtureMirror(tmp.path)
+    const webpageEvidenceDir = await writeFixtureEvidence(tmp.path)
     const projectDir = path.join(tmp.path, "app")
     await writePassingProject(projectDir)
     const longPath = "M0 0 " + Array.from({ length: 700 }, (_, index) => `L${index} ${index % 37}`).join(" ")
@@ -386,7 +386,7 @@ describe("web-clone source skeleton consumption audit", () => {
 
   test("accepts large SVG structure when geometry is kept in sidecar asset references", async () => {
     await using tmp = await tmpdir()
-    const webpageEvidenceDir = await writeFixtureMirror(tmp.path)
+    const webpageEvidenceDir = await writeFixtureEvidence(tmp.path)
     const projectDir = path.join(tmp.path, "app")
     await writePassingProject(projectDir)
     const assetPaths = Array.from({ length: 220 }, (_, index) =>
@@ -423,7 +423,7 @@ describe("web-clone source skeleton consumption audit", () => {
 
   test("rejects a source package that contains output verification artifacts", async () => {
     await using tmp = await tmpdir()
-    const webpageEvidenceDir = await writeFixtureMirror(tmp.path)
+    const webpageEvidenceDir = await writeFixtureEvidence(tmp.path)
     const projectDir = path.join(tmp.path, "app")
     await writePassingProject(projectDir)
     await Bun.write(path.join(webpageEvidenceDir, "actual-app.png"), minimalPngBytes())
@@ -441,7 +441,7 @@ describe("web-clone source skeleton consumption audit", () => {
 
   test("consumption evidence reports a missing or stale audit when source-skeleton is cited", async () => {
     await using tmp = await tmpdir()
-    const webpageEvidenceDir = await writeFixtureMirror(tmp.path)
+    const webpageEvidenceDir = await writeFixtureEvidence(tmp.path)
     const projectDir = tmp.path
     await writePassingProject(projectDir)
     const citedText = "Use web-clone-source/source-skeleton/README.md and web-clone-source/source-ir/content-model.json"
@@ -492,7 +492,7 @@ describe("web-clone source skeleton consumption audit", () => {
 
   test("consumption evidence ignores unrelated passing audits outside the acceptance root", async () => {
     await using tmp = await tmpdir()
-    const sourcePackageDir = await writeFixtureMirror(tmp.path)
+    const sourcePackageDir = await writeFixtureEvidence(tmp.path)
     await writePassingProject(path.join(tmp.path, "toy-app"))
     await writeWebCloneSourceSkeletonConsumptionAudit({
       projectDir: path.join(tmp.path, "toy-app"),
@@ -511,7 +511,7 @@ describe("web-clone source skeleton consumption audit", () => {
 
   test("consumption evidence reports a canonical audit that points at a different project", async () => {
     await using tmp = await tmpdir()
-    const sourcePackageDir = await writeFixtureMirror(tmp.path)
+    const sourcePackageDir = await writeFixtureEvidence(tmp.path)
     const toyProjectDir = path.join(tmp.path, "toy-app")
     await writePassingProject(toyProjectDir)
     const { audit } = await writeWebCloneSourceSkeletonConsumptionAudit({
@@ -567,7 +567,7 @@ async function writePassingProject(projectDir: string): Promise<void> {
   `)
 }
 
-async function writeFixtureMirror(root: string): Promise<string> {
+async function writeFixtureEvidence(root: string): Promise<string> {
   const webpageEvidenceDir = path.join(root, "web-clone-source")
   await Bun.write(path.join(webpageEvidenceDir, "reference.png"), minimalPngBytes())
   await Bun.write(path.join(webpageEvidenceDir, "source-skeleton", "index.html"), `
@@ -644,11 +644,11 @@ async function writeMinimalSourceManifest(sourcePackageDir: string): Promise<voi
       webpageEvidenceDir: sourcePackageDir,
       reference: { path: "reference.png", sha256: referenceSha256, width: 1, height: 1, bytes: minimalPngBytes().length },
     },
-    files: [{ path: "reference.png", sha256: referenceSha256, bytes: minimalPngBytes().length, source: "mirror/reference.png" }],
+    files: [{ path: "reference.png", sha256: referenceSha256, bytes: minimalPngBytes().length, source: "webpage-evidence/reference.png" }],
   }, null, 2))
 }
 
-async function writeSelfContainedManifestWithStaleMirror(sourcePackageDir: string, staleWebpageEvidenceDir: string): Promise<void> {
+async function writeSelfContainedManifestWithStaleEvidence(sourcePackageDir: string, staleWebpageEvidenceDir: string): Promise<void> {
   const referenceBytes = await Bun.file(path.join(sourcePackageDir, "reference.png")).arrayBuffer()
   const skeletonBytes = await Bun.file(path.join(sourcePackageDir, "source-skeleton", "index.html")).arrayBuffer()
   const referenceSha256 = createHash("sha256").update(Buffer.from(referenceBytes)).digest("hex")
@@ -662,12 +662,12 @@ async function writeSelfContainedManifestWithStaleMirror(sourcePackageDir: strin
       reference: { path: "reference.png", sha256: referenceSha256, width: 1, height: 1, bytes: referenceBytes.byteLength },
     },
     files: [
-      { path: "reference.png", sha256: referenceSha256, bytes: referenceBytes.byteLength, source: "mirror/reference.png" },
+      { path: "reference.png", sha256: referenceSha256, bytes: referenceBytes.byteLength, source: "webpage-evidence/reference.png" },
       {
         path: "source-skeleton/index.html",
         sha256: skeletonSha256,
         bytes: skeletonBytes.byteLength,
-        source: "mirror/source-skeleton/index.html",
+        source: "webpage-evidence/source-skeleton/index.html",
       },
     ],
   }, null, 2))

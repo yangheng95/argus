@@ -70,8 +70,7 @@ instead of grepping flat strings.
 | `agent/agent.ts:510-511`                       | `generate()` resolves `Provider.defaultModel()` then `Provider.getModel()` raw                           |
 | `cli/cmd/debug/agent.ts:73-74`                 | debug tool listing uses `Provider.defaultModel()` raw                                                    |
 | `cli/cmd/debug/agent.ts:117-118`               | debug tool execution context uses `Provider.defaultModel()` raw                                          |
-| `mirror/tools/webpage-image-extract.ts:66-69`  | mirror image extract resolves configured/default model raw                                               |
-| `mirror/tools/webpage-vision-judge.ts:147-150` | mirror vision judge resolves configured/default model raw                                                |
+| `frontend-design/tools/webpage-vision-judge.ts` | frontend-design vision judge resolves configured/default model raw                                                |
 | `session/prompt/title.ts:35`                   | title generation resolves model raw                                                                      |
 | `task-api/index.ts:1596`                       | follow-up summary model resolves raw                                                                     |
 

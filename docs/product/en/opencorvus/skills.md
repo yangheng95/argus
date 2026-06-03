@@ -34,12 +34,11 @@ Sessions receive a Skill Policy block that lists available skills. Agents should
 
 ## Built-in skills
 
-Shipped with the binary (`src/skill/skill.ts`), exactly three:
+Shipped with the binary (`src/skill/skill.ts`), exactly two:
 
 | Name | Purpose |
 |---|---|
-| `webpage-generate` | Produce a mirror-grounded frontend template for a live webpage reference |
-| `image-generate` | Produce a mirror-grounded frontend template from screenshot-only visual references |
+| `webpage-generate` | Produce a webpage-evidence-grounded frontend template for a live webpage reference |
 | `research-report` | Produce a sourced Markdown research report using `websearch` and targeted `webfetch` |
 
 Other skills must be loaded through configured skill paths or URLs if you need them.

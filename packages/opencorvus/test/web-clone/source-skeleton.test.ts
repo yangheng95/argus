@@ -279,7 +279,7 @@ describe("web-clone source skeleton", () => {
 
   test("does not leak extracted style or script placeholder text into visible skeleton HTML", async () => {
     await using tmp = await tmpdir()
-    const webpageEvidenceDir = path.join(tmp.path, "mirror")
+    const webpageEvidenceDir = path.join(tmp.path, "webpage-evidence")
     const extraction = extractArchiveHtml({
       html: `<!doctype html><html><head>
         <style>.__WEB_CLONE_CSS_ASSET_0__ { color: red; }</style>
@@ -310,7 +310,7 @@ describe("web-clone source skeleton", () => {
 
   test("omits hidden single-file duplicate nodes from visible skeleton HTML", async () => {
     await using tmp = await tmpdir()
-    const webpageEvidenceDir = path.join(tmp.path, "mirror")
+    const webpageEvidenceDir = path.join(tmp.path, "webpage-evidence")
     const extraction = extractArchiveHtml({
       html: `<!doctype html><html><head>
         <style>.visible { display: block; }</style>
@@ -344,7 +344,7 @@ describe("web-clone source skeleton", () => {
 
   test("preserves SVG geometry sidecar references for downstream framework code", async () => {
     await using tmp = await tmpdir()
-    const webpageEvidenceDir = path.join(tmp.path, "mirror")
+    const webpageEvidenceDir = path.join(tmp.path, "webpage-evidence")
     const extraction = extractArchiveHtml({
       html: `<!doctype html><html><body>
         <main>
@@ -434,6 +434,6 @@ async function writeMinimalSourceManifest(sourcePackageDir: string): Promise<voi
       webpageEvidenceDir: sourcePackageDir,
       reference: { path: "reference.png", sha256: referenceSha256, width: 1, height: 1, bytes: minimalPngBytes().length },
     },
-    files: [{ path: "reference.png", sha256: referenceSha256, bytes: minimalPngBytes().length, source: "mirror/reference.png" }],
+    files: [{ path: "reference.png", sha256: referenceSha256, bytes: minimalPngBytes().length, source: "webpage-evidence/reference.png" }],
   }, null, 2))
 }

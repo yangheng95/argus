@@ -45,7 +45,7 @@ Use this only when URL evidence is missing for the requested output directory. D
     outputDir: z
       .string()
       .describe(
-        `Directory to write artifacts. Defaults to task-scoped \`${DEFAULT_WEBPAGE_EVIDENCE_SUBDIR}\`. Do not set this during task sessions; overrides are for benchmarks/tests and task-session overrides must stay under \`${DEFAULT_WEBPAGE_EVIDENCE_SUBDIR}\`. Legacy \`mirror/\` overrides are accepted as aliases.`,
+        `Directory to write artifacts. Defaults to task-scoped \`${DEFAULT_WEBPAGE_EVIDENCE_SUBDIR}\`. Do not set this during task sessions; overrides are for benchmarks/tests and task-session overrides must stay under \`${DEFAULT_WEBPAGE_EVIDENCE_SUBDIR}\`.`,
       )
       .optional(),
     viewport_width: z.number().int().positive().describe("Viewport width in logical pixels. Default 1440.").optional(),

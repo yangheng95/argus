@@ -23,7 +23,7 @@ const runE2E = process.env.OPENCORVUS_RUN_WEB_CLONE_E2E === "1" || process.env.O
 const runFrontendDesignAgentE2E = process.env.OPENCORVUS_RUN_FRONTEND_DESIGN_AGENT_E2E === "1" || process.env.OPENCORVUS_RUN_FRONTEND_DESIGN_AGENT_E2E === "true"
 const e2eTest = runE2E ? test : test.skip
 const repoRoot = path.resolve(import.meta.dir, "../../../..")
-const defaultWebpageEvidenceDir = path.join(repoRoot, ".tmp", "source-skeleton-tradingview-v2h", "mirror")
+const defaultWebpageEvidenceDir = path.join(repoRoot, ".tmp", "source-skeleton-tradingview-v2h", "webpage-evidence")
 const webpageEvidenceDir = path.resolve(process.env.OPENCORVUS_WEB_CLONE_E2E_WEBPAGE_EVIDENCE ?? defaultWebpageEvidenceDir)
 const outputDir = path.resolve(process.env.OPENCORVUS_WEB_CLONE_E2E_OUTPUT ?? path.join(repoRoot, ".tmp", "opencorvus-web-clone-e2e-output"))
 const frontendDesignBenchmarkTaskID = process.env.OPENCORVUS_FRONTEND_DESIGN_TASK_ID ?? `tsk_web_clone_frontend_design_e2e_${Date.now().toString(16)}`
@@ -330,7 +330,7 @@ describe("web clone source project E2E", () => {
       sourcePackageDir: ".opencorvus/runtime/tasks/tsk_test/frontend-design/web-clone-source",
       skeletonProjectDir: ".opencorvus/runtime/tasks/tsk_test/frontend-design/frontend-design-skeleton",
       targetProjectDir: ".opencorvus/runtime/tasks/tsk_test/frontend-design/frontend-design-target",
-      webpageEvidenceDir: ".tmp/mirror",
+      webpageEvidenceDir: ".tmp/webpage-evidence",
     })
 
     expect(request).toContain("Call `create_frontend_skeleton_project`")
@@ -617,7 +617,7 @@ function buildFrontendDesignAgentBenchmarkRequest(input: {
   return [
     "Run the frontend-design rawproject refinement benchmark for the prepared webpage clone source package.",
     "",
-    `Mirror evidence: ${input.webpageEvidenceDir}`,
+    `Webpage evidence: ${input.webpageEvidenceDir}`,
     `Prepared web-clone-source package: ${input.sourcePackageDir}`,
     `Frontend-design skeleton evidence project: ${input.skeletonProjectDir}`,
     `Frontend-design target acceptance project: ${input.targetProjectDir}`,

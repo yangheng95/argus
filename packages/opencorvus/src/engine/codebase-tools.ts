@@ -54,18 +54,14 @@ async function collectLimitedLines(input: ReadableStream<Uint8Array>, limit: num
 function evidencePathMatches(normalized: string, relative: string): boolean {
   return (
     normalized.endsWith(`/webpage-evidence/${relative}`) ||
-    normalized === `webpage-evidence/${relative}` ||
-    normalized.endsWith(`/mirror/${relative}`) ||
-    normalized === `mirror/${relative}`
+    normalized === `webpage-evidence/${relative}`
   )
 }
 
 function evidencePathIncludes(normalized: string, relativeDir: string): boolean {
   return (
     normalized.includes(`/webpage-evidence/${relativeDir}/`) ||
-    normalized.startsWith(`webpage-evidence/${relativeDir}/`) ||
-    normalized.includes(`/mirror/${relativeDir}/`) ||
-    normalized.startsWith(`mirror/${relativeDir}/`)
+    normalized.startsWith(`webpage-evidence/${relativeDir}/`)
   )
 }
 

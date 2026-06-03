@@ -173,7 +173,7 @@ const PIPELINE: MiniWorkflow = {
       id: "frontend_design",
       tool: "frontend_design",
       label: "Design",
-      hint: "视觉/网页/图片/Figma 参考任务的前端设计/复刻专职阶段。独占 mirror 工具，产出前端实现级 frontend template、visual_consistency_contract、evidence_source_manifest；网页复刻还要产出 reference.png + web-clone-source/implementation-blueprint.md + source-ir/component-tree.json + source-ir/content-model.json + source-ir/layout-map.json + source-ir/style-tokens.json + source-ir/interaction-hints.json + source-ir/interaction-state-snapshots.json + source-skeleton/critical.css + visual-surface-candidates.json 作为 build 开发入口（截图是视觉真值，web-clone-source blueprint/source IR/assets 是 LLM 写 React/Vue 等源码的主入口，frontend-design source skeleton/CSS sidecars 必须先成为实现基底，不能被当成旁路参考后从空白页手搓）。",
+      hint: "视觉/网页/图片/Figma 参考任务的前端设计/复刻专职阶段。独占网页证据工具，产出前端实现级 frontend template、visual_consistency_contract、evidence_source_manifest；网页复刻还要产出 reference.png + web-clone-source/implementation-blueprint.md + source-ir/component-tree.json + source-ir/content-model.json + source-ir/layout-map.json + source-ir/style-tokens.json + source-ir/interaction-hints.json + source-ir/interaction-state-snapshots.json + source-skeleton/critical.css + visual-surface-candidates.json 作为 build 开发入口（截图是视觉真值，web-clone-source blueprint/source IR/assets 是 LLM 写 React/Vue 等源码的主入口，frontend-design source skeleton/CSS sidecars 必须先成为实现基底，不能被当成旁路参考后从空白页手搓）。",
       scope: "task",
       skippable: true,
       after: [],

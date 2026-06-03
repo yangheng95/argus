@@ -11,7 +11,7 @@ The registry currently ships with the agents below. `mode` controls how the agen
 
 | Agent | Mode | Purpose |
 |---|---|---|
-| `build` | primary | Default agent. Executes tools (read / edit / bash / mirror toolchain) under the configured permission ruleset. |
+| `build` | primary | Default agent. Executes implementation tools (read / edit / bash) under the configured permission ruleset. |
 | `general` | subagent | General-purpose multi-step research / parallel-work agent. Dispatched via the `task` tool. |
 | `explore` | subagent | Codebase exploration — fast file / code search, read-only by default. |
 | `acceptance` | primary (hidden) | Acceptance review. Submits semantic accept/reject judgments from acceptance evidence; deterministic arbitration finalizes the acceptance-stage verdict. |

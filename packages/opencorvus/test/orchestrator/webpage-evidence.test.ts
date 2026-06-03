@@ -110,7 +110,6 @@ describe("live webpage evidence pipeline", () => {
     expect(result.status).toBe("generated")
     expect(secondCalls).toEqual(["extract:https://example.com/second", "compile", "analyze", "captureRuntimeState:https://example.com/second"])
     expect(await fileExists(path.join(tmp.path, "webpage-evidence", "reference.png"))).toBe(false)
-    expect(await fileExists(path.join(tmp.path, "mirror", "reference.png"))).toBe(false)
     expect(await fileExists(path.join(tmp.path, "web-clone-source", "reference.png"))).toBe(false)
     expect(await fileExists(path.join(secondPaths.webpageEvidenceAbsolute, "reference.png"))).toBe(true)
     expect(await fileExists(path.join(secondPaths.sourcePackageAbsolute, "reference.png"))).toBe(true)
@@ -183,7 +182,7 @@ async function fileExists(file: string): Promise<boolean> {
 async function writeCompleteEvidence(evidenceDir: string, url: string): Promise<void> {
   await fs.mkdir(evidenceDir, { recursive: true })
   for (const artifact of primaryWebpageEvidenceArtifacts()) {
-    const relative = artifact.replace(/^webpage-evidence[\\/]/, "").replace(/^mirror[\\/]/, "")
+    const relative = artifact.replace(/^webpage-evidence[\\/]/, "")
     const file = path.join(evidenceDir, relative)
     await fs.mkdir(path.dirname(file), { recursive: true })
     if (relative === "reference.png") {

@@ -11,7 +11,7 @@ OpenCorvus 的编排围绕 **agent** 构建。代理注册表（名称、模式�
 
 | Agent | 模式 | 角色 |
 |---|---|---|
-| `build` | primary | 默认 agent。在配置的权限规则下执行 read / edit / bash / mirror 工具链。 |
+| `build` | primary | 默认 agent。在配置的权限规则下执行 read / edit / bash 等实现工具。 |
 | `general` | subagent | 通用多步研究 / 并行工作 agent，由 `task` 工具派发。 |
 | `explore` | subagent | 代码库探索——快速文件 / 代码搜索，默认只读。 |
 | `acceptance` | primary（hidden） | 交付 agent。基于交付证据提交语义 accept / reject 判断；确定性仲裁器最终化 acceptance-stage verdict。 |

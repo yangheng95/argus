@@ -203,7 +203,7 @@ describe("Worktree.mergeSafely", () => {
     await using tmp = await tmpdir({ git: true })
     await $`git ${gitEnv} branch -M master`.cwd(tmp.path).quiet()
 
-    await fs.writeFile(path.join(tmp.path, ".gitignore"), "mirror/\n")
+    await fs.writeFile(path.join(tmp.path, ".gitignore"), "webpage-evidence/\n")
     await fs.writeFile(path.join(tmp.path, "kept.txt"), "base\n")
     await $`git add .gitignore kept.txt`.cwd(tmp.path).quiet()
     await $`git ${gitEnv} commit -m "seed"`.cwd(tmp.path).quiet()
@@ -217,8 +217,8 @@ describe("Worktree.mergeSafely", () => {
     await $`git ${gitEnv} commit -m "goal feature"`.cwd(info.directory).quiet()
 
     await fs.writeFile(path.join(tmp.path, "kept.txt"), "primary dirty\n")
-    await fs.mkdir(path.join(tmp.path, "mirror"), { recursive: true })
-    await fs.writeFile(path.join(tmp.path, "mirror", "source.html"), "<html></html>\n")
+    await fs.mkdir(path.join(tmp.path, "webpage-evidence"), { recursive: true })
+    await fs.writeFile(path.join(tmp.path, "webpage-evidence", "source.html"), "<html></html>\n")
 
     const outcome = await Instance.provide({
       directory: tmp.path,
@@ -229,8 +229,8 @@ describe("Worktree.mergeSafely", () => {
     if (outcome.status !== "merged") throw new Error(`unexpected outcome ${outcome.status}`)
     expect((await fs.readFile(path.join(tmp.path, "feature.ts"), "utf8")).replace(/\r\n/g, "\n")).toBe("feature\n")
     expect((await fs.readFile(path.join(tmp.path, "kept.txt"), "utf8")).replace(/\r\n/g, "\n")).toBe("primary dirty\n")
-    expect((await fs.readFile(path.join(tmp.path, "mirror", "source.html"), "utf8")).replace(/\r\n/g, "\n")).toBe("<html></html>\n")
-    const tracked = await $`git ls-files mirror`.cwd(tmp.path).text()
+    expect((await fs.readFile(path.join(tmp.path, "webpage-evidence", "source.html"), "utf8")).replace(/\r\n/g, "\n")).toBe("<html></html>\n")
+    const tracked = await $`git ls-files webpage-evidence`.cwd(tmp.path).text()
     expect(tracked.trim()).toBe("")
   })
 

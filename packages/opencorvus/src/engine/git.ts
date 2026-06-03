@@ -496,8 +496,8 @@ function evidenceExcludedAddAllArgs(): string[] {
     ".",
     ":(exclude)web-clone-source",
     ":(exclude)web-clone-source/**",
-    ":(exclude)mirror",
-    ":(exclude)mirror/**",
+    ":(exclude)webpage-evidence",
+    ":(exclude)webpage-evidence/**",
   ]
 }
 

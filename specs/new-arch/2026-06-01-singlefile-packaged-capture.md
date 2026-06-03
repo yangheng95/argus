@@ -20,7 +20,7 @@ wrapper to throw a misleading `ENOENT` from `fs.stat(outputPath)`.
 
 | Symbol | Path | Decision |
 | --- | --- | --- |
-| `captureSingleFileHtml` | `packages/opencorvus/src/mirror/tools/webpage-extract.ts` | Keep API and return contract. |
+| `captureSingleFileHtml` | `packages/opencorvus/src/frontend-design/tools/webpage-extract.ts` | Keep API and return contract. |
 | `resolveSingleFileExecutable` | `packages/opencorvus/src/web-clone/singlefile-capture.ts` | Delete; external CLI lookup is the broken runtime dependency. |
 | `single-file-cli` dependency | `packages/opencorvus/package.json` | Keep as the single source dependency, but call its API in-process. |
 | `artifactExternalModules` | `packages/opencorvus/script/build-artifact.ts` | Leave unchanged unless build proves SingleFile needs an external. |

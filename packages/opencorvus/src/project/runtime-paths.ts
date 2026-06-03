@@ -59,9 +59,7 @@ export namespace ProjectRuntimePaths {
       normalized === "web-clone-source" ||
       normalized.startsWith("web-clone-source/") ||
       normalized === "webpage-evidence" ||
-      normalized.startsWith("webpage-evidence/") ||
-      normalized === "mirror" ||
-      normalized.startsWith("mirror/")
+      normalized.startsWith("webpage-evidence/")
     )
   }
 
@@ -142,13 +140,11 @@ export namespace ProjectRuntimePaths {
   export function frontendDesignPaths(projectDir: string, taskID: string): {
     relativeDir: string
     webpageEvidenceRelative: string
-    legacyWebpageEvidenceRelative: string
     sourcePackageRelative: string
     skeletonProjectRelative: string
     templateRelative: string
     manifestRelative: string
     webpageEvidenceAbsolute: string
-    legacyWebpageEvidenceAbsolute: string
     sourcePackageAbsolute: string
     skeletonProjectAbsolute: string
     templateAbsolute: string
@@ -156,18 +152,14 @@ export namespace ProjectRuntimePaths {
   } {
     const webpageEvidenceRelative = taskRelative(taskID, "frontend-design", "webpage-evidence")
     const webpageEvidenceAbsolute = taskAbsolute(projectDir, taskID, "frontend-design", "webpage-evidence")
-    const legacyWebpageEvidenceRelative = taskRelative(taskID, "frontend-design", "mirror")
-    const legacyWebpageEvidenceAbsolute = taskAbsolute(projectDir, taskID, "frontend-design", "mirror")
     return {
       relativeDir: taskRelative(taskID, "frontend-design"),
       webpageEvidenceRelative,
-      legacyWebpageEvidenceRelative,
       sourcePackageRelative: taskRelative(taskID, "frontend-design", "web-clone-source"),
       skeletonProjectRelative: taskRelative(taskID, "frontend-design", "frontend-design-skeleton"),
       templateRelative: taskRelative(taskID, "frontend-design", "frontend-template.md"),
       manifestRelative: taskRelative(taskID, "frontend-design", "evidence-source-manifest.md"),
       webpageEvidenceAbsolute,
-      legacyWebpageEvidenceAbsolute,
       sourcePackageAbsolute: taskAbsolute(projectDir, taskID, "frontend-design", "web-clone-source"),
       skeletonProjectAbsolute: taskAbsolute(projectDir, taskID, "frontend-design", "frontend-design-skeleton"),
       templateAbsolute: taskAbsolute(projectDir, taskID, "frontend-design", "frontend-template.md"),

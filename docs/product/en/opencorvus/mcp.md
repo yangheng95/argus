@@ -104,7 +104,7 @@ OpenCorvus injects this URL into the executor automatically:
 - **Claude Code**: `MCPServe.url(...)` produces an `McpHttpServerConfig` (`{ type: "http", url, headers }`) which the Anthropic Agent SDK forwards to the claude-code CLI as `--mcp-config`.
 - **Codex**: opencorvus passes `-c mcp_servers.opencorvus.url=...` to `codex app-server`.
 
-Exposes (`src/mcp/serve.ts`): `memory`, `task_report`, the `webpage_*` mirror toolchain (`webpage_extract`, `webpage_compile`, `webpage_analyze`, `webpage_image_extract/compile/analyze`, `webpage_render`, `webpage_evaluate`, `webpage_text_diff`, `webpage_vision_judge`), and the `figma_*` toolchain — plus every tool from locally connected MCP clients as a proxied tool.
+Exposes (`src/mcp/serve.ts`): `memory`, `task_report`, the webpage evidence tools (`webpage_extract`, `webpage_compile`, `webpage_analyze`, `webpage_runtime_state`, `webpage_render`, `webpage_evaluate`, `webpage_text_diff`, `webpage_vision_judge`), and every tool from locally connected MCP clients as a proxied tool.
 
 ## Connection status
 

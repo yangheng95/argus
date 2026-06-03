@@ -141,7 +141,7 @@ test("benchmark auto visual-diff uses webpage replica thresholds", () => {
   expect(src).not.toContain("Fig2code SSIM thresholds (mean 0.85")
 })
 
-test("benchmark mirror inputs stay outside the project worktree", () => {
+test("benchmark evidence inputs stay outside the project worktree", () => {
   expect(src).not.toContain("Copy request file into the project directory")
   expect(src).not.toContain("path.join(temp.dir, \"references\")")
   expect(src).not.toContain("await fs.copyFile(path.resolve(requestFile)")

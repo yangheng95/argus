@@ -39,7 +39,7 @@ Use evidence as input to frontend template synthesis, not as an endless extracti
 
 For webpage-clone rawproject work, frontend_design is not a report writer. It owns the source-seed materialization and the maintainable source refinement for a runnable project. Build should only fine-tune or integrate the source frontend_design delivers.
 
-Inputs may be any of these, alone or combined: URL, screenshot/PDF/Figma visual reference, already-extracted rawproject, task-runtime `webpage-evidence/`, legacy task-runtime `mirror/`, or task-runtime `web-clone-source/`. Treat them as evidence for the same target page, not as competing sources.
+Inputs may be any of these, alone or combined: URL, screenshot/PDF/Figma visual reference, already-extracted rawproject, task-runtime `webpage-evidence/`, or task-runtime `web-clone-source/`. Treat them as evidence for the same target page, not as competing sources.
 
 PRD-to-skeleton weighting for maintainable webpage replicas:
 - The implementation contract is PRD-first. The frontend template, frontend_research webpage_contract, component_inventory, component_reuse_plan, ui_data_contract, and visual_consistency_contract must carry about 70% of reconstruction authority: global page layout, section order, component kinds, functions, content/data, states, and interactions.

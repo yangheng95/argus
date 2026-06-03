@@ -110,7 +110,6 @@ const EXCLUDED_DIRS = new Set([
   "coverage",
   "frontend-design-skeleton",
   "dist",
-  "mirror",
   "node_modules",
   "out",
   "source-ir",
@@ -282,7 +281,7 @@ export async function auditWebCloneSourceSkeletonConsumption(
   if (!sourceEvidence.contentModelExists) findings.push(`Missing ${sourceLabel}/source-ir/content-model.json semantic content model.`)
   if (!sourceEvidence.componentTreeExists) findings.push(`Missing ${sourceLabel}/source-ir/component-tree.json semantic component tree.`)
   if (!sourceEvidence.criticalCssExists) findings.push(`Missing ${sourceLabel}/source-skeleton/critical.css CSS handoff.`)
-  if (sourceFiles.length === 0) findings.push("No project-owned source files were found outside mirror/generated/build directories.")
+  if (sourceFiles.length === 0) findings.push("No project-owned source files were found outside generated/build/evidence directories.")
   if (defaultScaffoldDetected) findings.push("Default framework scaffold text/assets are still present; the project ignored the webpage skeleton.")
   if (skeletonIgnored) {
     findings.push(

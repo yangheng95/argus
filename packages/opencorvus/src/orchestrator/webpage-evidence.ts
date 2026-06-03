@@ -116,7 +116,6 @@ export async function ensureLiveWebpageEvidence(input: {
 
   const paths = ProjectRuntimePaths.frontendDesignPaths(input.projectDir, input.taskID)
   const evidenceDir = paths.webpageEvidenceAbsolute
-  await promoteLegacyWebpageEvidence({ canonicalDir: evidenceDir, legacyDir: paths.legacyWebpageEvidenceAbsolute, url })
 
   if (await hasCompletePrimaryEvidence(evidenceDir, url)) {
     await ensureVisibleSourcePackage(input.projectDir, input.worktreeDir, input.taskID)
@@ -156,17 +155,6 @@ async function ensureVisibleSourcePackage(projectDir: string, worktreeDir: strin
     throw new Error(`Live webpage evidence pipeline produced an incomplete web-clone-source package in ${paths.sourcePackageAbsolute}`)
   }
   await TaskRuntimeMaterializer.materializeFrontendDesign({ projectDir, taskID, worktreeDir })
-}
-
-async function promoteLegacyWebpageEvidence(input: {
-  canonicalDir: string
-  legacyDir: string
-  url: string
-}): Promise<void> {
-  if (await hasCompletePrimaryEvidence(input.canonicalDir, input.url)) return
-  if (!(await hasCompletePrimaryEvidence(input.legacyDir, input.url))) return
-  await fs.mkdir(path.dirname(input.canonicalDir), { recursive: true })
-  await fs.cp(input.legacyDir, input.canonicalDir, { recursive: true, force: true })
 }
 
 export async function hasCompletePrimaryEvidence(webpageEvidenceDir: string, url?: string): Promise<boolean> {

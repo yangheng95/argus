@@ -28,15 +28,15 @@ feature and must not change the agent-visible tool surface.
 
 | Area | Current path | Current decision |
 | --- | --- | --- |
-| Runtime-state evidence | `packages/opencorvus/src/mirror/url/runtime-state.ts` | Keep public entrypoint; move sidecar process mechanics out. |
-| Visual render | `packages/opencorvus/src/mirror/visual/render.ts` | Keep screenshot behavior; replace local `renderFilesViaNode` process boilerplate with shared executor. |
+| Runtime-state evidence | `packages/opencorvus/src/browser/webpage/runtime-state.ts` | Keep public entrypoint; move sidecar process mechanics out. |
+| Visual render | `packages/opencorvus/src/browser/webpage/render.ts` | Keep screenshot behavior; replace local `renderFilesViaNode` process boilerplate with shared executor. |
 | Frontend URL screenshot capture | `packages/opencorvus/src/frontend-design/capture-gate.ts` | Keep visual capture behavior; replace local Node sidecar boilerplate and resolver with shared runtime. |
 | Browser Node runtime resolver | `packages/opencorvus/src/browser/runtime/node-sidecar.ts` | Keep and promote as the shared host-only browser Node runtime resolver. |
 | Browser MCP launcher | `packages/opencorvus/src/mcp/browser/node-launcher.ts` | Keep MCP-specific `stdio.mjs` bundle resolution; reuse shared Node path logic instead of duplicating it. |
 | Packaged runtime payload | `browser-mcp-node/` beside the executable | Keep for now. The name is historical; code should call it browser Node runtime, not MCP runtime, when used outside MCP. |
 | Build artifact packaging | `packages/opencorvus/script/build.ts`, `packages/opencorvus/script/build.local.ts` | Keep current payload layout during this convergence. |
 | Overlay embedded payload | `packages/overlay/src-tauri/build.rs`, `packages/overlay/src-tauri/src/main.rs` | Do not rename payload entries in this phase. |
-| Executor MCP exposure | `packages/opencorvus/src/mcp/serve.ts` | Keep mirror and runtime-state tools hidden from external coding executors. |
+| Executor MCP exposure | `packages/opencorvus/src/mcp/serve.ts` | Keep webpage evidence and runtime-state tools hidden from external coding executors. |
 
 ## Goals
 
@@ -54,7 +54,7 @@ feature and must not change the agent-visible tool surface.
 
 ## Non-Goals
 
-- Do not expose `webpage_runtime_state`, `webpage_extract`, or other mirror tools
+- Do not expose `webpage_runtime_state`, `webpage_extract`, or other webpage evidence tools
   through executor MCP.
 - Do not let the LLM choose between Bun browser launch, Node sidecar launch, or
   MCP browser tools.
@@ -202,12 +202,12 @@ The second-stage script move must preserve:
 
 ### Caller Tests
 
-- `mirror/url/runtime-state.test.ts`
+- `browser/webpage/runtime-state.test.ts`
   - runtime-state capture does not call `BrowserRuntime.launchPlaywrightBrowser`
   - writes four interaction screenshots and `interaction-state-snapshots.json`
   - keeps existing observation derivation tests
 
-- `mirror/visual/render.test.ts`
+- `browser/webpage/render.test.ts`
   - render integration still captures file URL screenshot
   - visible text extraction remains unchanged
 
@@ -216,7 +216,7 @@ The second-stage script move must preserve:
   - existing diagnostics tests remain unchanged
 
 - `mcp/serve.test.ts`
-  - executor MCP still filters mirror tools
+  - executor MCP still filters webpage evidence tools
   - no new browser evidence tools become LLM-visible
 
 ### Integration Verification
@@ -226,8 +226,8 @@ The second-stage script move must preserve:
 ```bash
 bun test packages/opencorvus/test/browser/node-sidecar.test.ts \
   packages/opencorvus/test/browser/node-executor.test.ts \
-  packages/opencorvus/test/mirror/url/runtime-state.test.ts \
-  packages/opencorvus/test/mirror/visual/render.test.ts \
+  packages/opencorvus/test/browser/webpage/runtime-state.test.ts \
+  packages/opencorvus/test/browser/webpage/render.test.ts \
   packages/opencorvus/test/frontend-design/capture-gate.test.ts \
   packages/opencorvus/test/mcp/serve.test.ts
 ```

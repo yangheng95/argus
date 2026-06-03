@@ -25,7 +25,7 @@ Repository grep covered all call points before the change:
 Host-prepared source materialization remains host-owned: the host prepares `web-clone-source/` and `frontend-design-skeleton/` once. frontend-design then receives:
 
 - read/search/list/memory context tools for bounded inspection;
-- no redundant mirror acquisition tools when host evidence already exists;
+- no redundant webpage evidence acquisition tools when host evidence already exists;
 - the full terminal `submit_frontend_template` schema.
 
 Text-only frontend-design turns still pin to direct terminal submission because there is no visual/material evidence to explore.
