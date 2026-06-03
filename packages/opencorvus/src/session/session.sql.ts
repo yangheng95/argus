@@ -59,7 +59,7 @@ import { Timestamps } from "@/storage/schema.sql"
  *   research       read-only advisory evidence-gathering subagent for external
  *                  facts and PRD/SPEC input bundles. It emits durable
  *                  research_brief artifacts; it is not a workflow step.
- *   frontend-research read-only webpage functional/visual evidence subagent.
+ *   frontend-research submit-only webpage investigation-division publisher.
  *                  It pairs with frontend-design and emits durable
  *                  frontend_research_brief artifacts for requirements and
  *                  architect.

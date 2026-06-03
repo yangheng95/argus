@@ -369,14 +369,14 @@ describe("extras execute-return normalisation (integration via resolveTools)", (
     expect(SessionLoop.usesExactRuntimeContractTools("build", contract)).toBe(false)
   })
 
-  test("frontend-research runtime contract uses exact read-only research tools instead of registry or MCP inheritance", () => {
+  test("frontend-research runtime contract uses exact submit-only tools instead of registry or MCP inheritance", () => {
     const contract = runtimeContract("ses_frontend_research_exact", {
       identity: {
         sessionID: "ses_frontend_research_exact",
         agentKind: "frontend-research",
         contractKind: "stage-attempt",
       },
-      tools: { webfetch: dummyTool(), read_file: dummyTool(), submit_research_brief: dummyTool() },
+      tools: { submit_research_brief: dummyTool() },
     })
 
     expect(SessionLoop.usesExactRuntimeContractTools("frontend-research", contract)).toBe(true)

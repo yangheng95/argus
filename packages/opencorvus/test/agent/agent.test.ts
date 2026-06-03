@@ -433,17 +433,10 @@ test("native stage agent registry tool surfaces match role boundaries", async ()
 
       const frontendResearch = await Agent.get("frontend-research")
       expect(frontendResearch).toBeDefined()
-      expect(frontendResearch?.tools?.include?.sort()).toEqual(
-        [
-          "find_files",
-          "list_directory",
-          "memory_get",
-          "memory_search",
-          "read_file",
-          "webfetch",
-        ].sort(),
-      )
+      expect(frontendResearch?.tools?.include).toEqual([])
       expect(frontendResearch?.tools?.include).not.toContain("websearch")
+      expect(frontendResearch?.tools?.include).not.toContain("webfetch")
+      expect(frontendResearch?.tools?.include).not.toContain("read_file")
       expect(frontendResearch?.tools?.include).not.toContain("search_code")
       expect(frontendResearch?.tools?.include).not.toContain("task")
       expect(frontendResearch?.tools?.include).not.toContain("build")
@@ -474,7 +467,7 @@ test("research agent tool config cannot reopen executor surfaces", async () => {
   })
 })
 
-test("fixed read-only evidence agents cannot be disabled or tool-overridden", async () => {
+test("fixed evidence agents cannot be disabled or tool-overridden", async () => {
   await using researchTmp = await tmpdir({
     config: {
       agent: {

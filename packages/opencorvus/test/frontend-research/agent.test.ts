@@ -7,10 +7,11 @@ describe("frontend-research agent", () => {
 
     expect(config.prepareWebpageEvidence).toBe("read-existing-for-source-url")
     expect(config.bundlePathKind).toBe("frontend-research")
+    expect(config.retrievalTools).toBe("none")
     expect(config).not.toHaveProperty("includeRetrievalTools")
     expect(config).not.toHaveProperty("createAdditionalTools")
     expect(config.delegation).toContain("publish webpage investigation work packets")
-    expect(config.delegation).toContain("do not perform deep source-page or artifact investigation yourself")
+    expect(config.delegation).toContain("do not perform source-page, artifact, repository, or web investigation yourself")
     expect(config.delegation).toContain("Do not create the frontend implementation template")
   })
 })
