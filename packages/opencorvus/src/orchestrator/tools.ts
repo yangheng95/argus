@@ -64,6 +64,7 @@ import {
 import {
   supersedePriorActivePlansForTask,
   ensureBuildRetryFeedbackForGoal,
+  persistTaskFrontendResearchBrief,
   persistTaskResearchBrief,
   updateGoalWorkspace,
   updateGoalRun,
@@ -79,6 +80,7 @@ import {
   findGoalRun,
   findLatestArchitectContractGraph,
   findLatestArchitectContractGraphArtifact,
+  findLatestFrontendResearchBriefArtifact,
   findLatestGoalWorkloadArtifact,
   findLatestResearchBriefArtifact,
   findLatestDeliveryVerdictArtifact,
@@ -93,6 +95,7 @@ import {
   listGoalRunsForTask,
   requireRun,
   requireTask,
+  type ResearchBriefArtifactRow,
   type TaskRow,
 } from "@/engine/store"
 import { describeTask, goalStatusByID, renderCollaborationClosure } from "@/engine/describe"
@@ -156,6 +159,39 @@ export const ORCHESTRATOR_WAIT_MIN_MS = 1_000
 export const ORCHESTRATOR_WAIT_MAX_MS = 10 * 60 * 1000
 
 const log = Log.create({ service: "task-tools" })
+
+async function appendResearchBriefContext(
+  sections: string[],
+  title: string,
+  artifact: ResearchBriefArtifactRow | undefined,
+  request: string,
+) {
+  if (!artifact) return
+  const { researchBriefIsStale } = await import("@/research")
+  const stale = researchBriefIsStale({ request, brief: artifact.payload })
+  const brief = artifact.payload
+  const subpageResearchTasks = brief.subpage_research_tasks ?? []
+  sections.push(
+    `\n## ${title}`,
+    `- artifact: ${artifact.id}`,
+    `- session: ${brief.metadata.research_session_id}`,
+    `- stale: ${stale.stale ? "true" : "false"}`,
+    stale.reasons.length > 0 ? `- stale_reasons: ${stale.reasons.join(", ")}` : "",
+    `- sources: ${brief.evidence_index.length}`,
+    `- facts: ${brief.facts.length}`,
+    `- subpage_research_tasks: ${subpageResearchTasks.length}`,
+    subpageResearchTasks.length > 0
+      ? `- subpage_research_task_refs: ${subpageResearchTasks
+          .slice(0, 5)
+          .map((item) => `${item.id}=${item.url}`)
+          .join("; ")}`
+      : "",
+    `- blocking_open_questions: ${brief.open_questions.filter((item) => item.blocking).length}`,
+    `- bundle: ${brief.bundle.full_markdown_path}, ${brief.bundle.evidence_json_path}, ${brief.bundle.citation_map_path}`,
+    `- summary: ${brief.summary.slice(0, 800)}`,
+    `Research is advisory evidence only; it is not a workflow step or next-tool instruction.`,
+  )
+}
 
 type OrchestratorToolExecutionContext = {
   orchestratorSessionID: string
@@ -2377,7 +2413,7 @@ export function createOrchestratorTools(input: {
         "SKIP this step when:",
         "  - No visual references are available",
         "  - The task is purely backend/API/infrastructure",
-        "  - The request asks to research/analyze a webpage as PRD/SPEC/report/source material rather than implement or clone the UI; route those URLs through `research` with `source_urls`",
+        "  - The request asks to research/analyze a webpage as PRD/SPEC/report/source material rather than implement or clone the UI; route those URLs through `frontend_research` with `source_urls`",
         "  - The request already contains detailed design specifications AND has no URL, screenshot/image, Figma/design-file, webpage-replica, or other visual reference that needs mirror/web-clone-source evidence for implementation",
       ].join("\n"),
       inputSchema: z.object({
@@ -4030,9 +4066,88 @@ export function createOrchestratorTools(input: {
       },
     }),
 
+    frontend_research: tool({
+      description:
+        "OPTIONAL stage agent for webpage/UI reference research. Use alongside `frontend_design` for supplied page URLs when downstream requirements and architect need faithful source-backed facts about page functions, visual layout, style requirements, interactions, content/data inventory, responsive behavior, fidelity acceptance, and risks. It consumes rendered webpage evidence and persists a frontend_research_brief/webpage_contract artifact. It is NOT the frontend implementation template owner, NOT build, NOT requirements, NOT architect, NOT a route selector, and NOT final PRD/SPEC/report delivery.",
+      inputSchema: z.object({
+        reason: z.string().min(1).describe("Why frontend webpage research is needed for this task."),
+        source_urls: z
+          .array(z.string().min(1))
+          .min(1)
+          .describe("Source page URLs the frontend-research agent must inspect through prepared rendered evidence."),
+        focus: z.string().optional().describe("Optional narrow focus for the frontend-research agent."),
+      }),
+      execute: async ({ reason, source_urls, focus }) => {
+        const task = requireTask(taskID)
+        await trackStepStart("frontend_research")
+        let runnerSessionID: string | undefined
+        try {
+          const { FrontendResearchAgent } = await import("@/frontend-research")
+          const result = await FrontendResearchAgent.run({
+            title: task.title,
+            request: task.request,
+            targetDeliverable: "implementation_input",
+            sourceUrls: source_urls,
+            focus,
+            reason,
+            taskID,
+            parentSessionID: input.agentSessionID,
+            signal: input.signal,
+            onStatus: () => {},
+            onSessionCreated: (id) => {
+              runnerSessionID = id
+            },
+          })
+          const artifactID = persistTaskFrontendResearchBrief({
+            taskID,
+            brief: result.brief,
+          })
+          await trackStepComplete("frontend_research")
+          const blocking = result.brief.open_questions.filter((item) => item.blocking)
+          const subpageTasks = result.brief.subpage_research_tasks
+          const contract = result.brief.webpage_contract
+          return SubAgentProtocol.yieldResult({
+            headline: "Frontend research brief persisted as advisory webpage evidence.",
+            summary: result.brief.summary,
+            fields: [
+              ["session", result.sessionID],
+              ["artifact_id", artifactID],
+              ["sources", String(result.brief.evidence_index.length)],
+              ["facts", String(result.brief.facts.length)],
+              ["webpage_contract", contract ? contract.source_url : "missing"],
+              ["functional_surfaces", String(contract?.functional_surfaces.length ?? 0)],
+              ["visual_layout", String(contract?.visual_layout.length ?? 0)],
+              ["style_requirements", String(contract?.style_requirements.length ?? 0)],
+              ["subpage_research_tasks", subpageTasks.map((item) => `${item.id}: ${item.url} | ${item.suggested_focus}`)],
+              ["blocking_open_questions", blocking.map((item) => `${item.id}: ${item.question}`)],
+              ["bundle_paths", Object.values(result.brief.bundle)],
+            ],
+            pointer:
+              `frontend_research_brief artifact ${artifactID}; requirements and architect read it as advisory webpage evidence. ` +
+              "This result is evidence only; choose the next tool from full task context.",
+          })
+        } catch (err) {
+          try {
+            await trackStepComplete("frontend_research", undefined, true)
+          } catch (trackErr) {
+            log.warn("frontend_research: trackStepComplete(failed) emit failed", {
+              taskID,
+              error: trackErr instanceof Error ? trackErr.message : String(trackErr),
+            })
+          }
+          const msg = err instanceof Error ? err.message : String(err)
+          if (runnerSessionID) {
+            SessionStatus.set(runnerSessionID, { type: "terminal", reason: "error", error: msg })
+          }
+          log.error("frontend_research tool failed", { taskID, error: msg })
+          throw err
+        }
+      },
+    }),
+
     research: tool({
       description:
-        "OPTIONAL advisory evidence side-tool agent. Use when the task depends on external facts, current documentation, competitor/industry/API research, or PRD/SPEC/report source material that should become a durable citation bundle. For webpage PRD/SPEC/report tasks, including requests that need both functional and visual analysis of a supplied page, pass known source_urls and set target_deliverable so research owns the rendered webpage PRD evidence path instead of frontend_design. The result is a compact research_brief artifact plus bundle paths and may include subpage_research_tasks for independent follow-up research. It is NOT a workflow step, NOT a route selector, NOT requirements, NOT architect, NOT build, and NOT a delivery path.",
+        "OPTIONAL advisory evidence side-tool agent. Use when the task depends on external facts, current documentation, competitor/industry/API research, source maps, or PRD/SPEC/report source material that should become a durable citation bundle. For supplied webpage URLs that need functional/visual frontend analysis, use `frontend_research` instead; for implementation-template/source handoff, use `frontend_design`. The result is a compact research_brief artifact plus bundle paths and may include subpage_research_tasks for independent follow-up research. It is NOT a workflow step, NOT a route selector, NOT requirements, NOT architect, NOT build, and NOT a delivery path.",
       inputSchema: z.object({
         reason: z.string().min(1).describe("Why evidence research is needed for this task."),
         target_deliverable: z
@@ -4556,33 +4671,13 @@ export function createOrchestratorTools(input: {
         }
 
         if (scope === "all") {
-          const researchArtifact = findLatestResearchBriefArtifact(taskID)
-          if (researchArtifact) {
-            const { researchBriefIsStale } = await import("@/research")
-            const stale = researchBriefIsStale({ request: task.request, brief: researchArtifact.payload })
-            const brief = researchArtifact.payload
-            const subpageResearchTasks = brief.subpage_research_tasks ?? []
-            sections.push(
-              `\n## Research Brief`,
-              `- artifact: ${researchArtifact.id}`,
-              `- session: ${brief.metadata.research_session_id}`,
-              `- stale: ${stale.stale ? "true" : "false"}`,
-              stale.reasons.length > 0 ? `- stale_reasons: ${stale.reasons.join(", ")}` : "",
-              `- sources: ${brief.evidence_index.length}`,
-              `- facts: ${brief.facts.length}`,
-              `- subpage_research_tasks: ${subpageResearchTasks.length}`,
-              subpageResearchTasks.length > 0
-                ? `- subpage_research_task_refs: ${subpageResearchTasks
-                    .slice(0, 5)
-                    .map((item) => `${item.id}=${item.url}`)
-                    .join("; ")}`
-                : "",
-              `- blocking_open_questions: ${brief.open_questions.filter((item) => item.blocking).length}`,
-              `- bundle: ${brief.bundle.full_markdown_path}, ${brief.bundle.evidence_json_path}, ${brief.bundle.citation_map_path}`,
-              `- summary: ${brief.summary.slice(0, 800)}`,
-              `Research is advisory evidence only; it is not a workflow step or next-tool instruction.`,
-            )
-          }
+          await appendResearchBriefContext(sections, "Research Brief", findLatestResearchBriefArtifact(taskID), task.request)
+          await appendResearchBriefContext(
+            sections,
+            "Frontend Research Brief",
+            findLatestFrontendResearchBriefArtifact(taskID),
+            task.request,
+          )
 
           // Fact-check attempts (one-line per row) — specs/fact-check-agent-2026-05-25.md
           // §6.1.2 step 7. Integrity replay reads this same artifact stream

@@ -4,7 +4,7 @@
  * 系统只内置两条路径：
  *   1. **direct**   — build
  *      用于显式 kind=build 的单文件改动 / bugfix / 配置调整 / 短篇调试。无需 requirements / architect / goals。
- *   2. **pipeline** — (frontend_design) → analyze_intent → requirements → architect → per-goal[build] → integrity
+ *   2. **pipeline** — (frontend_design + frontend_research) → analyze_intent → requirements → architect → per-goal[build] → integrity
  *      用于多文件功能、UI 复刻、跨模块重构、需要验收标准的任务。
  *
  * Pipeline 以 build 做实现、以 integrity 做 session-bound final gate。deliver
@@ -20,6 +20,7 @@ import { goalStatusByID } from "./describe"
 import { isGoalRunOrphaned } from "./orphan"
 import {
   findActiveSpecForTask,
+  findLatestFrontendResearchBriefArtifact,
   findLatestIntegrityAttemptArtifact,
   integrityAttemptVerdict,
   findRuns,
@@ -160,13 +161,13 @@ const DIRECT: MiniWorkflow = {
 /** pipeline — 完整开发流程。
  *
  *  适合：多文件功能 / UI 复刻 / 跨模块重构 / 需要明确验收标准的任务。
- *  流程：(frontend_design 可选) → analyze_intent → requirements → architect → per-goal[build] → integrity；
+ *  流程：(frontend_design + frontend_research 可选并行) → analyze_intent → requirements → architect → per-goal[build] → integrity；
  *  integrity 是 session-bound final gate：pass 完成任务；非 pass 返回证据后由编排器决定下一步。
  */
 const PIPELINE: MiniWorkflow = {
   id: "pipeline",
   name: "Pipeline",
-  description: "(frontend_design) → analyze_intent → requirements → architect → per-goal[build] → integrity。多文件功能 / UI 复刻 / 跨模块重构。",
+  description: "(frontend_design + frontend_research) → analyze_intent → requirements → architect → per-goal[build] → integrity。多文件功能 / UI 复刻 / 跨模块重构。",
   steps: [
     {
       id: "frontend_design",
@@ -178,13 +179,22 @@ const PIPELINE: MiniWorkflow = {
       after: [],
     },
     {
+      id: "frontend_research",
+      tool: "frontend_research",
+      label: "Frontend Research",
+      hint: "网页/URL 参考任务的功能、布局、样式、交互、内容清单、fidelity acceptance 专职研究阶段。与 frontend_design 并行：frontend_design 产出可维护实现模板和素材/源码入口；frontend_research 产出 source-backed frontend_research_brief/webpage_contract，供 requirements 和 architect 转成 REQ-N、goal coverage、验收依据。它不写 final PRD，不产出 frontend implementation template，不选择下一步路线。",
+      scope: "task",
+      skippable: true,
+      after: [],
+    },
+    {
       id: "analyze_intent",
       tool: "analyze_intent",
       label: "Intent",
-      hint: "解读用户真实意图：意图分类、复杂度、缺失槽位、阻断澄清。按需调用 —— request 模糊或 scope 不清时跑。视觉/参考任务必须等 frontend_design frontend template 完成后再跑。",
+      hint: "解读用户真实意图：意图分类、复杂度、缺失槽位、阻断澄清。按需调用 —— request 模糊或 scope 不清时跑。视觉/网页参考任务通常等 frontend_design/frontend_research 证据完成后再跑。",
       scope: "task",
       skippable: true,
-      after: ["frontend_design"],
+      after: ["frontend_design", "frontend_research"],
     },
     {
       id: "requirements",
@@ -193,7 +203,7 @@ const PIPELINE: MiniWorkflow = {
       hint: "分析输入并分解为 REQ-N + 基础决策。多文件 / 需要显式验收标准时按需调用；trivial direct edit 可跳过。",
       scope: "task",
       skippable: true,
-      after: ["frontend_design"],
+      after: ["frontend_design", "frontend_research"],
     },
     {
       id: "architect",
@@ -354,6 +364,8 @@ function taskStepStatusByTool(
         "evidence_source_manifest",
       ].every((key) => keys.has(key)) ? "completed" : "pending"
     }
+    case "frontend_research":
+      return findLatestFrontendResearchBriefArtifact(taskID) ? "completed" : "pending"
     case "requirements":
       return findActiveSpecForTask(taskID) ? "completed" : "pending"
     case "architect":

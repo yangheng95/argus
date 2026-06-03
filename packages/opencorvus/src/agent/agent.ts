@@ -20,6 +20,7 @@ import ACCEPTANCE_REVIEW_CORE from "@/prompt/core/acceptance-review-core.txt"
 import INTENT_ANALYSIS_CORE from "@/prompt/core/intent-analysis-core.txt"
 import FACT_CHECK_CORE from "@/prompt/core/fact-check-core.txt"
 import RESEARCH_CORE from "@/prompt/core/research-core.txt"
+import FRONTEND_RESEARCH_CORE from "@/prompt/core/frontend-research-core.txt"
 import GOAL_WORKLOAD_ANALYST_CORE from "@/prompt/core/goal-workload-analyst-core.txt"
 import { FRONTEND_DESIGN_STATIC_TOOL_IDS } from "@/frontend-design/static-tools"
 import PROMPT_CODING from "./prompt/coding.txt"
@@ -398,6 +399,7 @@ export namespace Agent {
             "build",
             "requirements",
             "research",
+            "frontend_research",
             "frontend_design",
             "architect",
             "workload_analysis",
@@ -586,6 +588,30 @@ export namespace Agent {
         native: true,
         hidden: true,
       },
+      "frontend-research": {
+        name: "frontend-research",
+        description: AgentRoleContract.description("frontend-research"),
+        prompt: FRONTEND_RESEARCH_CORE,
+        tools: {
+          include: [
+            "read_file",
+            "find_files",
+            "search_code",
+            "list_directory",
+            "memory_search",
+            "memory_get",
+            "webfetch",
+            "external_code_search",
+            "todoread",
+            "todowrite",
+          ],
+        },
+        steps: 1000,
+        options: {},
+        mode: "primary",
+        native: true,
+        hidden: true,
+      },
       "goal-workload-analyst": {
         name: "goal-workload-analyst",
         description: AgentRoleContract.description("goal-workload-analyst"),
@@ -614,7 +640,7 @@ export namespace Agent {
       },
     }
 
-    const fixedReadonlyAgents = new Set(["fact-check", "research"])
+    const fixedReadonlyAgents = new Set(["fact-check", "research", "frontend-research"])
     const fixedToolSurfaceAgents = new Set(["frontend-design"])
     for (const [key, value] of entries((cfg.agent ?? {}) as NonNullable<Config.Info["agent"]>)) {
       if (fixedReadonlyAgents.has(key) && value.disable) {
@@ -719,6 +745,7 @@ export namespace Agent {
     integrity: INTEGRITY_RUNTIME_PROMPT,
     "fact-check": FACT_CHECK_CORE,
     research: RESEARCH_CORE,
+    "frontend-research": FRONTEND_RESEARCH_CORE,
     "goal-workload-analyst": GOAL_WORKLOAD_ANALYST_CORE,
     mission: MISSION_CORE,
   }

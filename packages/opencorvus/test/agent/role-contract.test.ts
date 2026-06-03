@@ -174,9 +174,12 @@ test("research and frontend-design role descriptions keep document research dist
   expect(AgentRoleContract.description("frontend-design")).toContain("not the owner for PRD/SPEC/report webpage research")
   expect(AgentRoleContract.description("frontend-design")).toContain("UI implementation or replication")
 
-  expect(AgentRoleContract.description("research")).toContain("PRD/SPEC/report input material")
-  expect(AgentRoleContract.description("research")).toContain("webpage functional/visual analysis")
-  expect(AgentRoleContract.description("research")).toContain("rendered webpage PRD evidence")
+  expect(AgentRoleContract.description("research")).toContain("PRD/SPEC/report source material")
+  expect(AgentRoleContract.description("research")).toContain("Dedicated webpage functional/visual PRD evidence belongs to frontend-research")
+
+  expect(AgentRoleContract.description("frontend-research")).toContain("webpage functional and visual evidence")
+  expect(AgentRoleContract.description("frontend-research")).toContain("frontend_research_brief")
+  expect(AgentRoleContract.description("frontend-research")).toContain("does not create the frontend implementation template")
 })
 
 test("public docs and live prompt do not describe deleted planner or requirements-owned goals", async () => {

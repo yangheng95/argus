@@ -9,6 +9,7 @@ const promptFiles = {
   architect: "architect-core.txt",
   build: "build-core.txt",
   frontendDesign: "frontend-design-core.txt",
+  frontendResearch: "frontend-research-core.txt",
   factCheck: "fact-check-core.txt",
   integrity: "integrity-core.txt",
   integrityTeam: "integrity-team-core.txt",
@@ -56,6 +57,7 @@ describe("core prompt hygiene", () => {
       // functional containers/adapters second.
       build: relaxedAgentPromptLineBudget,
       frontendDesign: relaxedAgentPromptLineBudget,
+      frontendResearch: relaxedAgentPromptLineBudget,
       factCheck: relaxedAgentPromptLineBudget,
       integrity: relaxedAgentPromptLineBudget,
       // Raised from 125 -> 135 after integrity-team gained final
@@ -78,7 +80,9 @@ describe("core prompt hygiene", () => {
       // Raised 505 -> 525 on 2026-05-31 for research evidence boundaries
       // while preserving prompt-over-host orchestration.
       // Raised 525 -> 530 for source-URL research dispatch guidance.
-      orchestrator: 530,
+      // Raised 530 -> 565 on 2026-06-03 after splitting webpage
+      // functional/visual evidence from generic research into frontend_research.
+      orchestrator: 565,
       // Raised from 180 -> 190 on 2026-05-29 to make Requirements record
       // explicit workflow/visual/data/verification complexity calibration
       // without turning it into goal decomposition.
@@ -634,10 +638,10 @@ describe("core prompt hygiene", () => {
     expect(design).toContain("source-quality review against static HTML/base64/CSS replay")
     expect(design).toContain("frontend_design/host materializes raw mirror evidence and the `web-clone-source/` package under `.opencorvus/runtime/tasks/<taskID>/frontend-design/`")
     expect(design).toContain("When task-runtime webpage evidence already exists")
-    expect(design).toContain("frontend-design-created source project after `create_frontend_skeleton_project` returns")
+    expect(design).toContain("frontend-design-created skeleton evidence project after `create_frontend_skeleton_project` returns")
     expect(design).toContain("use bounded `read_file` / project-structure tools")
-    expect(design).toContain("frontend_design creates the runtime `frontend-design-skeleton/` captured source project from that package and refines that project before handoff")
-    expect(design).toContain("Build must adopt the frontend_design refined project as the root app's starting point")
+    expect(design).toContain("then frontend_design creates the runtime `frontend-design-skeleton/` captured source project from that package as evidence and extracts from it into the target delivery project before handoff")
+    expect(design).toContain("Build must start from the target project that frontend_design populated and should only perform integration and precision fixes")
     expect(design).toContain("`final_delivery_mode`")
     expect(design).toContain("`baseline_replacement_plan`")
     expect(design).toContain("maintainable_replacement_required")
@@ -888,9 +892,9 @@ describe("core prompt hygiene", () => {
   test("orchestrator prompt keeps visual workflow ordering and verification-goal lifecycle coherent", async () => {
     const text = await readPrompt("orchestrator")
     const normalized = text.replace(/\s+/g, " ")
-    expect(normalized).toContain("`frontend_design` MUST be first, before `analyze_intent`")
+    expect(normalized).toContain("`frontend_design` and any needed `frontend_research` MUST be first, before `analyze_intent`")
     expect(normalized).toContain("UI replication from visual reference")
-    expect(normalized).toContain("`frontend_design` (mandatory when an image or live page URL is the visual spec) -> `analyze_intent`")
+    expect(normalized).toContain("`frontend_design` and `frontend_research` in parallel when a live page URL is the source of truth")
     expect(normalized).not.toContain("UI replication from visual reference` in `Kind: workflow` → `analyze_intent`")
     expect(normalized).not.toContain("verification` goals are integration checks; they stay pending until **deliver**")
     expect(normalized).toContain("Dispatch them with `build({ goalID })` like every other goal")

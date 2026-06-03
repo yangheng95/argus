@@ -671,14 +671,43 @@ export function persistResearchBrief(
     now: number
   },
 ) {
+  return persistResearchBriefArtifact(db, {
+    ...input,
+    kind: "research_brief",
+  })
+}
+
+export function persistFrontendResearchBrief(
+  db: Database.TxOrDb,
+  input: {
+    taskID: string
+    brief: ResearchBrief
+    now: number
+  },
+) {
+  return persistResearchBriefArtifact(db, {
+    ...input,
+    kind: "frontend_research_brief",
+  })
+}
+
+function persistResearchBriefArtifact(
+  db: Database.TxOrDb,
+  input: {
+    taskID: string
+    brief: ResearchBrief
+    now: number
+    kind: "research_brief" | "frontend_research_brief"
+  },
+) {
   const brief = ResearchBriefSchema.parse(input.brief)
   const integrityError = validateResearchBriefIntegrity(brief)
   if (integrityError) {
-    throw new Error(`persistResearchBrief: ${integrityError}`)
+    throw new Error(`${input.kind}: ${integrityError}`)
   }
   const boundaryError = validateResearchBriefTaskBoundary(brief, input.taskID)
   if (boundaryError) {
-    throw new Error(`persistResearchBrief: ${boundaryError}`)
+    throw new Error(`${input.kind}: ${boundaryError}`)
   }
   const id = Identifier.ascending("artifact")
   db.insert(EngineArtifactTable)
@@ -688,7 +717,7 @@ export function persistResearchBrief(
       run_id: null,
       goal_run_id: null,
       delivery_id: null,
-      kind: "research_brief",
+      kind: input.kind,
       label: "active",
       payload: brief,
       time_created: input.now,
@@ -705,6 +734,20 @@ export function persistTaskResearchBrief(input: {
 }) {
   return Database.use((db) =>
     persistResearchBrief(db, {
+      taskID: input.taskID,
+      brief: input.brief,
+      now: input.now ?? Date.now(),
+    }),
+  )
+}
+
+export function persistTaskFrontendResearchBrief(input: {
+  taskID: string
+  brief: ResearchBrief
+  now?: number
+}) {
+  return Database.use((db) =>
+    persistFrontendResearchBrief(db, {
       taskID: input.taskID,
       brief: input.brief,
       now: input.now ?? Date.now(),

@@ -389,7 +389,6 @@ test("native stage agent registry tool surfaces match role boundaries", async ()
       const design = await Agent.get("frontend-design")
       expect(design?.tools?.include).toEqual([...FRONTEND_DESIGN_STATIC_TOOL_IDS])
       expect(design?.tools?.include).toContain("url_screenshot")
-      expect(design?.tools?.include).toContain("skill")
       expect(design?.tools?.include).toContain("webpage_render")
       expect(design?.tools?.include).toContain("webpage_evaluate")
       expect(design?.tools?.include).not.toContain("websearch")
@@ -424,6 +423,12 @@ test("native stage agent registry tool surfaces match role boundaries", async ()
       ]) {
         expect(research?.tools?.include).not.toContain(tool)
       }
+
+      const frontendResearch = await Agent.get("frontend-research")
+      expect(frontendResearch).toBeDefined()
+      expect(frontendResearch?.tools?.include?.sort()).toEqual(research?.tools?.include?.sort())
+      expect(frontendResearch?.tools?.include).not.toContain("websearch")
+      expect(frontendResearch?.tools?.include).not.toContain("task")
 
       const integrity = await Agent.get("integrity")
       expect(integrity).toBeDefined()
@@ -479,6 +484,22 @@ test("fixed read-only evidence agents cannot be disabled or tool-overridden", as
       await expect(Agent.get("fact-check")).rejects.toThrow("config.agent.fact-check.tools is not supported")
     },
   })
+
+  await using frontendResearchTmp = await tmpdir({
+    config: {
+      agent: {
+        "frontend-research": { tools: { include: ["bash"] } },
+      },
+    },
+  })
+  await Instance.provide({
+    directory: frontendResearchTmp.path,
+    fn: async () => {
+      await expect(Agent.get("frontend-research")).rejects.toThrow(
+        "config.agent.frontend-research.tools is not supported",
+      )
+    },
+  })
 })
 
 test("orchestrator registry exposes lifecycle tools it teaches in prompt", async () => {
@@ -502,6 +523,7 @@ test("orchestrator registry exposes lifecycle tools it teaches in prompt", async
       }
       expect(include).toContain("integrity")
       expect(include).toContain("research")
+      expect(include).toContain("frontend_research")
       expect(include).not.toContain("deliver")
       expect(include).not.toContain("publish_delivery")
       expect(orchestrator?.prompt).toContain("propose_task")

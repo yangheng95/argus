@@ -27,6 +27,16 @@ import { researchRequestHashInput } from "./staleness"
 import RESEARCH_CORE from "@/prompt/core/research-core.txt"
 
 const log = Log.create({ service: "research-agent" })
+export type ResearchLikeAgentKind = "research" | "frontend-research"
+
+export interface ResearchSessionConfig {
+  kind: ResearchLikeAgentKind
+  core: string
+  sessionTitlePrefix: string
+  prepareWebpageEvidence: "prd-only" | "always-for-source-url"
+  bundlePathKind: "research" | "frontend-research"
+  delegation: string
+}
 
 export namespace ResearchAgent {
   export interface RunInput {
@@ -52,93 +62,119 @@ export namespace ResearchAgent {
   }
 
   export async function run(input: RunInput): Promise<RunResult> {
-    const webpagePrdEvidence = await prepareInputWebpagePrdEvidence(input)
-    const retrievalTools = await filterAgentTools(createReadonlyRetrievalTools(undefined, { websearch: false }), "research", {
-      taskID: input.taskID,
-      sessionID: input.parentSessionID,
-    })
-    const outputToolKit = createResearchOutputTools()
-
-    log.info("research starting", {
-      title: input.title,
-      targetDeliverable: input.targetDeliverable,
-      hasFocus: Boolean(input.focus?.trim()),
-    })
-
-    const out = await runAgentSession<ResearchCollector>({
+    return runResearchSession(input, {
       kind: "research",
-      core: withFactCheckRegistration(RESEARCH_CORE),
-      sessionTitle: `Research: ${input.title}`,
-      parentSessionID: input.parentSessionID,
-      taskID: input.taskID,
-      model: input.model,
-      signal: input.signal,
-      onStatus: input.onStatus,
-      onSessionCreated: input.onSessionCreated
-        ? (session) => {
-            input.onSessionCreated!(session.id)
-          }
-        : undefined,
-      toolKit: {
-        tools: { ...retrievalTools, ...outputToolKit.tools },
-        getCollector: outputToolKit.getCollector,
-        buildReport: outputToolKit.buildReport,
-      },
-      buildUserPrompt: () => buildUserPrompt(input, webpagePrdEvidence),
-      terminalTool: {
-        toolName: "submit_research_brief",
-        isSatisfied: (collector) => collector.finalized,
-        shouldExposeOnlyTerminalTool: () => false,
-      },
+      core: RESEARCH_CORE,
+      sessionTitlePrefix: "Research",
+      prepareWebpageEvidence: "prd-only",
+      bundlePathKind: "research",
+      delegation:
+        "Orchestrator is asking research to gather evidence and prepare PRD/SPEC input material. " +
+        "Return evidence, problem statements, user needs, constraints, document outline, and open questions only. " +
+        "Do not produce final REQ-N, acceptance specs, goal graph, implementation plan, or next-tool routing instructions.",
     })
-
-    const collector = out.collector
-    if (!collector.finalized || !collector.draft) {
-      throw new Error(`research agent did not call submit_research_brief (session=${out.session.id})`)
-    }
-
-    const bundle = researchBundleFromDraft(collector.draft)
-    const bundlePaths = await writeResearchBundle({
-      taskID: input.taskID,
-      sessionID: out.session.id,
-      bundle,
-    })
-    const createdAt = new Date()
-    const requestHashInput = researchRequestHashInput({
-      request: input.request,
-      clarificationTranscript: input.taskID ? clarificationTranscriptSection(input.taskID) : undefined,
-      operatorNotes: input.taskID ? operatorNotesSection(input.taskID) : undefined,
-    })
-    const brief = buildResearchBriefFromDraft({
-      draft: collector.draft,
-      metadata: {
-        research_session_id: out.session.id,
-        created_for_message_id: out.finalMessage.info.id,
-        request_hash: researchRequestHash(requestHashInput),
-        created_at: createdAt.toISOString(),
-        stale_after: collector.draft.evidence_index.some((item) => item.volatile)
-          ? new Date(createdAt.getTime() + RESEARCH_VOLATILE_STALE_AFTER_MS).toISOString()
-          : undefined,
-      },
-      bundlePaths,
-    })
-    const factCheckItems = FactCheckItemListSchema.parse(collector.fact_check_items)
-
-    log.info("research finished", {
-      sessionID: out.session.id,
-      sources: brief.evidence_index.length,
-      facts: brief.facts.length,
-      blockingOpenQuestions: brief.open_questions.filter((item) => item.blocking).length,
-    })
-
-    return { brief, bundle, factCheckItems, sessionID: out.session.id }
   }
 }
 
-async function prepareInputWebpagePrdEvidence(input: ResearchAgent.RunInput): Promise<WebpagePrdEvidence | undefined> {
+export async function runResearchSession(
+  input: ResearchAgent.RunInput,
+  config: ResearchSessionConfig,
+): Promise<ResearchAgent.RunResult> {
+  const webpagePrdEvidence = await prepareInputWebpagePrdEvidence(input, config.prepareWebpageEvidence)
+  const retrievalTools = await filterAgentTools(
+    createReadonlyRetrievalTools(undefined, { websearch: false }),
+    config.kind,
+    {
+      taskID: input.taskID,
+      sessionID: input.parentSessionID,
+    },
+  )
+  const outputToolKit = createResearchOutputTools()
+
+  log.info(`${config.kind} starting`, {
+    title: input.title,
+    targetDeliverable: input.targetDeliverable,
+    hasFocus: Boolean(input.focus?.trim()),
+  })
+
+  const out = await runAgentSession<ResearchCollector>({
+    kind: config.kind,
+    core: withFactCheckRegistration(config.core),
+    sessionTitle: `${config.sessionTitlePrefix}: ${input.title}`,
+    parentSessionID: input.parentSessionID,
+    taskID: input.taskID,
+    model: input.model,
+    signal: input.signal,
+    onStatus: input.onStatus,
+    onSessionCreated: input.onSessionCreated
+      ? (session) => {
+          input.onSessionCreated!(session.id)
+        }
+      : undefined,
+    toolKit: {
+      tools: { ...retrievalTools, ...outputToolKit.tools },
+      getCollector: outputToolKit.getCollector,
+      buildReport: outputToolKit.buildReport,
+    },
+    buildUserPrompt: () => buildUserPrompt(input, webpagePrdEvidence, config),
+    terminalTool: {
+      toolName: "submit_research_brief",
+      isSatisfied: (collector) => collector.finalized,
+      shouldExposeOnlyTerminalTool: () => false,
+    },
+  })
+
+  const collector = out.collector
+  if (!collector.finalized || !collector.draft) {
+    throw new Error(`${config.kind} agent did not call submit_research_brief (session=${out.session.id})`)
+  }
+
+  const bundle = researchBundleFromDraft(collector.draft)
+  const bundlePaths = await writeResearchBundle({
+    taskID: input.taskID,
+    sessionID: out.session.id,
+    bundle,
+    kind: config.bundlePathKind,
+  })
+  const createdAt = new Date()
+  const requestHashInput = researchRequestHashInput({
+    request: input.request,
+    clarificationTranscript: input.taskID ? clarificationTranscriptSection(input.taskID) : undefined,
+    operatorNotes: input.taskID ? operatorNotesSection(input.taskID) : undefined,
+  })
+  const brief = buildResearchBriefFromDraft({
+    draft: collector.draft,
+    metadata: {
+      research_session_id: out.session.id,
+      created_for_message_id: out.finalMessage.info.id,
+      request_hash: researchRequestHash(requestHashInput),
+      created_at: createdAt.toISOString(),
+      stale_after: collector.draft.evidence_index.some((item) => item.volatile)
+        ? new Date(createdAt.getTime() + RESEARCH_VOLATILE_STALE_AFTER_MS).toISOString()
+        : undefined,
+    },
+    bundlePaths,
+  })
+  const factCheckItems = FactCheckItemListSchema.parse(collector.fact_check_items)
+
+  log.info(`${config.kind} finished`, {
+    sessionID: out.session.id,
+    sources: brief.evidence_index.length,
+    facts: brief.facts.length,
+    blockingOpenQuestions: brief.open_questions.filter((item) => item.blocking).length,
+  })
+
+  return { brief, bundle, factCheckItems, sessionID: out.session.id }
+}
+
+async function prepareInputWebpagePrdEvidence(
+  input: ResearchAgent.RunInput,
+  mode: ResearchSessionConfig["prepareWebpageEvidence"],
+): Promise<WebpagePrdEvidence | undefined> {
   const sourceUrls = input.sourceUrls ?? []
   const hasWebpageSource = sourceUrls.some((url) => /^https?:\/\//i.test(url))
-  if (input.targetDeliverable !== "prd" || !hasWebpageSource) return undefined
+  if (!hasWebpageSource) return undefined
+  if (mode === "prd-only" && input.targetDeliverable !== "prd") return undefined
   if (!input.taskID) {
     throw new Error("webpage PRD research requires taskID so rendered evidence can be persisted under task runtime")
   }
@@ -151,14 +187,13 @@ async function prepareInputWebpagePrdEvidence(input: ResearchAgent.RunInput): Pr
   })
 }
 
-function buildUserPrompt(input: ResearchAgent.RunInput, webpagePrdEvidence?: WebpagePrdEvidence): string {
+function buildUserPrompt(
+  input: ResearchAgent.RunInput,
+  webpagePrdEvidence: WebpagePrdEvidence | undefined,
+  config: ResearchSessionConfig,
+): string {
   const sections: string[] = []
-  sections.push(
-    "# Delegation\n\n" +
-      "Orchestrator is asking research to gather evidence and prepare PRD/SPEC input material. " +
-      "Return evidence, problem statements, user needs, constraints, document outline, and open questions only. " +
-      "Do not produce final REQ-N, acceptance specs, goal graph, implementation plan, or next-tool routing instructions.",
-  )
+  sections.push(`# Delegation\n\n${config.delegation}`)
   sections.push(renderUserRequestSection({
     heading: "# Task",
     title: input.title,
@@ -185,11 +220,14 @@ async function writeResearchBundle(input: {
   taskID?: string
   sessionID: string
   bundle: ResearchBundle
+  kind: ResearchSessionConfig["bundlePathKind"]
 }): Promise<ResearchBrief["bundle"]> {
   if (!input.taskID) {
     throw new Error("research bundle persistence requires taskID")
   }
-  const paths = ProjectRuntimePaths.researchPaths(Instance.directory, input.taskID, input.sessionID)
+  const paths = input.kind === "frontend-research"
+    ? ProjectRuntimePaths.frontendResearchPaths(Instance.directory, input.taskID, input.sessionID)
+    : ProjectRuntimePaths.researchPaths(Instance.directory, input.taskID, input.sessionID)
   await fs.mkdir(paths.absoluteDir, { recursive: true })
   await Promise.all([
     fs.writeFile(paths.fullMarkdownAbsolute, input.bundle.full_markdown, "utf8"),

@@ -2,11 +2,17 @@ import { afterEach, beforeEach, describe, expect, test } from "bun:test"
 import { Database } from "../../src/storage/db"
 import { ProjectTable } from "../../src/project/project.sql"
 import { EngineTaskTable } from "../../src/engine/engine.sql"
-import { persistTaskResearchBrief } from "../../src/engine/persist"
-import { findLatestResearchBriefArtifact } from "../../src/engine/store"
+import { persistTaskFrontendResearchBrief, persistTaskResearchBrief } from "../../src/engine/persist"
+import { findLatestFrontendResearchBriefArtifact, findLatestResearchBriefArtifact } from "../../src/engine/store"
 import { describeTask, renderTaskDescription } from "../../src/engine/describe"
+import { projectTaskSteps, WorkflowRegistry } from "../../src/engine/workflow"
 import { researchBriefIsStale } from "../../src/research/staleness"
-import { renderResearchBriefPromptSection } from "../../src/research/prompt-section"
+import {
+  allResearchEvidenceIDsForTask,
+  frontendResearchEvidenceIDsForTask,
+  renderFrontendResearchBriefPromptSection,
+  renderResearchBriefPromptSection,
+} from "../../src/research/prompt-section"
 import { validateResearchBriefTaskBoundary } from "../../src/research/schema"
 import { Instance } from "../../src/project/instance"
 import { Identifier } from "../../src/id/id"
@@ -18,12 +24,12 @@ import type { ResearchBrief } from "../../src/research/schema"
 const request = "research request"
 const INSTANCE_STARTUP_TIMEOUT_MS = 60_000
 
-function validResearchBriefForTask(taskID: string, overrides: Partial<ResearchBrief> = {}) {
+function validResearchBriefForTask(taskID: string, overrides: Partial<ResearchBrief> = {}, stage = "research") {
   return validResearchBrief(request, {
     bundle: {
-      full_markdown_path: `.opencorvus/runtime/tasks/${taskID}/research/s/research-bundle.md`,
-      evidence_json_path: `.opencorvus/runtime/tasks/${taskID}/research/s/evidence.json`,
-      citation_map_path: `.opencorvus/runtime/tasks/${taskID}/research/s/citation-map.json`,
+      full_markdown_path: `.opencorvus/runtime/tasks/${taskID}/${stage}/s/research-bundle.md`,
+      evidence_json_path: `.opencorvus/runtime/tasks/${taskID}/${stage}/s/evidence.json`,
+      citation_map_path: `.opencorvus/runtime/tasks/${taskID}/${stage}/s/citation-map.json`,
     },
     ...overrides,
   }, { timeout: INSTANCE_STARTUP_TIMEOUT_MS })
@@ -53,6 +59,73 @@ function seedTask(input: { projectID: string; taskID: string; now: number }) {
       time_started: input.now,
     }).run()
   }, { timeout: INSTANCE_STARTUP_TIMEOUT_MS })
+}
+
+function validWebpageContract() {
+  return {
+    source_url: "https://example.com/page",
+    reference_image_evidence_ids: ["ev_1"],
+    functional_surfaces: [
+      {
+        id: "surface_main",
+        title: "Main surface",
+        user_visible_behavior: "Shows the primary page content and navigation.",
+        required_interactions: ["Primary navigation remains clickable."],
+        evidence_ids: ["ev_1"],
+      },
+    ],
+    visual_layout: [
+      {
+        id: "layout_desktop",
+        viewport: "desktop",
+        region: "Main content",
+        layout_contract: "Header, content, and footer remain in source order.",
+        spacing_and_alignment: "Spacing and alignment follow the captured source layout.",
+        evidence_ids: ["ev_1"],
+      },
+    ],
+    style_requirements: [
+      {
+        id: "style_primary",
+        token_or_selector: ".source-card",
+        requirement: "Preserve source-backed typography, borders, and density.",
+        evidence_ids: ["ev_1"],
+      },
+    ],
+    interaction_states: [
+      {
+        id: "state_nav_hover",
+        component: "Navigation link",
+        state: "hover",
+        behavior: "Hover state remains visually distinct.",
+        evidence_ids: ["ev_1"],
+      },
+    ],
+    data_content_inventory: [
+      {
+        id: "data_main",
+        surface: "Main content",
+        content_contract: "Visible labels, values, and repeated rows are preserved.",
+        evidence_ids: ["ev_1"],
+      },
+    ],
+    fidelity_acceptance: [
+      {
+        id: "accept_desktop",
+        target: "Desktop viewport",
+        criterion: "Screenshot preserves the visible page order and primary components.",
+        evidence_ids: ["ev_1"],
+      },
+    ],
+    fidelity_risks: [
+      {
+        id: "risk_dynamic",
+        risk: "Dynamic content may differ between captures.",
+        impact: "Implementation must separate stable layout from volatile values.",
+        evidence_ids: ["ev_1"],
+      },
+    ],
+  }
 }
 
 describe("research brief persistence and describe projection", () => {
@@ -91,6 +164,47 @@ describe("research brief persistence and describe projection", () => {
         expect(rendered).toContain("Research is advisory evidence only")
         expect(rendered).toContain("blocking_open_questions=1")
         expect(renderResearchBriefPromptSection({ taskID, request })).toContain("```json")
+      },
+    })
+  }, { timeout: INSTANCE_STARTUP_TIMEOUT_MS })
+
+  test("persists frontend_research_brief separately and injects it downstream", async () => {
+    await using tmp = await tmpdir({ git: true })
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const projectID = "proj_frontend_research_persist_a"
+        const taskID = "tsk_frontend_research_persist_a"
+        seedTask({ projectID, taskID, now: 1_000 })
+        const artifactID = persistTaskFrontendResearchBrief({
+          taskID,
+          brief: validResearchBriefForTask(taskID, {
+            summary: "Frontend research source-backed summary.",
+            webpage_contract: validWebpageContract(),
+          }, "frontend-research"),
+          now: 2_000,
+        })
+
+        expect(findLatestResearchBriefArtifact(taskID)).toBeUndefined()
+        const artifact = findLatestFrontendResearchBriefArtifact(taskID)
+        expect(artifact?.id).toBe(artifactID)
+        expect(frontendResearchEvidenceIDsForTask({ taskID, request })).toEqual(["ev_1"])
+        expect(allResearchEvidenceIDsForTask({ taskID, request })).toEqual(["ev_1"])
+
+        const prompt = renderFrontendResearchBriefPromptSection({ taskID, request })
+        expect(prompt).toContain("Frontend Research Brief")
+        expect(prompt).toContain("\"webpage_contract\"")
+        expect(renderResearchBriefPromptSection({ taskID, request })).toBe("")
+
+        const desc = await describeTask(taskID)
+        expect(desc.research).toBeUndefined()
+        expect(desc.frontend_research?.artifact_id).toBe(artifactID)
+        const rendered = renderTaskDescription(desc)
+        expect(rendered).toContain("## Frontend Research Brief")
+        expect(rendered).toContain("Frontend research source-backed summary.")
+
+        const pipeline = WorkflowRegistry.resolveSync("pipeline")!
+        expect(projectTaskSteps(taskID, pipeline).frontend_research?.status).toBe("completed")
       },
     })
   }, { timeout: INSTANCE_STARTUP_TIMEOUT_MS })
@@ -134,9 +248,7 @@ describe("research brief persistence and describe projection", () => {
         const invalid = validResearchBriefForTask(taskID, {
           facts: [{ id: "fact_1", statement: "Broken fact.", evidence_ids: ["ev_missing"] }],
         })
-        expect(() => persistTaskResearchBrief({ taskID, brief: invalid, now: 2_000 })).toThrow(
-          "persistResearchBrief",
-        )
+        expect(() => persistTaskResearchBrief({ taskID, brief: invalid, now: 2_000 })).toThrow("research_brief")
         expect(findLatestResearchBriefArtifact(taskID)).toBeUndefined()
       },
     })

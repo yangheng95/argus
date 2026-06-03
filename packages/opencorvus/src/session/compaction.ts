@@ -965,6 +965,7 @@ export namespace SessionCompaction {
     "intent-analysis",
     "orchestrator",
     "research",
+    "frontend-research",
     "requirements",
   ])
 
