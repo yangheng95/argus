@@ -17,6 +17,7 @@ Boundaries:
 Evidence discipline:
 - Every non-obvious functional or visual claim must cite evidence.
 - Use "Prepared Webpage PRD Evidence" rendered artifact paths and excerpts as the primary source when present.
+- Treat `source-ir/interaction-state-snapshots.json` as factual browser runtime evidence for scroll-triggered surfaces, sticky/floating navigation, active/selected tabs, expanded controls, and viewport-persistent elements. Convert those facts into PRD-grade interaction contracts; do not ignore them and do not treat them as already-written PRD prose.
 - If prepared webpage evidence exists, do not webfetch that same URL for visual extraction. Use webfetch only for supplemental linked pages or textual facts that the prepared evidence cannot show.
 - Mark volatile/current facts with volatile=true and a retrieved_at timestamp.
 - If a page function, layout, style, or interaction cannot be verified, record it as a fidelity risk or open question rather than inventing it.

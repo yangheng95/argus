@@ -29,7 +29,12 @@ describe("research webpage PRD evidence", () => {
     })
 
     expect(evidence?.status).toBe("generated")
-    expect(calls).toEqual(["extract:https://example.com/markets/world-economy/", "compile", "analyze"])
+    expect(calls).toEqual([
+      "extract:https://example.com/markets/world-economy/",
+      "compile",
+      "analyze",
+      "captureRuntimeState:https://example.com/markets/world-economy/",
+    ])
     expect(evidence?.excerpts.some((item) => item.excerpt.includes("Economic trends"))).toBe(true)
 
     const prompt = renderWebpagePrdEvidencePromptSection(evidence)
@@ -38,6 +43,8 @@ describe("research webpage PRD evidence", () => {
     expect(prompt).toContain("Return `document_outline` as the PRD major module list")
     expect(prompt).toContain("Also submit `webpage_contract`")
     expect(prompt).toContain("functional_surfaces, visual_layout, style_requirements, interaction_states")
+    expect(prompt).toContain("source-ir/interaction-state-snapshots.json")
+    expect(prompt).toContain("factual runtime evidence")
     expect(prompt).toContain("Do not substitute a raw artifact/material list for this contract")
     expect(prompt).toContain("source-ir/content-model.json")
     expect(prompt).toContain("web-clone-source/reference.png")
@@ -80,6 +87,10 @@ function fakePipeline(calls: string[], options: { longEvidenceSummary?: boolean 
       const extracted = JSON.parse(await fs.readFile(path.join(outputDir, "extracted-page.json"), "utf8"))
       await writeCompleteEvidence(outputDir, extracted.url, options)
     },
+    captureRuntimeState: async ({ outputDir, url }) => {
+      calls.push(`captureRuntimeState:${url}`)
+      await writeRuntimeStateEvidence(outputDir, url)
+    },
   }
 }
 
@@ -94,6 +105,10 @@ async function writeCompleteEvidence(
     const file = path.join(mirrorDir, relative)
     await fs.mkdir(path.dirname(file), { recursive: true })
     if (relative === "reference.png") {
+      await fs.writeFile(file, minimalPngBytes())
+      continue
+    }
+    if (relative.startsWith("interaction-states/") && relative.endsWith(".png")) {
       await fs.writeFile(file, minimalPngBytes())
       continue
     }
@@ -133,11 +148,40 @@ function artifactContent(relative: string, url: string, options: { longEvidenceS
   if (relative === "source-ir/interaction-hints.json") {
     return JSON.stringify({ interactions: [{ type: "tabs", label: "Popular Recent Video" }] }, null, 2)
   }
+  if (relative === "source-ir/interaction-state-snapshots.json") {
+    return JSON.stringify({
+      version: 1,
+      purpose: "webpage-runtime-interaction-state-evidence",
+      source: { url, viewport: { width: 1440, height: 900 }, captureEngine: "playwright" },
+      snapshots: [
+        { id: "initial", scrollY: 0, navigationClusters: [{ texts: ["Overview", "Countries", "Ideas"] }] },
+        { id: "scroll-50", scrollY: 600, navigationClusters: [{ texts: ["Overview", "Countries", "Ideas"] }] },
+      ],
+      observations: [{
+        kind: "persistent-viewport-position",
+        elementKey: "tab:overview countries ideas",
+        description: "Element text and viewport Y remain stable while document scroll position changes.",
+      }],
+    }, null, 2)
+  }
   if (relative === "source-skeleton/source-skeleton-audit.json" || relative === "source-ir/source-quality-audit.json") {
     return JSON.stringify({ passed: true }, null, 2)
   }
   if (relative.endsWith(".json")) return JSON.stringify({ version: 1 }, null, 2)
   return `${relative}\n`
+}
+
+async function writeRuntimeStateEvidence(outputDir: string, url: string): Promise<void> {
+  await fs.mkdir(path.join(outputDir, "source-ir"), { recursive: true })
+  await fs.mkdir(path.join(outputDir, "interaction-states"), { recursive: true })
+  for (const name of ["initial.png", "scroll-25.png", "scroll-50.png", "scroll-75.png"]) {
+    await fs.writeFile(path.join(outputDir, "interaction-states", name), minimalPngBytes())
+  }
+  await fs.writeFile(
+    path.join(outputDir, "source-ir", "interaction-state-snapshots.json"),
+    artifactContent("source-ir/interaction-state-snapshots.json", url, {}),
+    "utf8",
+  )
 }
 
 function minimalPngBytes(): Uint8Array {

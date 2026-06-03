@@ -50,7 +50,12 @@ export const WEB_CLONE_REQUIRED_MIRROR_ARTIFACTS = [
   "source-ir/layout-map.json",
   "source-ir/style-tokens.json",
   "source-ir/interaction-hints.json",
+  "source-ir/interaction-state-snapshots.json",
   "source-ir/source-quality-audit.json",
+  "interaction-states/initial.png",
+  "interaction-states/scroll-25.png",
+  "interaction-states/scroll-50.png",
+  "interaction-states/scroll-75.png",
 ] as const
 
 const PNG_SIGNATURE = Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a])

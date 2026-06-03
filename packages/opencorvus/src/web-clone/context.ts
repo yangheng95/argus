@@ -56,6 +56,7 @@ const REQUIRED_READS = [
   "source-ir/layout-map.json",
   "source-ir/style-tokens.json",
   "source-ir/interaction-hints.json",
+  "source-ir/interaction-state-snapshots.json",
   "source-skeleton/critical.css",
   "source-skeleton/index.html (raw evidence only; do not mechanically convert this file into app source)",
 ]
@@ -65,6 +66,7 @@ const REQUIRED_SOURCE_HANDOFF_ARTIFACTS = [
   "source-skeleton/critical.css",
   "source-ir/component-tree.json",
   "source-ir/content-model.json",
+  "source-ir/interaction-state-snapshots.json",
 ] as const
 
 export async function prepareWebCloneContext(input: PrepareWebCloneContextInput): Promise<PrepareWebCloneContextOutput> {
@@ -274,6 +276,7 @@ async function materializeVisibleSourcePackage(input: {
   await copyFileIfExists(path.join(input.mirrorDir, "reference.png"), path.join(input.outputDir, "reference.png"), written)
   await copyDirIfExists(path.join(input.mirrorDir, "source-skeleton"), path.join(input.outputDir, "source-skeleton"), written)
   await copyDirIfExists(path.join(input.mirrorDir, "source-ir"), path.join(input.outputDir, "source-ir"), written)
+  await copyDirIfExists(path.join(input.mirrorDir, "interaction-states"), path.join(input.outputDir, "interaction-states"), written)
   await copyFileIfExists(path.join(input.mirrorDir, "assets", "manifest.json"), path.join(input.outputDir, "assets", "manifest.json"), written)
   await copyDirIfExists(path.join(input.mirrorDir, "assets", "svg"), path.join(input.outputDir, "assets", "svg"), written)
   await copyDirIfExists(path.join(input.mirrorDir, "assets", "images"), path.join(input.outputDir, "assets", "images"), written)
@@ -315,6 +318,11 @@ async function materializeVisibleSourcePackage(input: {
       "source-ir/layout-map.json",
       "source-ir/style-tokens.json",
       "source-ir/interaction-hints.json",
+      "source-ir/interaction-state-snapshots.json",
+      "interaction-states/initial.png",
+      "interaction-states/scroll-25.png",
+      "interaction-states/scroll-50.png",
+      "interaction-states/scroll-75.png",
       "singlefile.html",
       "visual-surface-candidates.json",
       "visual-surface-scaffold.json",
@@ -328,6 +336,7 @@ async function materializeVisibleSourcePackage(input: {
       "implementation-blueprint.md and source-ir/* are the primary app-source inputs.",
       "source-skeleton/index.html is raw evidence only; do not mechanically convert it into one giant framework component.",
       "Implementation code belongs in the target app source tree; this package is the reusable source handoff, not a generated app.",
+      "source-ir/interaction-state-snapshots.json is runtime evidence, not prose requirements or implementation code.",
       "Use sidecar assets by file reference instead of inlining dense SVG/base64 payloads.",
       "Do not runtime-load third-party CSS bundles; copy or author project-owned CSS from the extracted critical styles and tokens.",
       "Runtime acceptance still compares the target app against reference.png.",
@@ -350,10 +359,11 @@ function renderSourcePackageReadme(mirrorDir: string, stats: PrepareWebCloneCont
     "4. `source-ir/component-tree.json`",
     "5. `source-ir/content-model.json`",
     "6. `source-ir/layout-map.json`, `source-ir/style-tokens.json`, and `source-ir/interaction-hints.json`",
-    "7. `visual-surface-candidates.json` when present",
-    "8. `singlefile.html` as optional visual DOM/CSS evidence for frontend-design skeleton generation",
-    "9. `source-skeleton/critical.css`",
-    "10. `source-skeleton/index.html` only as raw evidence for ambiguous DOM order or missing text",
+    "7. `source-ir/interaction-state-snapshots.json` and `interaction-states/*.png` for scroll/click/runtime state evidence",
+    "8. `visual-surface-candidates.json` when present",
+    "9. `singlefile.html` as optional visual DOM/CSS evidence for frontend-design skeleton generation",
+    "10. `source-skeleton/critical.css`",
+    "11. `source-skeleton/index.html` only as raw evidence for ambiguous DOM order or missing text",
     "",
     "Use `assets/manifest.json`, `assets/svg/`, and `assets/images/` as reusable sidecars for dense geometry and extracted resources. Reference those files from normal React/Vue/etc. source instead of pasting the payloads inline.",
     "",
@@ -362,6 +372,8 @@ function renderSourcePackageReadme(mirrorDir: string, stats: PrepareWebCloneCont
     "Do not runtime-load source-site or other third-party CSS bundles. The target project must own the CSS it needs, derived from `source-skeleton/critical.css`, `source-ir/style-tokens.json`, and explicit component styling.",
     "",
     "Do not treat this package as the deliverable app. The deliverable is the project-owned app source seeded from this package's structure, content, styles, and assets.",
+    "",
+    "`source-ir/interaction-state-snapshots.json` is factual runtime evidence for frontend-research and implementation verification; it must not be treated as generated PRD prose.",
     "",
     "Verification evidence should include source-consumption diagnostics plus runtime visual comparison against `reference.png` when those checks are available.",
     "",

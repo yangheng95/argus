@@ -28,7 +28,7 @@ describe("live webpage evidence pipeline", () => {
 
     const mirrorDir = ProjectRuntimePaths.frontendDesignPaths(tmp.path, taskID).mirrorAbsolute
     expect(result.status).toBe("generated")
-    expect(calls).toEqual(["extract:https://example.com/markets", "compile", "analyze"])
+    expect(calls).toEqual(["extract:https://example.com/markets", "compile", "analyze", "captureRuntimeState:https://example.com/markets"])
     expect(await hasCompletePrimaryEvidence(mirrorDir, "https://example.com/markets")).toBe(true)
     const paths = ProjectRuntimePaths.frontendDesignPaths(tmp.path, taskID)
     expect(result.artifacts).toContain(path.posix.join(paths.mirrorRelative, "source-skeleton/index.html"))
@@ -36,12 +36,16 @@ describe("live webpage evidence pipeline", () => {
     expect(result.artifacts).toContain(path.posix.join(paths.mirrorRelative, "source-skeleton/used-selectors.json"))
     expect(result.artifacts).toContain(path.posix.join(paths.mirrorRelative, "source-skeleton/skeleton-manifest.json"))
     expect(result.artifacts).toContain(path.posix.join(paths.mirrorRelative, "source-ir/component-tree.json"))
+    expect(result.artifacts).toContain(path.posix.join(paths.mirrorRelative, "source-ir/interaction-state-snapshots.json"))
+    expect(result.artifacts).toContain(path.posix.join(paths.mirrorRelative, "interaction-states/scroll-50.png"))
     expect(result.artifacts).toContain(path.posix.join(paths.mirrorRelative, "visual-surface-candidates.json"))
     expect(result.artifacts).toContain(path.posix.join(paths.mirrorRelative, "visual-surface-scaffold.json"))
     expect(result.artifacts).toContain(path.posix.join(paths.sourcePackageRelative, "README.md"))
     expect(result.artifacts).toContain(path.posix.join(paths.sourcePackageRelative, "singlefile.html"))
     expect(result.artifacts).toContain(path.posix.join(paths.sourcePackageRelative, "implementation-blueprint.md"))
     expect(result.artifacts).toContain(path.posix.join(paths.sourcePackageRelative, "source-skeleton/critical.css"))
+    expect(result.artifacts).toContain(path.posix.join(paths.sourcePackageRelative, "source-ir/interaction-state-snapshots.json"))
+    expect(result.artifacts).toContain(path.posix.join(paths.sourcePackageRelative, "interaction-states/scroll-50.png"))
     expect(result.artifacts).toContain(path.posix.join(paths.sourcePackageRelative, "source-skeleton/used-selectors.json"))
     expect(result.artifacts).toContain(path.posix.join(paths.sourcePackageRelative, "source-skeleton/skeleton-manifest.json"))
     expect(result.artifacts).toContain(path.posix.join(paths.sourcePackageRelative, "visual-surface-candidates.json"))
@@ -51,6 +55,7 @@ describe("live webpage evidence pipeline", () => {
     expect(await fileExists(path.join(paths.sourcePackageAbsolute, "README.md"))).toBe(true)
     expect(await fileExists(path.join(paths.sourcePackageAbsolute, "implementation-blueprint.md"))).toBe(true)
     expect(await fileExists(path.join(paths.sourcePackageAbsolute, "visual-surface-scaffold.json"))).toBe(true)
+    expect(await fileExists(path.join(paths.sourcePackageAbsolute, "source-ir", "interaction-state-snapshots.json"))).toBe(true)
   })
 
   test("reuses complete mirror evidence for the same URL", async () => {
@@ -101,7 +106,7 @@ describe("live webpage evidence pipeline", () => {
 
     const secondPaths = ProjectRuntimePaths.frontendDesignPaths(tmp.path, "tsk_webpage_evidence_second")
     expect(result.status).toBe("generated")
-    expect(secondCalls).toEqual(["extract:https://example.com/second", "compile", "analyze"])
+    expect(secondCalls).toEqual(["extract:https://example.com/second", "compile", "analyze", "captureRuntimeState:https://example.com/second"])
     expect(await fileExists(path.join(tmp.path, "mirror", "reference.png"))).toBe(false)
     expect(await fileExists(path.join(tmp.path, "web-clone-source", "reference.png"))).toBe(false)
     expect(await fileExists(path.join(secondPaths.mirrorAbsolute, "reference.png"))).toBe(true)
@@ -124,6 +129,7 @@ describe("live webpage evidence pipeline", () => {
         },
         compile: async () => {},
         analyze: async () => {},
+        captureRuntimeState: async () => {},
       },
     })).rejects.toThrow("did not produce the complete primary mirror artifact set")
   })
@@ -144,6 +150,10 @@ function fakePipeline(calls: string[]): LiveWebpageEvidencePipeline {
       calls.push("analyze")
       const extracted = JSON.parse(await fs.readFile(path.join(outputDir, "extracted-page.json"), "utf8"))
       await writeCompleteEvidence(outputDir, extracted.url)
+    },
+    captureRuntimeState: async ({ outputDir, url }) => {
+      calls.push(`captureRuntimeState:${url}`)
+      await writeRuntimeStateEvidence(outputDir, url)
     },
   }
 }
@@ -166,6 +176,10 @@ async function writeCompleteEvidence(mirrorDir: string, url: string): Promise<vo
       await fs.writeFile(file, minimalPngBytes())
       continue
     }
+    if (relative.startsWith("interaction-states/") && relative.endsWith(".png")) {
+      await fs.writeFile(file, minimalPngBytes())
+      continue
+    }
     const content =
       relative === "extracted-page.json"
         ? JSON.stringify({ url })
@@ -176,6 +190,31 @@ async function writeCompleteEvidence(mirrorDir: string, url: string): Promise<vo
             : `${relative}\n`
     await fs.writeFile(file, content, "utf8")
   }
+}
+
+async function writeRuntimeStateEvidence(mirrorDir: string, url: string): Promise<void> {
+  await fs.mkdir(path.join(mirrorDir, "source-ir"), { recursive: true })
+  await fs.mkdir(path.join(mirrorDir, "interaction-states"), { recursive: true })
+  for (const name of ["initial.png", "scroll-25.png", "scroll-50.png", "scroll-75.png"]) {
+    await fs.writeFile(path.join(mirrorDir, "interaction-states", name), minimalPngBytes())
+  }
+  await fs.writeFile(path.join(mirrorDir, "source-ir", "interaction-state-snapshots.json"), JSON.stringify({
+    version: 1,
+    purpose: "webpage-runtime-interaction-state-evidence",
+    source: { url, viewport: { width: 1440, height: 900 }, captureEngine: "playwright" },
+    artifacts: { screenshotsDir: "interaction-states" },
+    snapshots: [
+      { id: "initial", scrollY: 0, navigationClusters: [] },
+      { id: "scroll-50", scrollY: 600, navigationClusters: [] },
+    ],
+    observations: [
+      {
+        kind: "persistent-viewport-position",
+        description: "Element text and viewport Y remain stable while document scroll position changes.",
+        elementKey: "tab:overview countries ideas",
+      },
+    ],
+  }), "utf8")
 }
 
 function minimalPngBytes(): Uint8Array {

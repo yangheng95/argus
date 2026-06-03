@@ -6,6 +6,7 @@
  *   - webpage_extract         URL → ExtractedPage + reference screenshot
  *   - webpage_compile         ExtractedPage → XML IR (compact prompt-friendly)
  *   - webpage_analyze         ExtractedPage → ProjectScaffold + pre-generated files
+ *   - webpage_runtime_state   URL → browser scroll/runtime state evidence
  *   - webpage_image_extract   Image(s) → ImageAnalysis (vision-LLM)
  *   - webpage_image_compile   ImageAnalysis → XML IR (same dialect as URL flow)
  *   - webpage_render          explicit browser URL → PNG screenshot
@@ -29,6 +30,7 @@
 export { WebpageExtractTool } from "./webpage-extract"
 export { WebpageCompileTool } from "./webpage-compile"
 export { WebpageAnalyzeTool } from "./webpage-analyze"
+export { WebpageRuntimeStateTool } from "./webpage-runtime-state"
 export { WebpageImageExtractTool } from "./webpage-image-extract"
 export { WebpageImageCompileTool } from "./webpage-image-compile"
 export { WebpageImageAnalyzeTool } from "./webpage-image-analyze"

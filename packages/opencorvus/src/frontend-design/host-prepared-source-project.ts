@@ -115,6 +115,7 @@ function renderHostPreparedEvidenceIndex(): string {
     ["web-clone-source/source-ir/layout-map.json", "layout regions and dimensions"],
     ["web-clone-source/source-ir/style-tokens.json", "colors, type, spacing, and source style tokens"],
     ["web-clone-source/source-ir/interaction-hints.json", "interactive affordances from the capture"],
+    ["web-clone-source/source-ir/interaction-state-snapshots.json", "browser runtime scroll/click state evidence"],
     ["web-clone-source/source-ir/source-quality-audit.json", "known extraction/source quality issues"],
     ["web-clone-source/source-skeleton/critical.css", "source critical CSS evidence"],
     ["web-clone-source/source-skeleton/source-skeleton-audit.json", "source skeleton coverage audit"],
