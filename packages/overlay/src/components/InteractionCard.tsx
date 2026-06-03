@@ -18,6 +18,7 @@ import { t } from "../utils/i18n";
 import { renderMarkdown } from "../utils/markdown";
 import { loadBoard } from "../store/board";
 import {
+  type InteractionReplyEndpoint,
   replyInteraction,
   rejectInteraction,
 } from "../services/interaction-reply";
@@ -38,6 +39,7 @@ export interface InteractionData {
   body?: string;
   status: string;
   payload?: { questions?: InteractionQuestion[] };
+  replyEndpoint?: InteractionReplyEndpoint;
 }
 
 export function InteractionCard(props: { interaction: InteractionData }) {
@@ -59,6 +61,9 @@ export function InteractionCard(props: { interaction: InteractionData }) {
     const q = props.interaction?.payload?.questions;
     return Array.isArray(q) ? q : [];
   });
+  const replyEndpoint = createMemo<InteractionReplyEndpoint>(() =>
+    props.interaction.replyEndpoint === "question" ? "question" : "interaction",
+  );
 
   function getSelected(qIdx: number): string[] {
     return drafts()[qIdx] ?? [];
@@ -102,9 +107,9 @@ export function InteractionCard(props: { interaction: InteractionData }) {
   }
 
   const resolvePermission = (action: "once" | "always") =>
-    runAction(() => replyInteraction(props.interaction.id, action, false));
+    runAction(() => replyInteraction(props.interaction.id, action, false, {}, replyEndpoint()));
   const reject = () =>
-    runAction(() => rejectInteraction(props.interaction.id, false));
+    runAction(() => rejectInteraction(props.interaction.id, false, replyEndpoint()));
   const submitAnswers = () =>
     runAction(() => {
       const answers = questions().map((_, idx) => {
@@ -114,7 +119,7 @@ export function InteractionCard(props: { interaction: InteractionData }) {
       });
       return replyInteraction(props.interaction.id, "answer", false, {
         answers,
-      });
+      }, replyEndpoint());
     });
 
   return (
