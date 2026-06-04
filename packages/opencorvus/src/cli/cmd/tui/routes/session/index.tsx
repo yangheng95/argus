@@ -76,6 +76,7 @@ import { renderToolFailureCause } from "@/session/tool-failure-cause"
 import { UI } from "@/cli/ui.ts"
 import { useTuiConfig } from "../../context/tui-config"
 import { OPENCORVUS_BASE_MODE, useBindings, useCommandShortcut } from "../../keymap"
+import { TuiPluginRuntime } from "@/cli/cmd/tui/plugin/runtime"
 
 addDefaultParsers(parsers.parsers)
 
@@ -169,6 +170,8 @@ export function Session() {
     if (session()?.parentID) return []
     return children().flatMap((x) => sync.data.question[x.id] ?? [])
   })
+  const promptVisible = createMemo(() => !session()?.parentID && permissions().length === 0 && questions().length === 0)
+  const promptDisabled = createMemo(() => permissions().length > 0 || questions().length > 0)
 
   const pending = createMemo(() => {
     return messages().findLast((x) => x.role === "assistant" && !x.time.completed)?.id
@@ -243,6 +246,15 @@ export function Session() {
   let prompt: PromptRef
   const dialog = useDialog()
   const renderer = useRenderer()
+  const bindPrompt = (ref: PromptRef | undefined) => {
+    if (!ref) return
+    prompt = ref
+    promptRef.set(ref)
+    // Apply initial prompt when prompt component mounts (e.g., from fork)
+    if (route.initialPrompt) {
+      ref.set(route.initialPrompt)
+    }
+  }
 
   // Allow exit when in child session (prompt is hidden)
   const exit = useExit()
@@ -940,22 +952,28 @@ export function Session() {
               <Show when={permissions().length === 0 && questions().length > 0}>
                 <QuestionPrompt request={questions()[0]} />
               </Show>
-              <Prompt
-                visible={!session()?.parentID && permissions().length === 0 && questions().length === 0}
-                ref={(r) => {
-                  prompt = r
-                  promptRef.set(r)
-                  // Apply initial prompt when prompt component mounts (e.g., from fork)
-                  if (route.initialPrompt) {
-                    r.set(route.initialPrompt)
-                  }
-                }}
-                disabled={permissions().length > 0 || questions().length > 0}
-                onSubmit={() => {
-                  toBottom()
-                }}
-                sessionID={route.sessionID}
-              />
+              <Show when={promptVisible()}>
+                <TuiPluginRuntime.Slot
+                  name="session_prompt"
+                  mode="replace"
+                  session_id={route.sessionID}
+                  visible={promptVisible()}
+                  disabled={promptDisabled()}
+                  on_submit={toBottom}
+                  ref={bindPrompt}
+                >
+                  <Prompt
+                    visible={promptVisible()}
+                    ref={bindPrompt}
+                    disabled={promptDisabled()}
+                    onSubmit={() => {
+                      toBottom()
+                    }}
+                    sessionID={route.sessionID}
+                    right={<TuiPluginRuntime.Slot name="session_prompt_right" session_id={route.sessionID} />}
+                  />
+                </TuiPluginRuntime.Slot>
+              </Show>
             </box>
           </Show>
           <Toast />

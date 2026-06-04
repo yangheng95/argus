@@ -1,6 +1,8 @@
 import type {
   Config as SdkConfig,
+  AgentPart,
   Event,
+  FilePart,
   LspStatus,
   McpStatus,
   Message,
@@ -10,6 +12,7 @@ import type {
   QuestionRequest,
   Session,
   SessionStatus,
+  TextPart,
   Todo,
   createOpenCorvusClient,
 } from "@opencorvus-ai/sdk"
@@ -175,11 +178,9 @@ export type TuiPromptInfo = {
   input: string
   mode?: "normal" | "shell"
   parts: (
-    | { type: "file"; path: string; mime?: string; content?: string; source?: unknown }
-    | { type: "agent"; name: string; source?: unknown }
-    | {
-        type: "text"
-        text: string
+    | Omit<FilePart, "id" | "messageID" | "sessionID">
+    | Omit<AgentPart, "id" | "messageID" | "sessionID">
+    | (Omit<TextPart, "id" | "messageID" | "sessionID" | "source"> & {
         source?: {
           text: {
             start: number
@@ -187,7 +188,7 @@ export type TuiPromptInfo = {
             value: string
           }
         }
-      }
+      })
   )[]
 }
 
