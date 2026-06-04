@@ -1860,3 +1860,39 @@ OpenCode gap after the round:
 - OpenCode's full workspace management remains missing: workspace list/create/unavailable dialogs, move-session prompt flow, workspace commands, and workspace status event sync are not implemented yet.
 - The current host is still a single project-bound embedded TUI process, not OpenCode's full multi-PTY `list/create/get/update/remove` service.
 - Browser visual E2E, external TUI plugin loader/install, and `SessionV2Debug` remain missing.
+
+### 2026-06-05 Round 28: right sidebar browser visual E2E
+
+Implemented:
+
+- Rechecked latest OpenCode dev before editing. Upstream advanced from `b1a7ee5695bded3ebe4282a17bfe91717edea363` to `ab5a12d916dd72eab0c84afb1f6de5a07c16a7e4`.
+- Audited the latest upstream TUI/server delta before choosing this round's scope:
+  - `packages/opencode/src/cli/cmd/tui/context/sync-v2.tsx` changed in the watched TUI tree;
+  - server/session V2 files also changed outside the copied TUI tree.
+- Did not copy `sync-v2.tsx` or `SessionV2Debug` in this round because OpenCorvus does not yet have the canonical `@opencorvus-ai/sdk` V2 session-message/event surface or the matching HTTP sync route. Copying those files now would require fake message data or a parallel sync source, violating the no hand-written/fallback rule.
+- Added `packages/overlay/test/tui-host-panel-visual.test.ts`, a real browser visual smoke test for the right sidebar TUI host panel.
+- The test loads the built overlay dist through the existing overlay browser harness, binds `oc_directory`/`oc_server_url`, serves the project-scoped `/tui/host/*` HTTP API, upgrades `/tui/host/connect` to a WebSocket, and streams visible terminal text into the panel.
+- The browser assertions verify:
+  - the right activity TUI panel is active;
+  - the panel title is `TUI`;
+  - the terminal reports `running`;
+  - no `.tui-host-error` is rendered;
+  - the panel and terminal have stable visible dimensions in the right sidebar;
+  - a real PNG screenshot is written and decoded with `sharp`, with non-trivial size and color diversity.
+- The screenshot is written to a temporary file instead of using the overlay browser RPC binary return because the existing sidecar returns empty buffers for screenshot calls. This keeps the visual benchmark honest while avoiding a transport limitation unrelated to TUI rendering.
+
+Verified in tests:
+
+- `bun test packages/overlay/test/tui-host-panel-visual.test.ts`
+
+OpenCode comparison after the round:
+
+- The implementation is now measurably moving toward the target screenshot's right-side embedded TUI surface: a real browser opens the overlay, the right TUI panel is active, the terminal host is running, WebSocket output is rendered, and the screenshot is checked for nonblank visual content.
+- This does not claim OpenCode visual parity yet. It closes the earlier `Browser visual E2E` validation gap so future OpenCode TUI copy rounds can be judged by rendered behavior, not static text matching.
+
+OpenCode gap after the round:
+
+- OpenCode's full workspace management remains missing: workspace list/create/unavailable dialogs, move-session prompt flow, workspace commands, and workspace status event sync are not implemented yet.
+- The current host is still a single project-bound embedded TUI process, not OpenCode's full multi-PTY `list/create/get/update/remove` service.
+- External TUI plugin loader/install remains missing; upstream depends on shared plugin loader modules that OpenCorvus does not yet expose in the copied TUI runtime.
+- `SessionV2Debug` and `context/sync-v2.tsx` remain missing until the real V2 session-message/event source is copied/adapted.
