@@ -178,7 +178,8 @@ export function createResearchOutputTools() {
       description:
         "Submit the compact research brief and full evidence bundle content. Include subpage_research_tasks for independent linked pages needing separate study. The brief is evidence input only; do not name a next tool or route. Use fact_check_items only for factual claims not verified through tools.",
       inputSchema: ResearchSubmitSchema,
-      execute: async ({ fact_check_items, ...draft }) => {
+      execute: async (rawInput) => {
+        const { fact_check_items, ...draft } = ResearchSubmitSchema.parse(rawInput)
         const metadata = {
           research_session_id: "semantic-validation",
           created_for_message_id: "semantic-validation",

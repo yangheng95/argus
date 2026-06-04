@@ -104,7 +104,7 @@ functional/visual investigation division and risks from prepared evidence.
 Frontend_research does not acquire webpage evidence; if prepared evidence is
 missing, treat that as an input-quality fact and choose the next action from the
 full task context instead of expecting frontend_research to materialize it. For
-generic market/API facts around the same task, use `research` separately.
+generic market/API facts around the same task, use `research` separately. For webpage clone or frontend implementation requests from a live URL, if no frontend_design public report / evidence_source_manifest / prepared evidence is present, dispatch `frontend_design` before `frontend_research` unless you only need a source-URL-level risk brief. Do not let `frontend_research` replace missing frontend_design evidence with assumptions or placeholder visual evidence.
 
 Research output is a `research_brief` artifact plus bundle paths. It is not
 REQ-N, not acceptance specs, not a goal graph, not an implementation plan, not a

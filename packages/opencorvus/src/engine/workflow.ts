@@ -161,13 +161,13 @@ const DIRECT: MiniWorkflow = {
 /** pipeline — 完整开发流程。
  *
  *  适合：多文件功能 / UI 复刻 / 跨模块重构 / 需要明确验收标准的任务。
- *  流程：(frontend_design + frontend_research 可选并行) → analyze_intent → requirements → architect → per-goal[build] → integrity；
+ *  流程：(frontend_design / frontend_research 按证据需要) → analyze_intent → requirements → architect → per-goal[build] → integrity；
  *  integrity 是 session-bound final gate：pass 完成任务；非 pass 返回证据后由编排器决定下一步。
  */
 const PIPELINE: MiniWorkflow = {
   id: "pipeline",
   name: "Pipeline",
-  description: "(frontend_design + frontend_research) → analyze_intent → requirements → architect → per-goal[build] → integrity。多文件功能 / UI 复刻 / 跨模块重构。",
+  description: "(frontend_design / frontend_research 按证据需要) → analyze_intent → requirements → architect → per-goal[build] → integrity。多文件功能 / UI 复刻 / 跨模块重构。",
   steps: [
     {
       id: "frontend_design",
@@ -182,7 +182,7 @@ const PIPELINE: MiniWorkflow = {
       id: "frontend_research",
       tool: "frontend_research",
       label: "Frontend Research",
-      hint: "网页/URL 参考任务的调查分工阶段。与 frontend_design 并行：frontend_design 产出可维护实现模板和素材/源码入口；frontend_research 只整理 prepared evidence、源 URL、可见区域、组件/数据/交互/样式疑点和 fidelity risk，发布 source-backed frontend_research_brief/webpage_contract 作为 investigation work packets，供 requirements、architect、build 消费。它不做深度调查、不写 final PRD、不产出 frontend implementation template、不调用 build、不选择下一步路线。",
+      hint: "网页/URL 参考任务的调查分工阶段。frontend_design 产出可维护实现模板和素材/源码入口；frontend_research 只整理已有 prepared evidence、源 URL、可见区域、组件/数据/交互/样式疑点和 fidelity risk，发布 source-backed frontend_research_brief/webpage_contract 作为 investigation work packets，供 requirements、architect、build 消费。网页复刻实现且尚无 frontend_design source manifest 时通常先调 frontend_design；它不做深度调查、不写 final PRD、不产出 frontend implementation template、不调用 build、不选择下一步路线。",
       scope: "task",
       skippable: true,
       after: [],
