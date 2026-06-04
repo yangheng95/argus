@@ -315,6 +315,8 @@ import type {
   TuiControlResponseResponses,
   TuiExecuteCommandErrors,
   TuiExecuteCommandResponses,
+  TuiHostConnectTokenErrors,
+  TuiHostConnectTokenResponses,
   TuiHostInputErrors,
   TuiHostInputResponses,
   TuiHostOutputErrors,
@@ -7629,6 +7631,38 @@ export class Host extends HeyApiClient {
       ...options,
       ...params,
     })
+  }
+
+  /**
+   * Issue embedded TUI host connect token
+   *
+   * Issue a one-use connect token scoped to the running project-bound Pseudo Terminal (PTY) host.
+   */
+  public connectToken<ThrowOnError extends boolean = false>(
+    parameters: {
+      "x-opencode-ticket": "1"
+      directory?: string
+    },
+    options?: Options<never, ThrowOnError>,
+  ) {
+    const params = buildClientParams(
+      [parameters],
+      [
+        {
+          args: [
+            { in: "headers", key: "x-opencode-ticket" },
+            { in: "query", key: "directory" },
+          ],
+        },
+      ],
+    )
+    return (options?.client ?? this.client).post<TuiHostConnectTokenResponses, TuiHostConnectTokenErrors, ThrowOnError>(
+      {
+        url: "/tui/host/connect-token",
+        ...options,
+        ...params,
+      },
+    )
   }
 
   /**

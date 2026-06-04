@@ -108,6 +108,39 @@ describe("server.tui-host-routes", () => {
     })
   })
 
+  test("issues connect tokens through the OpenCode ticket header contract", async () => {
+    await using tmp = await tmpdir()
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const app = TuiRoutes()
+
+        const missingHeader = await app.request("/host/connect-token", { method: "POST" })
+        expect(missingHeader.status).toBe(403)
+
+        const stopped = await app.request("/host/connect-token", {
+          method: "POST",
+          headers: { [TuiHost.CONNECT_TOKEN_HEADER]: TuiHost.CONNECT_TOKEN_HEADER_VALUE },
+        })
+        expect(stopped.status).toBe(404)
+
+        await TuiHost.startPrepared({ command: inputEchoCommand(tmp.path), cols: 80, rows: 24 })
+        const status = TuiHost.status()
+        expect(status.id).toBeString()
+        const issued = await app.request("/host/connect-token", {
+          method: "POST",
+          headers: { [TuiHost.CONNECT_TOKEN_HEADER]: TuiHost.CONNECT_TOKEN_HEADER_VALUE },
+        })
+        expect(issued.status).toBe(200)
+        const body = (await issued.json()) as { ticket: string; expires_in: number }
+        expect(body.ticket).toBeString()
+        expect(body.expires_in).toBe(60)
+        expect(TuiHost.consumeConnectToken({ ticket: body.ticket, hostID: status.id!, directory: tmp.path })).toBe(true)
+        expect(TuiHost.consumeConnectToken({ ticket: body.ticket, hostID: status.id!, directory: tmp.path })).toBe(false)
+      },
+    })
+  })
+
   test("writes input, resizes, snapshots, and stops through host routes", async () => {
     await using tmp = await tmpdir()
     await Instance.provide({

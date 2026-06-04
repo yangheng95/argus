@@ -1326,3 +1326,57 @@ OpenCode gap after the round:
 - The current host remains a single project-bound embedded TUI host, not OpenCode's multi-PTY `list/create/get/update/remove` service.
 - `GET /tui/host/snapshot` remains as a diagnostic/recovery route. It is no longer the overlay render loop source, but a later full PTY migration should either delete it or clearly keep it as a non-rendering debug surface.
 - Browser visual E2E, project-bound Agent Team tool/plugin surface, external TUI plugin loader/install, move-session/workspace prompt flow, and `SessionV2Debug` remain missing.
+
+### 2026-06-05 Round 15: copied OpenCode one-use PTY connect ticket contract
+
+Implemented:
+
+- Rechecked latest OpenCode dev before editing. Upstream remained at `107180701f626eaf97e0f032c4a46fe4b4e9c0ec`; no new TUI, PTY, app, or terminal files changed since Round 14.
+- Compared against OpenCode's current PTY ticket sources:
+  - `.tmp/opencode-upstream/packages/core/src/pty/ticket.ts`
+  - `.tmp/opencode-upstream/packages/opencode/src/server/shared/pty-ticket.ts`
+  - `.tmp/opencode-upstream/packages/opencode/src/server/routes/instance/httpapi/handlers/pty.ts`
+  - `.tmp/opencode-upstream/packages/opencode/test/server/httpapi-listen.test.ts`
+- Added an Instance-scoped right-sidebar host connect ticket store in `packages/opencorvus/src/tui/host.ts`:
+  - `issueConnectToken()` mints a random one-use token for the running host;
+  - tokens expire after 60 seconds, matching OpenCode's production lifetime;
+  - tokens are scoped to host id and project directory;
+  - wrong host id or directory does not consume the token;
+  - successful consume removes the token;
+  - start, stop, and Instance disposal clear outstanding tokens.
+- Added OpenCode-compatible ticket constants for the current host surface:
+  - query key `ticket`;
+  - header `x-opencode-ticket`;
+  - header value `1`.
+- Added `POST /tui/host/connect-token`:
+  - requires `x-opencode-ticket: 1`;
+  - returns `{ ticket, expires_in }`;
+  - returns 403 when the header contract is missing;
+  - returns 404 when no project-bound host is running.
+- Regenerated SDK and OpenAPI docs so the route is part of the public contract:
+  - `packages/sdk/openapi.json`
+  - `packages/sdk/js/src/gen/sdk.gen.ts`
+  - `packages/sdk/js/src/gen/types.gen.ts`
+  - `packages/web/src/content/docs/reference/api.mdx`
+  - `packages/web/src/content/docs/zh-cn/reference/api.mdx`
+
+Verified:
+
+- `bun test packages/opencorvus/test/tui/host.test.ts`
+- `bun test packages/opencorvus/test/server/tui-host-routes.test.ts`
+- `bun run --cwd packages/sdk/js build`
+- `bun run docs:api`
+
+OpenCode comparison after the round:
+
+- Matched OpenCode's short-lived, one-use, scoped connect-ticket semantics at the current single-host boundary.
+- Matched OpenCode's ticket issuance header name/value so the future attach client can use the same visible contract.
+- Preserved the existing agent workflow: no session prompt, task, permission, panel, or coding route behavior was changed.
+
+OpenCode gap after the round:
+
+- The ticket is now available, but the current right-sidebar host still lacks OpenCode's `/pty/:id/connect` WebSocket path that consumes the ticket and streams output/input directly.
+- The host still exposes a single embedded right-sidebar TUI process instead of OpenCode's multi-PTY `list/create/get/update/remove` service.
+- The route currently validates the ticket issuance header but does not yet implement OpenCode's browser-origin check because the corresponding WebSocket/connect path has not been added.
+- HTTP cursor polling remains the overlay render transport until the WebSocket attach path is implemented.
+- Browser visual E2E, project-bound Agent Team tool/plugin surface, external TUI plugin loader/install, move-session/workspace prompt flow, and `SessionV2Debug` remain missing.

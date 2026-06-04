@@ -58,6 +58,15 @@ const TuiHostOutput = TuiHostInfo.extend({
   truncated: z.boolean(),
 })
 
+const TuiHostConnectToken = z.object({
+  ticket: z.string().min(1),
+  expires_in: z.number().int().positive(),
+})
+
+const TuiHostConnectTokenError = z.object({
+  message: z.string().min(1),
+})
+
 const TuiHostStart = z.object({
   sessionID: z.string().optional(),
   model: z.string().optional(),
@@ -234,6 +243,51 @@ export const TuiRoutes = lazy(() =>
       validator("query", z.object({ cursor: z.coerce.number().int().min(-1).optional() })),
       async (c) => {
         return c.json(TuiHost.output(c.req.valid("query")))
+      },
+    )
+    .post(
+      "/host/connect-token",
+      describeRoute({
+        summary: "Issue embedded TUI host connect token",
+        description:
+          "Issue a one-use connect token scoped to the running project-bound Pseudo Terminal (PTY) host.",
+        operationId: "tui.host.connectToken",
+        parameters: [
+          {
+            name: TuiHost.CONNECT_TOKEN_HEADER,
+            in: "header",
+            required: true,
+            description: "Set to 1 to request an embedded TUI host connect token.",
+            schema: { type: "string", enum: [TuiHost.CONNECT_TOKEN_HEADER_VALUE] },
+          },
+        ],
+        responses: {
+          200: {
+            description: "Embedded TUI host connect token",
+            content: { "application/json": { schema: resolver(TuiHostConnectToken) } },
+          },
+          403: {
+            description: "Connect token request is missing the OpenCode ticket header",
+            content: { "application/json": { schema: resolver(TuiHostConnectTokenError) } },
+          },
+          404: {
+            description: "Embedded TUI host is not running",
+            content: { "application/json": { schema: resolver(TuiHostConnectTokenError) } },
+          },
+        },
+      }),
+      async (c) => {
+        if (c.req.header(TuiHost.CONNECT_TOKEN_HEADER) !== TuiHost.CONNECT_TOKEN_HEADER_VALUE) {
+          return c.json({ message: "Invalid embedded TUI host connect token request" }, 403)
+        }
+        try {
+          return c.json(TuiHost.issueConnectToken())
+        } catch (error) {
+          if (error instanceof Error && error.message === "TUI host is not running") {
+            return c.json({ message: error.message }, 404)
+          }
+          throw error
+        }
       },
     )
     .post(

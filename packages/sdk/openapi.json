@@ -27799,6 +27799,107 @@
         ]
       }
     },
+    "/tui/host/connect-token": {
+      "post": {
+        "operationId": "tui.host.connectToken",
+        "summary": "Issue embedded TUI host connect token",
+        "description": "Issue a one-use connect token scoped to the running project-bound Pseudo Terminal (PTY) host.",
+        "parameters": [
+          {
+            "name": "directory",
+            "in": "query",
+            "required": false,
+            "description": "Project directory for project-scoped routes. Equivalent to the x-opencorvus-directory request header.",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "x-opencode-ticket",
+            "in": "header",
+            "required": true,
+            "description": "Set to 1 to request an embedded TUI host connect token.",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "1"
+              ]
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Embedded TUI host connect token",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "ticket": {
+                      "type": "string",
+                      "minLength": 1
+                    },
+                    "expires_in": {
+                      "type": "integer",
+                      "exclusiveMinimum": 0,
+                      "maximum": 9007199254740991
+                    }
+                  },
+                  "required": [
+                    "ticket",
+                    "expires_in"
+                  ]
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Connect token request is missing the OpenCode ticket header",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "message": {
+                      "type": "string",
+                      "minLength": 1
+                    }
+                  },
+                  "required": [
+                    "message"
+                  ]
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Embedded TUI host is not running",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "message": {
+                      "type": "string",
+                      "minLength": 1
+                    }
+                  },
+                  "required": [
+                    "message"
+                  ]
+                }
+              }
+            }
+          }
+        },
+        "x-codeSamples": [
+          {
+            "lang": "js",
+            "source": "import { createOpenCorvusClient } from \"@opencorvus-ai/sdk\"\n\nconst client = createOpenCorvusClient()\nawait client.tui.host.connectToken({\n  ...\n})"
+          }
+        ]
+      }
+    },
     "/tui/host/input": {
       "post": {
         "operationId": "tui.host.input",

@@ -12899,6 +12899,53 @@ export type TuiHostOutputResponses = {
 
 export type TuiHostOutputResponse = TuiHostOutputResponses[keyof TuiHostOutputResponses]
 
+export type TuiHostConnectTokenData = {
+  body?: never
+  headers: {
+    /**
+     * Set to 1 to request an embedded TUI host connect token.
+     */
+    "x-opencode-ticket": "1"
+  }
+  path?: never
+  query?: {
+    /**
+     * Project directory for project-scoped routes. Equivalent to the x-opencorvus-directory request header.
+     */
+    directory?: string
+  }
+  url: "/tui/host/connect-token"
+}
+
+export type TuiHostConnectTokenErrors = {
+  /**
+   * Connect token request is missing the OpenCode ticket header
+   */
+  403: {
+    message: string
+  }
+  /**
+   * Embedded TUI host is not running
+   */
+  404: {
+    message: string
+  }
+}
+
+export type TuiHostConnectTokenError = TuiHostConnectTokenErrors[keyof TuiHostConnectTokenErrors]
+
+export type TuiHostConnectTokenResponses = {
+  /**
+   * Embedded TUI host connect token
+   */
+  200: {
+    ticket: string
+    expires_in: number
+  }
+}
+
+export type TuiHostConnectTokenResponse = TuiHostConnectTokenResponses[keyof TuiHostConnectTokenResponses]
+
 export type TuiHostInputData = {
   body?: {
     data: string

@@ -124,6 +124,30 @@ describe("tui.host", () => {
     })
   })
 
+  test("issues project-bound one-use connect tokens", async () => {
+    await using tmp = await tmpdir()
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        await TuiHost.startPrepared({ command: inputEchoCommand(tmp.path), cols: 80, rows: 24 })
+        const status = TuiHost.status()
+        expect(status.id).toBeString()
+
+        const token = TuiHost.issueConnectToken()
+        expect(token.ticket).toBeString()
+        expect(token.expires_in).toBe(60)
+        expect(TuiHost.consumeConnectToken({ ticket: token.ticket, hostID: "pty_wrong", directory: tmp.path })).toBe(false)
+        expect(TuiHost.consumeConnectToken({ ticket: token.ticket, hostID: status.id!, directory: `${tmp.path}-other` })).toBe(false)
+        expect(TuiHost.consumeConnectToken({ ticket: token.ticket, hostID: status.id!, directory: tmp.path })).toBe(true)
+        expect(TuiHost.consumeConnectToken({ ticket: token.ticket, hostID: status.id!, directory: tmp.path })).toBe(false)
+
+        const second = TuiHost.issueConnectToken()
+        await TuiHost.stop()
+        expect(TuiHost.consumeConnectToken({ ticket: second.ticket, hostID: status.id!, directory: tmp.path })).toBe(false)
+      },
+    })
+  })
+
   test("resolves embedded command from the same TUI spawn options", async () => {
     await using tmp = await tmpdir()
     const command = await Tui.resolveEmbeddedCommand({
