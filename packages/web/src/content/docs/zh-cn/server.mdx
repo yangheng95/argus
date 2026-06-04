@@ -53,8 +53,8 @@ opencorvus serve --hostname 127.0.0.1 --port 7878
 ## 嵌入式
 
 ```ts
-import { createOpencode } from "@opencorvus-ai/sdk/v2"
-const { client, shutdown } = await createOpencode({ directory: "/path/to/repo" })
+import { createOpenCorvus } from "@opencorvus-ai/sdk"
+const { client, server } = await createOpenCorvus({ directory: "/path/to/repo" })
 ```
 
 进程内随机端口启 server 并返回连接好的 client。无需独立的 `opencorvus serve` 进程时使用。

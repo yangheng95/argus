@@ -46,15 +46,15 @@ bun run dev
 
 | Direction | Protocol | Endpoints |
 |---|---|---|
-| channel-runtime → OpenCorvus | HTTP REST (JSON) | `/session/create`, `/session/promptAsync`, `/tui/runtime/start`, `/tui/runtime/submitTask`, `/permission/reply` |
-| OpenCorvus → channel-runtime | SSE | `/event/subscribe` |
+| channel-runtime → OpenCorvus | HTTP REST (JSON) | `/session`, `/session/{sessionID}/prompt_async`, `/tui/runtime/start`, `/tui/runtime/submit-task`, `/permission/{requestID}/reply` |
+| OpenCorvus → channel-runtime | SSE | `/event` |
 
-SDK: `@opencorvus-ai/sdk/v2` (`src/core.ts:2`).
+SDK: `@opencorvus-ai/sdk`.
 
 Two modes:
 
-1. **Embedded**: `createOpencode()` — launches backend in-process.
-2. **External**: `createOpencodeClient({ baseUrl })` — connects to an existing `opencorvus serve`.
+1. **Embedded**: `createOpenCorvus()` launches the backend in-process.
+2. **External**: `createOpenCorvusClient({ baseUrl })` connects to an existing `opencorvus serve`.
 
 ## Message flow (generic)
 
