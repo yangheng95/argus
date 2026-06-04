@@ -48,7 +48,7 @@ Long-running events stream over SSE on `/event`. The SDK exposes this as `client
 
 ## Authentication
 
-For non-loopback hostnames the server requires the `OPENCORVUS_SERVER_PASSWORD` env. Requests must carry it as a header (`X-OpenCorvus-Password`) or a query parameter — the SDK does this automatically.
+When `OPENCORVUS_SERVER_PASSWORD` is set, requests must use HTTP Basic Auth. The username is `OPENCORVUS_SERVER_USERNAME` or the default `opencorvus`; the password is `OPENCORVUS_SERVER_PASSWORD`. The SDK sets the `Authorization` header automatically when configured with `password`.
 
 ## Embedding
 

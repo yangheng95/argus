@@ -7,7 +7,7 @@ description: "HTTP API 参考--由 packages/sdk/openapi.json 自动生成。"
 
 ## Authentication
 
-全部端点受 `OPENCORVUS_SERVER_PASSWORD` 保护。设置后客户端必须使用 HTTP Basic Auth（用户名留空，密码 = 环境变量值）。
+设置 `OPENCORVUS_SERVER_PASSWORD` 后，全部端点受保护。客户端必须使用 HTTP Basic Auth：用户名为 `OPENCORVUS_SERVER_USERNAME`，未设置时默认为 `opencorvus`；密码为 `OPENCORVUS_SERVER_PASSWORD`。
 
 ## 端点列表
 

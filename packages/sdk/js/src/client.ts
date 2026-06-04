@@ -3,11 +3,32 @@ export * from "./gen/types.gen.js"
 import { createClient } from "./gen/client/client.gen.js"
 import { type Config } from "./gen/client/types.gen.js"
 import { OpencodeClient } from "./gen/sdk.gen.js"
-export { type Config as OpenCorvusClientConfig, OpencodeClient as OpenCorvusClient }
-export { type Config as OpencodeClientConfig, OpencodeClient }
+export { OpencodeClient as OpenCorvusClient }
+export { OpencodeClient }
 
-export function createOpenCorvusClient(config?: Config & { directory?: string }) {
-  if (!config?.fetch) {
+export type OpenCorvusClientConfig = Config & {
+  directory?: string
+  username?: string
+  password?: string
+}
+export type OpencodeClientConfig = OpenCorvusClientConfig
+
+function basicAuthorization(username: string, password: string) {
+  const bytes = new TextEncoder().encode(`${username}:${password}`)
+  let binary = ""
+  for (const byte of bytes) binary += String.fromCharCode(byte)
+  return `Basic ${btoa(binary)}`
+}
+
+function headerBag(headers: Config["headers"]) {
+  return new Headers(headers as HeadersInit | undefined)
+}
+
+export function createOpenCorvusClient(input?: OpenCorvusClientConfig) {
+  const { directory, username, password, ...rest } = input ?? {}
+  let config: Config = rest
+
+  if (!config.fetch) {
     const customFetch: any = (req: any) => {
       // @ts-ignore
       req.timeout = false
@@ -19,8 +40,8 @@ export function createOpenCorvusClient(config?: Config & { directory?: string })
     }
   }
 
-  if (config?.directory) {
-    let dir = config.directory
+  if (directory) {
+    let dir = directory
     // Normalize MINGW/MSYS-style paths (/c/foo/bar → C:\foo\bar) on Windows.
     // These paths cause path.resolve to produce incorrect results (e.g. C:\c\foo\bar).
     if (typeof process !== "undefined" && process.platform === "win32") {
@@ -29,12 +50,22 @@ export function createOpenCorvusClient(config?: Config & { directory?: string })
     }
     const isNonASCII = /[^\x00-\x7F]/.test(dir)
     const encodedDirectory = isNonASCII ? encodeURIComponent(dir) : dir
+    const headers = headerBag(config.headers)
+    headers.set("x-opencorvus-directory", encodedDirectory)
     config = {
       ...config,
-      headers: {
-        ...(config.headers ?? {}),
-        "x-opencorvus-directory": encodedDirectory,
-      },
+      headers,
+    }
+  }
+
+  if (password) {
+    const headers = headerBag(config.headers)
+    if (!headers.has("authorization")) {
+      headers.set("Authorization", basicAuthorization(username ?? "opencorvus", password))
+    }
+    config = {
+      ...config,
+      headers,
     }
   }
 
