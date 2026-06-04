@@ -1,5 +1,5 @@
 import { expect, test } from "bun:test"
-import { readFileSync } from "node:fs"
+import { existsSync, readFileSync } from "node:fs"
 import path from "node:path"
 
 const ROOT = path.resolve(import.meta.dir, "..")
@@ -51,4 +51,10 @@ test("right side coding assistant entry is the project-bound OpenTUI runtime act
   expect(css).toContain(".side-activity-toolbar")
   expect(css).toContain(".tui-host-panel")
   expect(css).toContain(".tui-host-terminal")
+})
+
+test("retired browser-side coding assistant service does not remain as a right-sidebar TUI double source", () => {
+  expect(existsSync(path.join(ROOT, "src/services/coding-assistant.ts"))).toBe(false)
+  expect(existsSync(path.join(ROOT, "src/services/coding-assistant-transcript.ts"))).toBe(false)
+  expect(existsSync(path.join(ROOT, "test/coding-assistant-service.test.ts"))).toBe(false)
 })

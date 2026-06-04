@@ -9,6 +9,7 @@ import {
   stopTuiHost,
   type TuiHostSnapshot,
 } from "../services/tui-host"
+import { hasTuiHostTerminalSizeChanged, syncTuiHostTerminalBuffer } from "../services/tui-host-terminal"
 import { t } from "../utils/i18n"
 import { Icon } from "./Icon"
 import { Button } from "./ui/Button"
@@ -67,15 +68,11 @@ export function TuiHostPanel(props: TuiHostPanelProps) {
   function writeBuffer(buffer: string) {
     const current = term
     if (!current) return
-    if (buffer === renderedBuffer) return
-    if (buffer.startsWith(renderedBuffer)) {
-      current.write(buffer.slice(renderedBuffer.length))
-      renderedBuffer = buffer
-      return
-    }
-    current.reset()
-    current.write(buffer)
-    renderedBuffer = buffer
+    renderedBuffer = syncTuiHostTerminalBuffer({
+      terminal: current,
+      renderedBuffer,
+      nextBuffer: buffer,
+    })
   }
 
   async function refreshSnapshot() {
@@ -136,8 +133,9 @@ export function TuiHostPanel(props: TuiHostPanelProps) {
   }
 
   function pushSize(cols: number, rows: number) {
-    if (lastSize?.cols === cols && lastSize.rows === rows) return
-    lastSize = { cols, rows }
+    const nextSize = { cols, rows }
+    if (!hasTuiHostTerminalSizeChanged(lastSize, nextSize)) return
+    lastSize = nextSize
     if (!hostStarted) return
     void resizeTuiHost({ cols, rows }).catch((err) => {
       if (!disposed) setError(err instanceof Error ? err.message : String(err))

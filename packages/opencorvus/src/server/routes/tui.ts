@@ -1,4 +1,5 @@
 import { Hono, type Context } from "hono"
+import { HTTPException } from "hono/http-exception"
 import { describeRoute, validator, resolver } from "hono-openapi"
 import z from "zod"
 import { Bus } from "../../bus"
@@ -63,6 +64,13 @@ const TuiHostStart = z.object({
   cols: z.number().int().min(1).max(500).default(100).optional(),
   rows: z.number().int().min(1).max(200).default(30).optional(),
 })
+
+function mapTuiHostRouteError(error: unknown): never {
+  if (error instanceof Error && error.message === "TUI host is not running") {
+    throw new HTTPException(400, { message: error.message })
+  }
+  throw error
+}
 
 const requestQueue: TuiControlRequest[] = []
 const requestWaiters: Array<(item: TuiControlRequest) => void> = []
@@ -217,7 +225,11 @@ export const TuiRoutes = lazy(() =>
       }),
       validator("json", z.object({ data: z.string().min(1) })),
       async (c) => {
-        return c.json(TuiHost.input(c.req.valid("json").data))
+        try {
+          return c.json(TuiHost.input(c.req.valid("json").data))
+        } catch (error) {
+          mapTuiHostRouteError(error)
+        }
       },
     )
     .post(
@@ -242,7 +254,11 @@ export const TuiRoutes = lazy(() =>
         }),
       ),
       async (c) => {
-        return c.json(TuiHost.resize(c.req.valid("json")))
+        try {
+          return c.json(TuiHost.resize(c.req.valid("json")))
+        } catch (error) {
+          mapTuiHostRouteError(error)
+        }
       },
     )
     .post(
