@@ -45,3 +45,18 @@ Full-repo grep before the change:
 - Update convergence/session-reuse tests to assert batch settlement does not
   synthesize a user note and internal orchestrator wakes do not append a user
   message.
+
+## Independent Review Feedback
+
+Independent agent review confirmed the synthetic note removal is the correct
+direction, but found three incomplete edges in the first implementation:
+
+| Finding | Repair |
+| --- | --- |
+| `SessionPrompt.loop` can enter standby when the newest assistant already finished, so an internal wake may not produce a new model turn. | Add an explicit one-turn runtime wake marker to the session runtime contract. The loop consumes it only when it reaches `processTurn`, so controls/compaction do not lose the wake. |
+| The old persisted `lastUser.system` can be appended together with the new runtime system. | Add a runtime system mode that makes the current runtime system complete for this turn and skips the persisted user-system block. |
+| Attachment inventory is gated behind user-message creation. | Build attachment inventory for every orchestrator wake. Internal wakes inject the textual inventory into runtime system context without creating hidden user messages or non-visible model-only messages. Multimodal bytes remain visible via the original persisted user file parts; adding fresh hidden file parts would violate the natural-message invariant. |
+
+The repair deliberately does not introduce a host-side routing gate. The engine
+still wakes the orchestrator naturally; the runtime contract only describes the
+session turn that is already being executed.

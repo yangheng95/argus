@@ -57,6 +57,7 @@ export namespace LLM {
      */
     toolChoice?: "auto" | "required" | "none" | { type: "tool"; toolName: string }
     stream?: TextHooks
+    runtimeSystemMode?: "complete"
     preTerminalToolInputStart?: (input: {
       toolName: string
       toolCallID: string
@@ -73,14 +74,16 @@ export namespace LLM {
     system: string[]
     user: Message.User
     sessionID?: string
+    runtimeSystemMode?: "complete"
   }) {
     const agent = Agent.resolveSessionAgent(input.agent, await resolveSessionOverlay(input.sessionID ? { sessionID: input.sessionID } : undefined))
     const providerPrompt =
-      input.user.systemMode === "complete"
+      input.runtimeSystemMode === "complete" || input.user.systemMode === "complete"
         ? []
         : agent.prompt
           ? [agent.prompt]
           : await SystemPrompt.provider(input.model, { sessionID: input.sessionID })
+    const userSystem = input.runtimeSystemMode === "complete" ? [] : input.user.system ? [input.user.system] : []
 
     return [
       [
@@ -90,7 +93,7 @@ export namespace LLM {
         // any custom prompt passed into this call
         ...input.system,
         // any custom prompt from last user message
-        ...(input.user.system ? [input.user.system] : []),
+        ...userSystem,
       ]
         .filter((x) => x)
         .join("\n"),
