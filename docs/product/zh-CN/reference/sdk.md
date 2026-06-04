@@ -7,7 +7,6 @@
 ## 安装
 
 ```bash
-# Monorepo 内通过 workspace 引用
 bun add @opencorvus-ai/sdk
 ```
 
@@ -51,7 +50,7 @@ await server.close()  // server 句柄上的 close() 关闭进程
 返回对象结构（来自 `packages/sdk/js/src/index.ts:30-43`）：
 
 ```typescript
-{ client: OpenCorvusClient, server: { url: string, close: () => Promise<void> } }
+{ client: OpenCorvusClient, server: { url: string, close: () => void } }
 ```
 
 ## 主要命名空间
@@ -99,4 +98,4 @@ bun ./packages/sdk/js/script/build.ts
 
 ## 底层实现
 
-SDK 内部 = `fetch()` + Zod validator + 自动重连的 `EventSource` 封装。若需自定义 HTTP 层（代理、拦截器），可以直接用 REST API，见 [API 参考](./api.md)。
+SDK 内部 = `@hey-api/openapi-ts` 生成的 fetch client + 生成的 TypeScript 类型 + SSE helper。若需自定义 HTTP 层（代理、拦截器），可以在 client config 里传入自定义 `fetch`，也可以直接用 REST API，见 [API 参考](./api.md)。
