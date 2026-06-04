@@ -1,11 +1,13 @@
 ---
 title: JavaScript / TypeScript SDK
-description: "@opencorvus-ai/sdk —— OpenCorvus REST API 的 TypeScript 类型化封装。"
+description: "@opencorvus-ai/sdk 的生成式 OpenCorvus REST 客户端参考。"
 ---
 
 **包名**：`@opencorvus-ai/sdk`
 **源码**：`packages/sdk/js/`
-**用途**：OpenCorvus REST API 的 TypeScript 类型化封装
+**生成来源**：`packages/sdk/openapi.json`
+
+SDK 是 OpenCorvus REST API 的类型化封装。HTTP 方法、请求类型、响应类型与 SSE helper 由 `@hey-api/openapi-ts` 生成；`src/client.ts` 与 `src/server.ts` 提供 OpenCorvus 专用的客户端和服务端辅助函数。
 
 ## 安装
 
@@ -13,92 +15,146 @@ description: "@opencorvus-ai/sdk —— OpenCorvus REST API 的 TypeScript 类�
 bun add @opencorvus-ai/sdk
 ```
 
-## 两种客户端
-
-### 1. 连接已运行的服务
+## 客户端
 
 ```typescript
 import { createOpenCorvusClient } from "@opencorvus-ai/sdk"
-// 旧名 createOpencodeClient 仍是 alias，保留向后兼容
 
 const client = createOpenCorvusClient({
   baseUrl: "http://127.0.0.1:7878",
-  password: process.env.OPENCORVUS_SERVER_PASSWORD,  // 可选
+  password: process.env.OPENCORVUS_SERVER_PASSWORD,
 })
+```
 
-// 创建任务
-const { task_id } = await client.task.create({
+`createOpenCorvusClient()` 接受生成 fetch client 的配置，并增加 OpenCorvus 专用选项：
+
+| 选项 | 用途 |
+|---|---|
+| `baseUrl` | OpenCorvus 服务地址；未传时使用生成时的默认地址。 |
+| `directory` | 为项目作用域请求添加 `x-opencorvus-directory`；Windows 下会规范化 `/c/repo` 这类 MSYS 路径。 |
+| `username` | Basic Auth 用户名，默认 `opencorvus`。 |
+| `password` | Basic Auth 密码；服务端启用 `OPENCORVUS_SERVER_PASSWORD` 时传入该值。 |
+| `headers` | 额外 header；显式传入的 `Authorization` 不会被 `password` 覆盖。 |
+| `fetch` | 自定义 Fetch 实现，用于代理、埋点、测试或进程内适配。 |
+| `throwOnError` | 为 `true` 时，失败响应直接 throw；否则返回 `{ error }`。 |
+| `responseStyle` | 生成客户端响应模式：默认 fields 对象，也可设为 `"data"` 返回纯数据。 |
+
+## 调用与返回值
+
+普通非 SSE 方法默认返回 fields 对象：
+
+```typescript
+const result = await client.task.create({
   request: "为 src/foo.ts 添加单元测试",
 })
 
-// 订阅事件流
-for await (const event of client.event.subscribe()) {
+if (result.error) throw result.error
+const taskID = result.data.task_id
+```
+
+如果只想拿数据，可以全局或单次调用设置 `responseStyle: "data"`：
+
+```typescript
+const client = createOpenCorvusClient({
+  baseUrl: "http://127.0.0.1:7878",
+  responseStyle: "data",
+})
+
+const task = await client.task.create({
+  request: "为 src/foo.ts 添加单元测试",
+})
+```
+
+## SSE
+
+SSE 方法返回 `{ stream }`，其中 `stream` 是 `AsyncGenerator`。
+
+```typescript
+const abort = new AbortController()
+const { stream } = client.event.subscribe(undefined, {
+  signal: abort.signal,
+  sseMaxRetryAttempts: 10,
+})
+
+for await (const event of stream) {
   console.log(event.type, event)
 }
 ```
 
-### 2. 在进程内嵌入启动
+常用 SSE 选项：`signal`、`onSseEvent`、`onSseError`、`sseDefaultRetryDelay`、`sseMaxRetryDelay`、`sseMaxRetryAttempts`。
+
+## 嵌入式服务
+
+调用方需要拉起一个 OpenCorvus server 进程并拿到已连接客户端时，使用 `createOpenCorvus()`。
 
 ```typescript
 import { createOpenCorvus } from "@opencorvus-ai/sdk"
-// `createOpencode` 是 `createOpenCorvus` 的 alias
 
 const { client, server } = await createOpenCorvus({
-  directory: "/path/to/repo",
+  port: 0,
+  config: { logLevel: "info" },
 })
-// ... 使用 client
-await server.close()
-```
 
-返回对象结构（来自 `packages/sdk/js/src/index.ts:30-43`）：
-
-```typescript
-{ client: OpenCorvusClient, server: { url: string, close: () => void } }
-```
-
-## 主要命名空间
-
-对应 REST API（见 [API 参考](./api.md)）：
-
-| 命名空间 | 对应端点 |
-|---|---|
-| `client.task.*` | `/task` / `/tasks` / `/task/:id/*` |
-| `client.session.*` | `/session/*` |
-| `client.goal.*` / `client.run.*` | `/goal/*` / `/run/*` |
-| `client.event.subscribe()` | `/event`（SSE） |
-| `client.mcp.*` | `/mcp/*` |
-| `client.permission.*` | `/permission/*` |
-| `client.skill.*` | `/skill/*` |
-| `client.executor.*` | `/executor/*` |
-| `client.tui.runtime.*` | `/tui/runtime/*` |
-
-## 事件订阅
-
-`client.event.subscribe()` 返回 `AsyncIterable<Event>`，内部用 SSE 长连接，断连自动指数退避重试（最大 60s）。
-
-```typescript
-const stream = client.event.subscribe({ signal: abortController.signal })
-for await (const event of stream) {
-  if (event.type === "task.updated") { /* ... */ }
+try {
+  const health = await client.global.health({ throwOnError: true })
+  console.log(health.data)
+} finally {
+  server.close()
 }
 ```
 
-事件类型定义见 [API 参考 § SSE 事件 schema](./api.md#sse-事件-schema)。
+返回结构：
 
-## 类型生成
+```typescript
+{
+  client: OpenCorvusClient
+  server: { url: string; close: () => void }
+}
+```
 
-SDK 的类型从 OpenAPI schema 自动生成（由 [`@hey-api/openapi-ts`](https://github.com/hey-api/openapi-ts) 工具链），源文件 `packages/sdk/js/src/gen/`。
+如果进程环境设置了 `OPENCORVUS_SERVER_PASSWORD`，`createOpenCorvus()` 会把该密码自动传给返回的 client。
 
-重新生成：
+## 命名空间
+
+SDK 跟随 OpenAPI `operationId` 命名。点号分段变成 namespace，snake_case 方法名变成 camelCase。例如 `session.prompt_async` 映射为 `client.session.promptAsync()`。
+
+| 命名空间 | 示例 |
+|---|---|
+| `client.global.*` | `health`、`event`、`config.get`、`db.reset` |
+| `client.task.*` | `create`、`list`、`message`、`retry`、`replan`、`followup` |
+| `client.session.*` | `create`、`prompt`、`promptAsync`、`events`、`trace` |
+| `client.goal.*` / `client.run.*` | Goal / Run 查询与控制路由 |
+| `client.channel.*` | Channel runtime 与附件路由 |
+| `client.mcp.*` | MCP server 生命周期与认证路由 |
+| `client.permission.*` | 权限 reply / reject 路由 |
+| `client.provider.*` | Provider 模型、认证与刷新路由 |
+| `client.tui.runtime.*` | 托管 TUI runtime 路由 |
+
+[HTTP API 参考](./api.md) 是完整 operation 清单；每个 `operationId` 都按上述规则映射到 SDK namespace / method。
+
+## 生成
+
+重新生成 OpenAPI、SDK 类型与 generated client：
 
 ```bash
 bun ./packages/sdk/js/script/build.ts
 ```
 
-## 版本
+从 `packages/sdk/openapi.json` 重新生成/检查网页 API 参考：
 
-只有一份 SDK 入口（`packages/sdk/js/src/index.ts`），没有 v1 / v2 分支。历史子路径 `@opencorvus-ai/sdk/v2` 已不再需要——直接 `import { createOpenCorvusClient } from "@opencorvus-ai/sdk"`。
+```bash
+bun run docs:api
+bun run docs:check
+```
 
-## 底层实现
+生成文件位于 `packages/sdk/js/src/gen/`。不要手写修改生成文件。
 
-SDK 内部 = `@hey-api/openapi-ts` 生成的 fetch client + 生成的 TypeScript 类型 + SSE helper。若需自定义 HTTP 层（代理、拦截器），可以在 client config 里传入自定义 `fetch`，也可以直接用 REST API，见 [API 参考](./api.md)。
+## 导出与兼容
+
+使用包根入口：
+
+```typescript
+import { createOpenCorvusClient, createOpenCorvus } from "@opencorvus-ai/sdk"
+```
+
+当前没有 `@opencorvus-ai/sdk/v2` 子路径。历史 `createOpencode*` 导出仍作为兼容 alias 保留；新代码使用 `createOpenCorvus*`。

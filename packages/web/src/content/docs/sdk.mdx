@@ -3,86 +3,14 @@ title: SDK
 description: Type-safe JS / TS client for the OpenCorvus server.
 ---
 
-**Package**: `@opencorvus-ai/sdk`
-**Source**: `packages/sdk/js/`
-**Purpose**: Type-safe TypeScript wrapper over OpenCorvus REST API.
+OpenCorvus ships the `@opencorvus-ai/sdk` package for TypeScript callers that need a typed client for the REST and SSE API.
 
-## Install
+Use the SDK when you want to:
 
-```bash
-bun add @opencorvus-ai/sdk
-```
+- connect to a running `opencorvus serve`
+- launch an embedded OpenCorvus server process from another Node/Bun program
+- consume generated request/response types from `packages/sdk/openapi.json`
 
-## Two clients
+The complete SDK reference is maintained in one place: [JavaScript / TypeScript SDK reference](/docs/reference/sdk/).
 
-### 1. Connect to a running server
-
-```typescript
-import { createOpenCorvusClient } from "@opencorvus-ai/sdk"
-
-const client = createOpenCorvusClient({
-  baseUrl: "http://127.0.0.1:7878",
-  password: process.env.OPENCORVUS_SERVER_PASSWORD,
-})
-
-const { task_id } = await client.task.create({
-  request: "Add unit tests for src/foo.ts",
-})
-
-for await (const event of client.event.subscribe()) {
-  console.log(event.type, event)
-}
-```
-
-### 2. Embed the server in-process
-
-```typescript
-import { createOpenCorvus } from "@opencorvus-ai/sdk"
-
-const { client, server } = await createOpenCorvus({ directory: "/path/to/repo" })
-// ... use client
-await server.close()
-```
-
-## Namespaces
-
-Mirror REST API modules (see [server reference](/docs/server/)):
-
-| Namespace | Endpoints |
-|---|---|
-| `client.task.*` | `/task`, `/tasks`, `/task/:id/*` |
-| `client.session.*` | `/session/*` |
-| `client.goal.*` / `client.run.*` | `/goal/*` / `/run/*` |
-| `client.event.subscribe()` | `/event` (SSE) |
-| `client.mcp.*` | `/mcp/*` |
-| `client.permission.*` | `/permission/*` |
-| `client.skill.*` | `/skill/*` |
-| `client.executor.*` | `/executor/*` |
-| `client.tui.runtime.*` | `/tui/runtime/*` |
-
-## Event subscription
-
-`client.event.subscribe()` returns `AsyncIterable<Event>`, backed by an SSE long-poll. Reconnect uses exponential backoff (up to 60 s).
-
-```typescript
-const stream = client.event.subscribe({ signal: abortController.signal })
-for await (const event of stream) {
-  if (event.type === "task.updated") { /* ... */ }
-}
-```
-
-## Type generation
-
-SDK types are generated from an OpenAPI schema via [`@hey-api/openapi-ts`](https://github.com/hey-api/openapi-ts). Regenerate:
-
-```bash
-bun ./packages/sdk/js/script/build.ts
-```
-
-## Versions
-
-Use the package root entrypoint: `@opencorvus-ai/sdk`. Legacy `createOpencode*` exports remain aliases, but new code should use `createOpenCorvus*`.
-
-## Internals
-
-The SDK layers the generated `@hey-api/openapi-ts` fetch client with generated TypeScript types and SSE helpers. To customize HTTP (proxy, interceptors), pass a custom `fetch` in client config or call the REST API directly; see [server](/docs/server/).
+For the full route and `operationId` list, use [HTTP API reference](/docs/reference/api/).

@@ -1,8 +1,8 @@
 {
   "title_en": "HTTP API reference",
   "title_zh": "HTTP API 参考",
-  "auth_en_lead": "All endpoints are protected by `OPENCORVUS_SERVER_PASSWORD`. When set, clients must use HTTP Basic Auth (empty username, password = env var value).",
-  "auth_zh_lead": "全部端点受 `OPENCORVUS_SERVER_PASSWORD` 保护。设置后客户端必须使用 HTTP Basic Auth（用户名留空，密码 = 环境变量值）。",
+  "auth_en_lead": "All endpoints are protected by `OPENCORVUS_SERVER_PASSWORD` when it is set. Clients must use HTTP Basic Auth with username `OPENCORVUS_SERVER_USERNAME` or the default `opencorvus`, and password = `OPENCORVUS_SERVER_PASSWORD`.",
+  "auth_zh_lead": "设置 `OPENCORVUS_SERVER_PASSWORD` 后，全部端点受保护。客户端必须使用 HTTP Basic Auth：用户名为 `OPENCORVUS_SERVER_USERNAME`，未设置时默认为 `opencorvus`；密码为 `OPENCORVUS_SERVER_PASSWORD`。",
   "generated_lead_en": "This file is generated from `packages/sdk/openapi.json` by `bun run docs:api`. Do not edit by hand — changes will be overwritten on the next CI run.",
   "generated_lead_zh": "本文件由 `bun run docs:api` 从 `packages/sdk/openapi.json` 生成。禁止手写编辑——下次 CI 运行会覆盖。",
   "section_endpoints_en": "Endpoints",

@@ -1,94 +1,16 @@
 ---
 title: SDK
-description: OpenCorvus 服务器的类型安全 JS / TS 客户端。
+description: OpenCorvus 服务端的类型安全 JS / TS 客户端。
 ---
 
-**包名**：`@opencorvus-ai/sdk`
-**源码**：`packages/sdk/js/`
-**用途**：OpenCorvus REST API 的 TypeScript 类型化封装
+OpenCorvus 提供 `@opencorvus-ai/sdk` 包，供 TypeScript 调用方访问 REST 与 SSE API。
 
-## 安装
+适合使用 SDK 的场景：
 
-```bash
-bun add @opencorvus-ai/sdk
-```
+- 连接已经运行的 `opencorvus serve`
+- 在另一个 Node/Bun 程序里拉起嵌入式 OpenCorvus server 进程
+- 复用从 `packages/sdk/openapi.json` 生成的请求/响应类型
 
-## 两种客户端
+完整 SDK 参考只维护在一个页面：[JavaScript / TypeScript SDK 参考](/docs/zh-cn/reference/sdk/)。
 
-### 1. 连接已运行的服务
-
-```typescript
-import { createOpenCorvusClient } from "@opencorvus-ai/sdk"
-
-const client = createOpenCorvusClient({
-  baseUrl: "http://127.0.0.1:7878",
-  password: process.env.OPENCORVUS_SERVER_PASSWORD,
-})
-
-// 创建任务
-const { task_id } = await client.task.create({
-  request: "为 src/foo.ts 添加单元测试",
-})
-
-// 订阅事件流
-for await (const event of client.event.subscribe()) {
-  console.log(event.type, event)
-}
-```
-
-### 2. 在进程内嵌入启动
-
-```typescript
-import { createOpenCorvus } from "@opencorvus-ai/sdk"
-
-const { client, server } = await createOpenCorvus({
-  directory: "/path/to/repo",
-})
-// ... 使用 client
-await server.close()
-```
-
-## 主要命名空间
-
-对应 REST API（见 [server 参考](/docs/zh-cn/server/)）：
-
-| 命名空间 | 对应端点 |
-|---|---|
-| `client.task.*` | `/task` / `/tasks` / `/task/:id/*` |
-| `client.session.*` | `/session/*` |
-| `client.goal.*` / `client.run.*` | `/goal/*` / `/run/*` |
-| `client.event.subscribe()` | `/event`（SSE） |
-| `client.mcp.*` | `/mcp/*` |
-| `client.permission.*` | `/permission/*` |
-| `client.skill.*` | `/skill/*` |
-| `client.executor.*` | `/executor/*` |
-| `client.tui.runtime.*` | `/tui/runtime/*` |
-
-## 事件订阅
-
-`client.event.subscribe()` 返回 `AsyncIterable<Event>`，内部用 SSE 长连接，断连自动指数退避重试（最大 60s）。
-
-```typescript
-const stream = client.event.subscribe({ signal: abortController.signal })
-for await (const event of stream) {
-  if (event.type === "task.updated") { /* ... */ }
-}
-```
-
-## 类型生成
-
-SDK 的类型从 OpenAPI schema 自动生成（由 [`@hey-api/openapi-ts`](https://github.com/hey-api/openapi-ts) 工具链），源文件 `packages/sdk/js/src/gen/`。
-
-重新生成：
-
-```bash
-bun ./packages/sdk/js/script/build.ts
-```
-
-## 版本
-
-只有一份 SDK 入口：`@opencorvus-ai/sdk`。历史 `createOpencode*` 名称仍是 alias，新代码使用 `createOpenCorvus*`。
-
-## 底层实现
-
-SDK 内部 = `@hey-api/openapi-ts` 生成的 fetch client + 生成的 TypeScript 类型 + SSE helper。若需自定义 HTTP 层（代理、拦截器），可以在 client config 里传入自定义 `fetch`，也可以直接用 REST API，见 [server](/docs/zh-cn/server/)。
+完整路由与 `operationId` 清单见 [HTTP API 参考](/docs/zh-cn/reference/api/)。

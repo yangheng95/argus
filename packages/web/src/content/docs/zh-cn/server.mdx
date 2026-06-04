@@ -48,7 +48,7 @@ opencorvus serve --hostname 127.0.0.1 --port 7878
 
 ## 认证
 
-绑定非 loopback 时必须设 `OPENCORVUS_SERVER_PASSWORD`。请求需在 header（`X-OpenCorvus-Password`）或 query 中携带——SDK 自动处理。
+设置 `OPENCORVUS_SERVER_PASSWORD` 后，请求必须使用 HTTP Basic Auth。用户名为 `OPENCORVUS_SERVER_USERNAME`，未设置时默认 `opencorvus`；密码为 `OPENCORVUS_SERVER_PASSWORD`。SDK 配置 `password` 后会自动设置 `Authorization` header。
 
 ## 嵌入式
 

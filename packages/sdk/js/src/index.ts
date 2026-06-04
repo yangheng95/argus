@@ -34,6 +34,8 @@ export async function createOpenCorvus(options?: ServerOptions) {
 
   const client = createOpenCorvusClientImpl({
     baseUrl: server.url,
+    username: process.env.OPENCORVUS_SERVER_USERNAME,
+    password: process.env.OPENCORVUS_SERVER_PASSWORD,
   })
 
   return {
