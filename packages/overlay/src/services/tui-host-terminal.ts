@@ -8,21 +8,26 @@ export interface TuiHostTerminalSize {
   rows: number
 }
 
-export function syncTuiHostTerminalBuffer(input: {
-  terminal: TuiHostTerminalWriter
-  renderedBuffer: string
-  nextBuffer: string
-}) {
-  if (input.nextBuffer === input.renderedBuffer) return input.renderedBuffer
-  if (input.nextBuffer.startsWith(input.renderedBuffer)) {
-    input.terminal.write(input.nextBuffer.slice(input.renderedBuffer.length))
-    return input.nextBuffer
-  }
-  input.terminal.reset()
-  input.terminal.write(input.nextBuffer)
-  return input.nextBuffer
+export interface TuiHostTerminalOutput {
+  data: string
+  truncated: boolean
 }
 
 export function hasTuiHostTerminalSizeChanged(previous: TuiHostTerminalSize | undefined, next: TuiHostTerminalSize) {
   return previous?.cols !== next.cols || previous.rows !== next.rows
+}
+
+export function writeTuiHostTerminalOutput(input: {
+  terminal: TuiHostTerminalWriter
+  renderedBuffer: string
+  output: TuiHostTerminalOutput
+}) {
+  if (!input.output.data) return input.renderedBuffer
+  if (input.output.truncated) {
+    input.terminal.reset()
+    input.terminal.write(input.output.data)
+    return input.output.data
+  }
+  input.terminal.write(input.output.data)
+  return `${input.renderedBuffer}${input.output.data}`
 }

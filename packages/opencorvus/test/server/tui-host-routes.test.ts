@@ -146,10 +146,39 @@ describe("server.tui-host-routes", () => {
         expect(body.cols).toBe(120)
         expect(body.rows).toBe(40)
 
+        const output = await app.request("/host/output?cursor=0")
+        expect(output.status).toBe(200)
+        const firstOutput = (await output.json()) as { data: string; cursor: number; from: number; truncated: boolean }
+        expect(firstOutput.data).toContain("route-host-input")
+        expect(firstOutput.from).toBe(0)
+        expect(firstOutput.cursor).toBeGreaterThan(0)
+        expect(firstOutput.truncated).toBe(false)
+
+        const emptyOutput = await app.request(`/host/output?cursor=${encodeURIComponent(String(firstOutput.cursor))}`)
+        expect(emptyOutput.status).toBe(200)
+        expect(await emptyOutput.json()).toMatchObject({
+          data: "",
+          cursor: firstOutput.cursor,
+          from: firstOutput.cursor,
+          truncated: false,
+        })
+
         const stop = await app.request("/host/stop", { method: "POST" })
         expect(stop.status).toBe(200)
         expect(await stop.json()).toBe(true)
         expect(TuiHost.status().running).toBe(false)
+      },
+    })
+  })
+
+  test("rejects invalid output cursor payload", async () => {
+    await using tmp = await tmpdir()
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const app = TuiRoutes()
+        const res = await app.request("/host/output?cursor=-2")
+        expect(res.status).toBe(400)
       },
     })
   })

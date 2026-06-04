@@ -1,15 +1,15 @@
 import { createEffect, createSignal, onCleanup, type Accessor } from "solid-js"
 import type { FitAddon, Ghostty, Terminal as GhosttyTerminal } from "ghostty-web"
 import {
-  loadTuiHostSnapshot,
+  loadTuiHostOutput,
   loadTuiHostStatus,
   resizeTuiHost,
   sendTuiHostInput,
   startTuiHost,
   stopTuiHost,
-  type TuiHostSnapshot,
+  type TuiHostOutput,
 } from "../services/tui-host"
-import { hasTuiHostTerminalSizeChanged, syncTuiHostTerminalBuffer } from "../services/tui-host-terminal"
+import { hasTuiHostTerminalSizeChanged, writeTuiHostTerminalOutput } from "../services/tui-host-terminal"
 import { t } from "../utils/i18n"
 import { Icon } from "./Icon"
 import { Button } from "./ui/Button"
@@ -47,40 +47,42 @@ export function TuiHostPanel(props: TuiHostPanelProps) {
   let disposed = false
   let hostStarted = false
   let renderedBuffer = ""
+  let hostCursor: number | undefined = 0
   let lastSize: { cols: number; rows: number } | undefined
 
-  const [snapshot, setSnapshot] = createSignal<TuiHostSnapshot | null>(null)
+  const [output, setOutput] = createSignal<TuiHostOutput | null>(null)
   const [loading, setLoading] = createSignal(false)
   const [error, setError] = createSignal("")
 
   const hostState = () => {
     if (error()) return "error"
-    if (loading() && !snapshot()) return "loading"
-    return snapshot()?.running ? "running" : "stopped"
+    if (loading() && !output()) return "loading"
+    return output()?.running ? "running" : "stopped"
   }
 
   const hostLabel = () => {
     if (error()) return t("tui.host_error")
-    if (loading() && !snapshot()) return t("common.loading")
-    return snapshot()?.running ? t("tui.host_running") : t("tui.host_stopped")
+    if (loading() && !output()) return t("common.loading")
+    return output()?.running ? t("tui.host_running") : t("tui.host_stopped")
   }
 
-  function writeBuffer(buffer: string) {
+  function writeOutput(nextOutput: TuiHostOutput) {
     const current = term
     if (!current) return
-    renderedBuffer = syncTuiHostTerminalBuffer({
+    renderedBuffer = writeTuiHostTerminalOutput({
       terminal: current,
       renderedBuffer,
-      nextBuffer: buffer,
+      output: nextOutput,
     })
   }
 
-  async function refreshSnapshot() {
+  async function refreshOutput() {
     if (!props.active()) return
-    const next = await loadTuiHostSnapshot()
+    const next = await loadTuiHostOutput(hostCursor)
     if (disposed) return
-    setSnapshot(next)
-    writeBuffer(next.buffer)
+    hostCursor = next.cursor
+    setOutput(next)
+    writeOutput(next)
   }
 
   async function ensureHostStarted() {
@@ -101,10 +103,10 @@ export function TuiHostPanel(props: TuiHostPanelProps) {
     setError("")
     try {
       await ensureHostStarted()
-      await refreshSnapshot()
+      await refreshOutput()
       if (pollTimer === undefined) {
         pollTimer = setInterval(() => {
-          void refreshSnapshot().catch((err) => {
+          void refreshOutput().catch((err) => {
             if (!disposed) setError(err instanceof Error ? err.message : String(err))
           })
         }, HOST_POLL_INTERVAL_MS)
@@ -149,6 +151,7 @@ export function TuiHostPanel(props: TuiHostPanelProps) {
       await stopTuiHost()
       hostStarted = false
       renderedBuffer = ""
+      hostCursor = 0
       term?.reset()
       await start()
     } catch (err) {
@@ -244,7 +247,7 @@ export function TuiHostPanel(props: TuiHostPanelProps) {
             title={t("common.refresh")}
             aria-label={t("common.refresh")}
             disabled={loading()}
-            onClick={() => void refreshSnapshot()}
+            onClick={() => void refreshOutput()}
           >
             <Icon name="refresh" />
           </Button>

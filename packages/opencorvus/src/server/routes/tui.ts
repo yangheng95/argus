@@ -51,6 +51,13 @@ const TuiHostSnapshot = TuiHostInfo.extend({
   buffer: z.string(),
 })
 
+const TuiHostOutput = TuiHostInfo.extend({
+  data: z.string(),
+  cursor: z.number().int(),
+  from: z.number().int(),
+  truncated: z.boolean(),
+})
+
 const TuiHostStart = z.object({
   sessionID: z.string().optional(),
   model: z.string().optional(),
@@ -207,6 +214,26 @@ export const TuiRoutes = lazy(() =>
       }),
       async (c) => {
         return c.json(TuiHost.snapshot())
+      },
+    )
+    .get(
+      "/host/output",
+      describeRoute({
+        summary: "Get embedded TUI host output delta",
+        description:
+          "Get buffered terminal output after a cursor for the embedded right-sidebar TUI host. Cursor -1 starts at the current end.",
+        operationId: "tui.host.output",
+        responses: {
+          200: {
+            description: "Embedded TUI host output delta",
+            content: { "application/json": { schema: resolver(TuiHostOutput) } },
+          },
+          ...errors(400),
+        },
+      }),
+      validator("query", z.object({ cursor: z.coerce.number().int().min(-1).optional() })),
+      async (c) => {
+        return c.json(TuiHost.output(c.req.valid("query")))
       },
     )
     .post(

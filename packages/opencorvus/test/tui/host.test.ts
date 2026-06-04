@@ -29,7 +29,14 @@ function inputEchoCommand(cwd: string): Tui.EmbeddedCommand {
   if (process.platform === "win32") {
     return {
       command: "powershell.exe",
-      args: ["-NoLogo", "-NoProfile", "-ExecutionPolicy", "Bypass", "-Command", "$line=[Console]::In.ReadLine(); Write-Output $line"],
+      args: [
+        "-NoLogo",
+        "-NoProfile",
+        "-ExecutionPolicy",
+        "Bypass",
+        "-Command",
+        "while (($line=[Console]::In.ReadLine()) -ne $null) { Write-Output $line }",
+      ],
       cwd,
       url: "http://127.0.0.1:2",
       port: 2,
@@ -38,7 +45,7 @@ function inputEchoCommand(cwd: string): Tui.EmbeddedCommand {
   }
   return {
     command: "sh",
-    args: ["-c", 'read line; printf "%s" "$line"'],
+    args: ["-c", 'while IFS= read -r line; do printf "%s\\n" "$line"; done'],
     cwd,
     url: "http://127.0.0.1:2",
     port: 2,
@@ -95,6 +102,23 @@ describe("tui.host", () => {
           "Pseudo Terminal host did not receive input",
         )
         expect(TuiHost.snapshot().buffer).toContain("opencorvus-host-input")
+        const current = TuiHost.output()
+        expect(current.data).toContain("opencorvus-host-input")
+        expect(current.cursor).toBeGreaterThan(0)
+        expect(TuiHost.output({ cursor: current.cursor })).toMatchObject({
+          data: "",
+          cursor: current.cursor,
+          from: current.cursor,
+          truncated: false,
+        })
+        TuiHost.input("opencorvus-host-cursor\r\n")
+        await waitFor(
+          () => TuiHost.output({ cursor: current.cursor }).data.includes("opencorvus-host-cursor"),
+          "Pseudo Terminal host did not return cursor output",
+        )
+        const delta = TuiHost.output({ cursor: current.cursor })
+        expect(delta.data).toContain("opencorvus-host-cursor")
+        expect(delta.cursor).toBeGreaterThan(current.cursor)
         await TuiHost.stop()
       },
     })
