@@ -6,8 +6,10 @@ Detailed implementation plan: `specs/new-arch/right-sidebar-opencode-tui-copy-im
 
 ## Source Baseline
 
-- Upstream: `anomalyco/opencode` `dev` branch at `789e4d57b9d7af136cfc88feeb72fe81e4e28009`
-- Upstream commit time: `2026-06-04T10:55:22-04:00`
+- Upstream: `anomalyco/opencode` `dev` branch at `94c49b20ba207a92e4150c552d616930b6560e39`
+- Upstream commit time: `2026-06-04T11:19:36-04:00`
+- Previous inspected commit: `789e4d57b9d7af136cfc88feeb72fe81e4e28009`
+- 2026-06-05 refresh: no changes were found under the inspected TUI, terminal, PTY, plugin TUI API, or OpenTUI dependency paths.
 - Local branch inspected: `coding-assistant`
 - Upstream TUI files: 165 files under `packages/opencode/src/cli/cmd/tui`
 - Local TUI files: existing OpenTUI implementation under `packages/opencorvus/src/cli/cmd/tui`, plus TUI runtime/control APIs under `packages/opencorvus/src/tui`
