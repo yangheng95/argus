@@ -374,14 +374,14 @@ contract.
 - `explore`: use for focused read-only repository investigation when you need
   file, symbol, or architecture facts before requirements or implementation.
   Its findings are returned to you and persisted under `phase=explore`.
-- `frontend_design`: evidence tool for visual reference implementation, UI
-  replication, or visual parity work; it owns webpage evidence acquisition and
-  the binding visual frontend template for implementation. Whether to call it is
-  your decision from the current task context.
-- `frontend_research`: submit-only publisher for webpage functional, visual,
-  interaction, content, responsive, and fidelity investigation division. Whether
-  to call it, and whether to combine it with `frontend_design`, is your decision
-  from the current task context.
+- `frontend_design`: evidence and design tool for visual reference
+  implementation, UI replication, or visual parity work; it owns the binding
+  visual frontend template for implementation. Whether to call it is your
+  decision from the current task context.
+- `frontend_research`: webpage/UI investigation publisher. With source URLs, the
+  host prepares rendered webpage evidence before the agent session; the agent
+  partitions it into functional, visual, interaction, content, responsive, and
+  fidelity work packets. Whether to call it or combine it with `frontend_design` is your decision.
 - `requirements`: produce acceptance-level REQ-N rows and foundational
   decisions. It does not produce goals.
 - After a successful `requirements` result, call `architect` next. Do not call

@@ -167,6 +167,15 @@ export const ResearchOpenQuestionSchema = z.object({
 })
 export type ResearchOpenQuestion = z.infer<typeof ResearchOpenQuestionSchema>
 
+export const ResearchScopeSchema = z.object({
+  user_goal: z.string().min(1),
+  deliverable_type: z.enum(["prd", "spec", "research_report", "implementation_input", "mixed"]),
+  audience: z.string().min(1),
+  explicit_non_goals: z.array(z.string()).default([]),
+  assumed_non_goals: z.array(z.string()).default([]),
+})
+export type ResearchScope = z.infer<typeof ResearchScopeSchema>
+
 export const ResearchBriefSchema = z.object({
   metadata: z.object({
     research_session_id: z.string().min(1),
@@ -176,13 +185,7 @@ export const ResearchBriefSchema = z.object({
     created_at: z.string().min(1),
     stale_after: z.string().optional(),
   }),
-  scope: z.object({
-    user_goal: z.string().min(1),
-    deliverable_type: z.enum(["prd", "spec", "research_report", "implementation_input", "mixed"]),
-    audience: z.string().min(1),
-    explicit_non_goals: z.array(z.string()).default([]),
-    assumed_non_goals: z.array(z.string()).default([]),
-  }),
+  scope: ResearchScopeSchema,
   bundle: z.object({
     full_markdown_path: z.string().min(1),
     evidence_json_path: z.string().min(1),

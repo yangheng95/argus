@@ -1,5 +1,7 @@
 # Research Bundle Structured Tool Input
 
+Superseded by `specs/new-arch/2026-06-04-research-brief-chunked-collector.md`. The structured bundle input described here was an intermediate step; the active design now registers the whole research brief in small collector chunks and leaves `submit_research_brief` as a strict finalizer.
+
 ## Problem
 
 `submit_research_brief` currently asks the model to submit `bundle.full_markdown`, `bundle.evidence_json`, and `bundle.citation_map_json` as large JSON string fields. The observed failure text says the model hit an unterminated JSON string while trying to submit the bundle. That failure happens before Zod validation because the provider/session boundary cannot parse malformed tool-call JSON.
