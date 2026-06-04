@@ -34,8 +34,14 @@ Full-repo grep before the change:
 ## Change
 
 - `syncGoalRuns` still wakes the orchestrator when a terminal goal batch settles.
-- It dispatches the wake without `event.note`, so the next user message falls
-  back to the original user request while dynamic context carries the new state.
+- It dispatches the wake without `event.note`.
+- Orchestrator internal wakes with an existing user message no longer call
+  `SessionPrompt.prompt`, because that API always persists a new `role=user`
+  message. They install the current dynamic context in the orchestrator runtime
+  contract and call `SessionPrompt.loop` directly.
+- The session loop merges runtime-contract `system` into the current model
+  request's system prompt. This is request context, not a persisted message.
 - Remove the now-dead `batchComplete` note helper and its note-level tests.
-- Update convergence tests to assert batch settlement does not synthesize a user
-  note.
+- Update convergence/session-reuse tests to assert batch settlement does not
+  synthesize a user note and internal orchestrator wakes do not append a user
+  message.

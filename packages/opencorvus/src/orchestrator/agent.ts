@@ -60,7 +60,7 @@ import {
 import { Session } from "@/session"
 import { SessionContext } from "@/session/context"
 import { SessionPrompt } from "@/session/prompt"
-import type { Message } from "@/session/message"
+import { Message } from "@/session/message"
 import { Bus } from "@/bus"
 import { Instance } from "@/project/instance"
 import { Identifier } from "@/id/id"
@@ -389,7 +389,10 @@ export namespace Orchestrator {
       if (debugCfg.fail_on_information_missing) {
         system.push(INFORMATION_MISSING_FALLBACK_TEXT)
       }
-      const userText = orchestratorUserText(task, event)
+      const appendUserMessage = Boolean(
+        event?.note || event?.operatorMessage || !(await sessionHasUserMessage(agentSession.id)),
+      )
+      const userText = appendUserMessage ? orchestratorUserText(task, event) : ""
       // Build multimodal content when task has file attachments. We re-inline
       // image/pdf bytes on EVERY wake, not just the first. The orchestrator
       // session is persistent, but compaction and per-wake prompt reduction
@@ -405,7 +408,7 @@ export namespace Orchestrator {
       // are additionally gated by the resolved model's input modality
       // capabilities so non-vision coding models don't receive bytes the
       // upstream API would silently drop.
-      const wakeAttachments = Array.isArray(task.attachments)
+      const wakeAttachments = appendUserMessage && Array.isArray(task.attachments)
         ? (task.attachments as Array<{ sha?: string; url?: string; mime?: string; size?: number; filename?: string }>)
         : undefined
       const inlineFileParts = await AttachmentStore.inlineFileParts(wakeAttachments, {
@@ -421,7 +424,7 @@ export namespace Orchestrator {
       // HARD design constraint (no read tool here) and a hard requirement
       // that the orchestrator cite the attachments in every dispatch prompt
       // so the sub-agent treats them as primary context, not silent backdrop.
-      const allAttachments = Array.isArray(task.attachments)
+      const allAttachments = appendUserMessage && Array.isArray(task.attachments)
         ? (task.attachments as Array<{ sha?: string; url?: string; mime?: string; size?: number; filename?: string }>)
         : undefined
       const visionCapable =
@@ -443,14 +446,14 @@ export namespace Orchestrator {
           "You do NOT have a `read` tool yourself — do not attempt to fetch reference content. " +
           "When you call `requirements` / `frontend_design` / `architect` / `build` / `refine`, the engine forwards every attachment to the sub-agent automatically — but the sub-agent's prompt only cites them when YOU mention them by filename in your dispatch instructions. ALWAYS cite the relevant attachments by EXACT filename and explain their relevance. NEVER reference an attachment that is not listed below — if this section is empty, the user attached nothing in this wake and any phrase implying you saw a file is a hallucination.",
       })
-      const enrichedUserText = userText + inventoryText
+      const enrichedUserText = appendUserMessage ? userText + inventoryText : ""
       // Build PromptInput.parts. Text first, then any multimodal attachments
       // as FilePart (data URL) so Session.saveMessage can persist the part
       // without re-resolving a local file path.
       const parts: Array<
         | { type: "text"; text: string }
         | { type: "file"; url: string; mime: string; filename?: string }
-      > = [{ type: "text", text: enrichedUserText }, ...inlineFileParts]
+      > = appendUserMessage ? [{ type: "text", text: enrichedUserText }, ...inlineFileParts] : []
       const partsWithIds = parts.map((p) => ({ ...p, id: Identifier.ascending("part") }))
 
       log.info("orchestrator starting", {
@@ -543,17 +546,22 @@ export namespace Orchestrator {
             installedAt: Date.now(),
           },
           tools: guard.tools as any,
+          system: appendUserMessage ? undefined : system,
         })
         promptInFlight = true
-        finalMessage = (await SessionPrompt.prompt({
-          sessionID: agentSession.id,
-          model: { providerID: model.providerID, modelID: model.api.id },
-          agent: "orchestrator",
-          system: Array.isArray(system) ? system.join("\n\n") : system,
-          systemMode: "complete",
-          tools: enableMap,
-          parts: partsWithIds,
-        })) as Message.WithParts
+        finalMessage = appendUserMessage
+          ? (await SessionPrompt.prompt({
+              sessionID: agentSession.id,
+              model: { providerID: model.providerID, modelID: model.api.id },
+              agent: "orchestrator",
+              system: Array.isArray(system) ? system.join("\n\n") : system,
+              systemMode: "complete",
+              tools: enableMap,
+              parts: partsWithIds,
+            })) as Message.WithParts
+          : (await SessionPrompt.loop({
+              sessionID: agentSession.id,
+            })) as Message.WithParts
         promptInFlight = false
       } finally {
         SessionPrompt.clearSessionRuntimeContract(agentSession.id)
@@ -833,6 +841,13 @@ async function orchestratorSessionForTask(task: TaskRow): Promise<Session.Info> 
     title: `Agent: ${task.title}`,
     directory: Instance.directory,
   })
+}
+
+async function sessionHasUserMessage(sessionID: string): Promise<boolean> {
+  for await (const item of Message.stream(sessionID)) {
+    if (item.info.role === "user") return true
+  }
+  return false
 }
 
 // ---------------------------------------------------------------------------
