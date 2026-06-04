@@ -494,13 +494,17 @@ export async function loadOlderConversationHistory(
     assertActiveHistory(selectedTaskID, epoch, controller.signal);
     const transcript = requireArray(page?.transcript, "transcript");
     const timeline = requireArray(page?.timeline, "timeline");
+    const events = requireArray(page?.events, "events");
     const view = requireObject(page?.view, "view");
     const nextHistory = parseHistoryState(page?.history, CONVERSATION_HISTORY_PAGE_LIMIT);
-    if (transcript.length === 0 && timeline.length === 0) {
+    if (transcript.length === 0 && timeline.length === 0 && events.length === 0) {
       historyState = nextHistory;
       return false;
     }
     hydrateConversationView(view, mergeLoadedConversationMessages(timeline, transcript));
+    for (const event of events) {
+      replayTaskEventToTree(event);
+    }
     assertActiveHistory(selectedTaskID, epoch, controller.signal);
     historyState = nextHistory;
     return true;
@@ -522,9 +526,13 @@ export async function loadConversationSessionHistory(
   );
   const transcript = requireArray(page?.transcript, "transcript");
   const timeline = requireArray(page?.timeline, "timeline");
+  const events = requireArray(page?.events, "events");
   const view = requireObject(page?.view, "view");
-  if (transcript.length === 0 && timeline.length === 0) return false;
+  if (transcript.length === 0 && timeline.length === 0 && events.length === 0) return false;
   hydrateConversationView(view, mergeLoadedConversationMessages(timeline, transcript));
+  for (const event of events) {
+    replayTaskEventToTree(event);
+  }
   return true;
 }
 

@@ -709,15 +709,17 @@ export const EngineRoutes = lazy(() =>
               const created = conversationItemTimestamp(item)
               return created >= oldestTimestamp && created <= newestTimestamp
             })
+        const sessionEvents = conversationSessionEvents(taskID, sessionID, { rewindCursor })
         return c.json({
           transcript: sessionTranscript,
           timeline: sessionTimeline,
-          view: projectConversationView(board, sessionTranscript),
+          events: sessionEvents,
+          view: projectConversationView(board, sessionTranscript, sessionEvents),
           history: {
-            oldestTimestamp,
+            oldestTimestamp: oldestTimestamp ?? sessionEvents[0]?.timestamp ?? null,
             oldestMessageID: sessionTranscript[0] ? conversationItemID(sessionTranscript[0]) || null : null,
             hasMore: false,
-            limit: sessionTranscript.length,
+            limit: Math.max(1, sessionTranscript.length),
           },
         })
       },
@@ -769,10 +771,16 @@ export const EngineRoutes = lazy(() =>
           filterByCursor(timeline),
           { before: query.before, beforeID: query.before_id, limit: query.limit },
         )
+        const pageEvents = conversationHistoryEvents(taskID, {
+          before: query.before,
+          oldestTimestamp: page.history.oldestTimestamp,
+          rewindCursor,
+        })
         return c.json({
           transcript: page.transcript,
           timeline: page.timeline,
-          view: projectConversationView(board, page.transcript),
+          events: pageEvents,
+          view: projectConversationView(board, page.transcript, pageEvents),
           history: page.history,
         })
       },
@@ -1789,6 +1797,42 @@ function conversationEventPage(
       sinceTimestamp: input.sinceTimestamp ?? null,
     },
   }
+}
+
+function conversationSessionEvents(
+  taskID: string,
+  sessionID: string,
+  input: {
+    rewindCursor: number | null;
+  },
+) {
+  return ProtocolStore.listTaskEvents(taskID)
+    .filter((event) =>
+      event.sessionID === sessionID &&
+      (event.type === "session.status" || event.type === "session.error") &&
+      (input.rewindCursor == null || event.time.emitted <= input.rewindCursor)
+    )
+    .map(protocolTaskEvent)
+}
+
+function conversationHistoryEvents(
+  taskID: string,
+  input: {
+    before: number;
+    oldestTimestamp: number | null;
+    rewindCursor: number | null;
+  },
+) {
+  if (input.oldestTimestamp == null) return []
+  const oldestTimestamp = input.oldestTimestamp
+  return ProtocolStore.listTaskEvents(taskID)
+    .filter((event) =>
+      (event.type === "session.status" || event.type === "session.error") &&
+      event.time.emitted >= oldestTimestamp &&
+      event.time.emitted < input.before &&
+      (input.rewindCursor == null || event.time.emitted <= input.rewindCursor)
+    )
+    .map(protocolTaskEvent)
 }
 
 export function taskListProtocolEvent(event: ReturnType<typeof ProtocolStore.listTaskEventsAfter>[number]) {
