@@ -1,115 +1,88 @@
 ---
 title: Architecture
-description: OpenCorvus turns natural-language requests into verified code changes via a six-layer pipeline of specialized agents.
+description: OpenCorvus turns natural-language requests into verified code changes with an orchestrator-led workflow and artifact-backed state.
 ---
 
-OpenCorvus's job: **turn a natural-language request into verified code changes, reliably**. Reliability requires a pipeline of specialized agents that check each other, where every failure has a recovery path and every state is traceable.
+OpenCorvus's job is to turn a natural-language request into verified code changes. The current architecture is orchestrator-led: the orchestrator reads the task snapshot on every wake, chooses explicit workflow tools, and records durable evidence as SQLite rows and artifacts.
 
-## HTTP API runtime layering
+## HTTP API Runtime Layering
 
 The HTTP server (`packages/opencorvus/src/server/server.ts`) splits routes into two real layers:
 
-- **Control plane** — `/global/*`, `/auth/*`, `/ui/*`, plus `/log`, `/shutdown`, `/restart` are mounted before the `Instance.provide` middleware. They work even when no project directory is open. Use these for health checks, server lifecycle, and authentication.
-- **Instance-scoped** — every other route (`/session`, `/task`, `/run`, `/mcp`, `/tui`, `/experimental`, `/panel`, …) runs inside `Instance.provide({ directory, init: InstanceBootstrap })`. They require a project directory (resolved from `?directory=` query or `x-opencorvus-directory` header).
+- **Control plane** — `/global/*`, `/auth/*`, `/ui/*`, plus `/log`, `/shutdown`, `/restart` are mounted before the `Instance.provide` middleware. They work even when no project directory is open.
+- **Instance-scoped** — every other route (`/session`, `/task`, `/run`, `/mcp`, `/tui`, `/experimental`, `/panel`, ...) runs inside `Instance.provide({ directory, init: InstanceBootstrap })`. They require a project directory from `?directory=` or `x-opencorvus-directory`.
 
-Route handlers themselves do not read `process.env`, do not call `Database.use(...)`, do not open SQL tables, and do not use `z.any()`. The boundary is enforced by `bun run api:routes-check` and the bilingual API reference is regenerated from OpenAPI by `bun run docs:api` / `docs:check`.
+Route handlers do not read `process.env`, open SQL tables directly, or use `z.any()`. `bun run api:routes-check` protects that boundary, and `bun run docs:api` regenerates the web API reference from OpenAPI.
 
-## Six-layer pipeline
+## Workflow Shape
+
+OpenCorvus has two built-in workflows in `packages/opencorvus/src/engine/workflow.ts`:
+
+| Workflow | Shape | Use case |
+|---|---|---|
+| `direct` | `analyze_intent` as needed, then `build` | Explicit `kind=build`, scoped edits, bug fixes, short debugging |
+| `pipeline` | `(frontend_design / frontend_research as needed) → analyze_intent → requirements → architect → per-goal build → integrity` | Multi-file features, UI replication, refactors, tasks needing explicit acceptance evidence |
+
+The workflow definition is advisory prompt context, not a hidden host state machine. The orchestrator can skip optional steps or reroute based on evidence. `integrity` is the final session-bound review step for the pipeline; the old host-side deliver gate is not part of the recommended workflow.
+
+## Runtime Layers
 
 ```
 User request
   ↓
-┌──────────────┐
-│ Channel      │  Local TUI / HTTP / Slack / Telegram / …
-└──────┬───────┘
-       ↓  CreateTask
-┌──────────────┐
-│ Orchestrator │  Task/Run/Goal lifecycle, retry/replan, budget
-└──────┬───────┘  packages/opencorvus/src/orchestrator/task-loop.ts:59
-       ↓
-┌──────────────┐
-│ Task Agent   │  Main decision LLM; invokes spec/goal/plan sub-agents
-└──────┬───────┘  packages/opencorvus/src/task-agent/agent.ts:60
-       ↓
-┌──────────────┐
-│ GoalPool     │  Per-goal worktree, concurrent execution
-└──────┬───────┘  packages/opencorvus/src/orchestrator/goal-pool.ts
-       ↓
-┌──────────────┐
-│ Executor     │  OpenCorvus / Codex / Claude Code
-└──────┬───────┘  packages/opencorvus/src/executor/opencode.ts
-       ↓  acceptance
-┌──────────────┐
-│ Evaluator    │  build/test/lint/… + LLM-judge fallback
-└──────┬───────┘  packages/opencorvus/src/acceptance/checks/per-goal.ts
-       ↓
- accepted / rejected
-       ↓
- done  |  retry  |  replan
+Channel / UI / API
+  ↓
+Engine task row
+  ↓
+Orchestrator session
+  ├─ typed workflow tools: requirements / architect / build / integrity / ...
+  ├─ durable artifacts: runs / goal_run_attempts / acceptance / evaluation / reports
+  └─ explicit user interactions: questions and permissions
+  ↓
+Worker sessions
+  ├─ requirements, architect, frontend-design, frontend-research
+  ├─ per-goal build sessions in isolated worktrees
+  └─ integrity review session
 ```
 
-## Layer responsibilities
+## Responsibilities
 
-| Layer | Role | Entry point |
+| Component | Role | Current source |
 |---|---|---|
-| **Channel** | Protocol adapter (Slack/HTTP/TUI/…), converts inbound messages to `CreateTask` | `src/channel/ingress.ts:39` |
-| **Orchestrator** | Task/Run/Goal lifecycle, retry, replan, budget | `src/orchestrator/task-loop.ts:59` |
-| **Task Agent** | Main LLM decision-maker; coordinates spec/goal/plan sub-agents | `src/task-agent/agent.ts:60` |
-| **Planner** | Produces PlanSteps per Goal | `removed-planning-package/per-goal.ts:45` |
-| **GoalPool** | Topological scheduling of goals by `depends_on` | `src/orchestrator/goal-pool.ts` |
-| **Executor** | Injects prompt into coding agent, runs agentic loop | `src/executor/opencode.ts:36` |
-| **Evaluator** | Runs deterministic checks + LLM judge for verdict | `src/acceptance/checks/per-goal.ts` |
+| Channel / API | Converts external input into task creation, messages, and control operations | `packages/opencorvus/src/channel/ingress.ts`, `packages/opencorvus/src/server/routes/` |
+| Engine | Stores tasks, specs, requirements, goals, plan versions, artifacts, interactions, and projected status | `packages/opencorvus/src/engine/engine.sql.ts`, `packages/opencorvus/src/engine/store.ts` |
+| Orchestrator | Single task-level decision maker. Reads `describeTask`, dispatches typed tools, and decides recovery from evidence | `packages/opencorvus/src/orchestrator/agent.ts`, `packages/opencorvus/src/orchestrator/tools.ts` |
+| Workflow | Declares built-in `direct` and `pipeline` recommendations and renders progress from artifacts | `packages/opencorvus/src/engine/workflow.ts` |
+| Build agent | Implements direct tasks or one architect-authored goal in an isolated workspace | `packages/opencorvus/src/build/agent.ts` |
+| Integrity | Final system review for pipeline tasks; returns pass/non-pass evidence to the orchestrator | `packages/opencorvus/src/integrity/` |
 
-## Two nested loops
+## Two Loops
 
-### Outer: task control loop
+### Outer: Orchestrator Wake Loop
 
-`runTaskLoop` (`src/orchestrator/task-loop.ts:59`):
+`runTaskLoop` (`packages/opencorvus/src/orchestrator/loop.ts`) serializes wakes for one task and calls `Orchestrator.processTask`. The orchestrator does not advance through a fixed phase pointer; each wake reads the current describe/artifact snapshot and decides the next tool call.
 
-```
-while (!aborted && budget > 0) {
-  1. TaskAgent.processTask()       ← LLM decides next step
-  2. GoalPool.drain()              ← concurrently executes all goals
-  3. loop back so TaskAgent sees results
-}
-```
+### Inner: Session Agentic Loop
 
-### Inner: session agentic loop
-
-`SessionLoop` (`src/session/loop.ts:50`):
+`SessionLoop` (`packages/opencorvus/src/session/loop.ts`) runs every worker session:
 
 ```
-while (session alive) {
-  LLM emits tool-call → tool executes → result fed back into messages → next turn
-}
+LLM emits tool call → tool executes → tool result is appended → next model turn
 ```
 
-Bridge: the OpenCorvus executor (`OpencorvusExecutor.submit`, `src/executor/opencode.ts:48`) injects the orchestrator's prompt into `TaskQueueService`, which fires the session loop.
+Typed orchestrator tools create worker sessions for requirements, architect, build, integrity, and related stages.
 
-See [Agentic Loop](./agent-loop.md).
+## Worktree Parallelism
 
-## Why six layers, not one
+Architect-authored goals are persisted in `engine_goal`. A per-goal `build` dispatch creates an artifact-backed goal run attempt (`engine_artifact.kind="goal_run_attempt"`) with its own workspace metadata. Goal status shown in the UI is derived from the latest goal-run attempt chain, not from a cached `engine_goal.status` column.
 
-Common question: "Why not let one big LLM prompt do everything?"
+## Data Flow
 
-1. **Each stage has a different I/O contract** — spec produces a structured specification, plan produces ordered steps, eval produces verdict + evidence. Mixing them makes the LLM skip checks.
-2. **Failures need targeted rollback** — spec wrong → re-spec; plan wrong → re-plan; execution wrong → retry. Monolithic agents can't do this layering.
-3. **Budget control** — each stage has its own step / retry cap, configurable via `assistant.<name>.max_steps` (per-agent step budget), `assistant.max_runs`, `assistant.max_fix_runs`, and `assistant.max_executor_groups` (`packages/opencorvus/src/config/config.ts:1255-1257`).
-4. **Human-machine interaction granularity** — permission approvals and follow-up messages live in the task loop, not polluting a single LLM context.
+See [Task / Run / Goal data model](./goal-run-task.md).
 
-## Worktree parallelism
+## What's Next
 
-Each Goal gets its own Git worktree (`src/orchestrator/goal-pool.ts`); they don't interfere. Acceptance review handles the final merge.
-
-This means: one Task may have multiple Goals running in different worktrees concurrently; retrying a failed Goal doesn't affect others.
-
-## Data flow and model
-
-See [Goal / Run / Task](./goal-run-task.md).
-
-## What's next
-
-- [Goal / Run / Task data model](./goal-run-task.md)
+- [Task / Run / Goal data model](./goal-run-task.md)
 - [Agentic loop](./agent-loop.md)
-- [OpenCorvus configuration](../opencorvus/configuration.md)
-- [Evaluator](../opencorvus/evaluator.md)
+- [OpenCorvus configuration](/docs/config/)
+- [Integrity and evaluation reference](/docs/reference/evaluator/)

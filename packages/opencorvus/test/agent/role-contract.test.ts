@@ -187,16 +187,67 @@ test("research and frontend-design role descriptions keep document research dist
 
 test("public docs and live prompt do not describe deleted planner or requirements-owned goals", async () => {
   const root = path.resolve(import.meta.dirname, "../../../..")
-  const files = [
+  const docsFiles = [
+    "packages/web/src/content/docs/index.mdx",
+    "packages/web/src/content/docs/zh-cn/index.mdx",
     "packages/web/src/content/docs/agents.mdx",
     "packages/web/src/content/docs/zh-cn/agents.mdx",
+    "packages/web/src/content/docs/concepts/architecture.mdx",
+    "packages/web/src/content/docs/zh-cn/concepts/architecture.mdx",
+    "packages/web/src/content/docs/concepts/goal-run-task.mdx",
+    "packages/web/src/content/docs/zh-cn/concepts/goal-run-task.mdx",
+    "packages/web/src/content/docs/concepts/agent-loop.mdx",
+    "packages/web/src/content/docs/zh-cn/concepts/agent-loop.mdx",
+    "packages/web/src/content/docs/tui.mdx",
+    "packages/web/src/content/docs/zh-cn/tui.mdx",
+    "packages/web/src/content/docs/operations/benchmark.mdx",
+    "packages/web/src/content/docs/zh-cn/operations/benchmark.mdx",
+    "packages/web/src/content/docs/reference/env.mdx",
+    "packages/web/src/content/docs/zh-cn/reference/env.mdx",
+    "packages/web/src/content/docs/reference/evaluator.mdx",
+    "packages/web/src/content/docs/zh-cn/reference/evaluator.mdx",
+    "packages/web/src/content/docs/troubleshooting.mdx",
+    "packages/web/src/content/docs/zh-cn/troubleshooting.mdx",
+  ]
+  const livePromptFiles = [
     "packages/web/src/content/docs/start/quickstart.mdx",
     "packages/web/src/content/docs/zh-cn/start/quickstart.mdx",
     "docs/product/en/start/quickstart.md",
     "docs/product/zh-CN/start/quickstart.md",
     "packages/opencorvus/src/session/prompt/system.txt",
   ]
-  for (const file of files) {
+
+  const deletedDocPatterns: RegExp[] = [
+    /deliver[- ]agent/i,
+    /交付 agent/i,
+    /Task Agent/,
+    /Goal Agent/,
+    /Spec Agent/,
+    /TaskAgent/,
+    /GoalPool/,
+    /\bPlanner\b/,
+    /removed-planning-package/,
+    /src\/task-agent/,
+    /src\/orchestrator\/task-loop/,
+    /src\/executor\/opencode/,
+    /acceptance\/checks\/per-goal/,
+    /evaluateGoal/,
+    /selectorsSatisfied/,
+    /assistant\.evaluator/,
+    /spec → goals/,
+    /execute → evaluate → deliver/,
+    /plan → execute/,
+    /→ deliver/,
+    /\.\.\/opencorvus\//,
+  ]
+  for (const file of docsFiles) {
+    const text = await fs.readFile(path.join(root, file), "utf8")
+    for (const pattern of deletedDocPatterns) {
+      expect(text, `${file} must not contain deleted public workflow term ${pattern}`).not.toMatch(pattern)
+    }
+  }
+
+  for (const file of [...docsFiles, ...livePromptFiles]) {
     const text = await fs.readFile(path.join(root, file), "utf8")
     expect(text, file).not.toContain("planner_agent_running")
     expect(text, file).not.toMatch(/\|\s*`planner`\s*\|/)

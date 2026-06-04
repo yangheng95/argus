@@ -1,9 +1,9 @@
 ---
 title: Agentic loop
-description: The executor follows the standard agentic loop with three states, tool routing, sub-tasks, and key invariants.
+description: SessionLoop follows the standard agentic loop with tool routing, sub-tasks, and key invariants.
 ---
 
-The executor internals follow the **standard agentic loop**: LLM emits tool-call → tool executes → result fed back → next turn. This page covers the three states, tool routing, and the key invariants.
+Worker sessions follow the **standard agentic loop**: LLM emits tool-call → tool executes → result fed back → next turn. This page covers loop states, tool routing, sub-tasks, and key invariants.
 
 ## Three states
 
@@ -22,7 +22,7 @@ The executor internals follow the **standard agentic loop**: LLM emits tool-call
 Each tool-call returned by the LLM is routed by `SessionToolResolver` (`src/session/tool-resolver.ts`):
 
 1. **Filter** — `resolveTools()` applies the `input.tools` allow-list so DashScope isn't bombarded with 30+ tools.
-2. **Permission check** — `PermissionNext.ask()` (see [Permissions](../opencorvus/permissions.md)).
+2. **Permission check** — `PermissionNext.ask()` (see [Permissions](/docs/permissions/)).
 3. **Execute** — dispatch to the tool handler.
 4. **Write back** — the result becomes a `tool-result` part on the session message stream.
 
@@ -32,14 +32,13 @@ Each tool-call returned by the LLM is routed by `SessionToolResolver` (`src/sess
 
 ## Outer loop wiring
 
-`runTaskLoop` (`src/orchestrator/task-loop.ts:59`) injects prompts through the OpenCorvus executor (`OpencorvusExecutor.submit`, `src/executor/opencode.ts:48`):
+`runTaskLoop` (`packages/opencorvus/src/orchestrator/loop.ts`) serializes task wakes and calls the orchestrator. The orchestrator then dispatches typed workflow tools that create worker sessions:
 
 ```
 Orchestrator.runTaskLoop
-  └─ TaskAgent.processTask      (LLM decision)
-      └─ OpenCorvus executor (inject prompt)
-          └─ TaskQueueService.runNow
-              └─ SessionLoop     (inner agentic loop)
+  └─ Orchestrator.processTask      (LLM decision)
+      └─ typed tool: requirements / architect / build / integrity / ...
+          └─ worker SessionLoop
 ```
 
 ## Key invariants
@@ -62,10 +61,10 @@ Tool `output` fields are **JSON strings**, not objects. Consumers must `JSON.par
 
 ## Doom-loop detection
 
-`tool/gui-state.ts` records tool-call sequences and detects repetition (e.g. 5 identical clicks at the same coordinate). When triggered, the Run is marked `stuck`; Evaluator returns `inconclusive`, which replans instead of retries — avoiding dead-loop budget burn.
+Runtime tooling records repetitive tool-call patterns and visual interaction loops. When surfaced as evidence, the orchestrator routes repair through the responsible worker or review stage instead of letting the same worker burn budget indefinitely.
 
 ## What's next
 
 - [Architecture](./architecture.md)
-- [Evaluator](../opencorvus/evaluator.md)
-- [Permissions](../opencorvus/permissions.md)
+- [Integrity and evaluation reference](/docs/reference/evaluator/)
+- [Permissions](/docs/permissions/)

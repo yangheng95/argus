@@ -16,7 +16,7 @@ This starts the TUI bound to the current working directory's project. It autodis
 ## Features
 
 - **Sessions** — every interactive run is a session. Resume with `--continue` or `--session <id>`.
-- **Tasks** — submit a task; watch spec → goals → plan → run → evaluate → deliver in real time.
+- **Tasks** — submit a task; watch orchestrator decisions, requirements, architecture, per-goal builds, integrity review, and interactions in real time.
 - **Slash commands** — `/init`, `/share`, `/undo`, plus any custom commands you define under `commands/` or in the [config](/docs/config/).
 - **Permission prompts** — when an `ask` rule fires, the TUI pauses and surfaces an `allow / deny` choice. See [Permissions](/docs/permissions/).
 - **Themes** — built-in palettes plus custom themes. See [Themes](/docs/themes/).
@@ -24,7 +24,7 @@ This starts the TUI bound to the current working directory's project. It autodis
 
 ## Inherited from OpenCorvus
 
-OpenCorvus's TUI extends the upstream Go-based OpenCorvus TUI. Most keybinds, themes, and slash-command primitives carry over; OpenCorvus layers in its orchestrator events (spec/goals/evaluator/acceptance) on top.
+OpenCorvus's TUI extends the upstream Go-based OpenCorvus TUI. Most keybinds, themes, and slash-command primitives carry over; OpenCorvus layers in orchestrator, workflow, goal-run, artifact, review, and interaction events on top.
 
 ## Headless alternative
 

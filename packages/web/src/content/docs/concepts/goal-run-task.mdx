@@ -1,113 +1,102 @@
 ---
-title: "Data model: Task / Run / Goal / Plan / Spec"
-description: Entity relationships and durable state for the orchestrator's core domain model.
+title: "Data model: Task / Run / Goal / Artifact"
+description: Current task-domain model for the orchestrator and engine.
 ---
 
-All table definitions live in `packages/opencorvus/src/orchestrator/orchestrator.sql.ts`.
+The current engine schema lives in `packages/opencorvus/src/engine/engine.sql.ts`. Runtime readers use `packages/opencorvus/src/engine/store.ts`, which reconstructs several logical rows from append-only artifacts.
 
-## Entity relationships
+## Entity Relationships
 
 ```
-Task (kind: "workflow" | "build")
- ├─ Run (phase: plan | execute | evaluate | deliver)
- │   ├─ PlanVersion (version 1, 2, ...)
- │   │   └─ Goal[] (decomposed targets)
- │   └─ GoalRun[] (one per goal execution)
- │       └─ Evaluation (verdict: accepted | rejected | inconclusive)
- └─ Acceptance (status: candidate → publishing → delivered)
-SpecSnapshot (standalone; referenced by PlanVersion)
+EngineTask (kind: "workflow" | "build")
+ ├─ EngineSpecSnapshot / EngineRequirement
+ ├─ EnginePlanVersion
+ │   ├─ EngineGoal[]
+ │   └─ EnginePlanNode[]
+ ├─ RunRow                  reconstructed from engine_artifact kind="run"
+ ├─ GoalRunRow[]            reconstructed from engine_artifact kind="goal_run_attempt"
+ ├─ AcceptanceRow[]         reconstructed from engine_artifact kind="acceptance"
+ └─ EvaluationRow[]         reconstructed from engine_artifact kind="verification-evidence"
 ```
 
-## Entity reference
+`engine_artifact` is the durable event/evidence surface for runs, goal attempts, acceptance rows, evaluations, integrity attempts, reports, diffs, images, and related records.
 
-### Task (`orchestrator.sql.ts:113`)
+## EngineTask
 
-| Field | Meaning |
-|---|---|
-| `kind` | `"workflow"` (full pipeline) or `"build"` (build-only) |
-| `status` | `pending / running / done / failed / canceled` |
-| `active_run_id` | Currently active Run |
-| `active_plan_version_id` | Currently active PlanVersion |
-| `budget` | Total budget (runs / goals / tokens) |
-
-One Task may span many Runs. Each replan creates a new PlanVersion; the old one is marked `superseded`.
-
-### Run (`orchestrator.sql.ts:332`)
-
-One attempt to complete the task end-to-end. Phase advances: `plan → execute → evaluate → deliver`.
-
-### PlanVersion (`orchestrator.sql.ts:161`)
-
-- `version` — sequential number
-- `summary` — human-readable plan summary
-- `spec_snapshot_id` — ties to the spec at this version
-- New version on every replan
-
-### Goal (`orchestrator.sql.ts:205`)
-
-The smallest unit that can be executed in parallel and verified independently.
+`EngineTaskTable` stores the user request and task-level metadata:
 
 | Field | Meaning |
 |---|---|
-| `title` / `objective` | Name and narrative |
-| `done_definition` | Acceptance criteria, optionally embedding executable commands (`pnpm test`, `cargo build`, …) |
-| `owned_paths[]` | Code paths owned by this goal |
-| `depends_on[]` | Upstream goals (topological order) |
-| `exports[]` / `imports[]` | Cross-goal contracts |
+| `kind` | `"workflow"` uses the pipeline workflow; `"build"` uses direct build |
+| `executor` | `opencorvus`, `codex`, or `claude-code` |
+| `request` / `title` | User-facing task contract |
+| `attachments` | User-contract attachments |
+| `system_artifacts` | System-generated material such as screenshots and rendered evidence |
+| `criteria_results` | Rollup used by the overlay quality panel |
+| `time_started` / `time_completed` / `error` | Source fields for derived task status |
 
-### GoalRun (`orchestrator.sql.ts:359`)
+There is no authoritative `engine_task.status` column. `deriveTaskStatus` projects status from task timestamps, errors, cancellation metadata, and run state.
+
+## Requirements and Specs
+
+`EngineSpecSnapshotTable`, `EngineSpecItemTable`, and `EngineRequirementTable` store requirements-stage outputs. The current producer is the `requirements` workflow tool / agent, not a separate public spec-writing worker stage.
+
+## PlanVersion, Goal, and PlanNode
+
+The Architect agent writes:
+
+| Entity | Meaning |
+|---|---|
+| `EnginePlanVersionTable` | Active or superseded plan version |
+| `EngineGoalTable` | Goal contract fields: objective, acceptance specs, dependencies, ownership, priority, kind |
+| `EnginePlanNodeTable` | Plan graph rows that connect goals to the active plan |
+
+`EngineGoalTable` no longer owns a status cache. UI and prompt status are derived from the goal-run attempt chain.
+
+## RunRow
+
+`RunRow` is reconstructed from `engine_artifact` rows with `kind="run"`. Its status is one of:
+
+```
+queued | accepted | running | blocked | completed | failed | aborted
+```
+
+`phase` still has legacy-compatible values in the type, but current workflow progress is rendered from artifacts and workflow tool side effects rather than a host phase pointer.
+
+## GoalRunRow
+
+`GoalRunRow` is reconstructed from `engine_artifact` rows with `kind="goal_run_attempt"`.
 
 | Field | Meaning |
 |---|---|
-| `status` | `queued → planning → running → evaluating → completed / failed` |
-| `workspace_dir` | Git worktree path (one per goal) |
-| `base_ref` / `merge_ref` | Branch start / merge target |
+| `goal_id` | Goal being implemented |
+| `status` | `queued / accepted / planning / running / evaluating / blocked / completed / failed / aborted` |
+| `workspace_dir` / `workspace_branch` | Isolated goal workspace |
+| `workspace_base_ref` / `merge_ref` | Snapshot/git references for replay and merge |
+| `supersede_of` | Links retry/rework attempts without mutating prior evidence |
+| `owner` | Process owner used to detect orphaned live attempts after restart |
 
-The same Goal may have multiple GoalRuns (via retry).
+The latest non-superseded attempt is the authoritative source for goal progress.
 
-### Evaluation (`orchestrator.sql.ts:467`)
+## Acceptance and Evaluation
+
+`AcceptanceRow` is reconstructed from `engine_artifact.kind="acceptance"` and records candidate/publishing/delivered/failed acceptance rows. The name "delivered" here is a persisted acceptance status, not a standalone final-delivery worker or workflow step.
+
+`EvaluationRow` is reconstructed from `engine_artifact.kind="verification-evidence"` and records task-level or goal-run evidence:
 
 | Field | Meaning |
 |---|---|
+| `scope` | `goal_run` or `acceptance` |
+| `status` | `pending / passed / failed / inconclusive` |
 | `verdict` | `accepted / rejected / inconclusive` |
-| `checks[]` | Per-check results (build/test/lint/spec_check/…) |
+| `checks[]` | Check summaries, evidence pointers, and scorer metadata |
 
-`inconclusive` means "cannot judge" — not a pass, not a fail — and triggers replan instead of retry.
+## Durable State
 
-### Acceptance (`orchestrator.sql.ts:423`)
+All task-domain state persists in SQLite under the configured OpenCorvus data directory. After a server restart, the UI restores task context from the engine tables and artifacts; the orchestrator continues only after a real wake/message gives it a new decision turn.
 
-- `candidate` — passed evaluation, awaiting acceptance
-- `publishing` — merging/pushing
-- `delivered` — shipped
+## What's Next
 
-### SpecSnapshot (`orchestrator.sql.ts:36`)
-
-Produced by Spec Agent:
-
-| Field | Meaning |
-|---|---|
-| `summary` | One-liner |
-| `content` | Full spec (Markdown) |
-| `scope` | Files/modules touched |
-| `evidence[]` | Code evidence the spec is grounded on |
-
-## GoalContract: runtime contract
-
-`GoalContract` (`src/pipeline/types.ts:60`) is the **only** input to the execution pipeline and is **immutable once created**:
-
-```typescript
-interface GoalContract {
-  goal: Goal
-  planNode: PlanStep
-  run: Run
-  task: Task
-  plan: PlanVersion
-  allGoals: Goal[]  // for cross-goal dependency queries
-}
-```
-
-It guarantees a stable snapshot; concurrent modifications cannot contaminate in-flight goals.
-
-## Durable state
-
-All state lives in SQLite (default: `~/.opencorvus/opencorvus.db`) and persists across process and session boundaries. After a server restart, the overlay restores the task context and waits for the next user message before the orchestrator continues.
+- [Architecture](./architecture.md)
+- [Agentic loop](./agent-loop.md)
+- [Integrity and evaluation reference](/docs/reference/evaluator/)

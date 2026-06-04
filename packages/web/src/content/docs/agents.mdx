@@ -11,22 +11,22 @@ The registry currently ships with the agents below. `mode` controls how the agen
 
 | Agent | Mode | Purpose |
 |---|---|---|
-| `build` | primary | Default agent. Executes implementation tools (read / edit / bash) under the configured permission ruleset. |
+| `build` | primary (hidden) | Implementation agent. Executes read / edit / bash-style implementation tools when dispatched by the orchestrator or direct workflow. |
 | `general` | subagent | General-purpose multi-step research / parallel-work agent. Dispatched via the `task` tool. |
 | `explore` | subagent | Codebase exploration — fast file / code search, read-only by default. |
-| `acceptance` | primary (hidden) | Acceptance review. Submits semantic accept/reject judgments from acceptance evidence; deterministic arbitration finalizes the acceptance-stage verdict. |
-| `orchestrator` | primary (hidden) | Orchestrator agent. Owns task lifecycle decisions and dispatches explicit workflow tools (`requirements`, `architect`, `build`, `deliver`, etc.). |
+| `acceptance` | primary (hidden) | Acceptance-review slot used by review streams and arbitration paths; it is not a standalone final-delivery worker. |
+| `orchestrator` | primary (hidden) | Orchestrator agent. Owns task lifecycle decisions and dispatches explicit workflow tools such as `frontend_design`, `frontend_research`, `analyze_intent`, `requirements`, `architect`, `build`, `integrity`, `modify_goal`, and `restart_from_stage`. |
 | `requirements` | primary (hidden) | Requirements stage. Extracts user requirements and foundational technical decisions; it does not produce goals. |
 
-Other registered agents (`architect`, `frontend-design`, `intent-analysis`, `integrity`, `prosecutor`, `summary`, `title`, `compaction`) are stage / utility slots invoked internally by the orchestrator or session loop. They surface in config (model + prompt overrides) but are not user-selectable.
+Other registered agents (`architect`, `frontend-design`, `frontend-research`, `intent-analysis`, `integrity`, `visual-qa`, `prosecutor`, `summary`, `title`, `compaction`, `mission`, `control`) are stage / utility slots invoked internally by the orchestrator, mission runtime, or session loop. They surface in config (model + prompt overrides) but are not user-selectable unless a dedicated runtime exposes them.
 
 See `packages/opencorvus/src/agent/agent.ts:144-463` for the canonical definitions.
 
 ## Sub-agent dispatch
 
-Sub-agents are dispatched via the **`task`** tool (or a typed dispatch tool such as `build` / `requirements` / `architect` for the orchestrator's whitelisted list). Each sub-agent runs its own session; the orchestrator does not wrap a "next session" around an existing sub-agent's session.
+Sub-agents are dispatched via the **`task`** tool from ordinary sessions, or via typed orchestrator tools such as `requirements`, `architect`, `build`, `integrity`, `frontend_design`, and `frontend_research`. Each sub-agent runs its own session; the orchestrator does not wrap a "next session" around an existing sub-agent's session.
 
-When the orchestrator runs a workflow that fans out per goal (the `pipeline` workflow), each goal is built in its own Goal worktree and merged back via fast-forward only.
+When the orchestrator runs the `pipeline` workflow, the Architect creates goals and each blocking goal is built in an isolated worktree. The final task-level review is `integrity`, not a separate delivery-stage worker.
 
 ## Per-agent model
 

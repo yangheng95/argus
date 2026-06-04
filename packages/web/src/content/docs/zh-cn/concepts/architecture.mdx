@@ -1,117 +1,88 @@
 ---
 title: 架构总览
-description: OpenCorvus 通过六层 pipeline 的专职 agent，把自然语言需求稳定地变成已验证的代码变更。
+description: OpenCorvus 通过 orchestrator 主导的 workflow 与 artifact-backed 状态，把自然语言请求变成已验证的代码变更。
 ---
 
-OpenCorvus 的职责是：**把一条自然语言需求，稳定地变成已验证的代码变更**。为了做到"稳定"，单个 LLM 是不够的——需要多个专职 agent 构成的 pipeline，互相制约、失败可回滚、状态可追溯。
+OpenCorvus 的职责是把自然语言请求变成已验证的代码变更。当前架构由 orchestrator 主导：每次唤醒都读取任务快照，选择显式 workflow 工具，并把证据持久化为 SQLite 行和 artifact。
 
 ## HTTP API 运行时分层
 
 HTTP 服务器（`packages/opencorvus/src/server/server.ts`）把路由切成两个真实层：
 
-- **Control plane（控制面）**——`/global/*`、`/auth/*`、`/ui/*`，以及 `/log`、`/shutdown`、`/restart`，挂载在 `Instance.provide` 中间件之前。即便没有打开任何项目目录也能工作。健康检查、服务生命周期、鉴权走这层。
-- **Instance-scoped（实例域）**——其余全部路由（`/session`、`/task`、`/run`、`/mcp`、`/tui`、`/experimental`、`/panel` 等）跑在 `Instance.provide({ directory, init: InstanceBootstrap })` 内部。必须有项目目录（来自 `?directory=` query 或 `x-opencorvus-directory` header）。
+- **Control plane（控制面）**：`/global/*`、`/auth/*`、`/ui/*`，以及 `/log`、`/shutdown`、`/restart`，挂载在 `Instance.provide` 中间件之前。即便没有打开项目目录也能工作。
+- **Instance-scoped（实例域）**：其余路由（`/session`、`/task`、`/run`、`/mcp`、`/tui`、`/experimental`、`/panel` 等）跑在 `Instance.provide({ directory, init: InstanceBootstrap })` 内部。目录来自 `?directory=` 或 `x-opencorvus-directory`。
 
-路由 handler 本身不读 `process.env`、不调 `Database.use(...)`、不直连 SQL 表、不使用 `z.any()`。边界由 `bun run api:routes-check` 守护；双语 API 参考由 OpenAPI 通过 `bun run docs:api` / `docs:check` 自动生成。
+路由 handler 不直接读 `process.env`、不直连 SQL 表、不使用 `z.any()`。`bun run api:routes-check` 保护这条边界，`bun run docs:api` 从 OpenAPI 重新生成网页 API 参考。
 
-## 六层 Pipeline
+## Workflow 形态
 
-```
-User 请求
-  ↓
-┌──────────────┐
-│ Channel 层   │  本地 TUI / HTTP / Slack / Telegram / …
-└──────┬───────┘
-       ↓  CreateTask
-┌──────────────┐
-│ Orchestrator │  Task/Run/Goal 生命周期、重试/重规划、预算
-└──────┬───────┘  packages/opencorvus/src/orchestrator/task-loop.ts:59
-       ↓
-┌──────────────┐
-│ Task Agent   │  主决策 LLM：调用 spec/goal/plan 子 agent
-└──────┬───────┘  packages/opencorvus/src/task-agent/agent.ts:60
-       ↓
-┌──────────────┐
-│ GoalPool     │  每个 Goal 独立 worktree，并发执行
-└──────┬───────┘  packages/opencorvus/src/orchestrator/goal-pool.ts
-       ↓
-┌──────────────┐
-│ Executor     │  OpenCorvus / Codex / Claude Code
-└──────┬───────┘  packages/opencorvus/src/executor/opencode.ts
-       ↓  acceptance
-┌──────────────┐
-│ Evaluator    │  build/test/lint/… + LLM judge 兜底
-└──────┬───────┘  packages/opencorvus/src/acceptance/checks/per-goal.ts
-       ↓
- accepted / rejected
-       ↓
- done  |  retry  |  replan
-```
+内置 workflow 定义在 `packages/opencorvus/src/engine/workflow.ts`，当前只有两条：
 
-### 每层职责
-
-| 层 | 职责 | 关键入口 |
+| Workflow | 形态 | 适用场景 |
 |---|---|---|
-| **Channel** | 协议适配（Slack/HTTP/TUI/…），把外部消息转成 `CreateTask` | `src/channel/ingress.ts:39` |
-| **Orchestrator** | Task/Run/Goal 生命周期、重试、重规划、预算控制 | `src/orchestrator/task-loop.ts:59` |
-| **Task Agent** | 主 LLM 决策者，协调 spec/goal/plan 子 agent | `src/task-agent/agent.ts:60` |
-| **Planner** | 为单个 Goal 产出 PlanSteps | `removed-planning-package/per-goal.ts:45` |
-| **GoalPool** | 按 `depends_on` 拓扑排序并发调度 Goal | `src/orchestrator/goal-pool.ts` |
-| **Executor** | 把 prompt 注入 coding agent，跑 agentic loop | `src/executor/opencode.ts:36` |
-| **Evaluator** | 运行确定性检查 + LLM 判决 verdict | `src/acceptance/checks/per-goal.ts` |
+| `direct` | 按需 `analyze_intent`，然后 `build` | 显式 `kind=build`、局部编辑、bugfix、短调试 |
+| `pipeline` | 按需 `(frontend_design / frontend_research)` → `analyze_intent` → `requirements` → `architect` → per-goal `build` → `integrity` | 多文件功能、UI 复刻、重构、需要明确验收证据的任务 |
+
+workflow 定义是 prompt 中的建议路径，不是隐藏的 host 状态机。orchestrator 可以基于证据跳过可选步骤或重新路由。`integrity` 是 pipeline 的最终 session-bound review；旧的 host-side deliver gate 不再是推荐 workflow 的步骤。
+
+## 运行时层次
+
+```
+User request
+  ↓
+Channel / UI / API
+  ↓
+Engine task row
+  ↓
+Orchestrator session
+  ├─ typed workflow tools: requirements / architect / build / integrity / ...
+  ├─ durable artifacts: runs / goal_run_attempts / acceptance / evaluation / reports
+  └─ explicit user interactions: questions and permissions
+  ↓
+Worker sessions
+  ├─ requirements, architect, frontend-design, frontend-research
+  ├─ 每个 goal 一个隔离 worktree 中的 build session
+  └─ integrity review session
+```
+
+## 职责边界
+
+| 组件 | 职责 | 当前源码 |
+|---|---|---|
+| Channel / API | 把外部输入转成 task 创建、消息和控制操作 | `packages/opencorvus/src/channel/ingress.ts`、`packages/opencorvus/src/server/routes/` |
+| Engine | 存储 task、spec、requirements、goals、plan versions、artifacts、interactions，并投影状态 | `packages/opencorvus/src/engine/engine.sql.ts`、`packages/opencorvus/src/engine/store.ts` |
+| Orchestrator | 唯一任务级决策者；读取 `describeTask`，派发 typed tools，根据证据决定恢复路径 | `packages/opencorvus/src/orchestrator/agent.ts`、`packages/opencorvus/src/orchestrator/tools.ts` |
+| Workflow | 声明内置 `direct` / `pipeline` 建议路径，并从 artifact 投影进度 | `packages/opencorvus/src/engine/workflow.ts` |
+| Build agent | 实现 direct task 或 architect 产出的单个 goal | `packages/opencorvus/src/build/agent.ts` |
+| Integrity | pipeline 的最终系统复核；向 orchestrator 返回 pass / non-pass 证据 | `packages/opencorvus/src/integrity/` |
 
 ## 两层循环
 
-OpenCorvus 里有**两层嵌套循环**：
+### 外层：Orchestrator Wake Loop
 
-### 外层：Task 控制循环
+`runTaskLoop`（`packages/opencorvus/src/orchestrator/loop.ts`）按 task 串行化唤醒并调用 `Orchestrator.processTask`。orchestrator 不沿固定 phase 指针前进；每次唤醒都读取当前 describe / artifact 快照，再决定下一次 tool call。
 
-`runTaskLoop`（`src/orchestrator/task-loop.ts:59`）：
+### 内层：Session Agentic Loop
 
-```
-while (!aborted && budget > 0) {
-  1. TaskAgent.processTask()       ← LLM 决策：下一步做什么
-  2. GoalPool.drain()              ← 并发执行所有 Goal
-  3. 回到 1 让 TaskAgent 看结果
-}
-```
-
-### 内层：Session agentic loop
-
-`SessionLoop`（`src/session/loop.ts:50`）：
+`SessionLoop`（`packages/opencorvus/src/session/loop.ts`）运行每个 worker session：
 
 ```
-while (session 活跃) {
-  LLM 出 tool-call → 工具执行 → 结果回填 messages → 下一轮
-}
+LLM 发出 tool call → tool 执行 → tool result 写回 → 下一轮模型调用
 ```
 
-连接两层的是 OpenCorvus executor（`OpencorvusExecutor.submit`，`src/executor/opencode.ts:48`）：把 Orchestrator 的 prompt 塞进 TaskQueue，触发 `SessionLoop`。
-
-详见 [Agentic Loop](./agent-loop.md)。
-
-## 为什么是 6 层而不是 1 层
-
-一个常见疑问："为什么不能让一个大 LLM prompt 把这一切干完？"
-
-1. **各阶段的输入/输出契约不同**：spec 产出结构化规格，plan 产出有序步骤，eval 产出 verdict+证据。混在一起 LLM 会遗漏检查。
-2. **失败要能精确回滚**：spec 写错→重 spec；plan 走错→重 plan；执行错→retry；这种分级重试在"单体 agent"里做不到。
-3. **预算可控**：每阶段独立 step / 重试上限。`.opencorvus/opencorvus.jsonc` 里的 `assistant.<name>.max_steps`（按 agent 步数预算）、`assistant.max_runs`、`assistant.max_fix_runs`、`assistant.max_executor_groups` 都是可配置的（`packages/opencorvus/src/config/config.ts:1255-1257`）。
-4. **人机协作粒度**：permission 审批、follow-up 消息都发生在 Task 循环里，不会污染单次 LLM 上下文。
+requirements、architect、build、integrity 等 worker session 都由 orchestrator 的 typed tools 创建。
 
 ## Worktree 并行
 
-每个 Goal 独立 worktree（`src/orchestrator/goal-pool.ts`），互不干扰。最终合并由 Acceptance review 负责。
+Architect 产出的 goals 存在 `engine_goal`。每次 per-goal `build` dispatch 会创建 artifact-backed goal run attempt（`engine_artifact.kind="goal_run_attempt"`），并带上独立 workspace 元数据。UI 展示的 goal 状态从最新 goal-run attempt 链派生，不再读缓存型 `engine_goal.status` 字段。
 
-这意味着：同一个 Task 可能有多个 Goal 在不同 worktree 里并行跑，失败的 Goal 重试时不影响其他 Goal。
+## 数据流
 
-## 数据流与数据模型
-
-详见 [Goal / Run / Task](./goal-run-task.md)。
+详见 [Task / Run / Goal 数据模型](./goal-run-task.md)。
 
 ## 你接下来要看的
 
-- [Goal / Run / Task 数据模型](./goal-run-task.md)
+- [Task / Run / Goal 数据模型](./goal-run-task.md)
 - [Agentic Loop 内循环](./agent-loop.md)
-- [OpenCorvus 配置](../opencorvus/configuration.md)
-- [Evaluator 质量闸门](../opencorvus/evaluator.md)
+- [OpenCorvus 配置](/docs/zh-cn/config/)
+- [Integrity / Evaluation 参考](/docs/zh-cn/reference/evaluator/)

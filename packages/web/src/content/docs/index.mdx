@@ -7,18 +7,18 @@ description: An open-source harness for AI coding agents.
 
 Coding agents write code. Their raw output is **unreliable**: no spec, no acceptance criteria, no retries, no durable state.
 
-OpenCorvus wraps one-shot code generation into a **repeatable, evaluator-driven, self-healing development workflow**. You hand it a task; it runs **spec → goals → plan → execute → evaluate → deliver** end-to-end, retrying or replanning until acceptance criteria are met or the budget is exhausted.
+OpenCorvus wraps one-shot code generation into a **repeatable, evidence-driven, self-healing development workflow**. You hand it a task; the orchestrator chooses between a direct build or the pipeline workflow: optional research/design, intent analysis, requirements, architecture, per-goal build, and integrity review.
 
 ## Core capabilities
 
 | Capability | Summary |
 |---|---|
-| **Spec-first planning** | A Spec agent turns vague requests into testable specifications with acceptance criteria and evidence chains |
-| **Goal decomposition** | A Goal agent breaks the spec into independent, parallel-executable implementation goals |
+| **Requirements capture** | A Requirements agent turns vague requests into testable requirements and foundational decisions |
+| **Architecture decomposition** | The Architect agent turns requirements into independently buildable goals with acceptance specs and dependency contracts |
 | **Multi-executor dispatch** | Built-in OpenCorvus; auto-discovers and dispatches to Codex / Claude Code |
-| **Evaluator-driven retry** | build/test/lint/startup/artifact/visual/Playwright/LLM review plus default-on `spec check` acceptance gate |
+| **Integrity-driven review** | Build evidence, specialist checks, visual/runtime evidence, and LLM review are consolidated by the integrity stage |
 | **Multi-channel reach** | Local TUI, HTTP API, Overlay desktop app, 14 IM channels (Slack/Telegram/Feishu/Discord/…) |
-| **Durable state** | All tasks, plans, runs, interactions, deliveries, and evaluations persist to SQLite |
+| **Durable state** | Tasks, requirements, plans, goals, runs, artifacts, interactions, acceptance rows, and evaluations persist to SQLite |
 | **Human-in-the-loop** | `ask/allow/deny` permissions, follow-up messages, manual feedback, all embeddable in unattended pipelines |
 
 ## Three-layer architecture
@@ -27,8 +27,8 @@ OpenCorvus wraps one-shot code generation into a **repeatable, evaluator-driven,
 ┌─ Channel layer ──────────────────────────────────────────┐
 │  Local TUI / Overlay UI / HTTP API / 14 IM channels      │
 ├─ Orchestrator layer ─────────────────────────────────────┤
-│  Task Agent → GoalPool → Planner → Executor → Evaluator  │
-│  (SQLite persistence + permissions + budget + retries)   │
+│  Orchestrator → workflow tools → per-goal build → review │
+│  (SQLite persistence + permissions + budgets + artifacts)│
 ├─ Executor layer ─────────────────────────────────────────┤
 │  OpenCorvus kernel / Codex / Claude Code                 │
 └──────────────────────────────────────────────────────────┘

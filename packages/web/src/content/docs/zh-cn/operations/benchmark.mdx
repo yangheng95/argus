@@ -73,7 +73,7 @@ Env 必须在**进程启动前**就绪。`Env.state()` 在实例创建时快照 
 
 `--report` 产出的 JSON 包含：
 - 任务元信息（title、model、executor）
-- 各阶段耗时（spec / goals / plan / execute / evaluate / deliver）
+- orchestrator workflow steps、goal runs、review、本地验证与 quality gates 的耗时
 - 每个 Goal 的 check 结果
 - `qualityVerdict` 与 `localVerify`
 - 失败样本：stderr / stdout 尾部 + 相关 artifact 路径
