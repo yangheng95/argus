@@ -69,6 +69,81 @@ describe("browser preview target resolver", () => {
     expect(target.diagnostics.join("\n")).toContain("Failed to read package.json")
   })
 
+  test("fails explicitly for invalid manifest URLs instead of falling back to command", async () => {
+    await using tmp = await tmpdir()
+    await writePackageJson(tmp.path, {
+      packageManager: "pnpm@9.0.0",
+      opencorvus: {
+        browserPreview: {
+          url: "file:///tmp/index.html",
+          command: "pnpm run dev",
+        },
+      },
+    })
+
+    const target = await resolveBrowserPreviewTarget({ projectRoot: tmp.path })
+
+    expect(target.status).toBe("failed")
+    expect(target.kind).toBe("failed")
+    expect(target.command).toBeUndefined()
+    expect(target.diagnostics.join("\n")).toContain("Invalid package.json opencorvus.browserPreview.url")
+  })
+
+  test("fails explicitly for non-string manifest URLs", async () => {
+    await using tmp = await tmpdir()
+    await writePackageJson(tmp.path, {
+      opencorvus: {
+        browserPreview: {
+          url: 5173,
+        },
+      },
+    })
+
+    const target = await resolveBrowserPreviewTarget({ projectRoot: tmp.path })
+
+    expect(target.status).toBe("failed")
+    expect(target.kind).toBe("failed")
+    expect(target.diagnostics.join("\n")).toContain("Invalid package.json opencorvus.browserPreview.url: 5173")
+  })
+
+  test("fails explicitly for blank manifest URLs instead of treating them as missing", async () => {
+    await using tmp = await tmpdir()
+    await writePackageJson(tmp.path, {
+      opencorvus: {
+        browserPreview: {
+          url: "  ",
+          command: "pnpm run dev",
+        },
+      },
+    })
+
+    const target = await resolveBrowserPreviewTarget({ projectRoot: tmp.path })
+
+    expect(target.status).toBe("failed")
+    expect(target.kind).toBe("failed")
+    expect(target.command).toBeUndefined()
+    expect(target.diagnostics.join("\n")).toContain("Invalid package.json opencorvus.browserPreview.url")
+  })
+
+  test("fails explicitly for null manifest URLs instead of treating them as missing", async () => {
+    await using tmp = await tmpdir()
+    await writePackageJson(tmp.path, {
+      opencorvus: {
+        browserPreview: {
+          url: null,
+          command: "pnpm run dev",
+        },
+      },
+    })
+
+    const target = await resolveBrowserPreviewTarget({ projectRoot: tmp.path })
+
+    expect(target.status).toBe("failed")
+    expect(target.kind).toBe("failed")
+    expect(target.command).toBeUndefined()
+    expect(target.diagnostics.join("\n")).toContain("Invalid package.json opencorvus.browserPreview.url: null")
+  })
+
   test("surfaces a configured command when URL is missing", async () => {
     await using tmp = await tmpdir()
     await writePackageJson(tmp.path, {
