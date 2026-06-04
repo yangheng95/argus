@@ -27,6 +27,7 @@
     "@tauri-apps/plugin-notification": "^2",
     "codemirror": "^6.0.2",
     "diff": "catalog:",
+    "ghostty-web": "github:anomalyco/ghostty-web#main",
     "highlight.js": "^11.11.1",
     "marked": "^17.0.1",
     "solid-js": "^1",
