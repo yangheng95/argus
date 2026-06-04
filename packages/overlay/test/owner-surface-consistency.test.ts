@@ -10,6 +10,7 @@ const MESSAGES_CSS = readFileSync(join(OVERLAY_ROOT, "src", "styles", "surfaces"
 const CARD_CSS = readFileSync(join(OVERLAY_ROOT, "src", "styles", "surfaces", "card.css"), "utf8")
 const CONVERSATION_CSS = readFileSync(join(OVERLAY_ROOT, "src", "styles", "surfaces", "conversation.css"), "utf8")
 const COMPOSER_CSS = readFileSync(join(OVERLAY_ROOT, "src", "styles", "surfaces", "composer.css"), "utf8")
+const FIELD_CSS = readFileSync(join(OVERLAY_ROOT, "src", "styles", "surfaces", "field.css"), "utf8")
 
 function bodyOf(source: string, selector: string): string {
   const css = source.replace(/\/\*[\s\S]*?\*\//g, "")
@@ -34,10 +35,12 @@ test("titlebar controls stay on the surface family", () => {
   expect(bodyOf(TITLEBAR_CSS, ".titlebar-status-chip:hover, .titlebar-setup-cta:hover, .titlebar-status-icon:hover")).toMatch(/background:\s*var\(--surface-hover\)/)
 })
 
-test("sidebar search stays on the rail surface family", () => {
-  expect(bodyOf(SIDEBAR_CSS, ".task-list-search")).toMatch(/background:\s*var\(--surface-inset\)/)
-  expect(bodyOf(SIDEBAR_CSS, ".task-list-search:focus-within")).toMatch(/background:\s*var\(--surface-hover\)/)
-  expect(bodyOf(SIDEBAR_CSS, ".task-list-search .oc-button[data-ui=\"task-list-search-clear\"]:hover, .task-list-search .oc-button[data-ui=\"task-list-search-clear\"]:focus-visible")).toContain("--oc-button-bg: var(--surface-hover)")
+test("task and file search share the field primitive", () => {
+  expect(bodyOf(SIDEBAR_CSS, ".task-list-search")).not.toMatch(/background|border|border-radius/)
+  expect(INSPECTOR_CSS).not.toContain(".file-explorer-search {")
+  expect(bodyOf(FIELD_CSS, ".search-field")).toMatch(/background:\s*color-mix\(in srgb, var\(--surface-inset\) 94%, transparent\)/)
+  expect(bodyOf(FIELD_CSS, ".search-field:focus-within")).toMatch(/background:\s*var\(--surface-inset\)/)
+  expect(bodyOf(FIELD_CSS, ".search-field .oc-button[data-ui$=\"-search-clear\"]:hover, .search-field .oc-button[data-ui$=\"-search-clear\"]:focus-visible")).toContain("--oc-button-bg: var(--surface-hover)")
 })
 
 test("inspector list rows keep a neutral inset base", () => {
