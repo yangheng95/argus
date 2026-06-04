@@ -2,6 +2,7 @@ import fs from "node:fs/promises"
 import path from "node:path"
 import { createHash } from "node:crypto"
 import { parseDocument } from "htmlparser2"
+import { GENERATED_FRONTEND_PACKAGE_PROFILE } from "./frontend-package-profile"
 
 export interface GenerateWebCloneSourceProjectInput {
   webpageEvidenceDir: string
@@ -1698,12 +1699,12 @@ function renderPackageJson(packageName: string): string {
     version: "0.0.0",
     type: "module",
     scripts: {
-      dev: "bunx vite --host 127.0.0.1",
-      typecheck: "bunx tsc --noEmit",
-      build: "bunx vite build",
-      preview: "bunx vite preview --host 127.0.0.1 --strictPort",
+      dev: GENERATED_FRONTEND_PACKAGE_PROFILE.scripts.viteDev,
+      typecheck: GENERATED_FRONTEND_PACKAGE_PROFILE.scripts.typecheck,
+      build: GENERATED_FRONTEND_PACKAGE_PROFILE.scripts.viteBuild,
+      preview: GENERATED_FRONTEND_PACKAGE_PROFILE.scripts.vitePreview,
     },
-    packageManager: "bun@1.3.14",
+    packageManager: GENERATED_FRONTEND_PACKAGE_PROFILE.packageManager,
     dependencies: {
       "@vitejs/plugin-react": "^5.0.0",
       typescript: "^5.8.0",

@@ -1,6 +1,7 @@
 import fs from "node:fs/promises"
 import { readFileSync } from "node:fs"
 import path from "node:path"
+import { GENERATED_FRONTEND_PACKAGE_PROFILE } from "./frontend-package-profile"
 
 export interface GenerateWebCloneSkeletonProjectInput {
   sourcePackageDir: string
@@ -503,10 +504,11 @@ function renderPackageJson(packageName: string): string {
     version: "0.0.0",
     type: "module",
     scripts: {
-      dev: "node scripts/extract-source-html.mjs && bunx vite --host 127.0.0.1",
-      build: "node scripts/extract-source-html.mjs && bunx vite build",
-      preview: "bunx vite preview --host 127.0.0.1 --strictPort",
+      dev: `node scripts/extract-source-html.mjs && ${GENERATED_FRONTEND_PACKAGE_PROFILE.scripts.viteDev}`,
+      build: `node scripts/extract-source-html.mjs && ${GENERATED_FRONTEND_PACKAGE_PROFILE.scripts.viteBuild}`,
+      preview: GENERATED_FRONTEND_PACKAGE_PROFILE.scripts.vitePreview,
     },
+    packageManager: GENERATED_FRONTEND_PACKAGE_PROFILE.packageManager,
     dependencies: {
       "@vitejs/plugin-react": "^4.3.4",
       react: "^18.3.1",
