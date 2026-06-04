@@ -1,96 +1,61 @@
+// Copied from OpenCode's home route shell and adapted to OpenCorvus prompt/route state.
 import { Prompt, type PromptRef } from "@tui/component/prompt"
-import { createMemo, Match, onMount, Show, Switch } from "solid-js"
-import { useTheme } from "@tui/context/theme"
+import { createEffect, createSignal, onMount } from "solid-js"
 import { Logo } from "../component/logo"
-import { Tips } from "../component/tips"
-import { Locale } from "@/util/locale"
 import { useSync } from "../context/sync"
 import { Toast } from "../ui/toast"
 import { useArgs } from "../context/args"
-import { useDirectory } from "../context/directory"
 import { useRouteData } from "@tui/context/route"
 import { usePromptRef } from "../context/prompt"
-import { Installation } from "@/installation"
-import { useKV } from "../context/kv"
-import { OPENCORVUS_BASE_MODE, useBindings } from "../keymap"
-import { useTuiConfig } from "../context/tui-config"
+import { useLocal } from "../context/local"
+import { TuiPluginRuntime } from "@/cli/cmd/tui/plugin/runtime"
 
-// TODO: what is the best way to do this?
 let once = false
 
 export function Home() {
   const sync = useSync()
-  const kv = useKV()
-  const { theme } = useTheme()
   const route = useRouteData("home")
   const promptRef = usePromptRef()
-  const tuiConfig = useTuiConfig()
-  const mcp = createMemo(() => Object.keys(sync.data.mcp).length > 0)
-  const mcpError = createMemo(() => {
-    return Object.values(sync.data.mcp).some((x) => x.status === "failed")
-  })
-
-  const connectedMcpCount = createMemo(() => {
-    return Object.values(sync.data.mcp).filter((x) => x.status === "connected").length
-  })
-
-  const isFirstTimeUser = createMemo(() => sync.data.session.length === 0)
-  const tipsHidden = createMemo(() => kv.get("tips_hidden", false))
-  const showTips = createMemo(() => {
-    // Don't show tips for first-time users
-    if (isFirstTimeUser()) return false
-    return !tipsHidden()
-  })
-
-  useBindings(() => ({
-    mode: OPENCORVUS_BASE_MODE,
-    commands: [
-      {
-        namespace: "palette",
-        name: "tips.toggle",
-        title: tipsHidden() ? "Show tips" : "Hide tips",
-        category: "System",
-        run: () => {
-          kv.set("tips_hidden", !tipsHidden())
-        },
-      },
-    ],
-    bindings: tuiConfig.keybinds.gather("tips", ["tips.toggle"]),
-  }))
-
-  const Hint = (
-    <Show when={connectedMcpCount() > 0}>
-      <box flexShrink={0} flexDirection="row" gap={1}>
-        <text fg={theme.text}>
-          <Switch>
-            <Match when={mcpError()}>
-              <span style={{ fg: theme.error }}>•</span> mcp errors{" "}
-              <span style={{ fg: theme.textMuted }}>ctrl+x s</span>
-            </Match>
-            <Match when={true}>
-              <span style={{ fg: theme.success }}>•</span>{" "}
-              {Locale.pluralize(connectedMcpCount(), "{} mcp server", "{} mcp servers")}
-            </Match>
-          </Switch>
-        </text>
-      </box>
-    </Show>
-  )
-
-  let prompt: PromptRef
+  const [ref, setRef] = createSignal<PromptRef | undefined>()
   const args = useArgs()
-  onMount(() => {
+  const local = useLocal()
+  let sent = false
+
+  const bind = (prompt: PromptRef) => {
+    setRef(prompt)
+    promptRef.set(prompt)
     if (once) return
     if (route.initialPrompt) {
       prompt.set(route.initialPrompt)
       once = true
-    } else if (args.prompt) {
-      prompt.set({ input: args.prompt, parts: [] })
-      once = true
-      prompt.submit()
+      return
     }
+    if (!args.prompt) return
+    prompt.set({ input: args.prompt, parts: [] })
+    once = true
+  }
+
+  // Wait for sync and model store readiness before auto-submitting --prompt.
+  createEffect(() => {
+    const prompt = ref()
+    if (sent) return
+    if (!prompt) return
+    if (!sync.ready || !local.model.ready) return
+    if (!args.prompt) return
+    if (prompt.current.input !== args.prompt) return
+    sent = true
+    prompt.submit()
   })
-  const directory = useDirectory()
+
+  onMount(() => {
+    const prompt = ref()
+    if (!prompt) return
+    if (!args.prompt) return
+    if (sent) return
+    if (!sync.ready || !local.model.ready) return
+    sent = true
+    prompt.submit()
+  })
 
   return (
     <>
@@ -98,48 +63,22 @@ export function Home() {
         <box flexGrow={1} minHeight={0} />
         <box height={4} minHeight={0} flexShrink={1} />
         <box flexShrink={0}>
-          <Logo />
+          <TuiPluginRuntime.Slot name="home_logo" mode="replace">
+            <Logo />
+          </TuiPluginRuntime.Slot>
         </box>
         <box height={1} minHeight={0} flexShrink={1} />
         <box width="100%" maxWidth={75} zIndex={1000} paddingTop={1} flexShrink={0}>
-          <Prompt
-            ref={(r) => {
-              prompt = r
-              promptRef.set(r)
-            }}
-            hint={Hint}
-          />
+          <TuiPluginRuntime.Slot name="home_prompt" mode="replace" ref={bind as never}>
+            <Prompt ref={bind} />
+          </TuiPluginRuntime.Slot>
         </box>
-        <box height={4} minHeight={0} width="100%" maxWidth={75} alignItems="center" paddingTop={3} flexShrink={1}>
-          <Show when={showTips()}>
-            <Tips />
-          </Show>
-        </box>
+        <TuiPluginRuntime.Slot name="home_bottom" />
         <box flexGrow={1} minHeight={0} />
         <Toast />
       </box>
-      <box paddingTop={1} paddingBottom={1} paddingLeft={2} paddingRight={2} flexDirection="row" flexShrink={0} gap={2}>
-        <text fg={theme.textMuted}>{directory()}</text>
-        <box gap={1} flexDirection="row" flexShrink={0}>
-          <Show when={mcp()}>
-            <text fg={theme.text}>
-              <Switch>
-                <Match when={mcpError()}>
-                  <span style={{ fg: theme.error }}>⊙ </span>
-                </Match>
-                <Match when={true}>
-                  <span style={{ fg: connectedMcpCount() > 0 ? theme.success : theme.textMuted }}>⊙ </span>
-                </Match>
-              </Switch>
-              {connectedMcpCount()} MCP
-            </text>
-            <text fg={theme.textMuted}>/status</text>
-          </Show>
-        </box>
-        <box flexGrow={1} />
-        <box flexShrink={0}>
-          <text fg={theme.textMuted}>{Installation.VERSION}</text>
-        </box>
+      <box width="100%" flexShrink={0}>
+        <TuiPluginRuntime.Slot name="home_footer" mode="single_winner" />
       </box>
     </>
   )
