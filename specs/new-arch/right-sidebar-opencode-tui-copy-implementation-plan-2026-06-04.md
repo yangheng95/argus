@@ -1427,3 +1427,46 @@ OpenCode gap after the round:
 - The WebSocket route consumes tickets, but still lacks OpenCode's origin validation for connect requests.
 - `GET /tui/host/snapshot` and `GET /tui/host/output` still exist as server diagnostics; they are no longer exposed by the overlay TUI service or used by the mounted right-sidebar render loop.
 - Browser visual E2E, project-bound Agent Team tool/plugin surface, external TUI plugin loader/install, move-session/workspace prompt flow, and `SessionV2Debug` remain missing.
+
+### 2026-06-05 Round 17: copied OpenCode PTY origin validation
+
+Implemented:
+
+- Rechecked latest OpenCode dev before editing. Upstream remained at `107180701f626eaf97e0f032c4a46fe4b4e9c0ec`; no new TUI, PTY, app, or terminal files changed since Round 16.
+- Compared against OpenCode's current origin validation sources:
+  - `.tmp/opencode-upstream/packages/opencode/src/server/cors.ts`
+  - `.tmp/opencode-upstream/packages/opencode/src/server/routes/instance/httpapi/handlers/pty.ts`
+  - `.tmp/opencode-upstream/packages/opencode/test/server/httpapi-listen.test.ts`
+- Extracted server origin policy into `packages/opencorvus/src/server/cors.ts` so HTTP CORS and PTY connect security share one source:
+  - localhost and `127.0.0.1` origins are allowed;
+  - Tauri origins are allowed;
+  - `*.opencorvus.ai` origins are allowed;
+  - explicit `Server.listen({ cors })` origins are allowed;
+  - WebSocket requests with an `Origin` matching the request host are allowed.
+- Updated `/tui/host/connect-token` to reject invalid origin with 403 in addition to the missing-header case.
+- Updated `/tui/host/connect` to reject invalid WebSocket origin before consuming the one-use ticket.
+- Added tests proving:
+  - connect-token rejects `https://evil.example`;
+  - WebSocket connect rejects `https://evil.example`;
+  - rejected WebSocket origin does not consume the ticket, so the same ticket can still connect from an allowed origin.
+- Regenerated SDK and API docs after the route description update.
+
+Verified:
+
+- `bun test packages/opencorvus/test/server/tui-host-routes.test.ts packages/opencorvus/test/tui/host.test.ts`
+- `bun run --cwd packages/opencorvus typecheck`
+- `bun run api:routes-check`
+- `bun run --cwd packages/sdk/js build`
+- `bun run docs:api`
+
+OpenCode comparison after the round:
+
+- Matched OpenCode's PTY connect-token and WebSocket connect origin validation behavior for the embedded right-sidebar host.
+- Preserved ticket semantics: invalid-origin WebSocket attempts are rejected before consuming the token.
+- Kept origin policy single-sourced instead of duplicating route-local origin checks.
+
+OpenCode gap after the round:
+
+- The current host is still a single project-bound embedded TUI process, not OpenCode's full multi-PTY `list/create/get/update/remove` service.
+- `GET /tui/host/snapshot` and `GET /tui/host/output` still exist as server diagnostics; they are no longer exposed by the overlay TUI service or used by the mounted right-sidebar render loop.
+- Browser visual E2E, project-bound Agent Team tool/plugin surface, external TUI plugin loader/install, move-session/workspace prompt flow, and `SessionV2Debug` remain missing.

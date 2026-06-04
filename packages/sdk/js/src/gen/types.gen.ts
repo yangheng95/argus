@@ -12919,7 +12919,7 @@ export type TuiHostConnectTokenData = {
 
 export type TuiHostConnectTokenErrors = {
   /**
-   * Connect token request is missing the OpenCode ticket header
+   * Connect token request is missing the OpenCode ticket header or has an invalid origin
    */
   403: {
     message: string
@@ -12968,7 +12968,7 @@ export type TuiHostConnectErrors = {
     message: string
   }
   /**
-   * Invalid or already consumed connect ticket
+   * Invalid origin, invalid connect ticket, or already consumed connect ticket
    */
   403: {
     message: string

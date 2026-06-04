@@ -18,6 +18,7 @@ import { muteAISdkWarnings } from "@/runtime/shims"
 import { OverlayUI } from "./overlay-ui"
 import { DEFAULT_SERVER_PORT } from "./defaults"
 import { requestID, serverErrorResponse } from "./error-handler"
+import { configureCorsOrigins, isAllowedCorsOrigin } from "./cors"
 
 muteAISdkWarnings()
 
@@ -39,7 +40,6 @@ export namespace Server {
   )
 
   let _url: URL | undefined
-  let _corsWhitelist: string[] = []
   let projectRoutesApp: Hono | undefined
 
   export function url(): URL {
@@ -192,22 +192,7 @@ export namespace Server {
         .use(
           cors({
             origin(input) {
-              if (!input) return
-              if (input.startsWith("http://localhost:")) return input
-              if (input.startsWith("http://127.0.0.1:")) return input
-              if (
-                input === "tauri://localhost" ||
-                input === "http://tauri.localhost" ||
-                input === "https://tauri.localhost"
-              )
-                return input
-              if (/^https:\/\/([a-z0-9-]+\.)*opencorvus\.ai$/.test(input)) {
-                return input
-              }
-              if (_corsWhitelist.includes(input)) {
-                return input
-              }
-              return
+              return isAllowedCorsOrigin(input) ? input : undefined
             },
           }),
         )
@@ -268,7 +253,7 @@ export namespace Server {
      */
     randomPort?: boolean
   }) {
-    _corsWhitelist = opts.cors ?? []
+    configureCorsOrigins(opts.cors)
 
     const args = {
       hostname: opts.hostname,
