@@ -1686,3 +1686,34 @@ OpenCode gap after the round:
 
 - The current host is still a single project-bound embedded TUI process, not OpenCode's full multi-PTY `list/create/get/update/remove` service.
 - Browser visual E2E, external TUI plugin loader/install, move-session/workspace prompt flow, `SessionV2Debug`, workspace label/connectivity UI, background pulse, and session/subagent footer modules remain missing.
+
+### 2026-06-05 Round 23: provider connectivity helper
+
+Implemented:
+
+- Rechecked latest OpenCode dev before editing. Upstream remained at `b1a7ee5695bded3ebe4282a17bfe91717edea363` (`feat(desktop): surface local server startup failures`); no new upstream TUI/PTY/terminal files changed since Round 22.
+- Copied OpenCode's `component/use-connected.tsx` provider connectivity helper into OpenCorvus and adapted only the built-in provider id from `opencode` to `opencorvus`.
+- Removed the inline `useConnected()` export from `component/dialog-model.tsx`; `DialogModel` and `app.tsx` now import the shared helper directly.
+- Collapsed the repeated provider-connected predicate in `feature-plugins/home/tips.tsx` and `feature-plugins/sidebar/footer.tsx` into the same helper module through `isProviderConnected`.
+- Kept the plugin API surface unchanged: internal plugins still read `api.state.provider`, while the predicate source is shared with the Solid hook.
+
+Verified in tests:
+
+- `plugin-runtime-guard.test.ts` now asserts the helper exists, preserves the OpenCode-derived predicate shape, imports the helper from `dialog-model` and `app`, and forbids the repeated provider-id predicate in home tips and sidebar footer.
+- `bun test packages/opencorvus/test/tui/plugin-runtime-guard.test.ts`
+- `bun run --cwd packages/opencorvus typecheck`
+- `bun run --cwd packages/plugin typecheck`
+- `bun typecheck`
+- `bun run api:routes-check`
+- `bun run docs:check`
+
+OpenCode comparison after the round:
+
+- This closes the local duplication against OpenCode's connectivity helper: OpenCorvus no longer carries three separate copies of the provider-connected predicate.
+- The helper is still intentionally adapted to the OpenCorvus built-in provider id, because the provider branding/source is project-specific.
+
+OpenCode gap after the round:
+
+- Full OpenCode workspace/connectivity UI remains incomplete: `workspace-label.tsx`, workspace dialogs, move-session prompt flow, and unavailable-workspace dialog are still missing.
+- The current host is still a single project-bound embedded TUI process, not OpenCode's full multi-PTY `list/create/get/update/remove` service.
+- Browser visual E2E, external TUI plugin loader/install, `SessionV2Debug`, background pulse, and session/subagent footer modules remain missing.

@@ -5,14 +5,8 @@ import { map, pipe, flatMap, entries, filter, sortBy, take } from "remeda"
 import { DialogSelect } from "@tui/ui/dialog-select"
 import { useDialog } from "@tui/ui/dialog"
 import { createDialogProviderOptions, DialogProvider } from "./dialog-provider"
+import { useConnected } from "./use-connected"
 import * as fuzzysort from "fuzzysort"
-
-export function useConnected() {
-  const sync = useSync()
-  return createMemo(() =>
-    sync.data.provider.some((x) => x.id !== "opencorvus" || Object.values(x.models).some((y) => y.cost?.input !== 0)),
-  )
-}
 
 export function DialogModel(props: { providerID?: string }) {
   const local = useLocal()
