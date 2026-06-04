@@ -5,7 +5,7 @@ import { findChildrenOfTask } from "@/engine"
 import { Session } from "@/session"
 import { Question } from "@/question"
 import { captureWindowScreenshot } from "@/gui/screenshot"
-import { PanelActionSchema, derivePanelActor } from "@/panel/capability"
+import { PanelActionSchema, derivePanelActor, panelCapabilityActionSet } from "@/panel/capability"
 import {
   RIGHT_SIDEBAR_CODING_ASSISTANT_SOURCE,
   isRightSidebarCodingAssistantSession,
@@ -32,25 +32,6 @@ const MISSION_ALLOWED_ACTIONS = new Set([
   "cancel_task",
   "reply_interaction",
   "reject_interaction",
-])
-const RIGHT_SIDEBAR_ASSISTANT_ALLOWED_ACTIONS = new Set([
-  "view_plan",
-  "view_board",
-  "view_tasks",
-  "query_task",
-  "create_task",
-  "send_task_message",
-  "reply_interaction",
-  "reject_interaction",
-  "retry_task",
-  "replan_task",
-  "cancel_task",
-  "update_checks",
-  "set_executor",
-  "select_task",
-  "select_session",
-  "update_goal",
-  "delete_goal",
 ])
 import { isDecodableText, decodeDataUrlText, decodeDataUrlBase64 } from "@/session/text-mime"
 
@@ -115,10 +96,11 @@ export const PanelTool = Tool.define("panel", {
           `replan/retry/goal/session operations belong to the orchestrator and the desktop panel.`,
       )
     }
-    if (actor === "right_sidebar_assistant" && !RIGHT_SIDEBAR_ASSISTANT_ALLOWED_ACTIONS.has(params.action)) {
+    const rightSidebarActions = actor === "right_sidebar_assistant" ? panelCapabilityActionSet("right-sidebar") : undefined
+    if (rightSidebarActions && !rightSidebarActions.has(params.action)) {
       throw new Error(
         `panel action "${params.action}" is not permitted for the right sidebar assistant. ` +
-          `Allowed actions: ${[...RIGHT_SIDEBAR_ASSISTANT_ALLOWED_ACTIONS].join(", ")}.`,
+          `Allowed actions: ${[...rightSidebarActions].join(", ")}.`,
       )
     }
     switch (params.action) {

@@ -9,6 +9,7 @@ import SidebarLsp from "../feature-plugins/sidebar/lsp"
 import SidebarTodo from "../feature-plugins/sidebar/todo"
 import SidebarFiles from "../feature-plugins/sidebar/files"
 import SidebarFooter from "../feature-plugins/sidebar/footer"
+import SidebarAgentTeam from "../feature-plugins/sidebar/agent-team"
 import DiffViewer from "../feature-plugins/system/diff-viewer"
 import PluginManager from "../feature-plugins/system/plugins"
 import Notifications from "../feature-plugins/system/notifications"
@@ -30,6 +31,7 @@ export function internalTuiPlugins(): InternalTuiPlugin[] {
     SidebarLsp,
     SidebarTodo,
     SidebarFiles,
+    SidebarAgentTeam,
     SidebarFooter,
     DiffViewer,
     Notifications,

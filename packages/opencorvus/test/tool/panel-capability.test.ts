@@ -1,5 +1,5 @@
 import { expect, test } from "bun:test"
-import { panelCapabilities } from "../../src/panel/capability"
+import { panelCapabilities, panelCapabilityActionSet } from "../../src/panel/capability"
 
 test("filters panel-only actions by surface", () => {
   const panel = panelCapabilities("panel")
@@ -45,4 +45,39 @@ test("exposes local action metadata and input schemas", () => {
       },
     },
   })
+})
+
+test("right sidebar capabilities come from the panel registry without session-management or screenshot grants", () => {
+  const rightSidebar = panelCapabilities("right-sidebar")
+  const actions = panelCapabilityActionSet("right-sidebar")
+
+  for (const action of [
+    "view_plan",
+    "view_board",
+    "view_tasks",
+    "query_task",
+    "create_task",
+    "send_task_message",
+    "reply_interaction",
+    "reject_interaction",
+    "retry_task",
+    "replan_task",
+    "cancel_task",
+    "update_checks",
+    "set_executor",
+    "select_task",
+    "select_session",
+    "update_goal",
+    "delete_goal",
+  ]) {
+    expect(actions.has(action)).toBe(true)
+  }
+
+  for (const action of ["capture_overlay_screenshot", "create_session", "fork_session", "delete_session"]) {
+    expect(actions.has(action)).toBe(false)
+  }
+
+  const selectTask = rightSidebar.actions.find((item) => item.action === "select_task")
+  expect(selectTask?.local_only).toBe(true)
+  expect(selectTask?.local_action_surfaces).toEqual(["panel", "right-sidebar"])
 })

@@ -3726,6 +3726,7 @@ export class Panel extends HeyApiClient {
         | "wecom"
         | "dingtalk"
         | "qq"
+        | "right-sidebar"
     },
     options?: Options<never, ThrowOnError>,
   ) {

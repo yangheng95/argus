@@ -80,6 +80,7 @@ describe("OpenCode-derived TUI plugin substrate", () => {
     const whichKey = await readFile(path.join(tuiRoot, "feature-plugins/system/which-key.tsx"), "utf8")
     const pluginManager = await readFile(path.join(tuiRoot, "feature-plugins/system/plugins.tsx"), "utf8")
     const notifications = await readFile(path.join(tuiRoot, "feature-plugins/system/notifications.ts"), "utf8")
+    const agentTeam = await readFile(path.join(tuiRoot, "feature-plugins/sidebar/agent-team.tsx"), "utf8")
     const diffViewer = await readFile(path.join(tuiRoot, "feature-plugins/system/diff-viewer.tsx"), "utf8")
     const diffViewerTree = await readFile(
       path.join(tuiRoot, "feature-plugins/system/diff-viewer-file-tree.tsx"),
@@ -134,6 +135,7 @@ describe("OpenCode-derived TUI plugin substrate", () => {
       "SidebarLsp",
       "SidebarTodo",
       "SidebarFiles",
+      "SidebarAgentTeam",
       "SidebarFooter",
       "DiffViewer",
       "SessionSwitcher",
@@ -152,6 +154,10 @@ describe("OpenCode-derived TUI plugin substrate", () => {
     expect(notifications).toContain('api.event.on("question.asked"')
     expect(notifications).toContain('api.event.on("permission.asked"')
     expect(notifications).toContain('api.event.on("session.status"')
+    expect(agentTeam).toContain('panelCapabilities(surface)')
+    expect(agentTeam).toContain('const surface = "right-sidebar"')
+    expect(agentTeam).toContain('sidebar_content()')
+    expect(agentTeam).toContain('name: "agent_team.tools"')
     expect(homeTips).toContain('home_bottom()')
     expect(homeTips).toContain('name: "tips.toggle"')
     expect(homeFooter).toContain('home_footer()')

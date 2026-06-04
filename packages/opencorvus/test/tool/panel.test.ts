@@ -182,6 +182,44 @@ describe("panel tool", () => {
     })
   })
 
+  test("right sidebar assistant local actions are authorized by the capability surface", async () => {
+    await using tmp = await tmpdir({ git: true })
+
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const session = await Session.create({
+          kind: "assistant",
+          metadata: RIGHT_SIDEBAR_CODING_ASSISTANT_METADATA,
+        })
+        const tool = await PanelTool.init()
+
+        const result = await tool.execute(
+          {
+            action: "select_task",
+            taskID: "task-right-sidebar",
+          },
+          {
+            sessionID: session.id,
+            messageID: Identifier.ascending("message"),
+            agent: "coding",
+            abort: new AbortController().signal,
+            messages: [],
+            metadata() {},
+            async ask() {},
+            extra: { surface: "right-sidebar" },
+          },
+        )
+
+        expect(JSON.parse(result.output)).toMatchObject({
+          kind: "panel_response",
+          task_id: "task-right-sidebar",
+          local_action: { type: "select_task", taskID: "task-right-sidebar" },
+        })
+      },
+    })
+  })
+
   test("update_checks preserves advanced config when panel toggles standard checks", async () => {
     await using tmp = await tmpdir({ git: true })
 
