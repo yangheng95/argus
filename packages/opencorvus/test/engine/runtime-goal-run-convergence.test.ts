@@ -51,10 +51,8 @@ describe("EngineRuntime goal-run convergence", () => {
         expect(runTaskLoop).toHaveBeenCalledTimes(1)
         expect(runTaskLoop.mock.calls[0]?.[0]).toMatchObject({
           taskID,
-          event: {
-            note: expect.stringContaining(`Goal batch complete on run ${runID}.`),
-          },
         })
+        expect(runTaskLoop.mock.calls[0]?.[0].event).toBeUndefined()
       },
     })
   })
@@ -112,10 +110,8 @@ describe("EngineRuntime goal-run convergence", () => {
         expect(runTaskLoop).toHaveBeenCalledTimes(2)
         expect(runTaskLoop.mock.calls[1]?.[0]).toMatchObject({
           taskID,
-          event: {
-            note: expect.stringContaining("Goal batch complete"),
-          },
         })
+        expect(runTaskLoop.mock.calls[1]?.[0].event).toBeUndefined()
       },
     })
   })

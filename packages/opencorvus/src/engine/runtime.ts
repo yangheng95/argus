@@ -120,8 +120,6 @@ export namespace EngineRuntime {
     if (goalBatchNotifications.get(run.id) === fingerprint) return
     goalBatchNotifications.set(run.id, fingerprint)
 
-    const passed = goalRuns.filter((goalRun) => goalRun.status === "completed").length
-    const failed = goalRuns.filter((goalRun) => goalRun.status === "failed" || goalRun.status === "aborted").length
     const task = findTask(run.task_id)
     if (task && isTaskCancelled(task)) {
       log.info("goal batch settled after task cancellation; not waking orchestrator", {
@@ -130,21 +128,10 @@ export namespace EngineRuntime {
       })
       return
     }
-    const [{ dispatchTaskLoop }, { OrchestratorEventNote }] = await Promise.all([
-      import("@/engine/queue"),
-      import("@/orchestrator/agent"),
-    ])
+    const { dispatchTaskLoop } = await import("@/engine/queue")
     try {
       await dispatchTaskLoop({
         taskID: run.task_id,
-        event: {
-          note: OrchestratorEventNote.batchComplete({
-            runID: run.id,
-            passed,
-            failed,
-            total: goalRuns.length,
-          }),
-        },
       })
     } catch (error) {
       goalBatchNotifications.delete(run.id)
