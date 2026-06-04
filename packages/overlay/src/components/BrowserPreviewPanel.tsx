@@ -129,6 +129,15 @@ export function BrowserPreviewPanel() {
               </Switch>
             )}
           </Match>
+          <Match when={target.error}>
+            {(error) => (
+              <div class="browser-preview-empty" data-status="failed">
+                <Icon name="status-failed" size={18} />
+                <p>{t("browser_preview.empty.failed")}</p>
+                <code>{String(error())}</code>
+              </div>
+            )}
+          </Match>
           <Match when={target()}>
             {(resolved) => (
               <div class="browser-preview-empty" data-status={resolved().status}>
@@ -149,8 +158,16 @@ export function BrowserPreviewPanel() {
           <Icon name="inspect" size={13} />
           <span>{t("browser_preview.capture")}</span>
         </Button>
-        <div class="browser-preview-evidence-status" data-status={verification()?.status ?? (verification.loading ? "loading" : "idle")}>
+        <div class="browser-preview-evidence-status" data-status={verification.error ? "failed" : verification()?.status ?? (verification.loading ? "loading" : "idle")}>
           <Switch>
+            <Match when={verification.error}>
+              {(error) => (
+                <>
+                  <Icon name="status-failed" size={14} />
+                  <span>{String(error())}</span>
+                </>
+              )}
+            </Match>
             <Match when={verification.loading}>
               <span class="card__spinner" />
               <span>{t("browser_preview.capture_loading")}</span>

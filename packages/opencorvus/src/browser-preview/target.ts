@@ -47,13 +47,13 @@ export async function resolveBrowserPreviewTarget(input: {
     const url = normalizeHttpUrl(explicitUrl)
     if (!url) {
       return {
-      kind: "failed",
-      status: "failed",
-      projectRoot,
-      viewports: [...BROWSER_PREVIEW_VIEWPORTS],
-      diagnostics: [`Invalid preview URL: ${explicitUrl}`],
-      source: "query",
-    }
+        kind: "failed",
+        status: "failed",
+        projectRoot,
+        viewports: [...BROWSER_PREVIEW_VIEWPORTS],
+        diagnostics: [`Invalid preview URL: ${explicitUrl}`],
+        source: "query",
+      }
     }
     return {
       kind: "explicit-url",
@@ -89,8 +89,21 @@ export async function resolveBrowserPreviewTarget(input: {
   }
   const pkg = packageRead.pkg
 
-  const manifestUrl = normalizeHttpUrl(pkg.opencorvus?.browserPreview?.url)
-  if (manifestUrl) {
+  const manifestConfig = pkg.opencorvus?.browserPreview
+  if (manifestConfig && Object.prototype.hasOwnProperty.call(manifestConfig, "url")) {
+    const manifestUrlInput = manifestConfig.url
+    const manifestUrl = normalizeHttpUrl(manifestUrlInput)
+    if (!manifestUrl) {
+      return {
+        kind: "failed",
+        status: "failed",
+        projectRoot,
+        packageManager: pkg.packageManager,
+        viewports: [...BROWSER_PREVIEW_VIEWPORTS],
+        diagnostics: [`Invalid package.json opencorvus.browserPreview.url: ${String(manifestUrlInput)}`],
+        source: "package-json",
+      }
+    }
     return {
       kind: "manifest-url",
       status: "ready",
