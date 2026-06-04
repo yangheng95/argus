@@ -67,6 +67,8 @@ interface HostSession {
   cols: number
   rows: number
   buffer: string
+  bufferCursor: number
+  cursor: number
   exitCode: number | null
   createdAt: number
   updatedAt: number
@@ -83,11 +85,33 @@ const state = lazyInstanceState(
 )
 
 function appendBuffer(session: HostSession, chunk: string) {
+  session.cursor += chunk.length
   session.buffer += chunk
   while (Buffer.byteLength(session.buffer, "utf8") > MAX_BUFFER_BYTES) {
-    session.buffer = session.buffer.slice(Math.max(1, Math.floor(session.buffer.length / 4)))
+    const remove = Math.max(1, Math.floor(session.buffer.length / 4))
+    session.buffer = session.buffer.slice(remove)
+    session.bufferCursor += remove
   }
   session.updatedAt = Date.now()
+}
+
+function readOutput(session: HostSession | null, cursor?: number) {
+  const end = session?.cursor ?? 0
+  const start = session?.bufferCursor ?? 0
+  const from = cursor === -1 ? end : typeof cursor === "number" && Number.isSafeInteger(cursor) ? Math.max(0, cursor) : 0
+  const data = (() => {
+    if (!session?.buffer || from >= end) return ""
+    const offset = Math.max(0, from - start)
+    if (offset >= session.buffer.length) return ""
+    return session.buffer.slice(offset)
+  })()
+  return {
+    ...info(session),
+    data,
+    cursor: end,
+    from,
+    truncated: !!session && from < start,
+  }
 }
 
 function info(session: HostSession | null) {
@@ -280,6 +304,8 @@ async function spawnPrepared(input: { command: Tui.EmbeddedCommand; cols: number
     cols: input.cols,
     rows: input.rows,
     buffer: "",
+    bufferCursor: 0,
+    cursor: 0,
     exitCode: null,
     createdAt: now,
     updatedAt: now,
@@ -311,6 +337,7 @@ async function spawnPrepared(input: { command: Tui.EmbeddedCommand; cols: number
 export namespace TuiHost {
   export type Info = ReturnType<typeof info>
   export type Snapshot = Info & { buffer: string }
+  export type Output = ReturnType<typeof readOutput>
 
   export async function start(input: {
     directory?: string
@@ -365,6 +392,10 @@ export namespace TuiHost {
       ...info(session),
       buffer: session?.buffer ?? "",
     }
+  }
+
+  export function output(input?: { cursor?: number }): Output {
+    return readOutput(state().session, input?.cursor)
   }
 
   export function input(data: string) {

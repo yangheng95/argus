@@ -317,6 +317,8 @@ import type {
   TuiExecuteCommandResponses,
   TuiHostInputErrors,
   TuiHostInputResponses,
+  TuiHostOutputErrors,
+  TuiHostOutputResponses,
   TuiHostResizeErrors,
   TuiHostResizeResponses,
   TuiHostSnapshotResponses,
@@ -7594,6 +7596,36 @@ export class Host extends HeyApiClient {
     const params = buildClientParams([parameters], [{ args: [{ in: "query", key: "directory" }] }])
     return (options?.client ?? this.client).get<TuiHostSnapshotResponses, unknown, ThrowOnError>({
       url: "/tui/host/snapshot",
+      ...options,
+      ...params,
+    })
+  }
+
+  /**
+   * Get embedded TUI host output delta
+   *
+   * Get buffered terminal output after a cursor for the embedded right-sidebar TUI host. Cursor -1 starts at the current end.
+   */
+  public output<ThrowOnError extends boolean = false>(
+    parameters?: {
+      directory?: string
+      cursor?: number
+    },
+    options?: Options<never, ThrowOnError>,
+  ) {
+    const params = buildClientParams(
+      [parameters],
+      [
+        {
+          args: [
+            { in: "query", key: "directory" },
+            { in: "query", key: "cursor" },
+          ],
+        },
+      ],
+    )
+    return (options?.client ?? this.client).get<TuiHostOutputResponses, TuiHostOutputErrors, ThrowOnError>({
+      url: "/tui/host/output",
       ...options,
       ...params,
     })

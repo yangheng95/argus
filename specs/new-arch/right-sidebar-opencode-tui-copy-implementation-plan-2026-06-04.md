@@ -1284,3 +1284,45 @@ OpenCode gap after the round:
 - OpenCode's `/pty` WebSocket/cursor/connect-token/list/remove model is still missing. The current route tests intentionally validate the existing host surface; they do not claim parity with OpenCode's PTY service.
 - Full component lifecycle behavior still lacks a browser/DOM test because overlay has no DOM test runtime and browser automation was blocked in Round 12. The pure terminal helper tests cover buffer and resize behavior, but not ghostty canvas rendering, focus, active=false startup suppression, or toolbar interaction in a real document.
 - Project-bound Agent Team tool/plugin surface, external TUI plugin loader/install, move-session/workspace prompt flow, and `SessionV2Debug` remain missing.
+
+### 2026-06-05 Round 14: moved host polling from full snapshots to cursor deltas
+
+Implemented:
+
+- Rechecked latest OpenCode dev before editing. Upstream remained at `107180701f626eaf97e0f032c4a46fe4b4e9c0ec`; no new TUI, PTY, app, or terminal files changed since Round 13.
+- Copied the important OpenCode PTY buffer idea into the current right-sidebar host surface:
+  - host sessions now track `cursor` and `bufferCursor`;
+  - every PTY data chunk advances `cursor`;
+  - retained buffer trimming advances `bufferCursor`;
+  - `cursor=-1` starts at the current end, matching OpenCode's attach semantics.
+- Added `GET /tui/host/output?cursor=`:
+  - returns `{ data, cursor, from, truncated }` plus the existing host info;
+  - returns only output after the requested cursor;
+  - returns empty data when the client is already at the end;
+  - marks `truncated=true` when the requested cursor predates the retained buffer.
+- Updated overlay `TuiHostPanel` to poll `loadTuiHostOutput(hostCursor)` instead of pulling full `/tui/host/snapshot` every 500 ms.
+- Added `writeTuiHostTerminalOutput()`:
+  - writes cursor deltas directly;
+  - writes nothing for empty deltas;
+  - resets and replays retained output when the server reports truncation.
+- Removed the old production snapshot-diff helper so the panel has one output replay model.
+
+Verified:
+
+- `bun test packages/opencorvus/test/server/tui-host-routes.test.ts packages/opencorvus/test/tui/host.test.ts`
+- `bun test packages/overlay/test/coding-assistant-panel.test.ts packages/overlay/test/tui-host-terminal.test.ts packages/overlay/test/tui-host-service.test.ts packages/overlay/test/tui-host-panel.test.ts packages/overlay/test/acceptance-panel-mount.test.ts`
+- `bun run --cwd packages/opencorvus typecheck`
+- `bun run --cwd packages/overlay typecheck`
+
+OpenCode comparison after the round:
+
+- Matched OpenCode's PTY retained-buffer cursor concept at the current `/tui/host/*` boundary.
+- Reduced overlay transport waste: the browser no longer repeatedly downloads the whole retained terminal buffer.
+- Preserved the existing agent workflow and host process model: only terminal-output replay changed; session prompt, task queue, permissions, questions, and panel tools are untouched.
+
+OpenCode gap after the round:
+
+- This is still HTTP polling, not OpenCode's `/pty/:id/connect` WebSocket attach path. Direct WebSocket streaming, connect-token validation, and server push are still missing.
+- The current host remains a single project-bound embedded TUI host, not OpenCode's multi-PTY `list/create/get/update/remove` service.
+- `GET /tui/host/snapshot` remains as a diagnostic/recovery route. It is no longer the overlay render loop source, but a later full PTY migration should either delete it or clearly keep it as a non-rendering debug surface.
+- Browser visual E2E, project-bound Agent Team tool/plugin surface, external TUI plugin loader/install, move-session/workspace prompt flow, and `SessionV2Debug` remain missing.

@@ -3,6 +3,7 @@ import { configure } from "../src/services/api"
 import { __setHostTransportForTest } from "../src/services/host-transport"
 import type { HostTransport, TransportRequest, TransportResponse } from "../src/services/host-transport"
 import {
+  loadTuiHostOutput,
   loadTuiHostSnapshot,
   loadTuiHostStatus,
   resizeTuiHost,
@@ -32,6 +33,10 @@ function fakeTransport(capture: (req: TransportRequest) => void): HostTransport 
           createdAt: 1,
           updatedAt: 2,
           buffer: "hello",
+          data: "hello",
+          cursor: 5,
+          from: 0,
+          truncated: false,
         } as T,
       }
     },
@@ -61,6 +66,7 @@ describe("tui host service", () => {
     await startTuiHost({ cols: 120, rows: 40 })
     await loadTuiHostStatus()
     await loadTuiHostSnapshot()
+    await loadTuiHostOutput(5)
     await sendTuiHostInput("abc")
     await resizeTuiHost({ cols: 100, rows: 30 })
     await stopTuiHost()
@@ -69,6 +75,7 @@ describe("tui host service", () => {
       "POST tui/host/start",
       "GET tui/host/status",
       "GET tui/host/snapshot",
+      "GET tui/host/output",
       "POST tui/host/input",
       "POST tui/host/resize",
       "POST tui/host/stop",
@@ -76,7 +83,8 @@ describe("tui host service", () => {
     expect(requests.some((req) => req.path === "tui/runtime/status")).toBe(false)
     expect(requests.every((req) => req.query?.directory === "D:/repo")).toBe(true)
     expect(requests[0]?.body).toEqual({ kind: "json", value: { cols: 120, rows: 40 } })
-    expect(requests[3]?.body).toEqual({ kind: "json", value: { data: "abc" } })
-    expect(requests[4]?.body).toEqual({ kind: "json", value: { cols: 100, rows: 30 } })
+    expect(requests[3]?.query).toMatchObject({ cursor: "5", directory: "D:/repo" })
+    expect(requests[4]?.body).toEqual({ kind: "json", value: { data: "abc" } })
+    expect(requests[5]?.body).toEqual({ kind: "json", value: { cols: 100, rows: 30 } })
   })
 })

@@ -17,6 +17,13 @@ export interface TuiHostSnapshot extends TuiHostInfo {
   buffer: string
 }
 
+export interface TuiHostOutput extends TuiHostInfo {
+  data: string
+  cursor: number
+  from: number
+  truncated: boolean
+}
+
 export interface StartTuiHostInput {
   cols: number
   rows: number
@@ -36,6 +43,11 @@ export async function loadTuiHostStatus(): Promise<TuiHostInfo> {
 
 export async function loadTuiHostSnapshot(): Promise<TuiHostSnapshot> {
   return await apiJson("tui/host/snapshot")
+}
+
+export async function loadTuiHostOutput(cursor?: number): Promise<TuiHostOutput> {
+  const query = typeof cursor === "number" ? `?cursor=${encodeURIComponent(String(cursor))}` : ""
+  return await apiJson(`tui/host/output${query}`)
 }
 
 export async function sendTuiHostInput(data: string): Promise<boolean> {

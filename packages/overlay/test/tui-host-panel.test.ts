@@ -10,14 +10,16 @@ describe("tui host panel wiring", () => {
     expect(main).not.toContain("TuiRuntimePanel")
   })
 
-  test("panel uses ghostty-web with embedded host input, resize, and snapshot APIs", () => {
+  test("panel uses ghostty-web with embedded host input, resize, and cursor output APIs", () => {
     const panel = readFileSync(resolve(import.meta.dir, "../src/components/TuiHostPanel.tsx"), "utf8")
     expect(panel).toContain('import("ghostty-web")')
     expect(panel).toContain("new mod.Terminal")
     expect(panel).toContain("new mod.FitAddon")
     expect(panel).toContain("sendTuiHostInput(data)")
     expect(panel).toContain("resizeTuiHost({ cols, rows })")
-    expect(panel).toContain("loadTuiHostSnapshot()")
+    expect(panel).toContain("loadTuiHostOutput(hostCursor)")
+    expect(panel).toContain("hostCursor = next.cursor")
+    expect(panel).not.toContain("loadTuiHostSnapshot")
     expect(panel).toContain("new ResizeObserver")
     expect(panel).toContain("resizeObserver?.disconnect()")
     expect(panel).not.toContain("loadTuiRuntimeStatus")

@@ -1,7 +1,7 @@
 import { describe, expect, test } from "bun:test"
 import {
   hasTuiHostTerminalSizeChanged,
-  syncTuiHostTerminalBuffer,
+  writeTuiHostTerminalOutput,
   type TuiHostTerminalWriter,
 } from "../src/services/tui-host-terminal"
 
@@ -19,36 +19,36 @@ function writer() {
 }
 
 describe("tui host terminal helpers", () => {
-  test("writes only the snapshot delta when the host buffer grows", () => {
+  test("writes cursor output onto the terminal without replaying old buffer", () => {
     const { terminal, calls } = writer()
-    const rendered = syncTuiHostTerminalBuffer({
+    const rendered = writeTuiHostTerminalOutput({
       terminal,
       renderedBuffer: "hello",
-      nextBuffer: "hello world",
+      output: { data: " world", truncated: false },
     })
 
     expect(rendered).toBe("hello world")
     expect(calls).toEqual([{ method: "write", data: " world" }])
   })
 
-  test("does not write when the host snapshot is unchanged", () => {
+  test("does not write when cursor output is empty", () => {
     const { terminal, calls } = writer()
-    const rendered = syncTuiHostTerminalBuffer({
+    const rendered = writeTuiHostTerminalOutput({
       terminal,
       renderedBuffer: "same",
-      nextBuffer: "same",
+      output: { data: "", truncated: false },
     })
 
     expect(rendered).toBe("same")
     expect(calls).toEqual([])
   })
 
-  test("resets the terminal before writing a non-prefix snapshot", () => {
+  test("resets the terminal before writing truncated cursor output", () => {
     const { terminal, calls } = writer()
-    const rendered = syncTuiHostTerminalBuffer({
+    const rendered = writeTuiHostTerminalOutput({
       terminal,
       renderedBuffer: "old prompt",
-      nextBuffer: "new prompt",
+      output: { data: "new prompt", truncated: true },
     })
 
     expect(rendered).toBe("new prompt")

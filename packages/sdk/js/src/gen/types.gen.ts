@@ -12853,6 +12853,52 @@ export type TuiHostSnapshotResponses = {
 
 export type TuiHostSnapshotResponse = TuiHostSnapshotResponses[keyof TuiHostSnapshotResponses]
 
+export type TuiHostOutputData = {
+  body?: never
+  path?: never
+  query?: {
+    /**
+     * Project directory for project-scoped routes. Equivalent to the x-opencorvus-directory request header.
+     */
+    directory?: string
+    cursor?: number
+  }
+  url: "/tui/host/output"
+}
+
+export type TuiHostOutputErrors = {
+  /**
+   * Bad request
+   */
+  400: BadRequestError
+}
+
+export type TuiHostOutputError = TuiHostOutputErrors[keyof TuiHostOutputErrors]
+
+export type TuiHostOutputResponses = {
+  /**
+   * Embedded TUI host output delta
+   */
+  200: {
+    id: string | null
+    running: boolean
+    status: "idle" | "running" | "exited"
+    cols: number | null
+    rows: number | null
+    url: string | null
+    directory: string | null
+    exitCode: number | null
+    createdAt: number | null
+    updatedAt: number | null
+    data: string
+    cursor: number
+    from: number
+    truncated: boolean
+  }
+}
+
+export type TuiHostOutputResponse = TuiHostOutputResponses[keyof TuiHostOutputResponses]
+
 export type TuiHostInputData = {
   body?: {
     data: string
