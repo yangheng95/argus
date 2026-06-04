@@ -45,9 +45,11 @@ describe("web-clone skeleton project generator", () => {
     expect(css).toContain(".economy")
 
     const packageJson = await Bun.file(path.join(outputDir, "package.json")).json()
+    expect(packageJson.packageManager).toBe("npm@10.9.0")
     expect(packageJson.scripts.build).toContain("extract-source-html")
-    expect(packageJson.scripts.dev).toContain("bunx vite --host 127.0.0.1")
-    expect(packageJson.scripts.preview).toBe("bunx vite preview --host 127.0.0.1 --strictPort")
+    expect(packageJson.scripts.dev).toContain("vite --host 127.0.0.1")
+    expect(packageJson.scripts.preview).toBe("vite preview --host 127.0.0.1 --strictPort")
+    expect(JSON.stringify(packageJson.scripts)).not.toContain("bunx")
     expect(result.warnings).toContain("No SingleFile HTML was available; the baseline uses source-skeleton HTML and may be less visually complete.")
   })
 
