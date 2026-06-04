@@ -15,6 +15,8 @@ test("orchestrator core prompt leaves frontend evidence tool selection to orches
   expect(prompt).toContain("`frontend_research` and `frontend_design` are sibling evidence tools")
   expect(prompt).toContain("Frontend_research")
   expect(prompt).toContain("not acquire webpage evidence")
+  expect(prompt).toContain("dispatch `frontend_design` before")
+  expect(prompt).toContain("placeholder visual evidence")
   expect(prompt).toContain("not a hard-coded pair")
   expect(prompt).toContain("not fixed lifecycle gates")
   expect(prompt).toContain("Do not apply the UI-replication rule to document/research requests")

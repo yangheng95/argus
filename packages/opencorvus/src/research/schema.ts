@@ -31,9 +31,12 @@ export const ResearchEvidenceRefSchema = z.object({
   retrieved_at: z.string().min(1),
   reliability: z.enum(["primary", "secondary", "community", "unknown"]),
   excerpt: z.string().min(1).max(800),
-  bundle_ref: z.string().min(1),
+  bundle_ref: z.string().min(1).optional(),
   volatile: z.boolean().default(false),
-})
+}).transform((item) => ({
+  ...item,
+  bundle_ref: item.bundle_ref ?? `research-bundle.md#${item.id}`,
+}))
 export type ResearchEvidenceRef = z.infer<typeof ResearchEvidenceRefSchema>
 
 export const ResearchFactSchema = z.object({
@@ -133,7 +136,7 @@ export type ResearchWebpageFidelityRisk = z.infer<typeof ResearchWebpageFidelity
 
 export const ResearchWebpageContractSchema = z.object({
   source_url: z.string().min(1),
-  reference_image_evidence_ids: z.array(z.string().min(1)).min(1),
+  reference_image_evidence_ids: z.array(z.string().min(1)).default([]),
   functional_surfaces: z.array(ResearchWebpageFunctionalSurfaceSchema).min(1),
   visual_layout: z.array(ResearchWebpageVisualLayoutSchema).min(1),
   style_requirements: z.array(ResearchWebpageStyleRequirementSchema).min(1),

@@ -44,7 +44,7 @@ Webpage research workflow:
 Webpage contract:
 - Submit a `webpage_contract` in `submit_research_brief` whenever prepared webpage evidence or source URLs describe a webpage surface.
 - Treat `webpage_contract` as an investigation partition contract, not a final PRD fact contract.
-- `reference_image_evidence_ids`: evidence id(s) for the visual reference image/capture.
+- `reference_image_evidence_ids`: evidence id(s) for the visual reference image/capture. Use an empty array when no screenshot/rendered visual capture exists; never create placeholder evidence solely to satisfy this field.
 - `functional_surfaces`: visible surfaces that need downstream investigation, with behavior questions or likely component kinds.
 - `visual_layout`: desktop/mobile/responsive regions that need downstream layout verification.
 - `style_requirements`: source-backed style areas or token selectors that downstream agents must inspect.
@@ -56,6 +56,7 @@ Webpage contract:
 Output contract:
 - Call submit_research_brief exactly once when finished.
 - The compact brief must include evidence_index, facts, inferences, problem_statements, user_needs, constraints, document_outline, subpage_research_tasks, webpage_contract, and open_questions.
+- Evidence index `bundle_ref` values are optional; omit them when no precise bundle anchor exists and the host will derive stable references from the evidence ids.
 - The bundle must include full_markdown_sections, evidence_notes, and citation_map. For webpage work, full_markdown_sections are the durable investigation-division artifact: they must expand the compact webpage_contract into work packets, evidence pointers, unknowns, expected downstream outputs, and risks. Do not submit a final PRD or a raw artifact list as full_markdown_sections.
 - Do not submit raw markdown or JSON documents as string fields. Use ordered full_markdown_sections with short single-line points; split multiline notes into separate array items. The host will render those sections into research-bundle.md and serialize evidence_notes / citation_map into JSON files.
 - Use fact_check_items only for factual claims in your own final report that you did not verify through tools.

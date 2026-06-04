@@ -213,6 +213,29 @@ describe("research output tools", () => {
     expect(kit.getCollector().fact_check_items).toHaveLength(1)
   })
 
+  test("submit_research_brief derives bundle_ref when evidence entries omit it", async () => {
+    const kit = createResearchOutputTools()
+    const submit = validSubmit({
+      evidence_index: [
+        {
+          id: "ev_1",
+          kind: "web",
+          pointer: "https://example.com",
+          title: "Example",
+          retrieved_at: "2026-05-31T00:00:00.000Z",
+          reliability: "primary",
+          excerpt: "A compact excerpt.",
+          volatile: false,
+        },
+      ],
+    })
+
+    const result = await callTool(kit.tools, "submit_research_brief", submit)
+
+    expect(result).toContain("PASS")
+    expect(kit.getCollector().draft?.evidence_index[0]?.bundle_ref).toBe("research-bundle.md#ev_1")
+  })
+
   test("submit_research_brief rejects legacy raw bundle string fields", () => {
     const legacy = validSubmit({
       bundle: {
@@ -325,6 +348,22 @@ describe("research output tools", () => {
     expect(kit.getCollector().draft?.webpage_contract?.functional_surfaces[0]?.title).toBe("Economic trends")
     expect(kit.buildReport().detail).toContain("## Webpage Contract")
     expect(kit.buildReport().detail).toContain("functional_surfaces=1")
+  })
+
+  test("submit_research_brief accepts webpage contracts without visual reference captures", async () => {
+    const kit = createResearchOutputTools()
+    const result = await callTool(
+      kit.tools,
+      "submit_research_brief",
+      validSubmit(withWebpagePrdBundle({
+        webpage_contract: validWebpageContract({
+          reference_image_evidence_ids: [],
+        }),
+      })),
+    )
+
+    expect(result).toContain("PASS")
+    expect(kit.getCollector().draft?.webpage_contract?.reference_image_evidence_ids).toEqual([])
   })
 
   test("submit_research_brief accepts a compact source-backed webpage PRD bundle", async () => {
