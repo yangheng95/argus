@@ -1896,3 +1896,32 @@ OpenCode gap after the round:
 - The current host is still a single project-bound embedded TUI process, not OpenCode's full multi-PTY `list/create/get/update/remove` service.
 - External TUI plugin loader/install remains missing; upstream depends on shared plugin loader modules that OpenCorvus does not yet expose in the copied TUI runtime.
 - `SessionV2Debug` and `context/sync-v2.tsx` remain missing until the real V2 session-message/event source is copied/adapted.
+
+### 2026-06-05 Round 29: OpenCode tool output collapse helper
+
+Implemented:
+
+- Rechecked latest OpenCode dev before editing. Upstream remained at `ab5a12d916dd72eab0c84afb1f6de5a07c16a7e4`.
+- Copied OpenCode's `packages/opencode/src/cli/cmd/tui/util/collapse-tool-output.ts` into OpenCorvus as `packages/opencorvus/src/cli/cmd/tui/util/collapse-tool-output.ts`.
+- Replaced the local hand-written line-only truncation in `routes/session/index.tsx` for `GenericTool` and `Bash` output with the copied helper.
+- Kept existing OpenCorvus session rendering, tool types, prompt/sidebar/footer behavior, and agent workflow unchanged.
+- This brings current session rendering closer to OpenCode before `SessionV2Debug` is copied: OpenCode uses this helper in both the main session route and `feature-plugins/system/session-v2.tsx`, and the helper collapses by both line budget and character budget.
+
+Verified in tests:
+
+- Added `packages/opencorvus/test/tui/collapse-tool-output.test.ts` covering short output, line overflow, character overflow, and Unicode code point behavior.
+- Extended `plugin-runtime-guard.test.ts` to assert the copied helper exists, remains OpenCode-derived, and the session route imports/uses it.
+- `bun test packages/opencorvus/test/tui/collapse-tool-output.test.ts packages/opencorvus/test/tui/plugin-runtime-guard.test.ts`
+- `bun run --cwd packages/opencorvus typecheck`
+
+OpenCode comparison after the round:
+
+- The previous output-collapse implementation gap in the current session route is closed for the two local call sites that had line-only truncation.
+- This is also a direct prerequisite for a later honest `SessionV2Debug` copy, because that upstream plugin imports the same helper.
+
+OpenCode gap after the round:
+
+- OpenCode's full workspace management remains missing: workspace list/create/unavailable dialogs, move-session prompt flow, workspace commands, and workspace status event sync are not implemented yet.
+- The current host is still a single project-bound embedded TUI process, not OpenCode's full multi-PTY `list/create/get/update/remove` service.
+- External TUI plugin loader/install remains missing; upstream depends on shared plugin loader modules that OpenCorvus does not yet expose in the copied TUI runtime.
+- `SessionV2Debug` and `context/sync-v2.tsx` remain missing until the real V2 session-message/event source is copied/adapted.
