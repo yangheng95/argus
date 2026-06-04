@@ -18,6 +18,7 @@
   <link rel="stylesheet" href="styles/surfaces/composer.css">
   <link rel="stylesheet" href="styles/surfaces/conversation.css">
   <link rel="stylesheet" href="styles/surfaces/sidebar.css">
+  <link rel="stylesheet" href="styles/surfaces/activity.css">
   <link rel="stylesheet" href="styles/surfaces/inspector.css">
   <link rel="stylesheet" href="styles/surfaces/settings.css">
   <link rel="stylesheet" href="styles/surfaces/workspace.css">
@@ -131,68 +132,77 @@
 
     <!-- Horizontal body: chat left, sections right -->
     <div class="panel-body" id="panelBody">
-      <aside class="sidebar" id="sidebar" data-collapsed="false">
-        <div class="sidebar-header oc-surface-header">
-          <div id="solidLeftPanelHeaderCollapseControl" class="panel-header-collapse-mount"></div>
-          <div class="sidebar-title oc-surface-header__title" data-i18n="sidebar.title">Recent Chats</div>
-          <div class="sidebar-header-actions oc-surface-header__actions" role="toolbar" aria-label="Recent Chats" data-i18n-aria-label="sidebar.title">
-            <button
-              type="button"
-              class="oc-button"
-              id="btnMission"
-              data-variant="ghost"
-              data-size="md"
-              data-tone="neutral"
-              data-ui="sidebar-mission-button"
-              data-i18n-title="mission.open_title"
-              data-i18n-aria-label="mission.open_title"
-              title="Open Mission"
-              aria-label="Open Mission"
-            >
-              <span class="sidebar-btn-icon" aria-hidden="true">
-                <svg width="13" height="13" viewBox="0 0 16 16" fill="none">
-                  <circle cx="8" cy="8" r="2.4" stroke="currentColor" stroke-width="1.4"/>
-                  <line x1="8" y1="2.5" x2="8" y2="5" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/>
-                  <line x1="8" y1="11" x2="8" y2="13.5" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/>
-                  <line x1="2.5" y1="8" x2="5" y2="8" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/>
-                  <line x1="11" y1="8" x2="13.5" y2="8" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/>
-                </svg>
-              </span>
-              <span class="sidebar-btn-label" data-i18n="mission.open">Mission</span>
-            </button>
-            <button
-              type="button"
-              class="oc-button"
-              id="btnCreateTask"
-              data-variant="solid"
-              data-size="md"
-              data-tone="accent"
-              data-ui="sidebar-new-task-button"
-              data-i18n-title="task.new"
-              data-i18n-aria-label="task.new"
-              title="New Chat"
-              aria-label="New Chat"
-            >
-              <span class="sidebar-btn-icon" aria-hidden="true">
-                <svg width="13" height="13" viewBox="0 0 16 16" fill="none">
-                  <path d="M8 3v10M3 8h10" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/>
-                </svg>
-              </span>
-              <span class="sidebar-btn-label" data-i18n="task.new">New Chat</span>
-            </button>
+      <aside class="sidebar" id="sidebar" data-collapsed="false" data-left-activity="tasks">
+        <div id="solidLeftActivityToolbar" class="side-activity-toolbar-mount" data-i18n-aria-label="activity.left"></div>
+        <div class="side-panel-content sidebar-content">
+          <div class="sidebar-header oc-surface-header">
+            <div class="sidebar-title oc-surface-header__title" data-i18n="sidebar.title">Recent Chats</div>
+            <div class="sidebar-header-actions oc-surface-header__actions" data-activity-actions="tasks" role="toolbar" aria-label="Recent Chats" data-i18n-aria-label="sidebar.title">
+              <button
+                type="button"
+                class="oc-button"
+                id="btnMission"
+                data-variant="ghost"
+                data-size="md"
+                data-tone="neutral"
+                data-ui="sidebar-mission-button"
+                data-i18n-title="mission.open_title"
+                data-i18n-aria-label="mission.open_title"
+                title="Open Mission"
+                aria-label="Open Mission"
+              >
+                <span class="sidebar-btn-icon" aria-hidden="true">
+                  <svg width="13" height="13" viewBox="0 0 16 16" fill="none">
+                    <circle cx="8" cy="8" r="2.4" stroke="currentColor" stroke-width="1.4"/>
+                    <line x1="8" y1="2.5" x2="8" y2="5" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/>
+                    <line x1="8" y1="11" x2="8" y2="13.5" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/>
+                    <line x1="2.5" y1="8" x2="5" y2="8" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/>
+                    <line x1="11" y1="8" x2="13.5" y2="8" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/>
+                  </svg>
+                </span>
+                <span class="sidebar-btn-label" data-i18n="mission.open">Mission</span>
+              </button>
+              <button
+                type="button"
+                class="oc-button"
+                id="btnCreateTask"
+                data-variant="solid"
+                data-size="md"
+                data-tone="accent"
+                data-ui="sidebar-new-task-button"
+                data-i18n-title="task.new"
+                data-i18n-aria-label="task.new"
+                title="New Chat"
+                aria-label="New Chat"
+              >
+                <span class="sidebar-btn-icon" aria-hidden="true">
+                  <svg width="13" height="13" viewBox="0 0 16 16" fill="none">
+                    <path d="M8 3v10M3 8h10" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/>
+                  </svg>
+                </span>
+                <span class="sidebar-btn-label" data-i18n="task.new">New Chat</span>
+              </button>
+            </div>
           </div>
+
+          <div class="side-activity-body sidebar-activity-body" id="leftPanelTasks" data-side-activity="tasks" data-active="true">
+            <div class="sidebar-body">
+              <div class="sidebar-list session-list-panel sidebar-session-list" id="taskListPanel"></div>
+            </div>
+          </div>
+          <div class="side-activity-body sidebar-activity-body" id="leftPanelExplorer" data-side-activity="explorer" data-active="false">
+            <div id="solidFileExplorerMount" class="sidebar-explorer-panel"></div>
+          </div>
+          <div class="side-activity-body sidebar-activity-body" id="leftPanelChanges" data-side-activity="changes" data-active="false">
+            <div id="solidFileChangesMount" class="sidebar-file-changes-panel"></div>
+          </div>
+
+          <footer class="sidebar-footer" aria-label="Author">
+            <span class="chat-version">
+              <span class="chat-version-copy" id="chatVersion">OpenCorvus v%OPENCORVUS_OVERLAY_VERSION%</span>
+            </span>
+          </footer>
         </div>
-
-        <div class="sidebar-body">
-          <div class="sidebar-list session-list-panel sidebar-session-list" id="taskListPanel"></div>
-        </div>
-
-        <footer class="sidebar-footer" aria-label="Author">
-          <span class="chat-version">
-            <span class="chat-version-copy" id="chatVersion">OpenCorvus v%OPENCORVUS_OVERLAY_VERSION%</span>
-          </span>
-        </footer>
-
       </aside>
       <div class="pane-resizer pane-resizer-left" id="leftPaneResizer" role="separator" aria-orientation="vertical" aria-label="Resize tasks panel"></div>
 
@@ -242,34 +252,28 @@
       <div class="pane-resizer pane-resizer-right" id="rightPaneResizer" role="separator" aria-orientation="vertical" aria-label="Resize control panel"></div>
 
       <!-- Collapsible Sections (right) -->
-      <div class="sections" id="sections">
-        <header class="sections-header oc-surface-header">
-          <div id="solidRightPanelTabs" class="sections-tabs-mount"></div>
-          <div class="sections-header-actions oc-surface-header__actions">
-            <div id="solidRightPanelHeaderCollapseControl" class="panel-header-collapse-mount"></div>
+      <div class="sections" id="sections" data-right-activity="tui">
+        <div class="side-panel-content sections-content">
+          <header class="sections-header oc-surface-header">
+            <div class="sections-title oc-surface-header__title" id="rightPanelTitle" data-i18n="tui.title">TUI</div>
+          </header>
+          <div class="sections-tab-body" id="rightPanelTui" data-side-activity="tui" data-active="true">
+            <div id="solidTuiRuntimeMount" class="sections-tui-activity"></div>
           </div>
-        </header>
-        <div class="sections-tab-body" id="rightPanelExplorer" data-panel-tab="explorer" data-active="true">
-          <div id="solidFileExplorerMount" class="sections-explorer-tab"></div>
-        </div>
-        <div class="sections-tab-body" id="rightPanelAssistant" data-panel-tab="assistant" data-active="false">
-          <div id="solidCodingAssistantMount" class="sections-assistant-tab"></div>
-        </div>
-        <div class="sections-tab-body" id="rightPanelFiles" data-panel-tab="files" data-active="false">
-          <div id="solidRightFilesMount" class="sections-files-tab"></div>
-        </div>
-        <div class="sections-tab-body" id="rightPanelBrowser" data-panel-tab="browser" data-active="false">
-          <div id="solidBrowserPreviewMount" class="sections-browser-tab"></div>
-        </div>
-        <div class="sections-tab-body" id="rightPanelInspector" data-panel-tab="inspector" data-active="false">
-          <div class="sections-stack">
+          <div class="sections-tab-body" id="rightPanelBrowser" data-side-activity="browser" data-active="false">
+            <div id="solidBrowserPreviewMount" class="sections-browser-activity"></div>
+          </div>
+          <div class="sections-tab-body" id="rightPanelInspector" data-side-activity="inspector" data-active="false">
+            <div class="sections-stack">
 
-          <!-- Inspector workflow sections: Board owns Requirements, Architect,
-               Goals, and Acceptance as one ordered section stack. -->
-          <div id="solidBoardMount"></div>
+            <!-- Inspector workflow sections: Board owns Requirements, Architect,
+                 Goals, and Acceptance as one ordered section stack. -->
+            <div id="solidBoardMount"></div>
 
+            </div>
           </div>
         </div>
+        <div id="solidRightActivityToolbar" class="side-activity-toolbar-mount" data-i18n-aria-label="activity.right"></div>
       </div>
 
     </div>
