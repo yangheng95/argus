@@ -7294,6 +7294,34 @@ export type CodingSessionGetResponses = {
 
 export type CodingSessionGetResponse = CodingSessionGetResponses[keyof CodingSessionGetResponses]
 
+export type CodingSessionSelectionUpdateData = {
+  body?: {
+    taskID: string | null
+  }
+  path: {
+    sessionID: string
+  }
+  query?: {
+    /**
+     * Project directory for project-scoped routes. Equivalent to the x-opencorvus-directory request header.
+     */
+    directory?: string
+  }
+  url: "/coding/session/{sessionID}/selection"
+}
+
+export type CodingSessionSelectionUpdateResponses = {
+  /**
+   * Coding assistant session with updated selection
+   */
+  200: {
+    session: Session
+  }
+}
+
+export type CodingSessionSelectionUpdateResponse =
+  CodingSessionSelectionUpdateResponses[keyof CodingSessionSelectionUpdateResponses]
+
 export type GatewayCapabilitiesData = {
   body?: never
   path?: never

@@ -6,10 +6,12 @@ import { CodingCli } from "@/coding-cli"
 import { SystemTerminal } from "@/system-terminal"
 import { HTTPException } from "hono/http-exception"
 import { Instance } from "@/project/instance"
+import { EngineService } from "@/task-api"
 import {
   RIGHT_SIDEBAR_CODING_ASSISTANT_METADATA,
   isRightSidebarCodingAssistantSession,
   listRightSidebarCodingAssistantSessions,
+  setRightSidebarCodingAssistantSelectedTask,
 } from "@/coding-assistant/session"
 
 const CodingSessionQuery = z.object({
@@ -19,6 +21,10 @@ const CodingSessionQuery = z.object({
 
 const CodingSessionResponse = z.object({
   session: Session.Info,
+})
+
+const CodingSessionSelectionInput = z.object({
+  taskID: z.string().nullable(),
 })
 
 const CodingSessionsResponse = z.object({
@@ -167,6 +173,39 @@ export function CodingRoutes() {
       async (c) => {
         const session = await assertRightSidebarCodingSession(c.req.valid("param").sessionID)
         return c.json({ session })
+      },
+    )
+    .patch(
+      "/session/:sessionID/selection",
+      describeRoute({
+        summary: "Update right sidebar coding assistant task selection",
+        description:
+          "Persist the selected project task for a right sidebar coding assistant session. The selected task is stored in session metadata and remains project-bound.",
+        operationId: "coding.session.selection.update",
+        responses: {
+          200: {
+            description: "Coding assistant session with updated selection",
+            content: {
+              "application/json": {
+                schema: resolver(CodingSessionResponse),
+              },
+            },
+          },
+        },
+      }),
+      validator("param", z.object({ sessionID: z.string() })),
+      validator("json", CodingSessionSelectionInput),
+      async (c) => {
+        const session = await assertRightSidebarCodingSession(c.req.valid("param").sessionID)
+        const { taskID } = c.req.valid("json")
+        if (taskID !== null) {
+          const task = await EngineService.getTask(taskID)
+          if (task.projectID !== Instance.project.id) {
+            throw new HTTPException(404, { message: `Task not found: ${taskID}` })
+          }
+        }
+        const updated = await setRightSidebarCodingAssistantSelectedTask({ session, taskID })
+        return c.json({ session: updated })
       },
     )
 }

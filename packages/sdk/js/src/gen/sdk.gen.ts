@@ -30,6 +30,7 @@ import type {
   CodingCliProfilesResponses,
   CodingSessionCreateResponses,
   CodingSessionGetResponses,
+  CodingSessionSelectionUpdateResponses,
   CodingSessionsListResponses,
   CommandListResponses,
   Config as Config4,
@@ -3952,6 +3953,45 @@ export class Cli extends HeyApiClient {
   }
 }
 
+export class Selection extends HeyApiClient {
+  /**
+   * Update right sidebar coding assistant task selection
+   *
+   * Persist the selected project task for a right sidebar coding assistant session. The selected task is stored in session metadata and remains project-bound.
+   */
+  public update<ThrowOnError extends boolean = false>(
+    parameters: {
+      sessionID: string
+      directory?: string
+      taskID?: string | null
+    },
+    options?: Options<never, ThrowOnError>,
+  ) {
+    const params = buildClientParams(
+      [parameters],
+      [
+        {
+          args: [
+            { in: "path", key: "sessionID" },
+            { in: "query", key: "directory" },
+            { in: "body", key: "taskID" },
+          ],
+        },
+      ],
+    )
+    return (options?.client ?? this.client).patch<CodingSessionSelectionUpdateResponses, unknown, ThrowOnError>({
+      url: "/coding/session/{sessionID}/selection",
+      ...options,
+      ...params,
+      headers: {
+        "Content-Type": "application/json",
+        ...options?.headers,
+        ...params.headers,
+      },
+    })
+  }
+}
+
 export class Session2 extends HeyApiClient {
   /**
    * Create right sidebar coding assistant session
@@ -4000,6 +4040,11 @@ export class Session2 extends HeyApiClient {
       ...options,
       ...params,
     })
+  }
+
+  private _selection?: Selection
+  get selection(): Selection {
+    return (this._selection ??= new Selection({ client: this.client }))
   }
 }
 

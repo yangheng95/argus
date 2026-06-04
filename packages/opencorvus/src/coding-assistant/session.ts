@@ -11,6 +11,11 @@ export const RIGHT_SIDEBAR_CODING_ASSISTANT_METADATA = {
   },
 } as const
 export const RIGHT_SIDEBAR_CODING_ASSISTANT_SOURCE = "right-sidebar-assistant"
+type RightSidebarCodingAssistantMetadata = {
+  surface: "right-sidebar"
+  selectedTaskID?: string | null
+  executor?: string | null
+}
 
 export function isRightSidebarCodingAssistantSession(
   session: Pick<Session.Info, "kind" | "metadata">,
@@ -41,6 +46,25 @@ export function applyRightSidebarCodingAssistantPromptOverlay<T extends Omit<Ses
       source: RIGHT_SIDEBAR_CODING_ASSISTANT_SOURCE,
     },
   }
+}
+
+export async function setRightSidebarCodingAssistantSelectedTask(input: {
+  session: Session.Info
+  taskID: string | null
+}) {
+  const current =
+    input.session.metadata && typeof input.session.metadata === "object"
+      ? (input.session.metadata as Record<string, unknown>).codingAssistant
+      : undefined
+  const codingAssistant: RightSidebarCodingAssistantMetadata = {
+    ...((current && typeof current === "object" ? current : {}) as Partial<RightSidebarCodingAssistantMetadata>),
+    surface: "right-sidebar",
+    selectedTaskID: input.taskID,
+  }
+  return SessionApi.mergeMetadata({
+    sessionID: input.session.id,
+    patch: { codingAssistant },
+  })
 }
 
 export function listRightSidebarCodingAssistantSessions(input: {
