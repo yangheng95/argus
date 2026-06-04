@@ -378,6 +378,13 @@ export type TuiSidebarFileItem = {
   deletions: number
 }
 
+export type TuiSessionDiffItem = TuiSidebarFileItem & {
+  patch?: string
+  status?: "added" | "deleted" | "modified"
+}
+
+export type VcsFileDiff = TuiSessionDiffItem
+
 export type TuiState = {
   readonly ready: boolean
   readonly config: SdkConfig
@@ -393,7 +400,7 @@ export type TuiState = {
   session: {
     count: () => number
     get: (sessionID: string) => Session | undefined
-    diff: (sessionID: string) => ReadonlyArray<TuiSidebarFileItem>
+    diff: (sessionID: string) => ReadonlyArray<TuiSessionDiffItem>
     todo: (sessionID: string) => ReadonlyArray<TuiSidebarTodoItem>
     messages: (sessionID: string) => ReadonlyArray<Message>
     status: (sessionID: string) => SessionStatus | undefined

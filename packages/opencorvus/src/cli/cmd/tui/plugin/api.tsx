@@ -18,6 +18,7 @@ import type { useToast } from "../ui/toast"
 import { Installation } from "@/installation"
 import * as Keymap from "../keymap"
 import { createCommandShim } from "./command-shim"
+import { formatPatch, structuredPatch } from "diff"
 
 type RouteEntry = {
   key: symbol
@@ -157,7 +158,17 @@ function stateApi(sync: ReturnType<typeof useSync>): TuiPluginApi["state"] {
       },
       diff(sessionID) {
         return (sync.data.session_diff[sessionID] ?? []).flatMap((item) =>
-          item.file === undefined ? [] : [{ ...item, file: item.file }],
+          item.file === undefined
+            ? []
+            : [
+                {
+                  ...item,
+                  file: item.file,
+                  patch: formatPatch(
+                    structuredPatch(item.file, item.file, item.before ?? "", item.after ?? "", "", "", { context: 3 }),
+                  ),
+                },
+              ],
         )
       },
       todo(sessionID) {
