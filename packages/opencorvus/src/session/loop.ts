@@ -257,8 +257,83 @@ export namespace SessionLoop {
     "requirements",
   ])
 
-  function disablesAutomaticCompaction(session: Session.Info): boolean {
-    return AutomaticCompaction.isDisabledForKind(session.kind)
+  export function automaticCompactionDecision(input: {
+    session: Session.Info
+    source: Message.User
+    model?: Provider.Model
+  }): { decision: AutomaticCompaction.Decision; error?: unknown } {
+    if (!AutomaticCompaction.requiresLiveRuntimeContinuation(input.session.kind)) {
+      return { decision: AutomaticCompaction.decision({ sessionKind: input.session.kind }) }
+    }
+    const sourceWorkerTurnDescriptor = sourceWorkerTurnDescriptorReference(input.source)
+    if (!sourceWorkerTurnDescriptor) {
+      return {
+        decision: AutomaticCompaction.decision({
+          sessionKind: input.session.kind,
+          runtimeContinuationReady: false,
+        }),
+        error: new SessionRuntimeContractMissingError({
+          message: `Automatic compaction source user ${input.source.id} is missing workerTurnDescriptor id/hash`,
+          sessionID: input.session.id,
+          agentKind: input.source.agent,
+          reason: "missing",
+        }),
+      }
+    }
+    try {
+      validateSessionRuntimeContractForContinuation({
+        sessionID: input.session.id,
+        sessionKind: input.session.kind,
+        expectedAgentKind: input.source.agent,
+        expectedContractKind: "stage-attempt",
+        expectedGoalID: input.session.goalID,
+        expectedWorkerTurnDescriptor: sourceWorkerTurnDescriptor,
+        expectedModel: input.model
+          ? {
+              providerID: input.model.providerID,
+              modelID: input.model.api.id,
+            }
+          : input.source.model,
+        expectedResultMode: "reply",
+        requireRuntimeContract: true,
+        requireWorkerTurnDescriptor: true,
+        rejectSatisfiedTerminal: true,
+      })
+      return {
+        decision: AutomaticCompaction.decision({
+          sessionKind: input.session.kind,
+          runtimeContinuationReady: true,
+        }),
+      }
+    } catch (error) {
+      return {
+        decision: AutomaticCompaction.decision({
+          sessionKind: input.session.kind,
+          runtimeContinuationReady: false,
+        }),
+        error,
+      }
+    }
+  }
+
+  function disabledAutomaticCompactionMessage(input: {
+    sessionKind: string
+    reason: AutomaticCompaction.Decision["reason"]
+    error?: unknown
+  }): string {
+    const cause =
+      input.error instanceof Error && input.error.message.length > 0 ? `: ${input.error.message}` : ""
+    return `Automatic compaction is disabled for workflow session kind=${input.sessionKind} (reason=${input.reason})${cause}`
+  }
+
+  function sourceWorkerTurnDescriptorReference(
+    source: Message.User,
+  ): { id: string; hash: string } | undefined {
+    const value = source.extra?.workerTurnDescriptor
+    if (!value || typeof value !== "object" || Array.isArray(value)) return undefined
+    const item = value as { id?: unknown; hash?: unknown }
+    if (typeof item.id !== "string" || typeof item.hash !== "string") return undefined
+    return { id: item.id, hash: item.hash }
   }
 
   function isActionableSessionControl(control: SessionControl.Record): boolean {
@@ -1747,13 +1822,22 @@ export namespace SessionLoop {
           messagePayloadChars,
           topPayloadParts,
         })
-        if (disablesAutomaticCompaction(input.session)) {
+        const autoCompaction = automaticCompactionDecision({
+          session: input.session,
+          source: input.lastUser,
+          model: input.model,
+        })
+        if (!autoCompaction.decision.enabled) {
           return stopTurnWithPredictiveBudgetError({
             processor,
             sessionID: input.sessionID,
             error: new Message.PromptBudgetOverflowError({
               message:
-                `Automatic compaction is disabled for workflow session kind=${input.session.kind}; ` +
+                `${disabledAutomaticCompactionMessage({
+                  sessionKind: input.session.kind,
+                  reason: autoCompaction.decision.reason,
+                  error: autoCompaction.error,
+                })}; ` +
                 `the prompt is estimated at ${totalTokensEst} tokens over limit=${predictiveBudget.limit}.`,
               systemTokensEst,
               messagePayloadChars,
@@ -1855,10 +1939,19 @@ export namespace SessionLoop {
 
     if (result === "stop") return "stop" as const
     if (result === "compact") {
-      if (disablesAutomaticCompaction(input.session)) {
+      const autoCompaction = automaticCompactionDecision({
+        session: input.session,
+        source: input.lastUser,
+        model: input.model,
+      })
+      if (!autoCompaction.decision.enabled) {
         processor.message.error = new Message.ContextOverflowError({
           message:
-            `Automatic compaction is disabled for workflow session kind=${input.session.kind}; ` +
+            `${disabledAutomaticCompactionMessage({
+              sessionKind: input.session.kind,
+              reason: autoCompaction.decision.reason,
+              error: autoCompaction.error,
+            })}; ` +
             `the provider reported context overflow for this turn.`,
         }).toObject()
         processor.message.finish = "error"
@@ -2053,40 +2146,12 @@ export namespace SessionLoop {
               history: msgs,
             }).catch((err) => log.error("failed to ensure session title", { error: String(err) }))
 
-          const model = await resolveAgentModel(lastUser.agent, {
-            sessionID,
-            explicitModel: lastUser.model,
-          }).catch((e) => {
-            if (Provider.ModelNotFoundError.isInstance(e)) {
-              const hint = e.data.suggestions?.length ? ` Did you mean: ${e.data.suggestions.join(", ")}?` : ""
-              Bus.publish(Session.Event.Error, {
-                sessionID,
-                error: new NamedError.Unknown({
-                  message: `Model not found: ${e.data.providerID}/${e.data.modelID}.${hint}`,
-                }).toObject(),
-              })
-            }
-            throw e
-          })
           const compactionControl = controls.find(
             (item) => item.kind === "compaction_request" || item.kind === "manual_summarize",
           )
           const task = tasks.pop()
 
-          if (task?.type === "subtask") {
-            await runSubtask({ task, model, lastUser, msgs, session, sessionID, abort })
-            continue
-          }
-
           if (compactionControl) {
-            if (compactionControl.kind === "compaction_request" && disablesAutomaticCompaction(session)) {
-              SessionControl.fail({
-                id: compactionControl.id,
-                sessionID,
-                error: `Automatic compaction is disabled for workflow session kind ${session.kind}`,
-              })
-              continue
-            }
             const sourceUserMessageID = compactionControl.payload.source_user_message_id
             if (typeof sourceUserMessageID !== "string") {
               SessionControl.fail({
@@ -2095,6 +2160,33 @@ export namespace SessionLoop {
                 error: "compaction control missing source_user_message_id",
               })
               continue
+            }
+            const sourceUserMessage = msgs.find((message) => message.info.id === sourceUserMessageID)?.info
+            if (!sourceUserMessage || sourceUserMessage.role !== "user") {
+              SessionControl.fail({
+                id: compactionControl.id,
+                sessionID,
+                error: `compaction control source_user_message_id ${sourceUserMessageID} is not a user message`,
+              })
+              continue
+            }
+            if (compactionControl.kind === "compaction_request") {
+              const autoCompaction = automaticCompactionDecision({
+                session,
+                source: sourceUserMessage,
+              })
+              if (!autoCompaction.decision.enabled) {
+                SessionControl.fail({
+                  id: compactionControl.id,
+                  sessionID,
+                  error: disabledAutomaticCompactionMessage({
+                    sessionKind: session.kind,
+                    reason: autoCompaction.decision.reason,
+                    error: autoCompaction.error,
+                  }),
+                })
+                continue
+              }
             }
             if (hasCompletedCompactionForSource(msgs, sourceUserMessageID)) {
               SessionControl.consume({ id: compactionControl.id, sessionID })
@@ -2126,7 +2218,22 @@ export namespace SessionLoop {
           }
 
           if (task?.type === "compaction") {
-            if (task.auto && disablesAutomaticCompaction(session)) {
+            const taskSourceUser = msgs.find((message) => message.info.id === task.messageID)?.info
+            if (!taskSourceUser || taskSourceUser.role !== "user") {
+              await Session.removePart({
+                sessionID,
+                messageID: task.messageID,
+                partID: task.id,
+              })
+              continue
+            }
+            const autoCompaction = task.auto
+              ? automaticCompactionDecision({
+                  session,
+                  source: taskSourceUser,
+                })
+              : undefined
+            if (autoCompaction && !autoCompaction.decision.enabled) {
               await Session.removePart({
                 sessionID,
                 messageID: task.messageID,
@@ -2136,7 +2243,7 @@ export namespace SessionLoop {
             }
             const result = await SessionCompaction.process({
               messages: msgs,
-              parentID: lastUser.id,
+              parentID: taskSourceUser.id,
               abort,
               sessionID,
               auto: task.auto,
@@ -2147,12 +2254,38 @@ export namespace SessionLoop {
             continue
           }
 
+          const model = await resolveAgentModel(lastUser.agent, {
+            sessionID,
+            explicitModel: lastUser.model,
+          }).catch((e) => {
+            if (Provider.ModelNotFoundError.isInstance(e)) {
+              const hint = e.data.suggestions?.length ? ` Did you mean: ${e.data.suggestions.join(", ")}?` : ""
+              Bus.publish(Session.Event.Error, {
+                sessionID,
+                error: new NamedError.Unknown({
+                  message: `Model not found: ${e.data.providerID}/${e.data.modelID}.${hint}`,
+                }).toObject(),
+              })
+            }
+            throw e
+          })
+
+          if (task?.type === "subtask") {
+            await runSubtask({ task, model, lastUser, msgs, session, sessionID, abort })
+            continue
+          }
+
           if (
             lastFinished &&
             lastFinished.summary !== true &&
             (await SessionCompaction.isOverflow({ tokens: lastFinished.tokens, model, sessionID }))
           ) {
-            if (disablesAutomaticCompaction(session)) {
+            const autoCompaction = automaticCompactionDecision({
+              session,
+              source: lastUser,
+              model,
+            })
+            if (!autoCompaction.decision.enabled) {
               const assistantMessage = (await Session.updateMessage({
                 id: Identifier.ascending("message"),
                 parentID: lastUser.id,
@@ -2174,7 +2307,11 @@ export namespace SessionLoop {
                 providerID: model.providerID,
                 error: new Message.ContextOverflowError({
                   message:
-                    `Automatic compaction is disabled for workflow session kind=${session.kind}; ` +
+                    `${disabledAutomaticCompactionMessage({
+                      sessionKind: session.kind,
+                      reason: autoCompaction.decision.reason,
+                      error: autoCompaction.error,
+                    })}; ` +
                     `the previous turn exceeded the configured context budget.`,
                 }).toObject(),
                 finish: "error",

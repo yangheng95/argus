@@ -296,6 +296,33 @@ describe("SessionLoop session runtime contract", () => {
             expectedWorkerTurnDescriptor: { id: descriptor.id, hash: "bad-hash" },
           }),
         ).toThrow("descriptor hash mismatch")
+        expect(() =>
+          SessionLoop.validateSessionRuntimeContractForContinuation({
+            sessionID,
+            sessionKind: "build",
+            expectedAgentKind: "build",
+            expectedWorkerTurnDescriptor: { id: descriptor.id, hash: descriptor.hash },
+            expectedResultMode: "summary",
+          }),
+        ).toThrow("result mode mismatch")
+        SessionLoop.setSessionRuntimeContract(
+          sessionID,
+          runtimeContract(sessionID, {
+            identity: {
+              workerTurnDescriptorID: descriptor.id,
+              workerTurnDescriptorHash: descriptor.hash,
+            },
+            tools: { other: dummyTool() },
+          }),
+        )
+        expect(() =>
+          SessionLoop.validateSessionRuntimeContractForContinuation({
+            sessionID,
+            sessionKind: "build",
+            expectedAgentKind: "build",
+            expectedWorkerTurnDescriptor: { id: descriptor.id, hash: descriptor.hash },
+          }),
+        ).toThrow("descriptor tools mismatch")
         SessionLoop.clearSessionRuntimeContract(sessionID)
       },
     })
