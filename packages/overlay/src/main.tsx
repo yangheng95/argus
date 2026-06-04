@@ -72,6 +72,7 @@ import { teardownApp } from "./services/init"
 import { stopTimers } from "./services/sync"
 import { nativeOpen, nativePrompt } from "./utils/native"
 import { eventClosest } from "./utils/dom-utils"
+import { installNativeContextMenuSuppression } from "./utils/context-menu"
 import { shortPath } from "./utils/tool"
 import { notifyError, notifyWarning, formatErrorDetails, recomputeBadgeFromTasks } from "./services/notify"
 import {
@@ -108,6 +109,7 @@ if ((import.meta as any).hot) {
   ;(import.meta as any).hot.dispose(runModuleTeardown)
 }
 const listenerOpts = { signal: moduleTeardown.signal } as const
+installNativeContextMenuSuppression(document, moduleTeardown.signal)
 
 const BROWSER_RESIZE_OBSERVER_DELIVERY_MESSAGES = new Set([
   "ResizeObserver loop completed with undelivered notifications.",
