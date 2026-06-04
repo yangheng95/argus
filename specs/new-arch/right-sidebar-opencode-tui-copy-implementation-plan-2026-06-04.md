@@ -1925,3 +1925,37 @@ OpenCode gap after the round:
 - The current host is still a single project-bound embedded TUI process, not OpenCode's full multi-PTY `list/create/get/update/remove` service.
 - External TUI plugin loader/install remains missing; upstream depends on shared plugin loader modules that OpenCorvus does not yet expose in the copied TUI runtime.
 - `SessionV2Debug` and `context/sync-v2.tsx` remain missing until the real V2 session-message/event source is copied/adapted.
+
+### 2026-06-05 Round 30: OpenCode path formatter provider
+
+Implemented:
+
+- Rechecked latest OpenCode dev before editing. Upstream remained at `ab5a12d916dd72eab0c84afb1f6de5a07c16a7e4`.
+- Copied OpenCode's `packages/opencode/src/cli/cmd/tui/context/path-format.tsx` into OpenCorvus as `packages/opencorvus/src/cli/cmd/tui/context/path-format.tsx`.
+- Adapted only the project import from `@opencode-ai/core/global` to OpenCorvus' existing `@/global`.
+- Wrapped the current session route with `<PathFormatterProvider path={session()?.directory}>`, using the canonical session directory as the formatting base.
+- Replaced local path-formatting call sites in `routes/session/index.tsx` with `usePathFormatter()` for:
+  - Bash workdir title display;
+  - write/edit/read/glob/search/list tool path labels;
+  - apply-patch move source labels.
+- Removed the local `normalizePath()` helper from the session route to avoid a second path-formatting source.
+- Kept tool execution, messages, permissions, prompt, sidebar, footer, and agent workflow unchanged.
+
+Verified in tests:
+
+- Added `packages/opencorvus/test/tui/path-format.test.ts` to guard the copied provider semantics and session route wiring without importing the TSX file through Bun's test JSX runtime.
+- Extended `plugin-runtime-guard.test.ts` to assert `context/path-format.tsx` exists, remains OpenCode-derived, the session route wraps `PathFormatterProvider`, uses `pathFormatter.format`, and no longer defines `normalizePath`.
+- `bun test packages/opencorvus/test/tui/path-format.test.ts packages/opencorvus/test/tui/plugin-runtime-guard.test.ts`
+- `bun run --cwd packages/opencorvus typecheck`
+
+OpenCode comparison after the round:
+
+- The session route now uses the same path formatter provider pattern as OpenCode, rather than scattered local relative-path logic.
+- This closes another prerequisite for copying more of OpenCode's session route and `SessionV2Debug`, both of which use formatter-style path rendering.
+
+OpenCode gap after the round:
+
+- OpenCode's full workspace management remains missing: workspace list/create/unavailable dialogs, move-session prompt flow, workspace commands, and workspace status event sync are not implemented yet.
+- The current host is still a single project-bound embedded TUI process, not OpenCode's full multi-PTY `list/create/get/update/remove` service.
+- External TUI plugin loader/install remains missing; upstream depends on shared plugin loader modules that OpenCorvus does not yet expose in the copied TUI runtime.
+- `SessionV2Debug` and `context/sync-v2.tsx` remain missing until the real V2 session-message/event source is copied/adapted.
