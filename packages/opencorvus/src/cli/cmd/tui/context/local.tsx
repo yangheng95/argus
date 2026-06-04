@@ -14,6 +14,7 @@ import { useSDK } from "./sdk"
 import { RGBA } from "@opentui/core"
 import { Filesystem } from "@/util/filesystem"
 import { Log } from "@/util/log"
+import { useRoute } from "./route"
 
 const log = Log.create({ service: "tui-local" })
 
@@ -355,6 +356,91 @@ export const { use: useLocal, provider: LocalProvider } = createSimpleContext({
       }
     })
 
+    const session = iife(() => {
+      const [sessionStore, setSessionStore] = createStore<{
+        ready: boolean
+        pinned: string[]
+      }>({
+        ready: false,
+        pinned: [],
+      })
+
+      const filePath = path.join(Global.Path.state, "session.json")
+      const state = {
+        pending: false,
+      }
+
+      function save() {
+        if (!sessionStore.ready) {
+          state.pending = true
+          return
+        }
+        state.pending = false
+        void Filesystem.writeJson(filePath, {
+          pinned: sessionStore.pinned,
+        })
+      }
+
+      Filesystem.readJson(filePath)
+        .then((x: any) => {
+          if (Array.isArray(x.pinned)) setSessionStore("pinned", x.pinned)
+        })
+        .catch(() => {})
+        .finally(() => {
+          setSessionStore("ready", true)
+          if (state.pending) save()
+        })
+
+      const route = useRoute()
+      const slots = createMemo(() => {
+        const existing = new Set(sync.data.session.filter((x) => x.parentID === undefined).map((x) => x.id))
+        return sessionStore.pinned.filter((id) => existing.has(id)).slice(0, 9)
+      })
+
+      function prune(sessionID: string) {
+        batch(() => {
+          if (sessionStore.pinned.includes(sessionID)) {
+            setSessionStore(
+              "pinned",
+              sessionStore.pinned.filter((x) => x !== sessionID),
+            )
+          }
+          save()
+        })
+      }
+
+      sdk.event.on("session.deleted", (evt) => {
+        prune(evt.properties.info.id)
+      })
+
+      return {
+        get ready() {
+          return sessionStore.ready
+        },
+        pinned() {
+          return sessionStore.pinned
+        },
+        slots,
+        isPinned(sessionID: string) {
+          return sessionStore.pinned.includes(sessionID)
+        },
+        togglePin(sessionID: string) {
+          batch(() => {
+            const exists = sessionStore.pinned.includes(sessionID)
+            const next = exists ? sessionStore.pinned.filter((x) => x !== sessionID) : [...sessionStore.pinned, sessionID]
+            setSessionStore("pinned", next)
+            save()
+          })
+        },
+        quickSwitch(slot: number) {
+          const target = slots()[slot - 1]
+          if (!target) return
+          if (route.data.type === "session" && route.data.sessionID === target) return
+          route.navigate({ type: "session", sessionID: target })
+        },
+      }
+    })
+
     const mcp = {
       isEnabled(name: string) {
         const status = sync.data.mcp[name]
@@ -393,6 +479,7 @@ export const { use: useLocal, provider: LocalProvider } = createSimpleContext({
     const result = {
       model,
       agent,
+      session,
       mcp,
     }
     return result

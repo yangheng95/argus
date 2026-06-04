@@ -33,7 +33,6 @@ import { DialogThemeList } from "@tui/component/dialog-theme-list"
 import { DialogHelp } from "./ui/dialog-help"
 import { CommandPaletteDialog } from "@tui/component/command-palette"
 import { DialogAgent } from "@tui/component/dialog-agent"
-import { DialogSessionList } from "@tui/component/dialog-session-list"
 import { ThemeProvider, useTheme } from "@tui/context/theme"
 import { Home } from "@tui/routes/home"
 import { Session } from "@tui/routes/session"
@@ -517,17 +516,6 @@ function App() {
         },
       },
     {
-      title: "Switch session",
-      name: "session.list",
-      category: "Session",
-      suggested: sync.data.session.length > 0,
-      slashName: "sessions",
-      slashAliases: ["resume", "continue"],
-      run: () => {
-        dialog.replace(() => <DialogSessionList />)
-      },
-    },
-    {
       title: "New session",
       suggested: route.data.type === "session",
       name: "session.new",
@@ -545,6 +533,15 @@ function App() {
         dialog.clear()
       },
     },
+    ...Array.from({ length: 9 }, (_, i) => ({
+      name: `session.quick_switch.${i + 1}`,
+      title: `Switch to session in quick slot ${i + 1}`,
+      category: "Session",
+      hidden: true,
+      run: () => {
+        local.session.quickSwitch(i + 1)
+      },
+    })),
     {
       title: "Switch model",
       name: "model.list",
