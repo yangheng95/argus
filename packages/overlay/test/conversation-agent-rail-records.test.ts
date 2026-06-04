@@ -119,3 +119,22 @@ test("hydrated agent records fall back to the latest message without a display m
   expect(conversationAgentStore.records[0]?.renderedCardID).toBe("build:session:ses_build:message:msg_latest")
   expect(conversationAgentStore.records[0]?.targetMessageID).toBe("msg_latest")
 })
+
+test("hydrated lifecycle-only agent records target the message-less session card", () => {
+  resetConversationAgentView()
+  hydrateConversationAgentView("task:tsk", {
+    sessions: [
+      {
+        sessionID: "ses_frontend_research_failed",
+        stage: "frontend-research",
+        messageIDs: [],
+        firstMessageTime: 100,
+        lastMessageTime: 110,
+        placement: "top_level",
+      },
+    ],
+  })
+
+  expect(conversationAgentStore.records[0]?.renderedCardID).toBe("frontend-research:session:ses_frontend_research_failed")
+  expect(conversationAgentStore.records[0]?.targetMessageID).toBe("")
+})

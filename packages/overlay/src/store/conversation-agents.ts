@@ -61,7 +61,7 @@ function renderedTargetForSession(
   }
   return messageID
     ? { renderedCardID: `${stage}:session:${session.sessionID}:message:${messageID}` }
-    : {};
+    : { renderedCardID: `${stage}:session:${session.sessionID}` };
 }
 
 function agentRecordFromSession(session: ConversationAgentSessionView): AgentWorkflowRecord | null {

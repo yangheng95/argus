@@ -21,6 +21,14 @@ export interface ConversationView {
   sessions: ConversationSessionView[]
 }
 
+interface ConversationLifecycleEvent {
+  type?: string
+  emittedAt?: number
+  timestamp?: number
+  payload?: Record<string, unknown>
+  properties?: Record<string, unknown>
+}
+
 function stageFromChannel(channel: unknown): string {
   const value = String(channel || "").trim()
   if (!value) {
@@ -66,7 +74,64 @@ export function conversationMessageHasDisplay(message: any): boolean {
   return Array.isArray(message?.parts) && message.parts.some(conversationPartHasDisplay)
 }
 
-export function projectConversationView(board: any, transcript: any[]): ConversationView {
+function eventProps(event: ConversationLifecycleEvent): Record<string, unknown> {
+  const properties = event?.properties
+  if (properties && typeof properties === "object" && !Array.isArray(properties)) return properties
+  const payload = event?.payload
+  if (payload && typeof payload === "object" && !Array.isArray(payload)) return payload
+  return {}
+}
+
+function eventTime(event: ConversationLifecycleEvent): number {
+  const emittedAt = Number(event?.emittedAt || 0)
+  if (emittedAt > 0) return emittedAt
+  const timestamp = Number(event?.timestamp || 0)
+  if (timestamp > 0) return timestamp
+  return 0
+}
+
+function upsertLifecycleEventSession(
+  board: any,
+  bySession: Map<string, ConversationSessionView>,
+  event: ConversationLifecycleEvent,
+): void {
+  if (String(event?.type || "") !== "session.status" && String(event?.type || "") !== "session.error") return
+  const props = eventProps(event)
+  const sessionID = String(props.sessionID || "")
+  const stage = stageFromChannel(props.channel)
+  if (!sessionID || stage === "filtered") return
+  const time = eventTime(event)
+  if (!(time > 0)) {
+    throw new Error(`projectConversationView: lifecycle event for ${sessionID} missing emitted time`)
+  }
+  const parentSessionID = String(props.parentSessionID || "")
+  const goalID = String(props.goalID || "")
+  const existing = bySession.get(sessionID)
+  if (existing) {
+    if (!existing.parentSessionID && parentSessionID) existing.parentSessionID = parentSessionID
+    if (!existing.goalID && goalID) existing.goalID = goalID
+    existing.firstMessageTime = Math.min(existing.firstMessageTime, time)
+    existing.lastMessageTime = Math.max(existing.lastMessageTime, time)
+    return
+  }
+  bySession.set(sessionID, {
+    sessionID,
+    stage,
+    parentSessionID: parentSessionID || undefined,
+    goalID: goalID || undefined,
+    messageIDs: [],
+    firstMessageTime: time,
+    lastMessageTime: time,
+    placement: placementOf(board, stage, goalID),
+    phase: phaseLocation(board, stage),
+  })
+}
+
+export function projectConversationView(
+  board: any,
+  transcript: any[],
+  lifecycleEvents: ConversationLifecycleEvent[] = [],
+): ConversationView {
   const sorted = [...(Array.isArray(transcript) ? transcript : [])].sort(
     (left, right) =>
       Number(left?.info?.time?.created || 0) - Number(right?.info?.time?.created || 0),
@@ -110,6 +175,9 @@ export function projectConversationView(board: any, transcript: any[]): Conversa
       placement: placementOf(board, stage, goalID),
       phase,
     })
+  }
+  for (const event of lifecycleEvents) {
+    upsertLifecycleEventSession(board, bySession, event)
   }
 
   const sessions = [...bySession.values()].sort(

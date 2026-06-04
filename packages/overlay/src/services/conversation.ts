@@ -391,6 +391,7 @@ export async function mergeLatestConversationTail(
     const board = requireObject(data?.board, "board");
     const transcript = requireArray(data?.transcript, "transcript");
     const timeline = requireArray(data?.timeline, "timeline");
+    const events = requireArray(data?.events, "events");
     const view = requireObject(data?.view, "view");
     const agentView = requireObject(data?.agentView ?? data?.view, "agentView");
     const messageWatermark = parseMessageWatermark(data?.messageWatermark);
@@ -401,6 +402,9 @@ export async function mergeLatestConversationTail(
     hydrateConversationView(view, mergeLoadedConversationMessages(timeline, transcript));
     hydrateConversationAgentView(selectedTaskID, agentView);
     markSelectedMessageWatermark(messageWatermark);
+    for (const event of events) {
+      replayTaskEventToTree(event);
+    }
   } finally {
     if (tailMergeAbort === controller) tailMergeAbort = null;
   }

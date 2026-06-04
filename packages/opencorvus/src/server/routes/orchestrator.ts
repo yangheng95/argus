@@ -645,9 +645,9 @@ export const EngineRoutes = lazy(() =>
             ? historyWindow.history.oldestTimestamp
             : null,
         })
-        const view = projectConversationView(board, historyWindow.transcript)
+        const view = projectConversationView(board, historyWindow.transcript, eventPage.events)
         const agentView = historyWindow.history.hasMore
-          ? projectConversationView(board, filteredTranscript)
+          ? projectConversationView(board, filteredTranscript, eventPage.events)
           : view
         return c.json({
           lastSequence: latestSequence,
