@@ -1,5 +1,9 @@
 # Right Sidebar Coding Assistant
 
+Status: superseded by `specs/new-arch/right-sidebar-opencode-tui-upgrade-2026-06-04.md`.
+
+This document is retained only as historical context. Its recommendation to avoid embedding OpenTUI in the web right sidebar is no longer valid after the 2026-06-04 upstream opencode comparison and user correction that forbids hand-written assistant UI. The active direction is to replace the hand-written browser transcript/composer with an embedded terminal/TUI host that runs the canonical OpenTUI app, upgrades to the current opencode OpenTUI stack, and adopts upstream keymap/plugin-slot patterns.
+
 Date: 2026-06-04
 
 ## Decision

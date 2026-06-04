@@ -9221,6 +9221,44 @@ export type TaskGetResponses = {
 
 export type TaskGetResponse = TaskGetResponses[keyof TaskGetResponses]
 
+export type TaskProjectArchiveData = {
+  body?: never
+  path: {
+    taskID: string
+  }
+  query?: {
+    /**
+     * Project directory for project-scoped routes. Equivalent to the x-opencorvus-directory request header.
+     */
+    directory?: string
+  }
+  url: "/task/{taskID}/project-archive"
+}
+
+export type TaskProjectArchiveErrors = {
+  /**
+   * Not found
+   */
+  404: NotFoundError
+  /**
+   * Task project is not a Git worktree
+   */
+  422: {
+    message: string
+  }
+}
+
+export type TaskProjectArchiveError = TaskProjectArchiveErrors[keyof TaskProjectArchiveErrors]
+
+export type TaskProjectArchiveResponses = {
+  /**
+   * ZIP archive
+   */
+  200: Blob | File
+}
+
+export type TaskProjectArchiveResponse = TaskProjectArchiveResponses[keyof TaskProjectArchiveResponses]
+
 export type TaskBindingsData = {
   body?: never
   path: {
@@ -13229,6 +13267,39 @@ export type CommandListResponses = {
 
 export type CommandListResponse = CommandListResponses[keyof CommandListResponses]
 
+export type LogReadData = {
+  body?: never
+  path?: never
+  query?: {
+    file?: string
+    n?: number
+  }
+  url: "/log"
+}
+
+export type LogReadErrors = {
+  /**
+   * Bad request
+   */
+  400: BadRequestError
+}
+
+export type LogReadError = LogReadErrors[keyof LogReadErrors]
+
+export type LogReadResponses = {
+  /**
+   * Log lines
+   */
+  200: {
+    directory: string
+    path: string
+    file: string
+    lines: Array<string>
+  }
+}
+
+export type LogReadResponse = LogReadResponses[keyof LogReadResponses]
+
 export type AppLogData = {
   body?: {
     /**
@@ -13273,6 +13344,32 @@ export type AppLogResponses = {
 
 export type AppLogResponse = AppLogResponses[keyof AppLogResponses]
 
+export type LogFilesData = {
+  body?: never
+  path?: never
+  query?: never
+  url: "/log/files"
+}
+
+export type LogFilesResponses = {
+  /**
+   * Log files
+   */
+  200: {
+    directory: string
+    current: string
+    files: Array<{
+      name: string
+      path: string
+      size: number
+      modified: string
+      current: boolean
+    }>
+  }
+}
+
+export type LogFilesResponse = LogFilesResponses[keyof LogFilesResponses]
+
 export type LogTailData = {
   body?: never
   path?: never
@@ -13288,7 +13385,9 @@ export type LogTailResponses = {
    * Log lines
    */
   200: {
+    directory: string
     path: string
+    file: string
     lines: Array<string>
   }
 }

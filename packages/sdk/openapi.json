@@ -15867,6 +15867,79 @@
         ]
       }
     },
+    "/task/{taskID}/project-archive": {
+      "get": {
+        "operationId": "task.projectArchive",
+        "summary": "Download task project archive",
+        "description": "Return a ZIP containing the task project's Git-included files plus the task execution flow exported from OpenCorvus task projections.",
+        "responses": {
+          "200": {
+            "description": "ZIP archive",
+            "content": {
+              "application/zip": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/NotFoundError"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Task project is not a Git worktree",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "message": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "message"
+                  ]
+                }
+              }
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "directory",
+            "in": "query",
+            "required": false,
+            "description": "Project directory for project-scoped routes. Equivalent to the x-opencorvus-directory request header.",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "taskID",
+            "schema": {
+              "type": "string",
+              "pattern": "^tsk.*"
+            },
+            "required": true
+          }
+        ],
+        "x-codeSamples": [
+          {
+            "lang": "js",
+            "source": "import { createOpenCorvusClient } from \"@opencorvus-ai/sdk\"\n\nconst client = createOpenCorvusClient()\nawait client.task.projectArchive({\n  ...\n})"
+          }
+        ]
+      }
+    },
     "/task/{taskID}/bindings": {
       "get": {
         "operationId": "task.bindings",
@@ -28250,6 +28323,150 @@
             "source": "import { createOpenCorvusClient } from \"@opencorvus-ai/sdk\"\n\nconst client = createOpenCorvusClient()\nawait client.app.log({\n  ...\n})"
           }
         ]
+      },
+      "get": {
+        "operationId": "log.read",
+        "summary": "Read logs",
+        "description": "Read the last N lines from the current or named server log file in the unified log directory.",
+        "responses": {
+          "200": {
+            "description": "Log lines",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "directory": {
+                      "type": "string"
+                    },
+                    "path": {
+                      "type": "string"
+                    },
+                    "file": {
+                      "type": "string"
+                    },
+                    "lines": {
+                      "type": "array",
+                      "items": {
+                        "type": "string"
+                      }
+                    }
+                  },
+                  "required": [
+                    "directory",
+                    "path",
+                    "file",
+                    "lines"
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BadRequestError"
+                }
+              }
+            }
+          }
+        },
+        "parameters": [
+          {
+            "in": "query",
+            "name": "file",
+            "schema": {
+              "type": "string",
+              "pattern": "^[^/\\\\:]+\\.log$"
+            }
+          },
+          {
+            "in": "query",
+            "name": "n",
+            "schema": {
+              "default": 500,
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 5000
+            }
+          }
+        ],
+        "x-codeSamples": [
+          {
+            "lang": "js",
+            "source": "import { createOpenCorvusClient } from \"@opencorvus-ai/sdk\"\n\nconst client = createOpenCorvusClient()\nawait client.log.read({\n  ...\n})"
+          }
+        ]
+      }
+    },
+    "/log/files": {
+      "get": {
+        "operationId": "log.files",
+        "summary": "List log files",
+        "description": "List server log files from the unified log directory.",
+        "responses": {
+          "200": {
+            "description": "Log files",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "directory": {
+                      "type": "string"
+                    },
+                    "current": {
+                      "type": "string"
+                    },
+                    "files": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "name": {
+                            "type": "string"
+                          },
+                          "path": {
+                            "type": "string"
+                          },
+                          "size": {
+                            "type": "number"
+                          },
+                          "modified": {
+                            "type": "string"
+                          },
+                          "current": {
+                            "type": "boolean"
+                          }
+                        },
+                        "required": [
+                          "name",
+                          "path",
+                          "size",
+                          "modified",
+                          "current"
+                        ]
+                      }
+                    }
+                  },
+                  "required": [
+                    "directory",
+                    "current",
+                    "files"
+                  ]
+                }
+              }
+            }
+          }
+        },
+        "x-codeSamples": [
+          {
+            "lang": "js",
+            "source": "import { createOpenCorvusClient } from \"@opencorvus-ai/sdk\"\n\nconst client = createOpenCorvusClient()\nawait client.log.files({\n  ...\n})"
+          }
+        ]
       }
     },
     "/log/tail": {
@@ -28265,7 +28482,13 @@
                 "schema": {
                   "type": "object",
                   "properties": {
+                    "directory": {
+                      "type": "string"
+                    },
                     "path": {
+                      "type": "string"
+                    },
+                    "file": {
                       "type": "string"
                     },
                     "lines": {
@@ -28276,7 +28499,9 @@
                     }
                   },
                   "required": [
+                    "directory",
                     "path",
+                    "file",
                     "lines"
                   ]
                 }

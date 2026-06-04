@@ -9,12 +9,14 @@ test("TaskList sidebar controls route through the Button primitive", () => {
   expect(TASK_LIST_SOURCE).toMatch(/import \{ Button \} from "\.\/ui\/Button"/);
   expect(TASK_LIST_SOURCE).toContain('data-ui="task-row-delete"');
   expect(TASK_LIST_SOURCE).toContain('data-ui="task-row-cancel"');
+  expect(TASK_LIST_SOURCE).toContain('data-ui="task-row-download"');
   expect(TASK_LIST_SOURCE).toContain('data-ui="task-row-start-now"');
   expect(TASK_LIST_SOURCE).toContain('data-ui="task-list-search-clear"');
   expect(TASK_LIST_SOURCE).toContain('data-ui="task-list-error-retry"');
   expect(TASK_LIST_SOURCE).not.toContain('class="task-row-delete"');
   expect(TASK_LIST_SOURCE).not.toContain('class="task-row-cancel"');
   expect(TASK_LIST_SOURCE).not.toContain('class="task-row-export"');
+  expect(TASK_LIST_SOURCE).not.toContain('class="task-row-download"');
   expect(TASK_LIST_SOURCE).not.toContain('class="task-row-start-now"');
   expect(TASK_LIST_SOURCE).not.toContain('class="task-list-import-button"');
   expect(TASK_LIST_SOURCE).not.toContain('class="task-list-search-clear"');
@@ -32,6 +34,7 @@ test("TaskList no longer exposes task archive import or export actions", () => {
   expect(TASK_LIST_SOURCE).not.toContain("task-archive:");
   expect(SIDEBAR_CSS).not.toContain("task-row-export");
   expect(SIDEBAR_CSS).not.toContain("task-list-import");
+  expect(SIDEBAR_CSS).toContain('data-ui="task-row-download"');
   expect(TASK_LIST_SOURCE).not.toContain("window.alert(");
 });
 

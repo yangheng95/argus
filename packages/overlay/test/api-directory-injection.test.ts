@@ -70,6 +70,7 @@ describe("apiUrl directory injection (W2-V31)", () => {
 
   describe("control-plane routes (no-inject)", () => {
     test("log", () => expectDoesNotInject("log"));
+    test("log files", () => expectDoesNotInject("log/files"));
     test("log tail", () => expectDoesNotInject("log/tail"));
     test("shutdown", () => expectDoesNotInject("shutdown"));
     test("restart", () => expectDoesNotInject("restart"));

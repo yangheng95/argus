@@ -42,6 +42,28 @@ import { AppDocumentation } from "./documentation"
 import { serverErrorResponse } from "../error-handler"
 
 const log = Log.create({ service: "server" })
+const LogReadResponse = z.object({
+  directory: z.string(),
+  path: z.string(),
+  file: z.string(),
+  lines: z.string().array(),
+})
+const LogFileInfo = z.object({
+  name: z.string(),
+  path: z.string(),
+  size: z.number(),
+  modified: z.string(),
+  current: z.boolean(),
+})
+const LogFilesResponse = z.object({
+  directory: z.string(),
+  current: z.string(),
+  files: LogFileInfo.array(),
+})
+const LogReadQuery = z.object({
+  file: Log.FileName.optional(),
+  n: z.coerce.number().int().min(1).max(5000).default(500),
+})
 
 export function AppRoutes(root: Hono) {
   return new Hono()
@@ -302,6 +324,55 @@ export function AppRoutes(root: Hono) {
       },
     )
     .get(
+      "/log",
+      describeRoute({
+        summary: "Read logs",
+        description: "Read the last N lines from the current or named server log file in the unified log directory.",
+        operationId: "log.read",
+        responses: {
+          200: {
+            description: "Log lines",
+            content: {
+              "application/json": {
+                schema: resolver(LogReadResponse),
+              },
+            },
+          },
+          ...errors(400),
+        },
+      }),
+      validator("query", LogReadQuery),
+      async (c) => {
+        const query = c.req.valid("query")
+        return c.json(await Log.read({ file: query.file, lines: query.n }))
+      },
+    )
+    .get(
+      "/log/files",
+      describeRoute({
+        summary: "List log files",
+        description: "List server log files from the unified log directory.",
+        operationId: "log.files",
+        responses: {
+          200: {
+            description: "Log files",
+            content: {
+              "application/json": {
+                schema: resolver(LogFilesResponse),
+              },
+            },
+          },
+        },
+      }),
+      async (c) => {
+        return c.json({
+          directory: Log.directory(),
+          current: Log.file(),
+          files: await Log.files(),
+        })
+      },
+    )
+    .get(
       "/log/tail",
       describeRoute({
         summary: "Read recent logs",
@@ -312,12 +383,7 @@ export function AppRoutes(root: Hono) {
             description: "Log lines",
             content: {
               "application/json": {
-                schema: resolver(
-                  z.object({
-                    path: z.string(),
-                    lines: z.string().array(),
-                  }),
-                ),
+                schema: resolver(LogReadResponse),
               },
             },
           },
@@ -332,18 +398,7 @@ export function AppRoutes(root: Hono) {
       ),
       async (c) => {
         const n = c.req.valid("query").n
-        const logFile = Log.file()
-        if (!logFile) {
-          return c.json({ path: "", lines: [] })
-        }
-        try {
-          const content = await Bun.file(logFile).text()
-          const all = content.split("\n")
-          const lines = all.slice(-n).filter((line) => line.length > 0)
-          return c.json({ path: logFile, lines })
-        } catch {
-          return c.json({ path: logFile, lines: [] })
-        }
+        return c.json(await Log.read({ lines: n }))
       },
     )
     .get(

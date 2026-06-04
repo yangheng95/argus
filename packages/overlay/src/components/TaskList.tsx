@@ -14,6 +14,7 @@ import {
 } from "./taskTree";
 import { settingsStore } from "../store/settings";
 import { reorderTaskQueue, startQueuedTaskNow } from "../services/task-queue";
+import { downloadTaskProjectArchive } from "../services/task";
 import { notifyError, notifySuccess, notifyWarning, taskHasUnreadNotification, formatErrorDetails } from "../services/notify";
 import { useArmedConfirm } from "../solid/armed-confirm";
 import { t } from "../utils/i18n";
@@ -238,6 +239,30 @@ function StartNowButton(props: { id: string; busy?: boolean; onStartNow: (id: st
   );
 }
 
+function DownloadProjectButton(props: { id: string; busy?: boolean; onDownload: (id: string) => void }) {
+  return (
+    <Button
+      type="button"
+      variant="ghost"
+      size="icon"
+      tone="neutral"
+      data-chrome="icon-action"
+      data-ui="task-row-download"
+      data-task-download={props.id}
+      data-busy={props.busy ? "true" : undefined}
+      disabled={props.busy}
+      title={t("task.download_project_button_title")}
+      aria-label={t("task.download_project_button_title")}
+      onClick={(e) => {
+        e.stopPropagation();
+        props.onDownload(props.id);
+      }}
+    >
+      <Icon name="download" size={11} />
+    </Button>
+  );
+}
+
 // ── TaskRow ──
 
 const INTERRUPTABLE_TASK_STATUSES = new Set(["queued", "active"]);
@@ -254,8 +279,10 @@ function TaskRow(props: {
   onDeleteTask?: (id: string) => void;
   onCancelTask?: (id: string) => void;
   onStartNow?: (id: string) => void;
+  onDownloadProject?: (id: string) => void;
   onRenameTask?: (id: string, title: string) => void | Promise<void>;
   startNowBusyID?: string;
+  downloadBusyID?: string;
   canDrag?: boolean;
   dragging?: boolean;
   dragOver?: boolean;
@@ -291,11 +318,13 @@ function TaskRow(props: {
     !pending() && !!id() && !!props.onCancelTask && INTERRUPTABLE_TASK_STATUSES.has(status());
   const canStartNow = () =>
     !pending() && !!id() && !!props.onStartNow && status() === "queued";
+  const canDownload = () =>
+    !pending() && !!id() && !!props.onDownloadProject;
   const canDelete = () =>
     !pending() && !!id() && !!props.onDeleteTask;
   const canRename = () =>
     !pending() && !!id() && !!props.onRenameTask;
-  const hasActions = () => canStartNow() || canCancel() || canDelete() || canRename();
+  const hasActions = () => canStartNow() || canDownload() || canCancel() || canDelete() || canRename();
   // Drag is disabled on any nested row (depth > 0). The drop handler at
   // handleDrop() reorders within a single directory's queue, computed from
   // the directory group's top-level items; nested children — whether
@@ -527,6 +556,13 @@ function TaskRow(props: {
             <Show when={canCancel()}>
               <CancelButton id={id()} onCancel={props.onCancelTask!} />
             </Show>
+            <Show when={canDownload()}>
+              <DownloadProjectButton
+                id={id()}
+                busy={props.downloadBusyID === id()}
+                onDownload={props.onDownloadProject!}
+              />
+            </Show>
             <Show when={canRename() && !editing()}>
               <RenameButton id={id()} onClick={beginRename} />
             </Show>
@@ -550,8 +586,10 @@ function TaskSection(props: {
   onDeleteTask?: (id: string) => void;
   onCancelTask?: (id: string) => void;
   onStartNow?: (id: string) => void;
+  onDownloadProject?: (id: string) => void;
   onRenameTask?: (id: string, title: string) => void | Promise<void>;
   startNowBusyID?: string;
+  downloadBusyID?: string;
   draggingID?: string;
   dragOverID?: string;
   canReorder?: boolean;
@@ -575,8 +613,10 @@ function TaskSection(props: {
                 onDeleteTask={props.onDeleteTask}
                 onCancelTask={props.onCancelTask}
                 onStartNow={props.onStartNow}
+                onDownloadProject={props.onDownloadProject}
                 onRenameTask={props.onRenameTask}
                 startNowBusyID={props.startNowBusyID}
+                downloadBusyID={props.downloadBusyID}
                 canDrag={props.canReorder}
                 dragging={props.draggingID === (entry.item?.task?.id || "")}
                 dragOver={props.dragOverID === (entry.item?.task?.id || "")}
@@ -761,6 +801,7 @@ export function TaskList(props: TaskListProps) {
 
   const [retrying, setRetrying] = createSignal(false);
   const [startNowBusyID, setStartNowBusyID] = createSignal("");
+  const [downloadBusyID, setDownloadBusyID] = createSignal("");
 
   function queuedItems(directory: string): any[] {
     const group = grouped().find((item) => item.directory === directory);
@@ -835,6 +876,38 @@ export function TaskList(props: TaskListProps) {
       await loadTasks().catch(() => undefined);
     } finally {
       setStartNowBusyID("");
+    }
+  }
+
+  async function handleDownloadProject(taskID: string) {
+    if (downloadBusyID()) return;
+    setDownloadBusyID(taskID);
+    const noticeID = `task:download-project:${taskID}`;
+    try {
+      const ok = await downloadTaskProjectArchive(taskID);
+      if (ok) {
+        const taskTitle = allItems().find((item) => item?.task?.id === taskID)?.task?.title || taskID;
+        notifySuccess({
+          id: noticeID,
+          title: t("task.download_project_started_title"),
+          message: taskTitle,
+        });
+      } else {
+        notifyError({
+          id: noticeID,
+          title: t("task.download_project_failed_title"),
+          message: t("task.download_project_failed", { error: taskID }),
+        });
+      }
+    } catch (err) {
+      notifyError({
+        id: noticeID,
+        title: t("task.download_project_failed_title"),
+        message: t("task.download_project_failed", { error: err instanceof Error ? err.message : String(err) }),
+        details: formatErrorDetails(err),
+      });
+    } finally {
+      setDownloadBusyID("");
     }
   }
 
@@ -957,7 +1030,9 @@ export function TaskList(props: TaskListProps) {
                       onCancelTask={props.onCancelTask}
                       onRenameTask={props.onRenameTask}
                       onStartNow={handleStartNow}
+                      onDownloadProject={handleDownloadProject}
                       startNowBusyID={startNowBusyID()}
+                      downloadBusyID={downloadBusyID()}
                       canReorder={
                         group.items.filter((item) => item?.task?.status === "queued" && !item?._pending).length > 1
                       }

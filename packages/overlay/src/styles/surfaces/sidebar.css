@@ -131,7 +131,7 @@
    active background) still live in styles.css until the action button
    chrome is reworked, but the resting shell is the canonical here. */
 .task-row-mini {
-  --task-row-actions-width: calc(64px * var(--ui-scale));
+  --task-row-actions-width: calc(108px * var(--ui-scale));
 
   display: grid;
   grid-template-columns: calc(20px * var(--ui-scale)) 0 minmax(0, 1fr) max-content;
@@ -548,6 +548,7 @@
 .task-row-actions .oc-button[data-ui="task-row-delete"],
 .task-row-actions .oc-button[data-ui="task-row-cancel"],
 .task-row-actions .oc-button[data-ui="task-row-rename"],
+.task-row-actions .oc-button[data-ui="task-row-download"],
 .task-row-actions .oc-button[data-ui="task-row-start-now"] {
   --oc-button-height: calc(22px * var(--ui-scale));
   --oc-button-padding-x: 0;
@@ -579,6 +580,8 @@
 .task-row-mini:focus-within .oc-button[data-ui="task-row-cancel"],
 .task-row-mini:hover .oc-button[data-ui="task-row-rename"],
 .task-row-mini:focus-within .oc-button[data-ui="task-row-rename"],
+.task-row-mini:hover .oc-button[data-ui="task-row-download"],
+.task-row-mini:focus-within .oc-button[data-ui="task-row-download"],
 .task-row-mini:hover .oc-button[data-ui="task-row-start-now"],
 .task-row-mini:focus-within .oc-button[data-ui="task-row-start-now"] {
   opacity: var(--ui-opacity-full);
@@ -598,6 +601,18 @@
 }
 
 .task-row-actions .oc-button[data-ui="task-row-start-now"][data-busy="true"] {
+  opacity: var(--ui-opacity-subtle);
+  cursor: progress;
+}
+
+.task-row-actions .oc-button[data-ui="task-row-download"]:hover,
+.task-row-actions .oc-button[data-ui="task-row-download"]:focus-visible {
+  opacity: var(--ui-opacity-full);
+  --oc-button-bg: color-mix(in srgb, var(--text-soft) 10%, transparent);
+  --oc-button-color: var(--text);
+}
+
+.task-row-actions .oc-button[data-ui="task-row-download"][data-busy="true"] {
   opacity: var(--ui-opacity-subtle);
   cursor: progress;
 }
@@ -690,7 +705,8 @@
 
 .task-row-main:focus-visible,
 .task-row-actions .oc-button[data-ui="task-row-delete"]:focus-visible,
-.task-row-actions .oc-button[data-ui="task-row-cancel"]:focus-visible {
+.task-row-actions .oc-button[data-ui="task-row-cancel"]:focus-visible,
+.task-row-actions .oc-button[data-ui="task-row-download"]:focus-visible {
   outline: var(--oc-border-width) solid var(--accent);
   outline-offset: calc(1px * var(--ui-scale));
 }

@@ -19,7 +19,7 @@ Log.init({ print: false })
  * Fix: throw `DirectoryRequiredError` (NamedError → 400) when the
  * directory query/header is absent on a project-scoped route.
  *
- * Control-plane routes (/log, /shutdown, /restart) and the cross-project
+ * Control-plane routes (/log, /log/*, /shutdown, /restart) and the cross-project
  * mounts (/global/*, /auth/*) must continue to work without ?directory=.
  */
 describe("project-scope middleware: directory required", () => {
@@ -50,6 +50,22 @@ describe("project-scope middleware: directory required", () => {
     expect(response.status).toBe(503)
     const body = (await response.json()) as { ok: boolean }
     expect(body.ok).toBe(false)
+  })
+
+  test("control-plane log read routes work without ?directory=", async () => {
+    const app = Server.App()
+
+    const read = await app.request("/log", { method: "GET" })
+    expect(read.status).toBe(200)
+    const readBody = await read.json() as { directory: string; lines: string[] }
+    expect(readBody.directory).toBe(Log.directory())
+    expect(Array.isArray(readBody.lines)).toBe(true)
+
+    const files = await app.request("/log/files", { method: "GET" })
+    expect(files.status).toBe(200)
+    const filesBody = await files.json() as { directory: string; files: unknown[] }
+    expect(filesBody.directory).toBe(Log.directory())
+    expect(Array.isArray(filesBody.files)).toBe(true)
   })
 
   test("cross-project GET /global/health works without ?directory=", async () => {

@@ -45,6 +45,7 @@ import { ChannelIngress } from "@/channel/ingress"
 import { Identifier } from "@/id/id"
 import { Session } from "@/session"
 import { Message } from "@/session/message"
+import { buildTaskProjectArchive, TaskProjectArchiveUnsupportedProjectError } from "@/engine/task-project-archive"
 import { errors, replyRouteErrors } from "../error"
 import { lazy } from "../../util/lazy"
 import { Log } from "@/util/log"
@@ -63,6 +64,10 @@ export const TaskListEvent = z.object({
   sequence: z.number(),
   notify: BusEvent.NotifyDescriptorSchema.optional(),
   notificationDetails: z.string().optional(),
+})
+
+const TaskProjectArchiveUnsupportedProjectResponse = z.object({
+  message: z.string(),
 })
 
 const ConversationEventPageQuery = z.object({
@@ -364,6 +369,58 @@ export const EngineRoutes = lazy(() =>
       validator("param", z.object({ taskID: Task.shape.id })),
       async (c) => {
         return c.json(await EngineService.getTask(c.req.valid("param").taskID))
+      },
+    )
+    .get(
+      "/task/:taskID/project-archive",
+      describeRoute({
+        summary: "Download task project archive",
+        description:
+          "Return a ZIP containing the task project's Git-included files plus the task execution flow exported from OpenCorvus task projections.",
+        operationId: "task.projectArchive",
+        responses: {
+          200: {
+            description: "ZIP archive",
+            content: {
+              "application/zip": {
+                schema: resolver(z.string()),
+              },
+            },
+          },
+          422: {
+            description: "Task project is not a Git worktree",
+            content: {
+              "application/json": {
+                schema: resolver(TaskProjectArchiveUnsupportedProjectResponse),
+              },
+            },
+          },
+          ...errors(404),
+        },
+      }),
+      validator("param", z.object({ taskID: Task.shape.id })),
+      async (c) => {
+        const taskID = c.req.valid("param").taskID
+        try {
+          const archive = await buildTaskProjectArchive({
+            taskID,
+            transcript: await loadTaskTranscript(taskID),
+          })
+          return new Response(archive.bytes, {
+            status: 200,
+            headers: {
+              "content-type": "application/zip",
+              "content-disposition": `attachment; filename="${archive.filename}"`,
+              "content-length": String(archive.bytes.byteLength),
+              "x-opencorvus-archive-file-count": String(archive.fileCount),
+            },
+          })
+        } catch (error) {
+          if (error instanceof TaskProjectArchiveUnsupportedProjectError) {
+            return c.json({ message: error.message }, 422)
+          }
+          throw error
+        }
       },
     )
     .get(

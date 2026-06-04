@@ -97,6 +97,9 @@ import type {
   InteractionRejectResponses,
   InteractionReplyErrors,
   InteractionReplyResponses,
+  LogFilesResponses,
+  LogReadErrors,
+  LogReadResponses,
   LogTailResponses,
   LspStatusResponses,
   McpAddErrors,
@@ -270,6 +273,8 @@ import type {
   TaskMessageResponses,
   TaskProgressErrors,
   TaskProgressResponses,
+  TaskProjectArchiveErrors,
+  TaskProjectArchiveResponses,
   TaskQueueReorderErrors,
   TaskQueueReorderResponses,
   TaskQueueStartNowErrors,
@@ -5786,6 +5791,36 @@ export class Task extends HeyApiClient {
   }
 
   /**
+   * Download task project archive
+   *
+   * Return a ZIP containing the task project's Git-included files plus the task execution flow exported from OpenCorvus task projections.
+   */
+  public projectArchive<ThrowOnError extends boolean = false>(
+    parameters: {
+      taskID: string
+      directory?: string
+    },
+    options?: Options<never, ThrowOnError>,
+  ) {
+    const params = buildClientParams(
+      [parameters],
+      [
+        {
+          args: [
+            { in: "path", key: "taskID" },
+            { in: "query", key: "directory" },
+          ],
+        },
+      ],
+    )
+    return (options?.client ?? this.client).get<TaskProjectArchiveResponses, TaskProjectArchiveErrors, ThrowOnError>({
+      url: "/task/{taskID}/project-archive",
+      ...options,
+      ...params,
+    })
+  }
+
+  /**
    * List channel bindings for a task
    *
    * Return every (platform, channel, thread) binding that points at this task. Used by the Mission page to surface inbound channel provenance for a selected task.
@@ -8036,6 +8071,48 @@ export class Command extends HeyApiClient {
 }
 
 export class Log extends HeyApiClient {
+  /**
+   * Read logs
+   *
+   * Read the last N lines from the current or named server log file in the unified log directory.
+   */
+  public read<ThrowOnError extends boolean = false>(
+    parameters?: {
+      file?: string
+      n?: number
+    },
+    options?: Options<never, ThrowOnError>,
+  ) {
+    const params = buildClientParams(
+      [parameters],
+      [
+        {
+          args: [
+            { in: "query", key: "file" },
+            { in: "query", key: "n" },
+          ],
+        },
+      ],
+    )
+    return (options?.client ?? this.client).get<LogReadResponses, LogReadErrors, ThrowOnError>({
+      url: "/log",
+      ...options,
+      ...params,
+    })
+  }
+
+  /**
+   * List log files
+   *
+   * List server log files from the unified log directory.
+   */
+  public files<ThrowOnError extends boolean = false>(options?: Options<never, ThrowOnError>) {
+    return (options?.client ?? this.client).get<LogFilesResponses, unknown, ThrowOnError>({
+      url: "/log/files",
+      ...options,
+    })
+  }
+
   /**
    * Read recent logs
    *

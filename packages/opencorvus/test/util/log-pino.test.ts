@@ -1,9 +1,11 @@
 import { expect, test } from "bun:test"
 import { readFileSync } from "node:fs"
+import path from "node:path"
 import { Log } from "../../src/util/log"
 
 test("Log writes Pino JSONL with structured error and timer fields", async () => {
   await Log.init({ print: false, dev: true, level: "DEBUG" })
+  expect(Log.file()).toBe(path.join(Log.directory(), "dev.log"))
   const log = Log.create({ service: "log-pino-test" })
   const cause = new Error("inner failure")
   const error = new Error("outer failure", { cause })

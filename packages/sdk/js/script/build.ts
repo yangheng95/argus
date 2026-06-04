@@ -57,6 +57,36 @@ async function writeFileWithRetry(file: string, contents: string) {
   }
 }
 
+async function waitForGeneratedClient() {
+  const checks = [
+    {
+      file: path.join(dir, "src", "gen", "client", "index.ts"),
+      text: "ClientOptions",
+    },
+    {
+      file: path.join(dir, "src", "gen", "client", "types.gen.ts"),
+      text: "export interface Config",
+    },
+    {
+      file: path.join(dir, "src", "gen", "sdk.gen.ts"),
+      text: "export class OpencodeClient",
+    },
+  ]
+
+  for (let attempt = 1; attempt <= 50; attempt++) {
+    const ready = await Promise.all(
+      checks.map(async (check) => {
+        const content = await fs.readFile(check.file, "utf8").catch(() => "")
+        return content.includes(check.text)
+      }),
+    )
+    if (ready.every(Boolean)) return
+    await Bun.sleep(100)
+  }
+
+  throw new Error("SDK generation did not materialize the expected client exports")
+}
+
 await writeFileWithRetry(
   path.join(dir, "src", "defaults.ts"),
   `// Auto-generated from packages/opencorvus/server-defaults.json by script/build.ts.\n` +
@@ -128,6 +158,7 @@ const generate = async (output: string) =>
   })
 
 await generate("./src/gen")
+await waitForGeneratedClient()
 
 for (let attempt = 1; attempt <= 5; attempt++) {
   try {
