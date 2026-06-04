@@ -243,7 +243,7 @@ export namespace Server {
         })
         .all("*", async (c) => {
           const projectApp = await loadProjectRoutesApp(app)
-          return projectApp.fetch(c.req.raw)
+          return projectApp.fetch(c.req.raw, c.env)
         }) as unknown as Hono,
   )
 

@@ -1,4 +1,4 @@
-import { apiJson } from "./api"
+import { apiJson, apiWebSocketUrl } from "./api"
 
 export interface TuiHostInfo {
   id: string | null
@@ -17,11 +17,9 @@ export interface TuiHostSnapshot extends TuiHostInfo {
   buffer: string
 }
 
-export interface TuiHostOutput extends TuiHostInfo {
-  data: string
-  cursor: number
-  from: number
-  truncated: boolean
+export interface TuiHostConnectToken {
+  ticket: string
+  expires_in: number
 }
 
 export interface StartTuiHostInput {
@@ -45,17 +43,18 @@ export async function loadTuiHostSnapshot(): Promise<TuiHostSnapshot> {
   return await apiJson("tui/host/snapshot")
 }
 
-export async function loadTuiHostOutput(cursor?: number): Promise<TuiHostOutput> {
-  const query = typeof cursor === "number" ? `?cursor=${encodeURIComponent(String(cursor))}` : ""
-  return await apiJson(`tui/host/output${query}`)
+export async function createTuiHostConnectToken(): Promise<TuiHostConnectToken> {
+  return await apiJson("tui/host/connect-token", {
+    method: "POST",
+    headers: { "x-opencode-ticket": "1" },
+  })
 }
 
-export async function sendTuiHostInput(data: string): Promise<boolean> {
-  return await apiJson("tui/host/input", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ data }),
-  })
+export function buildTuiHostConnectUrl(input: { ticket: string; cursor?: number }): string {
+  const params = new URLSearchParams()
+  params.set("ticket", input.ticket)
+  if (typeof input.cursor === "number") params.set("cursor", String(input.cursor))
+  return apiWebSocketUrl(`tui/host/connect?${params.toString()}`)
 }
 
 export async function resizeTuiHost(input: { cols: number; rows: number }): Promise<TuiHostInfo> {

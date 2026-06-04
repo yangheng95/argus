@@ -1,5 +1,6 @@
 import { Hono, type Context } from "hono"
 import { HTTPException } from "hono/http-exception"
+import { upgradeWebSocket } from "hono/bun"
 import { describeRoute, validator, resolver } from "hono-openapi"
 import z from "zod"
 import { Bus } from "../../bus"
@@ -67,6 +68,11 @@ const TuiHostConnectTokenError = z.object({
   message: z.string().min(1),
 })
 
+const TuiHostConnectQuery = z.object({
+  ticket: z.string().min(1),
+  cursor: z.coerce.number().int().min(-1).optional(),
+})
+
 const TuiHostStart = z.object({
   sessionID: z.string().optional(),
   model: z.string().optional(),
@@ -86,6 +92,23 @@ function mapTuiHostRouteError(error: unknown): never {
     throw new HTTPException(400, { message: error.message })
   }
   throw error
+}
+
+function mapTuiHostConnectRouteError(error: unknown): never {
+  if (error instanceof Error && error.message === "TUI host is not running") {
+    throw new HTTPException(404, { message: error.message })
+  }
+  if (error instanceof Error && error.message === "Invalid TUI host connect ticket") {
+    throw new HTTPException(403, { message: error.message })
+  }
+  throw error
+}
+
+function decodeHostConnectMessage(data: unknown) {
+  if (typeof data === "string") return data
+  if (data instanceof ArrayBuffer) return new TextDecoder().decode(data)
+  if (ArrayBuffer.isView(data)) return new TextDecoder().decode(data)
+  return undefined
 }
 
 const requestQueue: TuiControlRequest[] = []
@@ -288,6 +311,62 @@ export const TuiRoutes = lazy(() =>
           }
           throw error
         }
+      },
+    )
+    .get(
+      "/host/connect",
+      describeRoute({
+        summary: "Connect to embedded TUI host",
+        description:
+          "Upgrade to a WebSocket attached to the project-bound embedded Pseudo Terminal (PTY) host. The ticket is one-use and issued by /tui/host/connect-token.",
+        operationId: "tui.host.connect",
+        responses: {
+          200: {
+            description: "WebSocket upgrade accepted",
+          },
+          400: {
+            description: "Invalid connect query",
+            content: { "application/json": { schema: resolver(TuiHostConnectTokenError) } },
+          },
+          403: {
+            description: "Invalid or already consumed connect ticket",
+            content: { "application/json": { schema: resolver(TuiHostConnectTokenError) } },
+          },
+          404: {
+            description: "Embedded TUI host is not running",
+            content: { "application/json": { schema: resolver(TuiHostConnectTokenError) } },
+          },
+        },
+      }),
+      validator("query", TuiHostConnectQuery),
+      async (c) => {
+        const query = c.req.valid("query")
+        const prepared = (() => {
+          try {
+            return TuiHost.prepareConnect(query)
+          } catch (error) {
+            mapTuiHostConnectRouteError(error)
+          }
+        })()
+        let connection: ReturnType<typeof prepared.attach> | undefined
+        return upgradeWebSocket(c, {
+          onOpen(_event, ws) {
+            connection = prepared.attach({
+              send: (chunk) => ws.send(chunk),
+              close: (code, reason) => ws.close(code, reason),
+            })
+          },
+          onMessage(event) {
+            const data = decodeHostConnectMessage(event.data)
+            if (data !== undefined) connection?.onMessage(data)
+          },
+          onClose() {
+            connection?.onClose()
+          },
+          onError() {
+            connection?.onClose()
+          },
+        })
       },
     )
     .post(

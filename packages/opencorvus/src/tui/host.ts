@@ -52,6 +52,11 @@ process.on("SIGTERM", () => proc.kill())
 type HostStatus = "idle" | "running" | "exited"
 type ExitHandler = (event: { exitCode: number | null }) => void
 
+interface HostConnection {
+  send(chunk: string): void
+  close(code?: number, reason?: string): void
+}
+
 interface HostProcess {
   write(data: string): void
   resize(cols: number, rows: number): void
@@ -70,6 +75,7 @@ interface HostSession {
   buffer: string
   bufferCursor: number
   cursor: number
+  connections: Set<HostConnection>
   exitCode: number | null
   createdAt: number
   updatedAt: number
@@ -102,6 +108,13 @@ function appendBuffer(session: HostSession, chunk: string) {
     session.bufferCursor += remove
   }
   session.updatedAt = Date.now()
+  for (const connection of session.connections) {
+    try {
+      connection.send(chunk)
+    } catch {
+      session.connections.delete(connection)
+    }
+  }
 }
 
 function readOutput(session: HostSession | null, cursor?: number) {
@@ -321,6 +334,7 @@ async function spawnPrepared(input: { command: Tui.EmbeddedCommand; cols: number
     buffer: "",
     bufferCursor: 0,
     cursor: 0,
+    connections: new Set(),
     exitCode: null,
     createdAt: now,
     updatedAt: now,
@@ -345,6 +359,10 @@ async function spawnPrepared(input: { command: Tui.EmbeddedCommand; cols: number
     session.process = null
     session.exitCode = event.exitCode
     session.updatedAt = Date.now()
+    for (const connection of session.connections) {
+      connection.close(1000, "TUI host exited")
+    }
+    session.connections.clear()
   })
   return session
 }
@@ -358,6 +376,13 @@ export namespace TuiHost {
   export type Snapshot = Info & { buffer: string }
   export type Output = ReturnType<typeof readOutput>
   export type ConnectToken = { ticket: string; expires_in: number }
+  export type PreparedConnection = {
+    initialData: string
+    attach(input: HostConnection): {
+      onMessage(data: string): void
+      onClose(): void
+    }
+  }
 
   export async function start(input: {
     directory?: string
@@ -451,6 +476,40 @@ export namespace TuiHost {
     return true
   }
 
+  export function prepareConnect(input: { ticket: string; cursor?: number }): PreparedConnection {
+    const s = state()
+    const session = s.session
+    if (!session?.process || session.status !== "running") throw new Error("TUI host is not running")
+    if (!consumeConnectToken({ ticket: input.ticket, hostID: session.id, directory: session.command.cwd })) {
+      throw new Error("Invalid TUI host connect ticket")
+    }
+    const initialData = readOutput(session, input.cursor).data
+    return {
+      initialData,
+      attach(connection) {
+        if (!session.process || session.status !== "running") {
+          connection.close(4404, "TUI host is not running")
+          return {
+            onMessage() {},
+            onClose() {},
+          }
+        }
+        session.connections.add(connection)
+        if (initialData) connection.send(initialData)
+        return {
+          onMessage(data) {
+            if (!session.process || session.status !== "running") return
+            session.process.write(data)
+            session.updatedAt = Date.now()
+          },
+          onClose() {
+            session.connections.delete(connection)
+          },
+        }
+      },
+    }
+  }
+
   export function input(data: string) {
     const session = state().session
     if (!session?.process || session.status !== "running") throw new Error("TUI host is not running")
@@ -475,6 +534,10 @@ export namespace TuiHost {
     const session = s.session
     s.tickets.clear()
     if (!session) return true
+    for (const connection of session.connections) {
+      connection.close(1000, "TUI host stopped")
+    }
+    session.connections.clear()
     session.process?.kill()
     session.process = null
     session.status = "exited"

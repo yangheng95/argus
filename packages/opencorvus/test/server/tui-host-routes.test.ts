@@ -2,6 +2,7 @@ import { afterEach, describe, expect, test } from "bun:test"
 import { Tui } from "../../src/tui"
 import { TuiHost } from "../../src/tui/host"
 import { TuiRoutes } from "../../src/server/routes/tui"
+import { Server } from "../../src/server/server"
 import { Instance } from "../../src/project/instance"
 import { tmpdir } from "../fixture/fixture"
 
@@ -33,6 +34,77 @@ async function waitFor(check: () => boolean, message: string) {
     await new Promise((resolve) => setTimeout(resolve, 50))
   }
   throw new Error(message)
+}
+
+async function withTimeout<T>(promise: Promise<T>, message: string) {
+  let timeout: ReturnType<typeof setTimeout> | undefined
+  try {
+    return await Promise.race([
+      promise,
+      new Promise<T>((_, reject) => {
+        timeout = setTimeout(() => reject(new Error(message)), 5_000)
+      }),
+    ])
+  } finally {
+    if (timeout) clearTimeout(timeout)
+  }
+}
+
+async function openSocket(url: URL) {
+  const ws = new WebSocket(url)
+  await withTimeout(
+    new Promise<void>((resolve, reject) => {
+      ws.addEventListener("open", () => resolve(), { once: true })
+      ws.addEventListener("error", () => reject(new Error("websocket failed before open")), { once: true })
+    }),
+    "timed out waiting for websocket open",
+  )
+  return ws
+}
+
+async function expectSocketRejected(url: URL) {
+  const ws = new WebSocket(url)
+  await withTimeout(
+    new Promise<void>((resolve, reject) => {
+      ws.addEventListener(
+        "open",
+        () => {
+          ws.close(1000)
+          reject(new Error("websocket opened"))
+        },
+        { once: true },
+      )
+      ws.addEventListener("error", () => resolve(), { once: true })
+      ws.addEventListener("close", () => resolve(), { once: true })
+    }),
+    "timed out waiting for websocket rejection",
+  )
+}
+
+function waitForSocketMessage(ws: WebSocket, check: (message: string) => boolean) {
+  const decoder = new TextDecoder()
+  let listener: ((event: MessageEvent) => void) | undefined
+  return withTimeout(
+    new Promise<string>((resolve) => {
+      listener = (event: MessageEvent) => {
+        const message = typeof event.data === "string" ? event.data : decoder.decode(event.data as ArrayBuffer)
+        if (check(message)) resolve(message)
+      }
+      ws.addEventListener("message", listener)
+    }),
+    "timed out waiting for websocket message",
+  ).finally(() => {
+    if (listener) ws.removeEventListener("message", listener)
+  })
+}
+
+function hostConnectURL(base: URL, directory: string, ticket: string) {
+  const url = new URL("/tui/host/connect", base)
+  url.protocol = "ws:"
+  url.searchParams.set("directory", directory)
+  url.searchParams.set(TuiHost.CONNECT_TICKET_QUERY, ticket)
+  url.searchParams.set("cursor", "-1")
+  return url
 }
 
 describe("server.tui-host-routes", () => {
@@ -202,6 +274,35 @@ describe("server.tui-host-routes", () => {
         expect(TuiHost.status().running).toBe(false)
       },
     })
+  })
+
+  test("streams host input and output through a ticketed WebSocket connect route", async () => {
+    await using tmp = await tmpdir()
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        await TuiHost.startPrepared({ command: inputEchoCommand(tmp.path), cols: 80, rows: 24 })
+      },
+    })
+    const listener = Server.listen({ hostname: "127.0.0.1", port: 0, randomPort: true })
+    try {
+      const tokenResponse = await fetch(new URL(`/tui/host/connect-token?directory=${encodeURIComponent(tmp.path)}`, listener.url), {
+        method: "POST",
+        headers: { [TuiHost.CONNECT_TOKEN_HEADER]: TuiHost.CONNECT_TOKEN_HEADER_VALUE },
+      })
+      expect(tokenResponse.status).toBe(200)
+      const token = (await tokenResponse.json()) as { ticket: string }
+      const url = hostConnectURL(listener.url, tmp.path, token.ticket)
+      const ws = await openSocket(url)
+      const message = waitForSocketMessage(ws, (value) => value.includes("route-host-websocket"))
+      ws.send("route-host-websocket\r\n")
+      expect(await message).toContain("route-host-websocket")
+      await expectSocketRejected(url)
+      ws.close(1000)
+    } finally {
+      await listener.stop(true)
+      await Instance.disposeAll()
+    }
   })
 
   test("rejects invalid output cursor payload", async () => {

@@ -27900,6 +27900,110 @@
         ]
       }
     },
+    "/tui/host/connect": {
+      "get": {
+        "operationId": "tui.host.connect",
+        "summary": "Connect to embedded TUI host",
+        "description": "Upgrade to a WebSocket attached to the project-bound embedded Pseudo Terminal (PTY) host. The ticket is one-use and issued by /tui/host/connect-token.",
+        "responses": {
+          "200": {
+            "description": "WebSocket upgrade accepted"
+          },
+          "400": {
+            "description": "Invalid connect query",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "message": {
+                      "type": "string",
+                      "minLength": 1
+                    }
+                  },
+                  "required": [
+                    "message"
+                  ]
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Invalid or already consumed connect ticket",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "message": {
+                      "type": "string",
+                      "minLength": 1
+                    }
+                  },
+                  "required": [
+                    "message"
+                  ]
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Embedded TUI host is not running",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "message": {
+                      "type": "string",
+                      "minLength": 1
+                    }
+                  },
+                  "required": [
+                    "message"
+                  ]
+                }
+              }
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "directory",
+            "in": "query",
+            "required": false,
+            "description": "Project directory for project-scoped routes. Equivalent to the x-opencorvus-directory request header.",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "ticket",
+            "schema": {
+              "type": "string",
+              "minLength": 1
+            },
+            "required": true
+          },
+          {
+            "in": "query",
+            "name": "cursor",
+            "schema": {
+              "type": "integer",
+              "minimum": -1,
+              "maximum": 9007199254740991
+            }
+          }
+        ],
+        "x-codeSamples": [
+          {
+            "lang": "js",
+            "source": "import { createOpenCorvusClient } from \"@opencorvus-ai/sdk\"\n\nconst client = createOpenCorvusClient()\nawait client.tui.host.connect({\n  ...\n})"
+          }
+        ]
+      }
+    },
     "/tui/host/input": {
       "post": {
         "operationId": "tui.host.input",

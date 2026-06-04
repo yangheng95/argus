@@ -12946,6 +12946,50 @@ export type TuiHostConnectTokenResponses = {
 
 export type TuiHostConnectTokenResponse = TuiHostConnectTokenResponses[keyof TuiHostConnectTokenResponses]
 
+export type TuiHostConnectData = {
+  body?: never
+  path?: never
+  query: {
+    /**
+     * Project directory for project-scoped routes. Equivalent to the x-opencorvus-directory request header.
+     */
+    directory?: string
+    ticket: string
+    cursor?: number
+  }
+  url: "/tui/host/connect"
+}
+
+export type TuiHostConnectErrors = {
+  /**
+   * Invalid connect query
+   */
+  400: {
+    message: string
+  }
+  /**
+   * Invalid or already consumed connect ticket
+   */
+  403: {
+    message: string
+  }
+  /**
+   * Embedded TUI host is not running
+   */
+  404: {
+    message: string
+  }
+}
+
+export type TuiHostConnectError = TuiHostConnectErrors[keyof TuiHostConnectErrors]
+
+export type TuiHostConnectResponses = {
+  /**
+   * WebSocket upgrade accepted
+   */
+  200: unknown
+}
+
 export type TuiHostInputData = {
   body?: {
     data: string
