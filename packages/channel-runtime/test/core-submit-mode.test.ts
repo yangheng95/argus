@@ -39,8 +39,7 @@ describe("channel runtime submit mode", () => {
   test("uses tui.runtime.submitTask by default", async () => {
     const startCalls: Array<{
       mode: "spawn"
-      query_directory: string
-      body_directory: string
+      directory: string
       sessionID: string
       bin?: string
     }> = []
@@ -58,8 +57,7 @@ describe("channel runtime submit mode", () => {
           runtime: {
             start(input: {
               mode: "spawn"
-              query_directory: string
-              body_directory: string
+              directory: string
               sessionID: string
               bin?: string
             }): Promise<{ error?: unknown }>
@@ -134,8 +132,7 @@ describe("channel runtime submit mode", () => {
   test("fails when tui runtime submit fails instead of falling back", async () => {
     const startCalls: Array<{
       mode: "spawn"
-      query_directory: string
-      body_directory: string
+      directory: string
       sessionID: string
       bin?: string
     }> = []
@@ -159,8 +156,7 @@ describe("channel runtime submit mode", () => {
           runtime: {
             start(input: {
               mode: "spawn"
-              query_directory: string
-              body_directory: string
+              directory: string
               sessionID: string
               bin?: string
             }): Promise<{ error?: unknown }>
@@ -223,8 +219,7 @@ describe("channel runtime submit mode", () => {
   test("fails when tui runtime start fails instead of falling back", async () => {
     const startCalls: Array<{
       mode: "spawn"
-      query_directory: string
-      body_directory: string
+      directory: string
       sessionID: string
       bin?: string
     }> = []
@@ -248,8 +243,7 @@ describe("channel runtime submit mode", () => {
           runtime: {
             start(input: {
               mode: "spawn"
-              query_directory: string
-              body_directory: string
+              directory: string
               sessionID: string
               bin?: string
             }): Promise<{ error?: unknown }>
@@ -332,8 +326,7 @@ describe("channel runtime submit mode", () => {
           runtime: {
             start(input: {
               mode: "spawn"
-              query_directory: string
-              body_directory: string
+              directory: string
               sessionID: string
               bin?: string
             }): Promise<{ error?: unknown }>
@@ -432,8 +425,7 @@ describe("channel runtime submit mode", () => {
             runtime: {
               start(input: {
                 mode: "spawn"
-                query_directory: string
-                body_directory: string
+                directory: string
                 sessionID: string
                 bin?: string
               }): Promise<{ error?: unknown }>
@@ -527,8 +519,7 @@ describe("channel runtime submit mode", () => {
             runtime: {
               start(input: {
                 mode: "spawn"
-                query_directory: string
-                body_directory: string
+                directory: string
                 sessionID: string
                 bin?: string
               }): Promise<{ error?: unknown }>
@@ -626,8 +617,7 @@ describe("channel runtime submit mode", () => {
           runtime: {
             start(input: {
               mode: "spawn"
-              query_directory: string
-              body_directory: string
+              directory: string
               sessionID: string
               bin?: string
             }): Promise<{ error?: unknown }>
@@ -716,8 +706,7 @@ describe("channel runtime submit mode", () => {
           runtime: {
             start(input: {
               mode: "spawn"
-              query_directory: string
-              body_directory: string
+              directory: string
               sessionID: string
               bin?: string
             }): Promise<{ error?: unknown }>
@@ -806,8 +795,7 @@ describe("channel runtime submit mode", () => {
     process.env.OPENCORVUS_CHANNEL_TASK_MODE = "session-async"
     const startCalls: Array<{
       mode: "spawn"
-      query_directory: string
-      body_directory: string
+      directory: string
       sessionID: string
       bin?: string
     }> = []
@@ -825,8 +813,7 @@ describe("channel runtime submit mode", () => {
           runtime: {
             start(input: {
               mode: "spawn"
-              query_directory: string
-              body_directory: string
+              directory: string
               sessionID: string
               bin?: string
             }): Promise<{ error?: unknown }>
