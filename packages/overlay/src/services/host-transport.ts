@@ -144,6 +144,7 @@ export type NativeCommand =
   // services/theme.ts
   | { kind: "devtools.toggle" }
   // services/window.ts
+  | { kind: "window.quit" }
   | { kind: "tray.attention.set"; active: boolean }
   | { kind: "badge.set"; count: number }
   // services/workspace.ts

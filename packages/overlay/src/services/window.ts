@@ -1,5 +1,6 @@
 // ── Window / UI Service ──
 // Exported functions:
+// quitOverlay — quit the Tauri overlay process after UI confirmation
 // setTrayAttention — toggle the tray icon attention state via host
 // setDockBadge — set the host dock/taskbar badge projection
 
@@ -12,6 +13,11 @@ import { getHostTransport } from "./host-transport";
 
 let _trayAttentionEnabled: boolean | undefined;
 let _dockBadgeCount: number | undefined;
+
+export async function quitOverlay(): Promise<boolean> {
+  const result = await getHostTransport().native({ kind: "window.quit" });
+  return result === true;
+}
 
 export async function setTrayAttention(active: boolean): Promise<boolean> {
   if (_trayAttentionEnabled === !!active) return true;

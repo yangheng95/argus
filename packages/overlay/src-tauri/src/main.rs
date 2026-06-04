@@ -1255,6 +1255,13 @@ fn overlay_toggle_devtools<R: Runtime>(app: AppHandle<R>) -> Result<bool, String
     }
 }
 
+#[tauri::command]
+fn overlay_quit<R: Runtime>(app: AppHandle<R>) -> Result<bool, String> {
+    stop_server(&app);
+    app.exit(0);
+    Ok(true)
+}
+
 fn main() {
     let builder = tauri::Builder::default()
         .plugin(tauri_plugin_dialog::init())
@@ -1277,7 +1284,8 @@ fn main() {
             overlay_pick_files,
             overlay_attention_set,
             overlay_badge_set,
-            overlay_toggle_devtools
+            overlay_toggle_devtools,
+            overlay_quit
     ]);
 
     #[cfg(not(feature = "devtools"))]
@@ -1294,7 +1302,8 @@ fn main() {
             overlay_pick_dir,
             overlay_pick_files,
             overlay_attention_set,
-            overlay_badge_set
+            overlay_badge_set,
+            overlay_quit
     ]);
 
     builder

@@ -1,18 +1,14 @@
 // ── WindowControls Component ──
-// Tauri window management buttons: minimize, maximize/restore, close (hide).
-// Ports setupTauri() plus maximizeLabel + CLOSE_HINT_KEY logic.
+// Tauri window management buttons: minimize, maximize/restore, close.
+// Ports setupTauri() plus maximizeLabel logic.
 
 import { createSignal, onCleanup, onMount, Show } from "solid-js";
 import { t } from "../utils/i18n";
-import { nativeMessage } from "../services/app-dialog";
+import { getTauriWindowHandle } from "../services/tauri-transport";
+import { quitOverlay } from "../services/window";
+import { nativeConfirm } from "../utils/native";
 import { Button } from "./ui/Button";
 import { Icon } from "./Icon";
-
-// ── Constants ──
-
-const CLOSE_HINT_KEY = "oc_close_hint_seen";
-
-import { getTauriWindowHandle } from "../services/tauri-transport";
 
 // ── Tauri window helpers ──
 
@@ -66,21 +62,19 @@ export function WindowControls() {
     await syncMaximize(win);
   };
 
- // ── Handle close (hide window; first time shows background-notice) ──
+ // ── Handle close ──
   const handleClose = async () => {
-    const win = tauriWin();
-    if (!win) return;
-    if (localStorage.getItem(CLOSE_HINT_KEY) !== "true") {
-      localStorage.setItem(CLOSE_HINT_KEY, "true");
-      await nativeMessage(t("titlebar.background_notice"), {
-        title: t("titlebar.background_notice_title"),
-      }).catch(() => undefined);
-    }
-    if (typeof win.hide === "function") {
-      await win.hide().catch(() => undefined);
-    } else {
-      await win.minimize?.().catch(() => undefined);
-    }
+    if (!tauriWin()) return;
+    const confirmed = await nativeConfirm(t("titlebar.close_confirm_message"), {
+      title: t("titlebar.close_confirm_title"),
+      okLabel: t("titlebar.close_confirm_quit"),
+      cancelLabel: t("common.cancel"),
+      kind: "warning",
+    });
+    if (!confirmed) return;
+    await quitOverlay().catch((error) => {
+      console.error("[window] failed to quit overlay", error);
+    });
   };
 
  // ── Lifecycle: init Tauri and attach resize listener ──
