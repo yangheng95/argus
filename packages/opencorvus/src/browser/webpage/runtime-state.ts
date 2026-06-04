@@ -356,7 +356,8 @@ async function main() {
     const page = await context.newPage();
 
     phase = "navigate";
-    await page.goto(input.url, { waitUntil: "networkidle", timeout: input.navigationTimeoutMs });
+    await page.goto(input.url, { waitUntil: "domcontentloaded", timeout: input.navigationTimeoutMs });
+    await page.waitForLoadState("networkidle", { timeout: Math.min(5000, input.navigationTimeoutMs) }).catch(() => undefined);
     await page.waitForTimeout(1200);
 
     phase = "capture";

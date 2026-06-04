@@ -1,5 +1,5 @@
 import { describe, test, expect } from "bun:test"
-import { mkdirSync, writeFileSync, rmSync } from "node:fs"
+import { mkdirSync, readFileSync, writeFileSync, rmSync } from "node:fs"
 import { resolve } from "node:path"
 import { pathToFileURL } from "node:url"
 import os from "node:os"
@@ -40,6 +40,13 @@ describe("render helpers", () => {
     } finally {
       rmSync(dir, { recursive: true, force: true })
     }
+  })
+
+  test("does not require networkidle for initial navigation", () => {
+    const source = readFileSync(resolve(import.meta.dir, "../../../src/browser/webpage/render.ts"), "utf8")
+
+    expect(source).toContain('waitUntil: "domcontentloaded"')
+    expect(source).not.toContain('page.goto(input.url, { waitUntil: "networkidle"')
   })
 })
 

@@ -7,7 +7,7 @@
  *     policy shared with `browser/webpage/render.ts`,
  *     `frontend-design/url-screenshot.ts`, `runtime/visual-page.ts`).
  *   - Logs structured extraction failures through the webpage evidence logger.
- *   - Throws `UrlExtractError` (typed) on 401/403/429 + infra/asset failures.
+ *   - Throws `UrlExtractError` (typed) on 401/403/429 + browser infra failures.
  *   - Owns image-download constants locally so capture behavior has one source.
  *
  * **Atomic tool guarantee**: this module does not compile source handoff,
@@ -438,6 +438,7 @@ async function nodeDownloadImages(
 
   let totalBytes = 0
   let downloaded = 0
+  let skipped = 0
 
   for (let i = 0; i < urls.length; i += IMAGE_DOWNLOAD_CONCURRENCY) {
     const batch = urls.slice(i, i + IMAGE_DOWNLOAD_CONCURRENCY)
@@ -471,18 +472,14 @@ async function nodeDownloadImages(
 
     for (const r of results) {
       if ("error" in r) {
-        throw new UrlExtractError({
-          url: r.url,
-          reason: `image download failed: ${r.error}`,
-          phase: "asset",
-        })
+        skipped++
+        onProgress?.(`skipped image ${r.url}: ${r.error}`)
+        continue
       }
       if (totalBytes + r.buf.length > IMAGE_DOWNLOAD_MAX_TOTAL_BYTES) {
-        throw new UrlExtractError({
-          url: r.url,
-          reason: `image download total bytes would exceed ${IMAGE_DOWNLOAD_MAX_TOTAL_BYTES}`,
-          phase: "asset",
-        })
+        skipped++
+        onProgress?.(`skipped image ${r.url}: image download total bytes would exceed ${IMAGE_DOWNLOAD_MAX_TOTAL_BYTES}`)
+        continue
       }
       const ext = mimeToExt(r.mime)
       const fileName = `img-${downloaded}.${ext}`
@@ -494,6 +491,7 @@ async function nodeDownloadImages(
   }
 
   if (downloaded > 0) onProgress?.(`saved ${downloaded} images (${(totalBytes / 1024).toFixed(0)}KB)`)
+  if (skipped > 0) onProgress?.(`skipped ${skipped} unavailable images`)
   return imageMap
 }
 
@@ -666,7 +664,7 @@ export interface ExtractPageInput {
   viewport?: { width: number; height: number }
   /** CSS selector scoping the extraction; default body. */
   scopeSelector?: string | null
-  /** Settle wait after `networkidle0` (ms), default 2000. */
+  /** Post-DOM settle wait (ms), default 2000. */
   waitMs?: number
   /** Skip the full-page + above-fold screenshots (non-deterministic). */
   noScreenshots?: boolean

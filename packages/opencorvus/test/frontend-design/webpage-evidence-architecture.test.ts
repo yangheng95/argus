@@ -52,12 +52,11 @@ describe("webpage evidence architecture guards", () => {
     expect(source).toContain("No verdict was written")
   })
 
-  test("url extraction treats selected image download failure as fatal", () => {
+  test("url extraction keeps DOM evidence independent from external image mirroring", () => {
     const source = readSource("browser/webpage/extract.ts")
     expect(source).not.toMatch(/browser context fallback/i)
-    expect(source).not.toMatch(/best-effort/i)
-    expect(source).not.toMatch(/non-fatal/i)
-    expect(source).toMatch(/phase:\s*"asset"/)
-    expect(source).toMatch(/image download failed/)
+    expect(source).not.toMatch(/reason:\s*`image download failed/)
+    expect(source).toMatch(/skipped image/)
+    expect(source).toMatch(/skipped \${skipped} unavailable images/)
   })
 })

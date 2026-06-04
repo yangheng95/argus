@@ -209,7 +209,8 @@ async function main() {
     });
 
     phase = "navigate";
-    await page.goto(input.url, { waitUntil: "networkidle", timeout: input.timeout });
+    await page.goto(input.url, { waitUntil: "domcontentloaded", timeout: input.timeout });
+    await page.waitForLoadState("networkidle", { timeout: Math.min(5000, input.timeout) }).catch(() => undefined);
 
     phase = "evaluate";
     await Promise.race([

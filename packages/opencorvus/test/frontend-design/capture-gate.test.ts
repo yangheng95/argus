@@ -78,6 +78,16 @@ describe("capture reference diagnostics", () => {
     expect(source).not.toContain("timeoutMs ?? 90_000")
   })
 
+  test("node capture script does not require networkidle for initial navigation", () => {
+    const source = readFileSync(
+      path.join(import.meta.dir, "../../src/frontend-design/capture-gate.ts"),
+      "utf8",
+    )
+
+    expect(source).toContain('waitUntil: "domcontentloaded"')
+    expect(source).not.toContain('page.goto(input.url, { waitUntil: "networkidle"')
+  })
+
   test("captures a local HTTP visual reference through the browser runtime", async () => {
     const outDir = path.join(os.tmpdir(), `capture-gate-runtime-${process.pid}-${Date.now()}`)
     mkdirSync(outDir, { recursive: true })
