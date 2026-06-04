@@ -164,6 +164,7 @@ describe("OpenCode-derived TUI plugin substrate", () => {
     expect(agentTeam).toContain("props.api.state.project.tasks()")
     expect(agentTeam).toContain("active_sessions")
     expect(agentTeam).toContain("pending_interactions")
+    expect(agentTeamActions).toContain("pending_interaction_items")
     expect(agentTeam).toContain('sidebar_content()')
     expect(agentTeam).toContain('name: "agent_team.tools"')
     expect(agentTeam).toContain('name: "agent_team.tasks"')
@@ -262,7 +263,20 @@ describe("OpenCode-derived TUI plugin substrate", () => {
         time: { created: 1, updated: 1 },
       },
       active_sessions: [],
-      pending_interactions: 0,
+      pending_interactions: 1,
+      pending_interaction_items: [
+        {
+          id: "int_1",
+          taskID: "task_1",
+          runID: "run_1",
+          externalID: "perm_1",
+          type: "permission",
+          status: "pending",
+          title: "Approve command",
+          body: "Allow command?",
+          time: { created: 1, updated: 1 },
+        },
+      ],
       updated_at: 1,
     }
     const api = {
@@ -338,6 +352,16 @@ describe("OpenCode-derived TUI plugin substrate", () => {
             return { data: true }
           },
         },
+        interaction: {
+          async reply(parameters: Record<string, unknown>) {
+            calls.push({ name: "interaction.reply", parameters })
+            return { data: { id: parameters.interactionID } }
+          },
+          async reject(parameters: Record<string, unknown>) {
+            calls.push({ name: "interaction.reject", parameters })
+            return { data: { id: parameters.interactionID } }
+          },
+        },
       },
     } as unknown as TuiPluginApi
     const settle = async () => {
@@ -347,7 +371,7 @@ describe("OpenCode-derived TUI plugin substrate", () => {
     }
     const choose = async (value: string) => {
       const dialog = selectDialogs.at(-1)!
-      const option = dialog.options.find((item) => item.value === value)!
+      const option = dialog.options.find((item) => item.value === value || item.value.startsWith(`${value}:`))!
       dialog.onSelect?.(option)
       await settle()
     }
@@ -363,6 +387,20 @@ describe("OpenCode-derived TUI plugin substrate", () => {
     expect(calls).toContainEqual({
       name: "coding.session.selection.update",
       parameters: { sessionID: "ses_right_sidebar", directory: "D:/workspace", taskID: "task_1" },
+    })
+
+    await choose("reply_interaction")
+    expect(calls).toContainEqual({
+      name: "interaction.reply",
+      parameters: { interactionID: "int_1", directory: "D:/workspace", reply: "once", autoReply: false },
+    })
+
+    await choose("reject_interaction")
+    prompts.at(-1)!.onConfirm?.("deny")
+    await settle()
+    expect(calls).toContainEqual({
+      name: "interaction.reject",
+      parameters: { interactionID: "int_1", directory: "D:/workspace", message: "deny", autoReply: false },
     })
 
     await choose("send_task_message")

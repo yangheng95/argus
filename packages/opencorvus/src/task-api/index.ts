@@ -633,7 +633,7 @@ function taskItems(rows: TaskListRow[]) {
     const plan = findActivePlanForTask(task.id)
     const run = findActiveRunForTask(task.id)
     const evaluation = run ? findEvaluationByRun(run.id) : undefined
-    const pendingInteractions = listInteractions(task.id).filter((entry) => entry.status === "pending").length
+    const pendingInteractions = listInteractions(task.id).filter((entry) => entry.status === "pending")
     const taskView = viewTask(task, { directory: item.directory })
     if (taskView.queue && item.directory && isTaskQueued(task)) {
       taskView.queue.revision = queueRevisions.get(item.directory)
@@ -645,7 +645,8 @@ function taskItems(rows: TaskListRow[]) {
       run: run ? viewRun(run) : undefined,
       evaluation: evaluation ? viewEvaluation(evaluation) : undefined,
       active_sessions: listActiveSessionsForTask(task.id),
-      pending_interactions: pendingInteractions,
+      pending_interactions: pendingInteractions.length,
+      pending_interaction_items: pendingInteractions.map(viewInteraction),
       updated_at: task.time_updated,
     }
   })

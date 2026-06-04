@@ -3,7 +3,7 @@ import { Database } from "../../src/storage/db"
 import { ProjectTable } from "../../src/project/project.sql"
 import { Instance } from "../../src/project/instance"
 import { SessionTable } from "../../src/session/session.sql"
-import { EngineTaskTable } from "../../src/engine/engine.sql"
+import { EngineInteractionRequestTable, EngineTaskTable } from "../../src/engine/engine.sql"
 import { ProtocolEventTable } from "../../src/protocol/protocol.sql"
 import { listActiveSessionsForTask } from "../../src/engine/store"
 import { SessionStatus } from "../../src/session/status"
@@ -201,6 +201,19 @@ describe("listActiveSessionsForTask", () => {
             time_updated: now,
             time_started: now,
           }).run()
+          db.insert(EngineInteractionRequestTable).values({
+            id: "int_project_board_pending",
+            task_id: ids.taskID,
+            run_id: "run_project_board_pending",
+            session_id: ids.sessionID,
+            external_id: "perm_project_board_pending",
+            request_type: "permission",
+            status: "pending",
+            title: "Approve command",
+            body: "Allow command?",
+            time_created: now,
+            time_updated: now,
+          }).run()
         })
         insertStatus(ids, { seq: 1, emittedAt: now, status: "streaming" })
         setProcessStatus(ids.sessionID, "streaming")
@@ -214,6 +227,24 @@ describe("listActiveSessionsForTask", () => {
             kind: "build",
             goalID: "gol_project_board_active",
             lastActivityMs: now,
+          },
+        ])
+        expect(item?.pending_interactions).toBe(1)
+        expect(item?.pending_interaction_items).toEqual([
+          {
+            id: "int_project_board_pending",
+            taskID: ids.taskID,
+            runID: "run_project_board_pending",
+            sessionID: ids.sessionID,
+            externalID: "perm_project_board_pending",
+            type: "permission",
+            status: "pending",
+            title: "Approve command",
+            body: "Allow command?",
+            time: {
+              created: now,
+              updated: now,
+            },
           },
         ])
       },

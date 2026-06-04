@@ -8907,6 +8907,28 @@ export type TaskListResponses = {
         lastActivityMs: number
       }>
       pending_interactions: number
+      pending_interaction_items: Array<{
+        id: string
+        taskID: string
+        runID: string
+        sessionID?: string | null
+        externalID: string
+        type: "permission" | "question"
+        status: "pending" | "answered" | "rejected" | "expired"
+        title: string
+        body: string
+        payload?: {
+          [key: string]: unknown
+        }
+        response?: {
+          [key: string]: unknown
+        }
+        time: {
+          created: number
+          updated: number
+          resolved?: number
+        }
+      }>
       updated_at: number
     }>
   }
@@ -9059,6 +9081,28 @@ export type TaskGlobalListResponses = {
         lastActivityMs: number
       }>
       pending_interactions: number
+      pending_interaction_items: Array<{
+        id: string
+        taskID: string
+        runID: string
+        sessionID?: string | null
+        externalID: string
+        type: "permission" | "question"
+        status: "pending" | "answered" | "rejected" | "expired"
+        title: string
+        body: string
+        payload?: {
+          [key: string]: unknown
+        }
+        response?: {
+          [key: string]: unknown
+        }
+        time: {
+          created: number
+          updated: number
+          resolved?: number
+        }
+      }>
       updated_at: number
     }>
   }

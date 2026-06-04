@@ -1648,3 +1648,41 @@ OpenCode gap after the round:
 - The current host is still a single project-bound embedded TUI process, not OpenCode's full multi-PTY `list/create/get/update/remove` service.
 - `reply_interaction` and `reject_interaction` are exposed by the capability registry but not yet available as row actions because the project board currently exposes only the pending count, not interaction IDs.
 - Browser visual E2E, external TUI plugin loader/install, move-session/workspace prompt flow, `SessionV2Debug`, workspace label/connectivity UI, background pulse, and session/subagent footer modules remain missing.
+
+### 2026-06-05 Round 22: pending interaction row actions in agent-team sidebar
+
+Implemented:
+
+- Rechecked latest OpenCode dev before editing. Upstream advanced to `b1a7ee5695bded3ebe4282a17bfe91717edea363` (`feat(desktop): surface local server startup failures`). The changed files are under `packages/desktop/*`; upstream TUI/PTY/terminal files did not change in this range, so no TUI module copy was required in this round.
+- Closed the Round 21 interaction-action gap:
+  - `ProjectTaskSummary` now includes `pending_interaction_items`;
+  - `taskItems()` derives both `pending_interactions` and `pending_interaction_items` from the same `listInteractions(task.id)` source;
+  - the existing count remains a summary, while the new array is the actionable interaction read model.
+- Extended the right-sidebar `agent-team` action flow:
+  - task action dialogs now include `reply_interaction` and `reject_interaction` when pending interactions exist;
+  - permission replies call `client.interaction.reply({ reply: "once", autoReply: false })`;
+  - question replies use the existing OpenTUI prompt dialog and send a message reply;
+  - rejects use the existing OpenTUI prompt dialog for an optional reason and call `client.interaction.reject`.
+- Kept the capability source single:
+  - interaction actions are still filtered through `panelCapabilities("right-sidebar")`;
+  - no new right-sidebar action whitelist or TUI-only interaction endpoint was added.
+- Regenerated SDK/OpenAPI docs for the project board response schema.
+
+Verified:
+
+- `bun test packages/opencorvus/test/engine/active-sessions.test.ts packages/opencorvus/test/tui/plugin-runtime-guard.test.ts packages/opencorvus/test/tool/panel-capability.test.ts packages/opencorvus/test/tool/panel.test.ts`
+- `bun run --cwd packages/opencorvus typecheck`
+- `bun run --cwd packages/plugin typecheck`
+- `bun run --cwd packages/sdk/js typecheck`
+- `bun run --cwd packages/sdk/js build`
+- `bun run docs:api`
+
+OpenCode comparison after the round:
+
+- This remains an OpenCorvus-specific project/agent-team capability layer, but it is implemented inside the copied OpenCode plugin-slot/dialog architecture.
+- The right sidebar now has actionable pending interaction rows instead of only showing a pending count, moving it closer to the OpenCode-style operational side panel shown in the target screenshot.
+
+OpenCode gap after the round:
+
+- The current host is still a single project-bound embedded TUI process, not OpenCode's full multi-PTY `list/create/get/update/remove` service.
+- Browser visual E2E, external TUI plugin loader/install, move-session/workspace prompt flow, `SessionV2Debug`, workspace label/connectivity UI, background pulse, and session/subagent footer modules remain missing.
