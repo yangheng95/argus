@@ -727,7 +727,7 @@ export function SkillsPanel() {
 }
 
 export function McpPanel() {
-  return <ExtensionSettingsPanel mode="mcp" />;
+  return <ExtensionSettingsPanel mode="mcp" active={true} />;
 }
 
 export function SkillMarketPanel(props: { active?: boolean }) {

@@ -30,6 +30,7 @@ describe("overlay project directory request loop", () => {
     expect(source).toContain("const hasConnectingMcp = createMemo");
     expect(source).toContain("item?.status === \"connecting\"");
     expect(source).toContain('props.mode !== "mcp" || props.active !== true || !hasConnectingMcp()');
+    expect(source).toContain('<ExtensionSettingsPanel mode="mcp" active={true} />');
     expect(source).toContain("window.setTimeout");
     expect(source).toContain("loadExtensions().catch");
     expect(source).toContain("window.clearTimeout(timer)");

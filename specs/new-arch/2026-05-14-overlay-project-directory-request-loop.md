@@ -41,3 +41,15 @@ routes without a directory. Task creation then never reaches the server-side
 - A failing `/skill/market` request does not create a reactive retry loop.
 - Project-scoped route injection coverage includes `task`, `skill/market`,
   `skill/installed`, `skill/directories`, and `mcp`.
+
+## MCP Pending Status Follow-up
+
+On 2026-06-04, `browser` MCP startup was verified to transition from
+`connecting` to `connected` in the backend after the async startup completes.
+The overlay still showed `connecting` because `McpPanel` mounted
+`ExtensionSettingsPanel` without `active={true}`, while the pending-status
+refresh effect explicitly requires `props.active === true`.
+
+The fix is to make the mounted MCP settings panel active at its single call
+site. This preserves the existing `/mcp` refresh behavior and avoids adding
+any parallel status source.
