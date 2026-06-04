@@ -585,7 +585,7 @@ function createSessionCardNode(
     kind: userStage ? "message" : "agent",
     role: userStage ? "user" : undefined,
     sessionID,
-    messageID,
+    ...(messageID ? { messageID } : {}),
     stage,
     accent: !userStage && stage ? stageAccent(stage) : undefined,
     status: "running",
@@ -1099,10 +1099,12 @@ function handleSessionStatus(event: any): void {
     throw new Error("session.status missing sessionID");
   }
   const projected = projectSessionStatus(event);
-  const info = sessions.get(sessionID);
+  const info = ensureLifecycleSessionProjection(event, sessionID);
   const activeCardID = info?.activeCardID;
   if (!info || !activeCardID || !cardTreeStore.cards[activeCardID]) {
-    // Active turn card not yet materialized — hold until one exists.
+    // Active turn card not yet materialized and this status did not carry
+    // enough lifecycle metadata to create one. Hold until a message or a
+    // later enriched lifecycle event provides the session's stage.
     pendingSessionStatus.set(sessionID, projected);
     return;
   }
@@ -1118,7 +1120,7 @@ function handleSessionError(event: any): void {
     throw new Error("session.error missing sessionID");
   }
   const projected = projectSessionError(event);
-  const info = sessions.get(sessionID);
+  const info = ensureLifecycleSessionProjection(event, sessionID);
   const activeCardID = info?.activeCardID;
   if (!info || !activeCardID || !cardTreeStore.cards[activeCardID]) {
     pendingSessionStatus.set(sessionID, projected);
@@ -1138,6 +1140,62 @@ function drainPendingSessionStatus(sessionID: string): void {
   if (!session || !activeCardID || !cardTreeStore.cards[activeCardID]) return;
   pendingSessionStatus.delete(sessionID);
   applyProjectedSessionStatus(activeCardID, projected);
+}
+
+function lifecycleEventTime(event: any, projected?: ProjectedSessionStatus): number {
+  const terminalTime = Number(projected?.timeCompleted || 0);
+  if (terminalTime > 0) return terminalTime;
+  const emitted = Number(event?.emittedAt || event?.emitted_at || 0);
+  return emitted > 0 ? emitted : Date.now();
+}
+
+function lifecycleStageFromProps(props: Record<string, any>, existing?: SessionInfo): string {
+  const channel = String(props.channel || "").trim();
+  if (channel === "main") return "user";
+  if (channel) return channel;
+  return existing?.stage || "";
+}
+
+/** Materialize a real session card from lifecycle-only evidence. Some
+ *  frontend-design / frontend-research paths can fail during host-side
+ *  evidence preparation before the agent writes any message row. The
+ *  `session.status` event is still the real session lifecycle signal, so the
+ *  card must be session-backed rather than synthesized as orchestrator text. */
+function ensureLifecycleSessionProjection(event: any, sessionID: string): SessionInfo | undefined {
+  const props = propsOf(event);
+  const existing = sessions.get(sessionID);
+  const stage = lifecycleStageFromProps(props, existing);
+  if (stage === "filtered") return undefined;
+  if (!stage) return existing;
+
+  const session = ensureSessionProjection(sessionID, {
+    stage,
+    parentSessionID: String(props.parentSessionID || existing?.parentSessionID || ""),
+    goalID: String(props.goalID || existing?.goalID || ""),
+  });
+  if (session.activeCardID && cardTreeStore.cards[session.activeCardID]) return session;
+
+  const time = lifecycleEventTime(event);
+  if (isPhaseAbsorbedSession(session.stage, session.goalID)) {
+    const resolved = resolveTurnCardID(session.sessionID, session.stage, session.goalID, "", time);
+    session.activeCardID = resolved.cardID;
+    rebuildCardHierarchy();
+    return session;
+  }
+
+  const cardID = session.stage === "integrity"
+    ? integrityCardID(session.sessionID)
+    : sessionCardID(session.stage, session.sessionID);
+  if (!cardTreeStore.cards[cardID]) {
+    setCardTreeStore(
+      "cards",
+      cardID,
+      createSessionCardNode(cardID, session.stage, session.goalID, time, session.sessionID, ""),
+    );
+  }
+  session.activeCardID = cardID;
+  rebuildCardHierarchy();
+  return session;
 }
 
 function handleInteraction(event: any): void {
@@ -1921,6 +1979,31 @@ function migrateTurnCard(
   if (session.activeCardID === fromCardID) session.activeCardID = toCardID;
 }
 
+function migrateLifecycleCardToTurnCard(
+  session: SessionInfo,
+  fromCardID: string,
+  toCardID: string,
+  messageID: string,
+  time: number,
+): void {
+  if (fromCardID === toCardID || !cardTreeStore.cards[fromCardID] || cardTreeStore.cards[toCardID]) return;
+  setCardTreeStore(
+    "cards",
+    produce((cards: Record<string, CardNode>) => {
+      const from = cards[fromCardID];
+      if (!from) return;
+      cards[toCardID] = {
+        ...from,
+        id: toCardID,
+        messageID,
+        time,
+      };
+      delete cards[fromCardID];
+    }),
+  );
+  if (session.activeCardID === fromCardID) session.activeCardID = toCardID;
+}
+
 /** Create or refresh the display card for one message turn and point the
  *  session's active pointers at it. Returns the resolved card id + whether
  *  it is a phase card. */
@@ -1946,6 +2029,10 @@ function ensureMessageTurnProjection(
   }
 
   if (!isPhase) {
+    const lifecycleCardID = sessionCardID(stage, session.sessionID);
+    if (!prior && lifecycleCardID !== cardID && cardTreeStore.cards[lifecycleCardID]) {
+      migrateLifecycleCardToTurnCard(session, lifecycleCardID, cardID, messageID, opts.time);
+    }
     const existing = cardTreeStore.cards[cardID];
     if (existing) {
       setCardTreeStore("cards", cardID, "sessionID", session.sessionID);
@@ -1953,7 +2040,9 @@ function ensureMessageTurnProjection(
       if (opts.stampServerTime && prior && existing.messageID === messageID) {
         setCardTreeStore("cards", cardID, "time", opts.time);
       }
-      setCardTreeStore("cards", cardID, "status", "running");
+      if (existing.terminalReason !== "completed" && existing.terminalReason !== "error" && existing.terminalReason !== "aborted") {
+        setCardTreeStore("cards", cardID, "status", "running");
+      }
     } else {
       setCardTreeStore(
         "cards",
