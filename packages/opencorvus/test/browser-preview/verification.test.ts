@@ -1,10 +1,39 @@
-import { describe, expect, test } from "bun:test"
+import { afterEach, describe, expect, test } from "bun:test"
+import { eq } from "drizzle-orm"
+import { EngineArtifactTable, EngineTaskTable } from "../../src/engine/engine.sql"
+import { Instance } from "../../src/project/instance"
 import { resolveBrowserPreviewTarget } from "../../src/browser-preview/target"
 import { verifyBrowserPreview } from "../../src/browser-preview/verification"
+import { Database } from "../../src/storage/db"
+import { resetDatabase } from "../fixture/db"
 import { tmpdir } from "../fixture/fixture"
 import type { RuntimeCaptureInput, RuntimeCaptureResult } from "../../src/runtime/page-capture"
 
 describe("browser preview verification", () => {
+  afterEach(async () => {
+    await resetDatabase()
+  })
+
+  async function seedTask(directory: string, taskID = `tsk_browserpreviewverify${Date.now()}`) {
+    await Instance.provide({
+      directory,
+      fn: () => {
+        Database.use((db) =>
+          db.insert(EngineTaskTable).values({
+            id: taskID,
+            project_id: Instance.project.id,
+            title: "Preview task",
+            request: "Preview task",
+            source: "api",
+            time_created: Date.now(),
+            time_updated: Date.now(),
+          }).run(),
+        )
+      },
+    })
+    return taskID
+  }
+
   test("captures the resolved URL with the shared viewport preset", async () => {
     await using tmp = await tmpdir()
     const target = await resolveBrowserPreviewTarget({
@@ -68,5 +97,44 @@ describe("browser preview verification", () => {
     expect(result.status).toBe("failed")
     expect(result.capture).toBeUndefined()
     expect(result.diagnostics.join("\n")).toContain("requires a resolved http(s) URL")
+  })
+
+  test("persists task-scoped browser preview evidence from capture result", async () => {
+    await using tmp = await tmpdir()
+    const taskID = await seedTask(tmp.path)
+    const target = await resolveBrowserPreviewTarget({
+      projectRoot: tmp.path,
+      explicitUrl: "http://127.0.0.1:5173/",
+    })
+
+    const result = await verifyBrowserPreview({
+      projectRoot: tmp.path,
+      taskID,
+      target: { ...target, id: "art_previewtarget000000000001" },
+      viewportID: "desktop",
+      outDir: tmp.path,
+      async capture(input) {
+        return {
+          captured: false,
+          passed: false,
+          url: input.url,
+          requested_viewport: { width: input.viewport_width ?? 0, height: input.viewport_height ?? 0 },
+          viewport: { width: input.viewport_width ?? 0, height: input.viewport_height ?? 0, capped: false },
+          capture_error: { kind: "capture_failed", message: "server refused connection" },
+          summary: "runtime capture failed: server refused connection",
+        } as RuntimeCaptureResult
+      },
+    })
+
+    expect(result.status).toBe("failed")
+    expect(result.target.latestEvidenceID).toBeTruthy()
+    const artifact = Database.use((db) =>
+      db.select().from(EngineArtifactTable)
+        .where(eq(EngineArtifactTable.kind, "browser_preview_evidence"))
+        .limit(1)
+        .get(),
+    )
+    expect(artifact?.task_id).toBe(taskID)
+    expect(artifact?.payload?.status).toBe("failed")
   })
 })

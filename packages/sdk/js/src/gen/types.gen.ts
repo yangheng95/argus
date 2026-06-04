@@ -8063,25 +8063,29 @@ export type MissionWakeResponses = {
 
 export type MissionWakeResponse = MissionWakeResponses[keyof MissionWakeResponses]
 
-export type BrowserPreviewTargetData = {
+export type BrowserPreviewTaskTargetData = {
   body?: never
-  path?: never
+  path: {
+    taskID: string
+  }
   query?: {
     /**
      * Project directory for project-scoped routes. Equivalent to the x-opencorvus-directory request header.
      */
     directory?: string
-    url?: string
   }
-  url: "/browser-preview/target"
+  url: "/task/{taskID}/browser-preview"
 }
 
-export type BrowserPreviewTargetResponses = {
+export type BrowserPreviewTaskTargetResponses = {
   /**
    * Browser preview target
    */
   200: {
-    kind: "explicit-url" | "manifest-url" | "manifest-command" | "missing" | "failed"
+    id?: string
+    taskID?: string
+    latestEvidenceID?: string
+    kind: "task-url" | "explicit-url" | "manifest-url" | "manifest-command" | "missing" | "failed"
     status: "ready" | "configured" | "missing" | "failed"
     projectRoot: string
     url?: string
@@ -8094,28 +8098,75 @@ export type BrowserPreviewTargetResponses = {
       height: number
     }>
     diagnostics: Array<string>
-    source: "query" | "package-json" | "none"
+    source: "task-artifact" | "explicit" | "package-json" | "none"
   }
 }
 
-export type BrowserPreviewTargetResponse = BrowserPreviewTargetResponses[keyof BrowserPreviewTargetResponses]
+export type BrowserPreviewTaskTargetResponse =
+  BrowserPreviewTaskTargetResponses[keyof BrowserPreviewTaskTargetResponses]
 
-export type BrowserPreviewVerifyData = {
+export type BrowserPreviewSaveTaskTargetData = {
   body?: {
-    url?: string
-    viewportID?: "desktop" | "tablet" | "mobile"
+    url: string
   }
-  path?: never
+  path: {
+    taskID: string
+  }
   query?: {
     /**
      * Project directory for project-scoped routes. Equivalent to the x-opencorvus-directory request header.
      */
     directory?: string
   }
-  url: "/browser-preview/verify"
+  url: "/task/{taskID}/browser-preview/target"
 }
 
-export type BrowserPreviewVerifyResponses = {
+export type BrowserPreviewSaveTaskTargetResponses = {
+  /**
+   * Persisted browser preview target
+   */
+  200: {
+    id?: string
+    taskID?: string
+    latestEvidenceID?: string
+    kind: "task-url" | "explicit-url" | "manifest-url" | "manifest-command" | "missing" | "failed"
+    status: "ready" | "configured" | "missing" | "failed"
+    projectRoot: string
+    url?: string
+    command?: string
+    packageManager?: string
+    viewports: Array<{
+      id: "desktop" | "tablet" | "mobile"
+      labelKey: string
+      width: number
+      height: number
+    }>
+    diagnostics: Array<string>
+    source: "task-artifact" | "explicit" | "package-json" | "none"
+  }
+}
+
+export type BrowserPreviewSaveTaskTargetResponse =
+  BrowserPreviewSaveTaskTargetResponses[keyof BrowserPreviewSaveTaskTargetResponses]
+
+export type BrowserPreviewCaptureTaskTargetData = {
+  body?: {
+    targetID?: string
+    viewportID?: "desktop" | "tablet" | "mobile"
+  }
+  path: {
+    taskID: string
+  }
+  query?: {
+    /**
+     * Project directory for project-scoped routes. Equivalent to the x-opencorvus-directory request header.
+     */
+    directory?: string
+  }
+  url: "/task/{taskID}/browser-preview/capture"
+}
+
+export type BrowserPreviewCaptureTaskTargetResponses = {
   /**
    * Browser preview verification result
    */
@@ -8123,7 +8174,10 @@ export type BrowserPreviewVerifyResponses = {
     status: "passed" | "failed"
     projectRoot: string
     target: {
-      kind: "explicit-url" | "manifest-url" | "manifest-command" | "missing" | "failed"
+      id?: string
+      taskID?: string
+      latestEvidenceID?: string
+      kind: "task-url" | "explicit-url" | "manifest-url" | "manifest-command" | "missing" | "failed"
       status: "ready" | "configured" | "missing" | "failed"
       projectRoot: string
       url?: string
@@ -8136,7 +8190,7 @@ export type BrowserPreviewVerifyResponses = {
         height: number
       }>
       diagnostics: Array<string>
-      source: "query" | "package-json" | "none"
+      source: "task-artifact" | "explicit" | "package-json" | "none"
     }
     viewport: {
       id: "desktop" | "tablet" | "mobile"
@@ -8169,7 +8223,8 @@ export type BrowserPreviewVerifyResponses = {
   }
 }
 
-export type BrowserPreviewVerifyResponse = BrowserPreviewVerifyResponses[keyof BrowserPreviewVerifyResponses]
+export type BrowserPreviewCaptureTaskTargetResponse =
+  BrowserPreviewCaptureTaskTargetResponses[keyof BrowserPreviewCaptureTaskTargetResponses]
 
 export type ServerShutdownData = {
   body?: never

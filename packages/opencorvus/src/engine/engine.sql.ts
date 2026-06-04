@@ -115,6 +115,8 @@ export type EngineArtifactKind =
   | "build_session_contract"
   | "orchestrator_tool_ownership"
   | "exploration"
+  | "browser_preview_target"
+  | "browser_preview_evidence"
   | "orchestrator-stream-error"
   | "tool-execute-error"
 export type EngineAcceptanceStatus = "candidate" | "publishing" | "delivered" | "failed"

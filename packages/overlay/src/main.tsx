@@ -914,7 +914,7 @@ if (rightPanelTabsEl) {
 
 const browserPreviewEl = document.getElementById("solidBrowserPreviewMount")
 if (browserPreviewEl) {
-  render(() => <BrowserPreviewPanel />, browserPreviewEl)
+  render(() => <BrowserPreviewPanel active={() => rightPanelTab() === "browser"} directory={activeDirectory} taskID={() => activeTaskID() || undefined} />, browserPreviewEl)
 }
 
 // ── Mount: ConnectionBadge ──

@@ -15,8 +15,9 @@ import type {
   AuthRemoveResponses,
   AuthSetErrors,
   AuthSetResponses,
-  BrowserPreviewTargetResponses,
-  BrowserPreviewVerifyResponses,
+  BrowserPreviewCaptureTaskTargetResponses,
+  BrowserPreviewSaveTaskTargetResponses,
+  BrowserPreviewTaskTargetResponses,
   ChannelAttachmentCreateErrors,
   ChannelAttachmentCreateResponses,
   ChannelAttachmentGetErrors,
@@ -4795,12 +4796,43 @@ export class Mission extends HeyApiClient {
 
 export class BrowserPreview extends HeyApiClient {
   /**
-   * Resolve browser preview target
+   * Resolve task browser preview target
    *
-   * Return the single project-scoped browser preview target. The route uses an explicit URL query or package.json opencorvus.browserPreview metadata; it never guesses ports or package roots.
+   * Return the task-scoped browser preview target. Saved task artifacts are authoritative; package.json metadata is only used when the task has no saved target.
    */
-  public target<ThrowOnError extends boolean = false>(
-    parameters?: {
+  public taskTarget<ThrowOnError extends boolean = false>(
+    parameters: {
+      taskID: string
+      directory?: string
+    },
+    options?: Options<never, ThrowOnError>,
+  ) {
+    const params = buildClientParams(
+      [parameters],
+      [
+        {
+          args: [
+            { in: "path", key: "taskID" },
+            { in: "query", key: "directory" },
+          ],
+        },
+      ],
+    )
+    return (options?.client ?? this.client).get<BrowserPreviewTaskTargetResponses, unknown, ThrowOnError>({
+      url: "/task/{taskID}/browser-preview",
+      ...options,
+      ...params,
+    })
+  }
+
+  /**
+   * Save task browser preview target
+   *
+   * Persist the explicit browser preview URL as the task's preview target artifact. The overlay must use this route instead of local storage or query overrides.
+   */
+  public saveTaskTarget<ThrowOnError extends boolean = false>(
+    parameters: {
+      taskID: string
       directory?: string
       url?: string
     },
@@ -4811,28 +4843,35 @@ export class BrowserPreview extends HeyApiClient {
       [
         {
           args: [
+            { in: "path", key: "taskID" },
             { in: "query", key: "directory" },
-            { in: "query", key: "url" },
+            { in: "body", key: "url" },
           ],
         },
       ],
     )
-    return (options?.client ?? this.client).get<BrowserPreviewTargetResponses, unknown, ThrowOnError>({
-      url: "/browser-preview/target",
+    return (options?.client ?? this.client).put<BrowserPreviewSaveTaskTargetResponses, unknown, ThrowOnError>({
+      url: "/task/{taskID}/browser-preview/target",
       ...options,
       ...params,
+      headers: {
+        "Content-Type": "application/json",
+        ...options?.headers,
+        ...params.headers,
+      },
     })
   }
 
   /**
    * Capture browser preview verification evidence
    *
-   * Resolve the project-scoped preview target and capture Playwright-backed screenshot evidence for one shared viewport preset.
+   * Capture Playwright-backed screenshot evidence for the task-scoped browser preview target and persist the evidence artifact.
    */
-  public verify<ThrowOnError extends boolean = false>(
-    parameters?: {
+  public captureTaskTarget<ThrowOnError extends boolean = false>(
+    parameters: {
+      taskID: string
       directory?: string
-      url?: string
+      targetID?: string
       viewportID?: "desktop" | "tablet" | "mobile"
     },
     options?: Options<never, ThrowOnError>,
@@ -4842,15 +4881,16 @@ export class BrowserPreview extends HeyApiClient {
       [
         {
           args: [
+            { in: "path", key: "taskID" },
             { in: "query", key: "directory" },
-            { in: "body", key: "url" },
+            { in: "body", key: "targetID" },
             { in: "body", key: "viewportID" },
           ],
         },
       ],
     )
-    return (options?.client ?? this.client).post<BrowserPreviewVerifyResponses, unknown, ThrowOnError>({
-      url: "/browser-preview/verify",
+    return (options?.client ?? this.client).post<BrowserPreviewCaptureTaskTargetResponses, unknown, ThrowOnError>({
+      url: "/task/{taskID}/browser-preview/capture",
       ...options,
       ...params,
       headers: {

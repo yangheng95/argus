@@ -90,7 +90,7 @@ export function AppRoutes(root: Hono) {
     .route("/coding", CodingRoutes())
     .route("/gateway", GatewayRoutes())
     .route("/mission", MissionRoutes())
-    .route("/browser-preview", BrowserPreviewRoutes())
+    .route("/", BrowserPreviewRoutes())
     .post(
       "/shutdown",
       describeRoute({
