@@ -347,12 +347,13 @@ async function main() {
       const len = Number(res.headers()["content-length"]);
       if (Number.isFinite(len) && len > 0) harByteSize += len;
     });
-    await page.goto(input.url, { waitUntil: "networkidle", timeout: input.timeoutMs });
+    await page.goto(input.url, { waitUntil: "domcontentloaded", timeout: input.timeoutMs });
+    await page.waitForLoadState("networkidle", { timeout: Math.min(input.timeoutMs, 5000) }).catch(() => undefined);
     await Promise.race([
       page.evaluateHandle(() => document.fonts && document.fonts.ready),
-      new Promise((_, reject) => setTimeout(() => reject(new Error("document.fonts.ready timeout")), input.timeoutMs)),
-    ]);
-    await page.waitForFunction(() => document.readyState === "complete", { timeout: input.timeoutMs });
+      new Promise((resolve) => setTimeout(resolve, Math.min(input.timeoutMs, 5000))),
+    ]).catch(() => undefined);
+    await page.waitForFunction(() => document.readyState === "complete", { timeout: Math.min(input.timeoutMs, 5000) }).catch(() => undefined);
     await page.waitForFunction(
       () => {
         const canvases = Array.from(document.querySelectorAll("canvas"));

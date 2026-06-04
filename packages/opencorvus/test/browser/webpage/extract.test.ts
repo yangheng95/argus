@@ -1,6 +1,9 @@
 import { describe, test, expect } from "bun:test"
 import { createServer, type Server } from "node:http"
 import { AddressInfo } from "node:net"
+import { mkdirSync, rmSync } from "node:fs"
+import os from "node:os"
+import path from "node:path"
 
 import { extractPage } from "../../../src/browser/webpage/extract"
 import { ExtractedPageSchema } from "../../../src/browser/webpage/extracted-page"
@@ -120,6 +123,45 @@ describe("extractPage", () => {
 })
 
 describe("extractPage error paths", () => {
+  test(
+    "keeps DOM evidence when one external image socket closes during asset mirroring",
+    async () => {
+      const outputDir = path.join(os.tmpdir(), `extract-image-skip-${process.pid}-${Date.now()}`)
+      mkdirSync(outputDir, { recursive: true })
+      const progress: string[] = []
+      const server = createServer((req, res) => {
+        if (req.url === "/broken.jpg") {
+          res.destroy(new Error("simulated image socket close"))
+          return
+        }
+        res.writeHead(200, { "Content-Type": "text/html", Connection: "close" })
+        res.end(`<!doctype html><html><head><title>Image Skip</title></head><body><main><h1>Evidence survives</h1><img src="/broken.jpg" alt="broken asset"></main></body></html>`)
+      })
+      await new Promise<void>((ok) => server.listen(0, "127.0.0.1", ok))
+      const port = (server.address() as AddressInfo).port
+      try {
+        const result = await extractPage({
+          url: `http://127.0.0.1:${port}/`,
+          noScreenshots: true,
+          waitMs: 0,
+          outputDir,
+          onProgress: (message) => progress.push(message),
+        })
+
+        expect(result.title).toBe("Image Skip")
+        expect(result.tree.length).toBeGreaterThan(0)
+        expect(result.stats.extractedElements).toBeGreaterThan(0)
+        expect(result.assets.imageMap ?? {}).toEqual({})
+        expect(progress.some((message) => message.includes("skipped image"))).toBe(true)
+        expect(progress.some((message) => message.includes("skipped 1 unavailable images"))).toBe(true)
+      } finally {
+        server.close()
+        rmSync(outputDir, { recursive: true, force: true })
+      }
+    },
+    90_000,
+  )
+
   test(
     "throws UrlExtractError on navigation failure",
     async () => {

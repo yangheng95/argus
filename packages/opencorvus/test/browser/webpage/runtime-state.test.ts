@@ -59,6 +59,13 @@ describe("runtime-state evidence", () => {
     }
   }, 90_000)
 
+  test("does not require networkidle for runtime-state navigation", async () => {
+    const source = await fs.readFile(path.resolve(import.meta.dir, "../../../src/browser/webpage/runtime-state.ts"), "utf8")
+
+    expect(source).toContain('waitUntil: "domcontentloaded"')
+    expect(source).not.toContain('page.goto(input.url, { waitUntil: "networkidle"')
+  })
+
   test("identifies viewport-persistent tab evidence across scroll snapshots", () => {
     const snapshots: RuntimeStateSnapshot[] = [
       snapshot("initial", 0, 148, 148),
