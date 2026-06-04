@@ -427,5 +427,12 @@ export async function restoreInitialWorkspace(): Promise<boolean> {
     bumpDirectoryEpoch();
   }
 
+  if (
+    (workspaceTaskID || "").trim() ||
+    boardStore.selectedSource?.kind === "task" ||
+    boardStore.board?.task
+  ) {
+    await selectTask("");
+  }
   return false;
 }

@@ -10,7 +10,7 @@ beforeEach(() => {
   setBoardStore("board", null as any);
   setBoardStore("tasks", []);
   setBoardStore("pendingTasks", []);
-  setBoardStore("selectedTaskID", "");
+  setBoardStore("selectedSource", null);
   setBoardStore("taskSwitching", false);
   setOrphanedSelectionHandler(null);
 });
@@ -20,7 +20,7 @@ test("applyTasks clears orphaned selection even when board is missing", () => {
   setOrphanedSelectionHandler(() => {
     orphaned += 1;
   });
-  setBoardStore("selectedTaskID", "tsk_orphaned");
+  setBoardStore("selectedSource", { kind: "task", id: "tsk_orphaned" });
   setBoardStore("board", null as any);
 
   applyTasks([]);
@@ -33,7 +33,7 @@ test("applyTasks does not clear selection during an in-flight task switch", () =
   setOrphanedSelectionHandler(() => {
     orphaned += 1;
   });
-  setBoardStore("selectedTaskID", "tsk_loading");
+  setBoardStore("selectedSource", { kind: "task", id: "tsk_loading" });
   setBoardStore("taskSwitching", true);
 
   applyTasks([]);
