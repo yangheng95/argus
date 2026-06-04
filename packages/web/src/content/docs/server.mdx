@@ -53,8 +53,8 @@ For non-loopback hostnames the server requires the `OPENCORVUS_SERVER_PASSWORD` 
 ## Embedding
 
 ```ts
-import { createOpencode } from "@opencorvus-ai/sdk/v2"
-const { client, shutdown } = await createOpencode({ directory: "/path/to/repo" })
+import { createOpenCorvus } from "@opencorvus-ai/sdk"
+const { client, server } = await createOpenCorvus({ directory: "/path/to/repo" })
 ```
 
 This boots a server in-process on a random port and returns a client connected to it. Use this when you don't want a separate `opencorvus serve` process.

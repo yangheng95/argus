@@ -16,6 +16,13 @@ function notFoundText(locals: unknown) {
   return "share.not_found"
 }
 
+export async function getStaticPaths() {
+  const docs = await getCollection("docs")
+  return docs.map((doc) => ({
+    params: { slug: doc.id },
+  }))
+}
+
 export const GET: APIRoute = async ({ params, locals }) => {
   const slug = params.slug || "index"
   const docs = await getCollection("docs")

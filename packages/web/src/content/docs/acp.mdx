@@ -20,7 +20,7 @@ Source: `packages/opencorvus/src/cli/cmd/acp.ts`
 On startup:
 
 1. Internal `opencorvus serve` on a random port
-2. Creates `@opencorvus-ai/sdk/v2` client against that internal server
+2. Creates an `@opencorvus-ai/sdk` client against that internal server
 3. Opens a JSON-RPC channel over **stdin/stdout** via `ndJsonStream` from `@agentclientprotocol/sdk`
 4. Instantiates `ACP.Agent`, waits for client messages
 
