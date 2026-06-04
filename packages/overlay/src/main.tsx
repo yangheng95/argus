@@ -28,10 +28,10 @@ import { LogViewer } from "./components/LogViewer"
 import { WorkspacePanel } from "./components/WorkspacePanel"
 import { FileExplorerPanel } from "./components/FileExplorerPanel"
 import { FileEditorPane } from "./components/FileEditorPane"
-import { RightFilesPanel } from "./components/RightFilesPanel"
+import { FileChangesPanel } from "./components/FileChangesPanel"
 import { BrowserPreviewPanel } from "./components/BrowserPreviewPanel"
-import { CodingAssistantPanel } from "./components/CodingAssistantPanel"
-import { DEFAULT_RIGHT_PANEL_TAB, RightPanelTabs, type RightPanelTab } from "./components/RightPanelTabs"
+import { SideActivityToolbar, type SideActivity } from "./components/SideActivityToolbar"
+import { TuiRuntimePanel } from "./components/TuiRuntimePanel"
 import { fileWorkbenchOpen } from "./services/file-workbench"
 import type { DiffTarget } from "./services/diff"
 import { initApp } from "./services/init"
@@ -173,7 +173,39 @@ const [logOpen, setLogOpen] = createSignal(false)
 // open/close cycles so reopening restores the last active diff target.
 const [workspaceOpen, setWorkspaceOpen] = createSignal(false)
 const [workspaceTarget, setWorkspaceTarget] = createSignal<DiffTarget>({ filePath: "" })
-const [rightPanelTab, setRightPanelTab] = createSignal<RightPanelTab>(DEFAULT_RIGHT_PANEL_TAB)
+
+type LeftActivity = "tasks" | "explorer" | "changes"
+type RightActivity = "tui" | "browser" | "inspector"
+
+const DEFAULT_LEFT_ACTIVITY: LeftActivity = "tasks"
+const DEFAULT_RIGHT_ACTIVITY: RightActivity = "tui"
+
+const LEFT_ACTIVITIES: readonly SideActivity<LeftActivity>[] = [
+  { id: "tasks", icon: "goals", labelKey: "sidebar.title" },
+  { id: "explorer", icon: "folder", labelKey: "explorer.title" },
+  { id: "changes", icon: "file-document", labelKey: "section.files" },
+]
+
+const RIGHT_ACTIVITIES: readonly SideActivity<RightActivity>[] = [
+  { id: "tui", icon: "terminal", labelKey: "tui.title" },
+  { id: "browser", icon: "inspect", labelKey: "browser_preview.title" },
+  { id: "inspector", icon: "panel-right", labelKey: "sections.title" },
+]
+
+const LEFT_ACTIVITY_LABEL_KEYS: Record<LeftActivity, string> = {
+  tasks: "sidebar.title",
+  explorer: "explorer.title",
+  changes: "section.files",
+}
+
+const RIGHT_ACTIVITY_LABEL_KEYS: Record<RightActivity, string> = {
+  tui: "tui.title",
+  browser: "browser_preview.title",
+  inspector: "sections.title",
+}
+
+const [leftActivity, setLeftActivity] = createSignal<LeftActivity>(DEFAULT_LEFT_ACTIVITY)
+const [rightActivity, setRightActivity] = createSignal<RightActivity>(DEFAULT_RIGHT_ACTIVITY)
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return !!value && typeof value === "object" && !Array.isArray(value)
@@ -485,7 +517,7 @@ function closeWorkspace(): void {
 /** Open (or switch to) a diff file in the workspace. */
 function openWorkspaceDiff(target: DiffTarget): void {
   setWorkspaceTarget(target)
-  setRightPanelTab("files")
+  setLeftActivity("changes")
   openWorkspace()
 }
 
@@ -576,7 +608,7 @@ document.addEventListener(
 
 window.addEventListener(
   "acceptance:focus-changes",
-  () => setRightPanelTab("files"),
+  () => setLeftActivity("changes"),
   listenerOpts,
 )
 
@@ -675,12 +707,12 @@ if (fileEditorMountEl) {
   render(() => <FileEditorPane />, fileEditorMountEl)
 }
 
-const rightFilesMountEl = document.getElementById("solidRightFilesMount")
-if (rightFilesMountEl) {
-  rightFilesMountEl.innerHTML = ""
+const fileChangesMountEl = document.getElementById("solidFileChangesMount")
+if (fileChangesMountEl) {
+  fileChangesMountEl.innerHTML = ""
   render(
-    () => <RightFilesPanel diffOpen={workspaceOpen()} diffTarget={workspaceTarget()} onCloseDiff={closeWorkspace} />,
-    rightFilesMountEl,
+    () => <FileChangesPanel diffOpen={workspaceOpen()} diffTarget={workspaceTarget()} onCloseDiff={closeWorkspace} />,
+    fileChangesMountEl,
   )
 }
 
@@ -698,13 +730,13 @@ if (workspaceMountEl) {
 const fileExplorerMountEl = document.getElementById("solidFileExplorerMount")
 if (fileExplorerMountEl) {
   fileExplorerMountEl.innerHTML = ""
-  render(() => <FileExplorerPanel active={() => rightPanelTab() === "explorer"} directory={activeDirectory} />, fileExplorerMountEl)
+  render(() => <FileExplorerPanel active={() => leftActivity() === "explorer"} directory={activeDirectory} />, fileExplorerMountEl)
 }
 
-const codingAssistantMountEl = document.getElementById("solidCodingAssistantMount")
-if (codingAssistantMountEl) {
-  codingAssistantMountEl.innerHTML = ""
-  render(() => <CodingAssistantPanel active={() => rightPanelTab() === "assistant"} />, codingAssistantMountEl)
+const tuiRuntimeMountEl = document.getElementById("solidTuiRuntimeMount")
+if (tuiRuntimeMountEl) {
+  tuiRuntimeMountEl.innerHTML = ""
+  render(() => <TuiRuntimePanel active={() => rightActivity() === "tui"} />, tuiRuntimeMountEl)
 }
 
 // ── Sidebar title backdoor: double-click resets DB ──
@@ -897,24 +929,43 @@ if (workspaceEditorLaunchersEl) {
   render(() => <WorkspaceEditorLaunchers />, workspaceEditorLaunchersEl)
 }
 
-const leftPanelHeaderCollapseEl = document.getElementById("solidLeftPanelHeaderCollapseControl")
-if (leftPanelHeaderCollapseEl) {
-  render(() => <LeftPanelHeaderCollapseControl />, leftPanelHeaderCollapseEl)
+const leftActivityToolbarEl = document.getElementById("solidLeftActivityToolbar")
+if (leftActivityToolbarEl) {
+  render(
+    () => (
+      <SideActivityToolbar
+        side="left"
+        activities={LEFT_ACTIVITIES}
+        active={leftActivity}
+        ariaLabelKey="activity.left"
+        onSelect={setLeftActivity}
+        trailing={<LeftPanelHeaderCollapseControl />}
+      />
+    ),
+    leftActivityToolbarEl,
+  )
 }
 
-const rightPanelHeaderCollapseEl = document.getElementById("solidRightPanelHeaderCollapseControl")
-if (rightPanelHeaderCollapseEl) {
-  render(() => <RightPanelHeaderCollapseControl />, rightPanelHeaderCollapseEl)
-}
-
-const rightPanelTabsEl = document.getElementById("solidRightPanelTabs")
-if (rightPanelTabsEl) {
-  render(() => <RightPanelTabs active={rightPanelTab} onSelect={setRightPanelTab} />, rightPanelTabsEl)
+const rightActivityToolbarEl = document.getElementById("solidRightActivityToolbar")
+if (rightActivityToolbarEl) {
+  render(
+    () => (
+      <SideActivityToolbar
+        side="right"
+        activities={RIGHT_ACTIVITIES}
+        active={rightActivity}
+        ariaLabelKey="activity.right"
+        onSelect={setRightActivity}
+        trailing={<RightPanelHeaderCollapseControl />}
+      />
+    ),
+    rightActivityToolbarEl,
+  )
 }
 
 const browserPreviewEl = document.getElementById("solidBrowserPreviewMount")
 if (browserPreviewEl) {
-  render(() => <BrowserPreviewPanel active={() => rightPanelTab() === "browser"} directory={activeDirectory} taskID={() => activeTaskID() || undefined} />, browserPreviewEl)
+  render(() => <BrowserPreviewPanel active={() => rightActivity() === "browser"} directory={activeDirectory} taskID={() => activeTaskID() || undefined} />, browserPreviewEl)
 }
 
 // ── Mount: ConnectionBadge ──
@@ -1206,17 +1257,37 @@ disposers.push(
     })
 
     createEffect(() => {
-      const active = rightPanelTab()
-      const explorer = document.getElementById("rightPanelExplorer")
-      const assistant = document.getElementById("rightPanelAssistant")
-      const files = document.getElementById("rightPanelFiles")
-      const browser = document.getElementById("rightPanelBrowser")
-      const inspector = document.getElementById("rightPanelInspector")
-      if (explorer) explorer.dataset.active = String(active === "explorer")
-      if (assistant) assistant.dataset.active = String(active === "assistant")
-      if (files) files.dataset.active = String(active === "files")
-      if (browser) browser.dataset.active = String(active === "browser")
-      if (inspector) inspector.dataset.active = String(active === "inspector")
+      const active = leftActivity()
+      const sidebar = document.getElementById("sidebar")
+      const title = document.querySelector<HTMLElement>(".sidebar-title")
+      const actions = document.querySelector<HTMLElement>("[data-activity-actions='tasks']")
+      const bodies: Record<LeftActivity, HTMLElement | null> = {
+        tasks: document.getElementById("leftPanelTasks"),
+        explorer: document.getElementById("leftPanelExplorer"),
+        changes: document.getElementById("leftPanelChanges"),
+      }
+      if (sidebar) sidebar.dataset.leftActivity = active
+      if (title) title.textContent = t(LEFT_ACTIVITY_LABEL_KEYS[active])
+      if (actions) actions.hidden = active !== "tasks"
+      for (const [activity, body] of Object.entries(bodies)) {
+        if (body) body.dataset.active = String(activity === active)
+      }
+    })
+
+    createEffect(() => {
+      const active = rightActivity()
+      const sections = document.getElementById("sections")
+      const title = document.getElementById("rightPanelTitle")
+      const bodies: Record<RightActivity, HTMLElement | null> = {
+        tui: document.getElementById("rightPanelTui"),
+        browser: document.getElementById("rightPanelBrowser"),
+        inspector: document.getElementById("rightPanelInspector"),
+      }
+      if (sections) sections.dataset.rightActivity = active
+      if (title) title.textContent = t(RIGHT_ACTIVITY_LABEL_KEYS[active])
+      for (const [activity, body] of Object.entries(bodies)) {
+        if (body) body.dataset.active = String(activity === active)
+      }
     })
 
     createEffect(() => {

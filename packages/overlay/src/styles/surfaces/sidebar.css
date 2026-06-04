@@ -6,7 +6,7 @@
   max-width: var(--ui-sidebar-width);
   flex: 0 1 var(--ui-sidebar-width);
   display: flex;
-  flex-direction: column;
+  flex-direction: row;
   border: 0;
   border-radius: 0;
   background: var(--rail-surface);
@@ -16,6 +16,10 @@
     width var(--ui-duration-base) var(--ui-timing-standard),
     min-width var(--ui-duration-base) var(--ui-timing-standard);
   overflow: hidden;
+}
+
+.sidebar-content {
+  background: var(--rail-surface);
 }
 
 /* Sidebar header text lanes: panel collapse control, title, then
@@ -979,26 +983,11 @@
   margin-top: calc(2px * var(--ui-scale));
 }
 
-.sidebar[data-collapsed="true"] .sidebar-footer {
-  display: none;
-}
-
 .sidebar[data-collapsed="true"] {
   width: var(--ui-collapsed-pane-width);
   min-width: var(--ui-collapsed-pane-width);
   max-width: var(--ui-collapsed-pane-width);
   flex: 0 0 var(--ui-collapsed-pane-width);
-}
-
-.sidebar[data-collapsed="true"] .sidebar-title,
-.sidebar[data-collapsed="true"] .sidebar-body,
-.sidebar[data-collapsed="true"] .sidebar-header-actions,
-.sidebar[data-collapsed="true"] .sidebar-btn-label {
-  display: none;
-}
-
-.sidebar[data-collapsed="true"] .sidebar-header {
-  justify-content: flex-start;
 }
 
 .sidebar[data-collapsed="true"] .panel-header-collapse-mount {

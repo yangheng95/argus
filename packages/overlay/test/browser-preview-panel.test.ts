@@ -11,17 +11,18 @@ function readText(rel: string): string {
 test("browser preview panel uses mature primitives and HostTransport-backed service", () => {
   const component = readText("src/components/BrowserPreviewPanel.tsx")
   const service = readText("src/services/browser-preview.ts")
-  const tabs = readText("src/components/RightPanelTabs.tsx")
   const html = readText("src/index.html")
   const main = readText("src/main.tsx")
   const css = readText("src/styles/surfaces/inspector.css")
+  const activityCss = readText("src/styles/surfaces/activity.css")
 
-  expect(tabs).toContain('"browser"')
-  expect(tabs).toContain('props.onSelect("browser")')
+  expect(html).toContain('id="solidRightActivityToolbar"')
   expect(html).toContain('id="rightPanelBrowser"')
   expect(html).toContain('id="solidBrowserPreviewMount"')
+  expect(html).not.toContain('id="solidRightPanelTabs"')
   expect(main).toContain("<BrowserPreviewPanel")
-  expect(main).toContain('browser.dataset.active = String(active === "browser")')
+  expect(main).toContain('active={() => rightActivity() === "browser"}')
+  expect(main).toContain('browser: document.getElementById("rightPanelBrowser")')
 
   expect(component).toContain('from "./ui/Tabs"')
   expect(component).toContain('from "./ui/Button"')
@@ -46,7 +47,7 @@ test("browser preview panel uses mature primitives and HostTransport-backed serv
   expect(service).not.toContain("fetch(")
   expect(service).not.toContain("BROWSER_PREVIEW_VIEWPORTS")
 
-  expect(css).toContain(".sections-browser-tab")
+  expect(activityCss).toContain(".sections-browser-activity")
   expect(css).toContain(".browser-preview-panel")
   expect(css).toContain(".browser-preview-frame")
   expect(css).toContain(".browser-preview-evidence")

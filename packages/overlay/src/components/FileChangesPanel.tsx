@@ -5,13 +5,13 @@ import { ChangesPanel } from "./ChangesPanel"
 import { DiffPreviewPanel } from "./DiffPreviewPanel"
 import { Icon } from "./Icon"
 
-export interface RightFilesPanelProps {
+export interface FileChangesPanelProps {
   diffOpen: boolean
   diffTarget: DiffTarget
   onCloseDiff: () => void
 }
 
-export function RightFilesPanel(props: RightFilesPanelProps) {
+export function FileChangesPanel(props: FileChangesPanelProps) {
   const [activeView, setActiveView] = createSignal<"changes" | "diff">("changes")
   const hasDiff = createMemo(() => props.diffOpen && !!props.diffTarget?.filePath)
 
@@ -26,11 +26,11 @@ export function RightFilesPanel(props: RightFilesPanelProps) {
   })
 
   return (
-    <section class="right-files-panel" data-active-view={activeView()} aria-label={t("section.files")}>
-      <header class="right-files-switcher" aria-label={t("section.files")}>
+    <section class="file-changes-panel" data-active-view={activeView()} aria-label={t("section.files")}>
+      <header class="file-changes-switcher" aria-label={t("section.files")}>
         <button
           type="button"
-          class="right-files-tab"
+          class="file-changes-tab"
           data-active={activeView() === "changes" ? "true" : "false"}
           onClick={() => setActiveView("changes")}
         >
@@ -39,7 +39,7 @@ export function RightFilesPanel(props: RightFilesPanelProps) {
         </button>
         <button
           type="button"
-          class="right-files-tab"
+          class="file-changes-tab"
           data-active={activeView() === "diff" ? "true" : "false"}
           disabled={!hasDiff()}
           onClick={() => setActiveView("diff")}
@@ -48,11 +48,11 @@ export function RightFilesPanel(props: RightFilesPanelProps) {
           <span>{t("workspace.diff")}</span>
         </button>
       </header>
-      <div class="right-files-body">
-        <section class="right-files-view" data-active={activeView() === "changes" ? "true" : "false"}>
+      <div class="file-changes-body">
+        <section class="file-changes-view" data-active={activeView() === "changes" ? "true" : "false"}>
           <ChangesPanel hasSelectedTask />
         </section>
-        <section class="right-files-view right-files-diff" data-active={activeView() === "diff" ? "true" : "false"}>
+        <section class="file-changes-view file-changes-diff" data-active={activeView() === "diff" ? "true" : "false"}>
           <Show
             when={hasDiff()}
             fallback={
@@ -62,7 +62,7 @@ export function RightFilesPanel(props: RightFilesPanelProps) {
               </div>
             }
           >
-            <header class="right-files-diff-header">
+            <header class="file-changes-diff-header">
               <span>{t("workspace.diff")}</span>
               <button
                 type="button"

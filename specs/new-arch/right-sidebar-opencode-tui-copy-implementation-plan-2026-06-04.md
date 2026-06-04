@@ -808,3 +808,35 @@ Next required tests:
 - Plugin runtime/slot tests once OpenCode TUI plugin modules are copied.
 - Browser/right-sidebar visual E2E for the screenshot-level layout.
 - Agent workflow regression tests for prompt submit, permission reply, question reply, and subagent-session navigation once the TUI can be mounted under the right sidebar host.
+
+### 2026-06-05 Round 3: overlay side activity shell and project-bound TUI entry
+
+Implemented:
+
+- Replaced the old overlay right horizontal tab entry with a shared `SideActivityToolbar` mounted on both side panes.
+- Moved task list, file explorer, and file changes into left side activities: `tasks`, `explorer`, `changes`.
+- Made the right side default to the project-bound TUI activity, with right activities `tui`, `browser`, and `inspector`.
+- Replaced the old right-side browser assistant mount with `TuiRuntimePanel`, which reads the canonical server route `tui/runtime/status` instead of using the deleted hand-written browser assistant transport.
+- Renamed the file changes surface to `FileChangesPanel` and removed active source/test references to `RightFilesPanel`, `RightPanelTabs`, `rightPanelTab`, and `solidRightPanelTabs`.
+- Added `packages/overlay/src/styles/surfaces/activity.css` as the single CSS source for side activity chrome and the TUI runtime status panel.
+- Added static i18n keys for activity rails and the TUI runtime status panel.
+
+Verified:
+
+- `bun run --cwd packages/overlay typecheck`
+- `bun test test/coding-assistant-panel.test.ts test/browser-preview-panel.test.ts test/file-explorer-editor.test.ts test/acceptance-panel-mount.test.ts` from `packages/overlay`
+- `bun run --cwd packages/overlay check:i18n`
+
+Independent review findings incorporated:
+
+- Reviewer 1 confirmed the half-migrated overlay shell originally broke `RightPanelTabs`/`RightFilesPanel` imports and JSX; this round fixed the compile break, replaced old tests, and made the activity shell a single mounted state source.
+- Reviewer 2 compared latest OpenCode dev commit `94c49b20ba207a92e4150c552d616930b6560e39` and identified the real next gap: OpenCode plugin runtime, slots, internal sidebar plugins, and diff-viewer plugins are still missing.
+- Reviewer 3 confirmed the project-bound side TUI tool surface should read task state from existing `EngineRoutes`/`EngineService`, operate through `PanelTool` and `/panel/message/stream`, and avoid duplicating overlay services or `/tui/runtime/proxy` as a task API.
+
+OpenCode gap after the round:
+
+- This is only the overlay side activity shell and a canonical runtime-status entry. It does not yet render the screenshot-level OpenCode TUI.
+- The right TUI activity does not yet host `ghostty-web`, server PTY output, keyboard input, or OpenTUI pixels inside the overlay.
+- The OpenCode plugin runtime/slot model is still absent from `packages/opencorvus/src/cli/cmd/tui/plugin/*`.
+- Context, MCP, LSP, Todo, Modified Files, and Agent Team panes are not yet copied from OpenCode feature plugins.
+- The current `TuiRuntimePanel` is intentionally not a replacement for the terminal viewport; completion still requires the PTY/terminal host adapter and visual E2E.

@@ -1,0 +1,368 @@
+/* Side activity bars for the overlay side panels.
+   This is the single source for VS Code style left/right activity chrome. */
+
+.side-panel-content {
+  display: flex;
+  flex: 1 1 0;
+  min-width: 0;
+  min-height: 0;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.sidebar[data-collapsed="true"] .side-panel-content,
+.sections[data-collapsed="true"] .side-panel-content {
+  display: none;
+}
+
+.side-activity-toolbar-mount {
+  flex: 0 0 var(--ui-collapsed-pane-width);
+  width: var(--ui-collapsed-pane-width);
+  min-width: var(--ui-collapsed-pane-width);
+  border-right: var(--oc-border-width) solid color-mix(in srgb, var(--border) 72%, transparent);
+  background: var(--surface-inset);
+}
+
+.sections > .side-activity-toolbar-mount {
+  order: 2;
+  border-right: 0;
+  border-left: var(--oc-border-width) solid color-mix(in srgb, var(--border) 72%, transparent);
+}
+
+.side-activity-toolbar {
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: space-between;
+  gap: calc(8px * var(--ui-scale));
+  padding: calc(6px * var(--ui-scale)) 0;
+}
+
+.side-activity-toolbar__items,
+.side-activity-toolbar__trailing {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: calc(4px * var(--ui-scale));
+}
+
+.side-activity-toolbar [data-ui="side-activity-button"] {
+  position: relative;
+  width: calc(38px * var(--ui-scale));
+  height: calc(36px * var(--ui-scale));
+  border-radius: 0;
+  color: var(--text-muted);
+}
+
+.side-activity-toolbar .panel-header-collapse-mount .oc-button {
+  width: calc(38px * var(--ui-scale));
+  height: calc(36px * var(--ui-scale));
+  min-width: calc(38px * var(--ui-scale));
+  min-height: calc(36px * var(--ui-scale));
+  border-radius: 0;
+}
+
+.side-activity-toolbar [data-ui="side-activity-button"][data-active="true"] {
+  color: var(--text-strong);
+  background: color-mix(in srgb, var(--accent) 13%, transparent);
+}
+
+.side-activity-toolbar [data-ui="side-activity-button"][data-active="true"]::before {
+  content: "";
+  position: absolute;
+  top: calc(6px * var(--ui-scale));
+  bottom: calc(6px * var(--ui-scale));
+  width: calc(2px * var(--ui-scale));
+  border-radius: var(--oc-radius-pill);
+  background: var(--accent);
+}
+
+.side-activity-toolbar [data-side="left"][data-ui="side-activity-button"][data-active="true"]::before {
+  left: 0;
+}
+
+.side-activity-toolbar [data-side="right"][data-ui="side-activity-button"][data-active="true"]::before {
+  right: 0;
+}
+
+.side-activity-label {
+  position: absolute;
+  width: calc(1px * var(--ui-scale));
+  height: calc(1px * var(--ui-scale));
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+
+.side-activity-body,
+.sections-tab-body {
+  flex: 1 1 0;
+  min-height: 0;
+  overflow: hidden;
+}
+
+.side-activity-body[data-active="false"],
+.sections-tab-body[data-active="false"] {
+  display: none;
+}
+
+.side-activity-body[data-active="true"],
+.sections-tab-body[data-active="true"],
+.sidebar-explorer-panel,
+.sidebar-file-changes-panel,
+.sections-tui-activity,
+.sections-browser-activity {
+  display: flex;
+  flex: 1 1 0;
+  min-height: 0;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.sidebar-explorer-panel,
+.sidebar-file-changes-panel,
+.sections-tui-activity,
+.sections-browser-activity {
+  padding: var(--ui-gap-sm);
+  container: side-activity / inline-size;
+}
+
+.file-changes-panel,
+.file-changes-body,
+.file-changes-view,
+.file-changes-panel .file-changes-view {
+  display: flex;
+  flex: 1 1 0;
+  min-height: 0;
+  flex-direction: column;
+}
+
+.file-changes-switcher {
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  gap: calc(4px * var(--ui-scale));
+  margin-bottom: calc(6px * var(--ui-scale));
+}
+
+.file-changes-tab {
+  flex: 1 1 0;
+  min-width: 0;
+  min-height: calc(26px * var(--ui-scale));
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: calc(5px * var(--ui-scale));
+  border: 0;
+  border-radius: var(--oc-radius-soft);
+  background: transparent;
+  color: var(--text-muted);
+  cursor: pointer;
+  font-size: var(--ui-font-control);
+}
+
+.file-changes-tab[data-active="true"] {
+  background: color-mix(in srgb, var(--accent) 10%, transparent);
+  color: var(--text-strong);
+}
+
+.file-changes-tab:disabled {
+  opacity: var(--ui-opacity-dim);
+  cursor: default;
+}
+
+.file-changes-view[data-active="false"] {
+  display: none;
+}
+
+.file-changes-panel .changes-list {
+  flex: 1 1 0;
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  padding-right: calc(2px * var(--ui-scale));
+}
+
+.file-changes-diff-header {
+  flex: 0 0 auto;
+  min-height: var(--ui-panel-header-height);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: calc(8px * var(--ui-scale));
+  padding: 0 calc(8px * var(--ui-scale));
+  background: var(--surface-strong);
+  color: var(--text-strong);
+  font-size: var(--ui-font-title);
+  font-weight: var(--ui-font-weight-strong);
+}
+
+.file-changes-panel,
+.file-changes-body,
+.file-changes-view,
+.file-changes-panel .file-changes-view {
+  display: flex;
+  flex: 1 1 0;
+  min-height: 0;
+  flex-direction: column;
+}
+
+.file-changes-switcher {
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  gap: calc(4px * var(--ui-scale));
+  margin-bottom: calc(6px * var(--ui-scale));
+}
+
+.file-changes-tab {
+  flex: 1 1 0;
+  min-width: 0;
+  min-height: calc(26px * var(--ui-scale));
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: calc(5px * var(--ui-scale));
+  border: 0;
+  border-radius: var(--oc-radius-soft);
+  background: transparent;
+  color: var(--text-muted);
+  cursor: pointer;
+  font-size: var(--ui-font-control);
+}
+
+.file-changes-tab[data-active="true"] {
+  background: color-mix(in srgb, var(--accent) 10%, transparent);
+  color: var(--text-strong);
+}
+
+.file-changes-tab:disabled {
+  opacity: var(--ui-opacity-dim);
+  cursor: default;
+}
+
+.file-changes-view[data-active="false"] {
+  display: none;
+}
+
+.file-changes-panel .changes-list {
+  flex: 1 1 0;
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  padding-right: calc(2px * var(--ui-scale));
+}
+
+.file-changes-diff-header {
+  flex: 0 0 auto;
+  min-height: var(--ui-panel-header-height);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: calc(8px * var(--ui-scale));
+  padding: 0 calc(8px * var(--ui-scale));
+  background: var(--surface-strong);
+  color: var(--text-strong);
+  font-size: var(--ui-font-title);
+  font-weight: var(--ui-font-weight-strong);
+}
+
+.tui-runtime-panel {
+  display: flex;
+  flex: 1 1 0;
+  min-height: 0;
+  flex-direction: column;
+  gap: calc(8px * var(--ui-scale));
+  color: var(--text);
+}
+
+.tui-runtime-header,
+.tui-runtime-title,
+.tui-runtime-status,
+.tui-runtime-row,
+.tui-runtime-note {
+  display: flex;
+  align-items: center;
+}
+
+.tui-runtime-header {
+  justify-content: space-between;
+  gap: calc(8px * var(--ui-scale));
+}
+
+.tui-runtime-title {
+  gap: calc(6px * var(--ui-scale));
+  color: var(--text-strong);
+  font-size: var(--ui-font-control);
+  font-weight: var(--ui-font-weight-strong);
+}
+
+.tui-runtime-status,
+.tui-runtime-detail,
+.tui-runtime-note {
+  border: var(--oc-border-width) solid var(--border);
+  background: var(--surface-inset);
+}
+
+.tui-runtime-status {
+  min-height: calc(28px * var(--ui-scale));
+  gap: calc(7px * var(--ui-scale));
+  padding: 0 calc(8px * var(--ui-scale));
+  color: var(--text-muted);
+  font-size: var(--ui-font-control);
+}
+
+.tui-runtime-status-dot {
+  width: calc(7px * var(--ui-scale));
+  height: calc(7px * var(--ui-scale));
+  border-radius: var(--oc-radius-pill);
+  background: var(--text-muted);
+}
+
+.tui-runtime-status[data-state="running"] .tui-runtime-status-dot {
+  background: var(--good);
+}
+
+.tui-runtime-status[data-state="error"] .tui-runtime-status-dot {
+  background: var(--bad);
+}
+
+.tui-runtime-detail {
+  display: flex;
+  flex-direction: column;
+}
+
+.tui-runtime-row {
+  min-height: calc(28px * var(--ui-scale));
+  justify-content: space-between;
+  gap: calc(8px * var(--ui-scale));
+  padding: 0 calc(8px * var(--ui-scale));
+  border-bottom: var(--oc-border-width) solid color-mix(in srgb, var(--border) 70%, transparent);
+  color: var(--text-muted);
+  font-size: var(--ui-font-control);
+}
+
+.tui-runtime-row:last-child {
+  border-bottom: 0;
+}
+
+.tui-runtime-row code {
+  min-width: 0;
+  overflow: hidden;
+  color: var(--text);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.tui-runtime-note {
+  gap: calc(6px * var(--ui-scale));
+  padding: calc(8px * var(--ui-scale));
+  color: var(--text-muted);
+  font-size: var(--ui-font-control);
+}
+
+.tui-runtime-note[data-state="error"] {
+  color: var(--bad);
+  border-color: color-mix(in srgb, var(--bad) 42%, var(--border));
+}

@@ -1,45 +1,49 @@
-// Regression for iter18 of the design-language audit.
-//
-// User feedback (2026-05-02 22:57): "右侧面板也有个圆角" — the
-// right panel also has a rounded corner. Following iter15 which
-// made the `.sections` shell flat, the inner tab-list pill and
-// individual tab pills still rendered as rounded chips. With the
-// flat shell around them the rounded chips read as a bolted-on
-// island, not as part of the same surface.
-//
-// Drop both radii so the tablist sits flush with its container
-// and the tabs read as plain text affordances. The active tab
-// keeps its accent border + accent-tinted background so the
-// active state is still visible — just on a flat rectangle now.
-
 import { describe, expect, test } from "bun:test"
 import { readFileSync } from "node:fs"
 import path from "node:path"
 
-const STYLES = readFileSync(
-  path.resolve(import.meta.dir, "..", "src", "styles", "primitives", "tabs.css"),
-  "utf8",
-)
+const ROOT = path.resolve(import.meta.dir, "..")
 
-function ruleBody(selector: string): string {
-  const escaped = selector.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")
-  const head = new RegExp(`(^|\\n)${escaped}\\s*\\{`, "m").exec(STYLES)
-  if (!head) throw new Error(`solo ${selector} not found in styles.css`)
-  const open = head.index + head[0].length - 1
-  const close = STYLES.indexOf("}", open)
-  if (close < 0) throw new Error(`malformed block for ${selector}`)
-  return STYLES.slice(open + 1, close)
+function readText(rel: string): string {
+  return readFileSync(path.join(ROOT, rel), "utf8")
 }
 
-describe("right-panel tabs are flat (no rounded corners)", () => {
-  test(".oc-tabs drops border-radius", () => {
-    const body = ruleBody(".oc-tabs")
-    // Either explicit border-radius: 0 or no border-radius at all.
-    expect(body).not.toMatch(/border-radius:\s*(?!0)\S/)
+function ruleBody(styles: string, selector: string): string {
+  const escaped = selector.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")
+  const head = new RegExp(`(^|\\n)${escaped}\\s*\\{`, "m").exec(styles)
+  if (!head) throw new Error(`selector ${selector} not found`)
+  const open = head.index + head[0].length - 1
+  const close = styles.indexOf("}", open)
+  if (close < 0) throw new Error(`malformed block for ${selector}`)
+  return styles.slice(open + 1, close)
+}
+
+describe("right side activity toolbar replaces horizontal panel tabs", () => {
+  test("old right tab mount and tab selectors are gone", () => {
+    const html = readText("src/index.html")
+    const main = readText("src/main.tsx")
+    const inspectorCss = readText("src/styles/surfaces/inspector.css")
+
+    expect(html).not.toContain('id="solidRightPanelTabs"')
+    expect(html).not.toContain('data-panel-tab=')
+    expect(main).not.toContain("RightPanelTabs")
+    expect(main).not.toContain("rightPanelTab")
+    expect(inspectorCss).not.toContain(".sections-tabs")
+    expect(inspectorCss).not.toContain('[data-ui="right-tab"]')
+    expect(inspectorCss).not.toContain("[data-panel-tab")
   })
 
-  test(".oc-tab explicitly stays square", () => {
-    const body = ruleBody(".oc-tab")
-    expect(body).toMatch(/border-radius:\s*0\b/)
+  test("activity buttons are square icon rail controls", () => {
+    const css = readText("src/styles/surfaces/activity.css")
+    const toolbar = readText("src/components/SideActivityToolbar.tsx")
+    const buttonBody = ruleBody(css, '.side-activity-toolbar [data-ui="side-activity-button"]')
+
+    expect(toolbar).toContain('data-ui="side-activity-button"')
+    expect(toolbar).toContain("title={label()}")
+    expect(toolbar).toContain("aria-label={label()}")
+    expect(toolbar).toContain("<Icon name={activity.icon}")
+    expect(buttonBody).toMatch(/border-radius:\s*0\b/)
+    expect(buttonBody).toContain("width:")
+    expect(buttonBody).toContain("height:")
   })
 })

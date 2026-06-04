@@ -1,5 +1,4 @@
-/* Inspector surface — owns the right panel column shell + the
-   workflow / inspector / preview tab body containers. The richer
+/* Inspector surface — owns the right panel shell and activity bodies. The richer
    `.section` / `.gwg` card chrome and the per-section variants
    stay in styles.css until they are reworked through palette tokens
    (their hover states + theme overrides need a deliberate sweep). */
@@ -11,7 +10,7 @@
   flex: 0 1 var(--ui-sections-width);
   overflow: hidden;
   display: flex;
-  flex-direction: column;
+  flex-direction: row;
   gap: 0;
   padding: 0;
   border: 0;
@@ -28,55 +27,12 @@
   flex: 0 0 var(--ui-collapsed-pane-width);
 }
 
-.sections[data-collapsed="true"] .sections-tabs-mount,
-.sections[data-collapsed="true"] .sections-tab-body {
-  display: none;
-}
-
-.sections[data-collapsed="true"] .sections-header-actions {
-  justify-content: flex-end;
-  padding: 0;
-}
-
 .sections[data-collapsed="true"] .panel-header-collapse-mount {
   width: auto;
 }
 
-.sections-tabs-mount {
-  display: flex;
-  align-items: center;
-  flex: 1 1 auto;
-  min-width: 0;
-}
-
-.sections-tabs {
-  display: flex;
-  align-items: center;
-  min-width: 0;
-  max-width: 100%;
-  overflow: hidden;
-}
-
-.sections-tabs .oc-tabs {
-  max-width: 100%;
-  overflow-x: auto;
-  scrollbar-width: none;
-}
-
-.sections-tabs .oc-tabs::-webkit-scrollbar {
-  display: none;
-}
-
-.sections-tabs [data-ui="right-tab"] {
-  --oc-tab-bg: transparent;
-  flex: 0 0 auto;
-  background: transparent;
-}
-
-.sections-tabs [data-ui="right-tab"][data-active="true"] {
-  --oc-tab-bg: transparent;
-  --oc-tab-color: var(--text-strong);
-  box-shadow: inset 0 calc(-2px * var(--ui-scale)) 0 var(--accent);
+.sections-content {
+  background: var(--inspector-surface);
 }
 
 .sections-title {
@@ -99,9 +55,7 @@
   overflow-y: auto;
 }
 
-/* Tab body container: each top-level inspector tab (workflow,
-   inspector, preview) renders inside one of these. Inactive tabs
-   collapse via `[data-active="false"]`. */
+/* Activity body container: inactive activities collapse via data-active. */
 .sections-tab-body {
   flex: 1 1 0;
   min-height: 0;
@@ -112,232 +66,13 @@
   display: none;
 }
 
-.sections-tab-body[data-panel-tab="inspector"] {
+.sections-tab-body[data-side-activity] {
   display: flex;
   min-height: 0;
 }
 
-.sections-tab-body[data-panel-tab="inspector"][data-active="false"] {
+.sections-tab-body[data-side-activity][data-active="false"] {
   display: none;
-}
-
-.sections-tab-body[data-panel-tab="explorer"],
-.sections-tab-body[data-panel-tab="files"],
-.sections-tab-body[data-panel-tab="assistant"],
-.sections-tab-body[data-panel-tab="browser"] {
-  display: flex;
-  min-height: 0;
-}
-
-.sections-tab-body[data-panel-tab="explorer"][data-active="false"],
-.sections-tab-body[data-panel-tab="files"][data-active="false"],
-.sections-tab-body[data-panel-tab="assistant"][data-active="false"],
-.sections-tab-body[data-panel-tab="browser"][data-active="false"] {
-  display: none;
-}
-
-.sections-explorer-tab,
-.sections-files-tab,
-.sections-assistant-tab,
-.sections-browser-tab {
-  display: flex;
-  flex: 1 1 0;
-  min-height: 0;
-  flex-direction: column;
-  padding: var(--ui-gap-sm);
-  overflow: hidden;
-  container: right-files / inline-size;
-}
-
-.coding-assistant-panel {
-  display: flex;
-  flex: 1 1 0;
-  min-height: 0;
-  flex-direction: column;
-  gap: calc(6px * var(--ui-scale));
-}
-
-.coding-assistant-header,
-.coding-assistant-status,
-.coding-assistant-composer {
-  flex: 0 0 auto;
-}
-
-.coding-assistant-header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: calc(6px * var(--ui-scale));
-}
-
-.coding-assistant-title {
-  display: inline-flex;
-  min-width: 0;
-  align-items: center;
-  gap: calc(6px * var(--ui-scale));
-  color: var(--text-strong);
-  font-size: var(--ui-font-control);
-  font-weight: 600;
-}
-
-.coding-assistant-icon-button {
-  width: calc(28px * var(--ui-scale));
-  height: calc(28px * var(--ui-scale));
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  border: var(--oc-border-width) solid var(--border);
-  background: var(--surface);
-  color: var(--text-muted);
-  padding: 0;
-}
-
-.coding-assistant-icon-button:hover {
-  color: var(--text-strong);
-  border-color: color-mix(in srgb, var(--accent) 45%, var(--border));
-}
-
-.coding-assistant-status {
-  min-height: calc(24px * var(--ui-scale));
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: calc(8px * var(--ui-scale));
-  padding: 0 calc(8px * var(--ui-scale));
-  border: var(--oc-border-width) solid var(--border);
-  background: var(--surface-inset);
-  color: var(--text-soft);
-  font-size: var(--ui-font-control);
-}
-
-.coding-assistant-status[data-state="error"] {
-  color: var(--bad);
-  border-color: color-mix(in srgb, var(--bad) 42%, var(--border));
-}
-
-.coding-assistant-status code {
-  max-width: 45%;
-  overflow: hidden;
-  color: var(--text-muted);
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.coding-assistant-transcript {
-  flex: 1 1 0;
-  min-height: 0;
-  display: flex;
-  flex-direction: column;
-  gap: calc(8px * var(--ui-scale));
-  overflow-y: auto;
-  padding-right: calc(2px * var(--ui-scale));
-}
-
-.coding-assistant-empty {
-  margin: auto;
-  color: var(--text-soft);
-  font-size: var(--ui-font-control);
-  text-align: center;
-}
-
-.assistant-message {
-  display: flex;
-  flex-direction: column;
-  gap: calc(5px * var(--ui-scale));
-  padding: calc(8px * var(--ui-scale));
-  border: var(--oc-border-width) solid var(--border);
-  background: var(--surface);
-}
-
-.assistant-message[data-role="user"] {
-  border-color: color-mix(in srgb, var(--accent) 34%, var(--border));
-  background: color-mix(in srgb, var(--accent) 7%, var(--surface));
-}
-
-.assistant-message-header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: calc(8px * var(--ui-scale));
-  color: var(--text-soft);
-  font-size: var(--ui-font-micro);
-}
-
-.assistant-message-role {
-  color: var(--text-strong);
-  font-weight: 600;
-}
-
-.assistant-message-parts {
-  display: flex;
-  min-width: 0;
-  flex-direction: column;
-  gap: calc(5px * var(--ui-scale));
-}
-
-.assistant-message-part {
-  min-width: 0;
-  margin: 0;
-  white-space: pre-wrap;
-  overflow-wrap: anywhere;
-  color: var(--text);
-  font: inherit;
-  font-size: var(--ui-font-control);
-  line-height: 1.45;
-}
-
-.assistant-message-part[data-part-type="tool"] {
-  padding: calc(5px * var(--ui-scale)) calc(6px * var(--ui-scale));
-  border: var(--oc-border-width) solid var(--border);
-  background: var(--surface-inset);
-  color: var(--text-muted);
-  font-size: var(--ui-font-micro);
-}
-
-.coding-assistant-composer {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) auto;
-  align-items: end;
-  gap: calc(6px * var(--ui-scale));
-}
-
-.coding-assistant-composer textarea {
-  min-width: 0;
-  min-height: calc(72px * var(--ui-scale));
-  max-height: calc(180px * var(--ui-scale));
-  resize: vertical;
-  padding: calc(8px * var(--ui-scale));
-  border: var(--oc-border-width) solid var(--border);
-  background: var(--surface);
-  color: var(--text);
-  font: inherit;
-  font-size: var(--ui-font-control);
-  line-height: 1.4;
-}
-
-.coding-assistant-composer textarea:focus {
-  outline: none;
-  border-color: color-mix(in srgb, var(--accent) 58%, var(--border));
-}
-
-.coding-assistant-send {
-  min-height: calc(34px * var(--ui-scale));
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  gap: calc(5px * var(--ui-scale));
-  padding: 0 calc(10px * var(--ui-scale));
-  border: var(--oc-border-width) solid color-mix(in srgb, var(--accent) 54%, var(--border));
-  background: var(--accent);
-  color: var(--accent-contrast);
-  font-size: var(--ui-font-control);
-}
-
-.coding-assistant-send:disabled {
-  cursor: not-allowed;
-  border-color: var(--border);
-  background: var(--surface-muted);
-  color: var(--text-soft);
 }
 
 .browser-preview-panel {
@@ -531,76 +266,6 @@
   border-color: color-mix(in srgb, var(--bad) 42%, var(--border));
 }
 
-.right-files-panel,
-.right-files-body,
-.right-files-view,
-.right-files-panel .file-changes-view {
-  display: flex;
-  flex: 1 1 0;
-  min-height: 0;
-  flex-direction: column;
-}
-
-.right-files-switcher {
-  flex: 0 0 auto;
-  display: flex;
-  align-items: center;
-  gap: calc(4px * var(--ui-scale));
-  margin-bottom: calc(6px * var(--ui-scale));
-}
-
-.right-files-tab {
-  flex: 1 1 0;
-  min-width: 0;
-  min-height: calc(26px * var(--ui-scale));
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  gap: calc(5px * var(--ui-scale));
-  border: 0;
-  border-radius: var(--oc-radius-soft);
-  background: transparent;
-  color: var(--text-muted);
-  cursor: pointer;
-  font-size: var(--ui-font-control);
-}
-
-.right-files-tab[data-active="true"] {
-  background: color-mix(in srgb, var(--accent) 10%, transparent);
-  color: var(--text-strong);
-}
-
-.right-files-tab:disabled {
-  opacity: var(--ui-opacity-dim);
-  cursor: default;
-}
-
-.right-files-view[data-active="false"] {
-  display: none;
-}
-
-.right-files-panel .changes-list {
-  flex: 1 1 0;
-  min-height: 0;
-  overflow-y: auto;
-  overscroll-behavior: contain;
-  padding-right: calc(2px * var(--ui-scale));
-}
-
-.right-files-diff-header {
-  flex: 0 0 auto;
-  min-height: var(--ui-panel-header-height);
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: calc(8px * var(--ui-scale));
-  padding: 0 calc(8px * var(--ui-scale));
-  background: var(--surface-strong);
-  color: var(--text-strong);
-  font-size: var(--ui-font-title);
-  font-weight: var(--ui-font-weight-strong);
-}
-
 .file-explorer-panel {
   display: flex;
   flex: 1 1 0;
@@ -725,10 +390,6 @@
   color: var(--text-strong);
   border-color: color-mix(in srgb, var(--accent) 58%, var(--border));
   outline: 0;
-}
-
-.sections-tab-body[data-panel-tab="workflow"] {
-  min-height: 0;
 }
 
 /* Section icon-button: small 26x24 action button used inside section
