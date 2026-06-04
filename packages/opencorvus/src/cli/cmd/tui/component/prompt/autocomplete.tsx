@@ -8,11 +8,11 @@ import { useSDK } from "@tui/context/sdk"
 import { useSync } from "@tui/context/sync"
 import { useTheme, selectedForeground } from "@tui/context/theme"
 import { SplitBorder } from "@tui/component/border"
-import { useCommandDialog } from "@tui/component/dialog-command"
 import { useTerminalDimensions } from "@opentui/solid"
 import { Locale } from "@/util/locale"
 import type { PromptInfo } from "./history"
 import { useFrecency } from "./frecency"
+import { useCommandSlashes, useOpencorvusModeStack } from "../../keymap"
 
 function removeLineRange(input: string) {
   const hashIndex = input.lastIndexOf("#")
@@ -77,7 +77,8 @@ export function Autocomplete(props: {
 }) {
   const sdk = useSDK()
   const sync = useSync()
-  const command = useCommandDialog()
+  const slashes = useCommandSlashes()
+  const modeStack = useOpencorvusModeStack()
   const { theme } = useTheme()
   const dimensions = useTerminalDimensions()
   const frecency = useFrecency()
@@ -90,6 +91,12 @@ export function Autocomplete(props: {
   })
 
   const [positionTick, setPositionTick] = createSignal(0)
+
+  createEffect(() => {
+    if (!store.visible) return
+    const popMode = modeStack.push("autocomplete")
+    onCleanup(popMode)
+  })
 
   createEffect(() => {
     if (store.visible) {
@@ -354,7 +361,7 @@ export function Autocomplete(props: {
   })
 
   const commands = createMemo((): AutocompleteOption[] => {
-    const results: AutocompleteOption[] = [...command.slashes()]
+    const results: AutocompleteOption[] = [...slashes()]
 
     for (const serverCommand of sync.data.command) {
       if (serverCommand.source === "skill") continue
@@ -476,7 +483,6 @@ export function Autocomplete(props: {
   }
 
   function show(mode: "@" | "/") {
-    command.keybinds(false)
     setStore({
       visible: mode,
       index: props.input().cursorOffset,
@@ -493,7 +499,6 @@ export function Autocomplete(props: {
         draft.input = props.input().plainText
       })
     }
-    command.keybinds(true)
     setStore("visible", false)
   }
 

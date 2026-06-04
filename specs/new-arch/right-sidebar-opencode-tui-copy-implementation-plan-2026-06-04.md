@@ -749,3 +749,62 @@ This migration is complete only when all of the following are true:
 - Legacy command routes and local keybind systems are gone.
 - Unit, integration, OpenAPI/docs, typecheck, and visual E2E checks pass.
 - The final commit history shows the migration phases and no hook was bypassed.
+
+## 10. Implementation Round Log
+
+### 2026-06-05 Round 1: dependency substrate
+
+Implemented:
+
+- Upgraded OpenTUI substrate to the OpenCode baseline: `@opentui/core@0.3.1`, `@opentui/solid@0.3.1`, `@opentui/keymap@0.3.1`.
+- Added `@lydell/node-pty@1.2.0-beta.12` and `ghostty-web`.
+- Added dependency guards in `packages/opencorvus/test/tui/dependency-guard.test.ts`.
+- Adapted existing TUI code to OpenTUI `0.3.1` API changes: removed obsolete `disableStdoutInterception()` and switched paste decoding to `decodePasteBytes(event.bytes)`.
+
+Verified:
+
+- `bun test test/tui` from `packages/opencorvus`
+- `bun run typecheck` from `packages/opencorvus`
+- `bun run --cwd packages/overlay typecheck`
+- pre-push hook passed when commit `306629ac9` was pushed.
+
+OpenCode gap after the round:
+
+- The project had the right dependency floor, but the TUI still used the local `KeybindProvider`, local `dialog-command`, hard-coded sidebar sections, and external terminal runtime.
+
+### 2026-06-05 Round 2: copied keymap and command substrate
+
+Implemented:
+
+- Copied OpenCode-derived keymap substrate into `packages/opencorvus/src/cli/cmd/tui/keymap.ts`.
+- Copied OpenCode-derived TUI keybind definitions into `packages/opencorvus/src/cli/cmd/tui/config/keybind.ts`.
+- Moved `TuiConfig.get()` to resolve keybinds into the OpenTUI `BindingLookup`; no parallel local keybind parser remains.
+- Copied OpenCode-derived `dialog-select`, `dialog-help`, `command-palette`, and scroll acceleration primitives.
+- Replaced local `KeybindProvider`, `CommandProvider`, `dialog-command`, `context/keybind`, `util/keybind`, and `textarea-keybindings` with OpenTUI `@opentui/keymap` provider, command registry, command palette, and target-scoped bindings.
+- Migrated prompt, autocomplete, home, app, session, question, permission, and session header command/key flows to the keymap registry while preserving prompt submit/paste, permission decisions, question answers, and subagent-session navigation behavior.
+- Added `packages/opencorvus/test/tui/keymap-substrate.test.ts` to prove legacy TUI keybind config now resolves into the OpenTUI keymap substrate.
+- Added `packages/opencorvus/test/tui/keymap-migration-guard.test.ts` to prove deleted local keybind/command sources stay deleted and critical agent workflow command bindings remain in the OpenTUI lookup.
+
+Verified:
+
+- `bun test test/tui/keymap-substrate.test.ts test/tui/keymap-migration-guard.test.ts test/config/tui.test.ts` from `packages/opencorvus`
+- `bun run typecheck` from `packages/opencorvus`
+
+OpenCode comparison after the round:
+
+- Compared against OpenCode dev commit `94c49b20ba207a92e4150c552d616930b6560e39` from 2026-06-04.
+- Matched: OpenTUI `0.3.1`, `@opentui/keymap`, leader handling, command palette, dialog select action bindings, command slashes, prompt/autocomplete keymap modes, question/permission keymap interactions.
+- Preserved OpenCorvus-specific agent workflow behavior: prompt image paste, prompt stash, session transcript export, permission tool labeling, question replies, and subagent task navigation.
+
+OpenCode gap after the round:
+
+- `packages/opencorvus/src/cli/cmd/tui/plugin/*` and `feature-plugins/*` have not been copied yet.
+- The right-sidebar target still lacks OpenCode-like plugin slots for project-bound Context, MCP, LSP, Todo, and Agent Team controls.
+- The embedded terminal/PTY path still needs the `ghostty-web`/real PTY host adapter work.
+- No visual E2E has yet proven the screenshot-level layout: main transcript/diff area plus fixed right sidebar with project status panes.
+
+Next required tests:
+
+- Plugin runtime/slot tests once OpenCode TUI plugin modules are copied.
+- Browser/right-sidebar visual E2E for the screenshot-level layout.
+- Agent workflow regression tests for prompt submit, permission reply, question reply, and subagent-session navigation once the TUI can be mounted under the right sidebar host.

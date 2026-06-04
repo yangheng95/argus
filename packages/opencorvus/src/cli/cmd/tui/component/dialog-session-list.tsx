@@ -4,7 +4,6 @@ import { useRoute } from "@tui/context/route"
 import { useSync } from "@tui/context/sync"
 import { createMemo, createResource, onMount } from "solid-js"
 import { Locale } from "@/util/locale"
-import { useKeybind } from "../context/keybind"
 import { useSDK } from "../context/sdk"
 import { DialogSessionRename } from "./dialog-session-rename"
 import { createDebouncedSignal } from "../util/signal"
@@ -15,7 +14,6 @@ export function DialogSessionList() {
   const dialog = useDialog()
   const route = useRoute()
   const sync = useSync()
-  const keybind = useKeybind()
   const sdk = useSDK()
   const toast = useToast()
 
@@ -49,7 +47,7 @@ export function DialogSessionList() {
           value: x.id,
           category,
           footer: Locale.time(x.time.updated),
-          gutter: isWorking ? <Spinner /> : undefined,
+          gutter: isWorking ? () => <Spinner /> : undefined,
         }
       })
   })
@@ -72,9 +70,9 @@ export function DialogSessionList() {
         })
         dialog.clear()
       }}
-      keybind={[
+      actions={[
         {
-          keybind: keybind.all.session_delete?.[0],
+          command: "session.delete",
           title: "delete",
           onTrigger: async (option) => {
             const result = await sdk.client.session.delete({
@@ -88,7 +86,7 @@ export function DialogSessionList() {
           },
         },
         {
-          keybind: keybind.all.session_rename?.[0],
+          command: "session.rename",
           title: "rename",
           onTrigger: async (option) => {
             dialog.replace(() => <DialogSessionRename session={option.value} />)

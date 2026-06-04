@@ -1,9 +1,23 @@
 import { render, useKeyboard, useRenderer, useTerminalDimensions } from "@opentui/solid"
+import { createDefaultOpenTuiKeymap } from "@opentui/keymap/opentui"
 import { Clipboard } from "@tui/util/clipboard"
 import { Selection } from "@tui/util/selection"
 import { MouseButton, TextAttributes } from "@opentui/core"
 import { RouteProvider, useRoute } from "@tui/context/route"
-import { Switch, Match, createEffect, untrack, ErrorBoundary, createSignal, onMount, batch, on } from "solid-js"
+import {
+  Switch,
+  Match,
+  createEffect,
+  createMemo,
+  untrack,
+  ErrorBoundary,
+  createSignal,
+  onMount,
+  batch,
+  on,
+  onCleanup,
+  type JSX,
+} from "solid-js"
 import { win32DisableProcessedInput, win32FlushInputBuffer, win32InstallCtrlCGuard } from "./win32"
 import { Installation } from "@/installation"
 import { Flag } from "@/flag/flag"
@@ -17,10 +31,9 @@ import { DialogMcp } from "@tui/component/dialog-mcp"
 import { DialogStatus } from "@tui/component/dialog-status"
 import { DialogThemeList } from "@tui/component/dialog-theme-list"
 import { DialogHelp } from "./ui/dialog-help"
-import { CommandProvider, useCommandDialog } from "@tui/component/dialog-command"
+import { CommandPaletteDialog } from "@tui/component/command-palette"
 import { DialogAgent } from "@tui/component/dialog-agent"
 import { DialogSessionList } from "@tui/component/dialog-session-list"
-import { KeybindProvider } from "@tui/context/keybind"
 import { ThemeProvider, useTheme } from "@tui/context/theme"
 import { Home } from "@tui/routes/home"
 import { Session } from "@tui/routes/session"
@@ -38,8 +51,16 @@ import { ArgsProvider, useArgs, type Args } from "./context/args"
 import open from "open"
 import { writeHeapSnapshot } from "v8"
 import { PromptRefProvider, usePromptRef } from "./context/prompt"
-import { TuiConfigProvider } from "./context/tui-config"
+import { TuiConfigProvider, useTuiConfig } from "./context/tui-config"
 import { TuiConfig } from "@/config/tui"
+import {
+  COMMAND_PALETTE_COMMAND,
+  OPENCORVUS_BASE_MODE,
+  OpencorvusKeymapProvider,
+  registerOpencorvusKeymap,
+  useBindings,
+  useOpencorvusKeymap,
+} from "./keymap"
 
 async function getTerminalBackgroundColor(): Promise<"dark" | "light"> {
   // can't set raw mode if not a TTY
@@ -103,10 +124,61 @@ async function getTerminalBackgroundColor(): Promise<"dark" | "light"> {
 
 import type { EventSource } from "./context/sdk"
 
+const appGlobalBindingCommands = [
+  "session.list",
+  "session.new",
+  "session.quick_switch.1",
+  "session.quick_switch.2",
+  "session.quick_switch.3",
+  "session.quick_switch.4",
+  "session.quick_switch.5",
+  "session.quick_switch.6",
+  "session.quick_switch.7",
+  "session.quick_switch.8",
+  "session.quick_switch.9",
+] as const
+
+const appBindingCommands = [
+  "command.palette.show",
+  "model.list",
+  "model.cycle_recent",
+  "model.cycle_recent_reverse",
+  "model.cycle_favorite",
+  "model.cycle_favorite_reverse",
+  "agent.list",
+  "mcp.list",
+  "agent.cycle",
+  "agent.cycle.reverse",
+  "variant.cycle",
+  "provider.connect",
+  "opencorvus.status",
+  "theme.switch",
+  "theme.switch_mode",
+  "help.show",
+  "docs.open",
+  "app.debug",
+  "app.console",
+  "app.heap_snapshot",
+  "terminal.suspend",
+  "terminal.title.toggle",
+  "app.toggle.animations",
+  "app.toggle.diffwrap",
+] as const
+
+function TuiKeymapRoot(props: { children: JSX.Element }) {
+  const renderer = useRenderer()
+  const config = useTuiConfig()
+  const keymap = createDefaultOpenTuiKeymap(renderer)
+  const unregister = registerOpencorvusKeymap(keymap, renderer, config)
+  onCleanup(unregister)
+
+  return <OpencorvusKeymapProvider keymap={keymap}>{props.children}</OpencorvusKeymapProvider>
+}
+
 export function tui(input: {
   url: string
   args: Args
-  config: TuiConfig.Info
+  config: TuiConfig.Resolved
   directory?: string
   fetch?: typeof fetch
   headers?: RequestInit["headers"]
@@ -142,35 +214,33 @@ export function tui(input: {
                   <ToastProvider>
                     <RouteProvider>
                       <TuiConfigProvider config={input.config}>
-                        <SDKProvider
-                          url={input.url}
-                          directory={input.directory}
-                          fetch={input.fetch}
-                          headers={input.headers}
-                          events={input.events}
-                        >
-                          <SyncProvider>
-                            <ThemeProvider mode={mode}>
-                              <LocalProvider>
-                                <KeybindProvider>
+                        <TuiKeymapRoot>
+                          <SDKProvider
+                            url={input.url}
+                            directory={input.directory}
+                            fetch={input.fetch}
+                            headers={input.headers}
+                            events={input.events}
+                          >
+                            <SyncProvider>
+                              <ThemeProvider mode={mode}>
+                                <LocalProvider>
                                   <PromptStashProvider>
                                     <DialogProvider>
-                                      <CommandProvider>
-                                        <FrecencyProvider>
-                                          <PromptHistoryProvider>
-                                            <PromptRefProvider>
-                                              <App />
-                                            </PromptRefProvider>
-                                          </PromptHistoryProvider>
-                                        </FrecencyProvider>
-                                      </CommandProvider>
+                                      <FrecencyProvider>
+                                        <PromptHistoryProvider>
+                                          <PromptRefProvider>
+                                            <App />
+                                          </PromptRefProvider>
+                                        </PromptHistoryProvider>
+                                      </FrecencyProvider>
                                     </DialogProvider>
                                   </PromptStashProvider>
-                                </KeybindProvider>
-                              </LocalProvider>
-                            </ThemeProvider>
-                          </SyncProvider>
-                        </SDKProvider>
+                                </LocalProvider>
+                              </ThemeProvider>
+                            </SyncProvider>
+                          </SDKProvider>
+                        </TuiKeymapRoot>
                       </TuiConfigProvider>
                     </RouteProvider>
                   </ToastProvider>
@@ -201,13 +271,14 @@ export function tui(input: {
 }
 
 function App() {
+  const tuiConfig = useTuiConfig()
   const route = useRoute()
   const dimensions = useTerminalDimensions()
   const renderer = useRenderer()
   const dialog = useDialog()
   const local = useLocal()
   const kv = useKV()
-  const command = useCommandDialog()
+  const keymap = useOpencorvusKeymap()
   const sdk = useSDK()
   const toast = useToast()
   const { theme, mode, setMode } = useTheme()
@@ -357,32 +428,36 @@ function App() {
   )
 
   const connected = useConnected()
-  command.register(() => [
+  const appCommands = createMemo(() =>
+    [
+      {
+        name: COMMAND_PALETTE_COMMAND,
+        title: "Show command palette",
+        category: "System",
+        hidden: true,
+        run: () => {
+          dialog.replace(() => <CommandPaletteDialog />)
+        },
+      },
     {
       title: "Switch session",
-      value: "session.list",
-      keybind: "session_list",
+      name: "session.list",
       category: "Session",
       suggested: sync.data.session.length > 0,
-      slash: {
-        name: "sessions",
-        aliases: ["resume", "continue"],
-      },
-      onSelect: () => {
+      slashName: "sessions",
+      slashAliases: ["resume", "continue"],
+      run: () => {
         dialog.replace(() => <DialogSessionList />)
       },
     },
     {
       title: "New session",
       suggested: route.data.type === "session",
-      value: "session.new",
-      keybind: "session_new",
+      name: "session.new",
       category: "Session",
-      slash: {
-        name: "new",
-        aliases: ["clear"],
-      },
-      onSelect: () => {
+      slashName: "new",
+      slashAliases: ["clear"],
+      run: () => {
         const current = promptRef.current
         // Don't require focus - if there's any text, preserve it
         const currentPrompt = current?.current?.input ? current.current : undefined
@@ -395,150 +470,127 @@ function App() {
     },
     {
       title: "Switch model",
-      value: "model.list",
-      keybind: "model_list",
+      name: "model.list",
       suggested: true,
       category: "Agent",
-      slash: {
-        name: "models",
-      },
-      onSelect: () => {
+      slashName: "models",
+      run: () => {
         dialog.replace(() => <DialogModel />)
       },
     },
     {
       title: "Model cycle",
-      value: "model.cycle_recent",
-      keybind: "model_cycle_recent",
+      name: "model.cycle_recent",
       category: "Agent",
       hidden: true,
-      onSelect: () => {
+      run: () => {
         local.model.cycle(1)
       },
     },
     {
       title: "Model cycle reverse",
-      value: "model.cycle_recent_reverse",
-      keybind: "model_cycle_recent_reverse",
+      name: "model.cycle_recent_reverse",
       category: "Agent",
       hidden: true,
-      onSelect: () => {
+      run: () => {
         local.model.cycle(-1)
       },
     },
     {
       title: "Favorite cycle",
-      value: "model.cycle_favorite",
-      keybind: "model_cycle_favorite",
+      name: "model.cycle_favorite",
       category: "Agent",
       hidden: true,
-      onSelect: () => {
+      run: () => {
         local.model.cycleFavorite(1)
       },
     },
     {
       title: "Favorite cycle reverse",
-      value: "model.cycle_favorite_reverse",
-      keybind: "model_cycle_favorite_reverse",
+      name: "model.cycle_favorite_reverse",
       category: "Agent",
       hidden: true,
-      onSelect: () => {
+      run: () => {
         local.model.cycleFavorite(-1)
       },
     },
     {
       title: "Switch agent",
-      value: "agent.list",
-      keybind: "agent_list",
+      name: "agent.list",
       category: "Agent",
-      slash: {
-        name: "agents",
-      },
-      onSelect: () => {
+      slashName: "agents",
+      run: () => {
         dialog.replace(() => <DialogAgent />)
       },
     },
     {
       title: "Toggle MCPs",
-      value: "mcp.list",
+      name: "mcp.list",
       category: "Agent",
-      slash: {
-        name: "mcps",
-      },
-      onSelect: () => {
+      slashName: "mcps",
+      run: () => {
         dialog.replace(() => <DialogMcp />)
       },
     },
     {
       title: "Agent cycle",
-      value: "agent.cycle",
-      keybind: "agent_cycle",
+      name: "agent.cycle",
       category: "Agent",
       hidden: true,
-      onSelect: () => {
+      run: () => {
         local.agent.move(1)
       },
     },
     {
       title: "Variant cycle",
-      value: "variant.cycle",
-      keybind: "variant_cycle",
+      name: "variant.cycle",
       category: "Agent",
       hidden: true,
-      onSelect: () => {
+      run: () => {
         local.model.variant.cycle()
       },
     },
     {
       title: "Agent cycle reverse",
-      value: "agent.cycle.reverse",
-      keybind: "agent_cycle_reverse",
+      name: "agent.cycle.reverse",
       category: "Agent",
       hidden: true,
-      onSelect: () => {
+      run: () => {
         local.agent.move(-1)
       },
     },
     {
       title: "Connect provider",
-      value: "provider.connect",
+      name: "provider.connect",
       suggested: !connected(),
-      slash: {
-        name: "connect",
-      },
-      onSelect: () => {
+      slashName: "connect",
+      run: () => {
         dialog.replace(() => <DialogProviderList />)
       },
       category: "Provider",
     },
     {
       title: "View status",
-      keybind: "status_view",
-      value: "opencorvus.status",
-      slash: {
-        name: "status",
-      },
-      onSelect: () => {
+      name: "opencorvus.status",
+      slashName: "status",
+      run: () => {
         dialog.replace(() => <DialogStatus />)
       },
       category: "System",
     },
     {
       title: "Switch theme",
-      value: "theme.switch",
-      keybind: "theme_list",
-      slash: {
-        name: "themes",
-      },
-      onSelect: () => {
+      name: "theme.switch",
+      slashName: "themes",
+      run: () => {
         dialog.replace(() => <DialogThemeList />)
       },
       category: "System",
     },
     {
       title: "Toggle appearance",
-      value: "theme.switch_mode",
-      onSelect: (dialog) => {
+      name: "theme.switch_mode",
+      run: () => {
         setMode(mode() === "dark" ? "light" : "dark")
         dialog.clear()
       },
@@ -546,19 +598,17 @@ function App() {
     },
     {
       title: "Help",
-      value: "help.show",
-      slash: {
-        name: "help",
-      },
-      onSelect: () => {
+      name: "help.show",
+      slashName: "help",
+      run: () => {
         dialog.replace(() => <DialogHelp />)
       },
       category: "System",
     },
     {
       title: "Open docs",
-      value: "docs.open",
-      onSelect: () => {
+      name: "docs.open",
+      run: () => {
         open("https://opencorvus.ai/docs").catch(() => {})
         dialog.clear()
       },
@@ -566,19 +616,17 @@ function App() {
     },
     {
       title: "Exit the app",
-      value: "app.exit",
-      slash: {
-        name: "exit",
-        aliases: ["quit", "q"],
-      },
-      onSelect: () => exit(),
+      name: "app.exit",
+      slashName: "exit",
+      slashAliases: ["quit", "q"],
+      run: () => exit(),
       category: "System",
     },
     {
       title: "Toggle debug panel",
       category: "System",
-      value: "app.debug",
-      onSelect: (dialog) => {
+      name: "app.debug",
+      run: () => {
         renderer.toggleDebugOverlay()
         dialog.clear()
       },
@@ -586,8 +634,8 @@ function App() {
     {
       title: "Toggle console",
       category: "System",
-      value: "app.console",
-      onSelect: (dialog) => {
+      name: "app.console",
+      run: () => {
         renderer.console.toggle()
         dialog.clear()
       },
@@ -595,8 +643,8 @@ function App() {
     {
       title: "Write heap snapshot",
       category: "System",
-      value: "app.heap_snapshot",
-      onSelect: (dialog) => {
+      name: "app.heap_snapshot",
+      run: () => {
         const path = writeHeapSnapshot()
         toast.show({
           variant: "info",
@@ -608,11 +656,10 @@ function App() {
     },
     {
       title: "Suspend terminal",
-      value: "terminal.suspend",
-      keybind: "terminal_suspend",
+      name: "terminal.suspend",
       category: "System",
       hidden: true,
-      onSelect: () => {
+      run: () => {
         process.once("SIGCONT", () => {
           renderer.resume()
         })
@@ -624,10 +671,9 @@ function App() {
     },
     {
       title: terminalTitleEnabled() ? "Disable terminal title" : "Enable terminal title",
-      value: "terminal.title.toggle",
-      keybind: "terminal_title_toggle",
+      name: "terminal.title.toggle",
       category: "System",
-      onSelect: (dialog) => {
+      run: () => {
         setTerminalTitleEnabled((prev) => {
           const next = !prev
           kv.set("terminal_title_enabled", next)
@@ -639,24 +685,51 @@ function App() {
     },
     {
       title: kv.get("animations_enabled", true) ? "Disable animations" : "Enable animations",
-      value: "app.toggle.animations",
+      name: "app.toggle.animations",
       category: "System",
-      onSelect: (dialog) => {
+      run: () => {
         kv.set("animations_enabled", !kv.get("animations_enabled", true))
         dialog.clear()
       },
     },
     {
       title: kv.get("diff_wrap_mode", "word") === "word" ? "Disable diff wrapping" : "Enable diff wrapping",
-      value: "app.toggle.diffwrap",
+      name: "app.toggle.diffwrap",
       category: "System",
-      onSelect: (dialog) => {
+      run: () => {
         const current = kv.get("diff_wrap_mode", "word")
         kv.set("diff_wrap_mode", current === "word" ? "none" : "word")
         dialog.clear()
       },
     },
-  ])
+    ].map((command) => ({
+      namespace: "palette",
+      ...command,
+    })),
+  )
+
+  useBindings(() => ({
+    commands: appCommands(),
+  }))
+
+  useBindings(() => ({
+    mode: OPENCORVUS_BASE_MODE,
+    bindings: tuiConfig.keybinds.gather("app", appBindingCommands),
+  }))
+
+  useBindings(() => ({
+    bindings: tuiConfig.keybinds.gather("app.global", appGlobalBindingCommands),
+  }))
+
+  useBindings(() => ({
+    mode: OPENCORVUS_BASE_MODE,
+    enabled: () => {
+      const current = promptRef.current
+      if (!current?.focused) return true
+      return current.current.input === ""
+    },
+    bindings: tuiConfig.keybinds.gather("app_exit", ["app.exit"]),
+  }))
 
   createEffect(() => {
     const currentModel = local.model.current()
@@ -673,7 +746,7 @@ function App() {
   })
 
   sdk.event.on(TuiEvent.CommandExecute.type, (evt) => {
-    command.trigger(evt.properties.command)
+    keymap.dispatchCommand(evt.properties.command)
   })
 
   sdk.event.on(TuiEvent.ToastShow.type, (evt) => {
