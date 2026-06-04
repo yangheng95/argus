@@ -877,3 +877,40 @@ OpenCode gap after the round:
 - `internal.ts` is intentionally the single internal plugin registry but is still empty. Context, MCP, LSP, Todo, Files, Footer, WhichKey, DiffViewer, and Agent Team feature plugins still need to be copied and registered there.
 - Sidebar shell still has hard-coded local content. The next OpenCode-aligned round must replace `routes/session/sidebar.tsx` with slot rendering and move panes into copied feature plugins.
 - The right overlay activity still shows runtime status, not a `ghostty-web` terminal connected to server PTY output.
+
+### 2026-06-05 Round 5: copied sidebar feature plugins and slot-based sidebar shell
+
+Implemented:
+
+- Copied OpenCode sidebar feature plugin boundaries into `packages/opencorvus/src/cli/cmd/tui/feature-plugins/sidebar/*`:
+  - `context.tsx`
+  - `mcp.tsx`
+  - `lsp.tsx`
+  - `todo.tsx`
+  - `files.tsx`
+  - `footer.tsx`
+- Replaced the hard-coded session sidebar with the OpenCode slot shell: `sidebar_title`, `sidebar_content`, and `sidebar_footer`.
+- Registered the copied sidebar plugins through the single `internalTuiPlugins()` registry.
+- Kept OpenCorvus-specific behavior where required:
+  - Context cost is still derived from assistant messages because OpenCorvus local session state does not expose OpenCode's `session.cost` field.
+  - File truncation uses existing `Locale.truncateMiddle`; no new truncation helper was hand-written.
+  - Footer branding says OpenCorvus and reads version from `Installation.VERSION`.
+- Extended `plugin-runtime-guard.test.ts` to assert the sidebar shell uses slots and no longer imports/contains direct MCP, LSP, Todo, file diff, or session diff rendering logic.
+
+Verified:
+
+- `bun run --cwd packages/opencorvus typecheck`
+- `bun test test/tui/plugin-runtime-guard.test.ts test/tui/keymap-substrate.test.ts test/tui/keymap-migration-guard.test.ts test/tui/dependency-guard.test.ts` from `packages/opencorvus`
+
+OpenCode comparison after the round:
+
+- Matched: slot-based session sidebar shell, `sidebar_title`, `sidebar_content`, `sidebar_footer`, copied Context/MCP/LSP/Todo/Files/Footer internal plugin architecture, and internal plugin registry ownership.
+- Removed: local monolithic sidebar rendering for Context, MCP, LSP, Todo, Modified Files, Getting Started, directory, and version footer.
+
+OpenCode gap after the round:
+
+- System feature plugins remain missing: WhichKey, PluginManager, DiffViewer, Notifications, SessionV2Debug, and session switcher.
+- Home feature plugins remain missing: HomeFooter and HomeTips.
+- The Agent Team project-bound plugin required by OpenCorvus does not exist yet.
+- External TUI plugin loader/install remains missing.
+- The overlay right activity still lacks the embedded `ghostty-web` terminal and server PTY host.

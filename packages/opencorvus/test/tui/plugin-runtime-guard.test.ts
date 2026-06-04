@@ -69,6 +69,8 @@ describe("OpenCode-derived TUI plugin substrate", () => {
     const route = await readFile(path.join(tuiRoot, "context/route.tsx"), "utf8")
     const runtime = await readFile(path.join(tuiRoot, "plugin/runtime.ts"), "utf8")
     const slots = await readFile(path.join(tuiRoot, "plugin/slots.tsx"), "utf8")
+    const sidebar = await readFile(path.join(tuiRoot, "routes/session/sidebar.tsx"), "utf8")
+    const internal = await readFile(path.join(tuiRoot, "plugin/internal.ts"), "utf8")
 
     expect(app).toContain('from "./plugin/api"')
     expect(app).toContain('from "./plugin/runtime"')
@@ -80,5 +82,15 @@ describe("OpenCode-derived TUI plugin substrate", () => {
     expect(runtime).toContain("scope.track(host.register")
     expect(slots).toContain("createSolidSlotRegistry")
     expect(slots).toContain("createSlot")
+    expect(sidebar).toContain('name="sidebar_title"')
+    expect(sidebar).toContain('name="sidebar_content"')
+    expect(sidebar).toContain('name="sidebar_footer"')
+    expect(sidebar).not.toContain("TodoItem")
+    expect(sidebar).not.toContain("sync.data.mcp")
+    expect(sidebar).not.toContain("sync.data.lsp")
+    expect(sidebar).not.toContain("session_diff")
+    for (const plugin of ["SidebarContext", "SidebarMcp", "SidebarLsp", "SidebarTodo", "SidebarFiles", "SidebarFooter"]) {
+      expect(internal).toContain(plugin)
+    }
   })
 })
