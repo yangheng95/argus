@@ -17,7 +17,7 @@ OPENCORVUS_ENABLE_QUESTION_TOOL=1 opencorvus acp   # 启用 QuestionTool
 启动行为：
 
 1. 随机端口启内部 `opencorvus serve`（HTTP REST）
-2. 创建 `@opencorvus-ai/sdk/v2` 客户端连接内部服务
+2. 创建 `@opencorvus-ai/sdk` 客户端连接内部服务
 3. 通过 `@agentclientprotocol/sdk` 的 `ndJsonStream` 在 **stdin/stdout** 建立 JSON-RPC 通道
 4. 实例化 `ACP.Agent`，等待客户端连接
 

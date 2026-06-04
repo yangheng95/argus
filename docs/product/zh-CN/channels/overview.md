@@ -43,15 +43,15 @@ bun run dev             # 实际执行 bun run src/main.ts
 
 | 方向 | 协议 | 端点 |
 |---|---|---|
-| channel-runtime → OpenCorvus | HTTP REST (JSON) | `/session/create`、`/session/promptAsync`、`/tui/runtime/start`、`/tui/runtime/submitTask`、`/permission/reply` |
-| OpenCorvus → channel-runtime | SSE | `/event/subscribe` |
+| channel-runtime → OpenCorvus | HTTP REST (JSON) | `/session`、`/session/{sessionID}/prompt_async`、`/tui/runtime/start`、`/tui/runtime/submit-task`、`/permission/{requestID}/reply` |
+| OpenCorvus → channel-runtime | SSE | `/event` |
 
-SDK：`@opencorvus-ai/sdk/v2`（`src/core.ts:2`）。
+SDK：`@opencorvus-ai/sdk`。
 
 两种启动模式：
 
-1. **Embedded**：`createOpencode()` 在进程内嵌入启动后端
-2. **External**：`createOpencodeClient({ baseUrl })` 连到已跑的 `opencorvus serve`
+1. **Embedded**：`createOpenCorvus()` 在进程内嵌入启动后端
+2. **External**：`createOpenCorvusClient({ baseUrl })` 连到已跑的 `opencorvus serve`
 
 ## 消息流（通用）
 
