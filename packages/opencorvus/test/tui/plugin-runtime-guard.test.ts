@@ -74,6 +74,7 @@ describe("OpenCode-derived TUI plugin substrate", () => {
     const sessionRoute = await readFile(path.join(tuiRoot, "routes/session/index.tsx"), "utf8")
     const sidebar = await readFile(path.join(tuiRoot, "routes/session/sidebar.tsx"), "utf8")
     const internal = await readFile(path.join(tuiRoot, "plugin/internal.ts"), "utf8")
+    const local = await readFile(path.join(tuiRoot, "context/local.tsx"), "utf8")
     const homeTips = await readFile(path.join(tuiRoot, "feature-plugins/home/tips.tsx"), "utf8")
     const homeFooter = await readFile(path.join(tuiRoot, "feature-plugins/home/footer.tsx"), "utf8")
     const whichKey = await readFile(path.join(tuiRoot, "feature-plugins/system/which-key.tsx"), "utf8")
@@ -88,6 +89,10 @@ describe("OpenCode-derived TUI plugin substrate", () => {
       path.join(tuiRoot, "feature-plugins/system/diff-viewer-file-tree-utils.ts"),
       "utf8",
     )
+    const sessionSwitcher = await readFile(path.join(tuiRoot, "feature-plugins/session/index.tsx"), "utf8")
+    const sessionSwitcherDialog = await readFile(path.join(tuiRoot, "feature-plugins/session/dialog.tsx"), "utf8")
+    const sessionPreviewPane = await readFile(path.join(tuiRoot, "feature-plugins/session/preview-pane.tsx"), "utf8")
+    const sessionUtil = await readFile(path.join(tuiRoot, "feature-plugins/session/util.tsx"), "utf8")
     const keybind = await readFile(path.join(tuiRoot, "config/keybind.ts"), "utf8")
     const pluginApi = await readFile(path.join(projectRoot, "../plugin/src/tui.ts"), "utf8")
     const serverRoutes = await readFile(path.join(projectRoot, "src/server/routes/app.ts"), "utf8")
@@ -131,6 +136,7 @@ describe("OpenCode-derived TUI plugin substrate", () => {
       "SidebarFiles",
       "SidebarFooter",
       "DiffViewer",
+      "SessionSwitcher",
       "Notifications",
       "PluginManager",
       "WhichKey",
@@ -169,8 +175,27 @@ describe("OpenCode-derived TUI plugin substrate", () => {
     expect(diffViewerTree).toContain("DiffViewerFileTree")
     expect(diffViewerTreeUtils).toContain("buildFileTree")
     expect(diffViewerTreeUtils).toContain("movePatchFileIndex")
+    expect(sessionSwitcher).toContain('id = "internal:session-switcher"')
+    expect(sessionSwitcher).toContain('name: "session.list"')
+    expect(sessionSwitcherDialog).toContain("SessionPreviewPane")
+    expect(sessionSwitcherDialog).toContain("local.session.togglePin")
+    expect(sessionSwitcherDialog).toContain("local.session.slots")
+    expect(sessionSwitcherDialog).not.toContain("useProject")
+    expect(sessionSwitcherDialog).not.toContain("DialogSessionDeleteFailed")
+    expect(sessionPreviewPane).toContain("prefetchPreviews")
+    expect(sessionPreviewPane).toContain(".messages({")
+    expect(sessionUtil).toContain("extractMessageMarkdown")
+    expect(sessionUtil).not.toContain("@opencode-ai")
+    expect(local).toContain("sessionStore")
+    expect(local).toContain("quickSwitch(slot: number)")
+    expect(local).toContain('sdk.event.on("session.deleted"')
+    expect(app).toContain("local.session.quickSwitch")
+    expect(app).not.toContain("DialogSessionList")
+    expect(existsSync(path.join(tuiRoot, "component/dialog-session-list.tsx"))).toBe(false)
     expect(keybind).toContain("diff_toggle_file_tree")
     expect(keybind).toContain('"diff.toggle_file_tree"')
+    expect(keybind).toContain("session_quick_switch_9")
+    expect(keybind).toContain('"session.quick_switch.9"')
     expect(pluginApi).toContain("export type VcsFileDiff")
     expect(pluginApi).toContain("TuiSessionDiffItem")
     expect(pluginApi).toContain("FilePart")

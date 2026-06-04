@@ -1085,3 +1085,48 @@ OpenCode gap after the round:
 - Latest OpenCode added `dialog-move-session.tsx`, `prompt/move.tsx`, `prompt/workspace.tsx`, `routes/home/session-destination.tsx`, and control-plane/project-copy APIs. OpenCorvus does not yet have the same canonical project-copy/control-plane source, so these were not copied in this round. They must be ported as a real workflow/API round, not approximated in the Prompt component.
 - External TUI plugin loader/install, Agent Team project-bound plugin, SessionV2Debug/session switcher, and the right-sidebar `ghostty-web`/PTY bridge remain missing.
 - Visual/runtime verification of the screenshot-level right-side TUI still depends on the terminal host bridge.
+
+### 2026-06-05 Round 10: copied session switcher plugin and pinned quick-slot state
+
+Implemented:
+
+- Continued from OpenCode dev `cc9b73b0bddb54dfce534b4db9684c1959d81ba6`.
+- Copied OpenCode session switcher feature plugin modules into `packages/opencorvus/src/cli/cmd/tui/feature-plugins/session/*`:
+  - `index.tsx`
+  - `dialog.tsx`
+  - `preview-pane.tsx`
+  - `util.tsx`
+- Registered `SessionSwitcher` through the single `internalTuiPlugins()` registry.
+- Removed the old local `component/dialog-session-list.tsx` and removed `session.list` command ownership from `app.tsx`, so the session list now has one implementation source.
+- Copied OpenCode local session pinned/slot state into `context/local.tsx`:
+  - persistent `session.json`
+  - `pinned()`
+  - `slots()`
+  - `isPinned()`
+  - `togglePin()`
+  - `quickSwitch(slot)`
+  - prune on `session.deleted`
+- Added the missing `session_quick_switch_1` through `session_quick_switch_9` command map entries so existing keybind definitions resolve to commands.
+- Added OpenCode quick-switch command registrations in `app.tsx` so pinned quick slots are executable.
+- Adapted the copied dialog to OpenCorvus canonical session APIs:
+  - search uses existing `sdk.client.session.list({ search, limit })`;
+  - preview uses existing `sdk.client.session.messages`;
+  - session status maps `streaming`/`retry` instead of OpenCode's `busy`/`retry`;
+  - delete uses existing `sdk.client.session.delete`.
+
+Verified:
+
+- `bun run --cwd packages/opencorvus typecheck`
+- `bun test test/tui/plugin-runtime-guard.test.ts test/tui/session-switcher-util.test.ts test/tui/keymap-substrate.test.ts test/tui/keymap-migration-guard.test.ts test/tui/dependency-guard.test.ts` from `packages/opencorvus`
+
+OpenCode comparison after the round:
+
+- Matched: internal `session.list` plugin ownership, pinned session category, quick slot numbering, quick switch command names, preview pane with latest exchange summary, debounced search, rename/delete/pin actions, and removal of app-level hard-coded session list dialog.
+- Preserved OpenCorvus-specific agent workflow behavior: app-level `session.new`, session route prompt, permissions/questions, and session prompt submission paths are unchanged.
+
+OpenCode gap after the round:
+
+- OpenCode's workspace recovery path in session delete depends on its workspace/project-copy control plane. OpenCorvus has no equivalent single source in the TUI yet, so this round intentionally kept delete on the existing canonical `session.delete` API instead of faking workspace restore/delete.
+- `SessionV2Debug` remains missing because OpenCode's module depends on `sync-v2` and v2 message schema that are not present as canonical OpenCorvus TUI data sources.
+- External TUI plugin loader/install, Agent Team project-bound plugin, latest move-session/workspace prompt flow, and the right-sidebar `ghostty-web`/PTY bridge remain missing.
+- Visual/runtime verification of the screenshot-level right-side TUI still depends on the terminal host bridge.
