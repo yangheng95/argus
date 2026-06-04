@@ -13,6 +13,16 @@ export const TuiOptions = z.object({
     .enum(["auto", "stacked"])
     .optional()
     .describe("Control diff rendering style: 'auto' adapts to terminal width, 'stacked' always shows single column"),
+  prompt: z
+    .object({
+      max_height: z.number().int().positive().optional().describe("Prompt textarea max height"),
+      max_width: z
+        .union([z.number().int().positive(), z.literal("auto")])
+        .optional()
+        .describe("Home prompt max width: a positive integer for a fixed cap, or 'auto' to scale with terminal width"),
+    })
+    .optional()
+    .describe("Prompt size settings"),
 })
 
 export const TuiInfo = z

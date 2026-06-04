@@ -1,6 +1,6 @@
 // Copied from OpenCode's home route shell and adapted to OpenCorvus prompt/route state.
 import { Prompt, type PromptRef } from "@tui/component/prompt"
-import { createEffect, createSignal, onMount } from "solid-js"
+import { createEffect, createMemo, createSignal, onMount } from "solid-js"
 import { Logo } from "../component/logo"
 import { useSync } from "../context/sync"
 import { Toast } from "../ui/toast"
@@ -9,8 +9,14 @@ import { useRouteData } from "@tui/context/route"
 import { usePromptRef } from "../context/prompt"
 import { useLocal } from "../context/local"
 import { TuiPluginRuntime } from "@/cli/cmd/tui/plugin/runtime"
+import { useTerminalDimensions } from "@opentui/solid"
+import { useTuiConfig } from "../context/tui-config"
 
 let once = false
+const placeholder = {
+  normal: ["Fix a TODO in the codebase", "What is the tech stack of this project?", "Fix broken tests"],
+  shell: ["ls -la", "git status", "pwd"],
+}
 
 export function Home() {
   const sync = useSync()
@@ -19,12 +25,19 @@ export function Home() {
   const [ref, setRef] = createSignal<PromptRef | undefined>()
   const args = useArgs()
   const local = useLocal()
+  const dimensions = useTerminalDimensions()
+  const tuiConfig = useTuiConfig()
+  const promptMaxWidth = createMemo(() => {
+    const configured = tuiConfig.prompt?.max_width
+    if (configured === "auto") return Math.max(75, Math.floor(dimensions().width * 0.7))
+    return configured ?? 75
+  })
   let sent = false
 
-  const bind = (prompt: PromptRef) => {
+  const bind = (prompt: PromptRef | undefined) => {
     setRef(prompt)
     promptRef.set(prompt)
-    if (once) return
+    if (once || !prompt) return
     if (route.initialPrompt) {
       prompt.set(route.initialPrompt)
       once = true
@@ -68,9 +81,9 @@ export function Home() {
           </TuiPluginRuntime.Slot>
         </box>
         <box height={1} minHeight={0} flexShrink={1} />
-        <box width="100%" maxWidth={75} zIndex={1000} paddingTop={1} flexShrink={0}>
-          <TuiPluginRuntime.Slot name="home_prompt" mode="replace" ref={bind as never}>
-            <Prompt ref={bind} />
+        <box width="100%" maxWidth={promptMaxWidth()} zIndex={1000} paddingTop={1} flexShrink={0}>
+          <TuiPluginRuntime.Slot name="home_prompt" mode="replace" ref={bind}>
+            <Prompt ref={bind} right={<TuiPluginRuntime.Slot name="home_prompt_right" />} placeholders={placeholder} />
           </TuiPluginRuntime.Slot>
         </box>
         <TuiPluginRuntime.Slot name="home_bottom" />

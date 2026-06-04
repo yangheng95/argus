@@ -1047,3 +1047,41 @@ OpenCode gap after the round:
 - `home_prompt_right` remains only partially useful until the local Prompt component adopts OpenCode's richer `right` and `placeholders` prop surface.
 - SessionV2Debug and session switcher remain missing.
 - Visual/runtime verification of the actual right-side TUI remains blocked until the terminal host bridge is implemented; current tests cover code ownership, API wiring, and copied DiffViewer behavior.
+
+### 2026-06-05 Round 9: copied Prompt slot surface and latest OpenCode prompt sizing
+
+Implemented:
+
+- Refreshed OpenCode dev to `cc9b73b0bddb54dfce534b4db9684c1959d81ba6` before editing. The new upstream baseline added session-moving control-plane work and changed TUI Prompt/home/session prompt wiring.
+- Adopted the OpenCode Prompt public surface in the local host Prompt:
+  - `right?: JSX.Element`
+  - `placeholders?: { normal?: string[]; shell?: string[] }`
+  - `showPlaceholder === false`
+  - dynamic `tuiConfig.prompt?.max_height` fallback to terminal-height-based max height
+- Removed Prompt-internal placeholder constants. Home now owns the OpenCode default placeholder list and passes it through `placeholders={placeholder}`.
+- Mounted `home_prompt_right` inside the actual Prompt meta row instead of leaving the public slot API disconnected from the host prompt.
+- Mounted `session_prompt` and `session_prompt_right` around the existing session Prompt, matching OpenCode's host slot boundary while preserving the existing OpenCorvus submit, permission, question, and route behavior.
+- Added OpenCode's prompt size config schema:
+  - `prompt.max_height`
+  - `prompt.max_width`
+- Added home prompt max-width behavior matching OpenCode:
+  - numeric width caps the home prompt;
+  - `"auto"` scales to 70% terminal width with a 75-column minimum.
+- Removed the local plugin Prompt part double-source by changing `@opencorvus-ai/plugin/tui` `TuiPromptInfo.parts` to reuse SDK `FilePart`, `AgentPart`, and `TextPart` shapes. Host Prompt refs and plugin Prompt refs now typecheck without a slot-boundary cast.
+
+Verified:
+
+- `bun run --cwd packages/opencorvus typecheck`
+- `bun run --cwd packages/plugin typecheck`
+- `bun test test/tui/plugin-runtime-guard.test.ts test/config/tui.test.ts test/tui/keymap-substrate.test.ts test/tui/keymap-migration-guard.test.ts test/tui/dependency-guard.test.ts` from `packages/opencorvus`
+
+OpenCode comparison after the round:
+
+- Matched: `home_prompt_right`, `session_prompt`, and `session_prompt_right` host slot placement; Prompt `right/placeholders/showPlaceholder` prop surface; prompt max-height and home max-width config names; home default placeholder ownership.
+- Preserved OpenCorvus-specific agent workflow behavior: prompt submit still calls the existing OpenCorvus `session.prompt/session.command/session.shell` client paths; permission and question prompts still block the session prompt through existing local predicates; no OpenCode `moveSession` or project-copy control-plane API was faked.
+
+OpenCode gap after the round:
+
+- Latest OpenCode added `dialog-move-session.tsx`, `prompt/move.tsx`, `prompt/workspace.tsx`, `routes/home/session-destination.tsx`, and control-plane/project-copy APIs. OpenCorvus does not yet have the same canonical project-copy/control-plane source, so these were not copied in this round. They must be ported as a real workflow/API round, not approximated in the Prompt component.
+- External TUI plugin loader/install, Agent Team project-bound plugin, SessionV2Debug/session switcher, and the right-sidebar `ghostty-web`/PTY bridge remain missing.
+- Visual/runtime verification of the screenshot-level right-side TUI still depends on the terminal host bridge.

@@ -296,7 +296,9 @@ export function createTuiApi(input: Input): TuiPluginApi {
             onSubmit={props.onSubmit}
             ref={props.ref as never}
             hint={props.hint}
+            right={props.right}
             showPlaceholder={props.showPlaceholder}
+            placeholders={props.placeholders}
           />
         )
       },

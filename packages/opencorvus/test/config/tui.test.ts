@@ -79,6 +79,23 @@ test("merges keybind overrides across precedence layers", async () => {
   })
 })
 
+test("loads OpenCode-derived prompt size settings", async () => {
+  await using tmp = await tmpdir({
+    init: async (dir) => {
+      await Bun.write(path.join(dir, "tui.json"), JSON.stringify({ prompt: { max_height: 12, max_width: "auto" } }))
+    },
+  })
+
+  await Instance.provide({
+    directory: tmp.path,
+    fn: async () => {
+      const config = await TuiConfig.get()
+      expect(config.prompt?.max_height).toBe(12)
+      expect(config.prompt?.max_width).toBe("auto")
+    },
+  })
+})
+
 test("OPENCORVUS_TUI_CONFIG provides settings when no project config exists", async () => {
   await using tmp = await tmpdir({
     init: async (dir) => {
