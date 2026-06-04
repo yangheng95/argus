@@ -1752,3 +1752,37 @@ OpenCode gap after the round:
 - OpenCode's full workspace management remains missing: workspace list/create/unavailable dialogs, move-session prompt flow, workspace commands, and workspace status event sync are not implemented yet.
 - The current host is still a single project-bound embedded TUI process, not OpenCode's full multi-PTY `list/create/get/update/remove` service.
 - Browser visual E2E, external TUI plugin loader/install, `SessionV2Debug`, background pulse, and session/subagent footer modules remain missing.
+
+### 2026-06-05 Round 25: background pulse renderable
+
+Implemented:
+
+- Rechecked latest OpenCode dev before editing. Upstream remained at `b1a7ee5695bded3ebe4282a17bfe91717edea363`; no upstream TUI/PTY/terminal files changed since Round 24.
+- Copied OpenCode's `component/bg-pulse.tsx` and `component/bg-pulse-render.ts` into OpenCorvus.
+- Adapted only the source artwork and naming:
+  - uses OpenCorvus' existing `cli/logo.ts` `logo.left/right` data instead of OpenCode's `go` logo;
+  - renamed `GoUpsellArtPainter`/`go_upsell_art` to `LogoPulsePainter`/`logo_pulse_art`.
+- Wired the copied `BgPulse` behind the default `home_logo` slot content so the module is visible code, not dead copied code.
+- Preserved the OpenCode renderable approach: `FrameBufferRenderable`, cached frame-buffer drawing, theme-driven background/pulse colors, and temporary 30 FPS renderer tuning while mounted.
+- Kept `home_logo` as a replaceable plugin slot, so existing plugin workflow can still replace the entire logo area.
+
+Verified in tests:
+
+- `plugin-runtime-guard.test.ts` now asserts the background pulse files exist, use the OpenTUI `FrameBufferRenderable` path, render from local logo data, and are mounted by the home route.
+- `bun test packages/opencorvus/test/tui/plugin-runtime-guard.test.ts`
+- `bun run --cwd packages/opencorvus typecheck`
+- `bun run --cwd packages/plugin typecheck`
+- `bun typecheck`
+- `bun run api:routes-check`
+- `bun run docs:check`
+
+OpenCode comparison after the round:
+
+- The previous `background pulse` gap is now closed for the home/logo surface using the same rendering architecture as OpenCode.
+- The only intentional difference is artwork input: OpenCorvus uses its own logo while preserving OpenCode's animation/rendering implementation.
+
+OpenCode gap after the round:
+
+- OpenCode's full workspace management remains missing: workspace list/create/unavailable dialogs, move-session prompt flow, workspace commands, and workspace status event sync are not implemented yet.
+- The current host is still a single project-bound embedded TUI process, not OpenCode's full multi-PTY `list/create/get/update/remove` service.
+- Browser visual E2E, external TUI plugin loader/install, `SessionV2Debug`, and session/subagent footer modules remain missing.

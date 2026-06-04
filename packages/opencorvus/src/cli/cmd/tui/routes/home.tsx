@@ -2,6 +2,7 @@
 import { Prompt, type PromptRef } from "@tui/component/prompt"
 import { createEffect, createMemo, createSignal, onMount } from "solid-js"
 import { Logo } from "../component/logo"
+import { BgPulse } from "../component/bg-pulse"
 import { useSync } from "../context/sync"
 import { Toast } from "../ui/toast"
 import { useArgs } from "../context/args"
@@ -75,9 +76,14 @@ export function Home() {
       <box flexGrow={1} alignItems="center" paddingLeft={2} paddingRight={2}>
         <box flexGrow={1} minHeight={0} />
         <box height={4} minHeight={0} flexShrink={1} />
-        <box flexShrink={0}>
+        <box flexShrink={0} position="relative" width="100%" height={9} alignItems="center" justifyContent="center">
           <TuiPluginRuntime.Slot name="home_logo" mode="replace">
-            <Logo />
+            <box position="absolute" top={0} left={0} right={0} bottom={0} zIndex={0}>
+              <BgPulse />
+            </box>
+            <box zIndex={1}>
+              <Logo />
+            </box>
           </TuiPluginRuntime.Slot>
         </box>
         <box height={1} minHeight={0} flexShrink={1} />
