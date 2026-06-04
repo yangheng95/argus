@@ -1,4 +1,4 @@
-import { createMemo, For, Show } from "solid-js"
+import { createMemo, createResource, For, Show } from "solid-js"
 import { DiffView, changeStatusLabel } from "./DiffView"
 import {
   describeToolCall,
@@ -14,7 +14,7 @@ import { TodoListPart, extractTodos } from "./TodoListPart"
 import { StaticTextPart } from "./TextPart"
 import { toolFileChangesFromState, type ToolFileChange } from "../utils/file-change-summary"
 import { STREAMING_ACTIVE_TEXT_LIMIT, visibleStreamingText } from "./text-part-model"
-import { resolveResourceUrl } from "../services/api"
+import { fetchResourceAsObjectUrl, peekResourceObjectUrl, resolveResourceUrl } from "../services/api"
 
 // Same tool-kind sets used to drive code rendering below.
 const FILE_WRITE_TOOLS = new Set(["write", "writefile"])
@@ -27,6 +27,30 @@ const TODO_TOOLS = new Set(["todowrite", "todoread", "todoupdate", "updateplan"]
 
 function isRecord(value: unknown): value is Record<string, any> {
   return !!value && typeof value === "object" && !Array.isArray(value)
+}
+
+function BrowserEvidenceImage(props: { url: string; alt: string }) {
+  const authed = () => props.url.startsWith("/")
+  const [objectUrl] = createResource(
+    () => (authed() ? props.url : null),
+    (url: string | null) => (url ? fetchResourceAsObjectUrl(url) : null),
+    { initialValue: authed() ? peekResourceObjectUrl(props.url) ?? null : null },
+  )
+  const resolved = () => (authed() ? objectUrl() : resolveResourceUrl(props.url))
+
+  return (
+    <Show when={!objectUrl.error}>
+      <Show when={resolved()}>
+        {(src) => (
+          <img
+            class="msg-browser-evidence__image"
+            src={src()}
+            alt={props.alt}
+          />
+        )}
+      </Show>
+    </Show>
+  )
 }
 const READ_NOTE_RE = /^\((?:Showing|End of file|Output capped at)/
 
@@ -295,11 +319,7 @@ export function InlineToolPart(props: { part: any; mode?: "inline" | "block" | "
                 {(evidence) => (
                   <section class="msg-browser-evidence">
                     <Show when={evidence().screenshotUrl}>
-                      <img
-                        class="msg-browser-evidence__image"
-                        src={resolveResourceUrl(evidence().screenshotUrl)}
-                        alt="Browser observation"
-                      />
+                      <BrowserEvidenceImage url={evidence().screenshotUrl} alt="Browser observation" />
                     </Show>
                     <div class="msg-browser-evidence__meta">
                       <Show when={evidence().title || evidence().url}>

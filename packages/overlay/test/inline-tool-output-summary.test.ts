@@ -16,4 +16,14 @@ describe("inline tool output", () => {
     expect(source).not.toContain("Toggle tool output")
     expect(source).not.toContain("text.length")
   })
+
+  test("browser screenshot evidence uses the authenticated resource loader", () => {
+    const source = readFileSync(INLINE_TOOL_PART, "utf8")
+
+    expect(source).toContain("fetchResourceAsObjectUrl")
+    expect(source).toContain("peekResourceObjectUrl")
+    expect(source).toContain("function BrowserEvidenceImage")
+    expect(source).toContain("<BrowserEvidenceImage url={evidence().screenshotUrl} alt=\"Browser observation\" />")
+    expect(source).not.toContain("src={resolveResourceUrl(evidence().screenshotUrl)}")
+  })
 })
