@@ -1130,3 +1130,45 @@ OpenCode gap after the round:
 - `SessionV2Debug` remains missing because OpenCode's module depends on `sync-v2` and v2 message schema that are not present as canonical OpenCorvus TUI data sources.
 - External TUI plugin loader/install, Agent Team project-bound plugin, latest move-session/workspace prompt flow, and the right-sidebar `ghostty-web`/PTY bridge remain missing.
 - Visual/runtime verification of the screenshot-level right-side TUI still depends on the terminal host bridge.
+
+### 2026-06-05 Round 11: added project-bound embedded TUI PTY host API
+
+Implemented:
+
+- Rechecked OpenCode dev before editing; local upstream remained at `cc9b73b0bddb54dfce534b4db9684c1959d81ba6`.
+- Refactored `Tui.spawn()` command construction into `Tui.resolveEmbeddedCommand()` so external terminal launch and embedded right-sidebar launch share one canonical TUI command source.
+- Added `packages/opencorvus/src/tui/host.ts`:
+  - starts the canonical OpenCorvus OpenTUI app inside a project-bound Pseudo Terminal (PTY);
+  - captures bounded terminal output for snapshot/recovery;
+  - supports input, resize, stop, status, and snapshot;
+  - uses the existing packaged Node runtime plus `@lydell/node-pty` on Windows because Bun can read but cannot reliably write to the Windows PTY process.
+- Added `/tui/host/*` routes:
+  - `POST /tui/host/start`
+  - `GET /tui/host/status`
+  - `GET /tui/host/snapshot`
+  - `POST /tui/host/input`
+  - `POST /tui/host/resize`
+  - `POST /tui/host/stop`
+- Updated SDK OpenAPI and generated API docs for the new host routes.
+- Added `@lydell/node-pty` to packaged runtime external/native module handling so the embedded host is available outside the development workspace.
+
+Verified:
+
+- `bun test packages/opencorvus/test/tui/host.test.ts`
+- `bun test packages/opencorvus/test/server/tui-host-routes.test.ts`
+- `bun test --timeout 30000 packages/opencorvus/test/script/build-artifact.test.ts`
+- `bun run --cwd packages/opencorvus typecheck`
+- `bun run api:routes-check`
+- `bun run docs:check`
+
+OpenCode comparison after the round:
+
+- Matched the OpenCode architectural requirement that the browser-side terminal surface must be backed by a real server-owned PTY, not a hand-written chat/status panel.
+- Preserved OpenCorvus-specific agent workflow behavior: the host launches the canonical TUI process and does not alter `SessionPrompt`, task queue, permission, question, or existing `/tui/runtime/*` control paths.
+- Used the existing OpenCorvus runtime package resolver for native PTY dependencies instead of statically bundling native modules into the overlay-server artifact.
+
+OpenCode gap after the round:
+
+- OpenCode has a richer multi-session `/pty` API with list/create/get/update/remove/connect-token/connect WebSocket. This round intentionally added the narrower right-sidebar host surface required for one embedded coding assistant TUI; websocket streaming and tokenized attach still need to be copied/adapted before the overlay renderer can be live-stream rather than snapshot/poll driven.
+- The overlay still renders `TuiRuntimePanel`; `ghostty-web` is not yet mounted in the right sidebar, so screenshot-level parity is still incomplete.
+- External TUI plugin loader/install, Agent Team project-bound plugin, latest move-session/workspace prompt flow, and `SessionV2Debug` remain missing.

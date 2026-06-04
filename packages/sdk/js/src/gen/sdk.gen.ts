@@ -315,6 +315,15 @@ import type {
   TuiControlResponseResponses,
   TuiExecuteCommandErrors,
   TuiExecuteCommandResponses,
+  TuiHostInputErrors,
+  TuiHostInputResponses,
+  TuiHostResizeErrors,
+  TuiHostResizeResponses,
+  TuiHostSnapshotResponses,
+  TuiHostStartErrors,
+  TuiHostStartResponses,
+  TuiHostStatusResponses,
+  TuiHostStopResponses,
   TuiOpenHelpResponses,
   TuiOpenModelsResponses,
   TuiOpenSessionsResponses,
@@ -7496,6 +7505,192 @@ export class Mcp extends HeyApiClient {
   }
 }
 
+export class Host extends HeyApiClient {
+  /**
+   * Start embedded TUI host
+   *
+   * Start the project-bound TUI process inside a Pseudo Terminal (PTY) for right-sidebar terminal rendering.
+   */
+  public start<ThrowOnError extends boolean = false>(
+    parameters?: {
+      directory?: string
+      sessionID?: string
+      model?: string
+      agent?: string
+      prompt?: string
+      continue?: boolean
+      fork?: boolean
+      port?: number
+      hostname?: string
+      bin?: string
+      cols?: number
+      rows?: number
+    },
+    options?: Options<never, ThrowOnError>,
+  ) {
+    const params = buildClientParams(
+      [parameters],
+      [
+        {
+          args: [
+            { in: "query", key: "directory" },
+            { in: "body", key: "sessionID" },
+            { in: "body", key: "model" },
+            { in: "body", key: "agent" },
+            { in: "body", key: "prompt" },
+            { in: "body", key: "continue" },
+            { in: "body", key: "fork" },
+            { in: "body", key: "port" },
+            { in: "body", key: "hostname" },
+            { in: "body", key: "bin" },
+            { in: "body", key: "cols" },
+            { in: "body", key: "rows" },
+          ],
+        },
+      ],
+    )
+    return (options?.client ?? this.client).post<TuiHostStartResponses, TuiHostStartErrors, ThrowOnError>({
+      url: "/tui/host/start",
+      ...options,
+      ...params,
+      headers: {
+        "Content-Type": "application/json",
+        ...options?.headers,
+        ...params.headers,
+      },
+    })
+  }
+
+  /**
+   * Get embedded TUI host status
+   *
+   * Get the project-bound right-sidebar TUI host status.
+   */
+  public status<ThrowOnError extends boolean = false>(
+    parameters?: {
+      directory?: string
+    },
+    options?: Options<never, ThrowOnError>,
+  ) {
+    const params = buildClientParams([parameters], [{ args: [{ in: "query", key: "directory" }] }])
+    return (options?.client ?? this.client).get<TuiHostStatusResponses, unknown, ThrowOnError>({
+      url: "/tui/host/status",
+      ...options,
+      ...params,
+    })
+  }
+
+  /**
+   * Get embedded TUI host snapshot
+   *
+   * Get the buffered terminal output for the embedded right-sidebar TUI host.
+   */
+  public snapshot<ThrowOnError extends boolean = false>(
+    parameters?: {
+      directory?: string
+    },
+    options?: Options<never, ThrowOnError>,
+  ) {
+    const params = buildClientParams([parameters], [{ args: [{ in: "query", key: "directory" }] }])
+    return (options?.client ?? this.client).get<TuiHostSnapshotResponses, unknown, ThrowOnError>({
+      url: "/tui/host/snapshot",
+      ...options,
+      ...params,
+    })
+  }
+
+  /**
+   * Write input to embedded TUI host
+   *
+   * Write terminal input to the project-bound embedded TUI host.
+   */
+  public input<ThrowOnError extends boolean = false>(
+    parameters?: {
+      directory?: string
+      data?: string
+    },
+    options?: Options<never, ThrowOnError>,
+  ) {
+    const params = buildClientParams(
+      [parameters],
+      [
+        {
+          args: [
+            { in: "query", key: "directory" },
+            { in: "body", key: "data" },
+          ],
+        },
+      ],
+    )
+    return (options?.client ?? this.client).post<TuiHostInputResponses, TuiHostInputErrors, ThrowOnError>({
+      url: "/tui/host/input",
+      ...options,
+      ...params,
+      headers: {
+        "Content-Type": "application/json",
+        ...options?.headers,
+        ...params.headers,
+      },
+    })
+  }
+
+  /**
+   * Resize embedded TUI host
+   *
+   * Resize the Pseudo Terminal (PTY) used by the embedded right-sidebar TUI host.
+   */
+  public resize<ThrowOnError extends boolean = false>(
+    parameters?: {
+      directory?: string
+      cols?: number
+      rows?: number
+    },
+    options?: Options<never, ThrowOnError>,
+  ) {
+    const params = buildClientParams(
+      [parameters],
+      [
+        {
+          args: [
+            { in: "query", key: "directory" },
+            { in: "body", key: "cols" },
+            { in: "body", key: "rows" },
+          ],
+        },
+      ],
+    )
+    return (options?.client ?? this.client).post<TuiHostResizeResponses, TuiHostResizeErrors, ThrowOnError>({
+      url: "/tui/host/resize",
+      ...options,
+      ...params,
+      headers: {
+        "Content-Type": "application/json",
+        ...options?.headers,
+        ...params.headers,
+      },
+    })
+  }
+
+  /**
+   * Stop embedded TUI host
+   *
+   * Stop the project-bound embedded TUI host.
+   */
+  public stop<ThrowOnError extends boolean = false>(
+    parameters?: {
+      directory?: string
+    },
+    options?: Options<never, ThrowOnError>,
+  ) {
+    const params = buildClientParams([parameters], [{ args: [{ in: "query", key: "directory" }] }])
+    return (options?.client ?? this.client).post<TuiHostStopResponses, unknown, ThrowOnError>({
+      url: "/tui/host/stop",
+      ...options,
+      ...params,
+    })
+  }
+}
+
 export class Runtime2 extends HeyApiClient {
   /**
    * Start or connect TUI runtime
@@ -8014,6 +8209,11 @@ export class Tui extends HeyApiClient {
         ...params.headers,
       },
     })
+  }
+
+  private _host?: Host
+  get host(): Host {
+    return (this._host ??= new Host({ client: this.client }))
   }
 
   private _runtime?: Runtime2

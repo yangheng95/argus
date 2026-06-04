@@ -33,6 +33,16 @@ export namespace Tui {
     // reserved for future auth options (e.g. password)
   }
 
+  export interface EmbeddedCommand {
+    command: string
+    args: string[]
+    cwd: string
+    url: string
+    port: number
+    hostname: string
+    env?: Record<string, string>
+  }
+
   export class Handle {
     readonly url: string
     private proc: ChildProcess | undefined
@@ -243,7 +253,7 @@ export namespace Tui {
     return undefined
   }
 
-  export async function spawn(opts: SpawnOptions = {}): Promise<Handle> {
+  async function resolveSpawn(opts: SpawnOptions = {}) {
     const port = opts.port ?? (await allocatePort())
     const hostname = opts.hostname ?? "127.0.0.1"
     const bin = opts.bin ?? process.env.OPENCORVUS_BIN_PATH ?? selfBin() ?? "opencorvus"
@@ -258,6 +268,38 @@ export namespace Tui {
     if (opts.prompt) args.push("--prompt", opts.prompt)
     if (opts.continue) args.push("--continue")
     if (opts.fork) args.push("--fork")
+    const url = `http://${hostname}:${port}`
+
+    return { port, hostname, bin, cwd, devMode, args, url }
+  }
+
+  export async function resolveEmbeddedCommand(opts: SpawnOptions = {}): Promise<EmbeddedCommand> {
+    const resolved = await resolveSpawn(opts)
+    if (resolved.devMode) {
+      const pkgRoot = packageRoot()
+      const entryScript = path.join(pkgRoot, "src", "index.ts")
+      return {
+        command: "bun",
+        args: ["--preload", "@opentui/solid/preload", "--conditions=browser", entryScript, ...resolved.args],
+        cwd: pkgRoot,
+        url: resolved.url,
+        port: resolved.port,
+        hostname: resolved.hostname,
+      }
+    }
+    return {
+      command: resolved.bin,
+      args: resolved.args,
+      cwd: resolved.cwd,
+      url: resolved.url,
+      port: resolved.port,
+      hostname: resolved.hostname,
+    }
+  }
+
+  export async function spawn(opts: SpawnOptions = {}): Promise<Handle> {
+    const resolved = await resolveSpawn(opts)
+    const { port, hostname, bin, cwd, devMode, args, url } = resolved
 
     let proc: ChildProcess
     if (process.platform === "win32") {
@@ -353,7 +395,6 @@ export namespace Tui {
       }
     }
 
-    const url = `http://${hostname}:${port}`
     await waitForServer(url)
     return new Handle(url, proc)
   }

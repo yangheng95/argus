@@ -31,6 +31,7 @@ export function artifactExternalModules(): string[] {
     // .node files available through normal package resolution by itself.
     "@parcel/watcher",
     "@parcel/watcher/wrapper",
+    "@lydell/node-pty",
     "node-screenshots",
     "sharp",
   ]
@@ -80,6 +81,7 @@ export function artifactRuntimeNodeModules(target: ArtifactNodeRuntimeTarget): A
     { name: "playwright" },
     { name: "playwright-core" },
     { name: "chromium-bidi" },
+    { name: "@lydell/node-pty", runtimeDependencies: [nodePtyNativePackageName(target)] },
     { name: "sharp", runtimeDependencies: sharpNativePackageNames(target) },
     { name: "@parcel/watcher", runtimeDependencies: [parcelWatcherNativePackageName(target)] },
     { name: "node-screenshots", runtimeDependencies: nodeScreenshotsNativePackageNames(target) },
@@ -105,6 +107,10 @@ function parcelWatcherNativePackageName(target: ArtifactNodeRuntimeTarget): stri
     return `@parcel/watcher-linux-${target.arch}-${target.abi ?? "glibc"}`
   }
   return `@parcel/watcher-${target.os}-${target.arch}`
+}
+
+function nodePtyNativePackageName(target: ArtifactNodeRuntimeTarget): string {
+  return `@lydell/node-pty-${target.os}-${target.arch}`
 }
 
 function nodeScreenshotsNativePackageNames(target: ArtifactNodeRuntimeTarget): string[] {

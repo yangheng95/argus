@@ -64,6 +64,7 @@ describe("build-artifact", () => {
     expect(artifactExternalModules()).toContain("sharp")
     expect(artifactExternalModules()).toContain("@parcel/watcher")
     expect(artifactExternalModules()).toContain("@parcel/watcher/wrapper")
+    expect(artifactExternalModules()).toContain("@lydell/node-pty")
     expect(artifactExternalModules()).toContain("node-screenshots")
   })
 
@@ -72,6 +73,7 @@ describe("build-artifact", () => {
     const screenshotSource = readFileSync(resolve(import.meta.dir, "../../src/gui/screenshot.ts"), "utf8")
     const buildScreenshotSource = readFileSync(resolve(import.meta.dir, "../../src/build/screenshot-tool.ts"), "utf8")
     const capabilitySource = readFileSync(resolve(import.meta.dir, "../../src/platform/capability.ts"), "utf8")
+    const tuiHostSource = readFileSync(resolve(import.meta.dir, "../../src/tui/host.ts"), "utf8")
 
     expect(watcherSource).not.toContain('from "@parcel/watcher/wrapper"')
     expect(watcherSource).toContain("requireRuntimePackage<typeof import(\"@parcel/watcher/wrapper\")>")
@@ -80,10 +82,14 @@ describe("build-artifact", () => {
     expect(buildScreenshotSource).not.toContain('from "sharp"')
     expect(buildScreenshotSource).toContain('requireRuntimePackage<typeof import("sharp")>')
     expect(capabilitySource).toContain('requireRuntimePackage("node-screenshots")')
+    expect(tuiHostSource).not.toContain('from "@lydell/node-pty"')
+    expect(tuiHostSource).toContain('requireRuntimePackage<typeof import("@lydell/node-pty")>')
   })
 
   test("runtime node module set includes win32 x64 native packages only for win32 x64", () => {
     const packages = artifactRuntimeNodeModuleNames({ os: "win32", arch: "x64" })
+    expect(packages).toContain("@lydell/node-pty")
+    expect(packages).toContain("@lydell/node-pty-win32-x64")
     expect(packages).toContain("sharp")
     expect(packages).toContain("@img/sharp-win32-x64")
     expect(packages).toContain("@parcel/watcher-win32-x64")

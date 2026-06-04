@@ -292,6 +292,12 @@ All endpoints are protected by `OPENCORVUS_SERVER_PASSWORD` when it is set. Clie
 | GET | `/tui/control/next` | Get next TUI request | `tui.control.next` |
 | POST | `/tui/control/response` | Submit TUI response | `tui.control.response` |
 | POST | `/tui/execute-command` | Execute TUI command | `tui.executeCommand` |
+| POST | `/tui/host/input` | Write input to embedded TUI host | `tui.host.input` |
+| POST | `/tui/host/resize` | Resize embedded TUI host | `tui.host.resize` |
+| GET | `/tui/host/snapshot` | Get embedded TUI host snapshot | `tui.host.snapshot` |
+| POST | `/tui/host/start` | Start embedded TUI host | `tui.host.start` |
+| GET | `/tui/host/status` | Get embedded TUI host status | `tui.host.status` |
+| POST | `/tui/host/stop` | Stop embedded TUI host | `tui.host.stop` |
 | POST | `/tui/open-help` | Open help dialog | `tui.openHelp` |
 | POST | `/tui/open-models` | Open models dialog | `tui.openModels` |
 | POST | `/tui/open-sessions` | Open sessions dialog | `tui.openSessions` |
