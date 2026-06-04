@@ -6724,6 +6724,7 @@ export type PanelCapabilitiesData = {
       | "wecom"
       | "dingtalk"
       | "qq"
+      | "right-sidebar"
   }
   url: "/panel/capabilities"
 }
@@ -6750,6 +6751,7 @@ export type PanelCapabilitiesResponses = {
       | "wecom"
       | "dingtalk"
       | "qq"
+      | "right-sidebar"
     actions: Array<{
       action: string
       description: string
@@ -6771,6 +6773,7 @@ export type PanelCapabilitiesResponses = {
         | "wecom"
         | "dingtalk"
         | "qq"
+        | "right-sidebar"
       >
       local_only: boolean
       local_action_types?: Array<"set_executor" | "select_task" | "select_session" | "invalidate_session">
@@ -6791,6 +6794,7 @@ export type PanelCapabilitiesResponses = {
         | "wecom"
         | "dingtalk"
         | "qq"
+        | "right-sidebar"
       >
       schema: {
         [key: string]: unknown
@@ -7324,6 +7328,7 @@ export type GatewayCapabilitiesResponses = {
       | "wecom"
       | "dingtalk"
       | "qq"
+      | "right-sidebar"
     actions: Array<{
       action: string
       description: string
@@ -7345,6 +7350,7 @@ export type GatewayCapabilitiesResponses = {
         | "wecom"
         | "dingtalk"
         | "qq"
+        | "right-sidebar"
       >
       local_only: boolean
       local_action_types?: Array<"set_executor" | "select_task" | "select_session" | "invalidate_session">
@@ -7365,6 +7371,7 @@ export type GatewayCapabilitiesResponses = {
         | "wecom"
         | "dingtalk"
         | "qq"
+        | "right-sidebar"
       >
       schema: {
         [key: string]: unknown

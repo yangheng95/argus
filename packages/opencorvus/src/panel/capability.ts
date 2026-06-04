@@ -2,7 +2,8 @@ import z from "zod"
 import { CheckConfig, StageRouting } from "@/engine"
 import { ChannelId, ChannelSurface as SharedChannelSurface } from "@/channel/catalog"
 
-export const PanelSurface = SharedChannelSurface
+export const RIGHT_SIDEBAR_SURFACE = "right-sidebar"
+export const PanelSurface = z.enum([...SharedChannelSurface.options, RIGHT_SIDEBAR_SURFACE])
 export const PanelCapabilityKind = z.enum(["query", "mutation"])
 export const PanelLocalActionType = z.enum(["set_executor", "select_task", "select_session", "invalidate_session"])
 
@@ -44,9 +45,11 @@ export const PanelCapabilityQuery = z.object({
   surface: PanelSurface.default("panel"),
 })
 
-const all = PanelSurface.options
-const panel = ["panel"] as const
-const nonGateway = PanelSurface.options.filter((surface) => surface !== "gateway")
+const allProjectSurfaces = PanelSurface.options
+const sharedSurfaces = SharedChannelSurface.options
+const localSurfaces = ["panel", RIGHT_SIDEBAR_SURFACE] as const
+const localSurfaceSet: ReadonlySet<Surface> = new Set(localSurfaces)
+const nonGatewaySharedSurfaces = SharedChannelSurface.options.filter((surface) => surface !== "gateway")
 const CheckSelection = z.record(z.string(), z.boolean())
 
 type Shape = z.ZodRawShape
@@ -97,7 +100,7 @@ export const PanelCapabilityRegistry = list(
     action: "view_plan",
     description: "Inspect a task plan and goal list.",
     kind: "query",
-    surfaces: all,
+    surfaces: allProjectSurfaces,
     params: {
       taskID: z.string(),
     },
@@ -106,7 +109,7 @@ export const PanelCapabilityRegistry = list(
     action: "view_board",
     description: "Inspect a task board or list recent tasks when taskID is omitted.",
     kind: "query",
-    surfaces: all,
+    surfaces: allProjectSurfaces,
     params: {
       taskID: z.string().optional(),
     },
@@ -115,7 +118,7 @@ export const PanelCapabilityRegistry = list(
     action: "view_tasks",
     description: "List recent tasks in the current project.",
     kind: "query",
-    surfaces: all,
+    surfaces: allProjectSurfaces,
     params: {},
   }),
   item({
@@ -125,7 +128,7 @@ export const PanelCapabilityRegistry = list(
       "at a time. Distinct from view_board (which produces human-oriented prose, single-task at a time) — " +
       "use this when an agent needs to programmatically inspect outcomes of tasks it has dispatched.",
     kind: "query",
-    surfaces: all,
+    surfaces: allProjectSurfaces,
     params: {
       taskIDs: z.array(z.string().min(1)).min(1).max(50),
       includeChildren: z.boolean().optional(),
@@ -136,7 +139,7 @@ export const PanelCapabilityRegistry = list(
     action: "create_task",
     description: "Create a task, optionally binding it to a channel thread.",
     kind: "mutation",
-    surfaces: all,
+    surfaces: allProjectSurfaces,
     params: {
       request: z.string(),
       request_id: z.string().optional(),
@@ -156,7 +159,7 @@ export const PanelCapabilityRegistry = list(
     action: "send_task_message",
     description: "Send a follow-up message to an existing task.",
     kind: "mutation",
-    surfaces: all,
+    surfaces: allProjectSurfaces,
     params: {
       taskID: z.string(),
       text: z.string(),
@@ -168,7 +171,7 @@ export const PanelCapabilityRegistry = list(
     action: "reply_interaction",
     description: "Answer a pending task interaction.",
     kind: "mutation",
-    surfaces: all,
+    surfaces: allProjectSurfaces,
     params: {
       interactionID: z.string(),
       reply: z.enum(["once", "always"]).optional(),
@@ -179,7 +182,7 @@ export const PanelCapabilityRegistry = list(
     action: "reject_interaction",
     description: "Reject a pending task interaction.",
     kind: "mutation",
-    surfaces: all,
+    surfaces: allProjectSurfaces,
     params: {
       interactionID: z.string(),
       message: z.string().optional(),
@@ -189,7 +192,7 @@ export const PanelCapabilityRegistry = list(
     action: "retry_task",
     description: "Queue a retry for a task.",
     kind: "mutation",
-    surfaces: all,
+    surfaces: allProjectSurfaces,
     params: {
       taskID: z.string(),
     },
@@ -198,7 +201,7 @@ export const PanelCapabilityRegistry = list(
     action: "replan_task",
     description: "Queue a replan for a task.",
     kind: "mutation",
-    surfaces: all,
+    surfaces: allProjectSurfaces,
     params: {
       taskID: z.string(),
     },
@@ -207,7 +210,7 @@ export const PanelCapabilityRegistry = list(
     action: "cancel_task",
     description: "Cancel a task.",
     kind: "mutation",
-    surfaces: all,
+    surfaces: allProjectSurfaces,
     params: {
       taskID: z.string(),
     },
@@ -216,7 +219,7 @@ export const PanelCapabilityRegistry = list(
     action: "update_checks",
     description: "Update the selected verification checks for a task, or replace the full evaluation config.",
     kind: "mutation",
-    surfaces: all,
+    surfaces: allProjectSurfaces,
     params: {
       taskID: z.string(),
       selection: CheckSelection.optional(),
@@ -227,80 +230,80 @@ export const PanelCapabilityRegistry = list(
     action: "capture_overlay_screenshot",
     description: "Capture the current OpenCorvus GUI window and return it as an image attachment.",
     kind: "query",
-    surfaces: nonGateway,
+    surfaces: nonGatewaySharedSurfaces,
     params: {
       match: z.string().optional(),
     },
   }),
   item({
     action: "set_executor",
-    description: "Select the default executor for new desktop panel tasks.",
+    description: "Select the default executor for new local project tasks.",
     kind: "mutation",
-    surfaces: panel,
+    surfaces: localSurfaces,
     params: {
       executor: z.enum(["opencorvus", "codex", "claude-code"]),
     },
     local_action_types: ["set_executor"],
-    local_action_surfaces: panel,
+    local_action_surfaces: localSurfaces,
   }),
   item({
     action: "select_task",
-    description: "Focus a task in the desktop panel.",
+    description: "Focus a task in the local project assistant surface.",
     kind: "mutation",
-    surfaces: panel,
+    surfaces: localSurfaces,
     params: {
       taskID: z.string(),
     },
     local_action_types: ["select_task"],
-    local_action_surfaces: panel,
+    local_action_surfaces: localSurfaces,
   }),
   item({
     action: "select_session",
-    description: "Focus a session in the desktop panel chat.",
+    description: "Focus a session in the local project assistant surface.",
     kind: "mutation",
-    surfaces: panel,
+    surfaces: localSurfaces,
     params: {
       sessionID: z.string(),
     },
     local_action_types: ["select_session"],
-    local_action_surfaces: panel,
+    local_action_surfaces: localSurfaces,
   }),
   item({
     action: "create_session",
     description: "Create a blank session.",
     kind: "mutation",
-    surfaces: all,
+    surfaces: sharedSurfaces,
     params: {},
     local_action_types: ["select_session"],
-    local_action_surfaces: panel,
+    local_action_surfaces: ["panel"],
   }),
   item({
     action: "fork_session",
     description: "Fork an existing session.",
     kind: "mutation",
-    surfaces: all,
+    surfaces: sharedSurfaces,
     params: {
       sessionID: z.string(),
     },
     local_action_types: ["select_session"],
-    local_action_surfaces: panel,
+    local_action_surfaces: ["panel"],
   }),
   item({
     action: "delete_session",
     description: "Delete a session and its linked tasks.",
     kind: "mutation",
-    surfaces: all,
+    surfaces: sharedSurfaces,
     params: {
       sessionID: z.string(),
     },
     local_action_types: ["invalidate_session"],
-    local_action_surfaces: panel,
+    local_action_surfaces: ["panel"],
   }),
   item({
     action: "update_goal",
     description: "Update a goal description and acceptance specs.",
     kind: "mutation",
-    surfaces: all,
+    surfaces: allProjectSurfaces,
     params: {
       goalID: z.string(),
       description: z.string(),
@@ -311,7 +314,7 @@ export const PanelCapabilityRegistry = list(
     action: "delete_goal",
     description: "Delete a goal.",
     kind: "mutation",
-    surfaces: all,
+    surfaces: allProjectSurfaces,
     params: {
       goalID: z.string(),
     },
@@ -342,7 +345,7 @@ function view(item: Capability) {
     description: item.description,
     kind: item.kind,
     surfaces: [...item.surfaces],
-    local_only: item.surfaces.length === 1 && item.surfaces[0] === "panel",
+    local_only: item.surfaces.every((surface) => localSurfaceSet.has(surface)),
     ...(item.local_action_types ? { local_action_types: [...item.local_action_types] } : {}),
     ...(item.local_action_surfaces ? { local_action_surfaces: [...item.local_action_surfaces] } : {}),
     schema: z.toJSONSchema(item.schema),
@@ -354,6 +357,10 @@ export function panelCapabilities(surface: Surface) {
     surface,
     actions: PanelCapabilityRegistry.filter((item) => item.surfaces.includes(surface)).map(view),
   })
+}
+
+export function panelCapabilityActionSet(surface: Surface) {
+  return new Set(panelCapabilities(surface).actions.map((item) => item.action))
 }
 
 export function panelCapabilityPrompt(surface: Surface) {

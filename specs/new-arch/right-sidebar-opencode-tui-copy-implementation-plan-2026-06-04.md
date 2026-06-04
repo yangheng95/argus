@@ -1506,3 +1506,51 @@ OpenCode gap after the round:
 
 - The current host is still a single project-bound embedded TUI process, not OpenCode's full multi-PTY `list/create/get/update/remove` service.
 - Browser visual E2E, project-bound Agent Team tool/plugin surface, external TUI plugin loader/install, move-session/workspace prompt flow, and `SessionV2Debug` remain missing.
+
+### 2026-06-05 Round 19: single-sourced right-sidebar agent-team capability surface
+
+Implemented:
+
+- Rechecked latest OpenCode dev before editing. Upstream remained at `107180701f626eaf97e0f032c4a46fe4b4e9c0ec`; no new TUI, PTY, app, or terminal files changed since Round 18.
+- Recompared the local TUI file tree against `.tmp/opencode-upstream/packages/opencode/src/cli/cmd/tui` and confirmed remaining upstream gaps include:
+  - `feature-plugins/system/session-v2.tsx`;
+  - workspace and move-session prompt/dialog modules;
+  - `component/use-connected.tsx`, background pulse, session footer/subagent-footer, and provider/model helper utilities.
+- Removed the right-sidebar assistant action double source in `packages/opencorvus/src/tool/panel.ts`:
+  - deleted `RIGHT_SIDEBAR_ASSISTANT_ALLOWED_ACTIONS`;
+  - right-sidebar assistant authorization now derives from `panelCapabilityActionSet("right-sidebar")`;
+  - the visible `/panel/capabilities` surface and callable panel tool surface now share one registry.
+- Added `right-sidebar` to `PanelSurface` in `packages/opencorvus/src/panel/capability.ts`:
+  - project/task/agent-team actions are exposed to the right-sidebar surface;
+  - `set_executor`, `select_task`, and `select_session` are local actions for both `panel` and `right-sidebar`;
+  - session management actions (`create_session`, `fork_session`, `delete_session`) are not exposed to right-sidebar;
+  - `capture_overlay_screenshot` remains excluded from right-sidebar instead of being granted automatically.
+- Added an OpenCode slot-based internal TUI plugin:
+  - `packages/opencorvus/src/cli/cmd/tui/feature-plugins/sidebar/agent-team.tsx`;
+  - registered as `SidebarAgentTeam` in `plugin/internal.ts`;
+  - renders the right-sidebar project/agent-team tool surface through `sidebar_content`;
+  - registers palette command `agent_team.tools`;
+  - reads `panelCapabilities("right-sidebar")`, not a duplicated local list.
+- Regenerated SDK/OpenAPI/docs so `/panel/capabilities?surface=right-sidebar` is part of the public contract.
+
+Verified:
+
+- `bun test packages/opencorvus/test/tui/plugin-runtime-guard.test.ts packages/opencorvus/test/tool/panel-capability.test.ts packages/opencorvus/test/tool/panel.test.ts`
+- `bun run --cwd packages/opencorvus typecheck`
+- `bun run --cwd packages/sdk/js build`
+- `bun run docs:api`
+- `bun run api:routes-check`
+- `bun run docs:check`
+- `bun run --cwd packages/sdk/js typecheck`
+
+OpenCode comparison after the round:
+
+- The new `agent-team` plugin follows the copied OpenCode internal plugin/slot pattern instead of hard-coding another sidebar section into `routes/session/sidebar.tsx`.
+- This is intentionally OpenCorvus-specific: OpenCode does not have OpenCorvus' project task board or agent-team control-plane registry, so the reusable OpenCode part is the plugin slot/keymap structure, not the business action list.
+- The right-sidebar assistant's callable tool set now matches the visible right-sidebar capability surface, closing the reviewer-identified duplicate allowlist risk.
+
+OpenCode gap after the round:
+
+- The current host is still a single project-bound embedded TUI process, not OpenCode's full multi-PTY `list/create/get/update/remove` service.
+- The new `agent-team` plugin exposes the project-bound capability surface, but it does not yet render live task/agent activity rows from `EngineTaskTable`, queue state, or protocol interactions.
+- Browser visual E2E, external TUI plugin loader/install, move-session/workspace prompt flow, `SessionV2Debug`, workspace label/connectivity UI, background pulse, and session/subagent footer modules remain missing.
