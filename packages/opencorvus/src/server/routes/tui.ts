@@ -49,17 +49,6 @@ const TuiHostInfo = z.object({
   updatedAt: z.number().int().nullable(),
 })
 
-const TuiHostSnapshot = TuiHostInfo.extend({
-  buffer: z.string(),
-})
-
-const TuiHostOutput = TuiHostInfo.extend({
-  data: z.string(),
-  cursor: z.number().int(),
-  from: z.number().int(),
-  truncated: z.boolean(),
-})
-
 const TuiHostConnectToken = z.object({
   ticket: z.string().min(1),
   expires_in: z.number().int().positive(),
@@ -236,43 +225,6 @@ export const TuiRoutes = lazy(() =>
         return c.json(TuiHost.status())
       },
     )
-    .get(
-      "/host/snapshot",
-      describeRoute({
-        summary: "Get embedded TUI host snapshot",
-        description: "Get the buffered terminal output for the embedded right-sidebar TUI host.",
-        operationId: "tui.host.snapshot",
-        responses: {
-          200: {
-            description: "Embedded TUI host snapshot",
-            content: { "application/json": { schema: resolver(TuiHostSnapshot) } },
-          },
-        },
-      }),
-      async (c) => {
-        return c.json(TuiHost.snapshot())
-      },
-    )
-    .get(
-      "/host/output",
-      describeRoute({
-        summary: "Get embedded TUI host output delta",
-        description:
-          "Get buffered terminal output after a cursor for the embedded right-sidebar TUI host. Cursor -1 starts at the current end.",
-        operationId: "tui.host.output",
-        responses: {
-          200: {
-            description: "Embedded TUI host output delta",
-            content: { "application/json": { schema: resolver(TuiHostOutput) } },
-          },
-          ...errors(400),
-        },
-      }),
-      validator("query", z.object({ cursor: z.coerce.number().int().min(-1).optional() })),
-      async (c) => {
-        return c.json(TuiHost.output(c.req.valid("query")))
-      },
-    )
     .post(
       "/host/connect-token",
       describeRoute({
@@ -375,29 +327,6 @@ export const TuiRoutes = lazy(() =>
             connection?.onClose()
           },
         })
-      },
-    )
-    .post(
-      "/host/input",
-      describeRoute({
-        summary: "Write input to embedded TUI host",
-        description: "Write terminal input to the project-bound embedded TUI host.",
-        operationId: "tui.host.input",
-        responses: {
-          200: {
-            description: "Input written",
-            content: { "application/json": { schema: resolver(z.boolean()) } },
-          },
-          ...errors(400),
-        },
-      }),
-      validator("json", z.object({ data: z.string().min(1) })),
-      async (c) => {
-        try {
-          return c.json(TuiHost.input(c.req.valid("json").data))
-        } catch (error) {
-          mapTuiHostRouteError(error)
-        }
       },
     )
     .post(

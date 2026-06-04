@@ -5,7 +5,6 @@ import type { HostTransport, TransportRequest, TransportResponse } from "../src/
 import {
   buildTuiHostConnectUrl,
   createTuiHostConnectToken,
-  loadTuiHostSnapshot,
   loadTuiHostStatus,
   resizeTuiHost,
   startTuiHost,
@@ -65,7 +64,6 @@ describe("tui host service", () => {
 
     await startTuiHost({ cols: 120, rows: 40 })
     await loadTuiHostStatus()
-    await loadTuiHostSnapshot()
     await createTuiHostConnectToken()
     await resizeTuiHost({ cols: 100, rows: 30 })
     await stopTuiHost()
@@ -73,16 +71,18 @@ describe("tui host service", () => {
     expect(requests.map((req) => `${req.method ?? "GET"} ${req.path}`)).toEqual([
       "POST tui/host/start",
       "GET tui/host/status",
-      "GET tui/host/snapshot",
       "POST tui/host/connect-token",
       "POST tui/host/resize",
       "POST tui/host/stop",
     ])
     expect(requests.some((req) => req.path === "tui/runtime/status")).toBe(false)
+    expect(requests.some((req) => req.path === "tui/host/snapshot")).toBe(false)
+    expect(requests.some((req) => req.path === "tui/host/output")).toBe(false)
+    expect(requests.some((req) => req.path === "tui/host/input")).toBe(false)
     expect(requests.every((req) => req.query?.directory === "D:/repo")).toBe(true)
     expect(requests[0]?.body).toEqual({ kind: "json", value: { cols: 120, rows: 40 } })
-    expect(requests[3]?.headers).toEqual({ "x-opencode-ticket": "1" })
-    expect(requests[4]?.body).toEqual({ kind: "json", value: { cols: 100, rows: 30 } })
+    expect(requests[2]?.headers).toEqual({ "x-opencode-ticket": "1" })
+    expect(requests[3]?.body).toEqual({ kind: "json", value: { cols: 100, rows: 30 } })
   })
 
   test("builds ticketed websocket URLs through the API directory context", () => {

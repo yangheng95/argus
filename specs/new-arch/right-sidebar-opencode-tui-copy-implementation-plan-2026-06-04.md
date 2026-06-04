@@ -1470,3 +1470,39 @@ OpenCode gap after the round:
 - The current host is still a single project-bound embedded TUI process, not OpenCode's full multi-PTY `list/create/get/update/remove` service.
 - `GET /tui/host/snapshot` and `GET /tui/host/output` still exist as server diagnostics; they are no longer exposed by the overlay TUI service or used by the mounted right-sidebar render loop.
 - Browser visual E2E, project-bound Agent Team tool/plugin surface, external TUI plugin loader/install, move-session/workspace prompt flow, and `SessionV2Debug` remain missing.
+
+### 2026-06-05 Round 18: removed HTTP input/output/snapshot double source
+
+Implemented:
+
+- Rechecked latest OpenCode dev before editing. Upstream remained at `107180701f626eaf97e0f032c4a46fe4b4e9c0ec`; no new TUI, PTY, app, or terminal files changed since Round 17.
+- Compared against OpenCode's current PTY route group:
+  - OpenCode exposes PTY `list/create/get/update/remove/connect-token/connect`.
+  - It does not expose separate HTTP terminal `input`, retained-output `output`, or full-buffer `snapshot` routes.
+- Deleted the remaining custom public HTTP routes from `packages/opencorvus/src/server/routes/tui.ts`:
+  - `GET /tui/host/snapshot`
+  - `GET /tui/host/output`
+  - `POST /tui/host/input`
+- Removed `loadTuiHostSnapshot()` from the overlay TUI host service. The overlay service already had no HTTP input/output exposure after Round 16.
+- Updated route and overlay tests so the only right-sidebar terminal input/output path is the ticketed WebSocket attach route.
+- Regenerated SDK and API docs; route inventory dropped from 225 to 222 operations, removing the three custom double-source routes from generated public contracts.
+
+Verified:
+
+- `bun test packages/opencorvus/test/server/tui-host-routes.test.ts packages/opencorvus/test/tui/host.test.ts`
+- `bun test packages/overlay/test/tui-host-service.test.ts packages/overlay/test/tui-host-panel.test.ts packages/overlay/test/coding-assistant-panel.test.ts`
+- `bun run --cwd packages/opencorvus typecheck`
+- `bun run --cwd packages/overlay typecheck`
+- `bun run --cwd packages/sdk/js build`
+- `bun run docs:api`
+
+OpenCode comparison after the round:
+
+- Removed the leftover HTTP input/output/snapshot surface that did not exist in OpenCode's PTY API.
+- The public right-sidebar host terminal path is now start/status/resize/stop plus connect-token/connect WebSocket, with input/output over the WebSocket.
+- Existing agent workflow remains untouched: no session, task, permission, question, panel, or `/coding/session*` behavior changed.
+
+OpenCode gap after the round:
+
+- The current host is still a single project-bound embedded TUI process, not OpenCode's full multi-PTY `list/create/get/update/remove` service.
+- Browser visual E2E, project-bound Agent Team tool/plugin surface, external TUI plugin loader/install, move-session/workspace prompt flow, and `SessionV2Debug` remain missing.
