@@ -1172,3 +1172,68 @@ OpenCode gap after the round:
 - OpenCode has a richer multi-session `/pty` API with list/create/get/update/remove/connect-token/connect WebSocket. This round intentionally added the narrower right-sidebar host surface required for one embedded coding assistant TUI; websocket streaming and tokenized attach still need to be copied/adapted before the overlay renderer can be live-stream rather than snapshot/poll driven.
 - The overlay still renders `TuiRuntimePanel`; `ghostty-web` is not yet mounted in the right sidebar, so screenshot-level parity is still incomplete.
 - External TUI plugin loader/install, Agent Team project-bound plugin, latest move-session/workspace prompt flow, and `SessionV2Debug` remain missing.
+
+### 2026-06-05 Round 12: replaced right-sidebar placeholder with ghostty-backed host renderer
+
+Implemented:
+
+- Rechecked latest OpenCode dev before editing. Upstream advanced to `107180701f626eaf97e0f032c4a46fe4b4e9c0ec`, but the new diff only touched dependency/build metadata (`package.json`, `bun.lock`, `bunfig.toml`, Nix hashes, and build scripts). No TUI, terminal, PTY, or app component source changed in that upstream delta.
+- Deleted the old overlay runtime placeholder:
+  - `packages/overlay/src/components/TuiRuntimePanel.tsx`
+  - `packages/overlay/src/services/tui-runtime.ts`
+- Added `packages/overlay/src/services/tui-host.ts` as the single browser client for the real host routes:
+  - `tui/host/start`
+  - `tui/host/status`
+  - `tui/host/snapshot`
+  - `tui/host/input`
+  - `tui/host/resize`
+  - `tui/host/stop`
+- Added `packages/overlay/src/components/TuiHostPanel.tsx`:
+  - dynamically loads `ghostty-web`;
+  - creates a real `Terminal` and `FitAddon`;
+  - starts the project-bound host only when the TUI activity is active;
+  - renders host snapshots into the terminal buffer;
+  - forwards terminal input to `tui/host/input`;
+  - forwards terminal resize events to `tui/host/resize`;
+  - observes container resize with `ResizeObserver` so the embedded terminal follows right-sidebar resizing;
+  - supports explicit refresh and restart through the host API.
+- Replaced the right-sidebar mount with `<TuiHostPanel active={() => rightActivity() === "tui"} />`.
+- Renamed the DOM mount from `solidTuiRuntimeMount` to `solidTuiHostMount` so the new implementation does not keep the old runtime placeholder name.
+- Updated TUI host labels in both locale files and synchronized the panel revision hash.
+- Updated right-sidebar CSS from `.tui-runtime-*` placeholder rules to `.tui-host-*` terminal surface rules.
+
+Verified:
+
+- `bun test packages/overlay/test/tui-host-service.test.ts packages/overlay/test/tui-host-panel.test.ts packages/overlay/test/coding-assistant-panel.test.ts packages/overlay/test/acceptance-panel-mount.test.ts`
+- `bun run --cwd packages/overlay typecheck`
+- `bun run --cwd packages/overlay check:i18n`
+- `bun run --cwd packages/overlay build:vite`
+- Residual source grep: no `TuiRuntimePanel`, `tui-runtime`, `loadTuiRuntimeStatus`, `tui.runtime_*`, `embedded_host_pending`, or `solidTuiRuntimeMount` references remain in `packages/overlay/src`; remaining matches in `packages/overlay/test` are negative assertions proving the old path is absent.
+
+Visual verification status:
+
+- Vite started at `http://127.0.0.1:5187/`.
+- The Codex in-app Browser attach timed out twice while trying to inspect the local page.
+- Playwright had the package installed but no bundled Chromium executable. `bunx playwright install chromium` timed out after 10 minutes, and launching the system Chrome executable through Playwright also timed out before browser startup completed.
+- Because of that toolchain failure, this round does not claim screenshot-level visual acceptance. The implementation is build-verified and DOM-wiring-tested, but final acceptance still needs a browser screenshot/canvas-pixel pass once the browser automation toolchain is repaired.
+
+OpenCode comparison after the round:
+
+- Matched the important OpenCode terminal principle for the right sidebar: the visible assistant surface is now a real terminal renderer (`ghostty-web`) backed by a server-owned PTY host route set, not a hand-written browser chat/status panel.
+- Matched OpenCode's resize expectation by using the terminal fit addon and propagating resize events back to the host.
+- Preserved OpenCorvus-specific agent workflow behavior: this round only changed the overlay-side right activity body and its client calls. It did not alter orchestrator, task queue, session prompt, permission/question handling, existing agent message flow, or `/tui/runtime/*` control-plane behavior.
+
+OpenCode gap after the round:
+
+- OpenCode still has a richer `/pty` model with list/create/get/update/remove/connect-token/connect WebSocket. The current overlay uses `snapshot` polling every 500 ms, so it is not yet equivalent to OpenCode's streaming attach model.
+- Multi-PTY session list/attach, connect-token security, terminal close/remove semantics, and direct WebSocket input/output still need to be copied/adapted before the embedded TUI reaches full OpenCode parity.
+- The overlay terminal surface now exists, but the project-bound Agent Team tool/plugin surface is still missing. The next implementation round must expose project task query/control and agent-team operation tools through a canonical plugin/tool API rather than a parallel browser-only API.
+- External TUI plugin loader/install, latest move-session/workspace prompt flow, and `SessionV2Debug` remain missing.
+
+Independent review feedback to carry into the next round:
+
+- Overlay UI double-source is removed, but server `/tui/runtime/*` still exists as the external/runtime control plane. The next OpenCode PTY migration must either replace it with the canonical PTY attach model or prove why it remains a separate non-sidebar control surface; it must not become a fallback path for the right-sidebar TUI.
+- `packages/overlay/src/services/coding-assistant.ts` and `packages/overlay/src/services/coding-assistant-transcript.ts` are no longer used by the mounted right-sidebar UI, but still have old tests. They should be deleted in a dedicated cleanup round after verifying the canonical `/coding/session*` server metadata/provenance path remains covered for agent workflow.
+- Add route-level host tests for successful `/tui/host/start`, `/tui/host/input`, `/tui/host/resize`, `/tui/host/stop`, plus empty input and stopped-host errors.
+- Add component behavior tests with mocked `ghostty-web`: active=false does not start, active=true starts, snapshot writes to the terminal, non-prefix snapshot resets the terminal, terminal input reaches `tui/host/input`, resize de-duplicates and reaches `tui/host/resize`.
+- Add browser visual acceptance after repairing browser automation: right TUI active by default, ghostty canvas visible, no `.tui-runtime-panel`, host error/connected state visible, and no overlap with right toolbar or editor.

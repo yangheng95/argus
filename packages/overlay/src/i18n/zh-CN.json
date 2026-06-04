@@ -1,7 +1,7 @@
 {
   "_meta": {
     "language": "zh-CN",
-    "panel_revision": "e460c1848b5fc43c"
+    "panel_revision": "9d8ec15fae50e085"
   },
   "about.author_name": "杨恒",
   "about.go_version": "Go 版本",
@@ -812,13 +812,10 @@
   "titlebar.zoom_hint": "调整浮层界面缩放比例。",
   "trace.copy_json": "复制 trace JSON",
   "trace.copy_failed": "复制失败（剪贴板被阻止）",
-  "tui.embedded_host_pending": "嵌入式终端宿主尚未可用。此面板绑定真实 TUI 运行状态，不会自动启动外部终端。",
-  "tui.runtime_error": "运行时错误",
-  "tui.runtime_mode": "模式",
-  "tui.runtime_running": "运行时已连接",
-  "tui.runtime_session": "会话",
-  "tui.runtime_stopped": "运行时已停止",
-  "tui.runtime_url": "运行时 URL",
+  "tui.host_error": "终端错误",
+  "tui.host_restart": "重启 TUI",
+  "tui.host_running": "已连接",
+  "tui.host_stopped": "已停止",
   "tui.title": "TUI",
   "card.context_tokens_tooltip": "本轮约 {value} 个提示词 token（服务商上报，实际计费可能略有偏差）",
   "card.duration_tooltip": "会话耗时 {{value}}（从首条消息到终态）",

@@ -1,7 +1,7 @@
 {
   "_meta": {
     "language": "en-US",
-    "panel_revision": "e460c1848b5fc43c"
+    "panel_revision": "9d8ec15fae50e085"
   },
   "about.author_name": "Yang, Heng",
   "about.go_version": "Go Version",
@@ -812,13 +812,10 @@
   "titlebar.zoom_hint": "Scale the overlay interface.",
   "trace.copy_json": "Copy trace as JSON",
   "trace.copy_failed": "Copy failed (clipboard blocked)",
-  "tui.embedded_host_pending": "Embedded terminal host is not available yet. This panel is bound to the real TUI runtime status and will not start an external terminal automatically.",
-  "tui.runtime_error": "Runtime error",
-  "tui.runtime_mode": "Mode",
-  "tui.runtime_running": "Runtime connected",
-  "tui.runtime_session": "Session",
-  "tui.runtime_stopped": "Runtime stopped",
-  "tui.runtime_url": "Runtime URL",
+  "tui.host_error": "Terminal error",
+  "tui.host_restart": "Restart TUI",
+  "tui.host_running": "Connected",
+  "tui.host_stopped": "Stopped",
   "tui.title": "TUI",
   "card.context_tokens_tooltip": "~{value} prompt tokens at this turn (provider-reported; actual billing may differ)",
   "card.duration_tooltip": "Session ran for {{value}} (between first message and terminal status)",
