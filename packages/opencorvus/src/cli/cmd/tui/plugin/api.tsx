@@ -149,6 +149,17 @@ function stateApi(sync: ReturnType<typeof useSync>): TuiPluginApi["state"] {
         branch: sync.data.vcs.branch,
       }
     },
+    project: {
+      board() {
+        return sync.data.project_board
+      },
+      tasks() {
+        return sync.data.project_board?.tasks ?? []
+      },
+      summary() {
+        return sync.data.project_board?.summary
+      },
+    },
     session: {
       count() {
         return sync.data.session.length

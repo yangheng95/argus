@@ -1554,3 +1554,48 @@ OpenCode gap after the round:
 - The current host is still a single project-bound embedded TUI process, not OpenCode's full multi-PTY `list/create/get/update/remove` service.
 - The new `agent-team` plugin exposes the project-bound capability surface, but it does not yet render live task/agent activity rows from `EngineTaskTable`, queue state, or protocol interactions.
 - Browser visual E2E, external TUI plugin loader/install, move-session/workspace prompt flow, `SessionV2Debug`, workspace label/connectivity UI, background pulse, and session/subagent footer modules remain missing.
+
+### 2026-06-05 Round 20: live project task and agent rows in TUI state
+
+Implemented:
+
+- Rechecked latest OpenCode dev before editing. Upstream remained at `107180701f626eaf97e0f032c4a46fe4b4e9c0ec`; no new TUI, PTY, app, or terminal files changed since Round 19.
+- Filled the Round 19 gap where the `agent-team` plugin only displayed static capabilities:
+  - `SyncProvider` now loads `sdk.client.task.list({ limit: 8 })` into `project_board`;
+  - task, run, permission, and question events refresh that project board;
+  - `@opencorvus-ai/plugin/tui` exposes `state.project.board()`, `state.project.tasks()`, and `state.project.summary()`;
+  - `createTuiApi()` maps those accessors from the same sync store.
+- Extended the canonical project board projection instead of adding a TUI-only DB query:
+  - `ProjectTaskSummary` now includes `active_sessions`;
+  - `taskItems()` fills it through existing `listActiveSessionsForTask(task.id)`;
+  - `/tasks` query parameters now use a real zod validator so SDK generation includes `limit`, `q`, and `status`.
+- Updated the OpenCode-style `agent-team` sidebar plugin:
+  - displays open/running task counts;
+  - displays active agent count;
+  - lists recent project tasks;
+  - shows each task's active session count and pending interaction count;
+  - still renders through `sidebar_content` and still gets tools from `panelCapabilities("right-sidebar")`.
+- Regenerated SDK/OpenAPI/docs for the `/tasks` query and `active_sessions` response field.
+
+Verified:
+
+- `bun test packages/opencorvus/test/engine/active-sessions.test.ts packages/opencorvus/test/tui/plugin-runtime-guard.test.ts packages/opencorvus/test/tool/panel-capability.test.ts packages/opencorvus/test/tool/panel.test.ts`
+- `bun run --cwd packages/opencorvus typecheck`
+- `bun run --cwd packages/plugin typecheck`
+- `bun run --cwd packages/sdk/js typecheck`
+- `bun run --cwd packages/overlay typecheck`
+- `bun typecheck`
+- `bun run api:routes-check`
+- `bun run docs:check`
+
+OpenCode comparison after the round:
+
+- The right sidebar still follows OpenCode's copied plugin-slot architecture: project task rows are rendered by an internal plugin, not by hard-coded session sidebar JSX.
+- The data source is OpenCorvus-specific but canonical: it uses `/tasks`/SDK project board projection, equivalent in role to OpenCode's sync-backed state surfaces.
+- This closes the previous project-binding shortfall for the sidebar: the TUI now shows live project task and active agent state, not only a static tool list.
+
+OpenCode gap after the round:
+
+- The current host is still a single project-bound embedded TUI process, not OpenCode's full multi-PTY `list/create/get/update/remove` service.
+- The `agent-team` plugin shows live rows but does not yet dispatch actions directly from rows; palette still only lists the command/tool surface.
+- Browser visual E2E, external TUI plugin loader/install, move-session/workspace prompt flow, `SessionV2Debug`, workspace label/connectivity UI, background pulse, and session/subagent footer modules remain missing.

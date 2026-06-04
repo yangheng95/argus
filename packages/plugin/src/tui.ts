@@ -14,6 +14,7 @@ import type {
   SessionStatus,
   TextPart,
   Todo,
+  TaskListResponse,
   createOpenCorvusClient,
 } from "@opencorvus-ai/sdk"
 import type { CliRenderer, KeyEvent, RGBA, Renderable, SlotMode } from "@opentui/core"
@@ -398,6 +399,11 @@ export type TuiState = {
     directory: string
   }
   readonly vcs: { branch?: string } | undefined
+  project: {
+    board: () => TaskListResponse | undefined
+    tasks: () => ReadonlyArray<TaskListResponse["tasks"][number]>
+    summary: () => TaskListResponse["summary"] | undefined
+  }
   session: {
     count: () => number
     get: (sessionID: string) => Session | undefined

@@ -66,6 +66,12 @@ export const TaskListEvent = z.object({
   notificationDetails: z.string().optional(),
 })
 
+const TaskListQuery = z.object({
+  q: z.string().optional(),
+  status: z.string().optional(),
+  limit: z.coerce.number().int().positive().max(100).optional(),
+})
+
 const TaskProjectArchiveUnsupportedProjectResponse = z.object({
   message: z.string(),
 })
@@ -187,10 +193,9 @@ export const EngineRoutes = lazy(() =>
           },
         },
       }),
+      validator("query", TaskListQuery),
       async (c) => {
-        const query = c.req.query("q") || undefined
-        const status = c.req.query("status") || undefined
-        const limit = c.req.query("limit") ? parseInt(c.req.query("limit")!, 10) : undefined
+        const { q: query, status, limit } = c.req.valid("query")
         return c.json(await EngineService.getProjectBoard({ query, status, limit }))
       },
     )

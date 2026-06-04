@@ -7,6 +7,7 @@ import { EngineTaskTable } from "../../src/engine/engine.sql"
 import { ProtocolEventTable } from "../../src/protocol/protocol.sql"
 import { listActiveSessionsForTask } from "../../src/engine/store"
 import { SessionStatus } from "../../src/session/status"
+import { EngineService } from "../../src/task-api"
 import { resetDatabase } from "../fixture/db"
 import { tmpdir } from "../fixture/fixture"
 
@@ -159,5 +160,63 @@ describe("listActiveSessionsForTask", () => {
     insertStatus(ids, { seq: 1, emittedAt: now - 5 * 60_000, status: "streaming" })
 
     expect(listActiveSessionsForTask(ids.taskID)).toEqual([])
+  })
+
+  test("project board exposes active sessions for right-sidebar agent-team state", async () => {
+    await using tmp = await tmpdir({ git: true })
+    const now = Date.now()
+
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const ids = {
+          projectID: Instance.project.id,
+          taskID: "tsk_project_board_active_sessions",
+          sessionID: "ses_project_board_active_sessions",
+        }
+        Database.use((db) => {
+          db.insert(SessionTable).values({
+            id: ids.sessionID,
+            project_id: ids.projectID,
+            parent_id: null,
+            slug: "active-project-board-build",
+            directory: tmp.path,
+            title: "Build",
+            version: "1",
+            kind: "build",
+            goal_id: "gol_project_board_active",
+            time_created: now,
+            time_updated: now,
+          }).run()
+          db.insert(EngineTaskTable).values({
+            id: ids.taskID,
+            project_id: ids.projectID,
+            session_id: ids.sessionID,
+            source: "test",
+            title: "Task with live agent",
+            request: "Show active agent in project board",
+            kind: "workflow",
+            priority: "normal",
+            time_created: now,
+            time_updated: now,
+            time_started: now,
+          }).run()
+        })
+        insertStatus(ids, { seq: 1, emittedAt: now, status: "streaming" })
+        setProcessStatus(ids.sessionID, "streaming")
+
+        const board = await EngineService.getProjectBoard({ limit: 8 })
+        const item = board.tasks.find((entry) => entry.task.id === ids.taskID)
+
+        expect(item?.active_sessions).toEqual([
+          {
+            sessionID: ids.sessionID,
+            kind: "build",
+            goalID: "gol_project_board_active",
+            lastActivityMs: now,
+          },
+        ])
+      },
+    })
   })
 })
