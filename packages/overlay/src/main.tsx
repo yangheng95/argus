@@ -29,6 +29,8 @@ import { WorkspacePanel } from "./components/WorkspacePanel"
 import { FileExplorerPanel } from "./components/FileExplorerPanel"
 import { FileEditorPane } from "./components/FileEditorPane"
 import { RightFilesPanel } from "./components/RightFilesPanel"
+import { BrowserPreviewPanel } from "./components/BrowserPreviewPanel"
+import { CodingAssistantPanel } from "./components/CodingAssistantPanel"
 import { DEFAULT_RIGHT_PANEL_TAB, RightPanelTabs, type RightPanelTab } from "./components/RightPanelTabs"
 import { fileWorkbenchOpen } from "./services/file-workbench"
 import type { DiffTarget } from "./services/diff"
@@ -699,6 +701,12 @@ if (fileExplorerMountEl) {
   render(() => <FileExplorerPanel active={() => rightPanelTab() === "explorer"} directory={activeDirectory} />, fileExplorerMountEl)
 }
 
+const codingAssistantMountEl = document.getElementById("solidCodingAssistantMount")
+if (codingAssistantMountEl) {
+  codingAssistantMountEl.innerHTML = ""
+  render(() => <CodingAssistantPanel active={() => rightPanelTab() === "assistant"} />, codingAssistantMountEl)
+}
+
 // ── Sidebar title backdoor: double-click resets DB ──
 // Hidden operator escape hatch. Confirms before invoking POST /global/db/reset,
 // then reloads to repopulate from a clean schema.
@@ -902,6 +910,11 @@ if (rightPanelHeaderCollapseEl) {
 const rightPanelTabsEl = document.getElementById("solidRightPanelTabs")
 if (rightPanelTabsEl) {
   render(() => <RightPanelTabs active={rightPanelTab} onSelect={setRightPanelTab} />, rightPanelTabsEl)
+}
+
+const browserPreviewEl = document.getElementById("solidBrowserPreviewMount")
+if (browserPreviewEl) {
+  render(() => <BrowserPreviewPanel />, browserPreviewEl)
 }
 
 // ── Mount: ConnectionBadge ──
@@ -1195,10 +1208,14 @@ disposers.push(
     createEffect(() => {
       const active = rightPanelTab()
       const explorer = document.getElementById("rightPanelExplorer")
+      const assistant = document.getElementById("rightPanelAssistant")
       const files = document.getElementById("rightPanelFiles")
+      const browser = document.getElementById("rightPanelBrowser")
       const inspector = document.getElementById("rightPanelInspector")
       if (explorer) explorer.dataset.active = String(active === "explorer")
+      if (assistant) assistant.dataset.active = String(active === "assistant")
       if (files) files.dataset.active = String(active === "files")
+      if (browser) browser.dataset.active = String(active === "browser")
       if (inspector) inspector.dataset.active = String(active === "inspector")
     })
 

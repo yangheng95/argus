@@ -22,6 +22,29 @@ describe("app routes", () => {
     expect(await response.text()).toContain('data-page="overlay"')
   })
 
+  test("Server.openapi includes project routes mounted through routeInventoryApp", async () => {
+    const spec = await Server.openapi()
+    const paths = spec.paths ?? {}
+
+    expect(paths["/global/health"]?.get).toBeDefined()
+    expect(paths["/project/current"]?.get).toBeDefined()
+    expect(paths["/goal-run/{goalRunID}/acceptance"]?.get).toBeDefined()
+  })
+
+  test("Server.openapi documents directory query for project-scoped routes only once", async () => {
+    const spec = await Server.openapi()
+    const paths = spec.paths ?? {}
+    const parameterNames = (operation: { parameters?: Array<{ name?: string; in?: string }> } | undefined) =>
+      (operation?.parameters ?? [])
+        .filter((parameter) => parameter.in === "query" && parameter.name === "directory")
+        .map((parameter) => parameter.name)
+
+    expect(parameterNames(paths["/project/current"]?.get)).toEqual(["directory"])
+    expect(parameterNames(paths["/browser-preview/target"]?.get)).toEqual(["directory"])
+    expect(parameterNames(paths["/session"]?.get)).toEqual(["directory"])
+    expect(parameterNames(paths["/global/health"]?.get)).toEqual([])
+  })
+
   test("POST /shutdown returns 503 without a registered handler", async () => {
     const app = Server.App()
     const response = await app.request("/shutdown", { method: "POST" })

@@ -7,12 +7,12 @@ import { Log } from "../util/log"
 import { FileIgnore } from "./ignore"
 import { Config } from "../config/config"
 import path from "path"
-import { createWrapper } from "@parcel/watcher/wrapper"
 import { lazy } from "@/util/lazy"
 import { withTimeout } from "@/util/timeout"
 import { $ } from "bun"
 import { Flag } from "@/flag/flag"
 import { readdir } from "fs/promises"
+import { requireRuntimePackage } from "@/runtime/package-require"
 
 const SUBSCRIBE_TIMEOUT_MS = 10_000
 
@@ -36,7 +36,9 @@ export namespace FileWatcher {
   }
 
   const parcel = lazy((): typeof import("@parcel/watcher") => {
-    const binding = require(
+    const { createWrapper } =
+      requireRuntimePackage<typeof import("@parcel/watcher/wrapper")>("@parcel/watcher/wrapper")
+    const binding = requireRuntimePackage(
       `@parcel/watcher-${process.platform}-${process.arch}${process.platform === "linux" ? `-${OPENCORVUS_LIBC || "glibc"}` : ""}`,
     )
     return createWrapper(binding) as typeof import("@parcel/watcher")

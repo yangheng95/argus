@@ -1,14 +1,21 @@
-import { Window } from "node-screenshots"
+import { requireRuntimePackage } from "@/runtime/package-require"
+
+type WindowInstance = InstanceType<typeof import("node-screenshots").Window>
+type WindowClass = typeof import("node-screenshots").Window
+
+function loadWindow(): WindowClass {
+  return requireRuntimePackage<typeof import("node-screenshots")>("node-screenshots").Window
+}
 
 function text(value: string | undefined) {
   return String(value || "").trim()
 }
 
-function visible(win: InstanceType<typeof Window>) {
+function visible(win: WindowInstance) {
   return !win.isMinimized() && win.width() > 0 && win.height() > 0
 }
 
-function score(win: InstanceType<typeof Window>, match?: string) {
+function score(win: WindowInstance, match?: string) {
   const title = text(win.title())
   const app = text(win.appName())
   if (!title && !app) return -1
@@ -38,7 +45,7 @@ function name(value: string) {
   return safe || "opencorvus-gui"
 }
 
-function listWindows() {
+function listWindows(Window: WindowClass) {
   return Window.all()
     .filter(visible)
     .map((win) => text(win.title()) || text(win.appName()))
@@ -47,7 +54,8 @@ function listWindows() {
 }
 
 export async function captureWindowScreenshot(match?: string) {
-  let wins: InstanceType<typeof Window>[]
+  const Window = loadWindow()
+  let wins: WindowInstance[]
   try {
     wins = Window.all().filter(visible)
   } catch (error) {
@@ -62,7 +70,7 @@ export async function captureWindowScreenshot(match?: string) {
 
   if (!target) {
     const query = text(match)
-    const seen = listWindows()
+    const seen = listWindows(Window)
     const scope = query ? ` matching "${query}"` : ""
     const tail = seen.length > 0 ? ` Available windows: ${seen.join(", ")}` : ""
     throw new Error(`No OpenCorvus GUI window found${scope}.${tail}`)

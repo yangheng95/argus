@@ -1,12 +1,12 @@
 import fs from "node:fs/promises"
 import path from "node:path"
 import { tool } from "ai"
-import sharp from "sharp"
 import z from "zod"
 import { captureRuntimePage, type RuntimeCaptureSuccess } from "@/runtime/page-capture"
 import { buildMultimodalToolResult } from "@/tool/multimodal-result"
 import { ProjectRuntimePaths } from "@/project/runtime-paths"
 import { Log } from "@/util/log"
+import { requireRuntimePackage } from "@/runtime/package-require"
 
 const log = Log.create({ service: "build-screenshot-tool" })
 // LLM means large language model; this limit applies to the image attached
@@ -19,6 +19,7 @@ export async function resizeScreenshotForLLM(input: { path: string }): Promise<{
   height: number
   resized: boolean
 }> {
+  const sharp = requireRuntimePackage<typeof import("sharp")>("sharp")
   const image = sharp(input.path)
   const metadata = await image.metadata()
   const width = metadata.width

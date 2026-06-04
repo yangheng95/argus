@@ -15,6 +15,8 @@ import type {
   AuthRemoveResponses,
   AuthSetErrors,
   AuthSetResponses,
+  BrowserPreviewTargetResponses,
+  BrowserPreviewVerifyResponses,
   ChannelAttachmentCreateErrors,
   ChannelAttachmentCreateResponses,
   ChannelAttachmentGetErrors,
@@ -25,8 +27,9 @@ import type {
   ChannelRuntimeRestartResponses,
   CodingCliOpenResponses,
   CodingCliProfilesResponses,
-  CodingMessageStreamResponses,
-  CodingSessionMessagesResponses,
+  CodingSessionCreateResponses,
+  CodingSessionGetResponses,
+  CodingSessionsListResponses,
   CommandListResponses,
   Config as Config4,
   ConfigGetResponses,
@@ -111,7 +114,10 @@ import type {
   McpLocalConfig,
   McpRemoteConfig,
   McpStatusResponses,
+  MissionAbortResponses,
+  MissionDeleteResponses,
   MissionListResponses,
+  MissionRenameResponses,
   MissionWakeResponses,
   OutputFormat,
   PanelCapabilitiesResponses,
@@ -379,174 +385,6 @@ class HeyApiRegistry<T> {
   }
 }
 
-export class Config extends HeyApiClient {
-  /**
-   * Get global configuration
-   *
-   * Retrieve the current global OpenCorvus configuration settings and preferences.
-   */
-  public get<ThrowOnError extends boolean = false>(options?: Options<never, ThrowOnError>) {
-    return (options?.client ?? this.client).get<GlobalConfigGetResponses, unknown, ThrowOnError>({
-      url: "/global/config",
-      ...options,
-    })
-  }
-
-  /**
-   * Update global configuration
-   *
-   * Update global OpenCorvus configuration settings and preferences.
-   */
-  public update<ThrowOnError extends boolean = false>(
-    parameters?: {
-      config?: Config4
-    },
-    options?: Options<never, ThrowOnError>,
-  ) {
-    const params = buildClientParams([parameters], [{ args: [{ key: "config", map: "body" }] }])
-    return (options?.client ?? this.client).patch<GlobalConfigUpdateResponses, GlobalConfigUpdateErrors, ThrowOnError>({
-      url: "/global/config",
-      ...options,
-      ...params,
-      headers: {
-        "Content-Type": "application/json",
-        ...options?.headers,
-        ...params.headers,
-      },
-    })
-  }
-}
-
-export class Db extends HeyApiClient {
-  /**
-   * Reset database
-   *
-   * DESTRUCTIVE. Disposes all in-memory Instance handles, closes the global SQLite DB, and removes the DB file (with WAL/SHM), snapshot scratch, and the specified project's worktree/ownership markers under <projectDir>/.opencorvus/. Caller must specify projectDir so project-scoped scratch can be removed alongside the shared DB. Schema is rebuilt from DDL on next access. Active executor sessions block the reset (409).
-   */
-  public reset<ThrowOnError extends boolean = false>(
-    parameters?: {
-      projectDir?: string
-    },
-    options?: Options<never, ThrowOnError>,
-  ) {
-    const params = buildClientParams([parameters], [{ args: [{ in: "body", key: "projectDir" }] }])
-    return (options?.client ?? this.client).post<GlobalDbResetResponses, GlobalDbResetErrors, ThrowOnError>({
-      url: "/global/db/reset",
-      ...options,
-      ...params,
-      headers: {
-        "Content-Type": "application/json",
-        ...options?.headers,
-        ...params.headers,
-      },
-    })
-  }
-}
-
-export class Global extends HeyApiClient {
-  /**
-   * Get health
-   *
-   * Get health information about the OpenCorvus server, including the runtime-resolved on-disk paths the engine is actually using (database, data dir, home). The DB path is resolved by `Database.Path()` and is always the single global SQLite location for this server process — UIs should read this rather than rebuilding the path from a template.
-   */
-  public health<ThrowOnError extends boolean = false>(options?: Options<never, ThrowOnError>) {
-    return (options?.client ?? this.client).get<GlobalHealthResponses, unknown, ThrowOnError>({
-      url: "/global/health",
-      ...options,
-    })
-  }
-
-  /**
-   * Get global events
-   *
-   * Subscribe to global events from the OpenCorvus system using server-sent events.
-   */
-  public event<ThrowOnError extends boolean = false>(options?: Options<never, ThrowOnError>) {
-    return (options?.client ?? this.client).sse.get<GlobalEventResponses, unknown, ThrowOnError>({
-      url: "/global/event",
-      ...options,
-    })
-  }
-
-  /**
-   * Dispose instance
-   *
-   * Clean up and dispose all OpenCorvus instances, releasing all resources.
-   */
-  public dispose<ThrowOnError extends boolean = false>(options?: Options<never, ThrowOnError>) {
-    return (options?.client ?? this.client).post<GlobalDisposeResponses, unknown, ThrowOnError>({
-      url: "/global/dispose",
-      ...options,
-    })
-  }
-
-  private _config?: Config
-  get config(): Config {
-    return (this._config ??= new Config({ client: this.client }))
-  }
-
-  private _db?: Db
-  get db(): Db {
-    return (this._db ??= new Db({ client: this.client }))
-  }
-}
-
-export class Auth extends HeyApiClient {
-  /**
-   * Remove auth credentials
-   *
-   * Remove authentication credentials
-   */
-  public remove<ThrowOnError extends boolean = false>(
-    parameters: {
-      providerID: string
-    },
-    options?: Options<never, ThrowOnError>,
-  ) {
-    const params = buildClientParams([parameters], [{ args: [{ in: "path", key: "providerID" }] }])
-    return (options?.client ?? this.client).delete<AuthRemoveResponses, AuthRemoveErrors, ThrowOnError>({
-      url: "/auth/{providerID}",
-      ...options,
-      ...params,
-    })
-  }
-
-  /**
-   * Set auth credentials
-   *
-   * Set authentication credentials
-   */
-  public set<ThrowOnError extends boolean = false>(
-    parameters: {
-      providerID: string
-      auth?: Auth4
-    },
-    options?: Options<never, ThrowOnError>,
-  ) {
-    const params = buildClientParams(
-      [parameters],
-      [
-        {
-          args: [
-            { in: "path", key: "providerID" },
-            { key: "auth", map: "body" },
-          ],
-        },
-      ],
-    )
-    return (options?.client ?? this.client).put<AuthSetResponses, AuthSetErrors, ThrowOnError>({
-      url: "/auth/{providerID}",
-      ...options,
-      ...params,
-      headers: {
-        "Content-Type": "application/json",
-        ...options?.headers,
-        ...params.headers,
-      },
-    })
-  }
-}
-
 export class Current extends HeyApiClient {
   /**
    * Initialize git in current directory
@@ -725,7 +563,7 @@ export class Terminal extends HeyApiClient {
   }
 }
 
-export class Config2 extends HeyApiClient {
+export class Config extends HeyApiClient {
   /**
    * Get configuration
    *
@@ -1739,7 +1577,7 @@ export class Experimental extends HeyApiClient {
   }
 }
 
-export class Config3 extends HeyApiClient {
+export class Config2 extends HeyApiClient {
   /**
    * Get session effective configuration
    *
@@ -1897,6 +1735,9 @@ export class Session extends HeyApiClient {
       parentID?: string
       title?: string
       permission?: PermissionRuleset
+      metadata?: {
+        [key: string]: unknown
+      }
     },
     options?: Options<never, ThrowOnError>,
   ) {
@@ -1911,6 +1752,7 @@ export class Session extends HeyApiClient {
             { in: "body", key: "parentID" },
             { in: "body", key: "title" },
             { in: "body", key: "permission" },
+            { in: "body", key: "metadata" },
           ],
         },
       ],
@@ -2782,9 +2624,9 @@ export class Session extends HeyApiClient {
     })
   }
 
-  private _config?: Config3
-  get config(): Config3 {
-    return (this._config ??= new Config3({ client: this.client }))
+  private _config?: Config2
+  get config(): Config2 {
+    return (this._config ??= new Config2({ client: this.client }))
   }
 }
 
@@ -3077,7 +2919,7 @@ export class Discover extends HeyApiClient {
   }
 }
 
-export class Auth2 extends HeyApiClient {
+export class Auth extends HeyApiClient {
   /**
    * Get auth prompts
    *
@@ -3360,9 +3202,9 @@ export class Provider extends HeyApiClient {
     return (this._discover ??= new Discover({ client: this.client }))
   }
 
-  private _auth?: Auth2
-  get auth2(): Auth2 {
-    return (this._auth ??= new Auth2({ client: this.client }))
+  private _auth?: Auth
+  get auth2(): Auth {
+    return (this._auth ??= new Auth({ client: this.client }))
   }
 
   private _oauth?: Oauth
@@ -3398,7 +3240,6 @@ export class App extends HeyApiClient {
    */
   public log<ThrowOnError extends boolean = false>(
     parameters?: {
-      directory?: string
       service?: string
       level?: "debug" | "info" | "error" | "warn"
       message?: string
@@ -3413,7 +3254,6 @@ export class App extends HeyApiClient {
       [
         {
           args: [
-            { in: "query", key: "directory" },
             { in: "body", key: "service" },
             { in: "body", key: "level" },
             { in: "body", key: "message" },
@@ -4094,57 +3934,32 @@ export class Cli extends HeyApiClient {
   }
 }
 
-export class Message2 extends HeyApiClient {
+export class Session2 extends HeyApiClient {
   /**
-   * Send coding assistant message with streaming
+   * Create right sidebar coding assistant session
    *
-   * Send a message to the coding agent for direct coding assistance. Streams text deltas, tool calls, and results via SSE.
+   * Create a project-bound assistant session for the right sidebar coding assistant. Prompting and history use canonical /session routes.
    */
-  public stream<ThrowOnError extends boolean = false>(
+  public create<ThrowOnError extends boolean = false>(
     parameters?: {
       directory?: string
-      text?: string
-      sessionID?: string
-      parts?: Array<{
-        type: "text"
-        text: string
-      }>
     },
     options?: Options<never, ThrowOnError>,
   ) {
-    const params = buildClientParams(
-      [parameters],
-      [
-        {
-          args: [
-            { in: "query", key: "directory" },
-            { in: "body", key: "text" },
-            { in: "body", key: "sessionID" },
-            { in: "body", key: "parts" },
-          ],
-        },
-      ],
-    )
-    return (options?.client ?? this.client).sse.post<CodingMessageStreamResponses, unknown, ThrowOnError>({
-      url: "/coding/message/stream",
+    const params = buildClientParams([parameters], [{ args: [{ in: "query", key: "directory" }] }])
+    return (options?.client ?? this.client).post<CodingSessionCreateResponses, unknown, ThrowOnError>({
+      url: "/coding/session",
       ...options,
       ...params,
-      headers: {
-        "Content-Type": "application/json",
-        ...options?.headers,
-        ...params.headers,
-      },
     })
   }
-}
 
-export class Session2 extends HeyApiClient {
   /**
-   * Get coding session messages
+   * Claim right sidebar coding assistant session
    *
-   * Retrieve message history for a coding assistant session.
+   * Validate and return an existing project-bound right sidebar coding assistant session.
    */
-  public messages<ThrowOnError extends boolean = false>(
+  public get<ThrowOnError extends boolean = false>(
     parameters: {
       sessionID: string
       directory?: string
@@ -4162,8 +3977,40 @@ export class Session2 extends HeyApiClient {
         },
       ],
     )
-    return (options?.client ?? this.client).get<CodingSessionMessagesResponses, unknown, ThrowOnError>({
-      url: "/coding/session/{sessionID}/messages",
+    return (options?.client ?? this.client).get<CodingSessionGetResponses, unknown, ThrowOnError>({
+      url: "/coding/session/{sessionID}",
+      ...options,
+      ...params,
+    })
+  }
+}
+
+export class Sessions extends HeyApiClient {
+  /**
+   * List right sidebar coding assistant sessions
+   *
+   * List project-bound right sidebar coding assistant sessions. Prompting and history use canonical /session routes.
+   */
+  public list<ThrowOnError extends boolean = false>(
+    parameters?: {
+      directory?: string
+      limit?: number
+    },
+    options?: Options<never, ThrowOnError>,
+  ) {
+    const params = buildClientParams(
+      [parameters],
+      [
+        {
+          args: [
+            { in: "query", key: "directory" },
+            { in: "query", key: "limit" },
+          ],
+        },
+      ],
+    )
+    return (options?.client ?? this.client).get<CodingSessionsListResponses, unknown, ThrowOnError>({
+      url: "/coding/sessions",
       ...options,
       ...params,
     })
@@ -4176,14 +4023,14 @@ export class Coding extends HeyApiClient {
     return (this._cli ??= new Cli({ client: this.client }))
   }
 
-  private _message?: Message2
-  get message(): Message2 {
-    return (this._message ??= new Message2({ client: this.client }))
-  }
-
   private _session?: Session2
   get session(): Session2 {
     return (this._session ??= new Session2({ client: this.client }))
+  }
+
+  private _sessions?: Sessions
+  get sessions(): Sessions {
+    return (this._sessions ??= new Sessions({ client: this.client }))
   }
 }
 
@@ -4805,6 +4652,103 @@ export class Mission extends HeyApiClient {
   }
 
   /**
+   * Rename a Mission
+   *
+   * Rename the Mission session title. The Mission record remains backed by the same mission session.
+   */
+  public rename<ThrowOnError extends boolean = false>(
+    parameters: {
+      missionID: string
+      directory?: string
+      title?: string
+    },
+    options?: Options<never, ThrowOnError>,
+  ) {
+    const params = buildClientParams(
+      [parameters],
+      [
+        {
+          args: [
+            { in: "path", key: "missionID" },
+            { in: "query", key: "directory" },
+            { in: "body", key: "title" },
+          ],
+        },
+      ],
+    )
+    return (options?.client ?? this.client).patch<MissionRenameResponses, unknown, ThrowOnError>({
+      url: "/mission/{missionID}/title",
+      ...options,
+      ...params,
+      headers: {
+        "Content-Type": "application/json",
+        ...options?.headers,
+        ...params.headers,
+      },
+    })
+  }
+
+  /**
+   * Abort a Mission
+   *
+   * Abort the active Mission session loop for this Mission.
+   */
+  public abort<ThrowOnError extends boolean = false>(
+    parameters: {
+      missionID: string
+      directory?: string
+    },
+    options?: Options<never, ThrowOnError>,
+  ) {
+    const params = buildClientParams(
+      [parameters],
+      [
+        {
+          args: [
+            { in: "path", key: "missionID" },
+            { in: "query", key: "directory" },
+          ],
+        },
+      ],
+    )
+    return (options?.client ?? this.client).post<MissionAbortResponses, unknown, ThrowOnError>({
+      url: "/mission/{missionID}/abort",
+      ...options,
+      ...params,
+    })
+  }
+
+  /**
+   * Delete a Mission
+   *
+   * Delete the Mission session and its conversation history.
+   */
+  public delete<ThrowOnError extends boolean = false>(
+    parameters: {
+      missionID: string
+      directory?: string
+    },
+    options?: Options<never, ThrowOnError>,
+  ) {
+    const params = buildClientParams(
+      [parameters],
+      [
+        {
+          args: [
+            { in: "path", key: "missionID" },
+            { in: "query", key: "directory" },
+          ],
+        },
+      ],
+    )
+    return (options?.client ?? this.client).delete<MissionDeleteResponses, unknown, ThrowOnError>({
+      url: "/mission/{missionID}",
+      ...options,
+      ...params,
+    })
+  }
+
+  /**
    * Wake the Mission agent
    *
    * Start (or resume) a Mission agent session and inject a user prompt. Omit `missionID` to start a new mission; supply it to resume an existing one. The route is idempotent for (project, missionID) — exactly one mission session is keyed per mission.
@@ -4844,23 +4788,85 @@ export class Mission extends HeyApiClient {
   }
 }
 
+export class BrowserPreview extends HeyApiClient {
+  /**
+   * Resolve browser preview target
+   *
+   * Return the single project-scoped browser preview target. The route uses an explicit URL query or package.json opencorvus.browserPreview metadata; it never guesses ports or package roots.
+   */
+  public target<ThrowOnError extends boolean = false>(
+    parameters?: {
+      directory?: string
+      url?: string
+    },
+    options?: Options<never, ThrowOnError>,
+  ) {
+    const params = buildClientParams(
+      [parameters],
+      [
+        {
+          args: [
+            { in: "query", key: "directory" },
+            { in: "query", key: "url" },
+          ],
+        },
+      ],
+    )
+    return (options?.client ?? this.client).get<BrowserPreviewTargetResponses, unknown, ThrowOnError>({
+      url: "/browser-preview/target",
+      ...options,
+      ...params,
+    })
+  }
+
+  /**
+   * Capture browser preview verification evidence
+   *
+   * Resolve the project-scoped preview target and capture Playwright-backed screenshot evidence for one shared viewport preset.
+   */
+  public verify<ThrowOnError extends boolean = false>(
+    parameters?: {
+      directory?: string
+      url?: string
+      viewportID?: "desktop" | "tablet" | "mobile"
+    },
+    options?: Options<never, ThrowOnError>,
+  ) {
+    const params = buildClientParams(
+      [parameters],
+      [
+        {
+          args: [
+            { in: "query", key: "directory" },
+            { in: "body", key: "url" },
+            { in: "body", key: "viewportID" },
+          ],
+        },
+      ],
+    )
+    return (options?.client ?? this.client).post<BrowserPreviewVerifyResponses, unknown, ThrowOnError>({
+      url: "/browser-preview/verify",
+      ...options,
+      ...params,
+      headers: {
+        "Content-Type": "application/json",
+        ...options?.headers,
+        ...params.headers,
+      },
+    })
+  }
+}
+
 export class Server extends HeyApiClient {
   /**
    * Shutdown the server
    *
    * Gracefully abort live execution state and stop the current process.
    */
-  public shutdown<ThrowOnError extends boolean = false>(
-    parameters?: {
-      directory?: string
-    },
-    options?: Options<never, ThrowOnError>,
-  ) {
-    const params = buildClientParams([parameters], [{ args: [{ in: "query", key: "directory" }] }])
+  public shutdown<ThrowOnError extends boolean = false>(options?: Options<never, ThrowOnError>) {
     return (options?.client ?? this.client).post<ServerShutdownResponses, unknown, ThrowOnError>({
       url: "/shutdown",
       ...options,
-      ...params,
     })
   }
 
@@ -4869,22 +4875,15 @@ export class Server extends HeyApiClient {
    *
    * Spawn a new server process with the same arguments, then exit.
    */
-  public restart<ThrowOnError extends boolean = false>(
-    parameters?: {
-      directory?: string
-    },
-    options?: Options<never, ThrowOnError>,
-  ) {
-    const params = buildClientParams([parameters], [{ args: [{ in: "query", key: "directory" }] }])
+  public restart<ThrowOnError extends boolean = false>(options?: Options<never, ThrowOnError>) {
     return (options?.client ?? this.client).post<ServerRestartResponses, unknown, ThrowOnError>({
       url: "/restart",
       ...options,
-      ...params,
     })
   }
 }
 
-export class Global2 extends HeyApiClient {
+export class Global extends HeyApiClient {
   /**
    * List tasks across projects
    */
@@ -6390,9 +6389,9 @@ export class Task extends HeyApiClient {
     })
   }
 
-  private _global?: Global2
-  get global(): Global2 {
-    return (this._global ??= new Global2({ client: this.client }))
+  private _global?: Global
+  get global(): Global {
+    return (this._global ??= new Global({ client: this.client }))
   }
 
   private _queue?: Queue
@@ -7171,7 +7170,7 @@ export class Attachment2 extends HeyApiClient {
   }
 }
 
-export class Auth3 extends HeyApiClient {
+export class Auth2 extends HeyApiClient {
   /**
    * Remove MCP OAuth
    *
@@ -7415,9 +7414,9 @@ export class Mcp extends HeyApiClient {
     })
   }
 
-  private _auth?: Auth3
-  get auth(): Auth3 {
-    return (this._auth ??= new Auth3({ client: this.client }))
+  private _auth?: Auth2
+  get auth(): Auth2 {
+    return (this._auth ??= new Auth2({ client: this.client }))
   }
 }
 
@@ -7429,10 +7428,9 @@ export class Runtime2 extends HeyApiClient {
    */
   public start<ThrowOnError extends boolean = false>(
     parameters?: {
-      query_directory?: string
+      directory?: string
       mode?: "spawn" | "connect"
       url?: string
-      body_directory?: string
       sessionID?: string
       model?: string
       agent?: string
@@ -7450,18 +7448,9 @@ export class Runtime2 extends HeyApiClient {
       [
         {
           args: [
-            {
-              in: "query",
-              key: "query_directory",
-              map: "directory",
-            },
+            { in: "query", key: "directory" },
             { in: "body", key: "mode" },
             { in: "body", key: "url" },
-            {
-              in: "body",
-              key: "body_directory",
-              map: "directory",
-            },
             { in: "body", key: "sessionID" },
             { in: "body", key: "model" },
             { in: "body", key: "agent" },
@@ -8141,22 +8130,180 @@ export class Event extends HeyApiClient {
   }
 }
 
+export class Config3 extends HeyApiClient {
+  /**
+   * Get global configuration
+   *
+   * Retrieve the current global OpenCorvus configuration settings and preferences.
+   */
+  public get<ThrowOnError extends boolean = false>(options?: Options<never, ThrowOnError>) {
+    return (options?.client ?? this.client).get<GlobalConfigGetResponses, unknown, ThrowOnError>({
+      url: "/global/config",
+      ...options,
+    })
+  }
+
+  /**
+   * Update global configuration
+   *
+   * Update global OpenCorvus configuration settings and preferences.
+   */
+  public update<ThrowOnError extends boolean = false>(
+    parameters?: {
+      config?: Config4
+    },
+    options?: Options<never, ThrowOnError>,
+  ) {
+    const params = buildClientParams([parameters], [{ args: [{ key: "config", map: "body" }] }])
+    return (options?.client ?? this.client).patch<GlobalConfigUpdateResponses, GlobalConfigUpdateErrors, ThrowOnError>({
+      url: "/global/config",
+      ...options,
+      ...params,
+      headers: {
+        "Content-Type": "application/json",
+        ...options?.headers,
+        ...params.headers,
+      },
+    })
+  }
+}
+
+export class Db extends HeyApiClient {
+  /**
+   * Reset database
+   *
+   * DESTRUCTIVE. Disposes all in-memory Instance handles, closes the global SQLite DB, and removes the DB file (with WAL/SHM), snapshot scratch, and the specified project's worktree/ownership markers under <projectDir>/.opencorvus/. Caller must specify projectDir so project-scoped scratch can be removed alongside the shared DB. Schema is rebuilt from DDL on next access. Active executor sessions block the reset (409).
+   */
+  public reset<ThrowOnError extends boolean = false>(
+    parameters?: {
+      projectDir?: string
+    },
+    options?: Options<never, ThrowOnError>,
+  ) {
+    const params = buildClientParams([parameters], [{ args: [{ in: "body", key: "projectDir" }] }])
+    return (options?.client ?? this.client).post<GlobalDbResetResponses, GlobalDbResetErrors, ThrowOnError>({
+      url: "/global/db/reset",
+      ...options,
+      ...params,
+      headers: {
+        "Content-Type": "application/json",
+        ...options?.headers,
+        ...params.headers,
+      },
+    })
+  }
+}
+
+export class Global2 extends HeyApiClient {
+  /**
+   * Get health
+   *
+   * Get health information about the OpenCorvus server, including the runtime-resolved on-disk paths the engine is actually using (database, data dir, home). The DB path is resolved by `Database.Path()` and is always the single global SQLite location for this server process — UIs should read this rather than rebuilding the path from a template.
+   */
+  public health<ThrowOnError extends boolean = false>(options?: Options<never, ThrowOnError>) {
+    return (options?.client ?? this.client).get<GlobalHealthResponses, unknown, ThrowOnError>({
+      url: "/global/health",
+      ...options,
+    })
+  }
+
+  /**
+   * Get global events
+   *
+   * Subscribe to global events from the OpenCorvus system using server-sent events.
+   */
+  public event<ThrowOnError extends boolean = false>(options?: Options<never, ThrowOnError>) {
+    return (options?.client ?? this.client).sse.get<GlobalEventResponses, unknown, ThrowOnError>({
+      url: "/global/event",
+      ...options,
+    })
+  }
+
+  /**
+   * Dispose instance
+   *
+   * Clean up and dispose all OpenCorvus instances, releasing all resources.
+   */
+  public dispose<ThrowOnError extends boolean = false>(options?: Options<never, ThrowOnError>) {
+    return (options?.client ?? this.client).post<GlobalDisposeResponses, unknown, ThrowOnError>({
+      url: "/global/dispose",
+      ...options,
+    })
+  }
+
+  private _config?: Config3
+  get config(): Config3 {
+    return (this._config ??= new Config3({ client: this.client }))
+  }
+
+  private _db?: Db
+  get db(): Db {
+    return (this._db ??= new Db({ client: this.client }))
+  }
+}
+
+export class Auth3 extends HeyApiClient {
+  /**
+   * Remove auth credentials
+   *
+   * Remove authentication credentials
+   */
+  public remove<ThrowOnError extends boolean = false>(
+    parameters: {
+      providerID: string
+    },
+    options?: Options<never, ThrowOnError>,
+  ) {
+    const params = buildClientParams([parameters], [{ args: [{ in: "path", key: "providerID" }] }])
+    return (options?.client ?? this.client).delete<AuthRemoveResponses, AuthRemoveErrors, ThrowOnError>({
+      url: "/auth/{providerID}",
+      ...options,
+      ...params,
+    })
+  }
+
+  /**
+   * Set auth credentials
+   *
+   * Set authentication credentials
+   */
+  public set<ThrowOnError extends boolean = false>(
+    parameters: {
+      providerID: string
+      auth?: Auth4
+    },
+    options?: Options<never, ThrowOnError>,
+  ) {
+    const params = buildClientParams(
+      [parameters],
+      [
+        {
+          args: [
+            { in: "path", key: "providerID" },
+            { key: "auth", map: "body" },
+          ],
+        },
+      ],
+    )
+    return (options?.client ?? this.client).put<AuthSetResponses, AuthSetErrors, ThrowOnError>({
+      url: "/auth/{providerID}",
+      ...options,
+      ...params,
+      headers: {
+        "Content-Type": "application/json",
+        ...options?.headers,
+        ...params.headers,
+      },
+    })
+  }
+}
+
 export class OpencodeClient extends HeyApiClient {
   public static readonly __registry = new HeyApiRegistry<OpencodeClient>()
 
   constructor(args?: { client?: Client; key?: string }) {
     super(args)
     OpencodeClient.__registry.set(this, args?.key)
-  }
-
-  private _global?: Global
-  get global(): Global {
-    return (this._global ??= new Global({ client: this.client }))
-  }
-
-  private _auth?: Auth
-  get auth(): Auth {
-    return (this._auth ??= new Auth({ client: this.client }))
   }
 
   private _project?: Project
@@ -8169,9 +8316,9 @@ export class OpencodeClient extends HeyApiClient {
     return (this._terminal ??= new Terminal({ client: this.client }))
   }
 
-  private _config?: Config2
-  get config(): Config2 {
-    return (this._config ??= new Config2({ client: this.client }))
+  private _config?: Config
+  get config(): Config {
+    return (this._config ??= new Config({ client: this.client }))
   }
 
   private _channel?: Channel
@@ -8257,6 +8404,11 @@ export class OpencodeClient extends HeyApiClient {
   private _mission?: Mission
   get mission(): Mission {
     return (this._mission ??= new Mission({ client: this.client }))
+  }
+
+  private _browserPreview?: BrowserPreview
+  get browserPreview(): BrowserPreview {
+    return (this._browserPreview ??= new BrowserPreview({ client: this.client }))
   }
 
   private _server?: Server
@@ -8357,5 +8509,15 @@ export class OpencodeClient extends HeyApiClient {
   private _event?: Event
   get event(): Event {
     return (this._event ??= new Event({ client: this.client }))
+  }
+
+  private _global?: Global2
+  get global(): Global2 {
+    return (this._global ??= new Global2({ client: this.client }))
+  }
+
+  private _auth?: Auth3
+  get auth(): Auth3 {
+    return (this._auth ??= new Auth3({ client: this.client }))
   }
 }

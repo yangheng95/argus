@@ -5,7 +5,7 @@ import { Bus } from "../../src/bus"
 import { Log } from "../../src/util/log"
 import { Instance } from "../../src/project/instance"
 import { Identifier } from "../../src/id/id"
-import type { Message } from "../../src/session/message"
+import { Message } from "../../src/session/message"
 
 const projectRoot = path.join(__dirname, "../..")
 Log.init({ print: false })
@@ -35,6 +35,34 @@ describe("session.started event", () => {
         expect(receivedInfo?.projectID).toBe(session.projectID)
         expect(receivedInfo?.directory).toBe(session.directory)
         expect(receivedInfo?.title).toBe(session.title)
+
+        await Session.remove(session.id)
+      },
+    })
+  })
+
+  test("created event includes session metadata", async () => {
+    await Instance.provide({
+      directory: projectRoot,
+      fn: async () => {
+        let receivedInfo: Session.Info | undefined
+
+        const unsub = Bus.subscribe(Session.Event.Created, (event) => {
+          receivedInfo = event.properties.info as Session.Info
+        })
+
+        const session = await Session.create({
+          kind: "assistant",
+          metadata: { codingAssistant: { surface: "right-sidebar" } },
+        })
+
+        await new Promise((resolve) => setTimeout(resolve, 100))
+
+        unsub()
+
+        expect(receivedInfo?.id).toBe(session.id)
+        expect(receivedInfo?.metadata).toEqual({ codingAssistant: { surface: "right-sidebar" } })
+        expect(session.metadata).toEqual({ codingAssistant: { surface: "right-sidebar" } })
 
         await Session.remove(session.id)
       },
@@ -199,6 +227,72 @@ describe("Session.fork", () => {
         expect(childAssistants.map((message) => message.info.summary ?? false)).toEqual([true, false])
 
         await Session.remove(root.id)
+      },
+    })
+  })
+})
+
+describe("Session.updateMessage", () => {
+  test("preserves the original message created time across repeated updates", async () => {
+    await Instance.provide({
+      directory: projectRoot,
+      fn: async () => {
+        const session = await Session.create({ kind: "assistant" })
+        const messageID = Identifier.ascending("message")
+        const created = 1_776_000_000_100
+        const driftedCreated = 1_776_000_012_000
+        const events: Message.Info[] = []
+        const unsub = Bus.subscribe(Message.Event.Updated, (event) => {
+          events.push(event.properties.info as Message.Info)
+        })
+
+        await Session.updateMessage({
+          id: messageID,
+          sessionID: session.id,
+          role: "assistant",
+          time: { created },
+          parentID: "user-parent",
+          modelID: "test-model",
+          providerID: "test-provider",
+          agent: "frontend-research",
+          path: { cwd: projectRoot, root: projectRoot },
+          cost: 0,
+          tokens: {
+            input: 0,
+            output: 0,
+            reasoning: 0,
+            cache: { read: 0, write: 0 },
+          },
+        })
+        const updated = await Session.updateMessage({
+          id: messageID,
+          sessionID: session.id,
+          role: "assistant",
+          time: { created: driftedCreated },
+          parentID: "user-parent",
+          modelID: "test-model",
+          providerID: "test-provider",
+          agent: "frontend-research",
+          path: { cwd: projectRoot, root: projectRoot },
+          cost: 0,
+          tokens: {
+            input: 0,
+            output: 1,
+            reasoning: 0,
+            cache: { read: 0, write: 0 },
+          },
+        })
+
+        unsub()
+        const persisted = await Session.messages({ sessionID: session.id })
+        const persistedMessage = persisted.find((message) => message.info.id === messageID)
+
+        expect(updated.time.created).toBe(created)
+        expect(events.at(-1)?.time.created).toBe(created)
+        expect(persistedMessage?.info.time.created).toBe(created)
+        expect(persistedMessage?.info.role === "assistant" ? persistedMessage.info.tokens.output : undefined).toBe(1)
+
+        await Session.remove(session.id)
       },
     })
   })

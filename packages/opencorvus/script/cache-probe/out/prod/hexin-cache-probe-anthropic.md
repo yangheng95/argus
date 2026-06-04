@@ -1,6 +1,6 @@
 # Hexin gateway cache probe
 
-- Endpoint: `https://arsenal-openai.10jqka.com.cn:8443/ai-gateway/v1`
+- Endpoint: `https://aimemodeldev.myhexin.com/litellm/v1`
 - Model: `claude-sonnet-4-6`
 - Date: 2026-04-27T08:38:34.805Z
 - Total calls: 55 (0 errors)

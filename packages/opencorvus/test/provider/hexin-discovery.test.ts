@@ -445,7 +445,7 @@ describe("hexin model discovery", () => {
         provider: {
           hexin: {
             name: "Hexin OpenAI Gateway",
-            api: "https://arsenal-openai.10jqka.com.cn:8443/ai-gateway/v1",
+            api: "https://aimemodeldev.myhexin.com/litellm/v1",
             env: ["HEXIN_API_KEY"],
             options: {
               apiKey: "config-hexin-key",
@@ -484,7 +484,7 @@ describe("hexin model discovery", () => {
           expect(ids).toEqual(["claude-sonnet-4-6", "qwen3-coder-plus"])
           expect(requests).toEqual([
             {
-              url: "https://arsenal-openai.10jqka.com.cn:8443/ai-gateway/v1/models",
+              url: "https://aimemodeldev.myhexin.com/litellm/v1/models",
               authorization: "Bearer config-hexin-key",
             },
           ])
@@ -505,7 +505,7 @@ describe("hexin model discovery", () => {
         provider: {
           hexin: {
             name: "Hexin OpenAI Gateway",
-            api: "https://arsenal-openai.10jqka.com.cn:8443/ai-gateway/v1",
+            api: "https://aimemodeldev.myhexin.com/litellm/v1",
             env: ["HEXIN_API_KEY"],
             options: {
               apiKey: "config-hexin-key",

@@ -26,6 +26,15 @@ test("main.tsx wires the Mission button and mounts the Mission component", () =>
   expect(MAIN).toContain("render(() => <Mission />, missionMountEl)")
 })
 
+test("Mission page exposes an in-page Back to Panel action", () => {
+  const mission = readFileSync(join(import.meta.dir, "../src/components/Mission.tsx"), "utf8")
+  const missionList = readFileSync(join(import.meta.dir, "../src/components/MissionList.tsx"), "utf8")
+  expect(missionList).toContain('data-ui="mission-back-panel"')
+  expect(missionList).toContain('data-ui="mission-new-requirement"')
+  expect(missionList).not.toContain('data-ui="mission-refresh"')
+  expect(mission).toContain('onBackToPanel={() => setPageMode("panel")}')
+})
+
 test("main.tsx reflects pageMode onto body[data-page-mode] (drives mission.css visibility)", () => {
   expect(MAIN).toContain("document.body.dataset.pageMode = pageMode()")
 })

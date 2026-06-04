@@ -13,7 +13,7 @@ import { streamText } from "ai"
 const HEXIN_URL =
   process.env.HEXIN_OPENAI_URL?.trim()
     ? `${process.env.HEXIN_OPENAI_URL.replace(/\/+$/, "")}/v1`
-    : "https://arsenal-openai.10jqka.com.cn:8443/ai-gateway/v1"
+    : "https://aimemodeldev.myhexin.com/litellm/v1"
 // Embedded fallback removed — operator must export HEXIN_API_KEY (rule 7).
 const API_KEY = process.env.HEXIN_API_KEY?.trim()
 if (!API_KEY) {

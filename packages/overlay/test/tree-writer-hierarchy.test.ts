@@ -1305,6 +1305,44 @@ test("consecutive messages from the same agent stay in one card", () => {
   expect(cardTreeStore.cards[cardID]?.parts.some((p: any) => p.type === "boundary" && p.role === "assistant")).toBe(true);
 });
 
+test("repeated message.updated for the same agent message does not reset card start time", () => {
+  seedTurnBoard("stable message timer");
+
+  const cardID = "frontend-research:session:ses_timer_stable:message:msg_timer_stable";
+
+  applyEvent({ type: "message.updated", properties: { taskID: TASK_ID, info: stampedInfo("frontend-research", {
+    id: "msg_timer_stable",
+    sessionID: "ses_timer_stable",
+    role: "assistant",
+    resolvedRole: "frontend-research",
+    agent: "frontend-research",
+    parentSessionID: ROOT_SID,
+    time: { created: 1_776_000_000_100 },
+  }) } });
+  applyEvent({ type: "message.part.updated", properties: { taskID: TASK_ID, part: stampedPart("frontend-research", {
+    id: "prt_timer_stable",
+    messageID: "msg_timer_stable",
+    sessionID: "ses_timer_stable",
+    type: "text",
+    text: "initial research",
+  }) } });
+
+  expect(cardTreeStore.cards[cardID]?.time).toBe(1_776_000_000_100);
+
+  applyEvent({ type: "message.updated", properties: { taskID: TASK_ID, info: stampedInfo("frontend-research", {
+    id: "msg_timer_stable",
+    sessionID: "ses_timer_stable",
+    role: "assistant",
+    resolvedRole: "frontend-research",
+    agent: "frontend-research",
+    parentSessionID: ROOT_SID,
+    time: { created: 1_776_000_012_000 },
+  }) } });
+
+  expect(cardTreeStore.cards[cardID]?.time).toBe(1_776_000_000_100);
+  expect((cardTreeStore.cards[cardID]?.parts || []).map((part: any) => part.text)).toContain("initial research");
+});
+
 test("explore channel owns the card and in-card boundaries even when resolvedRole is stale", () => {
   seedTurnBoard("explore card ownership");
 

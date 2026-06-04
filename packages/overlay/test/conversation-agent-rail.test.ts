@@ -30,6 +30,14 @@ test("ConversationAgentRail locates cards through renderedCardID and CSS.escape"
   expect(source).not.toContain('scrollIntoView({ block: "center"')
 })
 
+test("Conversation card-scroll waits for virtualized target materialization", () => {
+  const source = readFileSync(join(import.meta.dir, "../src/components/Conversation.tsx"), "utf8")
+  expect(source).toContain("CARD_SCROLL_TARGET_MAX_FRAMES")
+  expect(source).toContain("waitForScrollTargetElement")
+  expect(source).toContain("const target = await waitForScrollTargetElement(request)")
+  expect(source).not.toContain("await waitForAnimationFrame();\n    await waitForAnimationFrame();\n    const target = scrollTargetElement(request)")
+})
+
 test("ConversationAgentRail stays a fixed narrow bottom strip", () => {
   const source = readFileSync(join(import.meta.dir, "../src/components/ConversationAgentRail.tsx"), "utf8")
   const css = readFileSync(join(import.meta.dir, "../src/styles/surfaces/conversation.css"), "utf8")

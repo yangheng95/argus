@@ -9,6 +9,7 @@ import { TuiRuntime } from "@/tui/runtime"
 import { Flag } from "../../flag/flag"
 import { errors } from "../error"
 import { lazy } from "../../util/lazy"
+import { Instance } from "@/project/instance"
 
 // ============================================================================
 // /control queue plumbing — shared state for control-plane proxy routes
@@ -141,7 +142,6 @@ export const TuiRoutes = lazy(() =>
         z.object({
           mode: z.enum(["spawn", "connect"]).default("spawn"),
           url: z.string().optional(),
-          directory: z.string().optional(),
           sessionID: z.string().optional(),
           model: z.string().optional(),
           agent: z.string().optional(),
@@ -155,7 +155,7 @@ export const TuiRoutes = lazy(() =>
       ),
       async (c) => {
         const body = c.req.valid("json")
-        return c.json(await TuiRuntime.start(body))
+        return c.json(await TuiRuntime.start({ ...body, directory: Instance.directory }))
       },
     )
     .get(

@@ -62,8 +62,6 @@ const STATS_OK = {
   channelRuntime: { running: true, status: "running", channels: ["slack", "discord", "github"], detail: "Tunnel healthy — 3 channels bound" },
 }
 
-const STATS_ERROR_MESSAGE = "DirectoryRequiredError: gateway/stats requires ?directory= query param"
-
 const CHANNELS_OK = [
   { id: "slack", name: "Slack", summary: "Routed channel #orion-ops bound to operator org", status: "configured", runtime_status: "running" },
   { id: "discord", name: "Discord", summary: "Guild orion-platform — bot user OrionGate", status: "configured", runtime_status: "running" },
@@ -186,13 +184,6 @@ async function isPortBound(port: number): Promise<boolean> {
 }
 
 async function applyMocks(page: OverlayPage): Promise<void> {
-  // Page-level "force this route to error" toggle. The reviewer agent can
-  // flip this from inside page.evaluate() so error states sit on a real
-  // failed fetch, not a hand-rolled fake DOM. Read inside the interceptor
-  // so the latest value wins across refresh clicks.
-  await page.evaluateOnNewDocument(() => {
-    ;(window as unknown as { __statsForceError?: string }).__statsForceError = undefined
-  })
   await page.route("**/*", async (route: OverlayRoute) => {
     const req = route.request()
     const url = req.url()
@@ -263,8 +254,6 @@ async function applyMocks(page: OverlayPage): Promise<void> {
     if (/\/task\/events/.test(url) && method === "GET") return void eventStream()
     if (/\/global\/tasks/.test(url) && method === "GET") return void ok({ tasks: GLOBAL_TASKS, summary: null })
     if (/\/gateway\/stats/.test(url) && method === "GET") {
-      const force = await page.evaluate(() => (window as unknown as { __statsForceError?: string }).__statsForceError)
-      if (force) return void fail(500, force)
       return void ok(STATS_OK)
     }
     if (/\/gateway\/capabilities/.test(url) && method === "GET") return void ok({ surface: "gateway", actions: [] })
@@ -412,8 +401,8 @@ async function bootstrapOverlay(page: OverlayPage): Promise<void> {
     w.setPageMode("mission")
   }, FIXTURE_DIR)
   // One frame for the page-mode createEffect to write body[data-page-mode]
-  // and for Mission's createResource bindings (gateway/stats infra endpoint,
-  // channel, bindings) to fire their mocked requests.
+  // and for Mission's channel / binding resources to fire their mocked
+  // requests.
   await page.waitForFunction(() => document.body.getAttribute("data-page-mode") === "mission", { timeout: 5_000 })
   await new Promise((r) => setTimeout(r, 800))
 }
@@ -525,16 +514,15 @@ async function captureStates(page: OverlayPage): Promise<StateResult[]> {
   }
   await page.setViewportSize(VIEWPORT_WIDE)
 
-  await step("07-error-stats-banner", async () => {
-    // The error-state shot is captured by toggling stats to an error
-    // response via window.__statsForceError, which the route interceptor
-    // (closure-captured below) honours when set. After refresh, the
-    // page-level error banner replaces the count chips.
-    await page.evaluate((message: string) => {
-      ;(window as unknown as { __statsForceError?: string }).__statsForceError = message
-    }, STATS_ERROR_MESSAGE)
-    const refresh = await page.$('[data-ui="mission-refresh"]')
-    if (refresh) await refresh.click()
+  await step("07-ledger-header-actions", async () => {
+    await page.evaluate(() => {
+      const panel = document.querySelector('[data-ui="mission-back-panel"]')
+      const create = document.querySelector('[data-ui="mission-new-requirement"]')
+      const refresh = document.querySelector('[data-ui="mission-refresh"]')
+      if (!panel) throw new Error("missing Mission Panel button")
+      if (!create) throw new Error("missing Mission create button")
+      if (refresh) throw new Error("Mission refresh button should be removed")
+    })
     await new Promise((r) => setTimeout(r, 700))
   })
 

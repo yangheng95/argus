@@ -2,7 +2,7 @@ import type { Accessor } from "solid-js"
 import { t } from "../utils/i18n"
 import { Tab, Tabs } from "./ui/Tabs"
 
-export type RightPanelTab = "files" | "explorer" | "inspector"
+export type RightPanelTab = "files" | "explorer" | "assistant" | "browser" | "inspector"
 
 export const DEFAULT_RIGHT_PANEL_TAB: RightPanelTab = "explorer"
 
@@ -41,6 +41,26 @@ export function RightPanelTabs(props: RightPanelTabsProps) {
           onClick={() => props.onSelect("explorer")}
         >
           {t("explorer.title")}
+        </Tab>
+        <Tab
+          value="assistant"
+          active={props.active() === "assistant"}
+          size="sm"
+          tone="neutral"
+          data-ui="right-tab"
+          onClick={() => props.onSelect("assistant")}
+        >
+          {t("coding_assistant.tab")}
+        </Tab>
+        <Tab
+          value="browser"
+          active={props.active() === "browser"}
+          size="sm"
+          tone="neutral"
+          data-ui="right-tab"
+          onClick={() => props.onSelect("browser")}
+        >
+          {t("browser_preview.title")}
         </Tab>
         <Tab
           value="inspector"

@@ -614,6 +614,7 @@ describe("overlay architecture guards", () => {
 
     expect(inspectorSurface).toMatch(/\.sections-tab-body\[data-active="false"\]/)
     expect(inspectorSurface).toMatch(/\.sections-tab-body\[data-panel-tab="inspector"\]/)
+    expect(inspectorSurface).not.toMatch(/\.sections-tab-body\[data-panel-tab="preview"\]/)
     expect(inspectorSurface).toContain("var(--inspector-surface)")
     expect(inspectorSurface).toContain("--ui-collapsed-pane-width")
 

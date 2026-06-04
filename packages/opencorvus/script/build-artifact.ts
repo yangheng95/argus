@@ -10,8 +10,8 @@ export function artifactPackageBaseName(pkgName: string, flavor: BuildFlavor): s
 }
 
 export function artifactEntrypoints(flavor: BuildFlavor, parserWorker: string, workerPath: string): string[] {
-  if (flavor === "overlay-server") return ["./src/overlay-server.ts"]
-  return ["./src/index.ts", parserWorker, workerPath]
+  if (flavor === "overlay-server") return ["./src/overlay-launcher.ts"]
+  return ["./src/launcher.ts", parserWorker, workerPath]
 }
 
 export function artifactExternalModules(): string[] {

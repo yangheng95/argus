@@ -42,9 +42,10 @@ describe("goal / mission / chat reuse the AutoGrowTextarea primitive", () => {
     expect(goal).not.toMatch(/<textarea\b/)
   })
 
-  test("mission launcher dropped its bespoke textarea for the primitive", () => {
+  test("mission launcher reuses the default ChatComposer input surface", () => {
     const mission = read("components/Mission.tsx")
-    expect(mission).toContain("AutoGrowTextarea")
+    expect(mission).toContain("<ChatComposer")
+    expect(mission).toContain('textareaDataUI="mission-composer-input"')
     expect(mission).not.toMatch(/<textarea\b/)
   })
 

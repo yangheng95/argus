@@ -53,6 +53,12 @@ export interface ChatComposerProps {
    *  dropped because the user was already typing). Parent should clear its
    *  signal to avoid re-applying the same suggestion. */
   onSuggestionConsumed?: () => void;
+  formID?: string;
+  textareaID?: string;
+  sendID?: string;
+  stopID?: string;
+  textareaDataUI?: string;
+  sendDataUI?: string;
 }
 
 // ── Constants ──
@@ -460,7 +466,7 @@ export function ChatComposer(props: ChatComposerProps) {
   return (
     <form
       ref={formRef}
-      id="chatForm"
+      id={props.formID ?? "chatForm"}
       class="chat-input"
       data-dragover={dragover() ? "true" : undefined}
       onSubmit={handleSubmit}
@@ -523,13 +529,14 @@ export function ChatComposer(props: ChatComposerProps) {
             ref={(el) => {
               textareaRef = el;
             }}
-            id="chatTextarea"
+            id={props.textareaID ?? "chatTextarea"}
             class="chat-textarea"
             rows={2}
             disabled={!props.enabled}
             placeholder={props.enabled ? "" : t("chat.placeholder_disabled")}
             title={t("chat.tip")}
             value={text()}
+            data-ui={props.textareaDataUI}
             onInput={(e) => {
               setText(e.currentTarget.value);
             }}
@@ -548,9 +555,10 @@ export function ChatComposer(props: ChatComposerProps) {
 
         {/* Send / Stop button */}
         <button
-          id={props.busy ? "btnTaskInterrupt" : "chatSend"}
+          id={props.busy ? props.stopID ?? "btnTaskInterrupt" : props.sendID ?? "chatSend"}
           class="chat-send"
           type={props.busy ? "button" : "submit"}
+          data-ui={props.sendDataUI}
           data-busy={props.busy ? "true" : undefined}
           data-mode={props.busy ? "stop" : "send"}
           disabled={sendDisabled()}

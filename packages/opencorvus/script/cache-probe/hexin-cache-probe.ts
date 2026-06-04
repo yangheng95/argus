@@ -1,7 +1,7 @@
 /**
  * Hexin gateway prompt-cache probe.
  *
- * Hits https://arsenal-openai.10jqka.com.cn:8443/ai-gateway/v1 directly
+ * Hits https://aimemodeldev.myhexin.com/litellm/v1 directly
  * (no ai-sdk wrapper) so we observe raw OpenAI-compatible usage fields.
  *
  * The gateway sits in front of Azure OpenAI / OpenAI upstreams and uses
@@ -38,7 +38,7 @@ import { performance } from "perf_hooks"
 
 const HEXIN_URL = process.env.HEXIN_OPENAI_URL?.trim()
   ? `${process.env.HEXIN_OPENAI_URL.replace(/\/+$/, "")}/v1`
-  : "https://arsenal-openai.10jqka.com.cn:8443/ai-gateway/v1"
+  : "https://aimemodeldev.myhexin.com/litellm/v1"
 // Embedded fallback removed — operator must export HEXIN_API_KEY before
 // running the cache probe (rule 7: no fallback / rule 10: no hardcoded
 // credentials).

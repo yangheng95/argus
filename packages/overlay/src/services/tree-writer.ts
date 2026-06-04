@@ -684,10 +684,12 @@ function handleMessageUpdated(event: any): void {
   const agent = String(info.agent || "");
   const parentSessionID = String(info.parentSessionID || "");
   const goalID = String(info.goalID || "");
-  const timeCreated = Number(info?.time?.created || 0);
-  if (!(timeCreated > 0)) {
+  const incomingTimeCreated = Number(info?.time?.created || 0);
+  if (!(incomingTimeCreated > 0)) {
     throw new Error(`message.updated info.time.created must be positive (got ${info?.time?.created}); server emitter is the single source of truth`);
   }
+  const existingMessage = messages.get(id);
+  const timeCreated = existingMessage?.time && existingMessage.time > 0 ? existingMessage.time : incomingTimeCreated;
   const completed = Number.isFinite(info?.time?.completed) && Number(info.time.completed) > 0;
 
   // Channel-driven stage. Bridge stamps it on every event; an absent

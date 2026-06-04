@@ -52,7 +52,7 @@ import { profileFor } from "./hexin-profiles"
 
 const log = Log.create({ service: "hexin-discovery" })
 
-export const HEXIN_GATEWAY_URL = "https://arsenal-openai.10jqka.com.cn:8443/ai-gateway/v1"
+export const HEXIN_GATEWAY_URL = "https://aimemodeldev.myhexin.com/litellm/v1"
 const CACHE_FILE = "hexin-models.json"
 
 type Model = ProviderNS.Model

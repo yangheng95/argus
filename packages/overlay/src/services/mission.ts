@@ -207,3 +207,29 @@ export async function wakeMission(input: MissionWakeInput): Promise<MissionWakeR
     signal: input.signal,
   })) as MissionWakeResult
 }
+
+export async function renameMission(missionID: string, title: string): Promise<MissionRecord> {
+  const trimmed = title.trim()
+  if (!missionID || !trimmed || trimmed.length > 200) {
+    throw new Error("renameMission: missionID and 1-200 character title are required")
+  }
+  return (await apiJson(`mission/${encodeURIComponent(missionID)}/title`, {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ title: trimmed }),
+  })) as MissionRecord
+}
+
+export async function abortMission(missionID: string): Promise<boolean> {
+  if (!missionID) return false
+  return (await apiJson(`mission/${encodeURIComponent(missionID)}/abort`, {
+    method: "POST",
+  })) as boolean
+}
+
+export async function deleteMission(missionID: string): Promise<boolean> {
+  if (!missionID) return false
+  return (await apiJson(`mission/${encodeURIComponent(missionID)}`, {
+    method: "DELETE",
+  })) as boolean
+}

@@ -3,25 +3,21 @@ import { generateSpecs } from "hono-openapi"
 import { Hono } from "hono"
 import { cors } from "hono/cors"
 import { basicAuth } from "hono/basic-auth"
-import { Provider } from "../provider/provider"
 import { NamedError } from "@opencorvus-ai/util/error"
 import { Flag } from "../flag/flag"
 import { lazy } from "../util/lazy"
 import { InstanceBootstrap } from "../project/bootstrap"
 import { Instance } from "../project/instance"
-import { Filesystem } from "../util/filesystem"
-import { NotFoundError } from "../storage/db"
-import type { ContentfulStatusCode } from "hono/utils/http-status"
 import { websocket } from "hono/bun"
-import { HTTPException } from "hono/http-exception"
 import z from "zod"
 import { AuthRoutes } from "./routes/auth"
-import { AppDocumentation, AppRoutes } from "./routes/app"
+import { AppDocumentation } from "./routes/documentation"
 import { GlobalRoutes } from "./routes/global"
 import { MDNS } from "./mdns"
 import { muteAISdkWarnings } from "@/runtime/shims"
 import { OverlayUI } from "./overlay-ui"
 import { DEFAULT_SERVER_PORT } from "./defaults"
+import { requestID, serverErrorResponse } from "./error-handler"
 
 muteAISdkWarnings()
 
@@ -44,10 +40,95 @@ export namespace Server {
 
   let _url: URL | undefined
   let _corsWhitelist: string[] = []
+  let projectRoutesApp: Hono | undefined
 
   export function url(): URL {
     if (!_url) throw new Error("Server.url() called before serve() — server not started")
     return _url
+  }
+
+  async function loadProjectRoutesApp(root: Hono) {
+    if (projectRoutesApp) return projectRoutesApp
+    const { AppRoutes } = await import("./routes/app")
+    projectRoutesApp = AppRoutes(root)
+    return projectRoutesApp
+  }
+
+  export async function routeInventoryApp(): Promise<Hono> {
+    const { AppRoutes } = await import("./routes/app")
+    const documented = AppRoutes(new Hono())
+      .route("/global", GlobalRoutes())
+      .route("/auth", AuthRoutes())
+      .route("/ui", OverlayUI.routes())
+    const routed = documented as unknown as Hono & {
+      routes: Array<{ method: string }>
+    }
+    routed.routes = routed.routes.filter((route) => route.method !== "ALL")
+    return routed
+  }
+
+  type OpenAPIParameter = {
+    name?: string
+    in?: string
+    [key: string]: unknown
+  }
+
+  type OpenAPIOperation = {
+    parameters?: OpenAPIParameter[]
+    [key: string]: unknown
+  }
+
+  type OpenAPISpecWithPaths = {
+    paths?: Record<string, unknown>
+    [key: string]: unknown
+  }
+
+  const DIRECTORY_QUERY_PARAMETER = {
+    name: "directory",
+    in: "query",
+    required: false,
+    description:
+      "Project directory for project-scoped routes. Equivalent to the x-opencorvus-directory request header.",
+    schema: {
+      type: "string",
+    },
+  } as const
+
+  const PROJECT_DIRECTORY_BYPASS_PATHS = new Set([
+    "/doc",
+    "/shutdown",
+    "/restart",
+    "/log",
+    "/log/tail",
+    "/favicon.ico",
+    "/global/tasks",
+    "/mission",
+  ])
+  const PROJECT_DIRECTORY_BYPASS_PREFIXES = ["/global/", "/auth/", "/ui/"] as const
+  const OPENAPI_OPERATION_METHODS = ["get", "post", "put", "patch", "delete"] as const
+
+  function routeRequiresProjectDirectory(routePath: string) {
+    const pathOnly = routePath.replace(/\/$/, "") || "/"
+    if (PROJECT_DIRECTORY_BYPASS_PATHS.has(pathOnly)) return false
+    if (pathOnly === "/global" || pathOnly === "/auth" || pathOnly === "/ui") return false
+    return !PROJECT_DIRECTORY_BYPASS_PREFIXES.some((prefix) => pathOnly.startsWith(prefix))
+  }
+
+  function addDirectoryQueryParameter<T extends OpenAPISpecWithPaths>(spec: T) {
+    for (const [routePath, pathItem] of Object.entries(spec.paths ?? {})) {
+      if (!routeRequiresProjectDirectory(routePath)) continue
+      if (!pathItem || typeof pathItem !== "object") continue
+      const operations = pathItem as Record<string, unknown>
+      for (const method of OPENAPI_OPERATION_METHODS) {
+        const rawOperation = operations[method]
+        if (!rawOperation || typeof rawOperation !== "object") continue
+        const operation = rawOperation as OpenAPIOperation
+        const existing = operation.parameters ?? []
+        if (existing.some((parameter) => parameter.in === "query" && parameter.name === "directory")) continue
+        operation.parameters = [DIRECTORY_QUERY_PARAMETER satisfies OpenAPIParameter, ...existing]
+      }
+    }
+    return spec
   }
 
   function decodeDirectory(raw: string) {
@@ -58,85 +139,11 @@ export namespace Server {
     }
   }
 
-  function requestID(c: { req: { header(name: string): string | undefined }; res: Response }) {
-    return c.req.header("x-opencorvus-request-id") ?? c.res.headers.get("x-opencorvus-request-id") ?? crypto.randomUUID()
-  }
-
-  function namedErrorStatus(err: NamedError): ContentfulStatusCode {
-    if (err instanceof NotFoundError) return 404
-    if (err instanceof Provider.ModelNotFoundError) return 400
-    if (err instanceof DirectoryRequiredError) return 400
-    if (err instanceof Filesystem.InvalidDirectoryError) return 400
-    // R5.1 item 2: a child session does not own a config overlay;
-    // "fix your input — target the root session" is a 400.
-    if (err.name === "ChildSessionConfigError") return 400
-    // WorktreeNotGitError is a precondition (the directory is reachable
-    // and valid, but does not contain a `.git` repository). 412 lets
-    // the overlay distinguish "fix your input" (400) from "init the
-    // repo and retry" (412); the former is an irrecoverable user error,
-    // the latter is a one-click recovery prompt.
-    if (err.name === "WorktreeNotGitError") return 412
-    if (err.name.startsWith("Worktree")) return 400
-    // Direct-reply taxonomy — see orchestrator/direct-reply.ts.
-    // These three are all about "this session structurally cannot
-    // accept the reply you sent", which is a 4xx client situation,
-    // not a server crash. The overlay reads err.name to decide
-    // whether to retry, hide the reply box, or surface a generic
-    // failure dialog. Without this mapping all three collapsed to
-    // 500 and AgentSessionReplyBox could not tell them apart from
-    // a real server error.
-    if (err.name === "InvalidReplyTargetKindError") return 400
-    if (err.name === "BuildSessionDirectReplyError") return 400
-    if (err.name === "ReplyTargetEnvelopeMissingError") return 409
-    if (err.name === "SessionRuntimeContractMissingError") return 410
-    // MissingModelConfigError is a user-fixable config error
-    // ("set agent.X.model in opencorvus.jsonc"), not a server
-    // crash. agent/model.ts throws it from resolveAgentModelRef
-    // which the reply route hits after the runtime-contract
-    // validator — if it falls through to the default `500` arm
-    // the overlay can't distinguish "your config is missing a
-    // model" from "the server is broken". codex review
-    // 2026-05-26.
-    if (err.name === "MissingModelConfigError") return 400
-    return 500
-  }
-
   const app = new Hono()
   export const App: () => Hono = lazy(
     () =>
       app
-        .onError((err, c) => {
-          const id = requestID(c)
-          c.header("x-opencorvus-request-id", id)
-          const status = err instanceof NamedError
-            ? namedErrorStatus(err)
-            : err instanceof HTTPException
-              ? err.status
-              : 500
-          log.error("request failed", {
-            requestID: id,
-            method: c.req.method,
-            path: c.req.path,
-            statusCode: status,
-            error: err,
-          })
-          if (err instanceof NamedError) {
-            return c.json(err.toObject(), { status })
-          }
-          if (err instanceof HTTPException) return err.getResponse()
-          // audit-2026-04-29 W2-V13 — pre-fix the response body
-          // returned `err.stack`, which on a managed sidecar leaks
-          // the user's local repo path layout (`C:\Users\<user>\
-          // ...\packages\opencorvus\src\server\...`) and node_modules
-          // structure to any caller who can hit the port. The full
-          // stack already lands in `log.error` above, which is the
-          // right surface for the operator (who is the server admin
-          // in managed mode). Send `err.message` only over the wire.
-          const message = err instanceof Error ? err.message : String(err)
-          return c.json(new NamedError.Unknown({ message }).toObject(), {
-            status: 500,
-          })
-        })
+        .onError(serverErrorResponse)
         .use((c, next) => {
           if (c.req.method === "OPTIONS") return next()
           const password = Flag.OPENCORVUS_SERVER_PASSWORD
@@ -217,15 +224,7 @@ export namespace Server {
           // a real failure for non-Tauri preview windows that have no UI
           // chance to attach the directory header. Falls through to the
           // root router; if no handler matches, the request 404s cleanly.
-          if (
-            c.req.path === "/log"
-            || c.req.path === "/log/tail"
-            || c.req.path === "/shutdown"
-            || c.req.path === "/restart"
-            || c.req.path === "/favicon.ico"
-            || c.req.path === "/global/tasks"
-            || c.req.path === "/mission"
-          ) {
+          if (!routeRequiresProjectDirectory(c.req.path)) {
             return next()
           }
           const raw = c.req.query("directory") || c.req.header("x-opencorvus-directory")
@@ -243,14 +242,17 @@ export namespace Server {
             },
           })
         })
-        .route("/", AppRoutes(app)) as unknown as Hono,
+        .all("*", async (c) => {
+          const projectApp = await loadProjectRoutesApp(app)
+          return projectApp.fetch(c.req.raw)
+        }) as unknown as Hono,
   )
 
   export async function openapi() {
-    const result = await generateSpecs(App() as Hono, {
+    const result = await generateSpecs(await routeInventoryApp(), {
       documentation: AppDocumentation,
     })
-    return result
+    return addDirectoryQueryParameter(result)
   }
 
   export function listen(opts: {

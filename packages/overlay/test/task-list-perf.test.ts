@@ -66,10 +66,22 @@ function boardForTask(item: any): any {
   }
 }
 
+function missionForTask(item: any): any {
+  return {
+    missionID: item.task.id.replace(/^task-/, "mission-"),
+    sessionID: item.task.sessionID,
+    title: item.task.title,
+    directory: item.task.directory,
+    created: item.task.time.created,
+    updated: item.task.time.updated,
+  }
+}
+
 test(
   `overlay task surfaces stay responsive with ${TASK_COUNT} queued tasks`,
   async () => {
     const tasks = Array.from({ length: TASK_COUNT }, (_, index) => taskItem(index))
+    const missions = tasks.map(missionForTask)
     const tasksByID = new Map(tasks.map((item) => [item.task.id, item]))
     const server = Bun.serve({
       idleTimeout: 255,
@@ -82,6 +94,8 @@ test(
         const staticResponse = await overlayStaticResponse(path)
         if (staticResponse) return staticResponse
         if (path === "/global/health") return send({ version: "perf-test" })
+        if (path === "/log") return send({})
+        if (path === "/log/tail") return send({ lines: [] })
         if (path === "/global/tasks" || path === "/tasks") return send({ tasks })
         if (path === "/executor") return send([])
         if (path === "/terminal/profiles" || path === "/coding/cli/profiles") return send({ profiles: [] })
@@ -101,9 +115,23 @@ test(
           })
         }
         if (path === "/config/prompt") return send({})
+        if (/^\/session\/[^/]+\/config$/.test(path)) return send({ config: {} })
         if (path === "/channel") return send([])
         if (path === "/channel/runtime") return send({ status: "disabled", channels: [] })
         if (path === "/gateway/stats") return send({ active: 0, queued: TASK_COUNT, completed: 0, failed: 0 })
+        if (path === "/mission") {
+          const search = (url.searchParams.get("search") || "").trim().toLowerCase()
+          return send(
+            search
+              ? missions.filter((mission) =>
+                  [mission.title, mission.missionID, mission.sessionID, mission.directory]
+                    .join(" ")
+                    .toLowerCase()
+                    .includes(search),
+                )
+              : missions,
+          )
+        }
         if (path === "/task/events") {
           return new Response(new ReadableStream(), {
             headers: { "content-type": "text/event-stream", "cache-control": "no-cache" },
@@ -114,6 +142,7 @@ test(
         if (path === "/skill/market") return send({ items: [] })
         if (path === "/mcp") return send({})
         if (path === "/agent") return send([])
+        if (path === "/file") return send([])
         const boardMatch = /^\/task\/([^/]+)\/board$/.exec(path)
         if (boardMatch) {
           const item = tasksByID.get(decodeURIComponent(boardMatch[1]))
@@ -130,6 +159,23 @@ test(
             view: { sessions: [] },
             eventReplay: { cursor: 0, latestSequence: 0, complete: true, limit: 100 },
             lastSequence: 0,
+          })
+        }
+        if (/^\/session\/[^/]+\/conversation$/.test(path)) {
+          return send({
+            transcript: [],
+            timeline: [],
+            events: [],
+            view: { sessions: [] },
+            eventReplay: { cursor: 0, latestSequence: 0, complete: true, limit: 100, sinceTimestamp: null },
+            history: { oldestTimestamp: null, oldestMessageID: null, hasMore: false, limit: 160 },
+            messageWatermark: 0,
+            lastSequence: 0,
+          })
+        }
+        if (/^\/session\/[^/]+\/events$/.test(path)) {
+          return new Response(new ReadableStream(), {
+            headers: { "content-type": "text/event-stream", "cache-control": "no-cache" },
           })
         }
         if (/^\/task\/[^/]+\/bindings$/.test(path)) return send([])
@@ -182,20 +228,38 @@ test(
       await page.goto(`${app}/ui/index.html`, { waitUntil: "load" })
       await page.waitForFunction(() => document.querySelector("#connBadge")?.getAttribute("data-status") === "online")
 
-      const panelRowsMs = await page.evaluate(async (count) => {
+      await page.evaluate(async (count) => {
         const start = performance.now()
-        while (document.querySelectorAll(".task-row-main[data-task-id]").length < count) {
+        while (document.querySelectorAll(".task-row-main[data-task-id]").length < 5) {
           if (performance.now() - start > 10_000) {
             const rows = document.querySelectorAll(".task-row-main[data-task-id]").length
             const text = document.body.textContent?.replace(/\s+/g, " ").trim().slice(0, 500)
-            throw new Error(`task rows did not render; rows=${rows}; body=${text}`)
+            throw new Error(`compact task rows did not render; rows=${rows}; body=${text}`)
+          }
+          await new Promise((resolve) => setTimeout(resolve, 16))
+        }
+        while (document.querySelector(".project-group-count")?.textContent?.trim() !== String(count)) {
+          if (performance.now() - start > 10_000) throw new Error("task project count did not render")
+          await new Promise((resolve) => setTimeout(resolve, 16))
+        }
+      }, TASK_COUNT)
+
+      const panelRowsMs = await page.evaluate(async (count) => {
+        const expand = document.querySelector<HTMLButtonElement>(".project-group-show-more button")
+        if (!expand) throw new Error("missing task group show-more button")
+        const start = performance.now()
+        expand.click()
+        while (document.querySelectorAll(".task-row-main[data-task-id]").length < count) {
+          if (performance.now() - start > 10_000) {
+            const rows = document.querySelectorAll(".task-row-main[data-task-id]").length
+            throw new Error(`expanded task rows did not render; rows=${rows}`)
           }
           await new Promise((resolve) => setTimeout(resolve, 16))
         }
         return performance.now() - start
       }, TASK_COUNT)
 
-      const hiddenMissionRows = await page.evaluate(() => document.querySelectorAll(".mission-ledger .task-row-main[data-task-id]").length)
+      const hiddenMissionRows = await page.evaluate(() => document.querySelectorAll('.mission-ledger [data-ui="mission-row"]').length)
       expect(hiddenMissionRows).toBe(0)
 
       const selectLastMs = await page.evaluate(async () => {
@@ -220,14 +284,22 @@ test(
           if (performance.now() - start > 10_000) throw new Error("Mission page did not open")
           await new Promise((resolve) => setTimeout(resolve, 16))
         }
-        while (document.querySelectorAll(".mission-ledger .task-row-main[data-task-id]").length < count) {
+        while (document.querySelectorAll('.mission-ledger [data-ui="mission-row"]').length < count) {
           if (performance.now() - start > 10_000) throw new Error("Mission rows did not render")
           await new Promise((resolve) => setTimeout(resolve, 16))
         }
+        const firstMission = document.querySelector<HTMLButtonElement>('.mission-ledger [data-ui="mission-row"]')
+        if (!firstMission) throw new Error("missing first Mission row")
+        firstMission.click()
         return performance.now() - start
       }, TASK_COUNT)
 
       await page.evaluate(async () => {
+        const selectStart = performance.now()
+        while (!document.querySelector('[data-ui="mission-new-requirement"]')) {
+          if (performance.now() - selectStart > 10_000) throw new Error("Mission selection did not expose new requirement button")
+          await new Promise((resolve) => setTimeout(resolve, 16))
+        }
         const newRequirement = document.querySelector<HTMLButtonElement>('[data-ui="mission-new-requirement"]')
         if (!newRequirement) throw new Error("missing Mission new requirement button")
         newRequirement.click()
@@ -244,19 +316,17 @@ test(
         input.value = "preserve composer draft"
         input.dispatchEvent(new InputEvent("input", { bubbles: true, inputType: "insertText", data: input.value }))
 
-        // The in-page "Back to Panel" affordance was removed — the Mission
-        // page-mode toggle now lives entirely in the titlebar #btnMission
-        // button (Mission.tsx comment, gateway-mission-split-2026-05-28.md §3).
-        // Clicking it from Mission mode flips back to panel.
-        const mission = document.querySelector<HTMLButtonElement>("#btnMission")
-        if (!mission) throw new Error("missing Mission button")
-        mission.click()
+        const backToPanel = document.querySelector<HTMLButtonElement>('[data-ui="mission-back-panel"]')
+        if (!backToPanel) throw new Error("missing Mission back-to-panel button")
+        backToPanel.click()
         while (document.body.getAttribute("data-page-mode") !== "panel") {
           await new Promise((resolve) => setTimeout(resolve, 16))
         }
-        const hiddenRows = document.querySelectorAll(".mission-ledger .task-row-main[data-task-id]").length
+        const hiddenRows = document.querySelectorAll('.mission-ledger [data-ui="mission-row"]').length
         if (hiddenRows !== 0) throw new Error(`hidden Mission ledger still rendered ${hiddenRows} rows`)
 
+        const mission = document.querySelector<HTMLButtonElement>("#btnMission")
+        if (!mission) throw new Error("missing Mission button")
         mission.click()
         while (document.body.getAttribute("data-page-mode") !== "mission") {
           await new Promise((resolve) => setTimeout(resolve, 16))
@@ -275,24 +345,26 @@ test(
         const start = performance.now()
         input.value = "task 149"
         input.dispatchEvent(new InputEvent("input", { bubbles: true, inputType: "insertText", data: "task 149" }))
-        while (document.querySelectorAll(".mission-ledger .task-row-main[data-task-id]").length !== 1) {
+        while (document.querySelectorAll('.mission-ledger [data-ui="mission-row"]').length !== 1) {
           if (performance.now() - start > 10_000) throw new Error("Mission search did not filter")
           await new Promise((resolve) => setTimeout(resolve, 16))
         }
         return performance.now() - start
       })
 
-      const metrics = await page.metrics()
+      const metrics = typeof (page as any).metrics === "function" ? await (page as any).metrics() : null
       console.log(
         `[perf] ${TASK_COUNT} tasks: panelRows=${panelRowsMs.toFixed(1)}ms ` +
-          `selectLast=${selectLastMs.toFixed(1)}ms gatewayRows=${gatewayRowsMs.toFixed(1)}ms ` +
-          `gatewaySearch=${gatewaySearchMs.toFixed(1)}ms heap=${Math.round(metrics.JSHeapUsedSize / 1024 / 1024)}MB`,
+          `selectLast=${selectLastMs.toFixed(1)}ms missionRows=${missionRowsMs.toFixed(1)}ms ` +
+          `missionSearch=${missionSearchMs.toFixed(1)}ms heap=${
+            metrics ? `${Math.round(metrics.JSHeapUsedSize / 1024 / 1024)}MB` : "unavailable"
+          }`,
       )
 
       expect(panelRowsMs).toBeLessThan(PERF_LIMITS.panelRowsMs)
       expect(selectLastMs).toBeLessThan(PERF_LIMITS.selectLastMs)
-      expect(gatewayRowsMs).toBeLessThan(PERF_LIMITS.gatewayRowsMs)
-      expect(gatewaySearchMs).toBeLessThan(PERF_LIMITS.gatewaySearchMs)
+      expect(missionRowsMs).toBeLessThan(PERF_LIMITS.missionRowsMs)
+      expect(missionSearchMs).toBeLessThan(PERF_LIMITS.missionSearchMs)
       expect(consoleErrors).toEqual([])
       expect(failedRequests).toEqual([])
       expect(badResponses).toEqual([])

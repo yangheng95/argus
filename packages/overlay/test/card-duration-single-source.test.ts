@@ -67,3 +67,42 @@ test("TaskStatusHeader uses the shared clock tick", () => {
   // The old private setInterval is gone.
   expect(src).not.toContain("setInterval(() => setNow");
 });
+
+test("promoted tool cards use tool state time instead of mount time", async () => {
+  const { toolToCardNode } = await import("../src/utils/tool-card-node");
+  const card = toolToCardNode({
+    id: "prt_read",
+    type: "tool",
+    tool: "read_file",
+    state: {
+      status: "completed",
+      input: { file_path: "D:/workspace/app/src/main.ts" },
+      output: "ok",
+      time: { start: 1_776_000_001_000, end: 1_776_000_002_500 },
+    },
+  }, 1_776_999_999_999);
+
+  expect(card.time).toBe(1_776_000_001_000);
+  expect(card.timeCompleted).toBe(1_776_000_002_500);
+});
+
+test("running promoted tool cards keep their original tool start across remounts", async () => {
+  const { toolToCardNode } = await import("../src/utils/tool-card-node");
+  const part = {
+    id: "prt_bash",
+    type: "tool",
+    tool: "bash",
+    state: {
+      status: "running",
+      input: { command: "bun test packages/overlay/test/card-duration-single-source.test.ts" },
+      time: { start: 1_776_000_003_000 },
+    },
+  };
+
+  const firstMount = toolToCardNode(part, 1_776_000_010_000);
+  const secondMount = toolToCardNode(part, 1_776_000_030_000);
+
+  expect(firstMount.time).toBe(1_776_000_003_000);
+  expect(secondMount.time).toBe(1_776_000_003_000);
+  expect(secondMount.timeCompleted).toBeUndefined();
+});

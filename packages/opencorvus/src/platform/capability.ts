@@ -1,4 +1,5 @@
 import { ExecutorDiscovery } from "@/executor/discovery"
+import { requireRuntimePackage } from "@/runtime/package-require"
 
 declare const OPENCORVUS_LIBC: string | undefined
 
@@ -50,7 +51,7 @@ export namespace Capability {
   function watcher() {
     const pkg = watcherPkg()
     try {
-      require(pkg)
+      requireRuntimePackage(pkg)
       return line("watcher", "File watcher binding", "ok", pkg)
     } catch (err) {
       return line(
@@ -84,7 +85,7 @@ export namespace Capability {
   }
   async function screenCapture() {
     try {
-      await import("node-screenshots" as any)
+      requireRuntimePackage("node-screenshots")
       return line("screen_capture", "Screen capture module", "ok", "node-screenshots")
     } catch (err) {
       return line(

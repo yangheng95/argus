@@ -26,7 +26,7 @@ function card(input: Partial<CardNode> & Pick<CardNode, "id" | "kind" | "title">
   } as CardNode
 }
 
-test("collectAgentFileChanges merges tool metadata, tool input paths, patch parts, and children", () => {
+test("collectAgentFileChanges merges structured tool metadata and structured patch parts", () => {
   const child = card({
     id: "child",
     kind: "agent",
@@ -34,7 +34,7 @@ test("collectAgentFileChanges merges tool metadata, tool input paths, patch part
     parts: [
       {
         type: "patch",
-        files: ["C:/repo/src/patch.ts"],
+        files: [{ file: "C:/repo/src/patch.ts", before: "old\n", after: "new\n", additions: 1, deletions: 1 }],
       },
     ],
   })
@@ -81,8 +81,39 @@ test("collectAgentFileChanges merges tool metadata, tool input paths, patch part
     openPath: "C:/repo/src/app.ts",
     additions: 2,
     deletions: 1,
-    sources: 2,
+    sources: 1,
   })
+  expect(changes[1]).toMatchObject({
+    openPath: "C:/repo/src/patch.ts",
+    additions: 1,
+    deletions: 1,
+    before: "old\n",
+    after: "new\n",
+  })
+})
+
+test("collectAgentFileChanges ignores bare tool input paths and string-only patch file lists", () => {
+  const agent = card({
+    id: "path-only-agent",
+    kind: "agent",
+    title: "Agent",
+    parts: [
+      {
+        type: "tool",
+        tool: "Write",
+        state: {
+          status: "completed",
+          input: { path: "C:/repo/src/path-only.ts", content: "next" },
+        },
+      },
+      {
+        type: "patch",
+        files: ["C:/repo/src/string-only-patch.ts"],
+      },
+    ],
+  })
+
+  expect(collectAgentFileChanges(agent, "C:/repo")).toEqual([])
 })
 
 test("collectAgentFileChanges follows renderer child precedence and completed tool semantics", () => {
@@ -90,7 +121,7 @@ test("collectAgentFileChanges follows renderer child precedence and completed to
     id: "store-child",
     kind: "agent",
     title: "Rendered child",
-    parts: [{ type: "patch", files: ["C:\\repo\\src\\rendered.ts"] }],
+    parts: [{ type: "patch", files: [{ file: "C:\\repo\\src\\rendered.ts", before: "a", after: "b", additions: 1, deletions: 1 }] }],
   })
   setCardTreeStore("cards", { "store-child": storeChild })
 
@@ -210,7 +241,7 @@ test("collectAgentFileChangeGroupsFromNodes aggregates all agent roots once", ()
       {
         type: "patch",
         goalID: "goal-a",
-        files: ["C:/repo/src/a.ts"],
+        files: [{ file: "C:/repo/src/a.ts", before: "a", after: "b", additions: 1, deletions: 1 }],
       },
     ],
   })
@@ -223,7 +254,7 @@ test("collectAgentFileChangeGroupsFromNodes aggregates all agent roots once", ()
       {
         type: "patch",
         goalID: "goal-b",
-        files: ["C:/repo/src/b.ts"],
+        files: [{ file: "C:/repo/src/b.ts", before: "a", after: "b", additions: 1, deletions: 1 }],
       },
     ],
   })

@@ -44,7 +44,7 @@
 }
 
 /* The Inspector header is `[title] [actions]` only — the in-between tabs
- * row was retired with the frontend-preview chain (commit 924ad97af), so
+ * row was retired with the old preview header layout, so
  * the actions block no longer needs to fill the row or space-between two
  * siblings. The parent `.sections-header` already uses
  * `justify-content: space-between`, which keeps the title left-aligned and

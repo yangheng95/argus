@@ -72,7 +72,7 @@ export async function prepareLocalProviders() {
     providers["hexin"] = {
       name: "Hexin OpenAI Gateway",
       // api: hexinUrl ? `${hexinUrl.replace(/\/+$/, "")}/v1` : "https://aimemodeldev.myhexin.com/litellm/v1",
-      api: hexinUrl ? `${hexinUrl.replace(/\/+$/, "")}/v1` : "https://arsenal-openai.10jqka.com.cn:8443/ai-gateway/v1",
+      api: hexinUrl ? `${hexinUrl.replace(/\/+$/, "")}/v1` : "https://aimemodeldev.myhexin.com/litellm/v1",
       env: ["HEXIN_API_KEY"],
       models: {
         "gpt-5.4-mini": { name: "GPT-5.4 Mini", tool_call: true },

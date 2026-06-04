@@ -42,17 +42,20 @@ Log.init({ print: false })
 function buildOnErrorProbe(throwFn: () => never): Hono {
   const probe = new Hono()
   probe.onError((err, c) => {
-    if (err instanceof NamedError) {
+    if (
+      err instanceof NamedError ||
+      (err && typeof err === "object" && typeof (err as any).name === "string" && typeof (err as any).toObject === "function")
+    ) {
       let status: ContentfulStatusCode
-      if (err instanceof NotFoundError) status = 404
-      else if (err instanceof Provider.ModelNotFoundError) status = 400
-      else if (err instanceof Server.DirectoryRequiredError) status = 400
-      else if (err instanceof Filesystem.InvalidDirectoryError) status = 400
+      if (err.name === "NotFoundError") status = 404
+      else if (err.name === "ProviderModelNotFoundError") status = 400
+      else if (err.name === "DirectoryRequiredError") status = 400
+      else if (err.name === "InvalidDirectoryError") status = 400
       else if (err.name === "ChildSessionConfigError") status = 400
       else if (err.name === "WorktreeNotGitError") status = 412
       else if (err.name.startsWith("Worktree")) status = 400
       else status = 500
-      return c.json(err.toObject(), { status })
+      return c.json((err as NamedError & { toObject(): { name: string; data: unknown } }).toObject(), { status })
     }
     return c.json({ name: "UnknownError" }, 500)
   })
@@ -136,6 +139,19 @@ describe("server onError NamedError → status code mapping (W2-V31)", () => {
     await expectMapping(
       () => {
         throw new NotFoundError({ message: "row missing" })
+      },
+      404,
+      "NotFoundError",
+    )
+  })
+
+  test("NotFoundError-shaped errors map to 404 without prototype identity", async () => {
+    await expectMapping(
+      () => {
+        const err = new Error("row missing") as Error & { name: string; toObject(): { name: string; data: unknown } }
+        err.name = "NotFoundError"
+        err.toObject = () => ({ name: "NotFoundError", data: { message: "row missing" } })
+        throw err
       },
       404,
       "NotFoundError",
