@@ -843,40 +843,6 @@ async function orchestratorSessionForTask(task: TaskRow): Promise<Session.Info> 
 // ---------------------------------------------------------------------------
 
 export const OrchestratorEventNote = {
-  batchComplete(input: {
-    runID: string
-    passed: number
-    failed: number
-    total: number
-    depBlocked?: Array<{ goalTitle: string; blockedBy: Array<{ title: string; status: string }> }>
-  }): string {
-    const lines: string[] = [
-      `Goal batch complete on run ${input.runID}.`,
-      `Summary: ${input.passed} passed, ${input.failed} failed, ${input.total} total.`,
-    ]
-    if (input.depBlocked && input.depBlocked.length > 0) {
-      lines.push("", "⚠ BLOCKED GOALS — the following pending goals CANNOT execute because their dependencies failed:")
-      for (const b of input.depBlocked) {
-        const deps = b.blockedBy.map((d) => `${d.title} [${d.status}]`).join(", ")
-        lines.push(`  • "${b.goalTitle}" blocked by: ${deps}`)
-      }
-      lines.push(
-        "",
-        "ACTION REQUIRED: resolve the blocking goals before these can proceed. Call query_failed_goals, then route the concrete root cause through build({ goalID, request }), modify_goal, architect, or fail_task. assistant.auto_iteration=false disables host-side queued loops; it does not make this turn a passive wait when same-task repair is possible.",
-      )
-    } else {
-      lines.push(
-        "",
-        "Read context (read_context) to see goal statuses and eval evidence.",
-        input.failed > 0
-          ? "Failed goal worktrees are diagnostic evidence under .opencorvus/runtime, not primary workspace pollution. Do not restart_from_stage solely because a failed diagnostic worktree contains partial files. Call query_failed_goals, then route stuck-state repair inside this task: retry the owner goal, modify the goal contract, repair the dependency graph, or fail only when no repository-owned repair remains."
-          : "No goals failed in this batch.",
-        "Decide next action based on current state — no predetermined action.",
-      )
-    }
-    return lines.join("\n")
-  },
-
   operatorMessage(input: { text: string; attachmentSummary?: string }): string {
     const lines: string[] = [input.text]
     if (input.attachmentSummary) {
