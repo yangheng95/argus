@@ -474,6 +474,8 @@ export function createTauriTransport(kind: Extract<HostKind, "tauri" | "browser"
           return invokeTauri("overlay_server_restart")
         case "devtools.toggle":
           return invokeTauri("overlay_toggle_devtools")
+        case "window.quit":
+          return invokeTauri("overlay_quit")
         case "tray.attention.set":
           return invokeTauri("overlay_attention_set", { active: command.active })
         case "badge.set":
