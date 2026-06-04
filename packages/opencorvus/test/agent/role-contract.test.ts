@@ -206,6 +206,8 @@ test("public workflow docs and live prompt describe the current model only", asy
     "packages/web/src/content/docs/zh-cn/reference/env.mdx",
     "packages/web/src/content/docs/reference/evaluator.mdx",
     "packages/web/src/content/docs/zh-cn/reference/evaluator.mdx",
+    "packages/web/src/content/docs/reference/sdk.mdx",
+    "packages/web/src/content/docs/zh-cn/reference/sdk.mdx",
     "packages/web/src/content/docs/troubleshooting.mdx",
     "packages/web/src/content/docs/zh-cn/troubleshooting.mdx",
     "packages/web/src/content/docs/start/install.mdx",
@@ -283,4 +285,18 @@ test("public workflow docs and live prompt describe the current model only", asy
     expect(text, file).not.toMatch(/requirements.*GoalContract/i)
     expect(text, file).not.toMatch(/需求阶段。.*GoalContract/)
   }
+})
+
+test("sdk reference api links resolve to canonical API docs", async () => {
+  const root = path.resolve(import.meta.dirname, "../../../..")
+  const enSdk = await fs.readFile(path.join(root, "packages/web/src/content/docs/reference/sdk.mdx"), "utf8")
+  const zhSdk = await fs.readFile(path.join(root, "packages/web/src/content/docs/zh-cn/reference/sdk.mdx"), "utf8")
+  const rawMarkdownRoute = await fs.readFile(path.join(root, "packages/web/src/pages/[...slug].md.ts"), "utf8")
+
+  expect(enSdk).not.toContain("(./api.md)")
+  expect(zhSdk).not.toContain("(./api.md)")
+  expect(enSdk).toContain("](/docs/reference/api/)")
+  expect(zhSdk).toContain("](/docs/zh-cn/reference/api/)")
+  expect(rawMarkdownRoute).toContain('"reference/sdk/api": "reference/api"')
+  expect(rawMarkdownRoute).toContain('"zh-cn/reference/sdk/api": "zh-cn/reference/api"')
 })
