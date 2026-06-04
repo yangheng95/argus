@@ -31,7 +31,7 @@ import { FileEditorPane } from "./components/FileEditorPane"
 import { FileChangesPanel } from "./components/FileChangesPanel"
 import { BrowserPreviewPanel } from "./components/BrowserPreviewPanel"
 import { SideActivityToolbar, type SideActivity } from "./components/SideActivityToolbar"
-import { TuiRuntimePanel } from "./components/TuiRuntimePanel"
+import { TuiHostPanel } from "./components/TuiHostPanel"
 import { fileWorkbenchOpen } from "./services/file-workbench"
 import type { DiffTarget } from "./services/diff"
 import { initApp } from "./services/init"
@@ -733,10 +733,10 @@ if (fileExplorerMountEl) {
   render(() => <FileExplorerPanel active={() => leftActivity() === "explorer"} directory={activeDirectory} />, fileExplorerMountEl)
 }
 
-const tuiRuntimeMountEl = document.getElementById("solidTuiRuntimeMount")
-if (tuiRuntimeMountEl) {
-  tuiRuntimeMountEl.innerHTML = ""
-  render(() => <TuiRuntimePanel active={() => rightActivity() === "tui"} />, tuiRuntimeMountEl)
+const tuiHostMountEl = document.getElementById("solidTuiHostMount")
+if (tuiHostMountEl) {
+  tuiHostMountEl.innerHTML = ""
+  render(() => <TuiHostPanel active={() => rightActivity() === "tui"} />, tuiHostMountEl)
 }
 
 // ── Sidebar title backdoor: double-click resets DB ──

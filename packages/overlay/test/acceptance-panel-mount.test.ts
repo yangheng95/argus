@@ -60,7 +60,7 @@ test("index.html declares side activity bodies and the default right TUI activit
   expect(html).toContain('id="solidFileChangesMount"')
   expect(html).toContain('id="rightPanelTui"')
   expect(html).toContain('data-side-activity="tui" data-active="true"')
-  expect(html).toContain('id="solidTuiRuntimeMount"')
+  expect(html).toContain('id="solidTuiHostMount"')
   expect(html).toContain('id="rightPanelBrowser"')
   expect(html).toContain('data-side-activity="browser" data-active="false"')
   expect(html).toContain('id="solidBrowserPreviewMount"')
@@ -101,7 +101,7 @@ test("main.tsx mounts the top-level side activity toolbars and bodies", async ()
   expect(main).toContain('document.getElementById("solidFileExplorerMount")')
   expect(main).toContain('document.getElementById("solidFileEditorMount")')
   expect(main).toContain('document.getElementById("solidFileChangesMount")')
-  expect(main).toContain('document.getElementById("solidTuiRuntimeMount")')
+  expect(main).toContain('document.getElementById("solidTuiHostMount")')
   expect(main).toContain('document.getElementById("solidLeftActivityToolbar")')
   expect(main).toContain('document.getElementById("solidRightActivityToolbar")')
   expect(main).toContain('document.getElementById("solidBrowserPreviewMount")')
@@ -114,7 +114,8 @@ test("main.tsx mounts the top-level side activity toolbars and bodies", async ()
   expect(main).not.toContain('document.getElementById("solidFrontendPreviewMount")')
   expect(main).not.toContain("<FrontendPreviewPanel")
   expect(main).toContain("<SideActivityToolbar")
-  expect(main).toContain("<TuiRuntimePanel")
+  expect(main).toContain("<TuiHostPanel")
+  expect(main).not.toContain("<TuiRuntimePanel")
   expect(main).toContain("<BrowserPreviewPanel")
   expect(main).toContain("<FileExplorerPanel")
   expect(main).toContain("<FileChangesPanel")
@@ -263,6 +264,11 @@ test("redesign-required i18n keys exist in both locales; the legacy lifecycle ke
     "browser_preview.capture",
     "browser_preview.capture_loading",
     "browser_preview.viewport.desktop",
+    "tui.title",
+    "tui.host_error",
+    "tui.host_restart",
+    "tui.host_running",
+    "tui.host_stopped",
   ]
   // i18n keys are flat strings with literal dots, not nested paths — use
   // `key in obj` instead of toHaveProperty (which would mis-traverse).
@@ -283,6 +289,10 @@ test("redesign-required i18n keys exist in both locales; the legacy lifecycle ke
     "right_panel.inspector",
     "right_panel.preview",
     "frontend_preview.title",
+    "coding_assistant.title",
+    "coding_assistant.input_placeholder",
+    "coding_assistant.send",
+    "coding_assistant.loading",
   ]) {
     expect(key in en).toBe(false)
     expect(key in zh).toBe(false)
