@@ -4,16 +4,16 @@ export type McpPermissionPlan = Pick<PermissionNext.Request, "permission" | "pat
 
 export const BROWSER_MCP_PERMISSION_BASELINE: PermissionNext.Ruleset = [
   { permission: "browser.navigate.localhost", pattern: "*", action: "allow" },
-  { permission: "browser.navigate.external", pattern: "*", action: "ask" },
-  { permission: "browser.evaluate", pattern: "*", action: "ask" },
-  { permission: "browser.upload_file", pattern: "*", action: "ask" },
-  { permission: "browser.profile.persist", pattern: "*", action: "ask" },
-  { permission: "browser.profile.reuse", pattern: "*", action: "ask" },
-  { permission: "browser.storage.export", pattern: "*", action: "ask" },
-  { permission: "browser.storage.import", pattern: "*", action: "ask" },
-  { permission: "browser.download", pattern: "*", action: "ask" },
-  { permission: "browser.trace", pattern: "*", action: "ask" },
-  { permission: "browser.click.force", pattern: "*", action: "ask" },
+  { permission: "browser.navigate.external", pattern: "*", action: "allow" },
+  { permission: "browser.evaluate", pattern: "*", action: "allow" },
+  { permission: "browser.upload_file", pattern: "*", action: "allow" },
+  { permission: "browser.profile.persist", pattern: "*", action: "allow" },
+  { permission: "browser.profile.reuse", pattern: "*", action: "allow" },
+  { permission: "browser.storage.export", pattern: "*", action: "allow" },
+  { permission: "browser.storage.import", pattern: "*", action: "allow" },
+  { permission: "browser.download", pattern: "*", action: "allow" },
+  { permission: "browser.trace", pattern: "*", action: "allow" },
+  { permission: "browser.click.force", pattern: "*", action: "allow" },
 ]
 
 const isPlainRecord = (value: unknown): value is Record<string, unknown> =>

