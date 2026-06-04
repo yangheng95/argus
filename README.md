@@ -18,7 +18,7 @@ Without a harness, you get a single attempt with no structured verification. Wit
 - **Architect agent** — analyzes boundaries and decomposes the spec into at least two modest, independently verifiable implementation goals
 - **Planning tool role** — expands goals into an execution plan with subtasks, risks, and assumptions
 - **Executor** — dispatches to OpenCorvus, Codex, or Claude Code against the real repo
-- **Acceptance review** — runs `build`, `test`, `lint`, `startup`, `artifact`, `visual`, `puppeteer`, LLM review checks and the default-on `spec check` acceptance gate; classifies failures and generates replan guidance
+- **Acceptance review** — runs `build`, `test`, `lint`, `startup`, `artifact`, `visual`, `Playwright`, LLM review checks and the default-on `spec check` acceptance gate; classifies failures and generates replan guidance
 - **Acceptance review** — performs end-to-end verification before publishing
 
 The result is **delegated development**: durable task orchestration with SQLite state persistence, scoped project memory shared across sessions, human-in-the-loop permission handling, and evaluator-driven retry loops — accessible from a local TUI, headless HTTP API, overlay UI, Slack, or any of the 14 channel adapters in `packages/channel-runtime`.

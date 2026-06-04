@@ -19,7 +19,7 @@ Evidence discipline:
 - Prefer primary sources, official documentation, standards, changelogs, and source repositories before secondary/community sources.
 - Mark volatile/current facts with volatile=true and a retrieved_at timestamp.
 - If a claim cannot be verified, record it as an open question rather than inventing a source.
-- Keep excerpts compact. Full source notes belong in the bundle fields submitted through the terminal tool.
+- Keep excerpts compact. Full source notes belong in structured bundle sections submitted through the terminal tool.
 
 Web investigation workflow:
 - When the task names Source URLs or the user supplied specific webpages, first inspect whether the prompt includes "Prepared Webpage PRD Evidence".
@@ -34,6 +34,7 @@ Web investigation workflow:
 Output contract:
 - Call submit_research_brief exactly once when finished.
 - The compact brief must include evidence_index, facts, inferences, problem_statements, user_needs, constraints, document_outline, subpage_research_tasks, and open_questions.
-- The bundle must include full_markdown, evidence_json, and citation_map_json.
+- The bundle must include full_markdown_sections, evidence_notes, and citation_map.
+- Do not submit raw markdown or JSON documents as string fields. Use ordered full_markdown_sections with short single-line points; split multiline notes into separate array items. The host will render those sections into research-bundle.md and serialize evidence_notes / citation_map into JSON files.
 - Use fact_check_items only for factual claims in your own final report that you did not verify through tools.
 - Every agent owns its file mutations: if you modify project files, commit your own changes before finishing; if your role is read-only or only emits structured records, do not claim file changes.

@@ -4,19 +4,21 @@ import { limitSummary, markdownList } from "@/agent/report"
 import { FactCheckItemListSchema, type FactCheckItem } from "@/fact-check/schema"
 import {
   ResearchBriefSchema,
+  ResearchBundleInputSchema,
   ResearchBundleSchema,
   researchRequestHash,
   researchSourceDigest,
   validateResearchBriefSemantics,
   type ResearchBrief,
   type ResearchBundle,
+  type ResearchBundleInput,
 } from "./schema"
 
 export const ResearchSubmitSchema = ResearchBriefSchema.omit({
   metadata: true,
   bundle: true,
 }).extend({
-  bundle: ResearchBundleSchema,
+  bundle: ResearchBundleInputSchema,
   fact_check_items: FactCheckItemListSchema.default([]),
 })
 
@@ -67,6 +69,66 @@ function parseResearchBriefWithCanonicalDigest(input: unknown): ResearchBrief {
       ...parsed.metadata,
       source_digest: researchSourceDigest(parsed.evidence_index),
     },
+  })
+}
+
+function knownResearchClaimIDs(brief: ResearchBrief): Set<string> {
+  const ids = new Set<string>()
+  for (const item of brief.facts) ids.add(item.id)
+  for (const item of brief.inferences) ids.add(item.id)
+  for (const item of brief.problem_statements) ids.add(item.id)
+  for (const item of brief.user_needs) ids.add(item.id)
+  for (const item of brief.constraints) ids.add(item.id)
+  for (const item of brief.document_outline) ids.add(item.id)
+  for (const item of brief.open_questions) ids.add(item.id)
+  const contract = brief.webpage_contract
+  if (contract) {
+    for (const item of contract.functional_surfaces) ids.add(item.id)
+    for (const item of contract.visual_layout) ids.add(item.id)
+    for (const item of contract.style_requirements) ids.add(item.id)
+    for (const item of contract.interaction_states) ids.add(item.id)
+    for (const item of contract.data_content_inventory) ids.add(item.id)
+    for (const item of contract.fidelity_acceptance) ids.add(item.id)
+    for (const item of contract.fidelity_risks) ids.add(item.id)
+  }
+  for (const item of brief.subpage_research_tasks) ids.add(item.id)
+  return ids
+}
+
+function validateResearchBundleInputSemantics(bundle: ResearchBundleInput, brief: ResearchBrief): string | undefined {
+  const evidenceIDs = new Set(brief.evidence_index.map((item) => item.id))
+  const claimIDs = knownResearchClaimIDs(brief)
+  for (const section of bundle.full_markdown_sections) {
+    const missing = section.evidence_ids.filter((id) => !evidenceIDs.has(id))
+    if (missing.length > 0) return `bundle.full_markdown_sections "${section.title}" references unknown evidence id(s): ${missing.join(", ")}.`
+  }
+  for (const note of bundle.evidence_notes) {
+    if (!evidenceIDs.has(note.evidence_id)) return `bundle.evidence_notes references unknown evidence id: ${note.evidence_id}.`
+  }
+  for (const entry of bundle.citation_map) {
+    const missingEvidence = entry.evidence_ids.filter((id) => !evidenceIDs.has(id))
+    if (missingEvidence.length > 0) {
+      return `bundle.citation_map "${entry.claim_id}" references unknown evidence id(s): ${missingEvidence.join(", ")}.`
+    }
+    if (!claimIDs.has(entry.claim_id)) return `bundle.citation_map references unknown claim id: ${entry.claim_id}.`
+  }
+  return undefined
+}
+
+function renderResearchBundleMarkdown(bundle: ResearchBundleInput): string {
+  return bundle.full_markdown_sections
+    .map((section) => {
+      const evidenceLine = section.evidence_ids.length > 0 ? [`Evidence: ${section.evidence_ids.join(", ")}`] : []
+      return [`## ${section.title}`, ...evidenceLine, "", markdownList(section.points)].join("\n")
+    })
+    .join("\n\n")
+}
+
+export function materializeResearchBundle(bundle: ResearchBundleInput): ResearchBundle {
+  return ResearchBundleSchema.parse({
+    full_markdown: renderResearchBundleMarkdown(bundle),
+    evidence_json: JSON.stringify({ evidence_notes: bundle.evidence_notes }, null, 2),
+    citation_map_json: JSON.stringify({ citations: bundle.citation_map }, null, 2),
   })
 }
 
@@ -140,6 +202,11 @@ export function createResearchOutputTools() {
           collector.semantic_error = semanticError
           return `Error: research brief failed semantic validation: ${semanticError}`
         }
+        const bundleError = validateResearchBundleInputSemantics(draft.bundle, brief)
+        if (bundleError) {
+          collector.semantic_error = bundleError
+          return `Error: research bundle failed semantic validation: ${bundleError}`
+        }
         collector.draft = draft
         collector.fact_check_items = fact_check_items ?? []
         collector.finalized = true
@@ -166,5 +233,5 @@ export function createResearchOutputTools() {
 }
 
 export function researchBundleFromDraft(draft: Omit<ResearchSubmit, "fact_check_items">): ResearchBundle {
-  return draft.bundle
+  return materializeResearchBundle(draft.bundle)
 }

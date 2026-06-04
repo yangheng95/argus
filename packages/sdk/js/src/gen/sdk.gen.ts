@@ -162,12 +162,12 @@ import type {
   QuestionReplyResponses,
   RunAbortErrors,
   RunAbortResponses,
+  RunAcceptanceErrors,
+  RunAcceptanceResponses,
   RunArtifactsErrors,
   RunArtifactsResponses,
   RunBriefErrors,
   RunBriefResponses,
-  RunAcceptanceErrors,
-  RunAcceptanceResponses,
   RunEvaluationsErrors,
   RunEvaluationsResponses,
   RunGetErrors,
@@ -4323,7 +4323,7 @@ export class Control2 extends HeyApiClient {
                 timeout_ms?: number
                 mode?: "soft" | "strict"
               }
-              puppeteer?: {
+              playwright?: {
                 target: "web"
                 url: string
                 browser?: "chrome" | "edge" | "chromium"
@@ -4485,7 +4485,7 @@ export class Control2 extends HeyApiClient {
                 timeout_ms?: number
                 mode?: "soft" | "strict"
               }
-              puppeteer?: {
+              playwright?: {
                 target: "web"
                 url: string
                 browser?: "chrome" | "edge" | "chromium"
@@ -5307,7 +5307,7 @@ export class Task extends HeyApiClient {
           timeout_ms?: number
           mode?: "soft" | "strict"
         }
-        puppeteer?: {
+        playwright?: {
           target: "web"
           url: string
           browser?: "chrome" | "edge" | "chromium"

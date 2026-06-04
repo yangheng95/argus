@@ -1299,7 +1299,7 @@ window.addEventListener("beforeunload", () => {
 installSystemThemeListener(() => applyTheme(settingsStore.theme))
 
 // Dev-only hook used by `script/snap-settings.ts` to drive the config
-// dialog open from puppeteer. Vite dev does not happily serve the
+// dialog open from Playwright. Vite dev does not happily serve the
 // `.ts` modules to a dynamic-import call from a foreign origin, so the
 // snap script cannot reach `openConfigDialog` through the module graph
 // — it reaches in via `window.__OC_DEV__` instead. Gated on

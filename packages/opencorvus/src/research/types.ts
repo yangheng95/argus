@@ -1,6 +1,7 @@
 export type {
   ResearchBrief,
   ResearchBundle,
+  ResearchBundleInput,
   ResearchConstraint,
   ResearchDocumentSection,
   ResearchEvidenceRef,

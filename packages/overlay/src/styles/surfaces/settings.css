@@ -2630,17 +2630,17 @@
    surface chrome.
    ───────────────────────────────────────────────────────────── */
 
-.puppeteer-options {
+.playwright-options {
   margin-top: var(--ui-gap-sm);
   padding: 0 var(--ui-gap-xs);
 }
-.puppeteer-options .field-compact {
+.playwright-options .field-compact {
   margin-bottom: 0;
 }
-.puppeteer-options .field-compact .field-label {
+.playwright-options .field-compact .field-label {
   font-size: var(--ui-font-control);
 }
-.puppeteer-options .field-compact .field-input {
+.playwright-options .field-compact .field-input {
   font-size: var(--ui-font-control);
   padding: calc(4px * var(--ui-scale)) var(--ui-input-padding-x);
 }

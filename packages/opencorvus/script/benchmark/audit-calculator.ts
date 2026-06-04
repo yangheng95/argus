@@ -1,12 +1,12 @@
 #!/usr/bin/env bun
 // Visual+functional audit for the web-calculator deliverable.
-// Walks the 16 spec requirements, builds the project, drives it with puppeteer,
+// Walks the 16 spec requirements, builds the project, drives it with Playwright,
 // and writes screenshots + a JSON verdict to <project>/.scratch/audit-report/.
 
 import { spawn, type ChildProcess } from "node:child_process"
 import fs from "node:fs/promises"
 import path from "node:path"
-import puppeteer, { type Browser, type Page } from "puppeteer-core"
+import { launchBrowser, type OverlayBrowser, type OverlayPage } from "../../../overlay/test/launch"
 
 const PROJECT_DIR = process.argv[2]
 if (!PROJECT_DIR) {
@@ -16,11 +16,6 @@ if (!PROJECT_DIR) {
 const ROOT = path.resolve(PROJECT_DIR)
 const REPORT_DIR = path.join(ROOT, ".scratch", "audit-report")
 await fs.mkdir(REPORT_DIR, { recursive: true })
-
-function chromePath(): string {
-  const root = path.join(process.env.USERPROFILE ?? process.env.HOME ?? "", ".cache", "puppeteer", "chrome")
-  return path.join(root, "win64-147.0.7727.57", "chrome-win64", "chrome.exe")
-}
 
 type Finding = { id: string; req: string; status: "pass" | "fail" | "warn" | "skip"; note: string }
 const findings: Finding[] = []
@@ -116,20 +111,16 @@ try {
 }
 
 // --- 4. drive UI ----------------------------------------------------------
-let browser: Browser | null = null
-let page: Page | null = null
+let browser: OverlayBrowser | null = null
+let page: OverlayPage | null = null
 const consoleErrors: string[] = []
 if (baseURL) {
-  browser = await puppeteer.launch({
-    executablePath: chromePath(),
-    headless: true,
-    args: ["--no-sandbox", "--disable-setuid-sandbox"],
-  })
+  browser = await launchBrowser(["--no-sandbox", "--disable-setuid-sandbox"])
   page = await browser.newPage()
   page.on("pageerror", (e) => consoleErrors.push(`pageerror: ${e.message}`))
   page.on("console", (m) => { if (m.type() === "error") consoleErrors.push(`console.error: ${m.text()}`) })
-  await page.setViewport({ width: 1440, height: 900, deviceScaleFactor: 1 })
-  await page.goto(baseURL, { waitUntil: "networkidle2", timeout: 30_000 })
+  await page.setViewportSize({ width: 1440, height: 900 })
+  await page.goto(baseURL, { waitUntil: "networkidle", timeout: 30_000 })
   await new Promise((r) => setTimeout(r, 1500))
   await page.screenshot({ path: path.join(REPORT_DIR, "01-desktop-default.png"), fullPage: true })
 }
@@ -142,14 +133,13 @@ async function shot(name: string) {
 // helpers to drive common interactions; resilient to button-naming variation.
 async function clickByText(text: string): Promise<boolean> {
   if (!page) return false
-  const handle = await page.evaluateHandle((t) => {
+  return await page.evaluate((t) => {
     const buttons = Array.from(document.querySelectorAll("button, [role=button], .button, .btn"))
-    return buttons.find((b) => (b.textContent || "").trim() === t) || null
+    const target = buttons.find((b) => (b.textContent || "").trim() === t) as HTMLElement | undefined
+    if (!target) return false
+    target.click()
+    return true
   }, text)
-  const el = handle.asElement()
-  if (!el) return false
-  await el.click()
-  return true
 }
 
 async function readDisplay(): Promise<string> {
@@ -329,8 +319,8 @@ if (page && baseURL) {
   record("R11-right-align", "display right-aligned", /right|end/i.test(layout.display?.textAlign || "") ? "pass" : "warn", `textAlign=${layout.display?.textAlign}`)
 
   // R12: mobile 360px
-  await page.setViewport({ width: 360, height: 720, deviceScaleFactor: 2 })
-  await page.reload({ waitUntil: "networkidle2" })
+  await page.setViewportSize({ width: 360, height: 720 })
+  await page.reload({ waitUntil: "networkidle" })
   await new Promise((r) => setTimeout(r, 800))
   await shot("05-mobile-360.png")
   const mobileCheck = await page.evaluate(() => {
@@ -338,8 +328,8 @@ if (page && baseURL) {
     return root ? { clientWidth: root.clientWidth, scrollWidth: root.scrollWidth, overflow: getComputedStyle(root).overflow } : null
   })
   record("R12-mobile", "mobile 360px renders without horizontal scroll", mobileCheck && mobileCheck.scrollWidth <= 380 ? "pass" : "warn", JSON.stringify(mobileCheck))
-  await page.setViewport({ width: 1440, height: 900, deviceScaleFactor: 1 })
-  await page.reload({ waitUntil: "networkidle2" })
+  await page.setViewportSize({ width: 1440, height: 900 })
+  await page.reload({ waitUntil: "networkidle" })
   await new Promise((r) => setTimeout(r, 600))
 
   // R13: no lorem / no obvious placeholder text

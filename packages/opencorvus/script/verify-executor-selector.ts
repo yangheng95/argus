@@ -1,7 +1,7 @@
 #!/usr/bin/env bun
 /**
  * Headless verification that ExecutorSelector renders + opens its menu.
- * Spins up vite preview, opens the page in puppeteer, asserts the chip
+ * Spins up vite preview, opens the page in Playwright, asserts the chip
  * is in the DOM with non-empty label, clicks it, and asserts the menu
  * appears with at least one row.
  *
@@ -11,31 +11,25 @@
  * Default url: http://localhost:5173/
  */
 
-import { findBrowserExecutable } from "../src/acceptance/checks/visual"
-import puppeteer from "puppeteer-core"
+import { launchBrowser } from "../../overlay/test/launch"
 import path from "node:path"
 
 const url = process.argv[2] ?? "http://localhost:5173/"
 const screenshotPath = path.resolve(process.cwd(), "executor-selector-verify.png")
 
-const exe = await findBrowserExecutable()
-const browser = await puppeteer.launch({
-  executablePath: exe,
-  headless: true,
-  args: ["--no-sandbox", "--disable-gpu", "--disable-dev-shm-usage"],
-})
+const browser = await launchBrowser(["--no-sandbox", "--disable-gpu", "--disable-dev-shm-usage"])
 
 let exitCode = 0
 try {
   const page = await browser.newPage()
-  await page.setViewport({ width: 1280, height: 800, deviceScaleFactor: 1 })
+  await page.setViewportSize({ width: 1280, height: 800 })
 
   page.on("pageerror", (err) => console.error(`[pageerror] ${err.message}`))
   page.on("console", (msg) => {
     if (msg.type() === "error") console.error(`[console.error] ${msg.text()}`)
   })
 
-  await page.goto(url, { waitUntil: "networkidle2", timeout: 30000 })
+  await page.goto(url, { waitUntil: "networkidle", timeout: 30000 })
   await new Promise((r) => setTimeout(r, 3000))
 
   const chip = await page.$(".executor-selector .executor-chip")
@@ -51,7 +45,7 @@ try {
     }
 
     // Composer sits at the bottom — scroll the chip into view first.
-    // Use JS click instead of puppeteer's geometric click so the chip
+    // Use JS click instead of Playwright's geometric click so the chip
     // doesn't have to be hit-tested at exact viewport coords.
     await page.$eval(".executor-chip", (el) => {
       (el as HTMLElement).scrollIntoView({ block: "center" })

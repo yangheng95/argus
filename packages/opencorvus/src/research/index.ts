@@ -1,6 +1,7 @@
 export { ResearchAgent } from "./agent"
 export {
   ResearchBriefSchema,
+  ResearchBundleInputSchema,
   ResearchBundleSchema,
   ResearchConstraintSchema,
   ResearchDocumentSectionSchema,
@@ -19,6 +20,7 @@ export { researchBriefIsStale } from "./staleness"
 export type {
   ResearchBrief,
   ResearchBundle,
+  ResearchBundleInput,
   ResearchConstraint,
   ResearchDocumentSection,
   ResearchEvidenceRef,

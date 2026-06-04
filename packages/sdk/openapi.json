@@ -10179,7 +10179,7 @@
                               "url"
                             ]
                           },
-                          "puppeteer": {
+                          "playwright": {
                             "type": "object",
                             "properties": {
                               "target": {
@@ -10834,7 +10834,7 @@
                               "url"
                             ]
                           },
-                          "puppeteer": {
+                          "playwright": {
                             "type": "object",
                             "properties": {
                               "target": {
@@ -12141,7 +12141,7 @@
                           "url"
                         ]
                       },
-                      "puppeteer": {
+                      "playwright": {
                         "type": "object",
                         "properties": {
                           "target": {
@@ -33326,6 +33326,11 @@
                     "items": {
                       "type": "string"
                     }
+                  },
+                  "followup_workload_guidance": {
+                    "description": "Explicit warning for subsequent agents about hidden or remaining work surface, evidence they must read deeper, and whether goal workload analysis or Architect re-sizing should be revisited.",
+                    "type": "string",
+                    "minLength": 1
                   }
                 },
                 "required": [
