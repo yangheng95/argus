@@ -185,7 +185,7 @@ test("research and frontend-design role descriptions keep document research dist
   expect(AgentRoleContract.description("frontend-research")).toContain("does not create the frontend implementation template")
 })
 
-test("public docs and live prompt do not describe deleted planner or requirements-owned goals", async () => {
+test("public workflow docs and live prompt describe the current model only", async () => {
   const root = path.resolve(import.meta.dirname, "../../../..")
   const docsFiles = [
     "packages/web/src/content/docs/index.mdx",
@@ -208,6 +208,14 @@ test("public docs and live prompt do not describe deleted planner or requirement
     "packages/web/src/content/docs/zh-cn/reference/evaluator.mdx",
     "packages/web/src/content/docs/troubleshooting.mdx",
     "packages/web/src/content/docs/zh-cn/troubleshooting.mdx",
+    "packages/web/src/content/docs/start/install.mdx",
+    "packages/web/src/content/docs/zh-cn/start/install.mdx",
+    "packages/web/src/content/docs/permissions.mdx",
+    "packages/web/src/content/docs/zh-cn/permissions.mdx",
+    "packages/web/src/content/docs/plugins.mdx",
+    "packages/web/src/content/docs/zh-cn/plugins.mdx",
+    "packages/web/src/content/docs/skills.mdx",
+    "packages/web/src/content/docs/zh-cn/skills.mdx",
   ]
   const livePromptFiles = [
     "packages/web/src/content/docs/start/quickstart.mdx",
@@ -240,10 +248,31 @@ test("public docs and live prompt do not describe deleted planner or requirement
     /→ deliver/,
     /\.\.\/opencorvus\//,
   ]
+  const staleExplanationPatterns: RegExp[] = [
+    /old host/i,
+    /old `[^`]+`.*removed/i,
+    /has been removed/i,
+    /retired/i,
+    /deliver gate/i,
+    /removed per-goal/i,
+    /per-goal evaluator/i,
+    /no longer uses/i,
+    /not a separate/i,
+    /not a standalone/i,
+    /旧的 host/i,
+    /已删除/,
+    /已废弃/,
+    /不再把/,
+    /不是独立/,
+    /交付阶段 worker/,
+  ]
   for (const file of docsFiles) {
     const text = await fs.readFile(path.join(root, file), "utf8")
     for (const pattern of deletedDocPatterns) {
       expect(text, `${file} must not contain deleted public workflow term ${pattern}`).not.toMatch(pattern)
+    }
+    for (const pattern of staleExplanationPatterns) {
+      expect(text, `${file} must describe the current workflow directly instead of explaining stale terms ${pattern}`).not.toMatch(pattern)
     }
   }
 

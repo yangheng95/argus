@@ -93,16 +93,12 @@ OpenCorvus 在内置 agent 定义中默认把工具权限设为 `allow`（`packa
 }
 ```
 
-系统不再存在 auto-permission 引擎。显式 `ask` 是真实的操作员 gate：`PermissionNext.ask()` 会发出 `permission.asked`、保存 pending 请求，并且只在收到回复后继续。如果一直无人回复，请求会在 `OPENCORVUS_PERMISSION_TIMEOUT_MS` 后被拒绝（默认 **300000 ms**，最小 **1000 ms**；见 `packages/opencorvus/src/permission/next.ts`）。
+显式 `ask` 是真实的操作员审批路径：`PermissionNext.ask()` 会发出 `permission.asked`、保存 pending 请求，并且只在收到回复后继续。如果一直无人回复，请求会在 `OPENCORVUS_PERMISSION_TIMEOUT_MS` 后被拒绝（默认 **300000 ms**，最小 **1000 ms**；见 `packages/opencorvus/src/permission/next.ts`）。
 
 ```bash
 export OPENCORVUS_PERMISSION_TIMEOUT_MS=60000   # 60s 后拒绝未回复的 ask
 ```
 
-:::note
-旧的 `experimental.unattended` 和 `experimental.auto_permission` 字段都已删除。如果 config 仍写着这些字段，OpenCorvus 会在 strict config parse 阶段直接拒绝。工具审批行为使用 `permission` 规则表达；`experimental.auto_question` 只用于悬置澄清提问。
-:::
-
 ## 配置错误早期暴露
 
-permission 字符串写错时**不 fallback**，直接抛。曾经有 bug：`permission: "allow"`（字符串而非对象）会被 `Object.entries` 当成字符拆开，导致规则全乱；已修复为 `PermissionNext.fromConfig` 中 `typeof === "string"` 的早返回（`src/permission/next.ts:62-85`）。
+permission 字符串写错时**不 fallback**，直接抛。`PermissionNext.fromConfig` 会在构建规则集前校验 config 形态（`src/permission/next.ts:62-85`）。

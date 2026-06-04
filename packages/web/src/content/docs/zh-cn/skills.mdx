@@ -31,7 +31,7 @@ Frontmatter 字段（`src/skill/skill.ts:26-45`）：
 
 ## 2. 内置 Skills
 
-随二进制打包（`src/skill/skill.ts` 的 `builtins` 数组），**只有三个**：
+随二进制打包（`src/skill/skill.ts` 的 `builtins` 数组），**只有两个**：
 
 | Skill | 用途 |
 |---|---|
@@ -81,7 +81,7 @@ Frontmatter 字段（`src/skill/skill.ts:26-45`）：
 3. 加载缓存下的 `SKILL.md`
 
 :::caution
-文件缓存后不再重新下载；更新需手动清缓存或 `opencorvus skill remove --url <url>`。
+远程文件会缓存在本地；更新远程 skill 时需要手动清缓存或运行 `opencorvus skill remove --url <url>`。
 :::
 
 内置 Skill Market 条目（`src/skill/manager.ts:107-165`）：
@@ -107,7 +107,7 @@ Git 方式克隆到 `~/.config/opencorvus/skills-market/<slug>/` 并自动追加
 
 Session 初始化时会提供 Skill Policy 与可用 skill 摘要。Agent 需要通过 `skill` 工具搜索或按精确名称加载 `SKILL.md`，然后执行其中的工作流。加载 skill 是会话历史中的可见工具调用。
 
-`auto_detect` 仅作为发现 / 排序 / 后续 UI 辅助的元数据，不再把 skill 正文隐藏注入 system prompt，也不会自动打开工具。`required_tools` 是 skill 搜索结果中的描述性提示；真正的证据要求由加载后的 skill 文档说明。
+`auto_detect` 仅作为发现 / 排序 / 后续 UI 辅助的元数据。Skill 正文通过可见的 `skill` 工具加载；`required_tools` 是 skill 搜索结果中的描述性提示；真正的证据要求由加载后的 skill 文档说明。
 
 ## 7. Permission 配置
 

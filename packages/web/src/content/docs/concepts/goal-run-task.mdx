@@ -35,11 +35,11 @@ EngineTask (kind: "workflow" | "build")
 | `criteria_results` | Rollup used by the overlay quality panel |
 | `time_started` / `time_completed` / `error` | Source fields for derived task status |
 
-There is no authoritative `engine_task.status` column. `deriveTaskStatus` projects status from task timestamps, errors, cancellation metadata, and run state.
+`deriveTaskStatus` projects task status from task timestamps, errors, cancellation metadata, and run state.
 
 ## Requirements and Specs
 
-`EngineSpecSnapshotTable`, `EngineSpecItemTable`, and `EngineRequirementTable` store requirements-stage outputs. The current producer is the `requirements` workflow tool / agent, not a separate public spec-writing worker stage.
+`EngineSpecSnapshotTable`, `EngineSpecItemTable`, and `EngineRequirementTable` store requirements-stage outputs written by the `requirements` workflow tool / agent.
 
 ## PlanVersion, Goal, and PlanNode
 
@@ -51,7 +51,7 @@ The Architect agent writes:
 | `EngineGoalTable` | Goal contract fields: objective, acceptance specs, dependencies, ownership, priority, kind |
 | `EnginePlanNodeTable` | Plan graph rows that connect goals to the active plan |
 
-`EngineGoalTable` no longer owns a status cache. UI and prompt status are derived from the goal-run attempt chain.
+UI and prompt status for a goal are derived from the goal-run attempt chain.
 
 ## RunRow
 
@@ -61,7 +61,7 @@ The Architect agent writes:
 queued | accepted | running | blocked | completed | failed | aborted
 ```
 
-`phase` still has legacy-compatible values in the type, but current workflow progress is rendered from artifacts and workflow tool side effects rather than a host phase pointer.
+Workflow progress is rendered from artifacts and workflow tool side effects.
 
 ## GoalRunRow
 
@@ -73,14 +73,14 @@ queued | accepted | running | blocked | completed | failed | aborted
 | `status` | `queued / accepted / planning / running / evaluating / blocked / completed / failed / aborted` |
 | `workspace_dir` / `workspace_branch` | Isolated goal workspace |
 | `workspace_base_ref` / `merge_ref` | Snapshot/git references for replay and merge |
-| `supersede_of` | Links retry/rework attempts without mutating prior evidence |
+| `supersede_of` | Links retry/rework attempts while preserving previous evidence |
 | `owner` | Process owner used to detect orphaned live attempts after restart |
 
 The latest non-superseded attempt is the authoritative source for goal progress.
 
 ## Acceptance and Evaluation
 
-`AcceptanceRow` is reconstructed from `engine_artifact.kind="acceptance"` and records candidate/publishing/delivered/failed acceptance rows. The name "delivered" here is a persisted acceptance status, not a standalone final-delivery worker or workflow step.
+`AcceptanceRow` is reconstructed from `engine_artifact.kind="acceptance"` and records candidate/publishing/delivered/failed acceptance statuses.
 
 `EvaluationRow` is reconstructed from `engine_artifact.kind="verification-evidence"` and records task-level or goal-run evidence:
 

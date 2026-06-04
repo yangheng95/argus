@@ -20,7 +20,7 @@ Source: `packages/opencorvus/src/plugin/index.ts`, `packages/plugin/src/index.ts
 
 **GitLab Auth** (internal) — `@gitlab/opencode-gitlab-auth` statically imported, no npm install (`src/plugin/index.ts:12-23`).
 
-OpenCorvus does not install npm plugins by default. The retired `opencode-anthropic-auth` package is no longer auto-loaded; add any third-party auth plugin explicitly in `plugin` if you choose to use one.
+Third-party npm plugins load only when declared explicitly in the `plugin` config array.
 
 ## Writing a plugin
 
