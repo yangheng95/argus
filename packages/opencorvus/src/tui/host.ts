@@ -13,6 +13,7 @@ import { requireRuntimePackage, runtimePackageRequire } from "@/runtime/package-
 import { Tui } from "@/tui"
 
 const MAX_BUFFER_BYTES = 1_000_000
+const CONNECT_TICKET_LIFETIME_MS = 60_000
 const NODE_BRIDGE_SCRIPT = String.raw`
 const readline = require("node:readline")
 
@@ -74,13 +75,21 @@ interface HostSession {
   updatedAt: number
 }
 
+interface HostConnectTicket {
+  hostID: string
+  directory: string
+  expiresAt: number
+}
+
 const state = lazyInstanceState(
   () => ({
     session: null as HostSession | null,
+    tickets: new Map<string, HostConnectTicket>(),
   }),
   async (s) => {
     s.session?.process?.kill()
     s.session = null
+    s.tickets.clear()
   },
 )
 
@@ -140,6 +149,12 @@ function info(session: HostSession | null) {
     exitCode: session.exitCode,
     createdAt: session.createdAt,
     updatedAt: session.updatedAt,
+  }
+}
+
+function deleteExpiredTickets(tickets: Map<string, HostConnectTicket>, now = Date.now()) {
+  for (const [ticket, record] of tickets) {
+    if (record.expiresAt <= now) tickets.delete(ticket)
   }
 }
 
@@ -335,9 +350,14 @@ async function spawnPrepared(input: { command: Tui.EmbeddedCommand; cols: number
 }
 
 export namespace TuiHost {
+  export const CONNECT_TICKET_QUERY = "ticket"
+  export const CONNECT_TOKEN_HEADER = "x-opencode-ticket"
+  export const CONNECT_TOKEN_HEADER_VALUE = "1"
+
   export type Info = ReturnType<typeof info>
   export type Snapshot = Info & { buffer: string }
   export type Output = ReturnType<typeof readOutput>
+  export type ConnectToken = { ticket: string; expires_in: number }
 
   export async function start(input: {
     directory?: string
@@ -374,6 +394,7 @@ export namespace TuiHost {
   export async function startPrepared(input: { command: Tui.EmbeddedCommand; cols?: number; rows?: number }) {
     await stop()
     const s = state()
+    s.tickets.clear()
     s.session = await spawnPrepared({
       command: input.command,
       cols: input.cols ?? 100,
@@ -398,6 +419,38 @@ export namespace TuiHost {
     return readOutput(state().session, input?.cursor)
   }
 
+  export function issueConnectToken(): ConnectToken {
+    const s = state()
+    const session = s.session
+    if (!session?.process || session.status !== "running") throw new Error("TUI host is not running")
+    deleteExpiredTickets(s.tickets)
+    const ticket = crypto.randomUUID()
+    s.tickets.set(ticket, {
+      hostID: session.id,
+      directory: session.command.cwd,
+      expiresAt: Date.now() + CONNECT_TICKET_LIFETIME_MS,
+    })
+    return {
+      ticket,
+      expires_in: Math.max(1, Math.round(CONNECT_TICKET_LIFETIME_MS / 1_000)),
+    }
+  }
+
+  export function consumeConnectToken(input: { ticket: string; hostID: string; directory?: string }) {
+    const s = state()
+    const record = s.tickets.get(input.ticket)
+    if (!record) return false
+    const now = Date.now()
+    if (record.expiresAt <= now) {
+      s.tickets.delete(input.ticket)
+      return false
+    }
+    const directory = input.directory ?? Instance.directory
+    if (record.hostID !== input.hostID || record.directory !== directory) return false
+    s.tickets.delete(input.ticket)
+    return true
+  }
+
   export function input(data: string) {
     const session = state().session
     if (!session?.process || session.status !== "running") throw new Error("TUI host is not running")
@@ -420,6 +473,7 @@ export namespace TuiHost {
   export async function stop() {
     const s = state()
     const session = s.session
+    s.tickets.clear()
     if (!session) return true
     session.process?.kill()
     session.process = null
