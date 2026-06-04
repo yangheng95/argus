@@ -27854,7 +27854,7 @@
             }
           },
           "403": {
-            "description": "Connect token request is missing the OpenCode ticket header",
+            "description": "Connect token request is missing the OpenCode ticket header or has an invalid origin",
             "content": {
               "application/json": {
                 "schema": {
@@ -27929,7 +27929,7 @@
             }
           },
           "403": {
-            "description": "Invalid or already consumed connect ticket",
+            "description": "Invalid origin, invalid connect ticket, or already consumed connect ticket",
             "content": {
               "application/json": {
                 "schema": {

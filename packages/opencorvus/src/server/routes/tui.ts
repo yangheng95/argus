@@ -13,6 +13,7 @@ import { Flag } from "../../flag/flag"
 import { errors } from "../error"
 import { lazy } from "../../util/lazy"
 import { Instance } from "@/project/instance"
+import { isAllowedRequestOrigin } from "../cors"
 
 // ============================================================================
 // /control queue plumbing — shared state for control-plane proxy routes
@@ -109,6 +110,10 @@ function decodeHostConnectMessage(data: unknown) {
   if (data instanceof ArrayBuffer) return new TextDecoder().decode(data)
   if (ArrayBuffer.isView(data)) return new TextDecoder().decode(data)
   return undefined
+}
+
+function hasAllowedOrigin(c: Context) {
+  return isAllowedRequestOrigin(c.req.header("origin"), c.req.header("host"))
 }
 
 const requestQueue: TuiControlRequest[] = []
@@ -290,7 +295,7 @@ export const TuiRoutes = lazy(() =>
             content: { "application/json": { schema: resolver(TuiHostConnectToken) } },
           },
           403: {
-            description: "Connect token request is missing the OpenCode ticket header",
+            description: "Connect token request is missing the OpenCode ticket header or has an invalid origin",
             content: { "application/json": { schema: resolver(TuiHostConnectTokenError) } },
           },
           404: {
@@ -300,7 +305,7 @@ export const TuiRoutes = lazy(() =>
         },
       }),
       async (c) => {
-        if (c.req.header(TuiHost.CONNECT_TOKEN_HEADER) !== TuiHost.CONNECT_TOKEN_HEADER_VALUE) {
+        if (c.req.header(TuiHost.CONNECT_TOKEN_HEADER) !== TuiHost.CONNECT_TOKEN_HEADER_VALUE || !hasAllowedOrigin(c)) {
           return c.json({ message: "Invalid embedded TUI host connect token request" }, 403)
         }
         try {
@@ -329,7 +334,7 @@ export const TuiRoutes = lazy(() =>
             content: { "application/json": { schema: resolver(TuiHostConnectTokenError) } },
           },
           403: {
-            description: "Invalid or already consumed connect ticket",
+            description: "Invalid origin, invalid connect ticket, or already consumed connect ticket",
             content: { "application/json": { schema: resolver(TuiHostConnectTokenError) } },
           },
           404: {
@@ -341,6 +346,9 @@ export const TuiRoutes = lazy(() =>
       validator("query", TuiHostConnectQuery),
       async (c) => {
         const query = c.req.valid("query")
+        if (!hasAllowedOrigin(c)) {
+          throw new HTTPException(403, { message: "Invalid TUI host connect origin" })
+        }
         const prepared = (() => {
           try {
             return TuiHost.prepareConnect(query)

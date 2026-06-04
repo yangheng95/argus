@@ -62,8 +62,9 @@ async function openSocket(url: URL) {
   return ws
 }
 
-async function expectSocketRejected(url: URL) {
-  const ws = new WebSocket(url)
+async function expectSocketRejected(url: URL, init?: { headers?: Record<string, string> }) {
+  const Ctor = WebSocket as unknown as new (url: URL, init?: { headers?: Record<string, string> }) => WebSocket
+  const ws = new Ctor(url, init)
   await withTimeout(
     new Promise<void>((resolve, reject) => {
       ws.addEventListener(
@@ -190,6 +191,15 @@ describe("server.tui-host-routes", () => {
         const missingHeader = await app.request("/host/connect-token", { method: "POST" })
         expect(missingHeader.status).toBe(403)
 
+        const invalidOrigin = await app.request("/host/connect-token", {
+          method: "POST",
+          headers: {
+            [TuiHost.CONNECT_TOKEN_HEADER]: TuiHost.CONNECT_TOKEN_HEADER_VALUE,
+            origin: "https://evil.example",
+          },
+        })
+        expect(invalidOrigin.status).toBe(403)
+
         const stopped = await app.request("/host/connect-token", {
           method: "POST",
           headers: { [TuiHost.CONNECT_TOKEN_HEADER]: TuiHost.CONNECT_TOKEN_HEADER_VALUE },
@@ -286,6 +296,15 @@ describe("server.tui-host-routes", () => {
     })
     const listener = Server.listen({ hostname: "127.0.0.1", port: 0, randomPort: true })
     try {
+      const rejectedTokenResponse = await fetch(new URL(`/tui/host/connect-token?directory=${encodeURIComponent(tmp.path)}`, listener.url), {
+        method: "POST",
+        headers: {
+          [TuiHost.CONNECT_TOKEN_HEADER]: TuiHost.CONNECT_TOKEN_HEADER_VALUE,
+          origin: "https://evil.example",
+        },
+      })
+      expect(rejectedTokenResponse.status).toBe(403)
+
       const tokenResponse = await fetch(new URL(`/tui/host/connect-token?directory=${encodeURIComponent(tmp.path)}`, listener.url), {
         method: "POST",
         headers: { [TuiHost.CONNECT_TOKEN_HEADER]: TuiHost.CONNECT_TOKEN_HEADER_VALUE },
@@ -293,6 +312,7 @@ describe("server.tui-host-routes", () => {
       expect(tokenResponse.status).toBe(200)
       const token = (await tokenResponse.json()) as { ticket: string }
       const url = hostConnectURL(listener.url, tmp.path, token.ticket)
+      await expectSocketRejected(url, { headers: { origin: "https://evil.example" } })
       const ws = await openSocket(url)
       const message = waitForSocketMessage(ws, (value) => value.includes("route-host-websocket"))
       ws.send("route-host-websocket\r\n")
