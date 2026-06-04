@@ -32,6 +32,7 @@ export type OverlayPage = {
   evaluate<T = unknown>(fn: Function | string, arg?: unknown): Promise<T>
   evaluateOnNewDocument(fn: Function | string, arg?: unknown): Promise<void>
   addInitScript(fn: Function | string, arg?: unknown): Promise<void>
+  reload(options?: Record<string, unknown>): Promise<unknown>
   route(pattern: string, handler: (route: OverlayRoute) => Promise<void> | void): Promise<void>
   click(selector: string, options?: Record<string, unknown>): Promise<void>
   type(selector: string, text: string, options?: Record<string, unknown>): Promise<void>
@@ -237,6 +238,7 @@ class OverlayBrowserSidecar {
       evaluate: (fn, arg) => remote("evaluate", [fn, arg]) as Promise<unknown>,
       evaluateOnNewDocument: (fn, arg) => remote("addInitScript", [fn, arg]) as Promise<void>,
       addInitScript: (fn, arg) => remote("addInitScript", [fn, arg]) as Promise<void>,
+      reload: (options = {}) => remote("reload", [options]) as Promise<unknown>,
       route: async (pattern, handler) => {
         const events = this.pageHandlers.get(pageId) ?? new Map<string, EventHandler[]>()
         events.set("route", [async (payload) => {
@@ -286,10 +288,10 @@ class OverlayBrowserSidecar {
         type: (text, options) => remote("keyboard.type", [text, options]) as Promise<void>,
       },
       mouse: {
-        click: (x, y, options) => remote("mouse.click", [x, y, options]) as Promise<void>,
-        move: (x, y, options) => remote("mouse.move", [x, y, options]) as Promise<void>,
-        down: (options) => remote("mouse.down", [options]) as Promise<void>,
-        up: (options) => remote("mouse.up", [options]) as Promise<void>,
+        click: (x, y, options = {}) => remote("mouse.click", [x, y, options]) as Promise<void>,
+        move: (x, y, options = {}) => remote("mouse.move", [x, y, options]) as Promise<void>,
+        down: (options = {}) => remote("mouse.down", [options]) as Promise<void>,
+        up: (options = {}) => remote("mouse.up", [options]) as Promise<void>,
       },
       on: (event, handler) => {
         const events = this.pageHandlers.get(pageId) ?? new Map<string, EventHandler[]>()
