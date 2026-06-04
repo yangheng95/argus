@@ -48,6 +48,7 @@ import type { SkillTool } from "@/tool/skill"
 import { useRenderer, useTerminalDimensions, type JSX } from "@opentui/solid"
 import { useSDK } from "@tui/context/sdk"
 import { Header } from "./header"
+import { SubagentFooter } from "./subagent-footer"
 import { useDialog } from "../../ui/dialog"
 import { TodoItem } from "../../component/todo-item"
 import { DialogMessage } from "./dialog-message"
@@ -945,6 +946,9 @@ export function Session() {
                 )}
               </For>
             </scrollbox>
+            <Show when={session()?.parentID}>
+              <SubagentFooter />
+            </Show>
             <box flexShrink={0}>
               <Show when={permissions().length > 0}>
                 <PermissionPrompt request={permissions()[0]} />
