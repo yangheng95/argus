@@ -14674,6 +14674,105 @@
                             "minimum": -9007199254740991,
                             "maximum": 9007199254740991
                           },
+                          "pending_interaction_items": {
+                            "type": "array",
+                            "items": {
+                              "type": "object",
+                              "properties": {
+                                "id": {
+                                  "type": "string",
+                                  "pattern": "^int.*"
+                                },
+                                "taskID": {
+                                  "type": "string",
+                                  "pattern": "^tsk.*"
+                                },
+                                "runID": {
+                                  "type": "string",
+                                  "pattern": "^run.*"
+                                },
+                                "sessionID": {
+                                  "anyOf": [
+                                    {
+                                      "type": "string",
+                                      "pattern": "^ses.*"
+                                    },
+                                    {
+                                      "type": "null"
+                                    }
+                                  ]
+                                },
+                                "externalID": {
+                                  "type": "string"
+                                },
+                                "type": {
+                                  "type": "string",
+                                  "enum": [
+                                    "permission",
+                                    "question"
+                                  ]
+                                },
+                                "status": {
+                                  "type": "string",
+                                  "enum": [
+                                    "pending",
+                                    "answered",
+                                    "rejected",
+                                    "expired"
+                                  ]
+                                },
+                                "title": {
+                                  "type": "string"
+                                },
+                                "body": {
+                                  "type": "string"
+                                },
+                                "payload": {
+                                  "type": "object",
+                                  "propertyNames": {
+                                    "type": "string"
+                                  },
+                                  "additionalProperties": {}
+                                },
+                                "response": {
+                                  "type": "object",
+                                  "propertyNames": {
+                                    "type": "string"
+                                  },
+                                  "additionalProperties": {}
+                                },
+                                "time": {
+                                  "type": "object",
+                                  "properties": {
+                                    "created": {
+                                      "type": "number"
+                                    },
+                                    "updated": {
+                                      "type": "number"
+                                    },
+                                    "resolved": {
+                                      "type": "number"
+                                    }
+                                  },
+                                  "required": [
+                                    "created",
+                                    "updated"
+                                  ]
+                                }
+                              },
+                              "required": [
+                                "id",
+                                "taskID",
+                                "runID",
+                                "externalID",
+                                "type",
+                                "status",
+                                "title",
+                                "body",
+                                "time"
+                              ]
+                            }
+                          },
                           "updated_at": {
                             "type": "number"
                           }
@@ -14682,6 +14781,7 @@
                           "task",
                           "active_sessions",
                           "pending_interactions",
+                          "pending_interaction_items",
                           "updated_at"
                         ]
                       }
@@ -15376,6 +15476,105 @@
                             "minimum": -9007199254740991,
                             "maximum": 9007199254740991
                           },
+                          "pending_interaction_items": {
+                            "type": "array",
+                            "items": {
+                              "type": "object",
+                              "properties": {
+                                "id": {
+                                  "type": "string",
+                                  "pattern": "^int.*"
+                                },
+                                "taskID": {
+                                  "type": "string",
+                                  "pattern": "^tsk.*"
+                                },
+                                "runID": {
+                                  "type": "string",
+                                  "pattern": "^run.*"
+                                },
+                                "sessionID": {
+                                  "anyOf": [
+                                    {
+                                      "type": "string",
+                                      "pattern": "^ses.*"
+                                    },
+                                    {
+                                      "type": "null"
+                                    }
+                                  ]
+                                },
+                                "externalID": {
+                                  "type": "string"
+                                },
+                                "type": {
+                                  "type": "string",
+                                  "enum": [
+                                    "permission",
+                                    "question"
+                                  ]
+                                },
+                                "status": {
+                                  "type": "string",
+                                  "enum": [
+                                    "pending",
+                                    "answered",
+                                    "rejected",
+                                    "expired"
+                                  ]
+                                },
+                                "title": {
+                                  "type": "string"
+                                },
+                                "body": {
+                                  "type": "string"
+                                },
+                                "payload": {
+                                  "type": "object",
+                                  "propertyNames": {
+                                    "type": "string"
+                                  },
+                                  "additionalProperties": {}
+                                },
+                                "response": {
+                                  "type": "object",
+                                  "propertyNames": {
+                                    "type": "string"
+                                  },
+                                  "additionalProperties": {}
+                                },
+                                "time": {
+                                  "type": "object",
+                                  "properties": {
+                                    "created": {
+                                      "type": "number"
+                                    },
+                                    "updated": {
+                                      "type": "number"
+                                    },
+                                    "resolved": {
+                                      "type": "number"
+                                    }
+                                  },
+                                  "required": [
+                                    "created",
+                                    "updated"
+                                  ]
+                                }
+                              },
+                              "required": [
+                                "id",
+                                "taskID",
+                                "runID",
+                                "externalID",
+                                "type",
+                                "status",
+                                "title",
+                                "body",
+                                "time"
+                              ]
+                            }
+                          },
                           "updated_at": {
                             "type": "number"
                           }
@@ -15384,6 +15583,7 @@
                           "task",
                           "active_sessions",
                           "pending_interactions",
+                          "pending_interaction_items",
                           "updated_at"
                         ]
                       }

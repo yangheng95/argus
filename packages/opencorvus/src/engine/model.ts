@@ -872,6 +872,7 @@ export const ProjectTaskSummary = z.object({
   evaluation: Evaluation.optional(),
   active_sessions: ActiveSession.array(),
   pending_interactions: z.number().int(),
+  pending_interaction_items: Interaction.array(),
   updated_at: z.number(),
 })
 

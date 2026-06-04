@@ -12,6 +12,7 @@ type TaskAction = {
   description: string
   run: () => void | Promise<void>
 }
+type PendingInteraction = TaskItem["pending_interaction_items"][number]
 
 export function title(action: string) {
   return action.replaceAll("_", " ")
@@ -46,6 +47,18 @@ async function runTaskMutation(api: TuiPluginApi, title: string, task: TaskItem,
     api.ui.toast({
       variant: "success",
       message: `${title} queued for ${taskTitle(task.task.title)}`,
+    })
+  } catch (err) {
+    showError(api, err)
+  }
+}
+
+async function runInteractionMutation(api: TuiPluginApi, title: string, interaction: PendingInteraction, run: () => Promise<unknown>) {
+  try {
+    await run()
+    api.ui.toast({
+      variant: "success",
+      message: `${title}: ${taskTitle(interaction.title)}`,
     })
   } catch (err) {
     showError(api, err)
@@ -148,19 +161,105 @@ function taskActions(api: TuiPluginApi, item: TaskItem) {
   })
 }
 
+function interactionActions(api: TuiPluginApi, item: TaskItem) {
+  return capabilities("mutation").flatMap((capability): Array<CapabilityItem & TaskAction> => {
+    if (capability.action !== "reply_interaction" && capability.action !== "reject_interaction") return []
+    return item.pending_interaction_items.flatMap((interaction): Array<CapabilityItem & TaskAction> => {
+      if (interaction.status !== "pending") return []
+      if (capability.action === "reply_interaction") {
+        return [
+          {
+            ...capability,
+            title: `Reply: ${taskTitle(interaction.title)}`,
+            description: interaction.body,
+            run() {
+              if (interaction.type === "question") {
+                api.ui.dialog.replace(() =>
+                  api.ui.DialogPrompt({
+                    title: "Reply Interaction",
+                    placeholder: "Answer",
+                    onConfirm(value) {
+                      const message = value.trim()
+                      if (!message) return
+                      void runInteractionMutation(api, "Interaction answered", interaction, () =>
+                        api.client.interaction.reply(
+                          {
+                            interactionID: interaction.id,
+                            directory: item.task.directory ?? api.state.path.directory,
+                            message,
+                            autoReply: false,
+                          },
+                          { throwOnError: true },
+                        ),
+                      )
+                    },
+                  }),
+                )
+                return
+              }
+              return runInteractionMutation(api, "Interaction answered", interaction, () =>
+                api.client.interaction.reply(
+                  {
+                    interactionID: interaction.id,
+                    directory: item.task.directory ?? api.state.path.directory,
+                    reply: "once",
+                    autoReply: false,
+                  },
+                  { throwOnError: true },
+                ),
+              )
+            },
+          },
+        ]
+      }
+      return [
+        {
+          ...capability,
+          title: `Reject: ${taskTitle(interaction.title)}`,
+          description: interaction.body,
+          run() {
+            api.ui.dialog.replace(() =>
+              api.ui.DialogPrompt({
+                title: "Reject Interaction",
+                placeholder: "Optional reason",
+                onConfirm(value) {
+                  const message = value.trim()
+                  void runInteractionMutation(api, "Interaction rejected", interaction, () =>
+                    api.client.interaction.reject(
+                      {
+                        interactionID: interaction.id,
+                        directory: item.task.directory ?? api.state.path.directory,
+                        ...(message ? { message } : {}),
+                        autoReply: false,
+                      },
+                      { throwOnError: true },
+                    ),
+                  )
+                },
+              }),
+            )
+          },
+        },
+      ]
+    })
+  })
+}
+
 export function showTask(api: TuiPluginApi, item: TaskItem) {
-  const options = taskActions(api, item).map((action) => ({
+  const actions = [...interactionActions(api, item), ...taskActions(api, item)]
+  const options = actions.map((action, index) => ({
     title: action.title,
-    value: action.action,
+    value: `${action.action}:${index}`,
     description: action.description,
-    category: "Task Action",
+    category: action.action === "reply_interaction" || action.action === "reject_interaction" ? "Interaction" : "Task Action",
   }))
   api.ui.dialog.replace(() =>
     api.ui.DialogSelect({
       title: taskTitle(item.task.title),
       options,
       onSelect(selected) {
-        const action = taskActions(api, item).find((item) => item.action === selected.value)
+        const index = Number(String(selected.value).split(":").at(-1))
+        const action = Number.isInteger(index) ? actions[index] : undefined
         void action?.run()
       },
     }),
