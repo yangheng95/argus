@@ -11804,7 +11804,7 @@
       "get": {
         "operationId": "browserPreview.taskTarget",
         "summary": "Resolve task browser preview target",
-        "description": "Return the task-scoped browser preview target. Saved task artifacts are authoritative; package.json metadata is only used when the task has no saved target.",
+        "description": "Return the task-scoped browser preview target. Saved task artifacts are the only preview target source.",
         "responses": {
           "200": {
             "description": "Browser preview target",
@@ -11826,9 +11826,6 @@
                       "type": "string",
                       "enum": [
                         "task-url",
-                        "explicit-url",
-                        "manifest-url",
-                        "manifest-command",
                         "missing",
                         "failed"
                       ]
@@ -11837,7 +11834,6 @@
                       "type": "string",
                       "enum": [
                         "ready",
-                        "configured",
                         "missing",
                         "failed"
                       ]
@@ -11846,12 +11842,6 @@
                       "type": "string"
                     },
                     "url": {
-                      "type": "string"
-                    },
-                    "command": {
-                      "type": "string"
-                    },
-                    "packageManager": {
                       "type": "string"
                     },
                     "viewports": {
@@ -11899,8 +11889,6 @@
                       "type": "string",
                       "enum": [
                         "task-artifact",
-                        "explicit",
-                        "package-json",
                         "none"
                       ]
                     }
@@ -11972,9 +11960,6 @@
                       "type": "string",
                       "enum": [
                         "task-url",
-                        "explicit-url",
-                        "manifest-url",
-                        "manifest-command",
                         "missing",
                         "failed"
                       ]
@@ -11983,7 +11968,6 @@
                       "type": "string",
                       "enum": [
                         "ready",
-                        "configured",
                         "missing",
                         "failed"
                       ]
@@ -11992,12 +11976,6 @@
                       "type": "string"
                     },
                     "url": {
-                      "type": "string"
-                    },
-                    "command": {
-                      "type": "string"
-                    },
-                    "packageManager": {
                       "type": "string"
                     },
                     "viewports": {
@@ -12045,8 +12023,6 @@
                       "type": "string",
                       "enum": [
                         "task-artifact",
-                        "explicit",
-                        "package-json",
                         "none"
                       ]
                     }
@@ -12149,9 +12125,6 @@
                           "type": "string",
                           "enum": [
                             "task-url",
-                            "explicit-url",
-                            "manifest-url",
-                            "manifest-command",
                             "missing",
                             "failed"
                           ]
@@ -12160,7 +12133,6 @@
                           "type": "string",
                           "enum": [
                             "ready",
-                            "configured",
                             "missing",
                             "failed"
                           ]
@@ -12169,12 +12141,6 @@
                           "type": "string"
                         },
                         "url": {
-                          "type": "string"
-                        },
-                        "command": {
-                          "type": "string"
-                        },
-                        "packageManager": {
                           "type": "string"
                         },
                         "viewports": {
@@ -12222,8 +12188,6 @@
                           "type": "string",
                           "enum": [
                             "task-artifact",
-                            "explicit",
-                            "package-json",
                             "none"
                           ]
                         }

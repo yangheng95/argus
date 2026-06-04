@@ -11,19 +11,17 @@ export interface BrowserPreviewTarget {
   id?: string
   taskID?: string
   latestEvidenceID?: string
-  kind: "task-url" | "explicit-url" | "manifest-url" | "manifest-command" | "missing" | "failed"
-  status: "ready" | "configured" | "missing" | "failed"
+  kind: "task-url" | "missing" | "failed"
+  status: "ready" | "missing" | "failed"
   projectRoot: string
   /**
    * URL means Uniform Resource Locator. The backend supplies it explicitly;
    * the overlay never infers ports or server paths.
    */
   url?: string
-  command?: string
-  packageManager?: string
   viewports: BrowserPreviewViewport[]
   diagnostics: string[]
-  source: "task-artifact" | "explicit" | "package-json" | "none"
+  source: "task-artifact" | "none"
 }
 
 export interface BrowserPreviewVerification {

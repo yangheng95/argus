@@ -8085,12 +8085,10 @@ export type BrowserPreviewTaskTargetResponses = {
     id?: string
     taskID?: string
     latestEvidenceID?: string
-    kind: "task-url" | "explicit-url" | "manifest-url" | "manifest-command" | "missing" | "failed"
-    status: "ready" | "configured" | "missing" | "failed"
+    kind: "task-url" | "missing" | "failed"
+    status: "ready" | "missing" | "failed"
     projectRoot: string
     url?: string
-    command?: string
-    packageManager?: string
     viewports: Array<{
       id: "desktop" | "tablet" | "mobile"
       labelKey: string
@@ -8098,7 +8096,7 @@ export type BrowserPreviewTaskTargetResponses = {
       height: number
     }>
     diagnostics: Array<string>
-    source: "task-artifact" | "explicit" | "package-json" | "none"
+    source: "task-artifact" | "none"
   }
 }
 
@@ -8129,12 +8127,10 @@ export type BrowserPreviewSaveTaskTargetResponses = {
     id?: string
     taskID?: string
     latestEvidenceID?: string
-    kind: "task-url" | "explicit-url" | "manifest-url" | "manifest-command" | "missing" | "failed"
-    status: "ready" | "configured" | "missing" | "failed"
+    kind: "task-url" | "missing" | "failed"
+    status: "ready" | "missing" | "failed"
     projectRoot: string
     url?: string
-    command?: string
-    packageManager?: string
     viewports: Array<{
       id: "desktop" | "tablet" | "mobile"
       labelKey: string
@@ -8142,7 +8138,7 @@ export type BrowserPreviewSaveTaskTargetResponses = {
       height: number
     }>
     diagnostics: Array<string>
-    source: "task-artifact" | "explicit" | "package-json" | "none"
+    source: "task-artifact" | "none"
   }
 }
 
@@ -8177,12 +8173,10 @@ export type BrowserPreviewCaptureTaskTargetResponses = {
       id?: string
       taskID?: string
       latestEvidenceID?: string
-      kind: "task-url" | "explicit-url" | "manifest-url" | "manifest-command" | "missing" | "failed"
-      status: "ready" | "configured" | "missing" | "failed"
+      kind: "task-url" | "missing" | "failed"
+      status: "ready" | "missing" | "failed"
       projectRoot: string
       url?: string
-      command?: string
-      packageManager?: string
       viewports: Array<{
         id: "desktop" | "tablet" | "mobile"
         labelKey: string
@@ -8190,7 +8184,7 @@ export type BrowserPreviewCaptureTaskTargetResponses = {
         height: number
       }>
       diagnostics: Array<string>
-      source: "task-artifact" | "explicit" | "package-json" | "none"
+      source: "task-artifact" | "none"
     }
     viewport: {
       id: "desktop" | "tablet" | "mobile"

@@ -167,7 +167,6 @@ export function BrowserPreviewPanel(props: BrowserPreviewPanelProps) {
                 <For each={resolved().diagnostics}>
                   {(item) => <code>{item}</code>}
                 </For>
-                <ShowCommand command={resolved().command} />
               </div>
             )}
           </Match>
@@ -221,8 +220,6 @@ function statusLabel(status: string): string {
   switch (status) {
     case "ready":
       return t("browser_preview.status.ready")
-    case "configured":
-      return t("browser_preview.status.configured")
     case "failed":
       return t("browser_preview.status.failed")
     default:
@@ -232,26 +229,9 @@ function statusLabel(status: string): string {
 
 function emptyMessage(status: string): string {
   switch (status) {
-    case "configured":
-      return t("browser_preview.empty.configured")
     case "failed":
       return t("browser_preview.empty.failed")
     default:
       return t("browser_preview.empty.missing")
   }
-}
-
-function ShowCommand(props: { command?: string }) {
-  return (
-    <Switch>
-      <Match when={props.command}>
-        {(command) => (
-          <div class="browser-preview-command">
-            <span>{t("browser_preview.command")}</span>
-            <code>{command()}</code>
-          </div>
-        )}
-      </Match>
-    </Switch>
-  )
 }

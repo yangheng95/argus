@@ -4798,7 +4798,7 @@ export class BrowserPreview extends HeyApiClient {
   /**
    * Resolve task browser preview target
    *
-   * Return the task-scoped browser preview target. Saved task artifacts are authoritative; package.json metadata is only used when the task has no saved target.
+   * Return the task-scoped browser preview target. Saved task artifacts are the only preview target source.
    */
   public taskTarget<ThrowOnError extends boolean = false>(
     parameters: {
