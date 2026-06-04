@@ -99,12 +99,11 @@ export namespace Server {
     "/shutdown",
     "/restart",
     "/log",
-    "/log/tail",
     "/favicon.ico",
     "/global/tasks",
     "/mission",
   ])
-  const PROJECT_DIRECTORY_BYPASS_PREFIXES = ["/global/", "/auth/", "/ui/"] as const
+  const PROJECT_DIRECTORY_BYPASS_PREFIXES = ["/global/", "/auth/", "/ui/", "/log/"] as const
   const OPENAPI_OPERATION_METHODS = ["get", "post", "put", "patch", "delete"] as const
 
   function routeRequiresProjectDirectory(routePath: string) {
@@ -152,7 +151,7 @@ export namespace Server {
           return basicAuth({ username, password })(c, next)
         })
         .use(async (c, next) => {
-          const skipLogging = c.req.path === "/log"
+          const skipLogging = c.req.path === "/log" || c.req.path.startsWith("/log/")
           const id = requestID(c)
           c.header("x-opencorvus-request-id", id)
           const started = Date.now()

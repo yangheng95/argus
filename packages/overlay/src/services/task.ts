@@ -8,7 +8,7 @@
 // This module owns no render-side effects. Callers are responsible for
 // driving UI updates through reactive Solid stores.
 
-import { apiJson, ApiError } from "./api";
+import { apiJson, apiRequest, ApiError } from "./api";
 import { getHostTransport } from "./host-transport";
 import { isSelectedTaskSSEConnected, startSSE, stopSSE } from "./sse";
 import { showAppDialog } from "./app-dialog";
@@ -368,6 +368,64 @@ export async function renameTask(taskID: string, title: string): Promise<boolean
     console.error("[renameTask] failed", { error: String(e), taskID });
     return false;
   }
+}
+
+function contentDispositionFilename(header: string | undefined): string | undefined {
+  if (!header) return undefined;
+  const match = /filename="([^"]+)"/i.exec(header) || /filename=([^;]+)/i.exec(header);
+  const raw = match?.[1]?.trim();
+  if (!raw) return undefined;
+  return raw.replace(/[\\/:*?"<>|]+/g, "-") || undefined;
+}
+
+function defaultArchiveFilename(taskID: string): string {
+  const safe = taskID.replace(/[^A-Za-z0-9._-]+/g, "-") || "task";
+  return `${safe}-project.zip`;
+}
+
+function saveBytesAsDownload(bytes: Uint8Array, filename: string): void {
+  const blob = new Blob([bytes], { type: "application/zip" });
+  const url = URL.createObjectURL(blob);
+  const anchor = document.createElement("a");
+  anchor.href = url;
+  anchor.download = filename;
+  anchor.rel = "noopener";
+  document.body.appendChild(anchor);
+  anchor.click();
+  anchor.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 1000);
+}
+
+function decodeBinaryErrorBody(body: Uint8Array): unknown {
+  const text = new TextDecoder().decode(body).trim();
+  if (!text) return body;
+  try {
+    return JSON.parse(text);
+  } catch {
+    return text;
+  }
+}
+
+// ── Public: downloadTaskProjectArchive ──
+
+/**
+ * Download a ZIP containing the task's project files plus its persisted
+ * execution-flow projections.
+ */
+export async function downloadTaskProjectArchive(taskID: string): Promise<boolean> {
+  if (!taskID) return false;
+  const archivePath = taskPath(taskID, "/project-archive");
+  const response = await apiRequest<Uint8Array>(archivePath, {
+    responseKind: "binary",
+  });
+  if (!response.ok) {
+    throw new ApiError(response.status, archivePath, decodeBinaryErrorBody(response.body));
+  }
+  const filename =
+    contentDispositionFilename(response.headers["content-disposition"] || response.headers["Content-Disposition"])
+    || defaultArchiveFilename(taskID);
+  saveBytesAsDownload(response.body, filename);
+  return true;
 }
 
 // ── Public: submitMessage ──

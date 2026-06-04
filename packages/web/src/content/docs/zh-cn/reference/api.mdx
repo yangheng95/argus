@@ -24,7 +24,9 @@ description: "HTTP API 参考--由 packages/sdk/openapi.json 自动生成。"
 | GET | `/global/health` | Get health | `global.health` |
 | GET | `/global/tasks` | List tasks across projects | `task.global.list` |
 | POST | `/instance/dispose` | Dispose instance | `instance.dispose` |
+| GET | `/log` | Read logs | `log.read` |
 | POST | `/log` | Write log | `app.log` |
+| GET | `/log/files` | List log files | `log.files` |
 | GET | `/log/tail` | Read recent logs | `log.tail` |
 | POST | `/restart` | Restart the server | `server.restart` |
 | POST | `/shutdown` | Shutdown the server | `server.shutdown` |
@@ -93,6 +95,7 @@ description: "HTTP API 参考--由 packages/sdk/openapi.json 自动生成。"
 | GET | `/task/{taskID}/interactions` | List task interactions | `task.interactions` |
 | POST | `/task/{taskID}/message` | Handle task message | `task.message` |
 | GET | `/task/{taskID}/progress` | Get task progress | `task.progress` |
+| GET | `/task/{taskID}/project-archive` | Download task project archive | `task.projectArchive` |
 | POST | `/task/{taskID}/replan` | Replan task | `task.replan` |
 | POST | `/task/{taskID}/retry` | Retry task | `task.retry` |
 | POST | `/task/{taskID}/rewind` | Rewind task timeline; optionally also reset worktree files via PatchPart replay | `task.rewind` |

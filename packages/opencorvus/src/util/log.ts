@@ -48,6 +48,30 @@ export namespace Log {
   let root = createRootLogger(pino.destination(2))
 
   export const Default = create({ service: "default" })
+  export const FileName = z.string().regex(/^[^/\\:]+\.log$/, {
+    message: "Log file must be a .log file name without path separators or drive/name-stream separators",
+  })
+
+  export type FileName = z.infer<typeof FileName>
+
+  export type FileInfo = {
+    name: string
+    path: string
+    size: number
+    modified: string
+    current: boolean
+  }
+
+  export type ReadResult = {
+    directory: string
+    path: string
+    file: string
+    lines: string[]
+  }
+
+  export function directory() {
+    return Global.Path.log
+  }
 
   export function file() {
     return logpath
@@ -55,14 +79,14 @@ export namespace Log {
 
   export async function init(options: Options) {
     if (options.level) level = options.level
-    await cleanup(Global.Path.log)
+    await cleanup(directory())
     logpath = ""
     let destination: pino.DestinationStream
     if (options.print) {
       destination = pino.destination(2)
     } else {
       logpath = path.join(
-        Global.Path.log,
+        directory(),
         options.dev ? "dev.log" : new Date().toISOString().split(".")[0].replace(/:/g, "") + ".log",
       )
       await fs.truncate(logpath).catch(() => {})
@@ -82,6 +106,54 @@ export namespace Log {
     if (files.length <= KEEP_RECENT) return
     const filesToDelete = files.slice(0, -KEEP_RECENT)
     await Promise.all(filesToDelete.map((file) => fs.unlink(file).catch(() => {})))
+  }
+
+  export async function files(): Promise<FileInfo[]> {
+    const dir = directory()
+    const entries = await fs.readdir(dir, { withFileTypes: true }).catch((error) => {
+      if ((error as NodeJS.ErrnoException)?.code === "ENOENT") return []
+      throw error
+    })
+    const list = await Promise.all(
+      entries
+        .filter((entry) => entry.isFile() && FileName.safeParse(entry.name).success)
+        .map(async (entry) => {
+          const pathname = path.join(dir, entry.name)
+          const stat = await fs.stat(pathname)
+          return {
+            name: entry.name,
+            path: pathname,
+            size: stat.size,
+            modified: stat.mtime.toISOString(),
+            current: pathname === logpath,
+          } satisfies FileInfo
+        }),
+    )
+    return list.sort((left, right) => right.modified.localeCompare(left.modified))
+  }
+
+  export async function read(input: { file?: FileName; lines: number }): Promise<ReadResult> {
+    const dir = directory()
+    const pathname = input.file ? path.join(dir, input.file) : logpath
+    if (!pathname) {
+      return {
+        directory: dir,
+        path: "",
+        file: "",
+        lines: [],
+      }
+    }
+    const content = await fs.readFile(pathname, "utf8").catch((error) => {
+      if ((error as NodeJS.ErrnoException)?.code === "ENOENT") return ""
+      throw error
+    })
+    const lines = content.split("\n").filter((line) => line.length > 0).slice(-input.lines)
+    return {
+      directory: dir,
+      path: pathname,
+      file: path.basename(pathname),
+      lines,
+    }
   }
 
   function createRootLogger(destination: pino.DestinationStream) {

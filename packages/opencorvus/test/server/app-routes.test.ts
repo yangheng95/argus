@@ -29,6 +29,7 @@ describe("app routes", () => {
     expect(paths["/global/health"]?.get).toBeDefined()
     expect(paths["/project/current"]?.get).toBeDefined()
     expect(paths["/goal-run/{goalRunID}/acceptance"]?.get).toBeDefined()
+    expect(paths["/task/{taskID}/project-archive"]?.get?.responses?.[200]?.content?.["application/zip"]).toBeDefined()
   })
 
   test("Server.openapi documents directory query for project-scoped routes only once", async () => {
@@ -43,6 +44,8 @@ describe("app routes", () => {
     expect(parameterNames(paths["/browser-preview/target"]?.get)).toEqual(["directory"])
     expect(parameterNames(paths["/session"]?.get)).toEqual(["directory"])
     expect(parameterNames(paths["/global/health"]?.get)).toEqual([])
+    expect(parameterNames(paths["/log"]?.get)).toEqual([])
+    expect(parameterNames(paths["/log/files"]?.get)).toEqual([])
   })
 
   test("POST /shutdown returns 503 without a registered handler", async () => {
