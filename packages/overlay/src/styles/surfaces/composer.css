@@ -190,7 +190,7 @@
   align-self: stretch;
   height: 100%;
   min-width: calc(72px * var(--ui-scale));
-  min-height: calc(64px * var(--ui-scale) * var(--chat-compose-scale));
+  min-height: var(--chat-textarea-height);
   padding: 0 calc(8px * var(--ui-scale));
   border: var(--oc-border-width) solid color-mix(in srgb, var(--accent) 46%, transparent);
   border-radius: var(--oc-radius-soft);

@@ -52,14 +52,16 @@ describe("composer shell stays tighter than the surrounding canvas", () => {
     )
   })
 
-  test("send button stays on the reduced 64px vertical contract", () => {
-    expect(COMPOSER).toContain("min-height: calc(64px * var(--ui-scale) * var(--chat-compose-scale));")
+  test("send button shares the textarea height contract", () => {
+    expect(COMPOSER).toMatch(
+      /\.chat-send\s*\{[^}]*min-height:\s*var\(--chat-textarea-height\)\s*;/,
+    )
   })
 })
 
 describe("conversation chrome keeps the compact header rhythm", () => {
-  test("copy-all action participates in control height instead of floating as raw text", () => {
-    expect(CONVERSATION).toContain("min-height: var(--oc-density-control-height);")
+  test("chat task status keeps compact header typography", () => {
+    expect(CONVERSATION).toContain(".chat-task-status")
     expect(CONVERSATION).toContain("font-size: var(--ui-font-meta);")
   })
 })
