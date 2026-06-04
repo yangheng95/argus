@@ -3,6 +3,7 @@ import { Server } from "../../src/server/server"
 import { Session } from "../../src/session"
 import { Instance } from "../../src/project/instance"
 import { Database, eq } from "../../src/storage/db"
+import { EngineTaskTable } from "../../src/engine/engine.sql"
 import { TaskQueueTable } from "../../src/scheduler/task-queue.sql"
 import { resetDatabase } from "../fixture/db"
 import { tmpdir } from "../fixture/fixture"
@@ -79,6 +80,79 @@ describe("coding assistant routes", () => {
         expect(ids).toContain(listedID)
         expect(ids).not.toContain(otherDirectoryID)
         expect(body.sessions.every((session) => session.metadata?.codingAssistant)).toBe(true)
+      },
+    })
+  })
+
+  test("persists selected task metadata for the current right sidebar project only", async () => {
+    await using first = await tmpdir({ git: true })
+    await using second = await tmpdir({ git: true })
+
+    let otherProjectTaskID = ""
+    await Instance.provide({
+      directory: second.path,
+      fn: async () => {
+        otherProjectTaskID = "task_other_project"
+        Database.use((db) =>
+          db.insert(EngineTaskTable).values({
+            id: otherProjectTaskID,
+            project_id: Instance.project.id,
+            title: "Other project task",
+            request: "other project",
+            source: "test",
+          }).run(),
+        )
+      },
+    })
+
+    await Instance.provide({
+      directory: first.path,
+      fn: async () => {
+        const app = Server.App()
+        const created = await app.request("/coding/session", {
+          method: "POST",
+          headers: {
+            "x-opencorvus-directory": first.path,
+          },
+        })
+        const { session } = (await created.json()) as { session: Session.Info }
+        const taskID = "task_current_project"
+        Database.use((db) =>
+          db.insert(EngineTaskTable).values({
+            id: taskID,
+            project_id: Instance.project.id,
+            title: "Current project task",
+            request: "current project",
+            source: "test",
+          }).run(),
+        )
+
+        const selected = await app.request(`/coding/session/${session.id}/selection`, {
+          method: "PATCH",
+          headers: {
+            "content-type": "application/json",
+            "x-opencorvus-directory": first.path,
+          },
+          body: JSON.stringify({ taskID }),
+        })
+        expect(selected.status).toBe(200)
+        const body = (await selected.json()) as { session: Session.Info }
+        expect(body.session.metadata).toEqual({
+          codingAssistant: {
+            surface: "right-sidebar",
+            selectedTaskID: taskID,
+          },
+        })
+
+        const crossProject = await app.request(`/coding/session/${session.id}/selection`, {
+          method: "PATCH",
+          headers: {
+            "content-type": "application/json",
+            "x-opencorvus-directory": first.path,
+          },
+          body: JSON.stringify({ taskID: otherProjectTaskID }),
+        })
+        expect(crossProject.status).toBe(404)
       },
     })
   })

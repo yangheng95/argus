@@ -9134,6 +9134,82 @@
         ]
       }
     },
+    "/coding/session/{sessionID}/selection": {
+      "patch": {
+        "operationId": "coding.session.selection.update",
+        "summary": "Update right sidebar coding assistant task selection",
+        "description": "Persist the selected project task for a right sidebar coding assistant session. The selected task is stored in session metadata and remains project-bound.",
+        "responses": {
+          "200": {
+            "description": "Coding assistant session with updated selection",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "session": {
+                      "$ref": "#/components/schemas/Session"
+                    }
+                  },
+                  "required": [
+                    "session"
+                  ]
+                }
+              }
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "directory",
+            "in": "query",
+            "required": false,
+            "description": "Project directory for project-scoped routes. Equivalent to the x-opencorvus-directory request header.",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "sessionID",
+            "schema": {
+              "type": "string"
+            },
+            "required": true
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "taskID": {
+                    "anyOf": [
+                      {
+                        "type": "string"
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  }
+                },
+                "required": [
+                  "taskID"
+                ]
+              }
+            }
+          }
+        },
+        "x-codeSamples": [
+          {
+            "lang": "js",
+            "source": "import { createOpenCorvusClient } from \"@opencorvus-ai/sdk\"\n\nconst client = createOpenCorvusClient()\nawait client.coding.session.selection.update({\n  ...\n})"
+          }
+        ]
+      }
+    },
     "/gateway/capabilities": {
       "get": {
         "operationId": "gateway.capabilities",

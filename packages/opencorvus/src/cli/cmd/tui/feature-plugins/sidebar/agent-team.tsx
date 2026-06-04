@@ -1,25 +1,10 @@
 // OpenCorvus project/agent-team sidebar plugin built on OpenCode's slot plugin pattern.
 import type { TuiPlugin, TuiPluginApi } from "@opencorvus-ai/plugin/tui"
 import type { InternalTuiPlugin } from "../../plugin/internal"
-import { panelCapabilities } from "@/panel/capability"
 import { For, Show, createMemo } from "solid-js"
-import { Locale } from "@/util/locale"
+import { capabilities, show, showTask, showTasks, taskTitle, title } from "./agent-team-actions"
 
 const id = "internal:sidebar-agent-team"
-const surface = "right-sidebar"
-
-function title(action: string) {
-  return action.replaceAll("_", " ")
-}
-
-function taskTitle(title: string) {
-  return Locale.truncateMiddle(title, 28)
-}
-
-function capabilities(kind?: "query" | "mutation") {
-  const actions = panelCapabilities(surface).actions
-  return kind ? actions.filter((item) => item.kind === kind) : actions
-}
 
 function View(props: { api: TuiPluginApi }) {
   const theme = () => props.api.theme.current
@@ -39,7 +24,7 @@ function View(props: { api: TuiPluginApi }) {
       </text>
       <For each={tasks()}>
         {(item) => (
-          <box>
+          <box onMouseUp={() => showTask(props.api, item)}>
             <text fg={theme().textMuted} wrapMode="none">
               {item.task.status} · {taskTitle(item.task.title)}
             </text>
@@ -72,27 +57,6 @@ function View(props: { api: TuiPluginApi }) {
   )
 }
 
-function show(api: TuiPluginApi) {
-  const options = capabilities().map((item) => ({
-    title: item.action,
-    value: item.action,
-    description: item.description,
-    category: item.kind === "query" ? "Project Query" : "Agent Team Action",
-  }))
-  api.ui.dialog.replace(() => (
-    <api.ui.DialogSelect
-      title="Agent Team Tools"
-      options={options}
-      onSelect={(item) => {
-        api.ui.toast({
-          variant: "info",
-          message: `${item.value} is available through the project-bound panel tool surface.`,
-        })
-      }}
-    />
-  ))
-}
-
 const tui: TuiPlugin = async (api) => {
   api.slots.register({
     order: 650,
@@ -113,8 +77,17 @@ const tui: TuiPlugin = async (api) => {
           show(api)
         },
       },
+      {
+        name: "agent_team.tasks",
+        title: "Agent team task actions",
+        category: "Agent Team",
+        namespace: "palette",
+        run() {
+          showTasks(api)
+        },
+      },
     ],
-    bindings: api.tuiConfig.keybinds.gather("agent-team.palette", ["agent_team.tools"]),
+    bindings: api.tuiConfig.keybinds.gather("agent-team.palette", ["agent_team.tools", "agent_team.tasks"]),
   })
 }
 

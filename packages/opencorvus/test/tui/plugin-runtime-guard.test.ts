@@ -2,9 +2,11 @@ import { describe, expect, test } from "bun:test"
 import { existsSync } from "fs"
 import { readFile } from "fs/promises"
 import path from "path"
-import { createBindingLookup } from "@opencorvus-ai/plugin/tui"
+import { createBindingLookup, type TuiPluginApi } from "@opencorvus-ai/plugin/tui"
+import { RIGHT_SIDEBAR_CODING_ASSISTANT_SOURCE } from "../../src/coding-assistant/session"
 import { createCommandShim } from "../../src/cli/cmd/tui/plugin/command-shim"
 import * as TuiKeybind from "../../src/cli/cmd/tui/config/keybind"
+import { showTasks } from "../../src/cli/cmd/tui/feature-plugins/sidebar/agent-team-actions"
 
 const projectRoot = path.join(import.meta.dir, "../..")
 const tuiRoot = path.join(projectRoot, "src/cli/cmd/tui")
@@ -81,6 +83,7 @@ describe("OpenCode-derived TUI plugin substrate", () => {
     const pluginManager = await readFile(path.join(tuiRoot, "feature-plugins/system/plugins.tsx"), "utf8")
     const notifications = await readFile(path.join(tuiRoot, "feature-plugins/system/notifications.ts"), "utf8")
     const agentTeam = await readFile(path.join(tuiRoot, "feature-plugins/sidebar/agent-team.tsx"), "utf8")
+    const agentTeamActions = await readFile(path.join(tuiRoot, "feature-plugins/sidebar/agent-team-actions.ts"), "utf8")
     const diffViewer = await readFile(path.join(tuiRoot, "feature-plugins/system/diff-viewer.tsx"), "utf8")
     const diffViewerTree = await readFile(
       path.join(tuiRoot, "feature-plugins/system/diff-viewer-file-tree.tsx"),
@@ -156,13 +159,24 @@ describe("OpenCode-derived TUI plugin substrate", () => {
     expect(notifications).toContain('api.event.on("question.asked"')
     expect(notifications).toContain('api.event.on("permission.asked"')
     expect(notifications).toContain('api.event.on("session.status"')
-    expect(agentTeam).toContain('panelCapabilities(surface)')
-    expect(agentTeam).toContain('const surface = "right-sidebar"')
+    expect(agentTeamActions).toContain('panelCapabilities(surface)')
+    expect(agentTeamActions).toContain('const surface = "right-sidebar"')
     expect(agentTeam).toContain("props.api.state.project.tasks()")
     expect(agentTeam).toContain("active_sessions")
     expect(agentTeam).toContain("pending_interactions")
     expect(agentTeam).toContain('sidebar_content()')
     expect(agentTeam).toContain('name: "agent_team.tools"')
+    expect(agentTeam).toContain('name: "agent_team.tasks"')
+    expect(agentTeamActions).toContain("api.client.coding.sessions.list")
+    expect(agentTeamActions).toContain("api.client.coding.session.create")
+    expect(agentTeamActions).toContain("api.client.coding.session.selection.update")
+    expect(agentTeamActions).toContain("api.client.task.message")
+    expect(agentTeamActions).toContain("api.client.task.retry")
+    expect(agentTeamActions).toContain("api.client.task.replan")
+    expect(agentTeamActions).toContain("api.client.task.cancel")
+    expect(agentTeamActions).toContain("RIGHT_SIDEBAR_CODING_ASSISTANT_SOURCE")
+    expect(agentTeamActions).toContain('capabilities("mutation").flatMap')
+    expect(agentTeam).toContain('onMouseUp={() => showTask(props.api, item)}')
     expect(sync).toContain("project_board")
     expect(sync).toContain("sdk.client.task.list({ limit: 8 })")
     expect(pluginHostApi).toContain("project: {")
@@ -223,5 +237,154 @@ describe("OpenCode-derived TUI plugin substrate", () => {
     expect(serverRoutes).toContain('"/vcs/diff"')
     expect(sdk).toContain("public diff<ThrowOnError")
     expect(sdk).toContain('url: "/vcs/diff"')
+  })
+
+  test("agent team task actions dispatch through canonical SDK payloads", async () => {
+    const selectDialogs: Array<{
+      title: string
+      options: Array<{ title: string; value: string; description?: string }>
+      onSelect?: (option: { title: string; value: string; description?: string }) => void
+    }> = []
+    const prompts: Array<{ onConfirm?: (value: string) => void }> = []
+    const confirms: Array<{ onConfirm?: () => void }> = []
+    const calls: Array<{ name: string; parameters: Record<string, unknown> }> = []
+    const task = {
+      task: {
+        id: "task_1",
+        projectID: "project_1",
+        directory: "D:/workspace",
+        sessionID: null,
+        title: "Implement task actions",
+        request: "Implement task actions",
+        source: "test",
+        status: "active",
+        priority: "normal",
+        time: { created: 1, updated: 1 },
+      },
+      active_sessions: [],
+      pending_interactions: 0,
+      updated_at: 1,
+    }
+    const api = {
+      state: {
+        path: { directory: "D:/workspace", state: "", config: "", worktree: "" },
+        project: {
+          tasks: () => [task],
+          summary: () => ({ open_tasks: 1, running_tasks: 1 }),
+        },
+      },
+      theme: { current: { text: "white", textMuted: "gray" } },
+      route: {
+        navigate() {
+          throw new Error("select_task must persist selection instead of navigating")
+        },
+      },
+      ui: {
+        dialog: {
+          replace(render: () => unknown) {
+            render()
+          },
+        },
+        DialogSelect(props: (typeof selectDialogs)[number]) {
+          selectDialogs.push(props)
+          return undefined
+        },
+        DialogPrompt(props: { onConfirm?: (value: string) => void }) {
+          prompts.push(props)
+          return undefined
+        },
+        DialogConfirm(props: { onConfirm?: () => void }) {
+          confirms.push(props)
+          return undefined
+        },
+        toast() {},
+      },
+      client: {
+        coding: {
+          sessions: {
+            async list(parameters: Record<string, unknown>) {
+              calls.push({ name: "coding.sessions.list", parameters })
+              return { data: { sessions: [{ id: "ses_right_sidebar" }] } }
+            },
+          },
+          session: {
+            async create(parameters: Record<string, unknown>) {
+              calls.push({ name: "coding.session.create", parameters })
+              return { data: { session: { id: "ses_created" } } }
+            },
+            selection: {
+              async update(parameters: Record<string, unknown>) {
+                calls.push({ name: "coding.session.selection.update", parameters })
+                return { data: { session: { id: parameters.sessionID } } }
+              },
+            },
+          },
+        },
+        task: {
+          async message(parameters: Record<string, unknown>) {
+            calls.push({ name: "task.message", parameters })
+            return { data: { message: "sent" } }
+          },
+          async retry(parameters: Record<string, unknown>) {
+            calls.push({ name: "task.retry", parameters })
+            return { data: true }
+          },
+          async replan(parameters: Record<string, unknown>) {
+            calls.push({ name: "task.replan", parameters })
+            return { data: true }
+          },
+          async cancel(parameters: Record<string, unknown>) {
+            calls.push({ name: "task.cancel", parameters })
+            return { data: true }
+          },
+        },
+      },
+    } as unknown as TuiPluginApi
+    const settle = async () => {
+      await Promise.resolve()
+      await Promise.resolve()
+      await new Promise((resolve) => setTimeout(resolve, 0))
+    }
+    const choose = async (value: string) => {
+      const dialog = selectDialogs.at(-1)!
+      const option = dialog.options.find((item) => item.value === value)!
+      dialog.onSelect?.(option)
+      await settle()
+    }
+
+    showTasks(api)
+    await choose("task_1")
+
+    await choose("select_task")
+    expect(calls).toContainEqual({
+      name: "coding.sessions.list",
+      parameters: { directory: "D:/workspace", limit: 1 },
+    })
+    expect(calls).toContainEqual({
+      name: "coding.session.selection.update",
+      parameters: { sessionID: "ses_right_sidebar", directory: "D:/workspace", taskID: "task_1" },
+    })
+
+    await choose("send_task_message")
+    prompts.at(-1)!.onConfirm?.(" follow up ")
+    await settle()
+    expect(calls).toContainEqual({
+      name: "task.message",
+      parameters: {
+        taskID: "task_1",
+        directory: "D:/workspace",
+        text: "follow up",
+        source: RIGHT_SIDEBAR_CODING_ASSISTANT_SOURCE,
+      },
+    })
+
+    await choose("retry_task")
+    await choose("replan_task")
+    await choose("cancel_task")
+    confirms.at(-1)!.onConfirm?.()
+    await settle()
+    expect(calls).toContainEqual({ name: "task.retry", parameters: { taskID: "task_1", directory: "D:/workspace" } })
+    expect(calls).toContainEqual({ name: "task.replan", parameters: { taskID: "task_1", directory: "D:/workspace" } })
+    expect(calls).toContainEqual({ name: "task.cancel", parameters: { taskID: "task_1", directory: "D:/workspace" } })
   })
 })

@@ -2,7 +2,7 @@
 
 Date: 2026-06-04
 Reviewed again: 2026-06-05
-Status: implementation plan, not yet implemented
+Status: staged implementation log and remaining plan; implementation is in progress
 Upstream baseline: `anomalyco/opencode` local snapshot `730ea6d2e3eedc5f3a5b4151cdaabd2d744fd828`
 Upstream license: MIT
 
@@ -1598,4 +1598,53 @@ OpenCode gap after the round:
 
 - The current host is still a single project-bound embedded TUI process, not OpenCode's full multi-PTY `list/create/get/update/remove` service.
 - The `agent-team` plugin shows live rows but does not yet dispatch actions directly from rows; palette still only lists the command/tool surface.
+- Browser visual E2E, external TUI plugin loader/install, move-session/workspace prompt flow, `SessionV2Debug`, workspace label/connectivity UI, background pulse, and session/subagent footer modules remain missing.
+
+### 2026-06-05 Round 21: project task row actions in agent-team sidebar
+
+Implemented:
+
+- Rechecked latest OpenCode dev before editing. Upstream remained at `107180701f626eaf97e0f032c4a46fe4b4e9c0ec`; no new TUI, PTY, app, or terminal files changed since Round 20.
+- Closed the Round 20 row-action gap in the OpenCode-style `agent-team` internal plugin:
+  - project task rows now open a task action dialog on mouse activation;
+  - palette command `agent_team.tasks` opens the same project task action flow;
+  - the action dialog is derived from `panelCapabilities("right-sidebar")`, not from a second right-sidebar allowlist.
+- Extracted executable task action behavior into `agent-team-actions.ts` so the Solid/OpenTUI view and the test suite share the same implementation path without importing `.tsx` in non-JSX tests.
+- Mapped right-sidebar task actions to canonical OpenCorvus SDK calls:
+  - `select_task` persists `session.metadata.codingAssistant.selectedTaskID` through `coding.session.selection.update`;
+  - `send_task_message` uses the existing OpenTUI dialog prompt and calls `task.message`;
+  - `retry_task`, `replan_task`, and `cancel_task` call `task.retry`, `task.replan`, and `task.cancel`;
+  - task API calls include the project directory from the task row or current TUI project state.
+- Added the canonical selection contract instead of treating session navigation as task selection:
+  - `PATCH /coding/session/:sessionID/selection`;
+  - validates the target session is the current project's right-sidebar coding assistant session;
+  - validates selected task project ownership before writing metadata;
+  - preserves the existing `codingAssistant.surface` metadata source of truth.
+- Kept the visible project/team controls in the copied OpenCode plugin-slot architecture. No hard-coded session sidebar JSX and no TUI-only DB query were added.
+- Independent reviewer feedback corrected in this round:
+  - removed the prior `right-sidebar-tui` source split and now uses `RIGHT_SIDEBAR_CODING_ASSISTANT_SOURCE`;
+  - replaced the prior session-navigation interpretation of `select_task` with persisted selected-task metadata;
+  - added a behavior test that invokes the real task-action module with a fake `TuiPluginApi` and asserts SDK payloads.
+
+Verified:
+
+- `bun test packages/opencorvus/test/server/coding-routes.test.ts packages/opencorvus/test/tui/plugin-runtime-guard.test.ts packages/opencorvus/test/tool/panel-capability.test.ts packages/opencorvus/test/tool/panel.test.ts`
+- `bun run --cwd packages/opencorvus typecheck`
+- `bun run --cwd packages/plugin typecheck`
+- `bun run --cwd packages/sdk/js build`
+- `bun run docs:api`
+- `bun typecheck`
+- `bun run api:routes-check`
+- `bun run docs:check`
+
+OpenCode comparison after the round:
+
+- OpenCode does not have OpenCorvus' project task board or agent-team control plane, so the business action set remains OpenCorvus-specific.
+- The reusable upstream part is still the OpenCode TUI structure: internal feature plugin, sidebar slot rendering, command palette entry, dialog-select action flow, and prompt dialog.
+- The right sidebar now behaves more like the screenshot target: a project-bound assistant surface can inspect context and act on todos/tasks instead of merely listing static capabilities.
+
+OpenCode gap after the round:
+
+- The current host is still a single project-bound embedded TUI process, not OpenCode's full multi-PTY `list/create/get/update/remove` service.
+- `reply_interaction` and `reject_interaction` are exposed by the capability registry but not yet available as row actions because the project board currently exposes only the pending count, not interaction IDs.
 - Browser visual E2E, external TUI plugin loader/install, move-session/workspace prompt flow, `SessionV2Debug`, workspace label/connectivity UI, background pulse, and session/subagent footer modules remain missing.
