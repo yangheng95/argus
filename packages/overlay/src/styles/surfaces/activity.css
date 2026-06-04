@@ -19,6 +19,8 @@
   flex: 0 0 var(--ui-collapsed-pane-width);
   width: var(--ui-collapsed-pane-width);
   min-width: var(--ui-collapsed-pane-width);
+  display: flex;
+  min-height: 0;
   border-right: var(--oc-border-width) solid color-mix(in srgb, var(--border) 72%, transparent);
   background: var(--surface-inset);
 }
@@ -95,20 +97,17 @@
   white-space: nowrap;
 }
 
-.side-activity-body,
-.sections-tab-body {
+.side-activity-body {
   flex: 1 1 0;
   min-height: 0;
   overflow: hidden;
 }
 
-.side-activity-body[data-active="false"],
-.sections-tab-body[data-active="false"] {
+.side-activity-body[data-active="false"] {
   display: none;
 }
 
 .side-activity-body[data-active="true"],
-.sections-tab-body[data-active="true"],
 .sidebar-explorer-panel,
 .sidebar-file-changes-panel,
 .sections-tui-activity,

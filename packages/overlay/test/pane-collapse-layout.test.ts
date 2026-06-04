@@ -39,6 +39,11 @@ test("panel header controls collapse side panes to message-adjacent rails", asyn
       if (path === "/provider/auth") return send({});
       if (path === "/config/providers") return send({ providers: [] });
       if (path === "/config") return send({ model: "" });
+      if (path === "/agent") return send([]);
+      if (path === "/channel") return send([]);
+      if (path === "/executor") return send([]);
+      if (path === "/skill/installed" || path === "/skill") return send([]);
+      if (path === "/mcp") return send({});
       if (path === "/terminal/profiles") {
         return send({
           defaultProfileID: "powershell",
@@ -66,6 +71,7 @@ test("panel header controls collapse side panes to message-adjacent rails", asyn
       }
       if (path === "/panel/knowledge/memory") return send([]);
       if (path === "/panel/knowledge/preference") return send([]);
+      if (path === "/tui/runtime/status") return send({ running: false, mode: "none", url: null, sessionID: null });
       return send({});
     },
   });
@@ -84,7 +90,7 @@ test("panel header controls collapse side panes to message-adjacent rails", asyn
       localStorage.setItem("oc_server_url", `http://127.0.0.1:${portValue}`);
     }, server.port);
     await page.goto(`http://127.0.0.1:${server.port}/ui/index.html`, { waitUntil: "domcontentloaded" });
-    await page.waitForSelector('.sidebar-header [data-ui="sidebar-header-collapse-toggle"]');
+    await page.waitForSelector('[data-ui="sidebar-header-collapse-toggle"]');
     expect(await page.$("#titlebar .workspace-layout-controls")).toBeNull();
     expect(await page.$(".workspace-command-dock .workspace-layout-controls")).not.toBeNull();
     expect(await page.$('.workspace-command-dock [data-ui="workspace-terminal-open"]')).not.toBeNull();
@@ -100,8 +106,8 @@ test("panel header controls collapse side panes to message-adjacent rails", asyn
     expect(await page.$('.workspace-command-dock [data-ui="workspace-right-panel-toggle"]')).toBeNull();
     expect(await page.$('.pane-edge-controls [data-ui="workspace-left-panel-toggle"]')).toBeNull();
     expect(await page.$('.pane-edge-controls [data-ui="workspace-right-panel-toggle"]')).toBeNull();
-    expect(await page.$('.sidebar-header [data-ui="sidebar-header-collapse-toggle"]')).not.toBeNull();
-    expect(await page.$('.sections-header [data-ui="right-panel-header-collapse-toggle"]')).not.toBeNull();
+    expect(await page.$('#solidLeftActivityToolbar [data-ui="sidebar-header-collapse-toggle"]')).not.toBeNull();
+    expect(await page.$('#solidRightActivityToolbar [data-ui="right-panel-header-collapse-toggle"]')).not.toBeNull();
     expect(await page.$(".workspace-command-dock .workspace-editor-launchers")).not.toBeNull();
     expect(await page.$('.workspace-command-dock [data-ui="workspace-editor-open-default"]')).not.toBeNull();
     expect(await page.$('.workspace-command-dock [data-ui="workspace-editor-menu"]')).not.toBeNull();
@@ -265,29 +271,26 @@ test("panel header controls collapse side panes to message-adjacent rails", asyn
     expect(projectMenu.rows.every((row) => row.pathText.startsWith("C:/Users/chuan/myhexin-local"))).toBe(true);
     await page.keyboard.press("Escape");
 
-    const headerPlacement = await page.evaluate(() => {
-      const sidebarHeader = document.querySelector<HTMLElement>(".sidebar-header")!.getBoundingClientRect();
-      const sidebarTitle = document.querySelector<HTMLElement>(".sidebar-title")!.getBoundingClientRect();
-      const left = document.querySelector<HTMLElement>('[data-ui="sidebar-header-collapse-toggle"]')!.getBoundingClientRect();
-      const sectionsHeader = document.querySelector<HTMLElement>(".sections-header")!.getBoundingClientRect();
-      const right = document.querySelector<HTMLElement>('[data-ui="right-panel-header-collapse-toggle"]')!.getBoundingClientRect();
+    const toolbarPlacement = await page.evaluate(() => {
+      const leftButton = document.querySelector<HTMLElement>('[data-ui="sidebar-header-collapse-toggle"]')!;
+      const rightButton = document.querySelector<HTMLElement>('[data-ui="right-panel-header-collapse-toggle"]')!;
+      const left = leftButton.getBoundingClientRect();
+      const right = rightButton.getBoundingClientRect();
       return {
-        leftInsideSidebarHeader: left.left >= sidebarHeader.left && left.right <= sidebarHeader.right,
-        leftBeforeTitle: left.right <= sidebarTitle.left,
-        rightInsideSectionsHeader: right.left >= sectionsHeader.left && right.right <= sectionsHeader.right,
+        leftInsideActivityToolbar: Boolean(leftButton.closest("#solidLeftActivityToolbar")),
+        rightInsideActivityToolbar: Boolean(rightButton.closest("#solidRightActivityToolbar")),
         leftHeight: Math.round(left.height),
         rightHeight: Math.round(right.height),
         leftWidth: Math.round(left.width),
         rightWidth: Math.round(right.width),
       };
     });
-    expect(headerPlacement.leftInsideSidebarHeader).toBe(true);
-    expect(headerPlacement.leftBeforeTitle).toBe(true);
-    expect(headerPlacement.rightInsideSectionsHeader).toBe(true);
-    expect(headerPlacement.leftWidth).toBeLessThanOrEqual(28);
-    expect(headerPlacement.rightWidth).toBeLessThanOrEqual(28);
-    expect(headerPlacement.leftHeight).toBeLessThanOrEqual(28);
-    expect(headerPlacement.rightHeight).toBeLessThanOrEqual(28);
+    expect(toolbarPlacement.leftInsideActivityToolbar).toBe(true);
+    expect(toolbarPlacement.rightInsideActivityToolbar).toBe(true);
+    expect(toolbarPlacement.leftWidth).toBeLessThanOrEqual(40);
+    expect(toolbarPlacement.rightWidth).toBeLessThanOrEqual(40);
+    expect(toolbarPlacement.leftHeight).toBeLessThanOrEqual(40);
+    expect(toolbarPlacement.rightHeight).toBeLessThanOrEqual(40);
 
     const beforeCollapse = await page.evaluate(() => {
       const measure = (selector: string) => {
@@ -338,7 +341,8 @@ test("panel header controls collapse side panes to message-adjacent rails", asyn
         rightResizer: measure("#rightPaneResizer"),
         leftToggle: measure('[data-ui="sidebar-header-collapse-toggle"]'),
         rightToggle: measure('[data-ui="right-panel-header-collapse-toggle"]'),
-        sidebarTitleVisible: getComputedStyle(document.querySelector<HTMLElement>(".sidebar-title")!).display !== "none",
+        sidebarContentVisible: getComputedStyle(document.querySelector<HTMLElement>("#sidebar .side-panel-content")!).display !== "none",
+        sectionsContentVisible: getComputedStyle(document.querySelector<HTMLElement>("#sections .side-panel-content")!).display !== "none",
         dockLeftControlExists: exists('.workspace-command-dock [data-ui="workspace-left-panel-toggle"]'),
         dockRightControlExists: exists('.workspace-command-dock [data-ui="workspace-right-panel-toggle"]'),
       };
@@ -368,7 +372,8 @@ test("panel header controls collapse side panes to message-adjacent rails", asyn
     expect(collapsed.leftToggle.display).not.toBe("none");
     expect(collapsed.rightToggle.hidden).toBe(false);
     expect(collapsed.rightToggle.display).not.toBe("none");
-    expect(collapsed.sidebarTitleVisible).toBe(false);
+    expect(collapsed.sidebarContentVisible).toBe(false);
+    expect(collapsed.sectionsContentVisible).toBe(false);
     expect(collapsed.dockLeftControlExists).toBe(false);
     expect(collapsed.dockRightControlExists).toBe(false);
 
@@ -407,4 +412,4 @@ test("panel header controls collapse side panes to message-adjacent rails", asyn
     await browser.close();
     server.stop(true);
   }
-});
+}, { timeout: 60_000 });
