@@ -512,8 +512,7 @@ export class ChannelRuntime {
     const bin = process.env.OPENCORVUS_BIN_PATH?.trim()
     const result = await this.client.tui.runtime.start({
       mode: "spawn",
-      query_directory: directory,
-      body_directory: directory,
+      directory,
       sessionID,
       ...(bin ? { bin } : {}),
     })
