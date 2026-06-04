@@ -48,6 +48,7 @@ import type { SkillTool } from "@/tool/skill"
 import { useRenderer, useTerminalDimensions, type JSX } from "@opentui/solid"
 import { useSDK } from "@tui/context/sdk"
 import { Header } from "./header"
+import { Footer } from "./footer"
 import { SubagentFooter } from "./subagent-footer"
 import { useDialog } from "../../ui/dialog"
 import { TodoItem } from "../../component/todo-item"
@@ -946,7 +947,7 @@ export function Session() {
                 )}
               </For>
             </scrollbox>
-            <Show when={session()?.parentID}>
+            <Show when={session()?.parentID} fallback={<Footer />}>
               <SubagentFooter />
             </Show>
             <box flexShrink={0}>

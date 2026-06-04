@@ -1822,3 +1822,41 @@ OpenCode gap after the round:
 - OpenCode's full workspace management remains missing: workspace list/create/unavailable dialogs, move-session prompt flow, workspace commands, and workspace status event sync are not implemented yet.
 - The current host is still a single project-bound embedded TUI process, not OpenCode's full multi-PTY `list/create/get/update/remove` service.
 - Browser visual E2E, external TUI plugin loader/install, and `SessionV2Debug` remain missing.
+
+### 2026-06-05 Round 27: general session footer
+
+Implemented:
+
+- Rechecked latest OpenCode dev before editing. Upstream remained at `b1a7ee5695bded3ebe4282a17bfe91717edea363`; no upstream TUI/PTY/terminal files changed since Round 26.
+- Copied OpenCode's `routes/session/footer.tsx` into OpenCorvus.
+- Reused the already-copied/adapted OpenCorvus `context/directory.ts` and `component/use-connected.tsx`, so no new duplicate directory/provider readiness logic was added.
+- Mounted `Footer` in the session route for normal parent sessions, while subagent sessions continue to use `SubagentFooter`.
+- The footer surfaces the same OpenCode status strip concepts from canonical OpenCorvus sync state:
+  - current project directory and branch;
+  - provider connectivity;
+  - pending permissions for the current session;
+  - LSP count;
+  - MCP connected/error status;
+  - `/status` affordance.
+- Kept prompt, permission/question prompts, sidebar, and subagent footer behavior unchanged.
+
+Verified in tests:
+
+- `plugin-runtime-guard.test.ts` now asserts the general footer exists, is mounted as the non-subagent fallback, and reads directory/connected/MCP/LSP/permission status from the copied TUI data sources.
+- `bun test packages/opencorvus/test/tui/plugin-runtime-guard.test.ts`
+- `bun run --cwd packages/opencorvus typecheck`
+- `bun run --cwd packages/plugin typecheck`
+- `bun typecheck`
+- `bun run api:routes-check`
+- `bun run docs:check`
+
+OpenCode comparison after the round:
+
+- The previous `routes/session/footer.tsx` gap is now closed for the non-subagent session surface.
+- OpenCorvus now has both OpenCode footer modules: general session footer and subagent footer, with mutually exclusive placement.
+
+OpenCode gap after the round:
+
+- OpenCode's full workspace management remains missing: workspace list/create/unavailable dialogs, move-session prompt flow, workspace commands, and workspace status event sync are not implemented yet.
+- The current host is still a single project-bound embedded TUI process, not OpenCode's full multi-PTY `list/create/get/update/remove` service.
+- Browser visual E2E, external TUI plugin loader/install, and `SessionV2Debug` remain missing.
