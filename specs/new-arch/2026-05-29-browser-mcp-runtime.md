@@ -324,14 +324,9 @@ External coding executor prompts need explicit names only if browser MCP is expo
 
 Permission categories:
 
-- `browser.navigate.localhost`: default allow.
-- `browser.navigate.external`: ask or policy-controlled.
-- `browser.evaluate`: ask by default.
-- `browser.upload_file`: use file path permission.
-- `browser.profile.persist`: ask and require expiration.
-- `browser.trace`: ask because traces can include sensitive content.
-- `browser.storage.export`: ask.
-- `browser.click` and `browser.type`: default allow, but guard warnings can escalate for destructive or payment-like flows.
+- Browser MCP permissions default to `allow`.
+- Explicit project, agent, or session permission config can still set any browser MCP permission to `ask` or `deny`.
+- `browser.navigate.localhost`, `browser.navigate.external`, `browser.evaluate`, `browser.upload_file`, `browser.profile.persist`, `browser.profile.reuse`, `browser.trace`, `browser.storage.export`, `browser.storage.import`, `browser.download`, and `browser.click.force` are covered by the default-allow baseline.
 
 ---
 

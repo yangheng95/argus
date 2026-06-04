@@ -69,7 +69,7 @@
 
 ## 默认放行策略
 
-OpenCorvus 对内置 agent 工具权限默认 `allow`。用户配置在默认规则之后合并，所以显式 `deny` 和 `ask` 仍然胜出：
+OpenCorvus 对内置 agent 工具和浏览器 MCP 权限默认 `allow`。用户配置在默认规则之后合并，所以显式 `deny` 和 `ask` 仍然胜出：
 
 ```jsonc
 {
