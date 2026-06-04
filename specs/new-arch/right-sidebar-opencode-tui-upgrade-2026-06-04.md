@@ -2,6 +2,8 @@
 
 Date: 2026-06-04
 
+Detailed implementation plan: `specs/new-arch/right-sidebar-opencode-tui-copy-implementation-plan-2026-06-04.md`
+
 ## Source Baseline
 
 - Upstream: `anomalyco/opencode` `dev` branch at `789e4d57b9d7af136cfc88feeb72fe81e4e28009`
