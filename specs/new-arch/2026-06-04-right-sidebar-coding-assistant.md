@@ -6,36 +6,63 @@ Date: 2026-06-04
 
 Build the coding assistant as a first-class right-panel tab in the Overlay, at the same hierarchy as Explorer, Files, and Inspector. Do not embed OpenTUI's terminal renderer inside the web right sidebar.
 
-The surface should reuse OpenCorvus' existing session database and streaming event spine:
+The surface should reuse OpenCorvus' existing session database and the canonical session prompt/history/event APIs, but the current event spine must be fixed before the panel depends on it:
 
 - Persist conversation in `session`, `message`, and `part`.
-- Use `session.kind = "assistant"` as the identity.
-- Use `SessionPrompt.prompt` through the existing async session prompt route.
-- Render session events from `GET /session/:sessionID/events`.
+- Use `session.kind = "assistant"` as the durable identity.
+- Mark right-sidebar sessions with required namespaced metadata.
+- Submit prompts through `POST /session/:sessionID/prompt_async`.
+- Hydrate through `GET /session/:sessionID/conversation`.
+- Stream through `GET /session/:sessionID/events` only after standalone assistant sessions are mirrored into session protocol events.
 
-## Evidence
+## Codex Review Feedback
+
+Independent review results on 2026-06-04 agreed on the direction, but found these required corrections:
+
+- P0: current `GET /session/:sessionID/events` is not proven to stream standalone assistant messages. It subscribes to `ProtocolStore`, while task message bridge drops sessions without a task and the existing session mirror is mission-only. The implementation must generalize the session mirror for `kind="assistant"` before depending on this route.
+- P1: `/coding/session/:sessionID/prompt` would create a second prompt entry point. Remove it. Prompt submission stays canonical through `/session/:sessionID/prompt_async`.
+- P1: `metadata.surface` cannot be optional. `assistant` also covers MCP, Debug, Panel, and scheduled wake sessions, so right-sidebar sessions need mandatory namespaced metadata.
+- P1: do not create and then patch metadata. The initial `session.created` event must already contain the right-sidebar metadata.
+- P2: the assistant panel must not call the main conversation tree pipeline (`loadConversation`, `startSSE`, `routeSSEEvent`, `replayTaskEventToTree`, or `cardTreeStore`).
+- P2: the spec must include i18n and existing right-panel tests as call points.
+- P2: opencode evidence and compatibility risks must be explicit: OpenTUI is compatible as a terminal runtime, but the right sidebar should not depend on its runtime API, PTY lifecycle, or TUI plugin API.
+
+## OpenCode Evidence
 
 Upstream opencode latest investigated on 2026-06-04:
 
-- `opencode` package version is `1.15.13`.
-- TUI is implemented with OpenTUI and Solid under `packages/opencode/src/cli/cmd/tui`.
-- OpenTUI packages are runtime dependencies (`@opentui/core`, `@opentui/keymap`, `@opentui/solid`).
-- The CLI docs expose `attach` / `run --attach`, which confirms the useful split: agent/session backend is separate from the TUI client.
+- `opencode-ai` latest stable is `1.15.13`.
+- Upstream catalog pins `@opentui/core`, `@opentui/keymap`, and `@opentui/solid` to `0.3.1`, and has a `fix-node-pty` postinstall plus `@lydell/node-pty`.
+- TUI source imports OpenTUI renderer/keymap APIs and owns terminal lifecycle, keymap, plugin runtime, and renderer destruction.
 
-Local OpenCorvus call points:
+| Evidence | Source | Meaning for OpenCorvus |
+| --- | --- | --- |
+| TUI + server split | `https://dev.opencode.ai/docs/server/` | The terminal TUI is a client over a server/OpenAPI surface. |
+| Terminal attach | `https://dev.opencode.ai/docs/web/#attaching-a-terminal` | A terminal TUI can attach to a running server and share state. |
+| TUI surface docs | `https://dev.opencode.ai/docs/tui/` | TUI-specific UX is terminal oriented. |
+| Plugin docs | `https://dev.opencode.ai/docs/plugins/` | Backend plugins and TUI plugin runtime are distinct concerns. |
+| TUI app source | `https://github.com/anomalyco/opencode/blob/dev/packages/opencode/src/cli/cmd/tui/app.tsx` | OpenTUI renderer/keymap/plugin APIs are process/terminal specific. |
+| Root catalog | `https://github.com/anomalyco/opencode/blob/dev/package.json` | OpenTUI is pre-1.0 and the repo includes native PTY dependencies. |
+
+The useful pattern to copy is backend/session/event separation. The wrong pattern is embedding a terminal renderer in a DOM/Solid right panel.
+
+## Local Call Points
 
 | Area | Existing source | Decision |
 | --- | --- | --- |
 | Right panel top tabs | `packages/overlay/src/components/RightPanelTabs.tsx` | Extend `RightPanelTab` with `assistant`. |
 | Right panel DOM bodies | `packages/overlay/src/index.html` | Add `rightPanelAssistant` and `solidRightAssistantMount` beside Explorer/Files/Inspector. |
 | Right panel activation | `packages/overlay/src/main.tsx` | Mount the assistant panel and include it in the same `rightPanelTab()` effect. |
+| Right panel labels | `packages/overlay/src/i18n/en-US.json`, `packages/overlay/src/i18n/zh-CN.json` | Add Assistant labels in both locales. |
+| Existing right-panel tests | `packages/overlay/test/acceptance-panel-mount.test.ts`, `file-explorer-editor.test.ts`, `right-panel-tabs-flat.test.ts` | Update structural tab/body assertions. |
 | Existing file workbench | `packages/overlay/src/components/RightFilesPanel.tsx` | Leave it as Files-internal Changes/Diff; do not put assistant here. |
-| Session identity | `packages/opencorvus/src/session/session.sql.ts` | Reuse `assistant`; comments already define it for externally-driven Coding/Panel sessions. |
+| Main conversation tree | `packages/overlay/src/services/conversation.ts`, `services/sse.ts`, `services/events.ts`, `store/card-tree.ts` | Do not use this pipeline for the side assistant. |
+| Session identity | `packages/opencorvus/src/session/session.sql.ts` | Reuse `assistant`; comments already define it for externally-driven sessions. |
 | Session persistence | `packages/opencorvus/src/storage/ddl.ts` + `session.sql.ts` | No new tables. |
-| Prompt execution | `packages/opencorvus/src/server/routes/session.ts` | Reuse `POST /session/:sessionID/prompt_async`. |
-| Session stream | `packages/opencorvus/src/server/routes/session.ts` | Reuse `GET /session/:sessionID/events`. |
-| Current coding routes | `packages/opencorvus/src/server/routes/coding.ts` | Keep CLI launcher routes; replace/retire `message/stream` for side assistant because it is a parallel POST-SSE path. |
-| Overlay transport | `packages/overlay/src/services/api.ts`, `services/sse.ts`, `services/task.ts` | Reuse `HostTransport.openStream` / `apiJson`; do not introduce native `fetch` / raw `EventSource` bypasses. |
+| Prompt execution | `packages/opencorvus/src/server/routes/session.ts` | Reuse `POST /session/:sessionID/prompt_async`; no `/coding` prompt wrapper. |
+| Session stream | `packages/opencorvus/src/server/routes/session.ts`, `packages/opencorvus/src/protocol/session-mirror.ts` | Generalize session mirror before relying on `GET /session/:sessionID/events`. |
+| Current coding routes | `packages/opencorvus/src/server/routes/coding.ts` | Keep CLI launcher routes; retire `message/stream` and `session/:id/messages` after canonical session path is verified. |
+| Overlay transport | `packages/overlay/src/services/api.ts`, `services/host-transport.ts` | Reuse `HostTransport.openStream` / `apiJson`; do not introduce raw `fetch` / raw `EventSource` bypasses. |
 
 ## Database Plan
 
@@ -45,37 +72,65 @@ Use one authoritative persisted object:
 Session.create({
   kind: "assistant",
   title: "Coding assistant",
+  metadata: {
+    codingAssistant: {
+      surface: "right-sidebar",
+    },
+  },
 })
 ```
 
-Add session metadata only if the right panel needs to distinguish its own assistant sessions from other generic assistant sessions:
+`assistant` remains the durable `SessionKind` because it is already the generic externally-driven assistant kind. The right-sidebar surface is not inferred from title, agent name, route, or missing metadata.
 
-```ts
-metadata: {
-  surface: "right-sidebar-assistant"
-}
-```
+`Session.create` / `Session.createNext` must accept optional metadata and persist it atomically in the initial insert. Do not create a session and then call `Session.mergeMetadata` for this marker; the created row and `session.created` event must already include `metadata.codingAssistant.surface`.
 
-`Session.create` currently does not accept metadata, so implementation should either:
+`GET /coding/sessions` must query:
 
-1. create the session, then call `Session.mergeMetadata({ sessionID, patch })`, or
-2. extend `Session.create` / `createNext` to accept metadata and update all call sites intentionally.
+- `kind = "assistant"`
+- current project/directory scope
+- not archived
+- `json_extract(session.metadata, '$.codingAssistant.surface') = 'right-sidebar'`
 
-Option 1 is smaller and does not change the session creation contract. It is the recommended first implementation.
-
-Do not add a `coding_session` table, localStorage transcript, or separate message store. The assistant transcript is the existing session transcript.
+Do not add a `coding_session` table, localStorage transcript, frontend-only transcript cache, or title-based classifier.
 
 ## Server Plan
 
 Keep `/coding/cli/profiles` and `/coding/cli/open` for external terminal launchers.
 
-For the side assistant, add canonical coding session helpers that wrap session APIs instead of creating a new stream protocol:
+`/coding` owns only right-sidebar assistant discovery and creation:
 
-- `GET /coding/sessions`: list unarchived `kind="assistant"` sessions for the active directory, filtered by `metadata.surface === "right-sidebar-assistant"` when that marker is present.
-- `POST /coding/session`: create a right-sidebar assistant session and tag metadata.
-- `POST /coding/session/:sessionID/prompt`: validate that the session is `kind="assistant"`, then delegate to `TaskQueueService.enqueuePrompt` with `agent: "coding"`.
+- `GET /coding/sessions`
+- `POST /coding/session`
+- optional `GET /coding/session/:sessionID` claim/validate endpoint
 
-The existing `/coding/message/stream` should not be used by the new panel. Once the panel is implemented and tests prove the session stream path, retire `/coding/message/stream` rather than keeping two live prompt/stream paths for the same surface.
+Prompt submission, hydration, task status, and events remain canonical `/session` APIs:
+
+- `GET /session/:sessionID/conversation`
+- `POST /session/:sessionID/prompt_async`
+- `GET /session/:sessionID/prompt_async/:taskID`
+- `GET /session/:sessionID/events`
+
+Retire `/coding/message/stream` and `/coding/session/:sessionID/messages` after tests prove the canonical session path. Do not replace them with a different `/coding` prompt or history path.
+
+## Event Plan
+
+Before the Overlay panel depends on `/session/:sessionID/events`, generalize the existing session mirror so standalone `kind="assistant"` sessions publish session-scoped protocol events.
+
+Required event coverage:
+
+- `message.updated`
+- `message.part.updated`
+- `message.part.delta`
+- `session.status`
+- `session.error`
+- `permission.asked`
+- `permission.replied`
+- `question.asked`
+- `question.replied`
+
+The events should be emitted as `aggregate = "session"` with `sessionID` and source `session.bridge` / `session.mirror` naming consistent with existing protocol events.
+
+Do not recreate a raw Bus SSE stream in `/coding`. The fix belongs in the single session event spine.
 
 ## Overlay Plan
 
@@ -86,10 +141,10 @@ Add a new component:
 Responsibilities:
 
 - Create or load the right-sidebar assistant session for the current directory.
-- Hydrate its transcript from `/session/:sessionID/conversation` or `/coding/session/:sessionID/messages`.
-- Subscribe to `session/:sessionID/events` using the existing transport.
-- Render user/assistant text, tool calls/results, errors, and permission/question interactions.
-- Submit text through the session async prompt path with `agent: "coding"`.
+- Hydrate its transcript from `GET /session/:sessionID/conversation`.
+- Subscribe to `GET /session/:sessionID/events` using `HostTransport.openStream`.
+- Render user/assistant text, tool calls/results, status, errors, permission requests, and questions.
+- Submit text through `POST /session/:sessionID/prompt_async` with `agent: "coding"`.
 
 Preferred UI wiring:
 
@@ -98,44 +153,60 @@ Preferred UI wiring:
 - Mount `RightAssistantPanel` in a new tab body beside `rightPanelExplorer`, `rightPanelFiles`, and `rightPanelInspector`.
 - Add CSS under `inspector.css` or a new surface stylesheet only if it follows the existing right-panel surface conventions.
 
-Do not reuse the main task `cardTreeStore` as the assistant panel's source of truth. The assistant can reuse rendering primitives, but it needs a session-scoped transcript store so it cannot pollute the task workflow conversation.
+Hard constraints:
+
+- `RightAssistantPanel` must not import or call `loadConversation`, `startSSE`, `routeSSEEvent`, `replayTaskEventToTree`, `tree-writer`, or `cardTreeStore`.
+- It may reuse display primitives, markdown rendering, buttons, icons, and transport helpers.
+- It needs a panel-local session transcript store so it cannot pollute the task workflow conversation.
+- Keyboard shortcuts apply only inside the panel/composer focus scope. Enter, Escape, paste/copy, command palette interactions, terminal focus, and CJK IME composition need explicit tests.
 
 ## Compatibility With OpenCode TUI
 
-OpenTUI is compatible as a terminal TUI dependency, but it is the wrong primitive for an Overlay right sidebar. Embedding it would require a PTY-like terminal surface inside a web panel, adding keyboard focus, rendering, and scroll semantics that conflict with the existing Solid Overlay.
+OpenTUI is compatible as a terminal TUI dependency, but it is the wrong primitive for an Overlay right sidebar. Embedding it would require a PTY-like terminal surface inside a web panel and would import terminal-specific lifecycle problems into a DOM panel.
 
-The part worth copying from opencode is the architecture split:
+| Risk | Decision |
+| --- | --- |
+| OpenTUI pre-1.0 runtime API | Right sidebar does not depend on OpenTUI APIs. |
+| Native PTY / ConPTY / WSL lifecycle | No PTY is created for the right-sidebar assistant. |
+| Terminal resize, signals, scrollback | Use DOM/Solid panel layout and existing Overlay scroll behavior. |
+| Global terminal keymap | Use focus-scoped DOM key handling only. |
+| OpenCode TUI plugin runtime | Do not depend on TUI plugin slots/keymap/renderer APIs. Future side-panel extensions need OpenCorvus-owned slots/actions. |
+| Backend plugin hooks | Continue to consume OpenCorvus session parts/events/permission contracts. |
 
-- backend owns session, tools, model config, and events;
-- UI is a client over that backend.
-
-OpenCorvus already has that split through `Session`, `SessionPrompt`, and `session.events`, so the right solution is a native Overlay panel, not a nested terminal TUI.
+OpenCorvus already has the backend split through `Session`, `SessionPrompt`, and protocol events, so the right solution is a native Overlay panel, not a nested terminal TUI.
 
 ## Tests
 
 Server:
 
-- `POST /coding/session` creates `kind="assistant"` and writes the right-sidebar surface metadata.
-- `GET /coding/sessions` returns only active right-sidebar assistant sessions for the directory.
-- prompt route delegates to the coding agent and does not create an `engine_task`.
-- route rejects non-assistant sessions.
+- `POST /coding/session` creates `kind="assistant"` with `metadata.codingAssistant.surface = "right-sidebar"` in the initial insert and `session.created` event.
+- `GET /coding/sessions` returns only active right-sidebar assistant sessions for the current directory.
+- untagged assistant, archived assistant, wrong directory, and non-assistant sessions are excluded/rejected.
+- `POST /session/:sessionID/prompt_async` accepts the right-sidebar assistant session with `agent: "coding"` and does not create an `engine_task`.
+- `GET /session/:sessionID/events` for that assistant session emits message delta, message update, tool result, status, error, permission, and question events.
+- `/coding/message/stream` and `/coding/session/:sessionID/messages` are removed or explicitly rejected after the canonical path is verified.
 
 Overlay:
 
 - `RightPanelTabs` includes `assistant`; `index.html` declares `rightPanelAssistant`; `main.tsx` toggles all four bodies.
-- `RightAssistantPanel` creates/loads one session per directory and does not mutate `cardTreeStore`.
-- composer posts to the assistant session route.
-- SSE events for the selected assistant session update only the assistant transcript.
+- `en-US.json` and `zh-CN.json` include the Assistant tab label.
+- Existing right-panel static tests are updated for the fourth tab/body.
+- `RightAssistantPanel` creates/loads one session per directory and does not import `cardTreeStore`, `loadConversation`, `startSSE`, `routeSSEEvent`, or `tree-writer`.
+- composer posts to `/session/:sessionID/prompt_async`.
+- session events for the selected assistant session update only the assistant transcript.
+- Enter, Escape, copy/paste, command palette focus, terminal focus, and CJK IME composition are covered.
 
 Visual/e2e:
 
 - Right panel opens on Assistant tab at desktop and narrow widths.
-- Empty, streaming text, tool-call, tool-result, error, and permission states render without overlap.
+- Empty, streaming text, tool-call, tool-result, error, permission, and question states render without overlap.
+- Scrolling stays inside the assistant panel and does not move the main conversation.
 
 ## Implementation Order
 
-1. Add server helpers around existing session APIs and tests.
-2. Add Overlay top-level Assistant tab mount and static wiring tests.
-3. Build `RightAssistantPanel` with transcript hydration, streaming, and composer.
-4. Add visual/e2e coverage for the right panel.
-5. Retire `/coding/message/stream` after the new path is verified.
+1. Extend session creation metadata atomically and add `/coding` list/create/claim helpers.
+2. Generalize the session mirror and prove `prompt_async + session.events` for standalone assistant sessions.
+3. Retire `/coding/message/stream` and `/coding/session/:sessionID/messages` once the canonical path is covered.
+4. Add Overlay top-level Assistant tab mount, i18n, and static wiring tests.
+5. Build `RightAssistantPanel` with panel-local transcript hydration, streaming, and composer.
+6. Add visual/e2e coverage for the right panel.
