@@ -914,11 +914,11 @@ export function TaskList(props: TaskListProps) {
   return (
     <div class="task-list-panel">
       <Show when={showSearch() && (allItems().length > 4 || searchQuery())}>
-        <div class="task-list-search">
-          <Icon name="search" size={12} class="task-list-search-icon" />
+        <div class="task-list-search search-field">
+          <Icon name="search" size={12} class="task-list-search-icon search-field-icon" />
           <input
             type="search"
-            class="task-list-search-input"
+            class="task-list-search-input search-field-input"
             placeholder={t("task.search_placeholder")}
             value={searchQuery()}
             onInput={(e) => setSearchQuery(e.currentTarget.value)}

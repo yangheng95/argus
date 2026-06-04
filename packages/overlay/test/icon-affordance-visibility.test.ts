@@ -49,7 +49,7 @@ describe("icon affordances stay visible at rest", () => {
     const css = read("src/styles/surfaces/sidebar.css")
     const body = soloRuleBody(
       css,
-      '.task-row-actions .oc-button[data-ui="task-row-delete"],\n.task-row-actions .oc-button[data-ui="task-row-cancel"],\n.task-row-actions .oc-button[data-ui="task-row-start-now"]',
+      '.task-row-actions .oc-button[data-ui="task-row-delete"],\n.task-row-actions .oc-button[data-ui="task-row-cancel"],\n.task-row-actions .oc-button[data-ui="task-row-rename"],\n.task-row-actions .oc-button[data-ui="task-row-download"],\n.task-row-actions .oc-button[data-ui="task-row-start-now"]',
     )
     expect(body).toContain("opacity: 0;")
     expect(body).toContain("pointer-events: none;")
@@ -64,11 +64,11 @@ describe("icon affordances stay visible at rest", () => {
   })
 
   test("search clear buttons share the visible icon-action resting state", () => {
-    const sidebarCss = read("src/styles/surfaces/sidebar.css")
+    const fieldCss = read("src/styles/surfaces/field.css")
     const providerCss = read("src/styles/surfaces/settings.css")
-    const taskClear = soloRuleBody(sidebarCss, '.task-list-search .oc-button[data-ui="task-list-search-clear"]')
+    const sharedClear = soloRuleBody(fieldCss, '.search-field .oc-button[data-ui$="-search-clear"]')
     const providerClear = soloRuleBody(providerCss, '.provider-search-field .oc-button[data-ui="provider-search-clear"]')
-    for (const body of [taskClear, providerClear]) {
+    for (const body of [sharedClear, providerClear]) {
       expect(body).not.toContain("--oc-button-color: var(--text-muted);")
       expect(body).not.toContain("--oc-button-shadow:")
     }

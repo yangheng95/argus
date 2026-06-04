@@ -22,13 +22,13 @@
 //
 // Visual consequence: after iter17 made `.chat-input` flat
 // (border-radius: 0), the inner textarea still rendered with
-// a 10px radius — a rounded textarea nested inside a flat
-// container. Drop the radius too so the composer reads as
-// one continuous flat surface.
+// a second late-overridden radius. The UX pass keeps the composer shell
+// flat in the dock, but lets the actual editable field carry the canonical
+// soft radius so focus chrome reads as one deliberate input surface.
 //
 // Pin: one canonical `.chat-textarea` rule with
-// `border-radius: 0`, no `!important`, the post-iter17 flat
-// treatment baked in. Sibling multi-selector min-height
+// `border-radius: var(--oc-radius-soft)`, no `!important`, the
+// post-UX-pass treatment baked in. Sibling multi-selector min-height
 // helpers consolidate to one too (last value wins anyway).
 
 import { describe, expect, test } from "bun:test"
@@ -74,7 +74,7 @@ function soloRuleBody(selector: string): string {
   return STYLES.slice(open + 1, close)
 }
 
-describe(".chat-textarea is a single flat source", () => {
+describe(".chat-textarea is a single composer input source", () => {
   test("only one solo top-level `.chat-textarea { … }` rule", () => {
     expect(countSoloTopLevelRules(".chat-textarea")).toBe(1)
   })
@@ -83,11 +83,11 @@ describe(".chat-textarea is a single flat source", () => {
     expect(soloRuleBody(".chat-textarea")).not.toContain("!important")
   })
 
-  test("the canonical declares `border-radius: 0` so the textarea matches the flat .chat-input shell", () => {
-    expect(soloRuleBody(".chat-textarea")).toMatch(/border-radius:\s*0(?:px)?\s*;/)
+  test("the canonical declares the shared soft radius token", () => {
+    expect(soloRuleBody(".chat-textarea")).toMatch(/border-radius:\s*var\(--oc-radius-soft\)\s*;/)
   })
 
-  test("no theme override re-introduces a non-zero border-radius on .chat-textarea", () => {
+  test("no theme override owns .chat-textarea radius", () => {
     // CRON lesson from iter17: theme-scoped overrides quietly
     // forced a non-zero radius back. Walk every theme-scoped
     // .chat-textarea rule body and assert none of them
@@ -97,7 +97,7 @@ describe(".chat-textarea is a single flat source", () => {
       const open = match.index + match[0].length - 1
       const close = STYLES.indexOf("}", open)
       const body = STYLES.slice(open + 1, close)
-      expect(body).not.toMatch(/border-radius:\s*(?!0)\S/)
+      expect(body).not.toMatch(/border-radius\s*:/)
     }
   })
 

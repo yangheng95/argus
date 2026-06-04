@@ -613,32 +613,8 @@
   flex: 0 0 auto;
 }
 
-.file-explorer-search {
-  display: flex;
-  align-items: center;
-  gap: calc(6px * var(--ui-scale));
-  min-height: calc(28px * var(--ui-scale));
-  padding: 0 calc(8px * var(--ui-scale));
-  border: var(--oc-border-width) solid var(--border);
-  background: var(--surface);
-  color: var(--text-muted);
-}
-
-.file-explorer-search:focus-within {
-  border-color: color-mix(in srgb, var(--accent) 58%, var(--border));
-  color: var(--text);
-}
-
 .file-explorer-search-input.field-input {
   min-height: 0;
-  height: calc(26px * var(--ui-scale));
-  flex: 1 1 auto;
-  min-width: 0;
-  border: 0;
-  padding: 0;
-  background: transparent;
-  color: var(--text);
-  font-size: var(--ui-font-control);
 }
 
 .file-explorer-list {

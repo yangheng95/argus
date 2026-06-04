@@ -60,6 +60,84 @@
   box-shadow: 0 0 0 calc(2px * var(--ui-scale)) color-mix(in srgb, var(--accent) 24%, transparent);
 }
 
+/* Shared compact search field used by task and file search. The callers own
+ * only their placement; chrome, input reset, icon tint, and clear affordance
+ * live here so the two search boxes cannot drift apart. */
+.search-field {
+  display: flex;
+  align-items: center;
+  gap: calc(6px * var(--ui-scale));
+  min-height: calc(30px * var(--ui-scale));
+  padding: 0 calc(8px * var(--ui-scale));
+  border: var(--oc-border-width) solid color-mix(in srgb, var(--border) 92%, transparent);
+  border-radius: var(--oc-radius-soft);
+  background: color-mix(in srgb, var(--surface-inset) 94%, transparent);
+  color: var(--text-muted);
+  transition:
+    border-color var(--ui-duration-base),
+    background var(--ui-duration-base),
+    box-shadow var(--ui-duration-base),
+    color var(--ui-duration-base);
+}
+
+.search-field:focus-within {
+  border-color: color-mix(in srgb, var(--accent) 54%, var(--border));
+  background: var(--surface-inset);
+  color: var(--text-soft);
+  box-shadow: 0 0 0 calc(2px * var(--ui-scale)) color-mix(in srgb, var(--accent) 16%, transparent);
+}
+
+.search-field-icon {
+  flex: none;
+  color: currentColor;
+}
+
+.search-field-input {
+  flex: 1 1 auto;
+  min-width: 0;
+  height: calc(28px * var(--ui-scale));
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  color: var(--text-strong);
+  padding: 0;
+  font: inherit;
+  font-size: var(--ui-font-control);
+  line-height: 1.4;
+  outline: none;
+  box-shadow: none;
+}
+
+.search-field-input::placeholder {
+  color: var(--text-muted);
+}
+
+.search-field-input::-webkit-search-cancel-button,
+.search-field-input::-webkit-search-decoration {
+  appearance: none;
+  -webkit-appearance: none;
+}
+
+.search-field .oc-button[data-ui$="-search-clear"] {
+  --oc-button-height: calc(22px * var(--ui-scale));
+  --oc-button-padding-x: 0;
+  --oc-button-border: 0 solid transparent;
+  --oc-button-bg: transparent;
+  --oc-button-color: var(--text-soft);
+
+  flex: none;
+  width: calc(22px * var(--ui-scale));
+  min-width: calc(22px * var(--ui-scale));
+  font-size: calc(16px * var(--ui-scale));
+  line-height: 1;
+}
+
+.search-field .oc-button[data-ui$="-search-clear"]:hover,
+.search-field .oc-button[data-ui$="-search-clear"]:focus-visible {
+  --oc-button-bg: var(--surface-hover);
+  --oc-button-color: var(--text-strong);
+}
+
 /* `<input type="search">` ships a UA cancel button rendered with the
  * platform colour scheme; on dark themes it shows up as a light-grey
  * glyph that ignores token colors. Strip it so the search field looks
