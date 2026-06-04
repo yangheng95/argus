@@ -3,7 +3,7 @@
 Date: 2026-06-04
 Reviewed again: 2026-06-05
 Status: implementation plan, not yet implemented
-Upstream baseline: `anomalyco/opencode` local snapshot `94c49b20ba207a92e4150c552d616930b6560e39`
+Upstream baseline: `anomalyco/opencode` local snapshot `730ea6d2e3eedc5f3a5b4151cdaabd2d744fd828`
 Upstream license: MIT
 
 ## 0. Hard Acceptance
@@ -32,12 +32,13 @@ Rejected outcome:
 On 2026-06-05, local upstream `anomalyco/opencode` was refreshed from `origin/dev`.
 
 - Previous inspected commit: `789e4d57b9d7af136cfc88feeb72fe81e4e28009`
-- Current inspected commit: `94c49b20ba207a92e4150c552d616930b6560e39`
-- New commits: `7f54b1b fix build`, `9f3a0fe chore: update nix node_modules hashes`, `94c49b2 make scripts executable`
+- Current inspected commit: `730ea6d2e3eedc5f3a5b4151cdaabd2d744fd828`
+- New commits: `7f54b1b fix build`, `9f3a0fe chore: update nix node_modules hashes`, `94c49b2 make scripts executable`, `730ea6d fix(opencode): attribute task child agent on creation (#30786)`
 - Checked paths: `packages/opencode/src/cli/cmd/tui`, `packages/app/src`, `packages/core/src/pty`, `packages/plugin`, root/package package manifests
-- Result: no changes in OpenCode TUI, terminal host, PTY, plugin TUI API, or OpenTUI dependency versions since the prior inspected snapshot.
+- Latest delta from `94c49b20ba207a92e4150c552d616930b6560e39` to `730ea6d2e3eedc5f3a5b4151cdaabd2d744fd828`: only `packages/opencode/src/cli/cmd/tui/app.tsx` changed in the watched TUI/plugin/PTY/app path set.
+- Result: no changes in OpenCode terminal host, PTY, plugin TUI API, plugin runtime, slot registry, feature plugins, or OpenTUI dependency versions since the prior inspected snapshot.
 
-The copy plan remains valid against the current upstream snapshot. The baseline hash above is updated so implementation must copy from `94c49b20ba207a92e4150c552d616930b6560e39`, not the older `789e4d57b9d7af136cfc88feeb72fe81e4e28009`.
+The copy plan remains valid against the current upstream snapshot. The baseline hash above is updated so implementation must copy from `730ea6d2e3eedc5f3a5b4151cdaabd2d744fd828`, not the older `94c49b20ba207a92e4150c552d616930b6560e39`.
 
 ### 1.1 Upstream OpenCode modules to reuse
 
@@ -840,3 +841,39 @@ OpenCode gap after the round:
 - The OpenCode plugin runtime/slot model is still absent from `packages/opencorvus/src/cli/cmd/tui/plugin/*`.
 - Context, MCP, LSP, Todo, Modified Files, and Agent Team panes are not yet copied from OpenCode feature plugins.
 - The current `TuiRuntimePanel` is intentionally not a replacement for the terminal viewport; completion still requires the PTY/terminal host adapter and visual E2E.
+
+### 2026-06-05 Round 4: copied TUI plugin API, slot host, and internal runtime entry
+
+Implemented:
+
+- Refreshed OpenCode dev to `730ea6d2e3eedc5f3a5b4151cdaabd2d744fd828` before editing. Watched TUI/plugin/PTY/app paths changed only in upstream `packages/opencode/src/cli/cmd/tui/app.tsx`; plugin API/runtime/slots and sidebar feature plugins were unchanged from the prior baseline.
+- Added `@opencorvus-ai/plugin/tui` as the single exported TUI plugin API surface, copied from OpenCode `packages/plugin/src/tui.ts` and adapted to OpenCorvus SDK type names.
+- Copied OpenCode-derived TUI plugin host modules into `packages/opencorvus/src/cli/cmd/tui/plugin/*`:
+  - `api.tsx`
+  - `runtime.ts`
+  - `slots.tsx`
+  - `command-shim.ts`
+  - `internal.ts`
+- Extended the TUI route model with `type: "plugin"` so plugin routes use a runtime route map instead of hard-coded component branches.
+- Wired `App` to create the TUI plugin API, initialize `TuiPluginRuntime`, dispose runtime on cleanup, render plugin routes, and mount OpenCode host slots `app` and `app_bottom`.
+- Extended local TUI dialogs to accept OpenCode's `xlarge` dialog size.
+- Added `packages/opencorvus/test/tui/plugin-runtime-guard.test.ts` for the TUI plugin export, v1 command shim dispatch/bindings, runtime/slot wiring, and plugin route guard.
+
+Verified:
+
+- `bun install`
+- `bun run --cwd packages/plugin typecheck`
+- `bun run --cwd packages/opencorvus typecheck`
+- `bun test test/tui/plugin-runtime-guard.test.ts test/tui/keymap-substrate.test.ts test/tui/keymap-migration-guard.test.ts test/tui/dependency-guard.test.ts` from `packages/opencorvus`
+
+OpenCode comparison after the round:
+
+- Matched: public `@opencorvus-ai/plugin/tui` API shape, `createBindingLookup`, legacy `api.command` shim, host slot registry built with `createSolidSlotRegistry`/`createSlot`, scoped keymap cleanup, plugin lifecycle dispose stack, plugin route registration, and app-level slot mount points.
+- Preserved OpenCorvus-specific agent workflow behavior: existing app commands, prompt submit/paste, permission/question handling, session navigation, and subagent child/parent command bindings still route through the existing command registry and tested keymap lookup.
+
+OpenCode gap after the round:
+
+- External TUI plugin loading/install is not implemented yet because OpenCode's `runtime.ts` depends on its `plugin/shared`, `plugin/loader`, `plugin/meta`, and `plugin/install` modules, which do not yet exist in OpenCorvus. This must be copied as a grouped loader round, not replaced with a local fake installer.
+- `internal.ts` is intentionally the single internal plugin registry but is still empty. Context, MCP, LSP, Todo, Files, Footer, WhichKey, DiffViewer, and Agent Team feature plugins still need to be copied and registered there.
+- Sidebar shell still has hard-coded local content. The next OpenCode-aligned round must replace `routes/session/sidebar.tsx` with slot rendering and move panes into copied feature plugins.
+- The right overlay activity still shows runtime status, not a `ghostty-web` terminal connected to server PTY output.

@@ -61,6 +61,9 @@ import {
   useBindings,
   useOpencorvusKeymap,
 } from "./keymap"
+import { createTuiApi, type RouteMap } from "./plugin/api"
+import { TuiPluginRuntime } from "./plugin/runtime"
+import type { TuiAttention } from "@opencorvus-ai/plugin/tui"
 
 async function getTerminalBackgroundColor(): Promise<"dark" | "light"> {
   // can't set raw mode if not a TTY
@@ -285,6 +288,80 @@ function App() {
   const sync = useSync()
   const exit = useExit()
   const promptRef = usePromptRef()
+  const pluginRoutes: RouteMap = new Map()
+  const [pluginRouteVersion, setPluginRouteVersion] = createSignal(0)
+  const [pluginsReady, setPluginsReady] = createSignal(false)
+
+  const attention: TuiAttention = {
+    async notify(input) {
+      if (!input.message.trim()) {
+        return { ok: false, notification: false, sound: false, skipped: "empty_message" }
+      }
+      toast.show({
+        title: input.title,
+        message: input.message,
+        variant: "info",
+      })
+      return { ok: true, notification: false, sound: false }
+    },
+    soundboard: {
+      registerPack() {
+        return () => {}
+      },
+      activate() {
+        return false
+      },
+      current() {
+        return "default"
+      },
+      list() {
+        return []
+      },
+    },
+  }
+
+  const pluginApi = createTuiApi({
+    tuiConfig,
+    dialog,
+    keymap,
+    kv,
+    route,
+    routes: pluginRoutes,
+    bump: () => setPluginRouteVersion((version) => version + 1),
+    event: sdk.event,
+    sdk,
+    sync,
+    theme: useTheme(),
+    toast,
+    renderer,
+    attention,
+  })
+
+  onMount(() => {
+    TuiPluginRuntime.init({
+      api: pluginApi,
+      config: tuiConfig,
+    })
+      .catch((error) => {
+        console.error("Failed to load TUI plugins", error)
+      })
+      .finally(() => {
+        setPluginsReady(true)
+      })
+  })
+
+  onCleanup(() => {
+    TuiPluginRuntime.dispose().catch((error) => {
+      console.error("Failed to dispose TUI plugins", error)
+    })
+  })
+
+  const pluginRoute = createMemo(() => {
+    pluginRouteVersion()
+    if (!pluginsReady()) return
+    if (route.data.type !== "plugin") return
+    return pluginRoutes.get(route.data.id)?.at(-1)?.render
+  })
 
   useKeyboard((evt) => {
     if (!Flag.OPENCORVUS_EXPERIMENTAL_DISABLE_COPY_ON_SELECT) return
@@ -830,7 +907,18 @@ function App() {
         <Match when={route.data.type === "session"}>
           <Session />
         </Match>
+        <Match when={route.data.type === "plugin"}>
+          {pluginRoute()?.({ params: route.data.type === "plugin" ? route.data.data : undefined }) ?? (
+            <box padding={1}>
+              <text fg={theme.textMuted}>TUI plugin route is not available.</text>
+            </box>
+          )}
+        </Match>
       </Switch>
+      <box flexShrink={0}>
+        <TuiPluginRuntime.Slot name="app_bottom" />
+      </box>
+      <TuiPluginRuntime.Slot name="app" />
     </box>
   )
 }
