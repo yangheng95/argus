@@ -952,3 +952,41 @@ OpenCode gap after the round:
 - HomeFooter/HomeTips are still hard-coded in local `routes/home.tsx`; home slots exist in the plugin API but are not yet mounted by the route.
 - External TUI plugin loader/install remains missing.
 - Agent Team project-bound plugin and right-sidebar PTY/`ghostty-web` host remain missing.
+
+### 2026-06-05 Round 7: copied home footer/tips plugins and slot-based home shell
+
+Implemented:
+
+- Replaced local `routes/home.tsx` hard-coded logo/prompt/tips/footer layout with the OpenCode-style slot shell:
+  - `home_logo`
+  - `home_prompt`
+  - `home_bottom`
+  - `home_footer`
+- Copied OpenCode home feature plugins into `packages/opencorvus/src/cli/cmd/tui/feature-plugins/home/*`:
+  - `footer.tsx`
+  - `tips.tsx`
+  - `tips-view.tsx`
+- Registered `HomeFooter` and `HomeTips` through `internalTuiPlugins()`.
+- Deleted the old local `packages/opencorvus/src/cli/cmd/tui/component/tips.tsx` to avoid a second tips implementation.
+- Preserved OpenCorvus-specific prompt workflow:
+  - `route.initialPrompt` still populates the prompt.
+  - `--prompt` waits for sync/model readiness before submit, matching the upstream OpenCode readiness pattern.
+  - existing `Prompt` props are preserved until the OpenCode prompt prop surface is copied in a later round.
+- Adapted tips/footer branding and paths from OpenCode to OpenCorvus.
+
+Verified:
+
+- `bun run --cwd packages/opencorvus typecheck`
+- `bun test test/tui/plugin-runtime-guard.test.ts test/tui/keymap-substrate.test.ts test/tui/keymap-migration-guard.test.ts test/tui/dependency-guard.test.ts` from `packages/opencorvus`
+
+OpenCode comparison after the round:
+
+- Matched: home route slot boundaries, HomeFooter plugin, HomeTips plugin, dynamic shortcut-aware tips, and removal of hard-coded home footer/tips rendering.
+- Preserved: existing OpenCorvus prompt submit path and route initialPrompt behavior.
+
+OpenCode gap after the round:
+
+- `home_prompt_right` is in the public slot API but not yet fully useful because the local `Prompt` component does not expose OpenCode's `right` and `placeholders` props.
+- DiffViewer and SessionV2Debug remain missing.
+- External TUI plugin loader/install remains missing.
+- Agent Team project-bound plugin and right-sidebar PTY/`ghostty-web` host remain missing.

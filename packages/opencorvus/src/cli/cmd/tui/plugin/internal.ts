@@ -1,5 +1,7 @@
 // OpenCode-compatible internal TUI plugin registry. Feature plugins are copied into this list in later rounds.
 import type { TuiPlugin, TuiPluginModule } from "@opencorvus-ai/plugin/tui"
+import HomeFooter from "../feature-plugins/home/footer"
+import HomeTips from "../feature-plugins/home/tips"
 import SidebarContext from "../feature-plugins/sidebar/context"
 import SidebarMcp from "../feature-plugins/sidebar/mcp"
 import SidebarLsp from "../feature-plugins/sidebar/lsp"
@@ -17,5 +19,17 @@ export type InternalTuiPlugin = Omit<TuiPluginModule, "id"> & {
 }
 
 export function internalTuiPlugins(): InternalTuiPlugin[] {
-  return [SidebarContext, SidebarMcp, SidebarLsp, SidebarTodo, SidebarFiles, SidebarFooter, Notifications, PluginManager, WhichKey]
+  return [
+    HomeFooter,
+    HomeTips,
+    SidebarContext,
+    SidebarMcp,
+    SidebarLsp,
+    SidebarTodo,
+    SidebarFiles,
+    SidebarFooter,
+    Notifications,
+    PluginManager,
+    WhichKey,
+  ]
 }

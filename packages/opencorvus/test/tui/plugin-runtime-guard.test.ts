@@ -69,8 +69,11 @@ describe("OpenCode-derived TUI plugin substrate", () => {
     const route = await readFile(path.join(tuiRoot, "context/route.tsx"), "utf8")
     const runtime = await readFile(path.join(tuiRoot, "plugin/runtime.ts"), "utf8")
     const slots = await readFile(path.join(tuiRoot, "plugin/slots.tsx"), "utf8")
+    const home = await readFile(path.join(tuiRoot, "routes/home.tsx"), "utf8")
     const sidebar = await readFile(path.join(tuiRoot, "routes/session/sidebar.tsx"), "utf8")
     const internal = await readFile(path.join(tuiRoot, "plugin/internal.ts"), "utf8")
+    const homeTips = await readFile(path.join(tuiRoot, "feature-plugins/home/tips.tsx"), "utf8")
+    const homeFooter = await readFile(path.join(tuiRoot, "feature-plugins/home/footer.tsx"), "utf8")
     const whichKey = await readFile(path.join(tuiRoot, "feature-plugins/system/which-key.tsx"), "utf8")
     const pluginManager = await readFile(path.join(tuiRoot, "feature-plugins/system/plugins.tsx"), "utf8")
     const notifications = await readFile(path.join(tuiRoot, "feature-plugins/system/notifications.ts"), "utf8")
@@ -85,6 +88,14 @@ describe("OpenCode-derived TUI plugin substrate", () => {
     expect(runtime).toContain("scope.track(host.register")
     expect(slots).toContain("createSolidSlotRegistry")
     expect(slots).toContain("createSlot")
+    expect(home).toContain('name="home_logo"')
+    expect(home).toContain('name="home_prompt"')
+    expect(home).toContain('name="home_bottom"')
+    expect(home).toContain('name="home_footer"')
+    expect(home).not.toContain("Tips />")
+    expect(home).not.toContain("useDirectory")
+    expect(home).not.toContain("sync.data.mcp")
+    expect(existsSync(path.join(tuiRoot, "component/tips.tsx"))).toBe(false)
     expect(sidebar).toContain('name="sidebar_title"')
     expect(sidebar).toContain('name="sidebar_content"')
     expect(sidebar).toContain('name="sidebar_footer"')
@@ -94,6 +105,8 @@ describe("OpenCode-derived TUI plugin substrate", () => {
     expect(sidebar).not.toContain("session_diff")
     for (const plugin of [
       "SidebarContext",
+      "HomeFooter",
+      "HomeTips",
       "SidebarMcp",
       "SidebarLsp",
       "SidebarTodo",
@@ -114,5 +127,8 @@ describe("OpenCode-derived TUI plugin substrate", () => {
     expect(notifications).toContain('api.event.on("question.asked"')
     expect(notifications).toContain('api.event.on("permission.asked"')
     expect(notifications).toContain('api.event.on("session.status"')
+    expect(homeTips).toContain('home_bottom()')
+    expect(homeTips).toContain('name: "tips.toggle"')
+    expect(homeFooter).toContain('home_footer()')
   })
 })
