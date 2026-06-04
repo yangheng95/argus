@@ -644,6 +644,7 @@ function taskItems(rows: TaskListRow[]) {
       plan: plan ? viewPlan(plan) : undefined,
       run: run ? viewRun(run) : undefined,
       evaluation: evaluation ? viewEvaluation(evaluation) : undefined,
+      active_sessions: listActiveSessionsForTask(task.id),
       pending_interactions: pendingInteractions,
       updated_at: task.time_updated,
     }

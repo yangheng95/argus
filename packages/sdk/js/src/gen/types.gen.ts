@@ -8735,6 +8735,9 @@ export type TaskListData = {
      * Project directory for project-scoped routes. Equivalent to the x-opencorvus-directory request header.
      */
     directory?: string
+    q?: string
+    status?: string
+    limit?: number
   }
   url: "/tasks"
 }
@@ -8869,6 +8872,12 @@ export type TaskListResponses = {
           completed?: number
         }
       }
+      active_sessions: Array<{
+        sessionID: string
+        kind: string
+        goalID: string | null
+        lastActivityMs: number
+      }>
       pending_interactions: number
       updated_at: number
     }>
@@ -9015,6 +9024,12 @@ export type TaskGlobalListResponses = {
           completed?: number
         }
       }
+      active_sessions: Array<{
+        sessionID: string
+        kind: string
+        goalID: string | null
+        lastActivityMs: number
+      }>
       pending_interactions: number
       updated_at: number
     }>

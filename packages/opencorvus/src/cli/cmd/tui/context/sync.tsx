@@ -18,6 +18,7 @@ import type {
   ProviderAuthMethod,
   Path,
   VcsInfo,
+  TaskListResponse,
 } from "@opencorvus-ai/sdk"
 import { createStore, produce, reconcile } from "solid-js/store"
 import { useSDK } from "@tui/context/sdk"
@@ -71,6 +72,7 @@ export const { use: useSync, provider: SyncProvider } = createSimpleContext({
         [key: string]: McpResource
       }
       formatter: FormatterStatus[]
+      project_board?: TaskListResponse
       vcs: VcsInfo | undefined
       path: Path
     }>({
@@ -98,11 +100,25 @@ export const { use: useSync, provider: SyncProvider } = createSimpleContext({
       mcp: {},
       mcp_resource: {},
       formatter: [],
+      project_board: undefined,
       vcs: undefined,
       path: { home: "", state: "", config: "", worktree: "", directory: "" },
     })
 
     const sdk = useSDK()
+
+    async function refreshProjectBoard() {
+      const response = await sdk.client.task.list({ limit: 8 })
+      setStore("project_board", reconcile(response.data))
+    }
+
+    function queueProjectBoardRefresh() {
+      refreshProjectBoard().catch((error) => {
+        Log.Default.warn("failed to refresh tui project board", {
+          error: error instanceof Error ? error.message : String(error),
+        })
+      })
+    }
 
     sdk.event.listen((e) => {
       const event = e.details
@@ -111,6 +127,7 @@ export const { use: useSync, provider: SyncProvider } = createSimpleContext({
           bootstrap()
           break
         case "permission.replied": {
+          queueProjectBoardRefresh()
           const requests = store.permission[event.properties.sessionID]
           if (!requests) break
           const match = Binary.search(requests, event.properties.requestID, (r) => r.id)
@@ -126,6 +143,7 @@ export const { use: useSync, provider: SyncProvider } = createSimpleContext({
         }
 
         case "permission.asked": {
+          queueProjectBoardRefresh()
           const request = event.properties
           const requests = store.permission[request.sessionID]
           if (!requests) {
@@ -149,6 +167,7 @@ export const { use: useSync, provider: SyncProvider } = createSimpleContext({
 
         case "question.replied":
         case "question.rejected": {
+          queueProjectBoardRefresh()
           const requests = store.question[event.properties.sessionID]
           if (!requests) break
           const match = Binary.search(requests, event.properties.requestID, (r) => r.id)
@@ -164,6 +183,7 @@ export const { use: useSync, provider: SyncProvider } = createSimpleContext({
         }
 
         case "question.asked": {
+          queueProjectBoardRefresh()
           const request = event.properties
           const requests = store.question[request.sessionID]
           if (!requests) {
@@ -331,6 +351,17 @@ export const { use: useSync, provider: SyncProvider } = createSimpleContext({
           break
         }
 
+        case "task.created":
+        case "task.updated":
+        case "task.completed":
+        case "task.failed":
+        case "task.cancelled":
+        case "task.message":
+        case "run.progress": {
+          queueProjectBoardRefresh()
+          break
+        }
+
         case "lsp.updated": {
           sdk.client.lsp.status().then((x) => setStore("lsp", x.data!))
           break
@@ -411,6 +442,7 @@ export const { use: useSync, provider: SyncProvider } = createSimpleContext({
               setStore("session_status", reconcile(x.data! as unknown as { [sessionID: string]: import("@opencorvus-ai/sdk").SessionStatus }))
             }),
             sdk.client.provider.auth().then((x) => setStore("provider_auth", reconcile(x.data ?? {}))),
+            refreshProjectBoard(),
             sdk.client.vcs.get().then((x) => setStore("vcs", reconcile(x.data))),
             sdk.client.path.get().then((x) => setStore("path", reconcile(x.data!))),
           ]).then(() => {

@@ -3,12 +3,17 @@ import type { TuiPlugin, TuiPluginApi } from "@opencorvus-ai/plugin/tui"
 import type { InternalTuiPlugin } from "../../plugin/internal"
 import { panelCapabilities } from "@/panel/capability"
 import { For, Show, createMemo } from "solid-js"
+import { Locale } from "@/util/locale"
 
 const id = "internal:sidebar-agent-team"
 const surface = "right-sidebar"
 
 function title(action: string) {
   return action.replaceAll("_", " ")
+}
+
+function taskTitle(title: string) {
+  return Locale.truncateMiddle(title, 28)
 }
 
 function capabilities(kind?: "query" | "mutation") {
@@ -20,12 +25,36 @@ function View(props: { api: TuiPluginApi }) {
   const theme = () => props.api.theme.current
   const queries = createMemo(() => capabilities("query"))
   const mutations = createMemo(() => capabilities("mutation"))
+  const summary = createMemo(() => props.api.state.project.summary())
+  const tasks = createMemo(() => props.api.state.project.tasks().slice(0, 5))
+  const activeAgents = createMemo(() => tasks().reduce((sum, item) => sum + item.active_sessions.length, 0))
 
   return (
     <box>
       <text fg={theme().text}>
         <b>Agent Team</b>
       </text>
+      <text fg={theme().textMuted}>
+        {summary()?.open_tasks ?? 0} open · {summary()?.running_tasks ?? 0} running · {activeAgents()} agents
+      </text>
+      <For each={tasks()}>
+        {(item) => (
+          <box>
+            <text fg={theme().textMuted} wrapMode="none">
+              {item.task.status} · {taskTitle(item.task.title)}
+            </text>
+            <Show when={item.active_sessions.length > 0 || item.pending_interactions > 0}>
+              <text fg={theme().textMuted} wrapMode="none">
+                {item.active_sessions.length} active agents
+                <Show when={item.pending_interactions > 0}> · {item.pending_interactions} interactions</Show>
+              </text>
+            </Show>
+          </box>
+        )}
+      </For>
+      <Show when={tasks().length === 0}>
+        <text fg={theme().textMuted}>No project tasks</text>
+      </Show>
       <text fg={theme().textMuted}>
         {queries().length} query tools · {mutations().length} action tools
       </text>

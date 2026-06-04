@@ -14558,6 +14558,41 @@
                               "time"
                             ]
                           },
+                          "active_sessions": {
+                            "type": "array",
+                            "items": {
+                              "type": "object",
+                              "properties": {
+                                "sessionID": {
+                                  "type": "string",
+                                  "pattern": "^ses.*"
+                                },
+                                "kind": {
+                                  "type": "string"
+                                },
+                                "goalID": {
+                                  "anyOf": [
+                                    {
+                                      "type": "string",
+                                      "pattern": "^gol.*"
+                                    },
+                                    {
+                                      "type": "null"
+                                    }
+                                  ]
+                                },
+                                "lastActivityMs": {
+                                  "type": "number"
+                                }
+                              },
+                              "required": [
+                                "sessionID",
+                                "kind",
+                                "goalID",
+                                "lastActivityMs"
+                              ]
+                            }
+                          },
                           "pending_interactions": {
                             "type": "integer",
                             "minimum": -9007199254740991,
@@ -14569,6 +14604,7 @@
                         },
                         "required": [
                           "task",
+                          "active_sessions",
                           "pending_interactions",
                           "updated_at"
                         ]
@@ -14593,6 +14629,29 @@
             "description": "Project directory for project-scoped routes. Equivalent to the x-opencorvus-directory request header.",
             "schema": {
               "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "q",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "status",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "limit",
+            "schema": {
+              "type": "integer",
+              "exclusiveMinimum": 0,
+              "maximum": 100
             }
           }
         ],
@@ -15201,6 +15260,41 @@
                               "time"
                             ]
                           },
+                          "active_sessions": {
+                            "type": "array",
+                            "items": {
+                              "type": "object",
+                              "properties": {
+                                "sessionID": {
+                                  "type": "string",
+                                  "pattern": "^ses.*"
+                                },
+                                "kind": {
+                                  "type": "string"
+                                },
+                                "goalID": {
+                                  "anyOf": [
+                                    {
+                                      "type": "string",
+                                      "pattern": "^gol.*"
+                                    },
+                                    {
+                                      "type": "null"
+                                    }
+                                  ]
+                                },
+                                "lastActivityMs": {
+                                  "type": "number"
+                                }
+                              },
+                              "required": [
+                                "sessionID",
+                                "kind",
+                                "goalID",
+                                "lastActivityMs"
+                              ]
+                            }
+                          },
                           "pending_interactions": {
                             "type": "integer",
                             "minimum": -9007199254740991,
@@ -15212,6 +15306,7 @@
                         },
                         "required": [
                           "task",
+                          "active_sessions",
                           "pending_interactions",
                           "updated_at"
                         ]
