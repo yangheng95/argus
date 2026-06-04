@@ -3,7 +3,7 @@ title: Integrity and Evaluation
 description: OpenCorvus 如何记录验证证据并执行最终完整性复核。
 ---
 
-OpenCorvus 当前不再把已删除的 per-goal evaluator 当作公开 workflow gate。per-goal build attempt 产出证据，pipeline 的最终复核是 `integrity` workflow tool。
+per-goal build attempt 产出 verification evidence，pipeline 的最终复核是 `integrity` workflow tool。
 
 ## 当前复核流程
 
@@ -37,7 +37,7 @@ type EvaluationRow = {
 }
 ```
 
-checks 是给 operator 与后续 review 使用的审计证据，不是独立的最终交付 workflow。
+checks 是给 operator 与后续 review 使用的审计证据。
 
 ## Integrity Verdict 语义
 

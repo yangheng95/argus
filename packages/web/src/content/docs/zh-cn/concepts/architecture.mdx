@@ -23,7 +23,7 @@ HTTP 服务器（`packages/opencorvus/src/server/server.ts`）把路由切成两
 | `direct` | 按需 `analyze_intent`，然后 `build` | 显式 `kind=build`、局部编辑、bugfix、短调试 |
 | `pipeline` | 按需 `(frontend_design / frontend_research)` → `analyze_intent` → `requirements` → `architect` → per-goal `build` → `integrity` | 多文件功能、UI 复刻、重构、需要明确验收证据的任务 |
 
-workflow 定义是 prompt 中的建议路径，不是隐藏的 host 状态机。orchestrator 可以基于证据跳过可选步骤或重新路由。`integrity` 是 pipeline 的最终 session-bound review；旧的 host-side deliver gate 不再是推荐 workflow 的步骤。
+workflow 定义是给 orchestrator 的 prompt 上下文。orchestrator 可以基于证据跳过可选步骤或重新路由。`integrity` 是 pipeline 的最终 session-bound review。
 
 ## 运行时层次
 
@@ -60,7 +60,7 @@ Worker sessions
 
 ### 外层：Orchestrator Wake Loop
 
-`runTaskLoop`（`packages/opencorvus/src/orchestrator/loop.ts`）按 task 串行化唤醒并调用 `Orchestrator.processTask`。orchestrator 不沿固定 phase 指针前进；每次唤醒都读取当前 describe / artifact 快照，再决定下一次 tool call。
+`runTaskLoop`（`packages/opencorvus/src/orchestrator/loop.ts`）按 task 串行化唤醒并调用 `Orchestrator.processTask`。每次唤醒都读取当前 describe / artifact 快照，再决定下一次 tool call。
 
 ### 内层：Session Agentic Loop
 
@@ -74,7 +74,7 @@ requirements、architect、build、integrity 等 worker session 都由 orchestra
 
 ## Worktree 并行
 
-Architect 产出的 goals 存在 `engine_goal`。每次 per-goal `build` dispatch 会创建 artifact-backed goal run attempt（`engine_artifact.kind="goal_run_attempt"`），并带上独立 workspace 元数据。UI 展示的 goal 状态从最新 goal-run attempt 链派生，不再读缓存型 `engine_goal.status` 字段。
+Architect 产出的 goals 存在 `engine_goal`。每次 per-goal `build` dispatch 会创建 artifact-backed goal run attempt（`engine_artifact.kind="goal_run_attempt"`），并带上独立 workspace 元数据。UI 展示的 goal 状态从最新 goal-run attempt 链派生。
 
 ## 数据流
 

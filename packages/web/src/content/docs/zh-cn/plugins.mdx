@@ -22,7 +22,7 @@ Plugin 是 OpenCorvus 的深层扩展机制。与 Skill（通过 `skill` 工具�
 
 `@gitlab/opencode-gitlab-auth` 编译时静态导入，无需 npm（`src/plugin/index.ts:12-23`）。
 
-OpenCorvus 不再默认安装 npm 插件。已废弃的 `opencode-anthropic-auth` 不再自动加载；如需第三方认证插件，必须在 `plugin` 配置中显式声明。
+第三方 npm 插件只在 `plugin` 配置数组中显式声明后加载。
 
 ## 3. 加载流程
 

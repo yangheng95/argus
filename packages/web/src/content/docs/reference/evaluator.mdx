@@ -3,7 +3,7 @@ title: Integrity and Evaluation
 description: How OpenCorvus records verification evidence and performs final integrity review.
 ---
 
-OpenCorvus no longer uses the removed per-goal evaluator as the public workflow gate. Per-goal build attempts produce evidence, and the pipeline's final review is the `integrity` workflow tool.
+Per-goal build attempts produce verification evidence, and the pipeline's final review is the `integrity` workflow tool.
 
 ## Current Review Flow
 
@@ -37,7 +37,7 @@ type EvaluationRow = {
 }
 ```
 
-Checks are audit evidence for operators and downstream review. They are not a standalone final-delivery workflow.
+Checks are audit evidence for operators and downstream review.
 
 ## Integrity Verdict Semantics
 

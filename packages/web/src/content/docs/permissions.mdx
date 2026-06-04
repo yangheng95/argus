@@ -93,16 +93,12 @@ User config is merged after the built-in allow rules, so explicit user rules sti
 }
 ```
 
-There is no auto-permission engine. An explicit `ask` is a real operator gate: `PermissionNext.ask()` emits `permission.asked`, stores the pending request, and only proceeds after a reply. If nobody replies, the request is rejected after `OPENCORVUS_PERMISSION_TIMEOUT_MS` (default **300000 ms**, minimum **1000 ms**; see `packages/opencorvus/src/permission/next.ts`).
+An explicit `ask` is a real operator approval path: `PermissionNext.ask()` emits `permission.asked`, stores the pending request, and proceeds after a reply. If nobody replies, the request is rejected after `OPENCORVUS_PERMISSION_TIMEOUT_MS` (default **300000 ms**, minimum **1000 ms**; see `packages/opencorvus/src/permission/next.ts`).
 
 ```bash
 export OPENCORVUS_PERMISSION_TIMEOUT_MS=60000   # reject unanswered asks after 60s
 ```
 
-:::note
-The old `experimental.unattended` and `experimental.auto_permission` fields have been removed. If your config still sets either field, OpenCorvus rejects the file during strict config parsing. Use `permission` rules for tool approval behavior and `experimental.auto_question` only for stale clarification questions.
-:::
-
 ## No silent fallback on config error
 
-If a permission string is malformed (e.g. `"allow"` written as a string instead of an object), OpenCorvus **throws loudly** rather than silently misinterpreting it. Historical bug: `Object.entries("allow")` split characters, causing chaos; fixed by the `typeof === "string"` short-circuit in `PermissionNext.fromConfig` (`src/permission/next.ts:62-85`).
+If a permission string is malformed (e.g. `"allow"` written as a string instead of an object), OpenCorvus **throws loudly** rather than silently misinterpreting it. `PermissionNext.fromConfig` validates the config shape before building the rule set (`src/permission/next.ts:62-85`).

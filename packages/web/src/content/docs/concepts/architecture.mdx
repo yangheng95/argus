@@ -23,7 +23,7 @@ OpenCorvus has two built-in workflows in `packages/opencorvus/src/engine/workflo
 | `direct` | `analyze_intent` as needed, then `build` | Explicit `kind=build`, scoped edits, bug fixes, short debugging |
 | `pipeline` | `(frontend_design / frontend_research as needed) → analyze_intent → requirements → architect → per-goal build → integrity` | Multi-file features, UI replication, refactors, tasks needing explicit acceptance evidence |
 
-The workflow definition is advisory prompt context, not a hidden host state machine. The orchestrator can skip optional steps or reroute based on evidence. `integrity` is the final session-bound review step for the pipeline; the old host-side deliver gate is not part of the recommended workflow.
+The workflow definition is prompt context for the orchestrator. The orchestrator can skip optional steps or reroute based on evidence. `integrity` is the final session-bound review step for the pipeline.
 
 ## Runtime Layers
 
@@ -60,7 +60,7 @@ Worker sessions
 
 ### Outer: Orchestrator Wake Loop
 
-`runTaskLoop` (`packages/opencorvus/src/orchestrator/loop.ts`) serializes wakes for one task and calls `Orchestrator.processTask`. The orchestrator does not advance through a fixed phase pointer; each wake reads the current describe/artifact snapshot and decides the next tool call.
+`runTaskLoop` (`packages/opencorvus/src/orchestrator/loop.ts`) serializes wakes for one task and calls `Orchestrator.processTask`. Each wake reads the current describe/artifact snapshot and decides the next tool call.
 
 ### Inner: Session Agentic Loop
 
@@ -74,7 +74,7 @@ Typed orchestrator tools create worker sessions for requirements, architect, bui
 
 ## Worktree Parallelism
 
-Architect-authored goals are persisted in `engine_goal`. A per-goal `build` dispatch creates an artifact-backed goal run attempt (`engine_artifact.kind="goal_run_attempt"`) with its own workspace metadata. Goal status shown in the UI is derived from the latest goal-run attempt chain, not from a cached `engine_goal.status` column.
+Architect-authored goals are persisted in `engine_goal`. A per-goal `build` dispatch creates an artifact-backed goal run attempt (`engine_artifact.kind="goal_run_attempt"`) with its own workspace metadata. Goal status shown in the UI is derived from the latest goal-run attempt chain.
 
 ## Data Flow
 

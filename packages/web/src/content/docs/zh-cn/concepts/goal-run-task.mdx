@@ -35,11 +35,11 @@ EngineTask (kind: "workflow" | "build")
 | `criteria_results` | Overlay quality panel 使用的汇总 |
 | `time_started` / `time_completed` / `error` | 派生 task status 的来源字段 |
 
-现在没有权威 `engine_task.status` 列。`deriveTaskStatus` 从时间戳、错误、取消 metadata 和 run 状态派生任务状态。
+`deriveTaskStatus` 从时间戳、错误、取消 metadata 和 run 状态派生任务状态。
 
 ## Requirements 和 Specs
 
-`EngineSpecSnapshotTable`、`EngineSpecItemTable` 与 `EngineRequirementTable` 存储 requirements 阶段产物。当前生产者是 `requirements` workflow tool / agent，不是公开 pipeline 中单独存在的 spec 编写 worker 阶段。
+`EngineSpecSnapshotTable`、`EngineSpecItemTable` 与 `EngineRequirementTable` 存储由 `requirements` workflow tool / agent 写入的 requirements 阶段产物。
 
 ## PlanVersion、Goal、PlanNode
 
@@ -51,7 +51,7 @@ Architect agent 写入：
 | `EngineGoalTable` | Goal contract 字段：objective、acceptance specs、dependencies、ownership、priority、kind |
 | `EnginePlanNodeTable` | 把 goals 连接到 active plan 的计划图行 |
 
-`EngineGoalTable` 不再持有 status cache。UI 和 prompt 中的 goal 状态都从 goal-run attempt 链派生。
+UI 和 prompt 中的 goal 状态都从 goal-run attempt 链派生。
 
 ## RunRow
 
@@ -61,7 +61,7 @@ Architect agent 写入：
 queued | accepted | running | blocked | completed | failed | aborted
 ```
 
-`phase` 类型里仍保留历史兼容值，但当前 workflow 进度不是由 host phase 指针推进，而是从 artifacts 与 workflow tool side effects 投影。
+workflow 进度从 artifacts 与 workflow tool side effects 投影。
 
 ## GoalRunRow
 
@@ -73,14 +73,14 @@ queued | accepted | running | blocked | completed | failed | aborted
 | `status` | `queued / accepted / planning / running / evaluating / blocked / completed / failed / aborted` |
 | `workspace_dir` / `workspace_branch` | 隔离 goal workspace |
 | `workspace_base_ref` / `merge_ref` | replay / merge 使用的 snapshot/git 引用 |
-| `supersede_of` | 连接 retry/rework attempt，不覆盖旧证据 |
+| `supersede_of` | 连接 retry/rework attempt，并保留之前的证据 |
 | `owner` | 进程 owner，用于重启后识别 orphaned live attempt |
 
 最新且未被 supersede 的 attempt 是 goal 进度的权威来源。
 
 ## Acceptance 和 Evaluation
 
-`AcceptanceRow` 从 `engine_artifact.kind="acceptance"` 重建，记录 candidate / publishing / delivered / failed 的 acceptance rows。这里的 `delivered` 是持久化 acceptance status，不是独立的最终交付 worker 或 workflow step。
+`AcceptanceRow` 从 `engine_artifact.kind="acceptance"` 重建，记录 candidate / publishing / delivered / failed 的 acceptance statuses。
 
 `EvaluationRow` 从 `engine_artifact.kind="verification-evidence"` 重建，记录 task-level 或 goal-run 证据：
 

@@ -14,9 +14,9 @@ The registry currently ships with the agents below. `mode` controls how the agen
 | `build` | primary (hidden) | Implementation agent. Executes read / edit / bash-style implementation tools when dispatched by the orchestrator or direct workflow. |
 | `general` | subagent | General-purpose multi-step research / parallel-work agent. Dispatched via the `task` tool. |
 | `explore` | subagent | Codebase exploration — fast file / code search, read-only by default. |
-| `acceptance` | primary (hidden) | Acceptance-review slot used by review streams and arbitration paths; it is not a standalone final-delivery worker. |
+| `acceptance` | primary (hidden) | Acceptance-review slot used by review streams and arbitration paths. |
 | `orchestrator` | primary (hidden) | Orchestrator agent. Owns task lifecycle decisions and dispatches explicit workflow tools such as `frontend_design`, `frontend_research`, `analyze_intent`, `requirements`, `architect`, `build`, `integrity`, `modify_goal`, and `restart_from_stage`. |
-| `requirements` | primary (hidden) | Requirements stage. Extracts user requirements and foundational technical decisions; it does not produce goals. |
+| `requirements` | primary (hidden) | Requirements stage. Extracts user requirements and foundational technical decisions. |
 
 Other registered agents (`architect`, `frontend-design`, `frontend-research`, `intent-analysis`, `integrity`, `visual-qa`, `prosecutor`, `summary`, `title`, `compaction`, `mission`, `control`) are stage / utility slots invoked internally by the orchestrator, mission runtime, or session loop. They surface in config (model + prompt overrides) but are not user-selectable unless a dedicated runtime exposes them.
 
@@ -24,9 +24,9 @@ See `packages/opencorvus/src/agent/agent.ts:144-463` for the canonical definitio
 
 ## Sub-agent dispatch
 
-Sub-agents are dispatched via the **`task`** tool from ordinary sessions, or via typed orchestrator tools such as `requirements`, `architect`, `build`, `integrity`, `frontend_design`, and `frontend_research`. Each sub-agent runs its own session; the orchestrator does not wrap a "next session" around an existing sub-agent's session.
+Sub-agents are dispatched via the **`task`** tool from ordinary sessions, or via typed orchestrator tools such as `requirements`, `architect`, `build`, `integrity`, `frontend_design`, and `frontend_research`. Each dispatch creates its own worker session.
 
-When the orchestrator runs the `pipeline` workflow, the Architect creates goals and each blocking goal is built in an isolated worktree. The final task-level review is `integrity`, not a separate delivery-stage worker.
+When the orchestrator runs the `pipeline` workflow, the Architect creates goals, each blocking goal is built in an isolated worktree, and `integrity` performs the final task-level review.
 
 ## Per-agent model
 
