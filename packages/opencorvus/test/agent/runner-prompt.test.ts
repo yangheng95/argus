@@ -92,6 +92,7 @@ test("runAgentSession appends config.agent.build.prompt_append after build core"
   expect(descriptor?.agent).toBe("build")
   expect(descriptor?.payload.model).toEqual({ providerID: "test", modelID: "mock" })
   expect(descriptor?.payload.workflow.sessionKind).toBe("build")
+  expect(descriptor?.payload.output.resultMode).toBe("reply")
   expect(descriptor?.payload.tools.enabled).toEqual([])
   expect(descriptor?.payload.tools.switches).toMatchObject({
     skill: true,

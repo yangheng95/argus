@@ -29,7 +29,6 @@ import type { ModelMessage, StopCondition, ToolSet } from "ai"
 import { SessionLoop } from "./loop"
 import { Todo } from "./todo"
 import { SessionControl } from "./control"
-import { AutomaticCompaction } from "./auto-compaction"
 
 export namespace SessionCompaction {
   const log = Log.create({ service: "session.compaction" })
@@ -948,8 +947,21 @@ export namespace SessionCompaction {
         )
       }
       const session = await Session.get(input.sessionID)
-      if (input.auto && AutomaticCompaction.isDisabledForKind(session.kind)) {
-        throw new Error(`Automatic compaction is disabled for workflow session kind ${session.kind}`)
+      if (input.auto) {
+        const autoCompaction = SessionLoop.automaticCompactionDecision({
+          session,
+          source: input.source,
+        })
+        if (!autoCompaction.decision.enabled) {
+          const cause =
+            autoCompaction.error instanceof Error && autoCompaction.error.message.length > 0
+              ? `: ${autoCompaction.error.message}`
+              : ""
+          throw new Error(
+            `Automatic compaction is disabled for workflow session kind ${session.kind} ` +
+              `(reason=${autoCompaction.decision.reason})${cause}`,
+          )
+        }
       }
       SessionControl.create({
         sessionID: input.sessionID,

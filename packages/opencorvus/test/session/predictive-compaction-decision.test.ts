@@ -307,6 +307,28 @@ describe("SessionLoop predictive compaction transcript hygiene", () => {
     expect(source).toContain("Predictive compaction budget error:")
     expect(source).toContain("await Session.updatePart")
   })
+
+  test("handles queued compaction controls before resolving the newest user model", async () => {
+    const source = await fs.readFile(sessionLoopSourcePath, "utf8")
+    const compactionControl = source.indexOf("if (compactionControl)")
+    const newestUserModel = source.indexOf("const model = await resolveAgentModel(lastUser.agent", compactionControl)
+
+    expect(compactionControl).toBeGreaterThan(0)
+    expect(newestUserModel).toBeGreaterThan(compactionControl)
+  })
+
+  test("uses the legacy compaction marker owner as the compaction source", async () => {
+    const source = await fs.readFile(sessionLoopSourcePath, "utf8")
+    const legacyCompaction = source.indexOf('if (task?.type === "compaction")')
+    const ownerLookup = source.indexOf("const taskSourceUser = msgs.find", legacyCompaction)
+    const ownerDecision = source.indexOf("source: taskSourceUser", legacyCompaction)
+    const ownerParent = source.indexOf("parentID: taskSourceUser.id", legacyCompaction)
+
+    expect(legacyCompaction).toBeGreaterThan(0)
+    expect(ownerLookup).toBeGreaterThan(legacyCompaction)
+    expect(ownerDecision).toBeGreaterThan(ownerLookup)
+    expect(ownerParent).toBeGreaterThan(ownerDecision)
+  })
 })
 
 describe("ContextBudget predictive limit", () => {
