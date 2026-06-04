@@ -546,8 +546,8 @@ test("parseModel handles model IDs with slashes", () => {
 })
 
 test("parseModel rejects bare model IDs before provider lookup", () => {
-  expect(() => Provider.parseModel("glm-5.1-fp8")).toThrow(Provider.InvalidModelReferenceError)
-  expect(() => Provider.parseModel("iwc-aime/")).toThrow('Model must be in the format "provider/model"')
+  expect(() => Provider.parseModel("bare-model")).toThrow(Provider.InvalidModelReferenceError)
+  expect(() => Provider.parseModel("glm51/")).toThrow('Model must be in the format "provider/model"')
 })
 
 test("configured default model resolves through the single model resolver", async () => {
@@ -2404,13 +2404,12 @@ test("built-in test providers are available without any config.provider", async 
     fn: async () => {
       const providers = await Provider.list()
 
-      // All three built-in gateways resolve with no config.provider declared.
-      expect(providers["iwc-aime"]).toBeDefined()
+      // Built-in gateways resolve with no config.provider declared.
+      expect(providers["iwc-aime"]).toBeUndefined()
       expect(providers["glm51"]).toBeDefined()
       expect(providers["kimik26"]).toBeDefined()
 
       // Built-in test providers are sourced as "custom" (same as hexin).
-      expect(providers["iwc-aime"].source).toBe("custom")
       expect(providers["glm51"].source).toBe("custom")
       expect(providers["kimik26"].source).toBe("custom")
 
@@ -2427,15 +2426,8 @@ test("built-in test providers are available without any config.provider", async 
       expect(kimi.api.url).toBe("http://117.50.195.92:8080/gpt-oss-120b/kimik2/v1")
       expect(kimi.limit.context).toBe(262144)
 
-      const iwc = await Provider.getModel("iwc-aime", "glm-5.1-fp8")
-      expect(iwc.api.url).toBe("http://ceshiai.iwencai.com/iwc-aime-model-9219/v1")
-
-      // Authorization header is pinned verbatim per gateway: iwc-aime sends a
-      // bare sk-xxx token, glm51 sends the "Bearer "-prefixed token, kimik26
-      // sends no Authorization header at all.
-      expect(providers["iwc-aime"].options.headers.Authorization).toBe(
-        "sk-c00551568fc0419e8f9ecf1ce5a971b5", // secret-scan: ignore — 内部测试网关 key
-      )
+      // Authorization header is pinned verbatim per gateway: glm51 sends the
+      // "Bearer "-prefixed token, kimik26 sends no Authorization header.
       expect(providers["glm51"].options.headers.Authorization).toBe("Bearer sk-glm51-cz-a")
       expect(providers["kimik26"].options.headers ?? {}).toEqual({})
     },
@@ -2484,9 +2476,9 @@ test("config.provider overrides a built-in test provider of the same name", asyn
       expect(providers["glm51"].options.headers.Authorization).toBe("Bearer override-token")
       const glm = await Provider.getModel("glm51", "glm51")
       expect(glm.api.url).toBe("https://override.example.com/v1")
-      // The other two built-ins remain untouched.
-      expect(providers["iwc-aime"]).toBeDefined()
+      // The other built-in remains untouched.
       expect(providers["kimik26"]).toBeDefined()
+      expect(providers["iwc-aime"]).toBeUndefined()
     },
   })
 })
@@ -2537,7 +2529,7 @@ test("disabled_providers can disable a built-in test provider", async () => {
       expect(providers["kimik26"]).toBeUndefined()
       // Sibling built-ins are unaffected.
       expect(providers["glm51"]).toBeDefined()
-      expect(providers["iwc-aime"]).toBeDefined()
+      expect(providers["iwc-aime"]).toBeUndefined()
     },
   })
 })

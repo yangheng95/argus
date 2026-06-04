@@ -84,7 +84,7 @@ test("rejects bare model IDs at config load time", async () => {
     init: async (dir) => {
       await writeConfig(dir, {
         $schema: "https://opencorvus.ai/config.json",
-        model: "glm-5.1-fp8",
+        model: "bare-model",
       })
     },
   })
