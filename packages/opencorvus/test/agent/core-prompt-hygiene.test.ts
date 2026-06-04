@@ -618,7 +618,7 @@ describe("core prompt hygiene", () => {
     expect(normalized).toContain("custom components only for truly page-specific surfaces")
   })
 
-  test("frontend-research publishes investigation division without deep investigation", async () => {
+  test("frontend-research publishes investigation division from host-prepared evidence", async () => {
     const research = await readPrompt("frontendResearch")
     const normalized = research.replace(/\s+/g, " ")
 
@@ -626,9 +626,9 @@ describe("core prompt hygiene", () => {
     expect(normalized).not.toContain("delegate_deep_research_to_build")
     expect(normalized).toContain("Do not write code, edit files, execute shell commands, search implementation code, or call build")
     expect(normalized).toContain("publish source-backed investigation work packets")
-    expect(normalized).toContain("Do not perform source-page, repository, web, or artifact investigation yourself")
-    expect(normalized).toContain("If prepared webpage evidence is absent")
-    expect(normalized).toContain("do not request or perform webpage evidence acquisition yourself")
+    expect(normalized).toContain("host-prepared rendered webpage evidence")
+    expect(normalized).toContain("the host prepares rendered webpage evidence before your session")
+    expect(normalized).toContain("do not invent page facts from memory")
     expect(normalized).toContain("The orchestrator owns routing")
     expect(normalized).toContain("Build a coverage plan")
     expect(normalized).toContain("Publish investigation work packets instead of completing the investigation yourself")
@@ -639,7 +639,7 @@ describe("core prompt hygiene", () => {
     expect(normalized).toContain("Interaction/State Questions")
     expect(normalized).toContain("Style/Layout Questions")
     expect(normalized).toContain("Treat `webpage_contract` as an investigation partition contract")
-    expect(normalized).toContain("full_markdown_sections are the durable investigation-division artifact")
+    expect(normalized).toContain("Build the brief with small registration tools")
     expect(normalized).toContain("Do not submit raw markdown or JSON documents as string fields")
     expect(normalized).toContain("Do not submit a final PRD or a raw artifact list")
     expect(normalized).toContain("Classify likely real component kinds explicitly")

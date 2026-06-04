@@ -162,7 +162,7 @@ export namespace AgentRoleContract {
     "frontend-research": {
       id: "frontend-research",
       description:
-        "Frontend research agent. Publishes source-backed webpage investigation work packets from prepared evidence indexes, summaries, bounded excerpts, and source URLs, then emits a frontend_research_brief with an investigation-partition webpage_contract covering visible surfaces, component questions, layout/style checks, interaction/data checks, fidelity risks, document outlines, constraints, and open questions. It does not perform deep investigation itself, does not create the frontend implementation template, does not call build, and never chooses routes or delivers final documents.",
+        "Frontend research agent. Uses host-prepared rendered webpage evidence from source URLs to publish source-backed webpage investigation work packets, then emits a frontend_research_brief with an investigation-partition webpage_contract covering visible surfaces, component questions, layout/style checks, interaction/data checks, fidelity risks, document outlines, constraints, and open questions. It does not create the frontend implementation template, does not call build, and never chooses routes or delivers final documents.",
       promptEditable: true,
       defaultPromptRequired: true,
       promptConfigMode: "append",

@@ -15,12 +15,12 @@ function frontendResearchSessionConfig(): ResearchSessionConfig {
     kind: "frontend-research",
     core: FRONTEND_RESEARCH_CORE,
     sessionTitlePrefix: "Frontend Research",
-    prepareWebpageEvidence: "read-existing-for-source-url",
+    prepareWebpageEvidence: "always-for-source-url",
     bundlePathKind: "frontend-research",
     retrievalTools: "none",
     delegation:
       "Orchestrator is asking frontend-research to publish webpage investigation work packets for downstream requirements, architecture, and implementation. " +
-      "Use only supplied prompt context and prepared evidence summaries already injected by the host; do not perform source-page, artifact, repository, or web investigation yourself. " +
+      "Use the host-prepared rendered webpage evidence summaries injected into the prompt; the host prepares source URL evidence before your session when a URL is supplied. " +
       "Do not create the frontend implementation template, do not build source, do not produce final REQ-N, acceptance specs, goal graph, implementation plan, or next-tool routing instructions.",
   }
 }

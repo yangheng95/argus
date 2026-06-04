@@ -27,7 +27,7 @@ describe("agent context tools", () => {
   //   frontend-design            → drop  (owns webpage evidence extraction; redundant)
   //   intent-analysis           → drop  (first cheap classifier; must not research)
   //   research                  → drop  (starts from source URLs with webfetch; search costs are avoided)
-  //   frontend-research         → drop  (publishes investigation packets from injected context; it does not investigate)
+  //   frontend-research         → drop  (host prepares rendered URL evidence before the session; no ad-hoc search)
   for (const agentName of ["requirements", "architect"] as const) {
     test(`${agentName} resolves websearch through its include whitelist`, async () => {
       await Instance.provide({
@@ -65,7 +65,7 @@ describe("agent context tools", () => {
     }, { timeout: INSTANCE_STARTUP_TIMEOUT_MS })
   }
 
-  test("frontend-research resolves no retrieval tools because it only publishes investigation packets", async () => {
+  test("frontend-research resolves no retrieval tools because host prepares rendered webpage evidence", async () => {
     await Instance.provide({
       directory: process.cwd(),
       fn: async () => {
