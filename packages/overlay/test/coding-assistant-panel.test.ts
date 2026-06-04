@@ -51,6 +51,7 @@ test("right side coding assistant entry is the project-bound OpenTUI runtime act
   expect(service).toContain('apiJson("tui/host/connect-token"')
   expect(service).toContain("apiWebSocketUrl(`tui/host/connect?")
   expect(service).not.toContain('apiJson("tui/host/input"')
+  expect(service).not.toContain('apiJson("tui/host/snapshot"')
   expect(service).not.toContain('apiJson(`tui/host/output')
   expect(service).toContain('apiJson("tui/host/resize"')
   expect(service).not.toContain("tui/runtime/status")

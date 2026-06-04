@@ -27,15 +27,6 @@ function inputEchoCommand(cwd: string): Tui.EmbeddedCommand {
   }
 }
 
-async function waitFor(check: () => boolean, message: string) {
-  const deadline = Date.now() + 5_000
-  while (Date.now() < deadline) {
-    if (check()) return
-    await new Promise((resolve) => setTimeout(resolve, 50))
-  }
-  throw new Error(message)
-}
-
 async function withTimeout<T>(promise: Promise<T>, message: string) {
   let timeout: ReturnType<typeof setTimeout> | undefined
   try {
@@ -113,7 +104,7 @@ describe("server.tui-host-routes", () => {
     await Instance.disposeAll()
   })
 
-  test("returns project-scoped host status and snapshot", async () => {
+  test("returns project-scoped host status", async () => {
     await using tmp = await tmpdir()
     await Instance.provide({
       directory: tmp.path,
@@ -125,12 +116,6 @@ describe("server.tui-host-routes", () => {
         expect(status.status).toBe("idle")
         expect(status.running).toBe(false)
         expect(status.directory).toBe(tmp.path)
-
-        const snapshotRes = await app.request("/host/snapshot")
-        expect(snapshotRes.status).toBe(200)
-        const snapshot = (await snapshotRes.json()) as { buffer: string; status: string }
-        expect(snapshot.status).toBe("idle")
-        expect(snapshot.buffer).toBe("")
       },
     })
   })
@@ -151,26 +136,12 @@ describe("server.tui-host-routes", () => {
     })
   })
 
-  test("rejects empty input and stopped host operations", async () => {
+  test("rejects stopped host resize operations", async () => {
     await using tmp = await tmpdir()
     await Instance.provide({
       directory: tmp.path,
       fn: async () => {
         const app = TuiRoutes()
-        const emptyInput = await app.request("/host/input", {
-          method: "POST",
-          headers: { "content-type": "application/json" },
-          body: JSON.stringify({ data: "" }),
-        })
-        expect(emptyInput.status).toBe(400)
-
-        const stoppedInput = await app.request("/host/input", {
-          method: "POST",
-          headers: { "content-type": "application/json" },
-          body: JSON.stringify({ data: "x" }),
-        })
-        expect(stoppedInput.status).toBe(400)
-
         const stoppedResize = await app.request("/host/resize", {
           method: "POST",
           headers: { "content-type": "application/json" },
@@ -223,25 +194,13 @@ describe("server.tui-host-routes", () => {
     })
   })
 
-  test("writes input, resizes, snapshots, and stops through host routes", async () => {
+  test("resizes and stops through host routes", async () => {
     await using tmp = await tmpdir()
     await Instance.provide({
       directory: tmp.path,
       fn: async () => {
         await TuiHost.startPrepared({ command: inputEchoCommand(tmp.path), cols: 80, rows: 24 })
         const app = TuiRoutes()
-
-        const input = await app.request("/host/input", {
-          method: "POST",
-          headers: { "content-type": "application/json" },
-          body: JSON.stringify({ data: "route-host-input\r\n" }),
-        })
-        expect(input.status).toBe(200)
-        expect(await input.json()).toBe(true)
-        await waitFor(
-          () => TuiHost.snapshot().buffer.includes("route-host-input"),
-          "host route input did not reach the Pseudo Terminal",
-        )
 
         const resize = await app.request("/host/resize", {
           method: "POST",
@@ -253,30 +212,6 @@ describe("server.tui-host-routes", () => {
         expect(resized.cols).toBe(120)
         expect(resized.rows).toBe(40)
         expect(resized.directory).toBe(tmp.path)
-
-        const snapshot = await app.request("/host/snapshot")
-        expect(snapshot.status).toBe(200)
-        const body = (await snapshot.json()) as { buffer: string; cols: number; rows: number }
-        expect(body.buffer).toContain("route-host-input")
-        expect(body.cols).toBe(120)
-        expect(body.rows).toBe(40)
-
-        const output = await app.request("/host/output?cursor=0")
-        expect(output.status).toBe(200)
-        const firstOutput = (await output.json()) as { data: string; cursor: number; from: number; truncated: boolean }
-        expect(firstOutput.data).toContain("route-host-input")
-        expect(firstOutput.from).toBe(0)
-        expect(firstOutput.cursor).toBeGreaterThan(0)
-        expect(firstOutput.truncated).toBe(false)
-
-        const emptyOutput = await app.request(`/host/output?cursor=${encodeURIComponent(String(firstOutput.cursor))}`)
-        expect(emptyOutput.status).toBe(200)
-        expect(await emptyOutput.json()).toMatchObject({
-          data: "",
-          cursor: firstOutput.cursor,
-          from: firstOutput.cursor,
-          truncated: false,
-        })
 
         const stop = await app.request("/host/stop", { method: "POST" })
         expect(stop.status).toBe(200)
@@ -325,15 +260,4 @@ describe("server.tui-host-routes", () => {
     }
   })
 
-  test("rejects invalid output cursor payload", async () => {
-    await using tmp = await tmpdir()
-    await Instance.provide({
-      directory: tmp.path,
-      fn: async () => {
-        const app = TuiRoutes()
-        const res = await app.request("/host/output?cursor=-2")
-        expect(res.status).toBe(400)
-      },
-    })
-  })
 })

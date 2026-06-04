@@ -13,10 +13,6 @@ export interface TuiHostInfo {
   updatedAt: number | null
 }
 
-export interface TuiHostSnapshot extends TuiHostInfo {
-  buffer: string
-}
-
 export interface TuiHostConnectToken {
   ticket: string
   expires_in: number
@@ -37,10 +33,6 @@ export async function startTuiHost(input: StartTuiHostInput): Promise<TuiHostInf
 
 export async function loadTuiHostStatus(): Promise<TuiHostInfo> {
   return await apiJson("tui/host/status")
-}
-
-export async function loadTuiHostSnapshot(): Promise<TuiHostSnapshot> {
-  return await apiJson("tui/host/snapshot")
 }
 
 export async function createTuiHostConnectToken(): Promise<TuiHostConnectToken> {

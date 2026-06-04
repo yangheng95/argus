@@ -319,13 +319,8 @@ import type {
   TuiHostConnectResponses,
   TuiHostConnectTokenErrors,
   TuiHostConnectTokenResponses,
-  TuiHostInputErrors,
-  TuiHostInputResponses,
-  TuiHostOutputErrors,
-  TuiHostOutputResponses,
   TuiHostResizeErrors,
   TuiHostResizeResponses,
-  TuiHostSnapshotResponses,
   TuiHostStartErrors,
   TuiHostStartResponses,
   TuiHostStatusResponses,
@@ -7587,55 +7582,6 @@ export class Host extends HeyApiClient {
   }
 
   /**
-   * Get embedded TUI host snapshot
-   *
-   * Get the buffered terminal output for the embedded right-sidebar TUI host.
-   */
-  public snapshot<ThrowOnError extends boolean = false>(
-    parameters?: {
-      directory?: string
-    },
-    options?: Options<never, ThrowOnError>,
-  ) {
-    const params = buildClientParams([parameters], [{ args: [{ in: "query", key: "directory" }] }])
-    return (options?.client ?? this.client).get<TuiHostSnapshotResponses, unknown, ThrowOnError>({
-      url: "/tui/host/snapshot",
-      ...options,
-      ...params,
-    })
-  }
-
-  /**
-   * Get embedded TUI host output delta
-   *
-   * Get buffered terminal output after a cursor for the embedded right-sidebar TUI host. Cursor -1 starts at the current end.
-   */
-  public output<ThrowOnError extends boolean = false>(
-    parameters?: {
-      directory?: string
-      cursor?: number
-    },
-    options?: Options<never, ThrowOnError>,
-  ) {
-    const params = buildClientParams(
-      [parameters],
-      [
-        {
-          args: [
-            { in: "query", key: "directory" },
-            { in: "query", key: "cursor" },
-          ],
-        },
-      ],
-    )
-    return (options?.client ?? this.client).get<TuiHostOutputResponses, TuiHostOutputErrors, ThrowOnError>({
-      url: "/tui/host/output",
-      ...options,
-      ...params,
-    })
-  }
-
-  /**
    * Issue embedded TUI host connect token
    *
    * Issue a one-use connect token scoped to the running project-bound Pseudo Terminal (PTY) host.
@@ -7696,41 +7642,6 @@ export class Host extends HeyApiClient {
       url: "/tui/host/connect",
       ...options,
       ...params,
-    })
-  }
-
-  /**
-   * Write input to embedded TUI host
-   *
-   * Write terminal input to the project-bound embedded TUI host.
-   */
-  public input<ThrowOnError extends boolean = false>(
-    parameters?: {
-      directory?: string
-      data?: string
-    },
-    options?: Options<never, ThrowOnError>,
-  ) {
-    const params = buildClientParams(
-      [parameters],
-      [
-        {
-          args: [
-            { in: "query", key: "directory" },
-            { in: "body", key: "data" },
-          ],
-        },
-      ],
-    )
-    return (options?.client ?? this.client).post<TuiHostInputResponses, TuiHostInputErrors, ThrowOnError>({
-      url: "/tui/host/input",
-      ...options,
-      ...params,
-      headers: {
-        "Content-Type": "application/json",
-        ...options?.headers,
-        ...params.headers,
-      },
     })
   }
 
