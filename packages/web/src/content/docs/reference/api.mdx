@@ -1,6 +1,6 @@
 ---
 title: HTTP API reference
-description: HTTP API reference — auto-generated from packages/sdk/openapi.json
+description: "HTTP API reference--auto-generated from packages/sdk/openapi.json."
 ---
 
 > This file is generated from `packages/sdk/openapi.json` by `bun run docs:api`. Do not edit by hand — changes will be overwritten on the next CI run.
@@ -18,6 +18,7 @@ All endpoints are protected by `OPENCORVUS_SERVER_PASSWORD`. When set, clients m
 | GET | `/event` | Subscribe to events | `event.subscribe` |
 | GET | `/global/config` | Get global configuration | `global.config.get` |
 | PATCH | `/global/config` | Update global configuration | `global.config.update` |
+| POST | `/global/db/reset` | Reset database | `global.db.reset` |
 | POST | `/global/dispose` | Dispose instance | `global.dispose` |
 | GET | `/global/event` | Get global events | `global.event` |
 | GET | `/global/health` | Get health | `global.health` |
@@ -68,20 +69,24 @@ All endpoints are protected by `OPENCORVUS_SERVER_PASSWORD`. When set, clients m
 | POST | `/interaction/{interactionID}/reply` | Reply to interaction | `interaction.reply` |
 | GET | `/run/{runID}` | Get run | `run.get` |
 | POST | `/run/{runID}/abort` | Abort run | `run.abort` |
+| GET | `/run/{runID}/acceptance` | Get run acceptance | `run.acceptance` |
 | GET | `/run/{runID}/artifacts` | List run artifacts | `run.artifacts` |
 | GET | `/run/{runID}/brief` | Get run brief | `run.brief` |
-| GET | `/run/{runID}/acceptance` | Get run acceptance | `run.acceptance` |
 | GET | `/run/{runID}/evaluations` | List run evaluations | `run.evaluations` |
 | POST | `/task` | Create task | `task.create` |
 | PATCH | `/task-queue/reorder` | Reorder queued tasks in a directory | `task.queue.reorder` |
 | GET | `/task/events` | Subscribe to global task-list change notifications | `task.list.events` |
 | DELETE | `/task/{taskID}` | Delete task | `task.delete` |
 | GET | `/task/{taskID}` | Get task | `task.get` |
+| GET | `/task/{taskID}/bindings` | List channel bindings for a task | `task.bindings` |
 | GET | `/task/{taskID}/board` | Get task board | `task.board` |
 | GET | `/task/{taskID}/brief` | Get task brief | `task.brief` |
 | PATCH | `/task/{taskID}/budget` | Update task budget | `task.updateBudget` |
 | POST | `/task/{taskID}/cancel` | Cancel task | `task.cancel` |
 | GET | `/task/{taskID}/conversation` | Hydrate task conversation state | `task.conversation` |
+| GET | `/task/{taskID}/conversation/events` | Page task conversation replay events | `task.conversation.events` |
+| GET | `/task/{taskID}/conversation/history` | Page older task conversation transcript | `task.conversation.history` |
+| GET | `/task/{taskID}/conversation/session/{sessionID}` | Get one task conversation session transcript | `task.conversation.session` |
 | GET | `/task/{taskID}/events` | Subscribe to task events | `task.events` |
 | POST | `/task/{taskID}/followup` | Generate follow-up suggestion | `task.followup` |
 | POST | `/task/{taskID}/inject` | Inject message into running task | `task.inject` |
@@ -95,6 +100,8 @@ All endpoints are protected by `OPENCORVUS_SERVER_PASSWORD`. When set, clients m
 | GET | `/task/{taskID}/runs` | List task runs | `task.runs` |
 | POST | `/task/{taskID}/session/{sessionID}/cancel` | Cancel a task agent session | `task.session.cancel` |
 | POST | `/task/{taskID}/session/{sessionID}/reply` | Reply directly to a task agent session | `task.session.reply` |
+| POST | `/task/{taskID}/start-now` | Start a queued task immediately | `task.queue.startNow` |
+| PATCH | `/task/{taskID}/title` | Update task title | `task.updateTitle` |
 | GET | `/task/{taskID}/trace` | Get task AgentTrace events (all sessions) | `task.trace` |
 | GET | `/task/{taskID}/transcript` | Get task transcript | `task.transcript` |
 | GET | `/tasks` | List project tasks | `task.list` |
@@ -113,7 +120,11 @@ All endpoints are protected by `OPENCORVUS_SERVER_PASSWORD`. When set, clients m
 | POST | `/session/{sessionID}/abort` | Abort session | `session.abort` |
 | GET | `/session/{sessionID}/children` | Get session children | `session.children` |
 | POST | `/session/{sessionID}/command` | Send command | `session.command` |
+| GET | `/session/{sessionID}/config` | Get session effective configuration | `session.config.get` |
+| PATCH | `/session/{sessionID}/config` | Update session configuration overlay | `session.config.update` |
+| GET | `/session/{sessionID}/conversation` | Hydrate session conversation state | `session.conversation` |
 | GET | `/session/{sessionID}/diff` | Get message diff | `session.diff` |
+| GET | `/session/{sessionID}/events` | Subscribe to session events | `session.events` |
 | POST | `/session/{sessionID}/fork` | Fork session | `session.fork` |
 | POST | `/session/{sessionID}/init` | Initialize session | `session.init` |
 | GET | `/session/{sessionID}/message` | Get session messages | `session.messages` |
@@ -141,6 +152,8 @@ All endpoints are protected by `OPENCORVUS_SERVER_PASSWORD`. When set, clients m
 
 | Method | Path | Summary | operationId |
 |---|---|---|---|
+| POST | `/coding/cli/open` | Open coding CLI | `coding.cli.open` |
+| GET | `/coding/cli/profiles` | List installed coding CLIs | `coding.cli.profiles` |
 | POST | `/coding/message/stream` | Send coding assistant message with streaming | `coding.message.stream` |
 | GET | `/coding/session/{sessionID}/messages` | Get coding session messages | `coding.session.messages` |
 
@@ -234,7 +247,9 @@ All endpoints are protected by `OPENCORVUS_SERVER_PASSWORD`. When set, clients m
 |---|---|---|---|
 | GET | `/provider` | List providers | `provider.list` |
 | GET | `/provider/auth` | Get provider auth methods | `provider.auth` |
+| POST | `/provider/discover-models` | Discover OpenAI-compatible provider models | `provider.discover.models` |
 | POST | `/provider/hexin/refresh` | Refresh hexin gateway model list | `provider.hexin.refresh` |
+| POST | `/provider/refresh` | Refresh the models.dev registry snapshot | `provider.refresh` |
 | POST | `/provider/{providerID}/auth/execute` | Execute auth method | `provider.auth.execute` |
 | POST | `/provider/{providerID}/auth/prompts` | Get auth prompts | `provider.auth.prompts` |
 | POST | `/provider/{providerID}/oauth/authorize` | OAuth authorize | `provider.oauth.authorize` |
@@ -249,23 +264,13 @@ All endpoints are protected by `OPENCORVUS_SERVER_PASSWORD`. When set, clients m
 | POST | `/question/{requestID}/reject` | Reject question request | `question.reject` |
 | POST | `/question/{requestID}/reply` | Reply to question request | `question.reply` |
 
-### PTY
-
-| Method | Path | Summary | operationId |
-|---|---|---|---|
-| GET | `/pty` | List PTY sessions | `pty.list` |
-| POST | `/pty` | Create PTY session | `pty.create` |
-| DELETE | `/pty/{ptyID}` | Remove PTY session | `pty.remove` |
-| GET | `/pty/{ptyID}` | Get PTY session | `pty.get` |
-| PUT | `/pty/{ptyID}` | Update PTY session | `pty.update` |
-| GET | `/pty/{ptyID}/connect` | Connect to PTY session | `pty.connect` |
-
 ### File / Search
 
 | Method | Path | Summary | operationId |
 |---|---|---|---|
 | GET | `/file` | List files | `file.list` |
 | GET | `/file/content` | Read file | `file.read` |
+| PATCH | `/file/content` | Write file | `file.write` |
 | GET | `/file/status` | Get file status | `file.status` |
 | GET | `/find` | Find text | `find.text` |
 | GET | `/find/file` | Find files | `find.files` |
@@ -316,3 +321,17 @@ All endpoints are protected by `OPENCORVUS_SERVER_PASSWORD`. When set, clients m
 | GET | `/experimental/worktree` | List worktrees | `worktree.list` |
 | POST | `/experimental/worktree` | Create worktree | `worktree.create` |
 | POST | `/experimental/worktree/reset` | Reset worktree | `worktree.reset` |
+
+### Mission
+
+| Method | Path | Summary | operationId |
+|---|---|---|---|
+| GET | `/mission` | List Missions | `mission.list` |
+| POST | `/mission/wake` | Wake the Mission agent | `mission.wake` |
+
+### Terminal
+
+| Method | Path | Summary | operationId |
+|---|---|---|---|
+| POST | `/terminal/open` | Open system terminal | `terminal.open` |
+| GET | `/terminal/profiles` | List system terminal profiles | `terminal.profiles` |
