@@ -315,6 +315,8 @@ import type {
   TuiControlResponseResponses,
   TuiExecuteCommandErrors,
   TuiExecuteCommandResponses,
+  TuiHostConnectErrors,
+  TuiHostConnectResponses,
   TuiHostConnectTokenErrors,
   TuiHostConnectTokenResponses,
   TuiHostInputErrors,
@@ -7663,6 +7665,38 @@ export class Host extends HeyApiClient {
         ...params,
       },
     )
+  }
+
+  /**
+   * Connect to embedded TUI host
+   *
+   * Upgrade to a WebSocket attached to the project-bound embedded Pseudo Terminal (PTY) host. The ticket is one-use and issued by /tui/host/connect-token.
+   */
+  public connect<ThrowOnError extends boolean = false>(
+    parameters: {
+      directory?: string
+      ticket: string
+      cursor?: number
+    },
+    options?: Options<never, ThrowOnError>,
+  ) {
+    const params = buildClientParams(
+      [parameters],
+      [
+        {
+          args: [
+            { in: "query", key: "directory" },
+            { in: "query", key: "ticket" },
+            { in: "query", key: "cursor" },
+          ],
+        },
+      ],
+    )
+    return (options?.client ?? this.client).get<TuiHostConnectResponses, TuiHostConnectErrors, ThrowOnError>({
+      url: "/tui/host/connect",
+      ...options,
+      ...params,
+    })
   }
 
   /**

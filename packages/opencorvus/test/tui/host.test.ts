@@ -148,6 +148,39 @@ describe("tui.host", () => {
     })
   })
 
+  test("prepares ticketed host connections that stream retained and live output", async () => {
+    await using tmp = await tmpdir()
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        await TuiHost.startPrepared({ command: inputEchoCommand(tmp.path), cols: 80, rows: 24 })
+        TuiHost.input("opencorvus-host-retained\r\n")
+        await waitFor(
+          () => TuiHost.snapshot().buffer.includes("opencorvus-host-retained"),
+          "Pseudo Terminal host did not retain output before connect",
+        )
+
+        const token = TuiHost.issueConnectToken()
+        const prepared = TuiHost.prepareConnect({ ticket: token.ticket, cursor: 0 })
+        expect(prepared.initialData).toContain("opencorvus-host-retained")
+        const chunks: string[] = []
+        const connection = prepared.attach({
+          send: (chunk) => chunks.push(chunk),
+          close: () => undefined,
+        })
+        expect(chunks.join("")).toContain("opencorvus-host-retained")
+
+        connection.onMessage("opencorvus-host-live\r\n")
+        await waitFor(
+          () => chunks.join("").includes("opencorvus-host-live"),
+          "ticketed host connection did not receive live output",
+        )
+        connection.onClose()
+        await TuiHost.stop()
+      },
+    })
+  })
+
   test("resolves embedded command from the same TUI spawn options", async () => {
     await using tmp = await tmpdir()
     const command = await Tui.resolveEmbeddedCommand({

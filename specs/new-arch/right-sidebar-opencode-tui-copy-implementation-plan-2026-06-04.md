@@ -1380,3 +1380,50 @@ OpenCode gap after the round:
 - The route currently validates the ticket issuance header but does not yet implement OpenCode's browser-origin check because the corresponding WebSocket/connect path has not been added.
 - HTTP cursor polling remains the overlay render transport until the WebSocket attach path is implemented.
 - Browser visual E2E, project-bound Agent Team tool/plugin surface, external TUI plugin loader/install, move-session/workspace prompt flow, and `SessionV2Debug` remain missing.
+
+### 2026-06-05 Round 16: added ticketed WebSocket attach and moved overlay off polling
+
+Implemented:
+
+- Rechecked latest OpenCode dev before editing. Upstream remained at `107180701f626eaf97e0f032c4a46fe4b4e9c0ec`; no new TUI, PTY, app, or terminal files changed since Round 15.
+- Copied the next OpenCode PTY attach behavior into the current single-host surface:
+  - added `GET /tui/host/connect?ticket=&cursor=` as a WebSocket upgrade endpoint;
+  - consumes the one-use ticket before upgrade, matching OpenCode's invalid/reuse rejection behavior;
+  - returns 400 for invalid query, 403 for invalid/reused ticket, and 404 when no host is running;
+  - sends retained output from the requested cursor after connect;
+  - streams future PTY output directly to every attached connection;
+  - writes incoming WebSocket messages to the PTY;
+  - closes attached sockets when the host exits or stops.
+- Fixed the project route delegate in `packages/opencorvus/src/server/server.ts` to pass Hono/Bun env into `projectApp.fetch(...)`; without that, project-scoped WebSocket routes cannot access the Bun server for upgrade.
+- Moved the right-sidebar overlay render path from HTTP cursor polling to ticketed WebSocket attach:
+  - `TuiHostPanel` now calls `createTuiHostConnectToken()`;
+  - opens `new WebSocket(buildTuiHostConnectUrl({ ticket, cursor }))`;
+  - writes incoming chunks directly into `ghostty-web`;
+  - sends keyboard input through `socket.send(data)`;
+  - keeps HTTP resize for terminal size changes.
+- Removed overlay service exposure for HTTP `input` and `output`, so the mounted right-sidebar UI has one input/output path.
+- Deleted the retired overlay polling replay helper `writeTuiHostTerminalOutput()` and its tests.
+- Regenerated SDK and API docs; route inventory now includes 225 operations.
+
+Verified:
+
+- `bun test packages/opencorvus/test/tui/host.test.ts`
+- `bun test packages/opencorvus/test/server/tui-host-routes.test.ts`
+- `bun test packages/overlay/test/tui-host-service.test.ts packages/overlay/test/tui-host-panel.test.ts packages/overlay/test/coding-assistant-panel.test.ts packages/overlay/test/tui-host-terminal.test.ts`
+- `bun run --cwd packages/opencorvus typecheck`
+- `bun run --cwd packages/overlay typecheck`
+- `bun run --cwd packages/sdk/js build`
+- `bun run docs:api`
+
+OpenCode comparison after the round:
+
+- The right-sidebar host now has the core OpenCode connect-token plus WebSocket attach loop: ticketed connect, retained cursor replay, live output streaming, input over WebSocket, and single-use ticket rejection.
+- The overlay no longer uses the old HTTP polling loop for rendering or HTTP input for keystrokes.
+- Existing agent workflow remains untouched: no changes to session prompt execution, task queue, permissions, questions, panel tools, or `/coding/session*` provenance.
+
+OpenCode gap after the round:
+
+- The current host is still a single project-bound embedded TUI process, not OpenCode's full multi-PTY `list/create/get/update/remove` service.
+- The WebSocket route consumes tickets, but still lacks OpenCode's origin validation for connect requests.
+- `GET /tui/host/snapshot` and `GET /tui/host/output` still exist as server diagnostics; they are no longer exposed by the overlay TUI service or used by the mounted right-sidebar render loop.
+- Browser visual E2E, project-bound Agent Team tool/plugin surface, external TUI plugin loader/install, move-session/workspace prompt flow, and `SessionV2Debug` remain missing.

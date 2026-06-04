@@ -1,20 +1,19 @@
 import { createEffect, createSignal, onCleanup, type Accessor } from "solid-js"
 import type { FitAddon, Ghostty, Terminal as GhosttyTerminal } from "ghostty-web"
 import {
-  loadTuiHostOutput,
+  buildTuiHostConnectUrl,
+  createTuiHostConnectToken,
   loadTuiHostStatus,
   resizeTuiHost,
-  sendTuiHostInput,
   startTuiHost,
   stopTuiHost,
-  type TuiHostOutput,
+  type TuiHostInfo,
 } from "../services/tui-host"
-import { hasTuiHostTerminalSizeChanged, writeTuiHostTerminalOutput } from "../services/tui-host-terminal"
+import { hasTuiHostTerminalSizeChanged } from "../services/tui-host-terminal"
 import { t } from "../utils/i18n"
 import { Icon } from "./Icon"
 import { Button } from "./ui/Button"
 
-const HOST_POLL_INTERVAL_MS = 500
 const DEFAULT_COLS = 100
 const DEFAULT_ROWS = 30
 
@@ -41,60 +40,84 @@ export function TuiHostPanel(props: TuiHostPanelProps) {
   let container!: HTMLDivElement
   let term: GhosttyTerminal | undefined
   let fitAddon: FitAddon | undefined
-  let pollTimer: ReturnType<typeof setInterval> | undefined
+  let socket: WebSocket | undefined
   let resizeFrame: number | undefined
   let resizeObserver: ResizeObserver | undefined
   let disposed = false
   let hostStarted = false
-  let renderedBuffer = ""
-  let hostCursor: number | undefined = 0
+  let hostCursor = 0
   let lastSize: { cols: number; rows: number } | undefined
 
-  const [output, setOutput] = createSignal<TuiHostOutput | null>(null)
+  const [hostInfo, setHostInfo] = createSignal<TuiHostInfo | null>(null)
   const [loading, setLoading] = createSignal(false)
   const [error, setError] = createSignal("")
 
   const hostState = () => {
     if (error()) return "error"
-    if (loading() && !output()) return "loading"
-    return output()?.running ? "running" : "stopped"
+    if (loading() && !hostInfo()) return "loading"
+    return hostInfo()?.running ? "running" : "stopped"
   }
 
   const hostLabel = () => {
     if (error()) return t("tui.host_error")
-    if (loading() && !output()) return t("common.loading")
-    return output()?.running ? t("tui.host_running") : t("tui.host_stopped")
+    if (loading() && !hostInfo()) return t("common.loading")
+    return hostInfo()?.running ? t("tui.host_running") : t("tui.host_stopped")
   }
 
-  function writeOutput(nextOutput: TuiHostOutput) {
+  function writeSocketOutput(data: string) {
     const current = term
     if (!current) return
-    renderedBuffer = writeTuiHostTerminalOutput({
-      terminal: current,
-      renderedBuffer,
-      output: nextOutput,
-    })
+    current.write(data)
+    hostCursor += data.length
   }
 
-  async function refreshOutput() {
-    if (!props.active()) return
-    const next = await loadTuiHostOutput(hostCursor)
-    if (disposed) return
-    hostCursor = next.cursor
-    setOutput(next)
-    writeOutput(next)
+  function closeSocket() {
+    const current = socket
+    socket = undefined
+    current?.close(1000)
   }
 
   async function ensureHostStarted() {
-    if (hostStarted) return
+    if (hostStarted) return hostInfo()
     const current = await loadTuiHostStatus()
     if (disposed) return
+    setHostInfo(current)
     hostStarted = current.running
-    if (hostStarted) return
+    if (hostStarted) return current
     const cols = term?.cols && term.cols > 0 ? term.cols : DEFAULT_COLS
     const rows = term?.rows && term.rows > 0 ? term.rows : DEFAULT_ROWS
-    await startTuiHost({ cols, rows })
+    const started = await startTuiHost({ cols, rows })
+    setHostInfo(started)
     hostStarted = true
+    return started
+  }
+
+  async function connectHostSocket() {
+    if (!props.active() || socket) return
+    const token = await createTuiHostConnectToken()
+    if (disposed || !props.active()) return
+    const nextSocket = new WebSocket(buildTuiHostConnectUrl({ ticket: token.ticket, cursor: hostCursor }))
+    socket = nextSocket
+    nextSocket.binaryType = "arraybuffer"
+    nextSocket.onopen = () => {
+      if (!disposed) setError("")
+    }
+    nextSocket.onmessage = (event) => {
+      if (disposed) return
+      if (typeof event.data === "string") {
+        writeSocketOutput(event.data)
+        return
+      }
+      if (event.data instanceof ArrayBuffer) {
+        writeSocketOutput(new TextDecoder().decode(event.data))
+      }
+    }
+    nextSocket.onerror = () => {
+      if (!disposed) setError("TUI host WebSocket failed")
+    }
+    nextSocket.onclose = () => {
+      if (socket === nextSocket) socket = undefined
+    }
   }
 
   async function start() {
@@ -103,25 +126,12 @@ export function TuiHostPanel(props: TuiHostPanelProps) {
     setError("")
     try {
       await ensureHostStarted()
-      await refreshOutput()
-      if (pollTimer === undefined) {
-        pollTimer = setInterval(() => {
-          void refreshOutput().catch((err) => {
-            if (!disposed) setError(err instanceof Error ? err.message : String(err))
-          })
-        }, HOST_POLL_INTERVAL_MS)
-      }
+      await connectHostSocket()
     } catch (err) {
       if (!disposed) setError(err instanceof Error ? err.message : String(err))
     } finally {
       if (!disposed) setLoading(false)
     }
-  }
-
-  function stopPolling() {
-    if (pollTimer === undefined) return
-    clearInterval(pollTimer)
-    pollTimer = undefined
   }
 
   function scheduleFit() {
@@ -149,8 +159,8 @@ export function TuiHostPanel(props: TuiHostPanelProps) {
     setError("")
     try {
       await stopTuiHost()
+      closeSocket()
       hostStarted = false
-      renderedBuffer = ""
       hostCursor = 0
       term?.reset()
       await start()
@@ -165,7 +175,7 @@ export function TuiHostPanel(props: TuiHostPanelProps) {
     if (props.active()) {
       void start()
     } else {
-      stopPolling()
+      closeSocket()
     }
   })
 
@@ -203,10 +213,8 @@ export function TuiHostPanel(props: TuiHostPanelProps) {
       resizeObserver = new ResizeObserver(() => scheduleFit())
       resizeObserver.observe(container)
       next.onData((data) => {
-        if (!hostStarted) return
-        void sendTuiHostInput(data).catch((err) => {
-          if (!disposed) setError(err instanceof Error ? err.message : String(err))
-        })
+        if (!hostStarted || socket?.readyState !== WebSocket.OPEN) return
+        socket.send(data)
       })
       next.onResize((size) => pushSize(size.cols, size.rows))
       next.focus()
@@ -219,7 +227,7 @@ export function TuiHostPanel(props: TuiHostPanelProps) {
 
   onCleanup(() => {
     disposed = true
-    stopPolling()
+    closeSocket()
     if (resizeFrame !== undefined) cancelAnimationFrame(resizeFrame)
     resizeObserver?.disconnect()
     fitAddon?.dispose()
@@ -247,7 +255,7 @@ export function TuiHostPanel(props: TuiHostPanelProps) {
             title={t("common.refresh")}
             aria-label={t("common.refresh")}
             disabled={loading()}
-            onClick={() => void refreshOutput()}
+            onClick={() => void connectHostSocket()}
           >
             <Icon name="refresh" />
           </Button>
