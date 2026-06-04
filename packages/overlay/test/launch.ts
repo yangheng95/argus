@@ -215,7 +215,10 @@ class OverlayBrowserSidecar {
       },
       close: async () => {
         try {
-          await this.call("closeBrowser")
+          await Promise.race([
+            this.call("closeBrowser"),
+            new Promise((resolve) => setTimeout(resolve, 5_000)),
+          ])
         } finally {
           this.child?.kill()
           this.release()

@@ -37,8 +37,14 @@ test("panel header collapse controls shrink side panes to header rails", async (
       if (path === "/provider/auth") return send({});
       if (path === "/config/providers") return send({ providers: [] });
       if (path === "/config") return send({ model: "" });
+      if (path === "/agent") return send([]);
+      if (path === "/channel") return send([]);
+      if (path === "/executor") return send([]);
+      if (path === "/skill/installed" || path === "/skill") return send([]);
+      if (path === "/mcp") return send({});
       if (path === "/panel/knowledge/memory") return send([]);
       if (path === "/panel/knowledge/preference") return send([]);
+      if (path === "/tui/runtime/status") return send({ running: false, mode: "none", url: null, sessionID: null });
       return send({});
     },
   });
@@ -102,7 +108,8 @@ test("panel header collapse controls shrink side panes to header rails", async (
         rightResizer: measure("#rightPaneResizer"),
         leftToggle: measure('[data-ui="sidebar-header-collapse-toggle"]'),
         rightToggle: measure('[data-ui="right-panel-header-collapse-toggle"]'),
-        sidebarTitleVisible: getComputedStyle(document.querySelector<HTMLElement>(".sidebar-title")!).display !== "none",
+        sidebarContentVisible: getComputedStyle(document.querySelector<HTMLElement>("#sidebar .side-panel-content")!).display !== "none",
+        sectionsContentVisible: getComputedStyle(document.querySelector<HTMLElement>("#sections .side-panel-content")!).display !== "none",
       };
     });
 
@@ -130,7 +137,8 @@ test("panel header collapse controls shrink side panes to header rails", async (
     expect(collapsed.leftToggle.display).not.toBe("none");
     expect(collapsed.rightToggle.hidden).toBe(false);
     expect(collapsed.rightToggle.display).not.toBe("none");
-    expect(collapsed.sidebarTitleVisible).toBe(false);
+    expect(collapsed.sidebarContentVisible).toBe(false);
+    expect(collapsed.sectionsContentVisible).toBe(false);
 
     await page.click('[data-ui="sidebar-header-collapse-toggle"]');
     await page.click('[data-ui="right-panel-header-collapse-toggle"]');
@@ -210,4 +218,4 @@ test("panel header collapse controls shrink side panes to header rails", async (
     await browser.close();
     server.stop(true);
   }
-});
+}, { timeout: 60_000 });

@@ -66,6 +66,7 @@ test(
         if (path === "/mcp") return send({})
         if (path === "/panel/knowledge/memory") return send([])
         if (path === "/panel/knowledge/preference") return send([])
+        if (path === "/tui/runtime/status") return send({ running: false, mode: "none", url: null, sessionID: null })
         if (path === "/log" && req.method === "POST") return send({ ok: true })
         return new Response(`unhandled ${req.method} ${url.pathname}`, { status: 404 })
       },
@@ -363,6 +364,7 @@ test(
         if (path === "/mcp") return send({})
         if (path === "/panel/knowledge/memory") return send([])
         if (path === "/panel/knowledge/preference") return send([])
+        if (path === "/tui/runtime/status") return send({ running: false, mode: "none", url: null, sessionID: null })
         if (path === "/log" && req.method === "POST") return send({ ok: true })
         return new Response(`unhandled ${req.method} ${url.pathname}`, { status: 404 })
       },
@@ -487,6 +489,7 @@ test(
         const staticResponse = await overlayStaticResponse(path)
         if (staticResponse) return staticResponse
         if (path === "/global/health") return send({ version: "1.2.3" })
+        if (path === "/tui/runtime/status") return send({ running: false, mode: "none", url: null, sessionID: null })
         if (path === "/log" && req.method === "POST") return send({ ok: true })
         return new Response(`unhandled ${req.method} ${url.pathname}`, { status: 404 })
       },
@@ -540,8 +543,8 @@ test(
         const title = document.querySelector<HTMLElement>(".workspace-onboarding-titleblock")
         const brandWordmark = document.querySelector<HTMLElement>(".brand-guide-wordmark")
         const brandLabel = document.querySelector<HTMLElement>(".brand-guide-label")
-        const rightTabs = Array.from(document.querySelectorAll<HTMLElement>('[data-ui="right-tab"]')).map((node) => ({
-          text: node.textContent || "",
+        const rightActivities = Array.from(document.querySelectorAll<HTMLElement>('[data-ui="side-activity-button"][data-side="right"]')).map((node) => ({
+          activity: node.dataset.activity || "",
           active: node.dataset.active,
         }))
         const startupInvokes = ((window as any).__startupInvokes || []) as string[]
@@ -552,7 +555,7 @@ test(
           title: title?.textContent || "",
           brandWordmark: brandWordmark?.textContent || "",
           brandLabel: brandLabel?.textContent || "",
-          rightTabs,
+          rightActivities,
           pickDirInvokes: startupInvokes.filter((value) => value === "overlay_pick_dir").length,
         }
       })
@@ -563,12 +566,10 @@ test(
       expect(intro.title).toContain("Open a workspace directory")
       expect(intro.brandWordmark).toBe("OpenCorvus")
       expect(intro.brandLabel).toBe("Workspace")
-      expect(intro.rightTabs).toEqual([
-        { text: "Files", active: "false" },
-        { text: "Explorer", active: "true" },
-        { text: "Assistant", active: "false" },
-        { text: "Preview", active: "false" },
-        { text: "Inspector", active: "false" },
+      expect(intro.rightActivities).toEqual([
+        { activity: "tui", active: "true" },
+        { activity: "browser", active: "false" },
+        { activity: "inspector", active: "false" },
       ])
       await page.close()
     } finally {
@@ -621,6 +622,7 @@ test(
         if (path === "/mcp") return send({})
         if (path === "/panel/knowledge/memory") return send([])
         if (path === "/panel/knowledge/preference") return send([])
+        if (path === "/tui/runtime/status") return send({ running: false, mode: "none", url: null, sessionID: null })
         if (path === "/log" && req.method === "POST") return send({ ok: true })
         return new Response(`unhandled ${req.method} ${url.pathname}`, { status: 404 })
       },
@@ -755,6 +757,7 @@ test(
         if (path === "/mcp") return send({})
         if (path === "/panel/knowledge/memory") return send([])
         if (path === "/panel/knowledge/preference") return send([])
+        if (path === "/tui/runtime/status") return send({ running: false, mode: "none", url: null, sessionID: null })
         if (path === "/log" && req.method === "POST") return send({ ok: true })
         return new Response(`unhandled ${req.method} ${url.pathname}`, { status: 404 })
       },
@@ -918,8 +921,6 @@ test(
           ".titlebar-btn",
           '[data-ui="sidebar-new-task-button"]',
           ".btn.mini",
-          '[data-ui="right-tabs"]',
-          '[data-ui="right-tab"]',
           ".conn-banner__action",
           ".board-intro__cta-action",
         ]
@@ -944,12 +945,7 @@ test(
             props: ["rowGap", "paddingTop", "paddingRight", "paddingBottom", "paddingLeft"],
             max: 7,
           },
-          {
-            selector: '[data-ui="right-tabs"]',
-            props: ["columnGap", "paddingTop", "paddingRight", "paddingBottom", "paddingLeft"],
-            max: 3,
-          },
-          { selector: '[data-ui="right-tab"]', props: ["height", "paddingLeft", "paddingRight"], max: 24 },
+          { selector: '[data-ui="side-activity-button"][data-side="right"]', props: ["height", "paddingLeft", "paddingRight"], max: 40 },
           {
             selector: ".board-intro",
             props: ["rowGap", "paddingTop", "paddingRight", "paddingBottom", "paddingLeft"],
@@ -999,8 +995,6 @@ test(
         const selectors = [
           ".sections",
           ".sections-header",
-          '[data-ui="right-tabs"]',
-          '[data-ui="right-tab"]',
           ".board-intro",
           ".board-intro__section",
           ".board-intro__mode",
@@ -1030,8 +1024,6 @@ test(
           '[data-ui="titlebar-menubar-trigger"]',
           ".titlebar-btn",
           ".btn.mini",
-          '[data-ui="right-tabs"]',
-          '[data-ui="right-tab"]',
           ".conn-banner__action",
         ]
         const transparent = (value: string) =>
