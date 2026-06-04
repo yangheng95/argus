@@ -62,8 +62,13 @@ describe("orchestrator session reuse", () => {
           patch: { model: "mock-control/control" },
         })
         const promptInputs: Array<Parameters<typeof SessionPrompt.prompt>[0]> = []
+        const loopInputs: Array<Parameters<typeof SessionPrompt.loop>[0]> = []
         spyOn(SessionPrompt, "prompt").mockImplementation((async (input) => {
           promptInputs.push(input)
+          return promptResult(input.sessionID)
+        }) as never)
+        spyOn(SessionPrompt, "loop").mockImplementation((async (input) => {
+          loopInputs.push(input)
           return promptResult(input.sessionID)
         }) as never)
 
@@ -84,15 +89,29 @@ describe("orchestrator session reuse", () => {
         })
 
         await Orchestrator.processTask(taskID, { note: "first wake" })
-        await Orchestrator.processTask(taskID, { note: "second wake" })
 
         const children = await Session.children(root.id)
         const orchestrators = children.filter((session) => session.kind === "orchestrator")
+        const orchestratorID = orchestrators[0]!.id
+
+        await Session.updateMessage({
+          id: `msg_orch_user_${now}`,
+          role: "user",
+          sessionID: orchestratorID,
+          time: { created: now + 1 },
+          agent: "orchestrator",
+          model: { providerID: "mock-control", modelID: "control" },
+          system: "previous dynamic context",
+          systemMode: "complete",
+        } as never)
+
+        await Orchestrator.processTask(taskID)
 
         expect(orchestrators).toHaveLength(1)
-        expect(promptInputs).toHaveLength(2)
-        expect(promptInputs[0]!.sessionID).toBe(orchestrators[0]!.id)
-        expect(promptInputs[1]!.sessionID).toBe(orchestrators[0]!.id)
+        expect(promptInputs).toHaveLength(1)
+        expect(promptInputs[0]!.sessionID).toBe(orchestratorID)
+        expect(loopInputs).toHaveLength(1)
+        expect(loopInputs[0]!.sessionID).toBe(orchestratorID)
       },
     })
   })

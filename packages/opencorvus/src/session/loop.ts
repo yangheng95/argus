@@ -114,6 +114,8 @@ export namespace SessionLoop {
   export interface SessionRuntimeContract {
     identity: SessionRuntimeContractIdentity
     tools?: Record<string, AITool>
+    /** Runtime-only system context for a wake that must not append a user message. */
+    system?: string[]
     terminalToolContract?: TerminalToolContract
     structuredOutputGuard?: StructuredOutputGuard
     stream?: TextHooks
@@ -148,6 +150,7 @@ export namespace SessionLoop {
     if (
       !contract ||
       ((!contract.tools || Object.keys(contract.tools).length === 0) &&
+        (!contract.system || contract.system.length === 0) &&
         !contract.terminalToolContract &&
         !contract.structuredOutputGuard &&
         !contract.stream &&
@@ -1471,6 +1474,7 @@ export namespace SessionLoop {
       ...(await SystemPrompt.environment(input.model)),
       ...(skillsSection ? [skillsSection] : []),
       ...(await InstructionPrompt.system()),
+      ...(runtimeContract?.system ?? []),
     ]
     if (format.type === "json_schema") {
       system.push(STRUCTURED_OUTPUT_SYSTEM_PROMPT)
