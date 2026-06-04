@@ -5,9 +5,8 @@ import { pipe, sumBy } from "remeda"
 import { useTheme } from "@tui/context/theme"
 import { SplitBorder } from "@tui/component/border"
 import type { AssistantMessage, Session } from "@opencorvus-ai/sdk"
-import { useCommandDialog } from "@tui/component/dialog-command"
-import { useKeybind } from "../../context/keybind"
 import { useTerminalDimensions } from "@opentui/solid"
+import { useCommandShortcut, useOpencorvusKeymap } from "../../keymap"
 
 const Title = (props: { session: Accessor<Session> }) => {
   const { theme } = useTheme()
@@ -60,8 +59,10 @@ export function Header() {
   })
 
   const { theme } = useTheme()
-  const keybind = useKeybind()
-  const command = useCommandDialog()
+  const keymap = useOpencorvusKeymap()
+  const parentShortcut = useCommandShortcut("session.parent")
+  const previousShortcut = useCommandShortcut("session.child.previous")
+  const nextShortcut = useCommandShortcut("session.child.next")
   const [hover, setHover] = createSignal<"parent" | "prev" | "next" | null>(null)
   const dimensions = useTerminalDimensions()
   const narrow = createMemo(() => dimensions().width < 80)
@@ -92,31 +93,31 @@ export function Header() {
                 <box
                   onMouseOver={() => setHover("parent")}
                   onMouseOut={() => setHover(null)}
-                  onMouseUp={() => command.trigger("session.parent")}
+                  onMouseUp={() => keymap.dispatchCommand("session.parent")}
                   backgroundColor={hover() === "parent" ? theme.backgroundElement : theme.backgroundPanel}
                 >
                   <text fg={theme.text}>
-                    Parent <span style={{ fg: theme.textMuted }}>{keybind.print("session_parent")}</span>
+                    Parent <span style={{ fg: theme.textMuted }}>{parentShortcut()}</span>
                   </text>
                 </box>
                 <box
                   onMouseOver={() => setHover("prev")}
                   onMouseOut={() => setHover(null)}
-                  onMouseUp={() => command.trigger("session.child.previous")}
+                  onMouseUp={() => keymap.dispatchCommand("session.child.previous")}
                   backgroundColor={hover() === "prev" ? theme.backgroundElement : theme.backgroundPanel}
                 >
                   <text fg={theme.text}>
-                    Prev <span style={{ fg: theme.textMuted }}>{keybind.print("session_child_cycle_reverse")}</span>
+                    Prev <span style={{ fg: theme.textMuted }}>{previousShortcut()}</span>
                   </text>
                 </box>
                 <box
                   onMouseOver={() => setHover("next")}
                   onMouseOut={() => setHover(null)}
-                  onMouseUp={() => command.trigger("session.child.next")}
+                  onMouseUp={() => keymap.dispatchCommand("session.child.next")}
                   backgroundColor={hover() === "next" ? theme.backgroundElement : theme.backgroundPanel}
                 >
                   <text fg={theme.text}>
-                    Next <span style={{ fg: theme.textMuted }}>{keybind.print("session_child_cycle")}</span>
+                    Next <span style={{ fg: theme.textMuted }}>{nextShortcut()}</span>
                   </text>
                 </box>
               </box>

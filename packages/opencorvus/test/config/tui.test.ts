@@ -73,8 +73,8 @@ test("merges keybind overrides across precedence layers", async () => {
     directory: tmp.path,
     fn: async () => {
       const config = await TuiConfig.get()
-      expect(config.keybinds?.app_exit).toBe("ctrl+q")
-      expect(config.keybinds?.theme_list).toBe("ctrl+k")
+      expect(config.keybinds.get("app.exit")[0]?.key).toBe("ctrl+q")
+      expect(config.keybinds.get("theme.switch")[0]?.key).toBe("ctrl+k")
     },
   })
 })
@@ -140,7 +140,7 @@ test("applies env and file substitutions in tui.json", async () => {
       fn: async () => {
         const config = await TuiConfig.get()
         expect(config.theme).toBe("env-theme")
-        expect(config.keybinds?.app_exit).toBe("ctrl+q")
+        expect(config.keybinds.get("app.exit")[0]?.key).toBe("ctrl+q")
       },
     })
   } finally {
@@ -222,6 +222,7 @@ test("gracefully falls back when tui.json has invalid JSON", async () => {
       const config = await TuiConfig.get()
       expect(config.theme).toBe("managed-fallback")
       expect(config.keybinds).toBeDefined()
+      expect(config.keybinds.get("app.exit")[0]?.key).toBe("ctrl+c,ctrl+d,<leader>q")
     },
   })
 })

@@ -8,6 +8,7 @@ import { Instance, lazyInstanceState } from "@/project/instance"
 import { Flag } from "@/flag/flag"
 import { Log } from "@/util/log"
 import { Global } from "@/global"
+import * as TuiKeybind from "@/cli/cmd/tui/config/keybind"
 
 export namespace TuiConfig {
   const log = Log.create({ service: "tui.config" })
@@ -15,6 +16,10 @@ export namespace TuiConfig {
   export const Info = TuiInfo
 
   export type Info = z.output<typeof Info>
+  export type Resolved = Omit<Info, "keybinds" | "leader_timeout"> & {
+    keybinds: TuiKeybind.BindingLookupView
+    leader_timeout: number
+  }
 
   function mergeInfo(target: Info, source: Info): Info {
     return mergeDeep(target, source)
@@ -60,15 +65,22 @@ export namespace TuiConfig {
       }
     }
 
-    result.keybinds = Config.Keybinds.parse(result.keybinds ?? {})
-
     return {
-      config: result,
+      config: resolve(result),
     }
   })
 
-  export async function get() {
+  export async function get(): Promise<Resolved> {
     return state().then((x) => x.config)
+  }
+
+  function resolve(info: Info): Resolved {
+    const keybinds = TuiKeybind.parse(info.keybinds ?? {})
+    return {
+      ...info,
+      keybinds: TuiKeybind.createLookup(keybinds),
+      leader_timeout: info.leader_timeout ?? TuiKeybind.LeaderTimeoutDefault,
+    }
   }
 
   async function loadFile(filepath: string): Promise<Info> {

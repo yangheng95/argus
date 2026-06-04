@@ -1,4 +1,5 @@
-import { BoxRenderable, TextareaRenderable, MouseEvent, PasteEvent, decodePasteBytes } from "@opentui/core"
+import { BoxRenderable, TextareaRenderable, MouseEvent, PasteEvent, decodePasteBytes, type KeyEvent, type Renderable } from "@opentui/core"
+import type { CommandContext } from "@opentui/keymap"
 import { createEffect, createMemo, type JSX, onMount, createSignal, onCleanup, on, Show, Switch, Match } from "solid-js"
 import "opentui-spinner/solid"
 import path from "path"
@@ -11,12 +12,10 @@ import { useRoute } from "@tui/context/route"
 import { useSync } from "@tui/context/sync"
 import { Identifier } from "@/id/id"
 import { createStore, produce } from "solid-js/store"
-import { useKeybind } from "@tui/context/keybind"
 import { usePromptHistory, type PromptInfo } from "./history"
 import { usePromptStash } from "./stash"
 import { DialogStash } from "../dialog-stash"
 import { type AutocompleteRef, Autocomplete } from "./autocomplete"
-import { useCommandDialog } from "../dialog-command"
 import { useRenderer } from "@opentui/solid"
 import { Editor } from "@tui/util/editor"
 import { useExit } from "../../context/exit"
@@ -32,8 +31,15 @@ import { DialogProvider as DialogProviderConnect } from "../dialog-provider"
 import { DialogAlert } from "../../ui/dialog-alert"
 import { useToast } from "../../ui/toast"
 import { useKV } from "../../context/kv"
-import { useTextareaKeybindings } from "../textarea-keybindings"
 import { DialogSkill } from "../dialog-skill"
+import {
+  OPENCORVUS_BASE_MODE,
+  useBindings,
+  useCommandShortcut,
+  useLeaderActive,
+  useOpencorvusKeymap,
+} from "../../keymap"
+import { useTuiConfig } from "../../context/tui-config"
 
 export type PromptProps = {
   sessionID?: string
@@ -63,7 +69,6 @@ export function Prompt(props: PromptProps) {
   let anchor: BoxRenderable
   let autocomplete: AutocompleteRef
 
-  const keybind = useKeybind()
   const local = useLocal()
   const sdk = useSDK()
   const route = useRoute()
@@ -73,7 +78,12 @@ export function Prompt(props: PromptProps) {
   const status = createMemo(() => sync.data.session_status?.[props.sessionID ?? ""] ?? { type: "idle" })
   const history = usePromptHistory()
   const stash = usePromptStash()
-  const command = useCommandDialog()
+  const tuiConfig = useTuiConfig()
+  const keymap = useOpencorvusKeymap()
+  const leader = useLeaderActive()
+  const variantShortcut = useCommandShortcut("variant.cycle")
+  const agentShortcut = useCommandShortcut("agent.cycle")
+  const commandShortcut = useCommandShortcut("command.palette.show")
   const renderer = useRenderer()
   const { theme, syntax } = useTheme()
   const kv = useKV()
@@ -89,12 +99,11 @@ export function Prompt(props: PromptProps) {
     }
   }
 
-  const textareaKeybindings = useTextareaKeybindings()
-
   const fileStyleId = syntax().getStyleId("extmark.file")!
   const agentStyleId = syntax().getStyleId("extmark.agent")!
   const pasteStyleId = syntax().getStyleId("extmark.paste")!
   let promptPartTypeId = 0
+  const [cursorVersion, setCursorVersion] = createSignal(0)
 
   sdk.event.on(TuiEvent.PromptAppend.type, (evt) => {
     if (!input || input.isDestroyed) return
@@ -172,14 +181,14 @@ export function Prompt(props: PromptProps) {
     }
   })
 
-  command.register(() => {
-    return [
+  const promptCommands = createMemo(() =>
+    [
       {
         title: "Clear prompt",
-        value: "prompt.clear",
+        name: "prompt.clear",
         category: "Prompt",
         hidden: true,
-        onSelect: (dialog) => {
+        run: () => {
           input.extmarks.clear()
           input.clear()
           dialog.clear()
@@ -187,11 +196,10 @@ export function Prompt(props: PromptProps) {
       },
       {
         title: "Submit prompt",
-        value: "prompt.submit",
-        keybind: "input_submit",
+        name: "prompt.submit",
         category: "Prompt",
         hidden: true,
-        onSelect: (dialog) => {
+        run: () => {
           if (!input.focused) return
           submit()
           dialog.clear()
@@ -199,11 +207,12 @@ export function Prompt(props: PromptProps) {
       },
       {
         title: "Paste",
-        value: "prompt.paste",
-        keybind: "input_paste",
+        name: "prompt.paste",
         category: "Prompt",
         hidden: true,
-        onSelect: async () => {
+        run: async (ctx: CommandContext<Renderable, KeyEvent>) => {
+          ctx.event.preventDefault()
+          ctx.event.stopPropagation()
           const content = await Clipboard.read()
           if (content?.mime.startsWith("image/")) {
             await pasteImage({
@@ -216,12 +225,11 @@ export function Prompt(props: PromptProps) {
       },
       {
         title: "Interrupt session",
-        value: "session.interrupt",
-        keybind: "session_interrupt",
+        name: "session.interrupt",
         category: "Session",
         hidden: true,
         enabled: status().type !== "idle",
-        onSelect: (dialog) => {
+        run: () => {
           if (autocomplete.visible) return
           if (!input.focused) return
           // TODO: this should be its own command
@@ -249,12 +257,9 @@ export function Prompt(props: PromptProps) {
       {
         title: "Open editor",
         category: "Session",
-        keybind: "editor_open",
-        value: "prompt.editor",
-        slash: {
-          name: "editor",
-        },
-        onSelect: async (dialog) => {
+        name: "prompt.editor",
+        slashName: "editor",
+        run: async () => {
           dialog.clear()
 
           // replace summarized text parts with the actual text
@@ -335,12 +340,10 @@ export function Prompt(props: PromptProps) {
       },
       {
         title: "Skills",
-        value: "prompt.skills",
+        name: "prompt.skills",
         category: "Prompt",
-        slash: {
-          name: "skills",
-        },
-        onSelect: () => {
+        slashName: "skills",
+        run: () => {
           dialog.replace(() => (
             <DialogSkill
               onSelect={(skill) => {
@@ -355,8 +358,15 @@ export function Prompt(props: PromptProps) {
           ))
         },
       },
-    ]
-  })
+    ].map((entry) => ({
+      namespace: "palette",
+      ...entry,
+    })),
+  )
+
+  useBindings(() => ({
+    commands: promptCommands(),
+  }))
 
   const ref: PromptRef = {
     get focused() {
@@ -474,60 +484,150 @@ export function Prompt(props: PromptProps) {
     )
   }
 
-  command.register(() => [
-    {
-      title: "Stash prompt",
-      value: "prompt.stash",
-      category: "Prompt",
-      enabled: !!store.prompt.input,
-      onSelect: (dialog) => {
-        if (!store.prompt.input) return
-        stash.push({
-          input: store.prompt.input,
-          parts: store.prompt.parts,
-        })
-        input.extmarks.clear()
-        input.clear()
-        setStore("prompt", { input: "", parts: [] })
-        setStore("extmarkToPartIndex", new Map())
-        dialog.clear()
+  const stashCommands = createMemo(() =>
+    [
+      {
+        title: "Stash prompt",
+        name: "prompt.stash",
+        category: "Prompt",
+        enabled: !!store.prompt.input,
+        run: () => {
+          if (!store.prompt.input) return
+          stash.push({
+            input: store.prompt.input,
+            parts: store.prompt.parts,
+          })
+          input.extmarks.clear()
+          input.clear()
+          setStore("prompt", { input: "", parts: [] })
+          setStore("extmarkToPartIndex", new Map())
+          dialog.clear()
+        },
       },
-    },
-    {
-      title: "Stash pop",
-      value: "prompt.stash.pop",
-      category: "Prompt",
-      enabled: stash.list().length > 0,
-      onSelect: (dialog) => {
-        const entry = stash.pop()
-        if (entry) {
-          input.setText(entry.input)
-          setStore("prompt", { input: entry.input, parts: entry.parts })
-          restoreExtmarksFromParts(entry.parts)
-          input.gotoBufferEnd()
-        }
-        dialog.clear()
+      {
+        title: "Stash pop",
+        name: "prompt.stash.pop",
+        category: "Prompt",
+        enabled: stash.list().length > 0,
+        run: () => {
+          const entry = stash.pop()
+          if (entry) {
+            input.setText(entry.input)
+            setStore("prompt", { input: entry.input, parts: entry.parts })
+            restoreExtmarksFromParts(entry.parts)
+            input.gotoBufferEnd()
+          }
+          dialog.clear()
+        },
       },
-    },
-    {
-      title: "Stash list",
-      value: "prompt.stash.list",
-      category: "Prompt",
-      enabled: stash.list().length > 0,
-      onSelect: (dialog) => {
-        dialog.replace(() => (
-          <DialogStash
-            onSelect={(entry) => {
-              input.setText(entry.input)
-              setStore("prompt", { input: entry.input, parts: entry.parts })
-              restoreExtmarksFromParts(entry.parts)
-              input.gotoBufferEnd()
-            }}
-          />
-        ))
+      {
+        title: "Stash list",
+        name: "prompt.stash.list",
+        category: "Prompt",
+        enabled: stash.list().length > 0,
+        run: () => {
+          dialog.replace(() => (
+            <DialogStash
+              onSelect={(entry) => {
+                input.setText(entry.input)
+                setStore("prompt", { input: entry.input, parts: entry.parts })
+                restoreExtmarksFromParts(entry.parts)
+                input.gotoBufferEnd()
+              }}
+            />
+          ))
+        },
       },
-    },
-  ])
+    ].map((entry) => ({
+      namespace: "palette",
+      ...entry,
+    })),
+  )
+
+  useBindings(() => ({
+    commands: stashCommands(),
+  }))
+
+  useBindings(() => ({
+    mode: OPENCORVUS_BASE_MODE,
+    target: () => input,
+    enabled: !props.disabled,
+    bindings: [
+      ...tuiConfig.keybinds.get("prompt.paste"),
+      ...tuiConfig.keybinds.get("session.interrupt"),
+      ...tuiConfig.keybinds.gather("prompt", ["prompt.editor", "prompt.skills", "prompt.stash", "prompt.stash.pop", "prompt.stash.list"]),
+    ],
+  }))
+
+  useBindings(() => ({
+    mode: OPENCORVUS_BASE_MODE,
+    target: () => input,
+    enabled: !props.disabled && store.prompt.input !== "",
+    bindings: tuiConfig.keybinds.get("prompt.clear"),
+  }))
+
+  useBindings(() => ({
+    mode: OPENCORVUS_BASE_MODE,
+    target: () => input,
+    enabled: !props.disabled && store.mode === "normal" && !autocomplete?.visible && input?.cursorOffset === 0,
+    commands: [
+      {
+        name: "prompt.history.previous",
+        title: "Previous prompt history",
+        category: "Prompt",
+        run() {
+          cursorVersion()
+          if (input.cursorOffset !== 0) {
+            if (input.scrollY + input.visualCursor.visualRow === 0) input.cursorOffset = 0
+            return false
+          }
+
+          const item = history.move(-1, input.plainText)
+          if (!item) return false
+          input.setText(item.input)
+          setStore("prompt", item)
+          setStore("mode", item.mode ?? "normal")
+          restoreExtmarksFromParts(item.parts)
+          input.cursorOffset = 0
+        },
+      },
+    ],
+    bindings: tuiConfig.keybinds.get("prompt.history.previous"),
+  }))
+
+  useBindings(() => ({
+    mode: OPENCORVUS_BASE_MODE,
+    target: () => input,
+    enabled:
+      !props.disabled &&
+      store.mode === "normal" &&
+      !autocomplete?.visible &&
+      input?.cursorOffset === input?.plainText.length,
+    commands: [
+      {
+        name: "prompt.history.next",
+        title: "Next prompt history",
+        category: "Prompt",
+        run() {
+          cursorVersion()
+          if (input.cursorOffset !== input.plainText.length) {
+            if (input.scrollY + input.visualCursor.visualRow === Math.max(0, input.editorView.getTotalVirtualLineCount() - 1))
+              input.cursorOffset = input.plainText.length
+            return false
+          }
+
+          const item = history.move(1, input.plainText)
+          if (!item) return false
+          input.setText(item.input)
+          setStore("prompt", item)
+          setStore("mode", item.mode ?? "normal")
+          restoreExtmarksFromParts(item.parts)
+          input.cursorOffset = input.plainText.length
+        },
+      },
+    ],
+    bindings: tuiConfig.keybinds.get("prompt.history.next"),
+  }))
 
   async function submit() {
     if (props.disabled) return
@@ -744,7 +844,7 @@ export function Prompt(props: PromptProps) {
   }
 
   const highlight = createMemo(() => {
-    if (keybind.leader) return theme.border
+    if (leader()) return theme.border
     if (store.mode === "shell") return theme.primary
     return local.agent.color(local.agent.current().name)
   })
@@ -827,8 +927,8 @@ export function Prompt(props: PromptProps) {
           >
             <textarea
               placeholder={placeholderText()}
-              textColor={keybind.leader ? theme.textMuted : theme.text}
-              focusedTextColor={keybind.leader ? theme.textMuted : theme.text}
+              textColor={leader() ? theme.textMuted : theme.text}
+              focusedTextColor={leader() ? theme.textMuted : theme.text}
               minHeight={1}
               maxHeight={6}
               onContentChange={() => {
@@ -836,47 +936,13 @@ export function Prompt(props: PromptProps) {
                 setStore("prompt", "input", value)
                 autocomplete.onInput(value)
                 syncExtmarksWithPromptParts()
+                setCursorVersion((value) => value + 1)
               }}
-              keyBindings={textareaKeybindings()}
+              onCursorChange={() => setCursorVersion((value) => value + 1)}
               onKeyDown={async (e) => {
                 if (props.disabled) {
                   e.preventDefault()
                   return
-                }
-                // Handle clipboard paste (Ctrl+V) - check for images first on Windows
-                // This is needed because Windows terminal doesn't properly send image data
-                // through bracketed paste, so we need to intercept the keypress and
-                // directly read from clipboard before the terminal handles it
-                if (keybind.match("input_paste", e)) {
-                  const content = await Clipboard.read()
-                  if (content?.mime.startsWith("image/")) {
-                    e.preventDefault()
-                    await pasteImage({
-                      filename: "clipboard",
-                      mime: content.mime,
-                      content: content.data,
-                    })
-                    return
-                  }
-                  // If no image, let the default paste behavior continue
-                }
-                if (keybind.match("input_clear", e) && store.prompt.input !== "") {
-                  input.clear()
-                  input.extmarks.clear()
-                  setStore("prompt", {
-                    input: "",
-                    parts: [],
-                  })
-                  setStore("extmarkToPartIndex", new Map())
-                  return
-                }
-                if (keybind.match("app_exit", e)) {
-                  if (store.prompt.input === "") {
-                    await exit()
-                    // Don't preventDefault - let textarea potentially handle the event
-                    e.preventDefault()
-                    return
-                  }
                 }
                 if (e.name === "!" && input.visualCursor.offset === 0) {
                   setStore("placeholder", Math.floor(Math.random() * SHELL_PLACEHOLDERS.length))
@@ -892,30 +958,6 @@ export function Prompt(props: PromptProps) {
                   }
                 }
                 if (store.mode === "normal") autocomplete.onKeyDown(e)
-                if (!autocomplete.visible) {
-                  if (
-                    (keybind.match("history_previous", e) && input.cursorOffset === 0) ||
-                    (keybind.match("history_next", e) && input.cursorOffset === input.plainText.length)
-                  ) {
-                    const direction = keybind.match("history_previous", e) ? -1 : 1
-                    const item = history.move(direction, input.plainText)
-
-                    if (item) {
-                      input.setText(item.input)
-                      setStore("prompt", item)
-                      setStore("mode", item.mode ?? "normal")
-                      restoreExtmarksFromParts(item.parts)
-                      e.preventDefault()
-                      if (direction === -1) input.cursorOffset = 0
-                      if (direction === 1) input.cursorOffset = input.plainText.length
-                    }
-                    return
-                  }
-
-                  if (keybind.match("history_previous", e) && input.visualCursor.visualRow === 0) input.cursorOffset = 0
-                  if (keybind.match("history_next", e) && input.visualCursor.visualRow === input.height - 1)
-                    input.cursorOffset = input.plainText.length
-                }
               }}
               onSubmit={submit}
               onPaste={async (event: PasteEvent) => {
@@ -930,7 +972,7 @@ export function Prompt(props: PromptProps) {
                 const normalizedText = decodePasteBytes(event.bytes).replace(/\r\n/g, "\n").replace(/\r/g, "\n")
                 const pastedContent = normalizedText.trim()
                 if (!pastedContent) {
-                  command.trigger("prompt.paste")
+                  keymap.dispatchCommand("prompt.paste")
                   return
                 }
 
@@ -1011,7 +1053,7 @@ export function Prompt(props: PromptProps) {
               </text>
               <Show when={store.mode === "normal"}>
                 <box flexDirection="row" gap={1}>
-                  <text flexShrink={0} fg={keybind.leader ? theme.textMuted : theme.text}>
+                  <text flexShrink={0} fg={leader() ? theme.textMuted : theme.text}>
                     {local.model.parsed().model}
                   </text>
                   <text fg={theme.textMuted}>{local.model.parsed().provider}</text>
@@ -1139,14 +1181,14 @@ export function Prompt(props: PromptProps) {
                 <Match when={store.mode === "normal"}>
                   <Show when={local.model.variant.list().length > 0}>
                     <text fg={theme.text}>
-                      {keybind.print("variant_cycle")} <span style={{ fg: theme.textMuted }}>variants</span>
+                      {variantShortcut()} <span style={{ fg: theme.textMuted }}>variants</span>
                     </text>
                   </Show>
                   <text fg={theme.text}>
-                    {keybind.print("agent_cycle")} <span style={{ fg: theme.textMuted }}>agents</span>
+                    {agentShortcut()} <span style={{ fg: theme.textMuted }}>agents</span>
                   </text>
                   <text fg={theme.text}>
-                    {keybind.print("command_list")} <span style={{ fg: theme.textMuted }}>commands</span>
+                    {commandShortcut()} <span style={{ fg: theme.textMuted }}>commands</span>
                   </text>
                 </Match>
                 <Match when={store.mode === "shell"}>

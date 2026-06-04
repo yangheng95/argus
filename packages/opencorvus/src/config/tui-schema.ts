@@ -1,14 +1,5 @@
 import z from "zod"
-import { Config } from "./config"
-
-const KeybindOverride = z
-  .object(
-    Object.fromEntries(Object.keys(Config.Keybinds.shape).map((key) => [key, z.string().optional()])) as Record<
-      string,
-      z.ZodOptional<z.ZodString>
-    >,
-  )
-  .strict()
+import { KeybindOverrides } from "@/cli/cmd/tui/config/keybind"
 
 export const TuiOptions = z.object({
   scroll_speed: z.number().min(0.001).optional().describe("TUI scroll speed"),
@@ -28,7 +19,8 @@ export const TuiInfo = z
   .object({
     $schema: z.string().optional(),
     theme: z.string().optional(),
-    keybinds: KeybindOverride.optional(),
+    keybinds: KeybindOverrides.optional(),
+    leader_timeout: z.number().int().positive().optional().describe("Leader key timeout in milliseconds"),
   })
   .extend(TuiOptions.shape)
   .strict()

@@ -5,7 +5,6 @@ import { map, pipe, flatMap, entries, filter, sortBy, take } from "remeda"
 import { DialogSelect } from "@tui/ui/dialog-select"
 import { useDialog } from "@tui/ui/dialog"
 import { createDialogProviderOptions, DialogProvider } from "./dialog-provider"
-import { useKeybind } from "../context/keybind"
 import * as fuzzysort from "fuzzysort"
 
 export function useConnected() {
@@ -19,7 +18,6 @@ export function DialogModel(props: { providerID?: string }) {
   const local = useLocal()
   const sync = useSync()
   const dialog = useDialog()
-  const keybind = useKeybind()
   const [query, setQuery] = createSignal("")
 
   const connected = useConnected()
@@ -138,16 +136,16 @@ export function DialogModel(props: { providerID?: string }) {
   return (
     <DialogSelect<ReturnType<typeof options>[number]["value"]>
       options={options()}
-      keybind={[
+      actions={[
         {
-          keybind: keybind.all.model_provider_list?.[0],
+          command: "model.dialog.provider",
           title: connected() ? "Connect provider" : "View all providers",
           onTrigger() {
             dialog.replace(() => <DialogProvider />)
           },
         },
         {
-          keybind: keybind.all.model_favorite_toggle?.[0],
+          command: "model.dialog.favorite",
           title: "Favorite",
           disabled: !connected(),
           onTrigger: (option) => {
