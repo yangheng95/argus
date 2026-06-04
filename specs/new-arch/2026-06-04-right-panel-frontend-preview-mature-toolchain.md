@@ -50,13 +50,15 @@ No hand-written browser, custom devtools, custom tab keyboard model, custom resi
 
 The product surface should be a right-panel Preview surface backed by a server-side preview target record:
 
-1. The backend resolves one preview target for the active task directory.
-2. The backend starts or observes the configured preview runtime and returns a structured preview target: URL, root, command, status, diagnostics, and evidence IDs.
+1. The backend resolves one preview target for the active task.
+2. The backend returns the saved task preview target artifact: URL, root, status, diagnostics, and evidence IDs.
 3. The overlay renders that URL in a sandboxed iframe and controls the viewport with Kobalte-backed controls.
 4. The backend Playwright runtime captures verification evidence for the same URL and viewport presets.
 5. Console and runtime diagnostics come from Playwright evidence and, for controlled same-origin pages only, explicit postMessage instrumentation.
 
-The UI never chooses a package manager or guesses a root. It displays the backend-resolved command and failure evidence.
+The UI never chooses a package manager, guesses a root, or reads project package metadata. It displays the backend-resolved task target and failure evidence.
+
+Automatic preview startup must feed this same artifact model. If a future Vite, Storybook, Sandpack, WebContainers, or browser-runtime launcher discovers or starts a preview URL, it must persist `browser_preview_target` first; the right-panel resolver must not gain a second manifest, command, or package metadata source.
 
 ## Toolchain Selection
 
@@ -74,7 +76,7 @@ The UI never chooses a package manager or guesses a root. It displays the backen
 
 - The backend route family is task-scoped: `GET /task/{taskID}/browser-preview`, `PUT /task/{taskID}/browser-preview/target`, and `POST /task/{taskID}/browser-preview/capture`.
 - Saved preview targets and preview capture evidence live as task-scoped `engine_artifact` facts: `browser_preview_target` and `browser_preview_evidence`. The stale `acceptance_preview` name must not be revived.
-- Preview startup must fail truthfully with root, command, status, and diagnostics. It must not try another root or another server kind.
+- Preview startup must fail truthfully with root, status, and diagnostics. It must not try another root or another server kind.
 - Overlay UI controls must use existing Kobalte-backed primitives and overlay design tokens.
 - Viewport presets must live in one shared config consumed by UI and Playwright verification.
 - The iframe must use a deliberate sandbox/allow/referrerpolicy contract.
@@ -86,7 +88,7 @@ The UI never chooses a package manager or guesses a root. It displays the backen
 - Overlay structure test: right panel bodies and tab state are updated from one source, and retired preview mount names remain absent.
 - UI primitive test: Preview controls use Kobalte-backed primitives, not raw custom ARIA tab/button behavior.
 - Route contract test: preview target route is directory-scoped and does not appear in no-directory bypass lists.
-- Startup resolver test: monorepo subpackage resolves one target; failure payload includes root, command, reason, and evidence.
+- Startup resolver test: task artifact resolves one target; failure payload includes root, reason, and evidence.
 - Transport test: overlay preview service uses HostTransport/api helpers and no raw fetch/EventSource.
 - Visual test: Playwright opens the resolved URL at each viewport preset and records screenshot plus console/pageerror/requestfailed evidence.
 - Visible acceptance: the right panel shows launch, ready, failed, reload, and diagnostics states in the actual overlay window.

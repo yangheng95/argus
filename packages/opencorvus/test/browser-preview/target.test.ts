@@ -1,13 +1,13 @@
 import { afterEach, describe, expect, test } from "bun:test"
 import fs from "node:fs/promises"
 import path from "node:path"
-import { tmpdir } from "../fixture/fixture"
-import { resolveBrowserPreviewTarget } from "../../src/browser-preview/target"
+import { EngineTaskTable } from "../../src/engine/engine.sql"
 import { persistBrowserPreviewTarget } from "../../src/browser-preview/persist"
-import { resetDatabase } from "../fixture/db"
+import { normalizeBrowserPreviewUrl, resolveBrowserPreviewTarget } from "../../src/browser-preview/target"
 import { Instance } from "../../src/project/instance"
 import { Database } from "../../src/storage/db"
-import { EngineTaskTable } from "../../src/engine/engine.sql"
+import { resetDatabase } from "../fixture/db"
+import { tmpdir } from "../fixture/fixture"
 
 async function writePackageJson(root: string, value: unknown) {
   await fs.writeFile(path.join(root, "package.json"), JSON.stringify(value, null, 2))
@@ -39,26 +39,13 @@ describe("browser preview target resolver", () => {
     return taskID
   }
 
-  test("uses explicit HTTP URL without reading project package metadata", async () => {
-    await using tmp = await tmpdir()
-    const target = await resolveBrowserPreviewTarget({
-      projectRoot: tmp.path,
-      explicitUrl: "http://127.0.0.1:5173/dashboard",
-    })
-
-    expect(target.status).toBe("ready")
-    expect(target.kind).toBe("explicit-url")
-    expect(target.url).toBe("http://127.0.0.1:5173/dashboard")
-    expect(target.source).toBe("explicit")
-    expect(target.viewports.map((viewport) => viewport.id)).toEqual(["desktop", "tablet", "mobile"])
-  })
-
-  test("uses the task artifact target before package metadata", async () => {
+  test("uses the task artifact target as the only resolved URL source", async () => {
     await using tmp = await tmpdir()
     await writePackageJson(tmp.path, {
       opencorvus: {
         browserPreview: {
           url: "http://127.0.0.1:4173/",
+          command: "npm run dev",
         },
       },
     })
@@ -75,23 +62,13 @@ describe("browser preview target resolver", () => {
 
     expect(target.id).toBe(persisted.id)
     expect(target.kind).toBe("task-url")
+    expect(target.status).toBe("ready")
     expect(target.source).toBe("task-artifact")
     expect(target.url).toBe("http://127.0.0.1:5173/task")
+    expect(target.viewports.map((viewport) => viewport.id)).toEqual(["desktop", "tablet", "mobile"])
   })
 
-  test("rejects non-browser explicit URLs instead of falling back", async () => {
-    await using tmp = await tmpdir()
-    const target = await resolveBrowserPreviewTarget({
-      projectRoot: tmp.path,
-      explicitUrl: "file:///tmp/index.html",
-    })
-
-    expect(target.status).toBe("failed")
-    expect(target.kind).toBe("failed")
-    expect(target.diagnostics.join("\n")).toContain("Invalid preview URL")
-  })
-
-  test("uses package.json opencorvus.browserPreview.url as the manifest source", async () => {
+  test("does not resolve package metadata when the task has no saved target", async () => {
     await using tmp = await tmpdir()
     await writePackageJson(tmp.path, {
       packageManager: "npm@10.9.0",
@@ -103,154 +80,34 @@ describe("browser preview target resolver", () => {
         },
       },
     })
+    const taskID = await seedTask(tmp.path)
 
-    const target = await resolveBrowserPreviewTarget({ projectRoot: tmp.path })
+    const target = await resolveBrowserPreviewTarget({ projectRoot: tmp.path, taskID })
 
-    expect(target.status).toBe("ready")
-    expect(target.kind).toBe("manifest-url")
-    expect(target.url).toBe("http://localhost:4173/")
-    expect(target.command).toBe("npm run dev")
-    expect(target.source).toBe("package-json")
+    expect(target.status).toBe("missing")
+    expect(target.kind).toBe("missing")
+    expect(target.url).toBeUndefined()
+    expect(target.source).toBe("none")
+    expect(target.diagnostics.join("\n")).toContain("No browser preview target saved for this task")
   })
 
-  test("fails explicitly when package.json cannot be parsed", async () => {
+  test("does not parse package.json when resolving a missing task target", async () => {
     await using tmp = await tmpdir()
     await fs.writeFile(path.join(tmp.path, "package.json"), "{")
+    const taskID = await seedTask(tmp.path)
 
-    const target = await resolveBrowserPreviewTarget({ projectRoot: tmp.path })
-
-    expect(target.status).toBe("failed")
-    expect(target.kind).toBe("failed")
-    expect(target.source).toBe("package-json")
-    expect(target.diagnostics.join("\n")).toContain("Failed to read package.json")
-  })
-
-  test("fails explicitly for invalid manifest URLs instead of falling back to command", async () => {
-    await using tmp = await tmpdir()
-    await writePackageJson(tmp.path, {
-      packageManager: "pnpm@9.0.0",
-      opencorvus: {
-        browserPreview: {
-          url: "file:///tmp/index.html",
-          command: "pnpm run dev",
-        },
-      },
-    })
-
-    const target = await resolveBrowserPreviewTarget({ projectRoot: tmp.path })
-
-    expect(target.status).toBe("failed")
-    expect(target.kind).toBe("failed")
-    expect(target.command).toBeUndefined()
-    expect(target.diagnostics.join("\n")).toContain("Invalid package.json opencorvus.browserPreview.url")
-  })
-
-  test("fails explicitly for non-string manifest URLs", async () => {
-    await using tmp = await tmpdir()
-    await writePackageJson(tmp.path, {
-      opencorvus: {
-        browserPreview: {
-          url: 5173,
-        },
-      },
-    })
-
-    const target = await resolveBrowserPreviewTarget({ projectRoot: tmp.path })
-
-    expect(target.status).toBe("failed")
-    expect(target.kind).toBe("failed")
-    expect(target.diagnostics.join("\n")).toContain("Invalid package.json opencorvus.browserPreview.url: 5173")
-  })
-
-  test("fails explicitly for blank manifest URLs instead of treating them as missing", async () => {
-    await using tmp = await tmpdir()
-    await writePackageJson(tmp.path, {
-      opencorvus: {
-        browserPreview: {
-          url: "  ",
-          command: "pnpm run dev",
-        },
-      },
-    })
-
-    const target = await resolveBrowserPreviewTarget({ projectRoot: tmp.path })
-
-    expect(target.status).toBe("failed")
-    expect(target.kind).toBe("failed")
-    expect(target.command).toBeUndefined()
-    expect(target.diagnostics.join("\n")).toContain("Invalid package.json opencorvus.browserPreview.url")
-  })
-
-  test("fails explicitly for null manifest URLs instead of treating them as missing", async () => {
-    await using tmp = await tmpdir()
-    await writePackageJson(tmp.path, {
-      opencorvus: {
-        browserPreview: {
-          url: null,
-          command: "pnpm run dev",
-        },
-      },
-    })
-
-    const target = await resolveBrowserPreviewTarget({ projectRoot: tmp.path })
-
-    expect(target.status).toBe("failed")
-    expect(target.kind).toBe("failed")
-    expect(target.command).toBeUndefined()
-    expect(target.diagnostics.join("\n")).toContain("Invalid package.json opencorvus.browserPreview.url: null")
-  })
-
-  test("surfaces a configured command when URL is missing", async () => {
-    await using tmp = await tmpdir()
-    await writePackageJson(tmp.path, {
-      packageManager: "pnpm@9.0.0",
-      scripts: { dev: "vite --host 127.0.0.1" },
-      opencorvus: {
-        browserPreview: {
-          command: "pnpm run dev",
-        },
-      },
-    })
-
-    const target = await resolveBrowserPreviewTarget({ projectRoot: tmp.path })
-
-    expect(target.status).toBe("configured")
-    expect(target.kind).toBe("manifest-command")
-    expect(target.command).toBe("pnpm run dev")
-    expect(target.url).toBeUndefined()
-    expect(target.diagnostics.join("\n")).toContain("no opencorvus.browserPreview.url")
-  })
-
-  test("does not derive preview commands from package manager scripts", async () => {
-    await using tmp = await tmpdir()
-    await writePackageJson(tmp.path, {
-      packageManager: "yarn@4.7.0",
-      scripts: {
-        start: "vite --host 127.0.0.1 --port 4173",
-        preview: "vite preview --host 127.0.0.1",
-        dev: "vite --host 127.0.0.1",
-      },
-    })
-
-    const target = await resolveBrowserPreviewTarget({ projectRoot: tmp.path })
+    const target = await resolveBrowserPreviewTarget({ projectRoot: tmp.path, taskID })
 
     expect(target.status).toBe("missing")
     expect(target.kind).toBe("missing")
-    expect(target.command).toBeUndefined()
-    expect(target.diagnostics.join("\n")).toContain("opencorvus.browserPreview.command")
+    expect(target.source).toBe("none")
+    expect(target.diagnostics.join("\n")).toContain("No browser preview target saved for this task")
   })
 
-  test("does not infer package manager or command for runtime scripts", async () => {
-    await using tmp = await tmpdir()
-    await writePackageJson(tmp.path, {
-      scripts: { dev: "vite --host 127.0.0.1" },
-    })
-
-    const target = await resolveBrowserPreviewTarget({ projectRoot: tmp.path })
-
-    expect(target.status).toBe("missing")
-    expect(target.kind).toBe("missing")
-    expect(target.command).toBeUndefined()
-    expect(target.diagnostics.join("\n")).toContain("opencorvus.browserPreview")
+  test("normalizes only explicit http(s) URLs before saving task targets", () => {
+    expect(normalizeBrowserPreviewUrl(" http://127.0.0.1:5173/dashboard ")).toBe("http://127.0.0.1:5173/dashboard")
+    expect(normalizeBrowserPreviewUrl("https://example.test/")).toBe("https://example.test/")
+    expect(normalizeBrowserPreviewUrl("file:///tmp/index.html")).toBeUndefined()
+    expect(normalizeBrowserPreviewUrl("")).toBeUndefined()
   })
 })

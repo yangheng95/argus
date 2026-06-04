@@ -2,6 +2,7 @@ import { afterEach, describe, expect, test } from "bun:test"
 import { eq } from "drizzle-orm"
 import { EngineArtifactTable, EngineTaskTable } from "../../src/engine/engine.sql"
 import { Instance } from "../../src/project/instance"
+import { persistBrowserPreviewTarget } from "../../src/browser-preview/persist"
 import { resolveBrowserPreviewTarget } from "../../src/browser-preview/target"
 import { verifyBrowserPreview } from "../../src/browser-preview/verification"
 import { Database } from "../../src/storage/db"
@@ -36,10 +37,9 @@ describe("browser preview verification", () => {
 
   test("captures the resolved URL with the shared viewport preset", async () => {
     await using tmp = await tmpdir()
-    const target = await resolveBrowserPreviewTarget({
-      projectRoot: tmp.path,
-      explicitUrl: "http://127.0.0.1:5173/",
-    })
+    const taskID = await seedTask(tmp.path)
+    persistBrowserPreviewTarget({ taskID, url: "http://127.0.0.1:5173/" })
+    const target = await resolveBrowserPreviewTarget({ projectRoot: tmp.path, taskID })
     let capturedInput: RuntimeCaptureInput | undefined
 
     const result = await verifyBrowserPreview({
@@ -83,7 +83,8 @@ describe("browser preview verification", () => {
 
   test("fails visibly when the target has no URL", async () => {
     await using tmp = await tmpdir()
-    const target = await resolveBrowserPreviewTarget({ projectRoot: tmp.path })
+    const taskID = await seedTask(tmp.path)
+    const target = await resolveBrowserPreviewTarget({ projectRoot: tmp.path, taskID })
 
     const result = await verifyBrowserPreview({
       projectRoot: tmp.path,
@@ -102,15 +103,13 @@ describe("browser preview verification", () => {
   test("persists task-scoped browser preview evidence from capture result", async () => {
     await using tmp = await tmpdir()
     const taskID = await seedTask(tmp.path)
-    const target = await resolveBrowserPreviewTarget({
-      projectRoot: tmp.path,
-      explicitUrl: "http://127.0.0.1:5173/",
-    })
+    const persisted = persistBrowserPreviewTarget({ taskID, url: "http://127.0.0.1:5173/" })
+    const target = await resolveBrowserPreviewTarget({ projectRoot: tmp.path, taskID })
 
     const result = await verifyBrowserPreview({
       projectRoot: tmp.path,
       taskID,
-      target: { ...target, id: "art_previewtarget000000000001" },
+      target,
       viewportID: "desktop",
       outDir: tmp.path,
       async capture(input) {
@@ -135,6 +134,7 @@ describe("browser preview verification", () => {
         .get(),
     )
     expect(artifact?.task_id).toBe(taskID)
+    expect(artifact?.payload?.target_id).toBe(persisted.id)
     expect(artifact?.payload?.status).toBe("failed")
   })
 })

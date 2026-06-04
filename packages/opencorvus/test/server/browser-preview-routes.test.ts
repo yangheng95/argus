@@ -38,7 +38,7 @@ describe("browser preview routes", () => {
     return taskID
   }
 
-  test("GET /task/:taskID/browser-preview is task scoped and reads saved target first", async () => {
+  test("GET /task/:taskID/browser-preview is task scoped and reads only saved targets", async () => {
     await using tmp = await tmpdir()
     const taskID = await seedTask(tmp.path)
     await fs.writeFile(
@@ -80,6 +80,32 @@ describe("browser preview routes", () => {
         .get(),
     )
     expect(artifact?.task_id).toBe(taskID)
+  })
+
+  test("GET /task/:taskID/browser-preview does not use package metadata as a target source", async () => {
+    await using tmp = await tmpdir()
+    const taskID = await seedTask(tmp.path)
+    await fs.writeFile(
+      path.join(tmp.path, "package.json"),
+      JSON.stringify({
+        packageManager: "npm@10.9.0",
+        opencorvus: { browserPreview: { url: "http://127.0.0.1:5173/", command: "npm run dev" } },
+      }),
+    )
+    const app = Server.App()
+
+    const response = await app.request(`/task/${taskID}/browser-preview`, {
+      headers: {
+        "x-opencorvus-directory": tmp.path,
+      },
+    })
+
+    expect(response.status).toBe(200)
+    const body = await response.json() as { status: string; url?: string; source: string; diagnostics?: string[] }
+    expect(body.status).toBe("missing")
+    expect(body.url).toBeUndefined()
+    expect(body.source).toBe("none")
+    expect(body.diagnostics?.join("\n")).toContain("No browser preview target saved for this task")
   })
 
   test("old project-scoped browser preview target route is removed", async () => {
@@ -131,6 +157,44 @@ describe("browser preview routes", () => {
     expect(body.viewport?.id).toBe("mobile")
     expect(body.capture).toBeUndefined()
     expect(body.target?.status).toBe("missing")
+    expect(body.diagnostics?.join("\n")).toContain("requires a resolved http(s) URL")
+  })
+
+  test("POST /task/:taskID/browser-preview/capture does not replace an unknown targetID with the latest target", async () => {
+    await using tmp = await tmpdir()
+    const taskID = await seedTask(tmp.path)
+    const app = Server.App()
+    const save = await app.request(`/task/${taskID}/browser-preview/target`, {
+      method: "PUT",
+      headers: {
+        "content-type": "application/json",
+        "x-opencorvus-directory": tmp.path,
+      },
+      body: JSON.stringify({ url: "http://127.0.0.1:5174/task" }),
+    })
+    expect(save.status).toBe(200)
+
+    const response = await app.request(`/task/${taskID}/browser-preview/capture`, {
+      method: "POST",
+      headers: {
+        "content-type": "application/json",
+        "x-opencorvus-directory": tmp.path,
+      },
+      body: JSON.stringify({ targetID: "art_previewtarget_missing", viewportID: "desktop" }),
+    })
+
+    expect(response.status).toBe(200)
+    const body = await response.json() as {
+      status: string
+      capture?: unknown
+      target?: { status: string; url?: string; diagnostics?: string[] }
+      diagnostics?: string[]
+    }
+    expect(body.status).toBe("failed")
+    expect(body.capture).toBeUndefined()
+    expect(body.target?.status).toBe("failed")
+    expect(body.target?.url).toBeUndefined()
+    expect(body.target?.diagnostics?.join("\n")).toContain("Browser preview target not found: art_previewtarget_missing")
     expect(body.diagnostics?.join("\n")).toContain("requires a resolved http(s) URL")
   })
 })

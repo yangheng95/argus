@@ -5,7 +5,7 @@ import { describeRoute, resolver, validator } from "hono-openapi"
 import z from "zod"
 import { requireTask } from "@/engine/store"
 import { findBrowserPreviewTargetByID, persistBrowserPreviewTarget } from "../../browser-preview/persist"
-import { BrowserPreviewTarget, normalizeBrowserPreviewUrl, resolveBrowserPreviewTarget } from "../../browser-preview/target"
+import { BrowserPreviewTarget, failedBrowserPreviewTarget, normalizeBrowserPreviewUrl, resolveBrowserPreviewTarget, taskBrowserPreviewTarget } from "../../browser-preview/target"
 import { BrowserPreviewVerification, verifyBrowserPreview } from "../../browser-preview/verification"
 import { BrowserPreviewViewportID } from "../../browser-preview/viewport"
 
@@ -16,7 +16,7 @@ export const BrowserPreviewRoutes = lazy(() =>
       describeRoute({
         summary: "Resolve task browser preview target",
         description:
-          "Return the task-scoped browser preview target. Saved task artifacts are authoritative; package.json metadata is only used when the task has no saved target.",
+          "Return the task-scoped browser preview target. Saved task artifacts are the only preview target source.",
         operationId: "browserPreview.taskTarget",
         responses: {
           200: {
@@ -71,20 +71,20 @@ export const BrowserPreviewRoutes = lazy(() =>
         requireTask(taskID)
         const url = normalizeBrowserPreviewUrl(rawUrl)
         if (!url) {
-          return c.json(await resolveBrowserPreviewTarget({ projectRoot: Instance.directory, explicitUrl: rawUrl }), 400)
+          return c.json(failedBrowserPreviewTarget({
+            projectRoot: Instance.directory,
+            taskID,
+            diagnostics: [`Invalid preview URL: ${rawUrl}`],
+          }), 400)
         }
         const persisted = persistBrowserPreviewTarget({ taskID, url })
-        return c.json({
+        return c.json(taskBrowserPreviewTarget({
           id: persisted.id,
           taskID,
-          kind: "task-url",
-          status: "ready",
           projectRoot: Instance.directory,
           url: persisted.url,
-          viewports: (await resolveBrowserPreviewTarget({ projectRoot: Instance.directory, explicitUrl: url })).viewports,
           diagnostics: [`Saved task browser preview target ${persisted.id}.`],
-          source: "task-artifact",
-        } satisfies BrowserPreviewTarget)
+        }) satisfies BrowserPreviewTarget)
       },
     )
     .post(
@@ -118,18 +118,20 @@ export const BrowserPreviewRoutes = lazy(() =>
         const body = c.req.valid("json")
         requireTask(taskID)
         const persisted = body.targetID ? findBrowserPreviewTargetByID({ taskID, targetID: body.targetID }) : undefined
-        const target = persisted
-          ? {
+        const target = body.targetID
+          ? persisted
+            ? taskBrowserPreviewTarget({
               id: persisted.id,
               taskID,
-              kind: "task-url" as const,
-              status: "ready" as const,
               projectRoot: Instance.directory,
               url: persisted.url,
-              viewports: (await resolveBrowserPreviewTarget({ projectRoot: Instance.directory, explicitUrl: persisted.url })).viewports,
               diagnostics: [`Using task browser preview target ${persisted.id}.`],
-              source: "task-artifact" as const,
-            }
+            })
+            : failedBrowserPreviewTarget({
+              projectRoot: Instance.directory,
+              taskID,
+              diagnostics: [`Browser preview target not found: ${body.targetID}`],
+            })
           : await resolveBrowserPreviewTarget({
               projectRoot: Instance.directory,
               taskID,
