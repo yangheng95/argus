@@ -685,11 +685,16 @@ test("does not try to install dependencies in read-only OPENCORVUS_CONFIG_DIR", 
   }
 })
 
-test("installs dependencies in writable OPENCORVUS_CONFIG_DIR", async () => {
+test("installs dependencies in writable OPENCORVUS_CONFIG_DIR when local plugins exist", async () => {
   await using tmp = await tmpdir<string>({
     init: async (dir) => {
       const cfg = path.join(dir, "configdir")
       await fs.mkdir(cfg, { recursive: true })
+      await fs.mkdir(path.join(cfg, "plugin"), { recursive: true })
+      await Filesystem.write(
+        path.join(cfg, "plugin", "local.ts"),
+        "export const Plugin = async () => ({})\n",
+      )
       return cfg
     },
   })
@@ -711,6 +716,38 @@ test("installs dependencies in writable OPENCORVUS_CONFIG_DIR", async () => {
   } finally {
     if (prev === undefined) delete process.env.OPENCORVUS_CONFIG_DIR
     else process.env.OPENCORVUS_CONFIG_DIR = prev
+  }
+})
+
+test("does not install config dependencies when no local plugin files exist", async () => {
+  await using tmp = await tmpdir<string>({
+    init: async (dir) => {
+      const home = path.join(dir, "home")
+      await fs.mkdir(home, { recursive: true })
+      return home
+    },
+  })
+
+  const prevHome = process.env.OPENCORVUS_HOME
+  process.env.OPENCORVUS_HOME = tmp.extra
+  ;(Config.global as any).reset()
+
+  try {
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        await Config.get()
+        await Config.waitForDependencies()
+      },
+    })
+
+    expect(existsSync(path.join(tmp.extra, "config", "package.json"))).toBe(false)
+    expect(existsSync(path.join(tmp.extra, "config", "node_modules"))).toBe(false)
+    expect(existsSync(path.join(tmp.path, ".opencorvus", "package.json"))).toBe(false)
+  } finally {
+    if (prevHome === undefined) delete process.env.OPENCORVUS_HOME
+    else process.env.OPENCORVUS_HOME = prevHome
+    ;(Config.global as any).reset()
   }
 })
 

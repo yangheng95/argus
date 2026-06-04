@@ -22,10 +22,8 @@ describe("Orchestrator startup error envelope", () => {
     await using tmp = await tmpdir({ config: { agent: {}, model: "missing-provider/missing-model" } })
     const prevHome = process.env.OPENCORVUS_HOME
     const prevGlobalConfigDir = process.env.OPENCORVUS_GLOBAL_CONFIG_DIR
-    const prevDisablePlugins = process.env.OPENCORVUS_DISABLE_DEFAULT_PLUGINS
     process.env.OPENCORVUS_HOME = path.join(tmp.path, ".opencorvus-home")
     process.env.OPENCORVUS_GLOBAL_CONFIG_DIR = path.join(tmp.path, ".opencorvus-home", "config")
-    process.env.OPENCORVUS_DISABLE_DEFAULT_PLUGINS = "1"
 
     try {
       await Instance.provide({
@@ -78,8 +76,6 @@ describe("Orchestrator startup error envelope", () => {
       else process.env.OPENCORVUS_HOME = prevHome
       if (prevGlobalConfigDir === undefined) delete process.env.OPENCORVUS_GLOBAL_CONFIG_DIR
       else process.env.OPENCORVUS_GLOBAL_CONFIG_DIR = prevGlobalConfigDir
-      if (prevDisablePlugins === undefined) delete process.env.OPENCORVUS_DISABLE_DEFAULT_PLUGINS
-      else process.env.OPENCORVUS_DISABLE_DEFAULT_PLUGINS = prevDisablePlugins
     }
   }, 15000)
 })

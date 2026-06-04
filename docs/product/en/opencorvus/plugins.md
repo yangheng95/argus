@@ -15,9 +15,9 @@ Source: `packages/opencorvus/src/plugin/index.ts`, `packages/plugin/src/index.ts
 
 ## Default plugins
 
-**`opencode-anthropic-auth`** (npm) — auto-installed at startup (`src/plugin/index.ts:18`). Provides Anthropic OAuth. Disable in offline/CI (see §6).
-
 **GitLab Auth** (internal) — `@gitlab/opencode-gitlab-auth` statically imported, no npm install (`src/plugin/index.ts:12-23`).
+
+OpenCorvus does not install npm plugins by default. The retired `opencode-anthropic-auth` package is no longer auto-loaded; add any third-party auth plugin explicitly in `plugin` if you choose to use one.
 
 ## Writing a plugin
 
@@ -69,14 +69,6 @@ Full hooks: `packages/plugin/src/index.ts:148-337`.
 ```
 
 Files in `.opencorvus/plugin/*.{ts,js}` auto-discovered (`src/config/config.ts:467-479`).
-
-## Disabling defaults
-
-```bash
-OPENCORVUS_DISABLE_DEFAULT_PLUGINS=1 opencorvus serve
-```
-
-Skips `opencode-anthropic-auth` install & load (`src/plugin/index.ts:52-54`). Required in CI, offline environments, or when running benchmarks.
 
 ## Relation to providers and executors
 

@@ -16,7 +16,6 @@ session rather than a direct task:
 ```bash
 cd packages/opencorvus
 
-OPENCORVUS_DISABLE_DEFAULT_PLUGINS=1 \
 CODING_DASHSCOPE_API_KEY=sk-sp-... \
 ALIBABA_CODING_PLAN_API_KEY=sk-sp-... \
 DASHSCOPE_API_URL=https://coding.dashscope.aliyuncs.com/v1 \
@@ -43,7 +42,6 @@ Default flow:
 ```bash
 cd packages/opencorvus
 
-OPENCORVUS_DISABLE_DEFAULT_PLUGINS=1 \
 CODING_DASHSCOPE_API_KEY=sk-sp-... \
 ALIBABA_CODING_PLAN_API_KEY=sk-sp-... \
 DASHSCOPE_API_URL=https://coding.dashscope.aliyuncs.com/v1 \
@@ -122,7 +120,6 @@ Historical baseline:
 - name: Benchmark
   env:
     CODING_DASHSCOPE_API_KEY: ${{ secrets.DASHSCOPE_KEY }}
-    OPENCORVUS_DISABLE_DEFAULT_PLUGINS: 1
   run: |
     cd packages/opencorvus
     bun run script/benchmark/overlay-web-benchmark.ts \

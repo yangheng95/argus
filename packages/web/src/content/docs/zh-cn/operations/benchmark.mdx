@@ -14,7 +14,6 @@ Benchmark 体系用于**端到端质量回归**。它模拟一次真实任务请
 ```bash
 cd packages/opencorvus
 
-OPENCORVUS_DISABLE_DEFAULT_PLUGINS=1 \
 CODING_DASHSCOPE_API_KEY=sk-sp-... \
 ALIBABA_CODING_PLAN_API_KEY=sk-sp-... \
 DASHSCOPE_API_URL=https://coding.dashscope.aliyuncs.com/v1 \
@@ -87,7 +86,6 @@ Env 必须在**进程启动前**就绪。`Env.state()` 在实例创建时快照 
 - name: Benchmark
   env:
     CODING_DASHSCOPE_API_KEY: ${{ secrets.DASHSCOPE_KEY }}
-    OPENCORVUS_DISABLE_DEFAULT_PLUGINS: 1
   run: |
     cd packages/opencorvus
     bun run script/benchmark/overlay-web-benchmark.ts \
