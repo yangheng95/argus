@@ -3,16 +3,13 @@ import type { TuiPlugin, TuiPluginApi } from "@opencorvus-ai/plugin/tui"
 import type { InternalTuiPlugin } from "../../plugin/internal"
 import { createMemo, Show } from "solid-js"
 import { Global } from "@/global"
+import { isProviderConnected } from "../../component/use-connected"
 
 const id = "internal:sidebar-footer"
 
 function View(props: { api: TuiPluginApi }) {
   const theme = () => props.api.theme.current
-  const has = createMemo(() =>
-    props.api.state.provider.some(
-      (item) => item.id !== "opencorvus" || Object.values(item.models).some((model) => model.cost?.input !== 0),
-    ),
-  )
+  const has = createMemo(() => props.api.state.provider.some(isProviderConnected))
   const done = createMemo(() => props.api.kv.get("dismissed_getting_started", false))
   const show = createMemo(() => !has() && !done())
   const path = createMemo(() => {
