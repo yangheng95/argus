@@ -914,3 +914,41 @@ OpenCode gap after the round:
 - The Agent Team project-bound plugin required by OpenCorvus does not exist yet.
 - External TUI plugin loader/install remains missing.
 - The overlay right activity still lacks the embedded `ghostty-web` terminal and server PTY host.
+
+### 2026-06-05 Round 6: copied system plugins for which-key, plugin manager, and notifications
+
+Implemented:
+
+- Copied OpenCode system feature plugins into `packages/opencorvus/src/cli/cmd/tui/feature-plugins/system/*`:
+  - `which-key.tsx`
+  - `plugins.tsx`
+  - `notifications.ts`
+- Registered these plugins through the single `internalTuiPlugins()` registry.
+- Kept OpenCode's `which-key` default disabled state so the plugin manager can activate it, matching upstream behavior.
+- Adapted Notifications to OpenCorvus SDK session status names:
+  - `streaming` and `retry` mark the session active.
+  - `idle` and `terminal` complete an active session.
+- Kept PluginManager wired to runtime `plugins.list/activate/deactivate/add/install` rather than creating a separate local plugin menu.
+- Extended `plugin-runtime-guard.test.ts` to assert:
+  - system plugins are registered from the internal registry;
+  - WhichKey uses `app` and `app_bottom` slots;
+  - PluginManager operates through the runtime plugin API;
+  - Notifications listens to question, permission, and session-status events.
+
+Verified:
+
+- `bun run --cwd packages/opencorvus typecheck`
+- `bun test test/tui/plugin-runtime-guard.test.ts test/tui/keymap-substrate.test.ts test/tui/keymap-migration-guard.test.ts test/tui/dependency-guard.test.ts` from `packages/opencorvus`
+
+OpenCode comparison after the round:
+
+- Matched: WhichKey command names, layout/pending-preview persistence keys, slot placement, PluginManager command registrations, plugin list/activate/deactivate wiring, and notification event coverage for question, permission, session done, and session error.
+- Preserved OpenCorvus-specific agent workflow behavior by adapting only status enum names and leaving existing prompt/session/permission/question routes untouched.
+
+OpenCode gap after the round:
+
+- DiffViewer and its file-tree helper modules remain missing.
+- SessionV2Debug and session switcher remain missing.
+- HomeFooter/HomeTips are still hard-coded in local `routes/home.tsx`; home slots exist in the plugin API but are not yet mounted by the route.
+- External TUI plugin loader/install remains missing.
+- Agent Team project-bound plugin and right-sidebar PTY/`ghostty-web` host remain missing.
