@@ -51,8 +51,8 @@ const HTTP_METHODS = ["get", "post", "put", "delete", "patch"] as const
 const REPO_ROOT = path.resolve(import.meta.dir, "..", "..", "..", "..")
 const OPENAPI_PATH = path.join(REPO_ROOT, "packages", "sdk", "openapi.json")
 const I18N_PATH = path.join(import.meta.dir, "i18n.json")
-const OUT_EN = path.join(REPO_ROOT, "docs", "product", "en", "reference", "api.md")
-const OUT_ZH = path.join(REPO_ROOT, "docs", "product", "zh-CN", "reference", "api.md")
+const OUT_EN = path.join(REPO_ROOT, "packages", "web", "src", "content", "docs", "reference", "api.mdx")
+const OUT_ZH = path.join(REPO_ROOT, "packages", "web", "src", "content", "docs", "zh-cn", "reference", "api.mdx")
 
 function loadJson<T>(p: string): T {
   return JSON.parse(fs.readFileSync(p, "utf8").replace(/^\uFEFF/, "")) as T
@@ -131,6 +131,9 @@ type Lang = "en" | "zh"
 function render(groups: Group[], i18n: I18n, lang: Lang): string {
   const isZh = lang === "zh"
   const title = isZh ? i18n.title_zh : i18n.title_en
+  const description = isZh
+    ? "HTTP API 参考--由 packages/sdk/openapi.json 自动生成。"
+    : "HTTP API reference--auto-generated from packages/sdk/openapi.json."
   const generated = isZh ? i18n.generated_lead_zh : i18n.generated_lead_en
   const auth = isZh ? i18n.auth_zh_lead : i18n.auth_en_lead
   const sec = isZh ? i18n.section_endpoints_zh : i18n.section_endpoints_en
@@ -141,7 +144,10 @@ function render(groups: Group[], i18n: I18n, lang: Lang): string {
   const noSummary = isZh ? i18n.no_summary_zh : i18n.no_summary_en
 
   const lines: string[] = []
-  lines.push(`# ${title}`)
+  lines.push("---")
+  lines.push(`title: ${title}`)
+  lines.push(`description: ${JSON.stringify(description)}`)
+  lines.push("---")
   lines.push("")
   lines.push(`> ${generated}`)
   lines.push("")
