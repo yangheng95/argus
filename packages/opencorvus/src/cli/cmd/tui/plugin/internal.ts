@@ -8,6 +8,7 @@ import SidebarLsp from "../feature-plugins/sidebar/lsp"
 import SidebarTodo from "../feature-plugins/sidebar/todo"
 import SidebarFiles from "../feature-plugins/sidebar/files"
 import SidebarFooter from "../feature-plugins/sidebar/footer"
+import DiffViewer from "../feature-plugins/system/diff-viewer"
 import PluginManager from "../feature-plugins/system/plugins"
 import Notifications from "../feature-plugins/system/notifications"
 import WhichKey from "../feature-plugins/system/which-key"
@@ -28,6 +29,7 @@ export function internalTuiPlugins(): InternalTuiPlugin[] {
     SidebarTodo,
     SidebarFiles,
     SidebarFooter,
+    DiffViewer,
     Notifications,
     PluginManager,
     WhichKey,

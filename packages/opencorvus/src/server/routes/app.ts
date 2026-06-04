@@ -250,6 +250,36 @@ export function AppRoutes(root: Hono) {
       },
     )
     .get(
+      "/vcs/diff",
+      describeRoute({
+        summary: "Get VCS diff",
+        description: "Retrieve the current git diff for the working tree or against the default branch.",
+        operationId: "vcs.diff",
+        responses: {
+          200: {
+            description: "VCS diff",
+            content: {
+              "application/json": {
+                schema: resolver(Vcs.FileDiff.array()),
+              },
+            },
+          },
+        },
+      }),
+      validator(
+        "query",
+        z.object({
+          mode: Vcs.Mode.default("git"),
+          context: z.coerce.number().int().nonnegative().optional(),
+          directory: z.string().optional(),
+        }),
+      ),
+      async (c) => {
+        const query = c.req.valid("query")
+        return c.json(await Vcs.diff(query.mode, { context: query.context }))
+      },
+    )
+    .get(
       "/command",
       describeRoute({
         summary: "List commands",

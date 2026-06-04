@@ -77,6 +77,19 @@ describe("OpenCode-derived TUI plugin substrate", () => {
     const whichKey = await readFile(path.join(tuiRoot, "feature-plugins/system/which-key.tsx"), "utf8")
     const pluginManager = await readFile(path.join(tuiRoot, "feature-plugins/system/plugins.tsx"), "utf8")
     const notifications = await readFile(path.join(tuiRoot, "feature-plugins/system/notifications.ts"), "utf8")
+    const diffViewer = await readFile(path.join(tuiRoot, "feature-plugins/system/diff-viewer.tsx"), "utf8")
+    const diffViewerTree = await readFile(
+      path.join(tuiRoot, "feature-plugins/system/diff-viewer-file-tree.tsx"),
+      "utf8",
+    )
+    const diffViewerTreeUtils = await readFile(
+      path.join(tuiRoot, "feature-plugins/system/diff-viewer-file-tree-utils.ts"),
+      "utf8",
+    )
+    const keybind = await readFile(path.join(tuiRoot, "config/keybind.ts"), "utf8")
+    const pluginApi = await readFile(path.join(projectRoot, "../plugin/src/tui.ts"), "utf8")
+    const serverRoutes = await readFile(path.join(projectRoot, "src/server/routes/app.ts"), "utf8")
+    const sdk = await readFile(path.join(projectRoot, "../sdk/js/src/gen/sdk.gen.ts"), "utf8")
 
     expect(app).toContain('from "./plugin/api"')
     expect(app).toContain('from "./plugin/runtime"')
@@ -112,6 +125,7 @@ describe("OpenCode-derived TUI plugin substrate", () => {
       "SidebarTodo",
       "SidebarFiles",
       "SidebarFooter",
+      "DiffViewer",
       "Notifications",
       "PluginManager",
       "WhichKey",
@@ -130,5 +144,23 @@ describe("OpenCode-derived TUI plugin substrate", () => {
     expect(homeTips).toContain('home_bottom()')
     expect(homeTips).toContain('name: "tips.toggle"')
     expect(homeFooter).toContain('home_footer()')
+    expect(diffViewer).toContain('id: "diff-viewer"')
+    expect(diffViewer).toContain("api.route.register")
+    expect(diffViewer).toContain('name: "diff.open"')
+    expect(diffViewer).toContain("props.api.client.vcs.diff")
+    expect(diffViewer).toContain("props.api.client.session.diff")
+    expect(diffViewer).toContain("DiffViewerFileTree")
+    expect(diffViewer).not.toContain("@opencode-ai")
+    expect(diffViewerTree).toContain("DiffViewerFileTree")
+    expect(diffViewerTreeUtils).toContain("buildFileTree")
+    expect(diffViewerTreeUtils).toContain("movePatchFileIndex")
+    expect(keybind).toContain("diff_toggle_file_tree")
+    expect(keybind).toContain('"diff.toggle_file_tree"')
+    expect(pluginApi).toContain("export type VcsFileDiff")
+    expect(pluginApi).toContain("TuiSessionDiffItem")
+    expect(serverRoutes).toContain('operationId: "vcs.diff"')
+    expect(serverRoutes).toContain('"/vcs/diff"')
+    expect(sdk).toContain("public diff<ThrowOnError")
+    expect(sdk).toContain('url: "/vcs/diff"')
   })
 })

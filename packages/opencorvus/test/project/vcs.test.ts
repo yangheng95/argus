@@ -58,3 +58,40 @@ describe("Vcs.info", () => {
     })
   })
 })
+
+describe("Vcs.diff", () => {
+  afterEach(async () => {
+    await resetDatabase()
+  })
+
+  test("returns OpenCode-style patches for modified and untracked working-tree files", async () => {
+    await using tmp = await tmpdir({ git: true })
+
+    await Bun.write(path.join(tmp.path, "tracked.txt"), "base\n")
+    await $`git add tracked.txt`.cwd(tmp.path).quiet()
+    await $`git commit -m "tracked"`.cwd(tmp.path).quiet()
+    await Bun.write(path.join(tmp.path, "tracked.txt"), "base\nchanged\n")
+    await Bun.write(path.join(tmp.path, "new.txt"), "new\n")
+
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const diff = await Vcs.diff("git", { context: 2 })
+        const tracked = diff.find((item) => item.file === "tracked.txt")
+        const added = diff.find((item) => item.file === "new.txt")
+
+        expect(tracked?.status).toBe("modified")
+        expect(tracked?.additions).toBe(1)
+        expect(tracked?.deletions).toBe(0)
+        expect(tracked?.patch).toContain("diff --git")
+        expect(tracked?.patch).toContain("+changed")
+
+        expect(added?.status).toBe("added")
+        expect(added?.additions).toBe(1)
+        expect(added?.deletions).toBe(0)
+        expect(added?.patch).toContain("new.txt")
+        expect(added?.patch).toContain("+new")
+      },
+    })
+  })
+})

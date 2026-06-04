@@ -990,3 +990,60 @@ OpenCode gap after the round:
 - DiffViewer and SessionV2Debug remain missing.
 - External TUI plugin loader/install remains missing.
 - Agent Team project-bound plugin and right-sidebar PTY/`ghostty-web` host remain missing.
+
+### 2026-06-05 Round 8: copied DiffViewer and added OpenCode-style VCS diff source
+
+Implemented:
+
+- Refreshed OpenCode dev to `730ea6d2e3eedc5f3a5b4151cdaabd2d744fd828` before editing. This round copied from the latest upstream baseline rather than the older half-year-old local TUI.
+- Copied OpenCode DiffViewer feature plugin modules into `packages/opencorvus/src/cli/cmd/tui/feature-plugins/system/*`:
+  - `diff-viewer.tsx`
+  - `diff-viewer-ui.tsx`
+  - `diff-viewer-file-tree.tsx`
+  - `diff-viewer-file-tree-utils.ts`
+- Registered `DiffViewer` through the single `internalTuiPlugins()` registry.
+- Copied OpenCode diff keybind names and command routing into the TUI keymap single source:
+  - `diff_close`
+  - `diff_toggle`
+  - `diff_expand`
+  - `diff_expand_all`
+  - `diff_collapse`
+  - `diff_switch_focus`
+  - `diff_next_file`
+  - `diff_previous_file`
+  - `diff_toggle_file_tree`
+  - `diff_single_patch`
+  - `diff_switch_source`
+  - `diff_toggle_view`
+  - `diff_help`
+- Added OpenCode-style `Vcs.diff(mode, options)` as the canonical source for working-tree and branch patches, using existing OpenCorvus git/project infrastructure instead of creating a TUI-only diff path.
+- Added `GET /vcs/diff`, regenerated the SDK OpenAPI artifacts, and wired `client.vcs.diff` into the copied DiffViewer.
+- Extended `@opencorvus-ai/plugin/tui` state types so `session.diff` exposes patch/status data compatible with the copied DiffViewer.
+- Adapted session diff data in the TUI plugin API by deriving patches from `before`/`after` snapshots with the mature `diff` package, not local string patch construction.
+
+Codex/agent review feedback applied:
+
+- DiffViewer reviewer confirmed the copied plugin needs a real SDK `vcs.diff` route, OpenCode diff keybinds, internal registry registration, and file-tree utility tests. This round added those items.
+- DiffViewer reviewer also confirmed local `session_panel` is not an upstream DiffViewer dependency. It remains outside this copy round and must not become a fake replacement for OpenCode DiffViewer.
+- Project-bound tool reviewer confirmed the side TUI must keep using existing coding/session workflow APIs and `PanelTool`/`EngineService` paths for agent-team operations. This round only added VCS diff capability; it did not introduce a new task/session store or `/tui/runtime/submit-task` workflow.
+
+Verified:
+
+- `bun run --cwd packages/plugin typecheck`
+- `bun run --cwd packages/sdk/js typecheck`
+- `bun run --cwd packages/opencorvus typecheck`
+- `bun test test/tui/diff-viewer-file-tree-utils.test.ts test/tui/plugin-runtime-guard.test.ts test/project/vcs.test.ts test/tui/keymap-substrate.test.ts test/tui/keymap-migration-guard.test.ts test/tui/dependency-guard.test.ts` from `packages/opencorvus`
+
+OpenCode comparison after the round:
+
+- Matched: DiffViewer plugin registration, route path, help dialog shape, focus modes, source switching between working tree and session diff, unified/split view toggle, file-tree sorting and navigation helpers, diff keybind command names, and `vcs.diff` SDK usage.
+- Preserved OpenCorvus-specific workflow behavior: no prompt/session/permission/question route was replaced; VCS diff is a project tool capability and the existing agent workflow remains the only task/session execution source.
+
+OpenCode gap after the round:
+
+- External TUI plugin loader/install still needs the grouped OpenCode plugin loader/meta/install copy. The current plugin manager can call the runtime API, but external loading is still inactive until those upstream modules exist in OpenCorvus.
+- Agent Team project-bound plugin is still missing. It must expose project task/session status and operations through existing `/coding/session*`, `/session/:id/prompt_async`, `/session/events`, and `PanelTool`/`EngineService` capabilities, not a new TUI workflow API.
+- The right sidebar activity still lacks the embedded `ghostty-web` terminal host and server PTY bridge, so the browser overlay is not yet screenshot-level interactive OpenCode output.
+- `home_prompt_right` remains only partially useful until the local Prompt component adopts OpenCode's richer `right` and `placeholders` prop surface.
+- SessionV2Debug and session switcher remain missing.
+- Visual/runtime verification of the actual right-side TUI remains blocked until the terminal host bridge is implemented; current tests cover code ownership, API wiring, and copied DiffViewer behavior.

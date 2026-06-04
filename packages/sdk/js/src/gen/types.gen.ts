@@ -2295,6 +2295,14 @@ export type VcsInfo = {
   behind: number
 }
 
+export type VcsFileDiff = {
+  file: string
+  patch?: string
+  additions: number
+  deletions: number
+  status?: "added" | "deleted" | "modified"
+}
+
 export type Command = {
   name: string
   description?: string
@@ -13294,6 +13302,26 @@ export type VcsGetResponses = {
 }
 
 export type VcsGetResponse = VcsGetResponses[keyof VcsGetResponses]
+
+export type VcsDiffData = {
+  body?: never
+  path?: never
+  query?: {
+    mode?: "git" | "branch"
+    context?: number
+    directory?: string
+  }
+  url: "/vcs/diff"
+}
+
+export type VcsDiffResponses = {
+  /**
+   * VCS diff
+   */
+  200: Array<VcsFileDiff>
+}
+
+export type VcsDiffResponse = VcsDiffResponses[keyof VcsDiffResponses]
 
 export type CommandListData = {
   body?: never
