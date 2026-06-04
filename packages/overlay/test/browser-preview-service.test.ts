@@ -1,10 +1,11 @@
 import { afterEach, beforeEach, expect, test } from "bun:test"
 import { configure } from "../src/services/api"
-import { loadBrowserPreviewTarget, type BrowserPreviewTarget } from "../src/services/browser-preview"
+import { captureTaskBrowserPreviewEvidence, loadTaskBrowserPreviewTarget, saveTaskBrowserPreviewTarget, type BrowserPreviewTarget } from "../src/services/browser-preview"
 import { __setHostTransportForTest } from "../src/services/host-transport"
 import type { HostTransport, TransportRequest, TransportResponse } from "../src/services/host-transport"
 
 const SAVED_DIRECTORY = "D:/workspace/app"
+const TASK_ID = "tsk_browserpreviewservice0001"
 
 function fakePreviewTransport(capture: (req: TransportRequest) => void): HostTransport {
   return {
@@ -16,7 +17,9 @@ function fakePreviewTransport(capture: (req: TransportRequest) => void): HostTra
         ok: true,
         headers: {},
         body: {
-          kind: "explicit-url",
+          id: "art_previewtarget000000000001",
+          taskID: TASK_ID,
+          kind: "task-url",
           status: "ready",
           projectRoot: SAVED_DIRECTORY,
           url: "http://127.0.0.1:5173/",
@@ -26,7 +29,7 @@ function fakePreviewTransport(capture: (req: TransportRequest) => void): HostTra
             { id: "mobile", labelKey: "browser_preview.viewport.mobile", width: 390, height: 844 },
           ],
           diagnostics: [],
-          source: "query",
+          source: "task-artifact",
         } satisfies BrowserPreviewTarget as T,
       }
     },
@@ -51,30 +54,36 @@ afterEach(() => {
   configure({ directory: "" })
 })
 
-test("browser preview service sends the explicit URL through HostTransport query", async () => {
+test("browser preview service loads the task-scoped target through HostTransport", async () => {
   let captured: TransportRequest | undefined
   __setHostTransportForTest(fakePreviewTransport((req) => { captured = req }))
 
-  const target = await loadBrowserPreviewTarget("  http://127.0.0.1:5173/dashboard?tab=one&view=wide  ")
+  const target = await loadTaskBrowserPreviewTarget(TASK_ID)
 
   expect(target.status).toBe("ready")
-  expect(captured?.path).toBe("browser-preview/target")
-  expect(captured?.query?.url).toBe("http://127.0.0.1:5173/dashboard?tab=one&view=wide")
+  expect(captured?.path).toBe(`task/${TASK_ID}/browser-preview`)
   expect(captured?.query?.directory).toBe(SAVED_DIRECTORY)
 })
 
-test("browser preview service omits the url query when no explicit URL is provided", async () => {
+test("browser preview service saves explicit URL as task target instead of query override", async () => {
   let captured: TransportRequest | undefined
   __setHostTransportForTest(fakePreviewTransport((req) => { captured = req }))
 
-  await loadBrowserPreviewTarget("   ")
+  await saveTaskBrowserPreviewTarget({ taskID: TASK_ID, url: "  http://127.0.0.1:5173/dashboard  " })
 
-  expect(captured?.path).toBe("browser-preview/target")
+  expect(captured?.path).toBe(`task/${TASK_ID}/browser-preview/target`)
+  expect(captured?.method).toBe("PUT")
   expect(captured?.query?.url).toBeUndefined()
   expect(captured?.query?.directory).toBe(SAVED_DIRECTORY)
+  expect(captured?.body).toEqual({
+    kind: "json",
+    value: {
+      url: "  http://127.0.0.1:5173/dashboard  ",
+    },
+  })
 })
 
-test("browser preview service asks the backend to capture Playwright evidence", async () => {
+test("browser preview service asks the backend to persist Playwright evidence", async () => {
   let captured: TransportRequest | undefined
   __setHostTransportForTest({
     ...fakePreviewTransport((req) => { captured = req }),
@@ -88,13 +97,15 @@ test("browser preview service asks the backend to capture Playwright evidence", 
           status: "passed",
           projectRoot: SAVED_DIRECTORY,
           target: {
-            kind: "explicit-url",
+            id: "art_previewtarget000000000001",
+            taskID: TASK_ID,
+            kind: "task-url",
             status: "ready",
             projectRoot: SAVED_DIRECTORY,
             url: "http://127.0.0.1:5173/",
             viewports: [],
             diagnostics: [],
-            source: "query",
+            source: "task-artifact",
           },
           viewport: { id: "mobile", labelKey: "browser_preview.viewport.mobile", width: 390, height: 844 },
           capture: {
@@ -109,20 +120,20 @@ test("browser preview service asks the backend to capture Playwright evidence", 
     },
   })
 
-  const { verifyBrowserPreviewTarget } = await import("../src/services/browser-preview")
-  const result = await verifyBrowserPreviewTarget({
-    url: "http://127.0.0.1:5173/",
+  const result = await captureTaskBrowserPreviewEvidence({
+    taskID: TASK_ID,
+    targetID: "art_previewtarget000000000001",
     viewportID: "mobile",
   })
 
   expect(result.status).toBe("passed")
-  expect(captured?.path).toBe("browser-preview/verify")
+  expect(captured?.path).toBe(`task/${TASK_ID}/browser-preview/capture`)
   expect(captured?.method).toBe("POST")
   expect(captured?.query?.directory).toBe(SAVED_DIRECTORY)
   expect(captured?.body).toEqual({
     kind: "json",
     value: {
-      url: "http://127.0.0.1:5173/",
+      targetID: "art_previewtarget000000000001",
       viewportID: "mobile",
     },
   })

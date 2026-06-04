@@ -83,6 +83,9 @@ All endpoints are protected by `OPENCORVUS_SERVER_PASSWORD` when it is set. Clie
 | GET | `/task/{taskID}/bindings` | List channel bindings for a task | `task.bindings` |
 | GET | `/task/{taskID}/board` | Get task board | `task.board` |
 | GET | `/task/{taskID}/brief` | Get task brief | `task.brief` |
+| GET | `/task/{taskID}/browser-preview` | Resolve task browser preview target | `browserPreview.taskTarget` |
+| POST | `/task/{taskID}/browser-preview/capture` | Capture browser preview verification evidence | `browserPreview.captureTaskTarget` |
+| PUT | `/task/{taskID}/browser-preview/target` | Save task browser preview target | `browserPreview.saveTaskTarget` |
 | PATCH | `/task/{taskID}/budget` | Update task budget | `task.updateBudget` |
 | POST | `/task/{taskID}/cancel` | Cancel task | `task.cancel` |
 | GET | `/task/{taskID}/conversation` | Hydrate task conversation state | `task.conversation` |
@@ -325,13 +328,6 @@ All endpoints are protected by `OPENCORVUS_SERVER_PASSWORD` when it is set. Clie
 | GET | `/experimental/worktree` | List worktrees | `worktree.list` |
 | POST | `/experimental/worktree` | Create worktree | `worktree.create` |
 | POST | `/experimental/worktree/reset` | Reset worktree | `worktree.reset` |
-
-### Browser-preview
-
-| Method | Path | Summary | operationId |
-|---|---|---|---|
-| GET | `/browser-preview/target` | Resolve browser preview target | `browserPreview.target` |
-| POST | `/browser-preview/verify` | Capture browser preview verification evidence | `browserPreview.verify` |
 
 ### Mission
 

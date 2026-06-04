@@ -135,6 +135,7 @@ export async function renderPage(opts: {
   expectTexts?: string[]
   /** Run a generic user-interaction probe in the same browser page after first paint. */
   probeInteractions?: boolean
+  signal?: AbortSignal
 }): Promise<{
   renderedPath: string
   viewport: { width: number; height: number }
@@ -187,6 +188,7 @@ export async function renderPage(opts: {
     expectSelectors: opts.expectSelectors,
     expectTexts: opts.expectTexts,
     probeInteractions: opts.probeInteractions,
+    signal: opts.signal,
   })
   const rendered = await decodePNG(renderedPath)
   const variance = pngLuminanceVariance(rendered)
@@ -221,6 +223,7 @@ async function renderPageViaNode(input: {
   expectSelectors?: string[]
   expectTexts?: string[]
   probeInteractions?: boolean
+  signal?: AbortSignal
 }): Promise<{
   dom: {
     textLength: number
@@ -264,6 +267,7 @@ async function renderPageViaNode(input: {
     payloadEnvName: "OPENCORVUS_VISUAL_RENDER_INPUT",
     hardTimeoutMs,
     label: "Node visual render",
+    signal: input.signal,
   }).catch((error) => {
     if (error instanceof BrowserNodeSidecarError) throw error
     throw new Error(error instanceof Error ? error.message : String(error), { cause: error })

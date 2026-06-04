@@ -72,7 +72,8 @@ The UI never chooses a package manager or guesses a root. It displays the backen
 
 ## Implementation Requirements
 
-- A new backend route family must be directory-scoped and return a single preview target contract. Route naming must be decided after grepping existing route definitions.
+- The backend route family is task-scoped: `GET /task/{taskID}/browser-preview`, `PUT /task/{taskID}/browser-preview/target`, and `POST /task/{taskID}/browser-preview/capture`.
+- Saved preview targets and preview capture evidence live as task-scoped `engine_artifact` facts: `browser_preview_target` and `browser_preview_evidence`. The stale `acceptance_preview` name must not be revived.
 - Preview startup must fail truthfully with root, command, status, and diagnostics. It must not try another root or another server kind.
 - Overlay UI controls must use existing Kobalte-backed primitives and overlay design tokens.
 - Viewport presets must live in one shared config consumed by UI and Playwright verification.

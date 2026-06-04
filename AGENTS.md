@@ -10,6 +10,7 @@
 - 原则上禁止任何gate/门规则和机制，加这些东西是因为你找不到真正的症结在哪里了，或者你不想修真正的症结。禁止使用 gate 来绕过问题，必须直接面对和解决问题的根本原因。任何试图通过 gate 来掩盖问题的行为都是不可接受的。
 - 设置benchmark后用定时器自我唤醒，不要保持监听日志
 - Playwright 不允许用bun启动，在windows上会卡死，必须用 node 启动。
+- 右侧前端预览面板禁止用临时 iframe、本地 signal、query 覆盖或手写交互冒充成熟工具链；必须以 task-scoped 后端 preview target / evidence 作为单一来源，UI 控件使用成熟 primitives，截图和诊断复用 Playwright/Node sidecar。
 
 ---
 

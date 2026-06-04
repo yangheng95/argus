@@ -30,7 +30,7 @@
 ### 执行与交付（artifact-centric）
 | 表 | 关键字段 / 状态 |
 |---|---|
-| `engine_artifact` | **统一过程表**，`kind` 决定语义；替代旧的 `engine_run` / `engine_goal_run` / `engine_acceptance` / `engine_evaluation` / `engine_goal_snapshot`。完整 `EngineArtifactKind` 取值（见 `engine.sql.ts:97`）：`run` · `goal_run_attempt` · `acceptance` · `verification-evidence` · `evaluation` · `verdict` · `patch` · `changed_file` · `diff` · `log` · `report` · `image` · `link` · `git_ref` · `pr` · `integrity_attempt` · `prosecutor_attempt` · `acceptance_evidence_manifest` · `acceptance_surface_manifest` · `acceptance_specialist_review` · `acceptance_review_threw` · `acceptance_preview` · `orchestrator-stream-error` |
+| `engine_artifact` | **统一过程表**，`kind` 决定语义；替代旧的 `engine_run` / `engine_goal_run` / `engine_acceptance` / `engine_evaluation` / `engine_goal_snapshot`。完整 `EngineArtifactKind` 取值（见 `engine.sql.ts:97`）：`run` · `goal_run_attempt` · `acceptance` · `verification-evidence` · `evaluation` · `verdict` · `patch` · `changed_file` · `diff` · `log` · `report` · `image` · `link` · `git_ref` · `pr` · `integrity_attempt` · `prosecutor_attempt` · `acceptance_evidence_manifest` · `acceptance_surface_manifest` · `acceptance_specialist_review` · `acceptance_review_threw` · `browser_preview_target` · `browser_preview_evidence` · `orchestrator-stream-error` |
 | `engine_progress_snapshot` | 进度快照（旧名 `orchestrator_progress_snapshot` 已重命名） |
 | `engine_executor_session` | 执行器会话绑定 |
 

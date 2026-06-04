@@ -35,6 +35,7 @@ export type RuntimeCaptureInput = RuntimeCaptureRequest & {
   headless?: boolean
   probeInteractions?: boolean
   fileLabel?: string
+  signal?: AbortSignal
 }
 
 export type RuntimeCaptureFailure = {
@@ -124,6 +125,7 @@ export async function captureRuntimePage(input: RuntimeCaptureInput): Promise<Ru
       expectSelectors: args.expect_selectors,
       expectTexts: args.expect_texts,
       probeInteractions: input.probeInteractions,
+      signal: input.signal,
     })
     const buf = await fs.readFile(rendered.renderedPath)
     const sha = crypto.createHash("sha256").update(buf).digest("hex").slice(0, 16)

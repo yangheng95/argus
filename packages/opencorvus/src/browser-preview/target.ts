@@ -1,6 +1,7 @@
 import fs from "node:fs/promises"
 import path from "node:path"
 import z from "zod"
+import { latestBrowserPreviewEvidenceID, findLatestBrowserPreviewTarget } from "./persist"
 import { BROWSER_PREVIEW_VIEWPORTS, BrowserPreviewViewport } from "./viewport"
 
 type PreviewPackage = {
@@ -24,7 +25,10 @@ type PreviewPackageRead =
   | { kind: "failed"; diagnostics: string[] }
 
 export const BrowserPreviewTarget = z.object({
-  kind: z.enum(["explicit-url", "manifest-url", "manifest-command", "missing", "failed"]),
+  id: z.string().optional(),
+  taskID: z.string().optional(),
+  latestEvidenceID: z.string().optional(),
+  kind: z.enum(["task-url", "explicit-url", "manifest-url", "manifest-command", "missing", "failed"]),
   status: z.enum(["ready", "configured", "missing", "failed"]),
   projectRoot: z.string(),
   url: z.string().optional(),
@@ -32,37 +36,59 @@ export const BrowserPreviewTarget = z.object({
   packageManager: z.string().optional(),
   viewports: BrowserPreviewViewport.array(),
   diagnostics: z.string().array(),
-  source: z.enum(["query", "package-json", "none"]),
+  source: z.enum(["task-artifact", "explicit", "package-json", "none"]),
 })
 
 export type BrowserPreviewTarget = z.infer<typeof BrowserPreviewTarget>
 
 export async function resolveBrowserPreviewTarget(input: {
   projectRoot: string
+  taskID?: string
   explicitUrl?: string
 }): Promise<BrowserPreviewTarget> {
   const projectRoot = path.resolve(input.projectRoot)
+  const taskID = input.taskID?.trim()
+  if (taskID) {
+    const persisted = findLatestBrowserPreviewTarget(taskID)
+    if (persisted) {
+      return {
+        id: persisted.id,
+        taskID,
+        latestEvidenceID: latestBrowserPreviewEvidenceID({ taskID, targetID: persisted.id }),
+        kind: "task-url",
+        status: "ready",
+        projectRoot,
+        url: persisted.url,
+        viewports: [...BROWSER_PREVIEW_VIEWPORTS],
+        diagnostics: [`Using task browser preview target ${persisted.id}.`],
+        source: "task-artifact",
+      }
+    }
+  }
+
   const explicitUrl = input.explicitUrl?.trim()
   if (explicitUrl) {
-    const url = normalizeHttpUrl(explicitUrl)
+    const url = normalizeBrowserPreviewUrl(explicitUrl)
     if (!url) {
       return {
         kind: "failed",
         status: "failed",
         projectRoot,
+        taskID,
         viewports: [...BROWSER_PREVIEW_VIEWPORTS],
         diagnostics: [`Invalid preview URL: ${explicitUrl}`],
-        source: "query",
+        source: "explicit",
       }
     }
     return {
       kind: "explicit-url",
       status: "ready",
       projectRoot,
+      taskID,
       url,
       viewports: [...BROWSER_PREVIEW_VIEWPORTS],
       diagnostics: [`Using explicit preview URL: ${url}`],
-      source: "query",
+      source: "explicit",
     }
   }
 
@@ -72,6 +98,7 @@ export async function resolveBrowserPreviewTarget(input: {
       kind: "failed",
       status: "failed",
       projectRoot,
+      taskID,
       viewports: [...BROWSER_PREVIEW_VIEWPORTS],
       diagnostics: packageRead.diagnostics,
       source: "package-json",
@@ -82,6 +109,7 @@ export async function resolveBrowserPreviewTarget(input: {
       kind: "missing",
       status: "missing",
       projectRoot,
+      taskID,
       viewports: [...BROWSER_PREVIEW_VIEWPORTS],
       diagnostics: ["No package.json found in the active project directory."],
       source: "none",
@@ -92,12 +120,13 @@ export async function resolveBrowserPreviewTarget(input: {
   const manifestConfig = pkg.opencorvus?.browserPreview
   if (manifestConfig && Object.prototype.hasOwnProperty.call(manifestConfig, "url")) {
     const manifestUrlInput = manifestConfig.url
-    const manifestUrl = normalizeHttpUrl(manifestUrlInput)
+    const manifestUrl = normalizeBrowserPreviewUrl(manifestUrlInput)
     if (!manifestUrl) {
       return {
         kind: "failed",
         status: "failed",
         projectRoot,
+        taskID,
         packageManager: pkg.packageManager,
         viewports: [...BROWSER_PREVIEW_VIEWPORTS],
         diagnostics: [`Invalid package.json opencorvus.browserPreview.url: ${String(manifestUrlInput)}`],
@@ -108,6 +137,7 @@ export async function resolveBrowserPreviewTarget(input: {
       kind: "manifest-url",
       status: "ready",
       projectRoot,
+      taskID,
       url: manifestUrl,
       command: explicitManifestCommand(pkg),
       packageManager: pkg.packageManager,
@@ -123,6 +153,7 @@ export async function resolveBrowserPreviewTarget(input: {
       kind: "manifest-command",
       status: "configured",
       projectRoot,
+      taskID,
       command,
       packageManager: pkg.packageManager,
       viewports: [...BROWSER_PREVIEW_VIEWPORTS],
@@ -138,6 +169,7 @@ export async function resolveBrowserPreviewTarget(input: {
     kind: "missing",
     status: "missing",
     projectRoot,
+    taskID,
     packageManager: pkg.packageManager,
     viewports: [...BROWSER_PREVIEW_VIEWPORTS],
     diagnostics: ["package.json does not declare opencorvus.browserPreview.url or opencorvus.browserPreview.command."],
@@ -145,7 +177,7 @@ export async function resolveBrowserPreviewTarget(input: {
   }
 }
 
-function normalizeHttpUrl(value: unknown): string | undefined {
+export function normalizeBrowserPreviewUrl(value: unknown): string | undefined {
   if (typeof value !== "string") return undefined
   const text = value.trim()
   if (!text) return undefined

@@ -41,7 +41,7 @@ describe("app routes", () => {
         .map((parameter) => parameter.name)
 
     expect(parameterNames(paths["/project/current"]?.get)).toEqual(["directory"])
-    expect(parameterNames(paths["/browser-preview/target"]?.get)).toEqual(["directory"])
+    expect(parameterNames(paths["/task/{taskID}/browser-preview"]?.get)).toEqual(["directory"])
     expect(parameterNames(paths["/session"]?.get)).toEqual(["directory"])
     expect(parameterNames(paths["/global/health"]?.get)).toEqual([])
     expect(parameterNames(paths["/log"]?.get)).toEqual([])

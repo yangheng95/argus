@@ -1,14 +1,44 @@
-import { describe, expect, test } from "bun:test"
+import { afterEach, describe, expect, test } from "bun:test"
 import fs from "node:fs/promises"
 import path from "node:path"
 import { tmpdir } from "../fixture/fixture"
 import { resolveBrowserPreviewTarget } from "../../src/browser-preview/target"
+import { persistBrowserPreviewTarget } from "../../src/browser-preview/persist"
+import { resetDatabase } from "../fixture/db"
+import { Instance } from "../../src/project/instance"
+import { Database } from "../../src/storage/db"
+import { EngineTaskTable } from "../../src/engine/engine.sql"
 
 async function writePackageJson(root: string, value: unknown) {
   await fs.writeFile(path.join(root, "package.json"), JSON.stringify(value, null, 2))
 }
 
 describe("browser preview target resolver", () => {
+  afterEach(async () => {
+    await resetDatabase()
+  })
+
+  async function seedTask(directory: string) {
+    const taskID = `tsk_browserpreviewtarget${Date.now()}`
+    await Instance.provide({
+      directory,
+      fn: () => {
+        Database.use((db) =>
+          db.insert(EngineTaskTable).values({
+            id: taskID,
+            project_id: Instance.project.id,
+            title: "Preview task",
+            request: "Preview task",
+            source: "api",
+            time_created: Date.now(),
+            time_updated: Date.now(),
+          }).run(),
+        )
+      },
+    })
+    return taskID
+  }
+
   test("uses explicit HTTP URL without reading project package metadata", async () => {
     await using tmp = await tmpdir()
     const target = await resolveBrowserPreviewTarget({
@@ -19,8 +49,34 @@ describe("browser preview target resolver", () => {
     expect(target.status).toBe("ready")
     expect(target.kind).toBe("explicit-url")
     expect(target.url).toBe("http://127.0.0.1:5173/dashboard")
-    expect(target.source).toBe("query")
+    expect(target.source).toBe("explicit")
     expect(target.viewports.map((viewport) => viewport.id)).toEqual(["desktop", "tablet", "mobile"])
+  })
+
+  test("uses the task artifact target before package metadata", async () => {
+    await using tmp = await tmpdir()
+    await writePackageJson(tmp.path, {
+      opencorvus: {
+        browserPreview: {
+          url: "http://127.0.0.1:4173/",
+        },
+      },
+    })
+    const taskID = await seedTask(tmp.path)
+    const persisted = persistBrowserPreviewTarget({
+      taskID,
+      url: "http://127.0.0.1:5173/task",
+    })
+
+    const target = await resolveBrowserPreviewTarget({
+      projectRoot: tmp.path,
+      taskID,
+    })
+
+    expect(target.id).toBe(persisted.id)
+    expect(target.kind).toBe("task-url")
+    expect(target.source).toBe("task-artifact")
+    expect(target.url).toBe("http://127.0.0.1:5173/task")
   })
 
   test("rejects non-browser explicit URLs instead of falling back", async () => {

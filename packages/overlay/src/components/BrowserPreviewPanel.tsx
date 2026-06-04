@@ -1,40 +1,59 @@
-import { createMemo, createResource, createSignal, For, Match, Switch } from "solid-js"
-import { loadBrowserPreviewTarget, verifyBrowserPreviewTarget, type BrowserPreviewViewportID } from "../services/browser-preview"
+import { createEffect, createMemo, createResource, createSignal, For, Match, Switch } from "solid-js"
+import { captureTaskBrowserPreviewEvidence, loadTaskBrowserPreviewTarget, saveTaskBrowserPreviewTarget, type BrowserPreviewViewportID } from "../services/browser-preview"
 import { t } from "../utils/i18n"
 import { Icon } from "./Icon"
 import { Button } from "./ui/Button"
 import { Tab, Tabs } from "./ui/Tabs"
 
-export function BrowserPreviewPanel() {
+export interface BrowserPreviewPanelProps {
+  active: () => boolean
+  directory: () => string
+  taskID: () => string | undefined
+}
+
+export function BrowserPreviewPanel(props: BrowserPreviewPanelProps) {
   let frameElement: HTMLIFrameElement | undefined
   const [draftUrl, setDraftUrl] = createSignal("")
-  const [targetUrl, setTargetUrl] = createSignal("")
   const [viewportID, setViewportID] = createSignal<BrowserPreviewViewportID>("desktop")
   const [refreshToken, setRefreshToken] = createSignal(0)
   const [frameToken, setFrameToken] = createSignal(0)
-  const [verificationRequest, setVerificationRequest] = createSignal<{ url: string; viewportID: BrowserPreviewViewportID; token: number }>()
+  const [verificationRequest, setVerificationRequest] = createSignal<{ taskID: string; targetID?: string; viewportID: BrowserPreviewViewportID; token: number }>()
   const [target] = createResource(
-    () => ({ url: targetUrl(), refreshToken: refreshToken() }),
-    ({ url }) => loadBrowserPreviewTarget(url || undefined),
+    () => {
+      const taskID = props.taskID()
+      const directory = props.directory()
+      if (!props.active() || !taskID || !directory) return undefined
+      return { taskID, directory, refreshToken: refreshToken() }
+    },
+    (scope) => loadTaskBrowserPreviewTarget(scope.taskID),
   )
   const [verification] = createResource(
     verificationRequest,
-    (request) => verifyBrowserPreviewTarget({ url: request.url, viewportID: request.viewportID }),
+    (request) => captureTaskBrowserPreviewEvidence({ taskID: request.taskID, targetID: request.targetID, viewportID: request.viewportID }),
   )
 
-  const viewports = createMemo(() => target()?.viewports ?? [])
+  const currentTarget = createMemo(() => (props.active() && props.taskID() && props.directory() ? target() : undefined))
+  const currentTargetError = createMemo(() => (props.active() && props.taskID() && props.directory() ? target.error : undefined))
+  const viewports = createMemo(() => currentTarget()?.viewports ?? [])
   const viewport = createMemo(() => viewports().find((item) => item.id === viewportID()) ?? viewports()[0])
-  const frameUrl = createMemo(() => target()?.url)
+  const frameUrl = createMemo(() => currentTarget()?.url)
+
+  createEffect(() => {
+    const resolved = currentTarget()
+    if (resolved?.source === "task-artifact" && resolved.url) setDraftUrl(resolved.url)
+    if (!props.taskID()) setDraftUrl("")
+  })
 
   const submitUrl = (event: Event) => {
     event.preventDefault()
-    setTargetUrl(draftUrl().trim())
-    setRefreshToken((value) => value + 1)
+    const taskID = props.taskID()
+    const url = draftUrl().trim()
+    if (!taskID || !url) return
+    void saveTaskBrowserPreviewTarget({ taskID, url }).then(() => setRefreshToken((value) => value + 1))
   }
 
   const reloadFrame = () => {
     setFrameToken((value) => value + 1)
-    setRefreshToken((value) => value + 1)
     const frameSrc = frameElement?.src
     if (frameElement && frameSrc) {
       frameElement.src = frameSrc
@@ -42,9 +61,10 @@ export function BrowserPreviewPanel() {
   }
 
   const captureEvidence = () => {
-    const url = frameUrl()
-    if (!url) return
-    setVerificationRequest({ url, viewportID: viewportID(), token: Date.now() })
+    const taskID = props.taskID()
+    const resolved = currentTarget()
+    if (!taskID || !resolved?.url) return
+    setVerificationRequest({ taskID, targetID: resolved.id, viewportID: viewportID(), token: Date.now() })
   }
 
   return (
@@ -57,12 +77,13 @@ export function BrowserPreviewPanel() {
             onInput={(event) => setDraftUrl(event.currentTarget.value)}
             placeholder={t("browser_preview.url_placeholder")}
             aria-label={t("browser_preview.url_label")}
+            disabled={!props.taskID()}
           />
         </label>
-        <Button type="submit" variant="solid" size="icon" tone="accent" title={t("browser_preview.load")} aria-label={t("browser_preview.load")}>
+        <Button type="submit" variant="solid" size="icon" tone="accent" title={t("browser_preview.load")} aria-label={t("browser_preview.load")} disabled={!props.taskID()}>
           <Icon name="external-link" size={13} />
         </Button>
-        <Button type="button" variant="outline" size="icon" tone="neutral" title={t("browser_preview.refresh")} aria-label={t("browser_preview.refresh")} onClick={reloadFrame}>
+        <Button type="button" variant="outline" size="icon" tone="neutral" title={t("browser_preview.refresh")} aria-label={t("browser_preview.refresh")} disabled={!frameUrl()} onClick={reloadFrame}>
           <Icon name="refresh" size={13} />
         </Button>
       </form>
@@ -83,17 +104,17 @@ export function BrowserPreviewPanel() {
         </Switch>
       </div>
 
-      <div class="browser-preview-status" data-status={target()?.status ?? "loading"}>
+      <div class="browser-preview-status" data-status={currentTarget()?.status ?? "loading"}>
         <Switch>
           <Match when={target.loading}>
             <span class="card__spinner" />
             <span>{t("browser_preview.loading")}</span>
           </Match>
-          <Match when={target.error}>
+          <Match when={currentTargetError()}>
             <Icon name="status-failed" size={14} />
-            <span>{String(target.error)}</span>
+            <span>{String(currentTargetError())}</span>
           </Match>
-          <Match when={target()}>
+          <Match when={currentTarget()}>
             {(resolved) => (
               <>
                 <Icon name={resolved().status === "ready" ? "status-completed" : resolved().status === "failed" ? "status-failed" : "info-circle"} size={14} />
@@ -129,7 +150,7 @@ export function BrowserPreviewPanel() {
               </Switch>
             )}
           </Match>
-          <Match when={target.error}>
+          <Match when={currentTargetError()}>
             {(error) => (
               <div class="browser-preview-empty" data-status="failed">
                 <Icon name="status-failed" size={18} />
@@ -138,7 +159,7 @@ export function BrowserPreviewPanel() {
               </div>
             )}
           </Match>
-          <Match when={target()}>
+          <Match when={currentTarget()}>
             {(resolved) => (
               <div class="browser-preview-empty" data-status={resolved().status}>
                 <Icon name={resolved().status === "failed" ? "status-failed" : "info-circle"} size={18} />
@@ -154,7 +175,7 @@ export function BrowserPreviewPanel() {
       </div>
 
       <div class="browser-preview-evidence">
-        <Button type="button" variant="outline" size="sm" tone="neutral" title={t("browser_preview.capture")} aria-label={t("browser_preview.capture")} disabled={!frameUrl() || verification.loading} onClick={captureEvidence}>
+        <Button type="button" variant="outline" size="sm" tone="neutral" title={t("browser_preview.capture")} aria-label={t("browser_preview.capture")} disabled={!props.taskID() || !frameUrl() || verification.loading} onClick={captureEvidence}>
           <Icon name="inspect" size={13} />
           <span>{t("browser_preview.capture")}</span>
         </Button>
