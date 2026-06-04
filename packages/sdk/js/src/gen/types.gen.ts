@@ -12735,6 +12735,221 @@ export type McpDisconnectResponses = {
 
 export type McpDisconnectResponse = McpDisconnectResponses[keyof McpDisconnectResponses]
 
+export type TuiHostStartData = {
+  body?: {
+    sessionID?: string
+    model?: string
+    agent?: string
+    prompt?: string
+    continue?: boolean
+    fork?: boolean
+    port?: number
+    hostname?: string
+    bin?: string
+    cols?: number
+    rows?: number
+  }
+  path?: never
+  query?: {
+    /**
+     * Project directory for project-scoped routes. Equivalent to the x-opencorvus-directory request header.
+     */
+    directory?: string
+  }
+  url: "/tui/host/start"
+}
+
+export type TuiHostStartErrors = {
+  /**
+   * Bad request
+   */
+  400: BadRequestError
+}
+
+export type TuiHostStartError = TuiHostStartErrors[keyof TuiHostStartErrors]
+
+export type TuiHostStartResponses = {
+  /**
+   * Embedded TUI host started
+   */
+  200: {
+    id: string | null
+    running: boolean
+    status: "idle" | "running" | "exited"
+    cols: number | null
+    rows: number | null
+    url: string | null
+    directory: string | null
+    exitCode: number | null
+    createdAt: number | null
+    updatedAt: number | null
+  }
+}
+
+export type TuiHostStartResponse = TuiHostStartResponses[keyof TuiHostStartResponses]
+
+export type TuiHostStatusData = {
+  body?: never
+  path?: never
+  query?: {
+    /**
+     * Project directory for project-scoped routes. Equivalent to the x-opencorvus-directory request header.
+     */
+    directory?: string
+  }
+  url: "/tui/host/status"
+}
+
+export type TuiHostStatusResponses = {
+  /**
+   * Embedded TUI host status
+   */
+  200: {
+    id: string | null
+    running: boolean
+    status: "idle" | "running" | "exited"
+    cols: number | null
+    rows: number | null
+    url: string | null
+    directory: string | null
+    exitCode: number | null
+    createdAt: number | null
+    updatedAt: number | null
+  }
+}
+
+export type TuiHostStatusResponse = TuiHostStatusResponses[keyof TuiHostStatusResponses]
+
+export type TuiHostSnapshotData = {
+  body?: never
+  path?: never
+  query?: {
+    /**
+     * Project directory for project-scoped routes. Equivalent to the x-opencorvus-directory request header.
+     */
+    directory?: string
+  }
+  url: "/tui/host/snapshot"
+}
+
+export type TuiHostSnapshotResponses = {
+  /**
+   * Embedded TUI host snapshot
+   */
+  200: {
+    id: string | null
+    running: boolean
+    status: "idle" | "running" | "exited"
+    cols: number | null
+    rows: number | null
+    url: string | null
+    directory: string | null
+    exitCode: number | null
+    createdAt: number | null
+    updatedAt: number | null
+    buffer: string
+  }
+}
+
+export type TuiHostSnapshotResponse = TuiHostSnapshotResponses[keyof TuiHostSnapshotResponses]
+
+export type TuiHostInputData = {
+  body?: {
+    data: string
+  }
+  path?: never
+  query?: {
+    /**
+     * Project directory for project-scoped routes. Equivalent to the x-opencorvus-directory request header.
+     */
+    directory?: string
+  }
+  url: "/tui/host/input"
+}
+
+export type TuiHostInputErrors = {
+  /**
+   * Bad request
+   */
+  400: BadRequestError
+}
+
+export type TuiHostInputError = TuiHostInputErrors[keyof TuiHostInputErrors]
+
+export type TuiHostInputResponses = {
+  /**
+   * Input written
+   */
+  200: boolean
+}
+
+export type TuiHostInputResponse = TuiHostInputResponses[keyof TuiHostInputResponses]
+
+export type TuiHostResizeData = {
+  body?: {
+    cols: number
+    rows: number
+  }
+  path?: never
+  query?: {
+    /**
+     * Project directory for project-scoped routes. Equivalent to the x-opencorvus-directory request header.
+     */
+    directory?: string
+  }
+  url: "/tui/host/resize"
+}
+
+export type TuiHostResizeErrors = {
+  /**
+   * Bad request
+   */
+  400: BadRequestError
+}
+
+export type TuiHostResizeError = TuiHostResizeErrors[keyof TuiHostResizeErrors]
+
+export type TuiHostResizeResponses = {
+  /**
+   * Embedded TUI host resized
+   */
+  200: {
+    id: string | null
+    running: boolean
+    status: "idle" | "running" | "exited"
+    cols: number | null
+    rows: number | null
+    url: string | null
+    directory: string | null
+    exitCode: number | null
+    createdAt: number | null
+    updatedAt: number | null
+  }
+}
+
+export type TuiHostResizeResponse = TuiHostResizeResponses[keyof TuiHostResizeResponses]
+
+export type TuiHostStopData = {
+  body?: never
+  path?: never
+  query?: {
+    /**
+     * Project directory for project-scoped routes. Equivalent to the x-opencorvus-directory request header.
+     */
+    directory?: string
+  }
+  url: "/tui/host/stop"
+}
+
+export type TuiHostStopResponses = {
+  /**
+   * Embedded TUI host stopped
+   */
+  200: boolean
+}
+
+export type TuiHostStopResponse = TuiHostStopResponses[keyof TuiHostStopResponses]
+
 export type TuiRuntimeStartData = {
   body?: {
     mode?: "spawn" | "connect"

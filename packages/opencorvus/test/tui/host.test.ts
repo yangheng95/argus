@@ -1,0 +1,135 @@
+import { afterEach, describe, expect, test } from "bun:test"
+import { Tui } from "../../src/tui"
+import { TuiHost } from "../../src/tui/host"
+import { Instance } from "../../src/project/instance"
+import { tmpdir } from "../fixture/fixture"
+
+function echoCommand(cwd: string, text: string): Tui.EmbeddedCommand {
+  if (process.platform === "win32") {
+    return {
+      command: "cmd.exe",
+      args: ["/d", "/s", "/c", `echo ${text}`],
+      cwd,
+      url: "http://127.0.0.1:1",
+      port: 1,
+      hostname: "127.0.0.1",
+    }
+  }
+  return {
+    command: "sh",
+    args: ["-lc", `printf '${text}'`],
+    cwd,
+    url: "http://127.0.0.1:1",
+    port: 1,
+    hostname: "127.0.0.1",
+  }
+}
+
+function inputEchoCommand(cwd: string): Tui.EmbeddedCommand {
+  if (process.platform === "win32") {
+    return {
+      command: "powershell.exe",
+      args: ["-NoLogo", "-NoProfile", "-ExecutionPolicy", "Bypass", "-Command", "$line=[Console]::In.ReadLine(); Write-Output $line"],
+      cwd,
+      url: "http://127.0.0.1:2",
+      port: 2,
+      hostname: "127.0.0.1",
+    }
+  }
+  return {
+    command: "sh",
+    args: ["-c", 'read line; printf "%s" "$line"'],
+    cwd,
+    url: "http://127.0.0.1:2",
+    port: 2,
+    hostname: "127.0.0.1",
+  }
+}
+
+async function waitFor(check: () => boolean, message: string) {
+  const deadline = Date.now() + 5_000
+  while (Date.now() < deadline) {
+    if (check()) return
+    await new Promise((resolve) => setTimeout(resolve, 50))
+  }
+  throw new Error(message)
+}
+
+describe("tui.host", () => {
+  afterEach(async () => {
+    await Instance.disposeAll()
+  })
+
+  test("captures output from a real Pseudo Terminal process", async () => {
+    await using tmp = await tmpdir()
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        await TuiHost.startPrepared({ command: echoCommand(tmp.path, "opencorvus-host-capture") })
+        await waitFor(
+          () => TuiHost.snapshot().buffer.includes("opencorvus-host-capture"),
+          "Pseudo Terminal host did not capture process output",
+        )
+        const snapshot = TuiHost.snapshot()
+        expect(snapshot.buffer).toContain("opencorvus-host-capture")
+        expect(snapshot.directory).toBe(tmp.path)
+        await TuiHost.stop()
+        expect(TuiHost.status().status).toBe("idle")
+      },
+    })
+  })
+
+  test("writes input and resizes the embedded host", async () => {
+    await using tmp = await tmpdir()
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        await TuiHost.startPrepared({ command: inputEchoCommand(tmp.path), cols: 80, rows: 24 })
+        const resized = TuiHost.resize({ cols: 120, rows: 40 })
+        expect(resized.cols).toBe(120)
+        expect(resized.rows).toBe(40)
+
+        TuiHost.input("opencorvus-host-input\r\n")
+        await waitFor(
+          () => TuiHost.snapshot().buffer.includes("opencorvus-host-input"),
+          "Pseudo Terminal host did not receive input",
+        )
+        expect(TuiHost.snapshot().buffer).toContain("opencorvus-host-input")
+        await TuiHost.stop()
+      },
+    })
+  })
+
+  test("resolves embedded command from the same TUI spawn options", async () => {
+    await using tmp = await tmpdir()
+    const command = await Tui.resolveEmbeddedCommand({
+      directory: tmp.path,
+      sessionID: "ses_000000000001abcdefghijklmn",
+      model: "provider/model",
+      agent: "build",
+      prompt: "hello",
+      port: 4567,
+      hostname: "127.0.0.1",
+      bin: "opencorvus-bin",
+    })
+
+    expect(command.command).toBe("opencorvus-bin")
+    expect(command.cwd).toBe(tmp.path)
+    expect(command.url).toBe("http://127.0.0.1:4567")
+    expect(command.args).toEqual([
+      tmp.path,
+      "--port",
+      "4567",
+      "--hostname",
+      "127.0.0.1",
+      "-s",
+      "ses_000000000001abcdefghijklmn",
+      "-m",
+      "provider/model",
+      "--agent",
+      "build",
+      "--prompt",
+      "hello",
+    ])
+  })
+})

@@ -5,6 +5,7 @@ import { Bus } from "../../bus"
 import { Session, SessionStatus } from "../../session"
 import { TuiEvent } from "@/cli/cmd/tui/event"
 import { TuiCommand } from "@/tui/command"
+import { TuiHost } from "@/tui/host"
 import { TuiRuntime } from "@/tui/runtime"
 import { Flag } from "../../flag/flag"
 import { errors } from "../error"
@@ -31,6 +32,37 @@ const TuiControlResponse = z
   })
 
 type TuiControlRequest = z.infer<typeof TuiControlRequest>
+
+const TuiHostInfo = z.object({
+  id: z.string().nullable(),
+  running: z.boolean(),
+  status: z.enum(["idle", "running", "exited"]),
+  cols: z.number().int().nullable(),
+  rows: z.number().int().nullable(),
+  url: z.string().nullable(),
+  directory: z.string().nullable(),
+  exitCode: z.number().int().nullable(),
+  createdAt: z.number().int().nullable(),
+  updatedAt: z.number().int().nullable(),
+})
+
+const TuiHostSnapshot = TuiHostInfo.extend({
+  buffer: z.string(),
+})
+
+const TuiHostStart = z.object({
+  sessionID: z.string().optional(),
+  model: z.string().optional(),
+  agent: z.string().optional(),
+  prompt: z.string().optional(),
+  continue: z.boolean().optional(),
+  fork: z.boolean().optional(),
+  port: z.number().int().optional(),
+  hostname: z.string().optional(),
+  bin: z.string().optional(),
+  cols: z.number().int().min(1).max(500).default(100).optional(),
+  rows: z.number().int().min(1).max(200).default(30).optional(),
+})
 
 const requestQueue: TuiControlRequest[] = []
 const requestWaiters: Array<(item: TuiControlRequest) => void> = []
@@ -113,6 +145,123 @@ export async function callTui(ctx: Context) {
 
 export const TuiRoutes = lazy(() =>
   new Hono()
+    // === host: embedded right-sidebar terminal ===
+    .post(
+      "/host/start",
+      describeRoute({
+        summary: "Start embedded TUI host",
+        description:
+          "Start the project-bound TUI process inside a Pseudo Terminal (PTY) for right-sidebar terminal rendering.",
+        operationId: "tui.host.start",
+        responses: {
+          200: {
+            description: "Embedded TUI host started",
+            content: { "application/json": { schema: resolver(TuiHostInfo) } },
+          },
+          ...errors(400),
+        },
+      }),
+      validator("json", TuiHostStart),
+      async (c) => {
+        const body = c.req.valid("json")
+        return c.json(await TuiHost.start({ ...body, directory: Instance.directory }))
+      },
+    )
+    .get(
+      "/host/status",
+      describeRoute({
+        summary: "Get embedded TUI host status",
+        description: "Get the project-bound right-sidebar TUI host status.",
+        operationId: "tui.host.status",
+        responses: {
+          200: {
+            description: "Embedded TUI host status",
+            content: { "application/json": { schema: resolver(TuiHostInfo) } },
+          },
+        },
+      }),
+      async (c) => {
+        return c.json(TuiHost.status())
+      },
+    )
+    .get(
+      "/host/snapshot",
+      describeRoute({
+        summary: "Get embedded TUI host snapshot",
+        description: "Get the buffered terminal output for the embedded right-sidebar TUI host.",
+        operationId: "tui.host.snapshot",
+        responses: {
+          200: {
+            description: "Embedded TUI host snapshot",
+            content: { "application/json": { schema: resolver(TuiHostSnapshot) } },
+          },
+        },
+      }),
+      async (c) => {
+        return c.json(TuiHost.snapshot())
+      },
+    )
+    .post(
+      "/host/input",
+      describeRoute({
+        summary: "Write input to embedded TUI host",
+        description: "Write terminal input to the project-bound embedded TUI host.",
+        operationId: "tui.host.input",
+        responses: {
+          200: {
+            description: "Input written",
+            content: { "application/json": { schema: resolver(z.boolean()) } },
+          },
+          ...errors(400),
+        },
+      }),
+      validator("json", z.object({ data: z.string().min(1) })),
+      async (c) => {
+        return c.json(TuiHost.input(c.req.valid("json").data))
+      },
+    )
+    .post(
+      "/host/resize",
+      describeRoute({
+        summary: "Resize embedded TUI host",
+        description: "Resize the Pseudo Terminal (PTY) used by the embedded right-sidebar TUI host.",
+        operationId: "tui.host.resize",
+        responses: {
+          200: {
+            description: "Embedded TUI host resized",
+            content: { "application/json": { schema: resolver(TuiHostInfo) } },
+          },
+          ...errors(400),
+        },
+      }),
+      validator(
+        "json",
+        z.object({
+          cols: z.number().int().min(1).max(500),
+          rows: z.number().int().min(1).max(200),
+        }),
+      ),
+      async (c) => {
+        return c.json(TuiHost.resize(c.req.valid("json")))
+      },
+    )
+    .post(
+      "/host/stop",
+      describeRoute({
+        summary: "Stop embedded TUI host",
+        description: "Stop the project-bound embedded TUI host.",
+        operationId: "tui.host.stop",
+        responses: {
+          200: {
+            description: "Embedded TUI host stopped",
+            content: { "application/json": { schema: resolver(z.boolean()) } },
+          },
+        },
+      }),
+      async (c) => {
+        return c.json(await TuiHost.stop())
+      },
+    )
     // === runtime: lifecycle ===
     .post(
       "/runtime/start",
