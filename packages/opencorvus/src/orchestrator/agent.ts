@@ -369,11 +369,10 @@ export namespace Orchestrator {
         Object.keys(guard.tools).map((name) => [name, true]),
       )
 
-      // 4. Build prompt. Caller-supplied notes are real wake messages
-      //    (operator text / retry reason / batch-complete note). When no
-      //    caller note exists, reuse the task's original user request; every
-      //    decision branch downstream reads the describe snapshot, not an
-      //    invented re-read instruction.
+      // 4. Build prompt. Caller-supplied text is a real wake message
+      //    (operator text / retry reason). Internal engine wakes reuse the
+      //    existing visible user message and carry fresh task state through
+      //    the runtime contract instead of synthesizing another user turn.
       const system = await buildSystemParts(task, event, workflow, workflowState)
       // INFORMATION MISSING fallback — single source per rule 8. The runner.ts
       // path injects this for every worker agent (build / architect / acceptance
@@ -393,28 +392,26 @@ export namespace Orchestrator {
         event?.note || event?.operatorMessage || !(await sessionHasUserMessage(agentSession.id)),
       )
       const userText = appendUserMessage ? orchestratorUserText(task, event) : ""
-      // Build multimodal content when task has file attachments. We re-inline
-      // image/pdf bytes on EVERY wake, not just the first. The orchestrator
-      // session is persistent, but compaction and per-wake prompt reduction
-      // are allowed to trim prior turns; every wake must therefore carry the
-      // concrete multimodal bytes it needs instead of relying on historical
-      // transcript retention. A first-wake-only gate left subsequent wakes
-      // with only textual inventory, encouraging the model to either silently
-      // ignore visual context or confabulate references to images it could
-      // not see.
+      // Build multimodal content when task has file attachments. Real user
+      // wakes persist file parts on the visible user message. Internal engine
+      // wakes do not create a hidden model-only user message; they refresh the
+      // textual inventory through runtime system context and rely on the
+      // originally persisted file parts for bytes.
       // AttachmentStore.partition routes image/audio/video/pdf to inline
       // file parts and text/* / json to a URL-only reference list; see
       // helper comments for the silent-rejection rationale. Inline parts
       // are additionally gated by the resolved model's input modality
       // capabilities so non-vision coding models don't receive bytes the
       // upstream API would silently drop.
-      const wakeAttachments = appendUserMessage && Array.isArray(task.attachments)
+      const wakeAttachments = Array.isArray(task.attachments)
         ? (task.attachments as Array<{ sha?: string; url?: string; mime?: string; size?: number; filename?: string }>)
         : undefined
-      const inlineFileParts = await AttachmentStore.inlineFileParts(wakeAttachments, {
-        capabilities: model.capabilities,
-        agent: "orchestrator",
-      })
+      const inlineFileParts = appendUserMessage
+        ? await AttachmentStore.inlineFileParts(wakeAttachments, {
+            capabilities: model.capabilities,
+            agent: "orchestrator",
+          })
+        : []
       // Orchestrator does NOT own a `read` tool. Attachments are forwarded
       // automatically to every sub-agent it dispatches (requirements /
       // frontend_design / architect / build / refine — see orchestrator/tools.ts
@@ -424,7 +421,7 @@ export namespace Orchestrator {
       // HARD design constraint (no read tool here) and a hard requirement
       // that the orchestrator cite the attachments in every dispatch prompt
       // so the sub-agent treats them as primary context, not silent backdrop.
-      const allAttachments = appendUserMessage && Array.isArray(task.attachments)
+      const allAttachments = Array.isArray(task.attachments)
         ? (task.attachments as Array<{ sha?: string; url?: string; mime?: string; size?: number; filename?: string }>)
         : undefined
       const visionCapable =
@@ -434,8 +431,10 @@ export namespace Orchestrator {
         model.capabilities.input.video
       const inlinedNote = inlineFileParts.length > 0
         ? "Multimodal items (image / pdf / audio / video) below are inlined as file parts in this wake's user message — you can see and reason about them directly."
-        : visionCapable
-          ? "No multimodal items are inlined in this wake (the task carries no image / pdf / audio / video attachments, or none was inlinable)."
+        : !appendUserMessage
+          ? "This is an internal engine wake, so no new user message is created and no hidden file parts are injected. Use this inventory to cite task attachments; do not claim pixel-level inspection unless the visible conversation already contains the file parts."
+          : visionCapable
+            ? "No multimodal items are inlined in this wake (the task carries no image / pdf / audio / video attachments, or none was inlinable)."
           : "Your current model does NOT accept image / pdf / audio / video input — multimodal items below are listed by filename ONLY; you cannot see their pixels. Do NOT pretend you saw them; describe them only via the textual context the user provided in prose, and rely on `frontend_design` / sub-agents whose models DO support vision for visual reasoning."
       const inventoryText = AttachmentStore.renderAttachmentInventory(allAttachments, {
         header: "## Task Attachments (forwarded to sub-agents automatically)",
@@ -447,6 +446,9 @@ export namespace Orchestrator {
           "When you call `requirements` / `frontend_design` / `architect` / `build` / `refine`, the engine forwards every attachment to the sub-agent automatically — but the sub-agent's prompt only cites them when YOU mention them by filename in your dispatch instructions. ALWAYS cite the relevant attachments by EXACT filename and explain their relevance. NEVER reference an attachment that is not listed below — if this section is empty, the user attached nothing in this wake and any phrase implying you saw a file is a hallucination.",
       })
       const enrichedUserText = appendUserMessage ? userText + inventoryText : ""
+      const runtimeSystem = appendUserMessage || !inventoryText.trim()
+        ? system
+        : [...system, inventoryText]
       // Build PromptInput.parts. Text first, then any multimodal attachments
       // as FilePart (data URL) so Session.saveMessage can persist the part
       // without re-resolving a local file path.
@@ -546,7 +548,9 @@ export namespace Orchestrator {
             installedAt: Date.now(),
           },
           tools: guard.tools as any,
-          system: appendUserMessage ? undefined : system,
+          system: appendUserMessage ? undefined : runtimeSystem,
+          systemMode: appendUserMessage ? undefined : "complete",
+          runOnce: !appendUserMessage,
         })
         promptInFlight = true
         finalMessage = appendUserMessage

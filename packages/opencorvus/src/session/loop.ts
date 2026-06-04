@@ -116,6 +116,16 @@ export namespace SessionLoop {
     tools?: Record<string, AITool>
     /** Runtime-only system context for a wake that must not append a user message. */
     system?: string[]
+    /**
+     * Makes the runtime system the complete per-turn custom system and skips
+     * the persisted user-message system block for this turn.
+     */
+    systemMode?: "complete"
+    /**
+     * One pending model turn for an internal wake that must not append a new
+     * user message. Consumed only when the loop reaches processTurn.
+     */
+    runOnce?: boolean
     terminalToolContract?: TerminalToolContract
     structuredOutputGuard?: StructuredOutputGuard
     stream?: TextHooks
@@ -175,6 +185,17 @@ export namespace SessionLoop {
   export function clearSessionRuntimeContract(sessionID: string): void {
     sessionRuntimeContracts.delete(sessionID)
     clearPreTerminalReflectionForSession(sessionID)
+  }
+
+  function shouldRunRuntimeContractTurn(sessionID: string): boolean {
+    const contract = sessionRuntimeContracts.get(sessionID)
+    return contract?.identity.contractKind === "orchestrator-wake" && contract.runOnce === true
+  }
+
+  function consumeRuntimeContractTurn(sessionID: string): void {
+    const contract = sessionRuntimeContracts.get(sessionID)
+    if (!contract?.runOnce) return
+    sessionRuntimeContracts.set(sessionID, { ...contract, runOnce: false })
   }
 
   function clearPreTerminalReflectionForSession(sessionID: string): void {
@@ -1774,6 +1795,7 @@ export namespace SessionLoop {
       model: input.model,
       toolChoice: turnToolChoice,
       stream: runtimeContract?.stream,
+      runtimeSystemMode: runtimeContract?.systemMode,
     })
 
     if (structured !== undefined) {
@@ -2007,7 +2029,8 @@ export namespace SessionLoop {
             })
           }
           const controls = pendingControls.filter(isActionableSessionControl)
-          if (controls.length === 0 && shouldEnterStandby({ lastUser, lastAssistant })) {
+          const runRuntimeContractTurn = shouldRunRuntimeContractTurn(sessionID)
+          if (!runRuntimeContractTurn && controls.length === 0 && shouldEnterStandby({ lastUser, lastAssistant })) {
             if (!lastAssistant) break
             const lastResult = msgs.find((m) => m.info.id === lastAssistant.id)
             if (lastResult) flushCallbacks(sessionID, lastResult)
@@ -2195,6 +2218,7 @@ export namespace SessionLoop {
             model,
             abort,
           })
+          if (runRuntimeContractTurn) consumeRuntimeContractTurn(sessionID)
           // Fire the registered step hook (phase 3-a-4) — agents that
           // dispatch via a tool and want to abort the active generation
           // once the tool landed use this hook to fire their deferred-stop
