@@ -1038,6 +1038,109 @@ test("session.status preserves terminal reason when status arrives before the ca
   expect(statusBadge(card)).toEqual({ tone: "cancelled", glyph: "⊘" });
 });
 
+test("session.status materializes frontend research card when preparation fails before any message", () => {
+  resetWriter();
+  setBoardStore("board", {
+    task: {
+      id: TASK_ID,
+      status: "active",
+      request: "frontend research preparation failure",
+      sessionID: ROOT_SID,
+      time: { created: 1_776_000_000_000 },
+      attachments: [],
+    },
+    goalWorkflows: [],
+    interactions: [],
+  });
+  setBoardStore("selectedTaskID", TASK_ID);
+
+  const sessionID = "ses_frontend_research_prepare_failed";
+  const cardID = `frontend-research:session:${sessionID}`;
+  applyEvent({
+    type: "session.status",
+    emittedAt: 1_776_000_010_000,
+    properties: {
+      sessionID,
+      channel: "frontend-research",
+      resolvedRole: "frontend-research",
+      parentSessionID: ROOT_SID,
+      status: {
+        type: "terminal",
+        reason: "error",
+        error: "Node runtime state capture failed during navigate: page.goto timeout",
+      },
+    },
+  });
+
+  const card = cardTreeStore.cards[cardID]!;
+  expect(card).toBeDefined();
+  expect(card.kind).toBe("agent");
+  expect(card.sessionID).toBe(sessionID);
+  expect(card.messageID).toBeUndefined();
+  expect(card.stage).toBe("frontend-research");
+  expect(card.status).toBe("error");
+  expect(card.terminalReason).toBe("error");
+  expect(card.errorReason).toContain("page.goto timeout");
+  expect(cardTreeStore.order).toContain(cardID);
+});
+
+test("message arrival migrates lifecycle-only frontend card without leaving a duplicate", () => {
+  resetWriter();
+  setBoardStore("board", {
+    task: {
+      id: TASK_ID,
+      status: "active",
+      request: "frontend design starts before first message",
+      sessionID: ROOT_SID,
+      time: { created: 1_776_000_000_000 },
+      attachments: [],
+    },
+    goalWorkflows: [],
+    interactions: [],
+  });
+  setBoardStore("selectedTaskID", TASK_ID);
+
+  const sessionID = "ses_frontend_design_lifecycle";
+  const lifecycleCardID = `frontend-design:session:${sessionID}`;
+  const messageCardID = `frontend-design:session:${sessionID}:message:msg_frontend_design_lifecycle`;
+
+  applyEvent({
+    type: "session.status",
+    emittedAt: 1_776_000_001_000,
+    properties: {
+      sessionID,
+      channel: "frontend-design",
+      resolvedRole: "frontend-design",
+      parentSessionID: ROOT_SID,
+      status: { type: "streaming" },
+    },
+  });
+
+  expect(cardTreeStore.cards[lifecycleCardID]).toBeDefined();
+  expect(cardTreeStore.order).toContain(lifecycleCardID);
+
+  applyEvent({
+    type: "message.updated",
+    properties: {
+      taskID: TASK_ID,
+      info: stampedInfo("frontend-design", {
+        id: "msg_frontend_design_lifecycle",
+        sessionID,
+        role: "assistant",
+        parentSessionID: ROOT_SID,
+        time: { created: 1_776_000_002_000 },
+      }),
+    },
+  });
+
+  expect(cardTreeStore.cards[lifecycleCardID]).toBeUndefined();
+  expect(cardTreeStore.cards[messageCardID]).toBeDefined();
+  expect(cardTreeStore.cards[messageCardID]?.sessionID).toBe(sessionID);
+  expect(cardTreeStore.cards[messageCardID]?.messageID).toBe("msg_frontend_design_lifecycle");
+  expect(cardTreeStore.order).not.toContain(lifecycleCardID);
+  expect(cardTreeStore.order).toContain(messageCardID);
+});
+
 test("session.error marks the session card with the original stream error", () => {
   resetWriter();
 
