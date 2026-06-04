@@ -7,6 +7,8 @@ import { withFactCheckRegistration } from "@/prompt/fragments/fact-check-registr
 import { ProjectRuntimePaths } from "@/project/runtime-paths"
 import { Instance } from "@/project/instance"
 import { Log } from "@/util/log"
+import { Session } from "@/session"
+import { SessionStatus } from "@/session/status"
 import { renderUserRequestSection } from "@/intent/request-prompt"
 import { FactCheckItemListSchema, type FactCheckItem } from "@/fact-check/schema"
 import { clarificationTranscriptSection, operatorNotesSection } from "@/engine/helpers"
@@ -83,7 +85,26 @@ export async function runResearchSession(
   input: ResearchAgent.RunInput,
   config: ResearchSessionConfig,
 ): Promise<ResearchAgent.RunResult> {
-  const webpagePrdEvidence = await prepareInputWebpagePrdEvidence(input, config.prepareWebpageEvidence)
+  const sessionTitle = `${config.sessionTitlePrefix}: ${input.title}`
+  const session = await Session.createNext({
+    kind: config.kind,
+    parentID: input.parentSessionID,
+    title: sessionTitle,
+    directory: Instance.directory,
+  })
+  input.onSessionCreated?.(session.id)
+
+  let webpagePrdEvidence: WebpagePrdEvidence | undefined
+  try {
+    webpagePrdEvidence = await prepareInputWebpagePrdEvidence(input, config.prepareWebpageEvidence)
+  } catch (err) {
+    SessionStatus.set(session.id, {
+      type: "terminal",
+      reason: "error",
+      error: err instanceof Error ? err.message : String(err),
+    })
+    throw err
+  }
   const retrievalTools =
     config.retrievalTools === "readonly"
       ? await filterAgentTools(createReadonlyRetrievalTools(undefined, { websearch: false }), config.kind, {
@@ -92,7 +113,6 @@ export async function runResearchSession(
         })
       : {}
   const outputToolKit = createResearchOutputTools()
-  let sessionID: string | undefined
 
   log.info(`${config.kind} starting`, {
     title: input.title,
@@ -103,16 +123,13 @@ export async function runResearchSession(
   const out = await runAgentSession<ResearchCollector>({
     kind: config.kind,
     core: withFactCheckRegistration(config.core),
-    sessionTitle: `${config.sessionTitlePrefix}: ${input.title}`,
+    sessionTitle,
+    existingSessionID: session.id,
     parentSessionID: input.parentSessionID,
     taskID: input.taskID,
     model: input.model,
     signal: input.signal,
     onStatus: input.onStatus,
-    onSessionCreated: (session) => {
-      sessionID = session.id
-      input.onSessionCreated?.(session.id)
-    },
     toolKit: {
       tools: { ...retrievalTools, ...outputToolKit.tools },
       getCollector: outputToolKit.getCollector,

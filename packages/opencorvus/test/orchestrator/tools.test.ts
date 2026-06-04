@@ -81,6 +81,7 @@ let reviewIntegrityImpl: ((input: any) => Promise<any>) | undefined
 let computeRequirementStatusSnapshotImpl: ((input: any) => any[]) | undefined
 let architectCoordinateImpl: ((input: any) => Promise<any>) | undefined
 let designAnalyzeImpl: ((input: any) => Promise<any>) | undefined
+let frontendResearchRunImpl: ((input: any) => Promise<any>) | undefined
 let mcpServerToolsImpl: (() => Promise<any[]>) | undefined
 let mcpCallToolImpl: ((input: { key: string; args: Record<string, unknown> }) => Promise<any>) | undefined
 
@@ -253,6 +254,15 @@ mock.module("@/frontend-design", () => ({
     analyze: (input: any) => {
       if (!designAnalyzeImpl) throw new Error("FrontendDesignAgent.analyze mock not configured")
       return designAnalyzeImpl(input)
+    },
+  },
+}))
+
+mock.module("@/frontend-research", () => ({
+  FrontendResearchAgent: {
+    run: (input: any) => {
+      if (!frontendResearchRunImpl) throw new Error("FrontendResearchAgent.run mock not configured")
+      return frontendResearchRunImpl(input)
     },
   },
 }))
@@ -642,6 +652,7 @@ describe("orchestrator tools", () => {
     computeRequirementStatusSnapshotImpl = undefined
     architectCoordinateImpl = undefined
     designAnalyzeImpl = undefined
+    frontendResearchRunImpl = undefined
     mcpServerToolsImpl = undefined
     mcpCallToolImpl = undefined
     mock.restore()
@@ -1135,6 +1146,78 @@ describe("orchestrator tools", () => {
         ).rejects.toThrow("contract_audit references unknown graph contract")
         expect(buildStarted).toBe(false)
         expect(listGoalRunsByGoal(goalID)).toHaveLength(0)
+      },
+    })
+  })
+
+  test("frontend_research returns a visible failure card when startup fails", async () => {
+    const now = Date.now()
+    const stamp = now.toString(16)
+    const projectID = `project_frontend_research_failure_${stamp}`
+    const taskID = `tsk_frontend_research_failure_${stamp}`
+
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const parent = await Session.create({ kind: "root", title: "frontend research failure parent" })
+        Database.use((db) => {
+          db.insert(ProjectTable)
+            .values({
+              id: projectID,
+              worktree: tmp.path,
+              name: "Frontend research failure project",
+              sandboxes: "[]",
+              time_created: now,
+              time_updated: now,
+            })
+            .run()
+          db.insert(EngineTaskTable)
+            .values({
+              id: taskID,
+              project_id: projectID,
+              session_id: parent.id,
+              source: "test",
+              title: "Frontend research failure task",
+              request: "Investigate a webpage before implementation.",
+              kind: "workflow",
+              priority: "normal",
+              time_created: now,
+              time_updated: now,
+              time_started: now,
+            })
+            .run()
+        })
+
+        frontendResearchRunImpl = async (input: any) => {
+          input.onSessionCreated?.("ses_frontend_research_failed_startup")
+          throw new Error("rendered webpage evidence capture failed")
+        }
+
+        const { tools } = createOrchestratorTools({
+          taskID,
+          agentSessionID: parent.id,
+          signal: new AbortController().signal,
+        })
+
+        const result = await tools.frontend_research.execute(
+          {
+            reason: "Need visible webpage investigation packets.",
+            source_urls: ["https://example.com/page"],
+          },
+          buildToolOptions("frontend_research"),
+        )
+
+        expect(result).toContain("Frontend research failed before producing an artifact.")
+        expect(result).toContain("- status: failed")
+        expect(result).toContain("- artifact_id: none")
+        expect(result).toContain("- session: ses_frontend_research_failed_startup")
+        expect(result).toContain("rendered webpage evidence capture failed")
+        expect(result).toContain("https://example.com/page")
+        expect(SessionStatus.get("ses_frontend_research_failed_startup")).toEqual({
+          type: "terminal",
+          reason: "error",
+          error: "rendered webpage evidence capture failed",
+        })
       },
     })
   })
