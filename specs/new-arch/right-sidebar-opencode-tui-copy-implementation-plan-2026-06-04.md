@@ -1,8 +1,9 @@
 # Right Sidebar OpenCode TUI Copy Implementation Plan
 
 Date: 2026-06-04
+Reviewed again: 2026-06-05
 Status: implementation plan, not yet implemented
-Upstream baseline: `anomalyco/opencode` local snapshot `789e4d57b9d7af136cfc88feeb72fe81e4e28009`
+Upstream baseline: `anomalyco/opencode` local snapshot `94c49b20ba207a92e4150c552d616930b6560e39`
 Upstream license: MIT
 
 ## 0. Hard Acceptance
@@ -25,6 +26,18 @@ Rejected outcome:
 - Adding another local keybinding, command palette, or sidebar plugin framework.
 
 ## 1. Evidence Baseline
+
+### 1.0 Upstream freshness check
+
+On 2026-06-05, local upstream `anomalyco/opencode` was refreshed from `origin/dev`.
+
+- Previous inspected commit: `789e4d57b9d7af136cfc88feeb72fe81e4e28009`
+- Current inspected commit: `94c49b20ba207a92e4150c552d616930b6560e39`
+- New commits: `7f54b1b fix build`, `9f3a0fe chore: update nix node_modules hashes`, `94c49b2 make scripts executable`
+- Checked paths: `packages/opencode/src/cli/cmd/tui`, `packages/app/src`, `packages/core/src/pty`, `packages/plugin`, root/package package manifests
+- Result: no changes in OpenCode TUI, terminal host, PTY, plugin TUI API, or OpenTUI dependency versions since the prior inspected snapshot.
+
+The copy plan remains valid against the current upstream snapshot. The baseline hash above is updated so implementation must copy from `94c49b20ba207a92e4150c552d616930b6560e39`, not the older `789e4d57b9d7af136cfc88feeb72fe81e4e28009`.
 
 ### 1.1 Upstream OpenCode modules to reuse
 
