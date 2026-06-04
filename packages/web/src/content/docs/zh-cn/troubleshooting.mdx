@@ -42,20 +42,20 @@ description: 按症状定位 OpenCorvus 问题——启动、Provider、orchestr
 
 ## Orchestrator 类
 
-### 任务卡在 spec / goals / plan 阶段
+### 任务卡在 build 或 review 之前
 
 | 症状 | 检查 |
 |---|---|
 | 没有任何事件 | LLM provider 连通性 |
 | 有 reasoning tokens 但无 tool-call | 检查 `toolChoice`，reasoning 模型必须 `"auto"` |
-| 规划 agent 长时间无动静 | 正常：规划可能静默思考 30+ 分钟，用 `--planning-stall-timeout-ms` 调 |
+| worker session 长时间无动静 | 查看最新 orchestrator event 与当前 workflow tool（`requirements`、`architect`、`build` 或 `integrity`）。只有确认 provider 连通后，才调整 decision inactivity timeout。 |
 
-### 任务一直 replan 不停
+### 任务反复进入修复循环
 
-根因通常是 evaluator 的 `replan_guidance` 没有改善信息。检查：
+根因通常是最新 integrity 或 review 证据没有指出具体修复方向。检查：
 
-1. Spec 是否本身就缺 acceptance criteria
-2. `done_definition` 里的命令是否可执行
+1. requirements 或 acceptance specs 是否缺少具体 criteria
+2. Architect goals 是否缺少可运行、有证据支撑的 acceptance checks
 3. `max_runs` 是否配太大（默认 3，过大会烧预算）
 
 ### 权限审批无限等待
@@ -71,15 +71,15 @@ description: 按症状定位 OpenCorvus 问题——启动、Provider、orchestr
 
 ### Benchmark 显示 "accepted" 但产物跑不起来
 
-典型症状是 acceptance worktree 合并失败但 evaluator 没捕获。检查：
+典型症状是 review 证据不完整或本地验证被跳过。检查：
 
 1. 合并日志里是否有 `EEXIST` / conflict
-2. Evaluator 的 `qa_rule_selectors` 是否包含 `build` 与 `startup`
-3. `selectorsSatisfied()` 是否把 skipped 检查误当通过——已修复，但 config 错误可能复发
+2. integrity evidence 是否在需要时包含 runtime readiness、build 与 startup checks
+3. benchmark report 是否包含 `localVerify.exitCode` 与 required check pass-rate evidence
 
 ### TypeScript 编译错误未被检测
 
-确保 evaluator tier ≥ `standard`（包含 lint），或手工在 `qa_rule_selectors` 里加 `"lint"` / `"typecheck"`。
+确保 integrity 或 local verification 为 TypeScript 项目包含 lint/typecheck evidence。
 
 ## Channel 类
 

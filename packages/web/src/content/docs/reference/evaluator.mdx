@@ -1,76 +1,58 @@
 ---
-title: Evaluator
-description: The evaluator decides whether a acceptance is acceptable — deterministic checks first, LLM judge as fallback.
+title: Integrity and Evaluation
+description: How OpenCorvus records verification evidence and performs final integrity review.
 ---
 
-Evaluator decides whether a acceptance is acceptable. It runs **deterministic checks** (real commands) first, then falls back to **LLM judge** for the final verdict.
+OpenCorvus no longer uses the removed per-goal evaluator as the public workflow gate. Per-goal build attempts produce evidence, and the pipeline's final review is the `integrity` workflow tool.
 
-## Two-stage evaluation
+## Current Review Flow
 
-### Stage 1: deterministic checks
+1. **Build evidence** — every direct build or per-goal build writes run and goal-run artifacts, changed files, reports, and optional verification evidence.
+2. **Acceptance/evaluation artifacts** — `engine_artifact` rows with `kind="acceptance"` and `kind="verification-evidence"` preserve acceptance and check evidence for replay.
+3. **Integrity review** — the integrity agent reads the user request, requirements, architect contract graph, goal outputs, diffs, runtime/visual evidence, previous attempts, and acceptance evidence.
+4. **Orchestrator decision** — integrity returns pass or non-pass evidence. The orchestrator decides whether to complete, modify goals, re-run build, re-enter architect, ask the user, or fail the task.
 
-`evaluateGoal` (`packages/opencorvus/src/acceptance/checks/per-goal.ts`), in priority order:
+## Evidence Surfaces
 
-1. **Extract commands from `done_definition`** — parse executable commands (`pnpm test`, `cargo build`, `pytest`, …) from acceptance text; run them; trust exit codes.
-2. **Project discovery** — walk up from `owned_paths` to find the nearest `package.json` / `pyproject.toml` / `Cargo.toml` / `go.mod`; auto-detect build/test/lint commands.
-3. **Semantic criteria** — plain-text criteria that cannot be executed (e.g., "conforms to architecture") become evidence; they do not decide pass/fail.
+| Surface | Current source |
+|---|---|
+| Acceptance/project checks | `packages/opencorvus/src/acceptance/checks/project-gate.ts` |
+| Runtime readiness | `packages/opencorvus/src/acceptance/checks/runtime-readiness.ts` |
+| Contract audit review | `packages/opencorvus/src/acceptance/checks/contract-audit-review.ts` |
+| Specialist reviews | `packages/opencorvus/src/acceptance/specialists/` |
+| Integrity team review | `packages/opencorvus/src/integrity/team-agent.ts` |
+| Integrity schemas | `packages/opencorvus/src/integrity/team-schema.ts` |
+| Artifact-backed evaluation rows | `packages/opencorvus/src/engine/store.ts` |
 
-### Stage 2: LLM judge
+## Evaluation Row Shape
 
-Engaged only when deterministic checks **can't decide** (e.g., no executable tests). Produces `EvaluatorAnalysis` (`src/acceptance/checks/types.ts:37`):
+`EvaluationRow` is reconstructed from `engine_artifact.kind="verification-evidence"`:
 
 ```typescript
-interface EvaluatorAnalysis {
+type EvaluationRow = {
+  scope: "goal_run" | "acceptance"
+  status: "pending" | "passed" | "failed" | "inconclusive"
   verdict: "accepted" | "rejected" | "inconclusive"
-  goal_statuses: GoalStatus[]
-  replan_guidance?: string
+  checks: EngineEvaluationCheck[] | null
 }
 ```
 
-## CheckSelector
+Checks are audit evidence for operators and downstream review. They are not a standalone final-delivery workflow.
 
-Allowed selectors (`src/check/policy.ts:3`):
+## Integrity Verdict Semantics
 
-```
-build | test | lint | verify_cmd | ui_review |
-code_quality | code_review | dead_code_review |
-startup | spec_check
-```
-
-`spec_check` (spec-consistency check) is **on by default** — this is a core part of the harness value.
-
-## Evaluator tiers
-
-Set via `assistant.evaluator.tier`:
-
-| tier | includes |
+| Integrity outcome | Orchestrator meaning |
 |---|---|
-| `core` | build + test + spec_check |
-| `standard` (default) | core + lint + startup |
-| `full` | standard + ui_review + visual + Playwright + code_quality |
+| pass | The integrated system is acceptable for this task; the orchestrator may complete the task. |
+| non-pass with blocking findings | The orchestrator must route repairs to build, `modify_goal`, `architect`, or a user question based on evidence. |
+| thrown / artifact missing | The orchestrator receives visible failure evidence and decides recovery; the UI should not silently show an empty card. |
 
-## `selectorsSatisfied` semantics
+## Configuration Notes
 
-`src/check/policy.ts:45`:
+Agent models and step budgets are configured under `agent.integrity.*` and `assistant.integrity.*`. Visual acceptance thresholds live under `assistant.acceptance_visual` in the engine config.
 
-```
-1. Filter out checks where status === "skipped"
-2. Every declared selector must have at least one matched and passed check
-3. Unexecuted selectors never count as passed
-```
+## What's Next
 
-**Critical**: not-run ≠ passed. Prevents "silently skip build and declare accepted".
-
-## Verdict semantics
-
-| verdict | next action |
-|---|---|
-| `accepted` | proceed to Acceptance |
-| `rejected` | retry (same plan) or replan (new plan) — `replan_guidance` decides |
-| `inconclusive` | treated as rejected but prefers replan (missing info) |
-
-## Known traps
-
-1. **Empty output → `inconclusive`, not `accepted`.** Historical bug: empty executor output treated as "no problems → pass".
-2. **Skipped build checks.** If a worktree merge fails (`EEXIST`), build can't run — must not be passed over.
-3. **TypeScript errors undetected.** Ensure `qa_rule_selectors` includes `lint` or `typecheck`.
+- [Architecture](/docs/concepts/architecture/)
+- [Task / Run / Goal data model](/docs/concepts/goal-run-task/)
+- [Benchmark](/docs/operations/benchmark/)

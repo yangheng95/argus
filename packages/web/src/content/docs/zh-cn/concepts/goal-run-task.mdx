@@ -1,119 +1,102 @@
 ---
-title: "数据模型：Task / Run / Goal / Plan / Spec"
-description: Orchestrator 核心领域模型的实体关系与持久化状态。
+title: "数据模型：Task / Run / Goal / Artifact"
+description: Orchestrator 与 engine 当前使用的任务领域模型。
 ---
 
-所有表定义集中在 `packages/opencorvus/src/orchestrator/orchestrator.sql.ts`。
+当前 engine schema 位于 `packages/opencorvus/src/engine/engine.sql.ts`。运行时读取走 `packages/opencorvus/src/engine/store.ts`，其中多种逻辑 row 从 append-only artifact 重建。
 
 ## 概念关系
 
 ```
-Task (kind: "workflow" | "build")
- ├─ Run (phase: plan | execute | evaluate | deliver)
- │   ├─ PlanVersion (version 1, 2, ...)
- │   │   └─ Goal[] (深度分解的目标)
- │   └─ GoalRun[] (每次 Goal 被执行均 1 条)
- │       └─ Evaluation (verdict: accepted | rejected | inconclusive)
- └─ Acceptance (status: candidate → publishing → delivered)
-SpecSnapshot (独立，被 PlanVersion 引用)
+EngineTask (kind: "workflow" | "build")
+ ├─ EngineSpecSnapshot / EngineRequirement
+ ├─ EnginePlanVersion
+ │   ├─ EngineGoal[]
+ │   └─ EnginePlanNode[]
+ ├─ RunRow                  从 engine_artifact kind="run" 重建
+ ├─ GoalRunRow[]            从 engine_artifact kind="goal_run_attempt" 重建
+ ├─ AcceptanceRow[]         从 engine_artifact kind="acceptance" 重建
+ └─ EvaluationRow[]         从 engine_artifact kind="verification-evidence" 重建
 ```
 
-## 各实体速览
+`engine_artifact` 是 run、goal attempt、acceptance、evaluation、integrity attempt、report、diff、image 等证据的持久化表面。
 
-### Task（`orchestrator.sql.ts:113`）
+## EngineTask
 
-| 字段 | 说明 |
-|---|---|
-| `kind` | `"workflow"`（完整 pipeline）或 `"build"`（仅编译/构建型任务） |
-| `status` | `pending / running / done / failed / canceled` |
-| `active_run_id` | 当前活跃的 Run |
-| `active_plan_version_id` | 当前活跃的 PlanVersion |
-| `budget` | 总预算（runs / goals / tokens 维度） |
-
-一个 Task 可能经历多个 Run。每次 replan 产生新的 PlanVersion，旧的置 `superseded`。
-
-### Run（`orchestrator.sql.ts:332`）
-
-Run 是 Task 的一次完整执行尝试，phase 按 `plan → execute → evaluate → deliver` 推进。
-
-### PlanVersion（`orchestrator.sql.ts:161`）
-
-- `version`：递增序号
-- `summary`：人类可读的本版计划摘要
-- `spec_snapshot_id`：关联当时的规格快照
-- 每次 replan 生成新版
-
-### Goal（`orchestrator.sql.ts:205`）
-
-Goal 是最小可并行、可独立验收的实现单元。
+`EngineTaskTable` 存储用户请求与任务级元数据：
 
 | 字段 | 说明 |
 |---|---|
-| `title` / `objective` | 目标名与叙述 |
-| `done_definition` | 验收标准（可含可执行命令：`pnpm test`、`cargo build` 等） |
-| `owned_paths[]` | 本 Goal 负责的代码路径 |
-| `depends_on[]` | 前置 Goal（拓扑排序依据） |
-| `exports[]` / `imports[]` | Goal 间数据契约 |
+| `kind` | `"workflow"` 走 pipeline workflow；`"build"` 走 direct build |
+| `executor` | `opencorvus`、`codex` 或 `claude-code` |
+| `request` / `title` | 用户可见的任务契约 |
+| `attachments` | 用户契约附件 |
+| `system_artifacts` | 系统生成材料，如截图和 rendered evidence |
+| `criteria_results` | Overlay quality panel 使用的汇总 |
+| `time_started` / `time_completed` / `error` | 派生 task status 的来源字段 |
 
-### GoalRun（`orchestrator.sql.ts:359`）
+现在没有权威 `engine_task.status` 列。`deriveTaskStatus` 从时间戳、错误、取消 metadata 和 run 状态派生任务状态。
+
+## Requirements 和 Specs
+
+`EngineSpecSnapshotTable`、`EngineSpecItemTable` 与 `EngineRequirementTable` 存储 requirements 阶段产物。当前生产者是 `requirements` workflow tool / agent，不是公开 pipeline 中单独存在的 spec 编写 worker 阶段。
+
+## PlanVersion、Goal、PlanNode
+
+Architect agent 写入：
+
+| 实体 | 说明 |
+|---|---|
+| `EnginePlanVersionTable` | active 或 superseded 的计划版本 |
+| `EngineGoalTable` | Goal contract 字段：objective、acceptance specs、dependencies、ownership、priority、kind |
+| `EnginePlanNodeTable` | 把 goals 连接到 active plan 的计划图行 |
+
+`EngineGoalTable` 不再持有 status cache。UI 和 prompt 中的 goal 状态都从 goal-run attempt 链派生。
+
+## RunRow
+
+`RunRow` 从 `engine_artifact.kind="run"` 的 artifact 重建。状态集合：
+
+```
+queued | accepted | running | blocked | completed | failed | aborted
+```
+
+`phase` 类型里仍保留历史兼容值，但当前 workflow 进度不是由 host phase 指针推进，而是从 artifacts 与 workflow tool side effects 投影。
+
+## GoalRunRow
+
+`GoalRunRow` 从 `engine_artifact.kind="goal_run_attempt"` 的 artifact 重建。
 
 | 字段 | 说明 |
 |---|---|
-| `status` | `queued → planning → running → evaluating → completed / failed` |
-| `workspace_dir` | Git worktree 路径（每个 Goal 独立） |
-| `base_ref` / `merge_ref` | 分支起点 / 合并点 |
+| `goal_id` | 正在实现的 goal |
+| `status` | `queued / accepted / planning / running / evaluating / blocked / completed / failed / aborted` |
+| `workspace_dir` / `workspace_branch` | 隔离 goal workspace |
+| `workspace_base_ref` / `merge_ref` | replay / merge 使用的 snapshot/git 引用 |
+| `supersede_of` | 连接 retry/rework attempt，不覆盖旧证据 |
+| `owner` | 进程 owner，用于重启后识别 orphaned live attempt |
 
-同一 Goal 可能因重试产生多个 GoalRun。
+最新且未被 supersede 的 attempt 是 goal 进度的权威来源。
 
-### Evaluation（`orchestrator.sql.ts:467`）
+## Acceptance 和 Evaluation
+
+`AcceptanceRow` 从 `engine_artifact.kind="acceptance"` 重建，记录 candidate / publishing / delivered / failed 的 acceptance rows。这里的 `delivered` 是持久化 acceptance status，不是独立的最终交付 worker 或 workflow step。
+
+`EvaluationRow` 从 `engine_artifact.kind="verification-evidence"` 重建，记录 task-level 或 goal-run 证据：
 
 | 字段 | 说明 |
 |---|---|
+| `scope` | `goal_run` 或 `acceptance` |
+| `status` | `pending / passed / failed / inconclusive` |
 | `verdict` | `accepted / rejected / inconclusive` |
-| `checks[]` | build/test/lint/spec_check 等各检查的结果 |
-
-`inconclusive` 语义为"无法判决"——不是通过也不是失败，触发 replan 而非 retry。
-
-### Acceptance（`orchestrator.sql.ts:423`）
-
-- `candidate`：评估通过，等待交付
-- `publishing`：正在合并/推送
-- `delivered`：已交付
-
-### SpecSnapshot（`orchestrator.sql.ts:36`）
-
-由 Spec Agent 产出：
-
-| 字段 | 说明 |
-|---|---|
-| `summary` | 一句话规格 |
-| `content` | 完整规格（Markdown） |
-| `scope` | 涉及的文件/模块范围 |
-| `evidence[]` | 产出规格所依据的代码证据链 |
-
-## GoalContract 运行时契约
-
-`GoalContract`（`src/pipeline/types.ts:60`）是 Pipeline 的唯一入参，一经创建**不可变**：
-
-```typescript
-interface GoalContract {
-  goal: Goal
-  planNode: PlanStep
-  run: Run
-  task: Task
-  plan: PlanVersion
-  allGoals: Goal[]  // 用于跨 Goal 依赖查询
-}
-```
-
-它保证执行某个 Goal 时拿到的是快照，不会被并发修改污染。
+| `checks[]` | 检查摘要、证据指针和 scorer metadata |
 
 ## 状态持久化
 
-所有状态存 SQLite（默认 `~/.opencorvus/opencorvus.db`），支持跨进程/跨会话恢复。Server 重启后，overlay 只恢复任务上下文，编排器必须等下一条真实用户消息才继续。
+所有任务领域状态存 SQLite，位置由 OpenCorvus 数据目录配置决定。Server 重启后，UI 从 engine tables 与 artifacts 恢复任务上下文；orchestrator 只在真实 wake/message 到来后继续下一次决策。
 
 ## 你接下来要看的
 
 - [架构总览](./architecture.md)
 - [Agentic Loop](./agent-loop.md)
-- [Evaluator](../opencorvus/evaluator.md)
+- [Integrity / Evaluation 参考](/docs/zh-cn/reference/evaluator/)

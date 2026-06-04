@@ -7,18 +7,18 @@ description: AI 编码代理的开源工程化外壳。
 
 编码代理（coding agent）擅长写代码，但单次输出**不可靠**：没有规格、没有验收、没有重试、没有状态。
 
-OpenCorvus 把「一次性的代码生成」包装成**可重复、可验收、可自愈的研发工作流**。你给一个任务，它自动走一遍 **spec → goals → plan → execute → evaluate → deliver**，失败时自动重规划或重试，直到达成验收标准或预算耗尽。
+OpenCorvus 把「一次性的代码生成」包装成**可重复、可验收、可自愈的研发工作流**。你给一个任务，orchestrator 会在 direct build 与 pipeline workflow 之间选择：按需做 research/design、intent analysis、requirements、architecture、per-goal build 与 integrity review。
 
 ## 核心能力
 
 | 能力 | 说明 |
 |---|---|
-| **Spec-first 规划** | Spec Agent 把模糊需求转写成可测试的规格书（含验收标准、证据链） |
-| **目标分解** | Goal Agent 把规格分解成互相独立、可并行执行的实现目标 |
+| **需求抽取** | Requirements agent 把模糊请求转成可测试的需求与基础决策 |
+| **架构分解** | Architect agent 把需求转成可独立实现的 goals、acceptance specs 与依赖契约 |
 | **多执行器调度** | 内置 OpenCorvus，可自动发现并调度 Codex / Claude Code |
-| **评估驱动重试** | build/test/lint/startup/artifact/visual/Playwright/LLM review + 默认开启的 `spec check` 验收门 |
+| **完整性复核** | build evidence、specialist checks、visual/runtime evidence 与 LLM review 由 integrity 阶段汇总 |
 | **多通道接入** | 本地 TUI、HTTP API、Overlay 桌面端、14 个 IM channel |
-| **状态持久化** | 任务、计划、运行、交互、交付、评估全部落 SQLite |
+| **状态持久化** | 任务、需求、计划、goal、run、artifact、交互、acceptance 与 evaluation 全部落 SQLite |
 | **人工参与** | 权限 ask/allow/deny、follow-up 消息、手动反馈，均可在无人值守流程中无缝嵌入 |
 
 ## 三层架构
@@ -27,8 +27,8 @@ OpenCorvus 把「一次性的代码生成」包装成**可重复、可验收、�
 ┌─ Channel 层 ─────────────────────────────────────────────┐
 │  本地 TUI / Overlay UI / HTTP API / 14 个 IM channel     │
 ├─ Orchestrator 层 ────────────────────────────────────────┤
-│  Task Agent → GoalPool → Planner → Executor → Evaluator  │
-│  （SQLite 持久化 + permission + 预算 + 重试/重规划）     │
+│  Orchestrator → workflow tools → per-goal build → review │
+│  （SQLite 持久化 + permission + 预算 + artifacts）       │
 ├─ Executor 层 ────────────────────────────────────────────┤
 │  OpenCorvus 内核 / Codex / Claude Code                   │
 └──────────────────────────────────────────────────────────┘

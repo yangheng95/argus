@@ -1,9 +1,9 @@
 ---
 title: Agentic Loop
-description: Executor 内部的标准 agentic loop——三状态、工具路由、子任务、关键约束。
+description: SessionLoop 的标准 agentic loop——循环状态、工具路由、子任务、关键约束。
 ---
 
-Executor 内部是一个**标准的 agentic loop**：LLM 出 tool-call → 工具执行 → 结果回填 → 下一轮。本页讲清这个循环的三个状态机与关键约束。
+Worker session 内部是一个**标准的 agentic loop**：LLM 出 tool-call → 工具执行 → 结果回填 → 下一轮。本页讲清这个循环状态、工具路由、子任务与关键约束。
 
 ## 三个状态
 
@@ -22,7 +22,7 @@ Executor 内部是一个**标准的 agentic loop**：LLM 出 tool-call → 工�
 LLM 返回的每个 tool-call 由 `SessionToolResolver`（`src/session/tool-resolver.ts`）路由：
 
 1. **过滤**：`resolveTools()` 按 `input.tools` 白名单过滤，避免 30+ 工具全量发给 DashScope（`session/tool-resolver.ts`）。
-2. **权限检查**：走 `PermissionNext.ask()`（见 [Permissions](../opencorvus/permissions.md)）。
+2. **权限检查**：走 `PermissionNext.ask()`（见 [Permissions](/docs/zh-cn/permissions/)）。
 3. **执行**：调对应 tool handler。
 4. **结果回填**：以 `tool-result` part 写回 session messages。
 
@@ -32,14 +32,13 @@ LLM 返回的每个 tool-call 由 `SessionToolResolver`（`src/session/tool-reso
 
 ## 外层循环的触发
 
-`SessionLoop` 是内循环。外层的 `runTaskLoop`（`src/orchestrator/task-loop.ts:59`）通过 OpenCorvus executor（`OpencorvusExecutor.submit`，`src/executor/opencode.ts:48`）把 prompt 塞进 `TaskQueueService`：
+`SessionLoop` 是 worker 内循环。外层的 `runTaskLoop`（`packages/opencorvus/src/orchestrator/loop.ts`）按 task 串行化 wake 并调用 orchestrator；orchestrator 再通过 typed workflow tools 创建 worker sessions：
 
 ```
 Orchestrator.runTaskLoop
-  └─ TaskAgent.processTask (LLM 决策)
-      └─ OpenCorvus executor (inject prompt)
-          └─ TaskQueueService.runNow
-              └─ SessionLoop (内层 agentic loop)
+  └─ Orchestrator.processTask (LLM 决策)
+      └─ typed tool: requirements / architect / build / integrity / ...
+          └─ worker SessionLoop
 ```
 
 ## 关键约束
@@ -62,10 +61,10 @@ Tool 调用超时必须是"无输出后的真实超时"，不能从启动时刻�
 
 ## Doom-loop 检测
 
-`tool/gui-state.ts` 会记录工具调用序列，检测重复动作（例如连续 5 次点击同一坐标）。触发后当前 Run 会被标记 `stuck`，由 Evaluator 产出 `inconclusive` verdict，触发 replan 而非 retry——防止 agent 在死循环里烧预算。
+Runtime 工具会记录重复 tool-call 与视觉交互循环。相关证据暴露后，由 orchestrator 把修复路由给负责的 worker 或 review 阶段，而不是让同一个 worker 无限消耗预算。
 
 ## 你接下来要看的
 
 - [架构总览](./architecture.md)
-- [Evaluator](../opencorvus/evaluator.md)
-- [Permissions](../opencorvus/permissions.md)
+- [Integrity / Evaluation 参考](/docs/zh-cn/reference/evaluator/)
+- [Permissions](/docs/zh-cn/permissions/)
