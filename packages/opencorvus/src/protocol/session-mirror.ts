@@ -4,6 +4,7 @@ import { ProtocolStore } from "@/protocol/store"
 import { Question } from "@/question"
 import { Message, Session, SessionStatus } from "@/session"
 import { sessionGoalID, sessionRole } from "@/orchestrator/task-event"
+import { isRightSidebarCodingAssistantSession } from "@/coding-assistant/session"
 
 export type SessionBusEvent = {
   type: string
@@ -199,9 +200,17 @@ export function mapSessionBusEvent(
   }
 }
 
-export function mirrorMissionSessionBusEvent(event: SessionBusEvent, sessionID: string): void {
+async function shouldMirrorStandaloneSession(sessionID: string): Promise<boolean> {
+  const role = sessionRole(sessionID)
+  if (role === "mission") return true
+  if (role !== "assistant") return false
+  const session = await Session.get(sessionID).catch(() => undefined)
+  return !!session && isRightSidebarCodingAssistantSession(session)
+}
+
+export async function mirrorSessionBusEvent(event: SessionBusEvent, sessionID: string): Promise<void> {
   if (sessionBusEventSessionID(event) !== sessionID) return
-  if (sessionRole(sessionID) !== "mission") return
+  if (!(await shouldMirrorStandaloneSession(sessionID))) return
   const mapped = mapSessionBusEvent(event, { sessionID })
   if (!mapped) return
   ProtocolStore.dispatchEphemeral({
@@ -216,11 +225,11 @@ export function mirrorMissionSessionBusEvent(event: SessionBusEvent, sessionID: 
   })
 }
 
-export function subscribeMissionSessionMirror(sessionID: string): () => void {
+export function subscribeSessionMirror(sessionID: string): () => void {
   const handler = (envelope: { payload?: SessionBusEvent }) => {
     const event = envelope.payload
     if (!event || typeof event.type !== "string" || !event.properties) return
-    mirrorMissionSessionBusEvent(event, sessionID)
+    void mirrorSessionBusEvent(event, sessionID)
   }
   GlobalBus.on("event", handler)
   return () => GlobalBus.off("event", handler)

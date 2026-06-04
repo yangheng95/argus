@@ -29,9 +29,17 @@ describe("build-artifact", () => {
     expect(artifactPackageBaseName("opencorvus", "overlay-server")).toBe("opencorvus-overlay-server")
   })
 
-  test("overlay-server flavor compiles only the serve entrypoint", () => {
+  test("overlay-server flavor compiles only the launcher entrypoint", () => {
     expect(artifactEntrypoints("overlay-server", "parser.worker.js", "./src/cli/cmd/tui/worker.ts")).toEqual([
-      "./src/overlay-server.ts",
+      "./src/overlay-launcher.ts",
+    ])
+  })
+
+  test("default flavor compiles through the binary launcher", () => {
+    expect(artifactEntrypoints("cli", "parser.worker.js", "./src/cli/cmd/tui/worker.ts")).toEqual([
+      "./src/launcher.ts",
+      "parser.worker.js",
+      "./src/cli/cmd/tui/worker.ts",
     ])
   })
 
@@ -57,6 +65,21 @@ describe("build-artifact", () => {
     expect(artifactExternalModules()).toContain("@parcel/watcher")
     expect(artifactExternalModules()).toContain("@parcel/watcher/wrapper")
     expect(artifactExternalModules()).toContain("node-screenshots")
+  })
+
+  test("packaged native modules load through runtime package resolver", () => {
+    const watcherSource = readFileSync(resolve(import.meta.dir, "../../src/file/watcher.ts"), "utf8")
+    const screenshotSource = readFileSync(resolve(import.meta.dir, "../../src/gui/screenshot.ts"), "utf8")
+    const buildScreenshotSource = readFileSync(resolve(import.meta.dir, "../../src/build/screenshot-tool.ts"), "utf8")
+    const capabilitySource = readFileSync(resolve(import.meta.dir, "../../src/platform/capability.ts"), "utf8")
+
+    expect(watcherSource).not.toContain('from "@parcel/watcher/wrapper"')
+    expect(watcherSource).toContain("requireRuntimePackage<typeof import(\"@parcel/watcher/wrapper\")>")
+    expect(screenshotSource).not.toContain('from "node-screenshots"')
+    expect(screenshotSource).toContain('requireRuntimePackage<typeof import("node-screenshots")>')
+    expect(buildScreenshotSource).not.toContain('from "sharp"')
+    expect(buildScreenshotSource).toContain('requireRuntimePackage<typeof import("sharp")>')
+    expect(capabilitySource).toContain('requireRuntimePackage("node-screenshots")')
   })
 
   test("runtime node module set includes win32 x64 native packages only for win32 x64", () => {
@@ -110,6 +133,12 @@ describe("build-artifact", () => {
       expect(existsSync(resolve(outdir, "node_modules/sharp/node_modules/@img/sharp-win32-x64/package.json"))).toBe(
         true,
       )
+      expect(existsSync(resolve(outdir, "node_modules/@parcel/watcher/wrapper.js"))).toBe(true)
+      expect(
+        existsSync(
+          resolve(outdir, "node_modules/@parcel/watcher/node_modules/@parcel/watcher-win32-x64/package.json"),
+        ),
+      ).toBe(true)
       expect(existsSync(resolve(outdir, "node_modules/@parcel/watcher/node_modules/micromatch/package.json"))).toBe(
         true,
       )

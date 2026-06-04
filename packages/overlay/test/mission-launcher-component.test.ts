@@ -88,18 +88,19 @@ test("services/mission.ts exports loadMissions pointed at /mission", () => {
   expect(SERVICES_MISSION).toContain("server returned non-array body")
 })
 
-test("MissionComposer textarea respects the shared length cap", () => {
-  // The mission wake text shares the same 32K cap as the prior decompose
-  // endpoint; the constant is reused to keep client + server in lockstep
-  // (helpers.MISSION_REQUIREMENT_MAX_CHARS).
-  expect(MISSION_TSX).toContain("MISSION_REQUIREMENT_MAX_CHARS")
+test("MissionComposer reuses ChatComposer with mission-scoped DOM ids", () => {
+  expect(MISSION_TSX).toContain('formID="missionLauncherChatForm"')
+  expect(MISSION_TSX).toContain('textareaID="missionLauncherChatTextarea"')
+  expect(MISSION_TSX).toContain('sendID="missionLauncherChatSend"')
+  expect(MISSION_TSX).toContain('textareaDataUI="mission-composer-input"')
+  expect(MISSION_TSX).toContain('sendDataUI="mission-composer-submit"')
 })
 
 test("MissionComposer exposes the standard data-ui hooks for downstream e2e", () => {
   // These attributes are part of the mission page contract — the e2e
   // tests select on them rather than on i18n text.
-  expect(MISSION_TSX).toContain('data-ui="mission-composer-input"')
-  expect(MISSION_TSX).toContain('data-ui="mission-composer-submit"')
+  expect(MISSION_TSX).toContain('textareaDataUI="mission-composer-input"')
+  expect(MISSION_TSX).toContain('sendDataUI="mission-composer-submit"')
   expect(MISSION_TSX).toContain('data-ui="mission-composer-mission-id"')
 })
 
@@ -107,13 +108,8 @@ test("MissionComposer exposes the standard data-ui hooks for downstream e2e", ()
 
 const LAUNCHER_KEYS = [
   "mission.launcher.title",
-  "mission.launcher.placeholder",
-  "mission.launcher.length_counter",
   "mission.launcher.mission_id_label",
   "mission.launcher.mission_id_placeholder",
-  "mission.launcher.submitting",
-  "mission.launcher.start",
-  "mission.launcher.resume",
   "mission.launcher.error",
   "mission.launcher.discard",
   "mission.launcher.discard_title",

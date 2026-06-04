@@ -1721,6 +1721,34 @@ mod tests {
     }
 
     #[test]
+    fn embedded_payload_contains_parcel_watcher_runtime_when_present() {
+        if EMBEDDED_SERVER_FILES.is_empty() {
+            return;
+        }
+
+        let native_package = if cfg!(windows) {
+            "node_modules/@parcel/watcher/node_modules/@parcel/watcher-win32-x64/package.json"
+        } else if cfg!(target_os = "macos") && cfg!(target_arch = "x86_64") {
+            "node_modules/@parcel/watcher/node_modules/@parcel/watcher-darwin-x64/package.json"
+        } else if cfg!(target_os = "macos") && cfg!(target_arch = "aarch64") {
+            "node_modules/@parcel/watcher/node_modules/@parcel/watcher-darwin-arm64/package.json"
+        } else if cfg!(target_os = "linux") && cfg!(target_arch = "x86_64") {
+            "node_modules/@parcel/watcher/node_modules/@parcel/watcher-linux-x64-glibc/package.json"
+        } else if cfg!(target_os = "linux") && cfg!(target_arch = "aarch64") {
+            "node_modules/@parcel/watcher/node_modules/@parcel/watcher-linux-arm64-glibc/package.json"
+        } else {
+            return;
+        };
+
+        for path in ["node_modules/@parcel/watcher/wrapper.js", native_package] {
+            assert!(
+                EMBEDDED_SERVER_FILES.iter().any(|file| file.path == path),
+                "embedded sidecar payload must include {path}"
+            );
+        }
+    }
+
+    #[test]
     fn startup_failure_diagnostic_includes_error_and_log_path() {
         let path = PathBuf::from("C:/opencorvus/log/overlay-startup.log");
         let message = startup_failure_diagnostic_message("spawn failed", Some(&path));

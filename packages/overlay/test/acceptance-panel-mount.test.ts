@@ -58,6 +58,9 @@ test("index.html declares right-panel Files/Explorer/Inspector tab bodies", asyn
   expect(html).toContain('id="rightPanelFiles"')
   expect(html).toContain('data-panel-tab="files" data-active="false"')
   expect(html).toContain('id="solidRightFilesMount"')
+  expect(html).toContain('id="rightPanelBrowser"')
+  expect(html).toContain('data-panel-tab="browser" data-active="false"')
+  expect(html).toContain('id="solidBrowserPreviewMount"')
   expect(html).toContain('id="rightPanelInspector"')
   expect(html).toContain('data-panel-tab="inspector" data-active="false"')
   expect(html).toContain('id="solidBoardMount"')
@@ -93,6 +96,7 @@ test("main.tsx mounts the top-level right-panel tabs and tab bodies", async () =
   expect(main).toContain('document.getElementById("solidFileExplorerMount")')
   expect(main).toContain('document.getElementById("solidFileEditorMount")')
   expect(main).toContain('document.getElementById("solidRightFilesMount")')
+  expect(main).toContain('document.getElementById("solidBrowserPreviewMount")')
   expect(main).not.toContain('document.getElementById("solidFileEditorToggleMount")')
   expect(main).not.toContain('document.getElementById("solidAgentWorkflowMount")')
   expect(main).toContain('document.getElementById("solidRightPanelTabs")')
@@ -102,6 +106,7 @@ test("main.tsx mounts the top-level right-panel tabs and tab bodies", async () =
   expect(main).not.toContain('document.getElementById("solidFrontendPreviewMount")')
   expect(main).not.toContain("<FrontendPreviewPanel")
   expect(main).toContain("<RightPanelTabs")
+  expect(main).toContain("<BrowserPreviewPanel")
   expect(main).toContain("<FileExplorerPanel")
   expect(main).toContain("<RightFilesPanel")
   expect(main).toContain("<FileEditorPane")
@@ -242,6 +247,11 @@ test("redesign-required i18n keys exist in both locales; the legacy lifecycle ke
     "acceptance.show_more",
     "acceptance.show_less",
     "acceptance.inflight.hint",
+    "browser_preview.title",
+    "browser_preview.url_label",
+    "browser_preview.capture",
+    "browser_preview.capture_loading",
+    "browser_preview.viewport.desktop",
   ]
   // i18n keys are flat strings with literal dots, not nested paths — use
   // `key in obj` instead of toHaveProperty (which would mis-traverse).

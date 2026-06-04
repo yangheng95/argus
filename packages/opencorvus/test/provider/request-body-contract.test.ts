@@ -161,7 +161,7 @@ describe("provider request-body contract", () => {
       providerID: "hexin",
       api: {
         id: "claude-sonnet-4-6-v2",
-        url: "https://arsenal-openai.10jqka.com.cn:8443/ai-gateway/v1",
+        url: "https://aimemodeldev.myhexin.com/litellm/v1",
         npm: "@ai-sdk/openai-compatible",
       },
     })
@@ -236,7 +236,7 @@ describe("provider request-body contract", () => {
       providerID: "hexin",
       api: {
         id: "glm-5.1",
-        url: "https://arsenal-openai.10jqka.com.cn:8443/ai-gateway/v1",
+        url: "https://aimemodeldev.myhexin.com/litellm/v1",
         npm: "@ai-sdk/openai-compatible",
       },
     })
@@ -307,7 +307,7 @@ describe("provider request-body contract", () => {
         providerID: "hexin",
         api: {
           id: "kimi-k2.6",
-          url: "https://arsenal-openai.10jqka.com.cn:8443/ai-gateway/v1",
+          url: "https://aimemodeldev.myhexin.com/litellm/v1",
           npm: "@ai-sdk/openai-compatible",
         },
         capabilities: {
@@ -322,7 +322,7 @@ describe("provider request-body contract", () => {
         providerID: "hexin",
         api: {
           id: "openai/glm-5.1",
-          url: "https://arsenal-openai.10jqka.com.cn:8443/ai-gateway/v1",
+          url: "https://aimemodeldev.myhexin.com/litellm/v1",
           npm: "@ai-sdk/openai-compatible",
         },
         capabilities: {
@@ -379,7 +379,7 @@ describe("provider request-body contract", () => {
       providerID: "hexin",
       api: {
         id: "kimi-k2.6",
-        url: "https://arsenal-openai.10jqka.com.cn:8443/ai-gateway/v1",
+        url: "https://aimemodeldev.myhexin.com/litellm/v1",
         npm: "@ai-sdk/openai-compatible",
       },
     })

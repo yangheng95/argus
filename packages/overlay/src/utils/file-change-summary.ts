@@ -2,7 +2,7 @@ import { cardTreeStore, type CardNode } from "../store/card-tree"
 import type { FileChange } from "../components/DiffView"
 import type { ChangeGroup } from "../services/diff"
 import { goalRevisionLabelFromIndexes } from "./goal-label"
-import { relativePathFrom, toolNameKey } from "./tool"
+import { relativePathFrom } from "./tool"
 
 export interface ToolFileChange extends FileChange {
   openPath: string
@@ -13,9 +13,6 @@ export interface ToolFileChange extends FileChange {
 export interface AgentFileChange extends ToolFileChange {
   sources: number
 }
-
-const FILE_WRITE_TOOLS = new Set(["write", "writefile"])
-const FILE_EDIT_TOOLS = new Set(["edit", "editfile", "applypatch"])
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return !!value && typeof value === "object" && !Array.isArray(value)
@@ -89,33 +86,6 @@ export function toolFileChangesFromState(state: unknown, base: string): ToolFile
   return single ? [single] : []
 }
 
-function inputPath(input: unknown): string {
-  if (!isRecord(input)) return ""
-  return asText(input.file_path) ?? asText(input.filePath) ?? asText(input.path) ?? asText(input.filename) ?? ""
-}
-
-function toolInputFileChange(part: unknown, base: string, goalID: string): ToolFileChange[] {
-  if (!isRecord(part)) return []
-  const key = toolNameKey(asText(part.tool) ?? asText(part.toolName) ?? "")
-  if (!FILE_WRITE_TOOLS.has(key) && !FILE_EDIT_TOOLS.has(key)) return []
-  const state = isRecord(part.state) ? part.state : {}
-  if (String(state.status || "").toLowerCase() !== "completed") return []
-  const path = inputPath(state.input)
-  if (!path) return []
-  const renderedPath = displayPath(path, base)
-  return [
-    {
-      file: renderedPath,
-      status: "modified",
-      additions: 0,
-      deletions: 0,
-      openPath: path,
-      displayPath: renderedPath,
-      ...(goalID ? { goalID } : {}),
-    },
-  ]
-}
-
 function applyGoal(change: ToolFileChange, goalID: string): ToolFileChange {
   return goalID && !change.goalID ? { ...change, goalID } : change
 }
@@ -125,31 +95,16 @@ function toolPartFileChanges(part: unknown, base: string, nodeGoalID: string): T
   const state = isRecord(part.state) ? part.state : {}
   if (String(state.status || "").toLowerCase() !== "completed") return []
   const goalID = asText(part.goalID) ?? nodeGoalID
-  return [
-    ...toolFileChangesFromState(state, base).map((change) => applyGoal(change, goalID)),
-    ...toolInputFileChange(part, base, goalID),
-  ]
+  return toolFileChangesFromState(state, base).map((change) => applyGoal(change, goalID))
 }
 
 function patchPartFileChanges(part: unknown, base: string, nodeGoalID: string): ToolFileChange[] {
   if (!isRecord(part) || part.type !== "patch" || !Array.isArray(part.files)) return []
   const goalID = asText(part.goalID) ?? nodeGoalID
-  return part.files.flatMap((file) => {
-    const path = asText(file)
-    if (!path) return []
-    const renderedPath = displayPath(path, base)
-    return [
-      {
-        file: renderedPath,
-        status: "modified" as const,
-        additions: 0,
-        deletions: 0,
-        openPath: path,
-        displayPath: renderedPath,
-        ...(goalID ? { goalID } : {}),
-      },
-    ]
-  })
+  return part.files
+    .map((file) => normalizeToolDiff(file, base))
+    .filter((change): change is ToolFileChange => !!change)
+    .map((change) => applyGoal(change, goalID))
 }
 
 function mergeFileChange(map: Map<string, AgentFileChange>, change: ToolFileChange): void {

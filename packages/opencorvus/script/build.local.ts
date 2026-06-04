@@ -97,7 +97,7 @@ if (Object.keys(embeddedEnv).length > 0) {
 }
 const embeddedEnvDefine = Object.keys(embeddedEnv).length > 0 ? JSON.stringify(embeddedEnv) : "undefined"
 if (onefileFlag) {
-  console.warn("onefile mode: overlay UI will be bundled as sidecar files in dist/*/bin/ui/")
+  console.warn("onefile mode: overlay UI will be bundled as sidecar files in dist/*/ui/")
 }
 
 const allTargets: {
@@ -188,7 +188,7 @@ async function prepareOverlayBuild() {
 
 async function installOverlay(_item: Target, name: string) {
   const overlayDir = await prepareOverlayBuild()
-  const destDir = path.join(dir, "dist", name, "bin", "ui")
+  const destDir = path.join(dir, "dist", name, "ui")
   const indexPath = path.join(overlayDir, "index.html")
   if (!fs.existsSync(indexPath)) {
     console.log(`  overlay: skipping (missing built UI in ${overlayDir})`)
@@ -317,7 +317,7 @@ for (const item of targets) {
     .filter(Boolean)
     .join("-")
   console.log(`building ${name}`)
-  await $`mkdir -p dist/${name}/bin`
+  await $`mkdir -p dist/${name}`
 
   const parserWorker = fs.realpathSync(path.resolve(dir, "./node_modules/@opentui/core/parser.worker.js"))
   const workerPath = "./src/cli/cmd/tui/worker.ts"
@@ -338,7 +338,7 @@ for (const item of targets) {
     autoloadTsconfig: true,
     autoloadPackageJson: true,
     target: compileTarget,
-    outfile: `dist/${name}/bin/opencorvus`,
+    outfile: `dist/${name}/opencorvus`,
     execArgv: [`--user-agent=opencorvus/${Script.version}`, "--use-system-ca", "--"],
     windows: {},
   }
@@ -361,25 +361,25 @@ for (const item of targets) {
       OPENCORVUS_EMBEDDED_ENV: embeddedEnvDefine,
     },
   })
-  const browserMcpRuntimeDir = path.join(dir, "dist", name, "bin", "browser-mcp-node")
+  const browserMcpRuntimeDir = path.join(dir, "dist", name, "browser-mcp-node")
   await buildBrowserMcpNodeBundle(browserMcpRuntimeDir)
-  await copyRuntimeNodeModules(item, path.join(dir, "dist", name, "bin"), dir)
+  await copyRuntimeNodeModules(item, path.join(dir, "dist", name), dir)
   await copyRuntimeNodeModules(item, browserMcpRuntimeDir, dir)
   await copyBrowserMcpNodeRuntime(item, browserMcpRuntimeDir)
 
   if (item.os === "win32") {
     const helper = await buildWindowsSupervisorHelper()
-    await fs.promises.copyFile(helper, path.join(dir, "dist", name, "bin", "opencorvus-process-supervisor.exe"))
+    await fs.promises.copyFile(helper, path.join(dir, "dist", name, "opencorvus-process-supervisor.exe"))
   }
 
-  await $`rm -rf ./dist/${name}/bin/tui`
+  await $`rm -rf ./dist/${name}/tui`
   await installOverlay(item, name)
   if (binaryOnly) {
-    const files = await fs.promises.readdir(path.join(dir, "dist", name, "bin"))
+    const files = await fs.promises.readdir(path.join(dir, "dist", name))
     await Promise.all(
       files
         .filter((x) => x.endsWith(".map"))
-        .map((x) => fs.promises.rm(path.join(dir, "dist", name, "bin", x), { force: true })),
+        .map((x) => fs.promises.rm(path.join(dir, "dist", name, x), { force: true })),
     )
   }
   await Bun.file(`dist/${name}/package.json`).write(
@@ -400,9 +400,9 @@ for (const item of targets) {
 if (Script.release) {
   for (const key of Object.keys(binaries)) {
     if (key.includes("linux")) {
-      await $`tar -czf ../../${key}.tar.gz *`.cwd(`dist/${key}/bin`)
+      await $`tar -czf ../${key}.tar.gz *`.cwd(`dist/${key}`)
     } else {
-      await $`zip -r ../../${key}.zip *`.cwd(`dist/${key}/bin`)
+      await $`zip -r ../${key}.zip *`.cwd(`dist/${key}`)
     }
   }
   const files = [...new Bun.Glob("dist/*.zip").scanSync("."), ...new Bun.Glob("dist/*.tar.gz").scanSync(".")]

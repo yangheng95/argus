@@ -15,7 +15,6 @@
 // Data sources (template section 5, single source of truth):
 //   - /mission                  : mission session ledger records
 //   - boardStore.board          : selected mission session detail
-//   - MissionStats              : mission/stats infra endpoint (counts + project)
 //   - Channel runtime + list    : existing channel infra routes
 //   - /mission/wake             : start or resume the Mission agent session
 //
@@ -27,7 +26,6 @@ import {
   For,
   Show,
   createEffect,
-  createMemo,
   createResource,
   createSignal,
   onCleanup,
@@ -37,20 +35,21 @@ import { boardStore, setBoardStore, activeTaskID } from "../store/board"
 import { clearMessages, setChatAttachments } from "../store/messages"
 import { settingsStore, setSettingsStore, saveSettings } from "../store/settings"
 import { initPaneResizers, renderPaneLayout, MISSION_PANE_CONFIG } from "../services/pane"
-import { isMissionPage } from "../store/page-mode"
+import { isMissionPage, setPageMode } from "../store/page-mode"
 import { submitMessage } from "../services/task"
 import {
   loadChannelList,
   loadChannelRuntime,
   loadMissions,
-  loadMissionStats,
   loadTaskBindings,
   restartChannelRuntime,
   wakeMission,
+  abortMission,
+  deleteMission,
+  renameMission,
   type ChannelInfo,
   type ChannelRuntimeStatus,
   type MissionRecord,
-  type MissionStats,
 } from "../services/mission"
 import { ApiError } from "../services/api"
 import { loadConversation } from "../services/conversation"
@@ -58,8 +57,6 @@ import { startSSE, stopSSE } from "../services/sse"
 import { resetWriter } from "../services/tree-writer"
 import { t } from "../utils/i18n"
 import {
-  compactDirectory,
-  MISSION_REQUIREMENT_MAX_CHARS,
   humanizeApiError,
   runtimeLabel,
 } from "../utils/mission-helpers"
@@ -67,7 +64,6 @@ import { Icon } from "./Icon"
 import { Button } from "./ui/Button"
 import { Conversation } from "./Conversation"
 import { ChatComposer } from "./ChatComposer"
-import { AutoGrowTextarea } from "./primitives/AutoGrowTextarea"
 import { MissionList } from "./MissionList"
 
 // ── Status taxonomies ──
@@ -167,17 +163,6 @@ export function Mission() {
     if (!onMissionPage) return null
     return dir ? dir : null
   }
-
-  const [stats, statsCtl] = createResource(
-    missionDirectory,
-    async (directory: string) => {
-      try {
-        return await loadMissionStats({ directory })
-      } catch (err) {
-        throw new Error(errorMessage(err))
-      }
-    },
-  )
 
   const [missionRecords, missionRecordsCtl] = createResource(
     () => {
@@ -301,23 +286,10 @@ export function Mission() {
 
   // ── Derived mission views ──────────────────────────────────────────
 
-  const activeDirectory = () => settingsStore.directory || ""
   const selectedMissionSessionID = () =>
     boardStore.selectedSource?.kind === "session" ? boardStore.selectedSource.id : ""
-  const counts = createMemo(() => ({ total: missionRecords()?.length ?? 0 }))
 
   // ── Refresh / actions ──────────────────────────────────────────────
-
-  async function refreshAll(): Promise<void> {
-    setActionError(null)
-    await Promise.allSettled([
-      missionRecordsCtl.refetch(),
-      statsCtl.refetch(),
-      channelsCtl.refetch(),
-      runtimeCtl.refetch(),
-      bindingsCtl.refetch(),
-    ])
-  }
 
   function reportActionError(action: string, err: unknown): void {
     setActionError({ action, error: humanizeApiError(err) })
@@ -358,6 +330,36 @@ export function Mission() {
     })
   }
 
+  function handleNewMission(): void {
+    handleCloseMission()
+    setComposerOpen(true)
+    queueMicrotask(() => {
+      document.querySelector<HTMLTextAreaElement>('[data-ui="mission-composer-input"]')?.focus()
+    })
+  }
+
+  async function handleMissionAbort(mission: MissionRecord): Promise<void> {
+    await withBusy(`abort:${mission.missionID}`, async () => {
+      await abortMission(mission.missionID)
+      setMissionRefreshToken((value) => value + 1)
+    })
+  }
+
+  async function handleMissionDelete(mission: MissionRecord): Promise<void> {
+    await withBusy(`delete:${mission.missionID}`, async () => {
+      if (selectedMissionSessionID() === mission.sessionID) handleCloseMission()
+      await deleteMission(mission.missionID)
+      await missionRecordsCtl.refetch()
+    })
+  }
+
+  async function handleMissionRename(mission: MissionRecord, title: string): Promise<void> {
+    await withBusy(`rename:${mission.missionID}`, async () => {
+      await renameMission(mission.missionID, title)
+      await missionRecordsCtl.refetch()
+    })
+  }
+
   async function handleMissionAwake(result: { missionID: string; sessionID: string; created: boolean }): Promise<void> {
     await missionRecordsCtl.refetch()
     await openMissionSession(result.sessionID)
@@ -393,22 +395,6 @@ export function Mission() {
 
   return (
     <div class="mission" data-ui="mission-page">
-      <Show when={isMissionPage()}>
-        <MissionHeader
-          stats={stats()}
-          statsError={stats.error ? humanizeApiError(stats.error) : ""}
-          runtime={runtime()}
-          runtimeError={runtime.error ? humanizeApiError(runtime.error) : ""}
-          counts={counts()}
-          directory={activeDirectory()}
-          refreshing={missionRecords.loading || stats.loading || runtime.loading || channels.loading}
-          composerOpen={composerOpen()}
-          showComposeButton={boardStore.selectedSource?.kind === "session"}
-          onRefresh={() => void refreshAll()}
-          onCompose={() => setComposerOpen(true)}
-        />
-      </Show>
-
       <Show when={isMissionPage() && actionError()}>
         <div class="mission-action-error" role="alert" data-ui="mission-global-action-error">
           <span>
@@ -442,6 +428,11 @@ export function Mission() {
             searchQuery={searchQuery()}
             onSearchChange={setSearchQuery}
             onSelectMission={(mission) => void handleMissionSelect(mission)}
+            onAbortMission={(mission) => void handleMissionAbort(mission)}
+            onDeleteMission={(mission) => void handleMissionDelete(mission)}
+            onRenameMission={(mission, title) => void handleMissionRename(mission, title)}
+            onBackToPanel={() => setPageMode("panel")}
+            onCreateMission={handleNewMission}
             onRetry={() => void missionRecordsCtl.refetch()}
           />
         </Show>
@@ -517,111 +508,6 @@ export function Mission() {
   )
 }
 
-// ── Header ────────────────────────────────────────────────────────────
-
-function MissionHeader(props: {
-  stats: MissionStats | null | undefined
-  statsError: string
-  runtime: ChannelRuntimeStatus | null | undefined
-  runtimeError: string
-  counts: { total: number }
-  directory: string
-  refreshing: boolean
-  composerOpen: boolean
-  showComposeButton: boolean
-  onRefresh: () => void
-  onCompose: () => void
-}) {
-  const runtimeStatusLabel = () => {
-    const r = props.runtime
-    if (!r) return t("mission.runtime.disabled")
-    return runtimeLabel(r.status)
-  }
-  const healthStatus = () => {
-    if (props.statsError) return "error"
-    if (!props.stats) return "unknown"
-    return "healthy"
-  }
-  return (
-    <header class="mission-header" data-ui="mission-header">
-      <div class="mission-header-row mission-header-row--stats">
-        <div class="mission-header-cluster">
-          <span class="mission-header-eyebrow">
-            <Icon name="mission" size={14} />
-            <span>{t("mission.title")}</span>
-          </span>
-          <span class="mission-header-subtitle">{t("mission.subtitle")}</span>
-        </div>
-        <span class="mission-stat" data-stat="workspace" title={props.directory || ""}>
-          <span class="mission-stat-label">{t("mission.workspace_label")}</span>
-          <span class="mission-stat-value">{compactDirectory(props.directory) || "—"}</span>
-        </span>
-        <span class="mission-stat" data-stat="health" data-status={healthStatus()}>
-          <span class="mission-stat-label">{t("mission.health_label")}</span>
-          <span class="mission-stat-value">
-            {props.statsError
-              ? t("mission.health.error")
-              : props.stats
-                ? t("mission.health.healthy")
-                : t("mission.health.unknown")}
-          </span>
-        </span>
-        <span class="mission-stat" data-stat="runtime" data-status={props.runtime?.status ?? "disabled"}>
-          <span class="mission-stat-label">{t("mission.runtime_label")}</span>
-          <span class="mission-stat-value">
-            {props.runtimeError ? t("mission.runtime.error") : runtimeStatusLabel()}
-          </span>
-        </span>
-        <span class="mission-stat" data-stat="counts">
-          <span class="mission-stat-label">{t("mission.counts.label")}</span>
-          <span class="mission-stat-value">{t("mission.counts.total", { count: String(props.counts.total) })}</span>
-        </span>
-        <div class="mission-header-actions" role="toolbar" aria-label={t("mission.title")}>
-          <Show when={props.showComposeButton}>
-            <Button
-              type="button"
-              variant="ghost"
-              size="icon"
-              tone="accent"
-              data-ui="mission-new-requirement"
-              disabled={props.composerOpen}
-              title={t("mission.new_requirement_title")}
-              aria-label={t("mission.new_requirement")}
-              onClick={props.onCompose}
-            >
-              <Icon name="plus" size={13} />
-            </Button>
-          </Show>
-          <Button
-            type="button"
-            variant="ghost"
-            size="icon"
-            tone="neutral"
-            data-ui="mission-refresh"
-            disabled={props.refreshing}
-            title={t("mission.refresh_title")}
-            aria-label={props.refreshing ? t("mission.refreshing") : t("mission.refresh")}
-            onClick={props.onRefresh}
-          >
-            <Icon name="refresh" size={13} />
-          </Button>
-          {/* Page-mode toggle lives in the titlebar Mission button now —
-              one button, one stable position across both modes. The
-              in-page back affordance was removed because keeping two
-              navigation surfaces meant the operator's eye had to relearn
-              the toggle position when crossing pages. */}
-        </div>
-      </div>
-      <Show when={props.statsError}>
-        <div class="mission-error" role="alert" data-ui="mission-stats-error">
-          <Icon name="status-failed" size={12} />
-          <span>{t("mission.error.stats_failed", { error: props.statsError })}</span>
-        </div>
-      </Show>
-    </header>
-  )
-}
-
 function MissionWorkbench(props: {
   active: boolean
   composerOpen: boolean
@@ -679,6 +565,9 @@ function MissionConversation(props: { onClose: () => void; onSubmitted: () => vo
         <ChatComposer
           enabled={true}
           busy={false}
+          formID="missionConversationChatForm"
+          textareaID="missionConversationChatTextarea"
+          sendID="missionConversationChatSend"
           onSubmit={async (text, attachments, webSearch) => {
             await submitMessage(text, attachments, {
               metadata: {
@@ -699,14 +588,6 @@ function MissionComposer(props: {
   onAwake: (result: { missionID: string; sessionID: string; created: boolean }) => void
   dismissible?: boolean
 }) {
-  // ── Mission launcher — Mission agent wake surface ─────────────────────
-  //
-  // Single textarea + optional missionID input. Submitting POSTs to
-  // /mission/wake which either starts a new mission session (no missionID)
-  // or resumes an existing one (operator-typed missionID). Once wake returns,
-  // the operator's goal is owned by the Mission agent — no proposal preview /
-  // candidate selection here. See specs/gateway-mission-split-2026-05-28.md.
-  const [text, setText] = createSignal("")
   const [missionID, setMissionID] = createSignal("")
   const [submitting, setSubmitting] = createSignal(false)
   const [error, setError] = createSignal("")
@@ -720,9 +601,14 @@ function MissionComposer(props: {
   }
   onCleanup(() => cancelActive())
 
-  async function handleSubmit() {
-    const t = text().trim()
-    if (!t) return
+  async function handleSubmit(promptText: string, attachments: unknown[]) {
+    const text = promptText.trim()
+    if (!text) return
+    if (attachments.length > 0) {
+      const message = t("mission.launcher.attachments_unsupported")
+      setError(message)
+      throw new Error(message)
+    }
     setSubmitting(true)
     setError("")
     cancelActive()
@@ -730,13 +616,12 @@ function MissionComposer(props: {
     activeController = controller
     try {
       const result = await wakeMission({
-        text: t,
+        text,
         missionID: missionID().trim() || undefined,
         signal: controller.signal,
       })
       if (controller.signal.aborted) return
       setLastResult(result)
-      setText("")
       props.onAwake(result)
     } catch (err) {
       if (controller.signal.aborted) return
@@ -750,7 +635,6 @@ function MissionComposer(props: {
 
   function handleDiscard() {
     cancelActive()
-    setText("")
     setMissionID("")
     setError("")
     setLastResult(null)
@@ -780,34 +664,6 @@ function MissionComposer(props: {
         </Show>
       </header>
       <div class="mission-composer-shell">
-        <div class="mission-composer-input-head">
-          <label class="mission-composer-input-label" for="missionText">
-            {t("mission.launcher.title")}
-          </label>
-          <div class="mission-composer-counter" data-ui="mission-composer-counter">
-            <span
-              data-near-limit={text().length >= MISSION_REQUIREMENT_MAX_CHARS - 200 ? "true" : undefined}
-              data-at-limit={text().length >= MISSION_REQUIREMENT_MAX_CHARS ? "true" : undefined}
-            >
-              {t("mission.launcher.length_counter", {
-                count: String(text().length),
-                max: String(MISSION_REQUIREMENT_MAX_CHARS),
-              })}
-            </span>
-          </div>
-        </div>
-        <AutoGrowTextarea
-          id="missionText"
-          class="composer-textarea mission-composer-textarea"
-          rows={10}
-          maxLines={22}
-          placeholder={t("mission.launcher.placeholder")}
-          value={text()}
-          maxLength={MISSION_REQUIREMENT_MAX_CHARS}
-          onInput={(e) => setText(e.currentTarget.value)}
-          disabled={submitting()}
-          data-ui="mission-composer-input"
-        />
         <div class="mission-composer-controls">
           <label class="mission-composer-mission-id">
             <span>{t("mission.launcher.mission_id_label")}</span>
@@ -821,22 +677,17 @@ function MissionComposer(props: {
               data-ui="mission-composer-mission-id"
             />
           </label>
-          <Button
-            type="button"
-            variant="solid"
-            size="md"
-            tone="accent"
-            data-ui="mission-composer-submit"
-            disabled={!text().trim() || submitting()}
-            onClick={() => void handleSubmit()}
-          >
-            {submitting()
-              ? t("mission.launcher.submitting")
-              : missionID().trim()
-                ? t("mission.launcher.resume")
-                : t("mission.launcher.start")}
-          </Button>
         </div>
+        <ChatComposer
+          enabled={!submitting()}
+          busy={false}
+          formID="missionLauncherChatForm"
+          textareaID="missionLauncherChatTextarea"
+          sendID="missionLauncherChatSend"
+          textareaDataUI="mission-composer-input"
+          sendDataUI="mission-composer-submit"
+          onSubmit={handleSubmit}
+        />
       </div>
       <Show when={error()}>
         <div class="mission-error" role="alert" data-ui="mission-composer-error">

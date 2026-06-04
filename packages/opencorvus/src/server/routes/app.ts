@@ -35,29 +35,23 @@ import { TerminalRoutes } from "./terminal"
 import { AttachmentRoutes } from "./attachment"
 import { GatewayRoutes } from "./gateway"
 import { MissionRoutes } from "./mission"
+import { BrowserPreviewRoutes } from "./browser-preview"
 import { hasServerShutdownHandler, requestServerShutdown } from "../shutdown"
 import { Env } from "@/runtime/env"
+import { AppDocumentation } from "./documentation"
+import { serverErrorResponse } from "../error-handler"
 
 const log = Log.create({ service: "server" })
 
-export const AppDocumentation = {
-  info: {
-    title: "opencorvus",
-    version: "0.0.1-alpha",
-    description: "opencorvus api",
-  },
-  openapi: "3.1.1",
-} as const
-
 export function AppRoutes(root: Hono) {
   return new Hono()
+    .onError(serverErrorResponse)
     .get(
       "/doc",
       openAPIRouteHandler(root, {
         documentation: AppDocumentation,
       }),
     )
-    .use(validator("query", z.object({ directory: z.string().optional() })))
     .route("/project", ProjectRoutes())
     .route("/terminal", TerminalRoutes())
     .route("/config", ConfigRoutes())
@@ -74,6 +68,7 @@ export function AppRoutes(root: Hono) {
     .route("/coding", CodingRoutes())
     .route("/gateway", GatewayRoutes())
     .route("/mission", MissionRoutes())
+    .route("/browser-preview", BrowserPreviewRoutes())
     .post(
       "/shutdown",
       describeRoute({

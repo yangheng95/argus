@@ -6,6 +6,10 @@ import { Session } from "@/session"
 import { Question } from "@/question"
 import { captureWindowScreenshot } from "@/gui/screenshot"
 import { PanelActionSchema, derivePanelActor } from "@/panel/capability"
+import {
+  RIGHT_SIDEBAR_CODING_ASSISTANT_SOURCE,
+  isRightSidebarCodingAssistantSession,
+} from "@/coding-assistant/session"
 
 // Action whitelist by actor. Only `mission` is restricted — it is a
 // coordinator that drives squad/team work through a bounded set of panel
@@ -29,9 +33,34 @@ const MISSION_ALLOWED_ACTIONS = new Set([
   "reply_interaction",
   "reject_interaction",
 ])
+const RIGHT_SIDEBAR_ASSISTANT_ALLOWED_ACTIONS = new Set([
+  "view_plan",
+  "view_board",
+  "view_tasks",
+  "query_task",
+  "create_task",
+  "send_task_message",
+  "reply_interaction",
+  "reject_interaction",
+  "retry_task",
+  "replan_task",
+  "cancel_task",
+  "update_checks",
+  "set_executor",
+  "select_task",
+  "select_session",
+  "update_goal",
+  "delete_goal",
+])
 import { isDecodableText, decodeDataUrlText, decodeDataUrlBase64 } from "@/session/text-mime"
 
-const localOnly = (ctx: Tool.Context) => ctx.extra?.surface === "panel"
+const localOnly = (ctx: Tool.Context) => ctx.extra?.surface === "panel" || ctx.extra?.surface === "right-sidebar"
+
+async function resolvePanelActor(ctx: Tool.Context) {
+  const session = await Session.get(ctx.sessionID).catch(() => undefined)
+  if (session && isRightSidebarCodingAssistantSession(session)) return "right_sidebar_assistant"
+  return derivePanelActor(ctx.agent)
+}
 
 async function resolveCreateTaskQueueDecision(input: {
   queue?: boolean
@@ -77,13 +106,19 @@ export const PanelTool = Tool.define("panel", {
     // it drives squad/team work through a bounded panel surface and must not
     // replan/retry/edit goals or manage sessions here (rule 11). The host
     // enforces so even a future mis-grant of `panel` to another identity holds.
-    const actor = derivePanelActor(ctx.agent)
+    const actor = await resolvePanelActor(ctx)
     if (actor === "mission" && !MISSION_ALLOWED_ACTIONS.has(params.action)) {
       throw new Error(
         `panel action "${params.action}" is not permitted for the mission agent. ` +
           `Mission may call: ${[...MISSION_ALLOWED_ACTIONS].join(", ")}. ` +
           `It coordinates squad/team work but does not replace the orchestrator — ` +
           `replan/retry/goal/session operations belong to the orchestrator and the desktop panel.`,
+      )
+    }
+    if (actor === "right_sidebar_assistant" && !RIGHT_SIDEBAR_ASSISTANT_ALLOWED_ACTIONS.has(params.action)) {
+      throw new Error(
+        `panel action "${params.action}" is not permitted for the right sidebar assistant. ` +
+          `Allowed actions: ${[...RIGHT_SIDEBAR_ASSISTANT_ALLOWED_ACTIONS].join(", ")}.`,
       )
     }
     switch (params.action) {
@@ -266,6 +301,11 @@ export const PanelTool = Tool.define("panel", {
           actor,
           ...(missionProvenance ? { mission: missionProvenance } : {}),
         }
+        const source = actor === "right_sidebar_assistant"
+          ? RIGHT_SIDEBAR_CODING_ASSISTANT_SOURCE
+          : params.source ??
+            ctx.extra?.source ??
+            (params.platform ? `channel:${params.platform}` : actor === "mission" ? "mission" : "panel")
         const taskID = await EngineService.createTask({
           requestID: params.request_id ?? ctx.extra?.requestID,
           request,
@@ -273,10 +313,7 @@ export const PanelTool = Tool.define("panel", {
           queue,
           checks: params.checks,
           routing: params.routing,
-          source:
-            params.source ??
-            ctx.extra?.source ??
-            (params.platform ? `channel:${params.platform}` : actor === "mission" ? "mission" : "panel"),
+          source,
           ...(params.platform && params.channel && params.thread
             ? {
                 channelBinding: {
@@ -331,7 +368,9 @@ export const PanelTool = Tool.define("panel", {
           }))
         const result = await EngineService.handleTaskMessage(params.taskID, {
           text: followText ? params.text + followText : params.text,
-          source: params.source ?? ctx.extra?.source ?? "panel",
+          source: actor === "right_sidebar_assistant"
+            ? RIGHT_SIDEBAR_CODING_ASSISTANT_SOURCE
+            : params.source ?? ctx.extra?.source ?? "panel",
           user_id: params.user_id,
           ...(followBinaries.length > 0 ? { attachments: followBinaries } : {}),
         })

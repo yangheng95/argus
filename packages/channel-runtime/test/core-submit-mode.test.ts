@@ -29,6 +29,13 @@ function incoming(text: string): IncomingMessage {
   }
 }
 
+type RuntimeStartInput = {
+  mode: "spawn"
+  directory: string
+  sessionID: string
+  bin?: string
+}
+
 beforeEach(() => {
   delete process.env.OPENCORVUS_CHANNEL_TASK_MODE
   delete process.env.OPENCORVUS_CHANNEL_TASK_TIMEOUT_MS
@@ -37,12 +44,7 @@ beforeEach(() => {
 
 describe("channel runtime submit mode", () => {
   test("uses tui.runtime.submitTask by default", async () => {
-    const startCalls: Array<{
-      mode: "spawn"
-      directory: string
-      sessionID: string
-      bin?: string
-    }> = []
+    const startCalls: RuntimeStartInput[] = []
     const submitCalls: Array<{ sessionID: string; text: string; wait: boolean }> = []
     const promptCalls: Array<{ sessionID: string; parts: Array<{ type: "text"; text: string }>; system: string }> = []
     const a = adapter()
@@ -55,12 +57,7 @@ describe("channel runtime submit mode", () => {
       client: {
         tui: {
           runtime: {
-            start(input: {
-              mode: "spawn"
-              directory: string
-              sessionID: string
-              bin?: string
-            }): Promise<{ error?: unknown }>
+            start(input: RuntimeStartInput): Promise<{ error?: unknown }>
             submitTask(input: {
               sessionID: string
               text: string
@@ -120,6 +117,7 @@ describe("channel runtime submit mode", () => {
     expect(startCalls).toHaveLength(1)
     expect(startCalls[0]?.mode).toBe("spawn")
     expect(startCalls[0]?.sessionID).toBe("session_1")
+    expect(startCalls[0]?.directory).toBeTruthy()
     expect(submitCalls).toHaveLength(1)
     expect(submitCalls[0]).toEqual({
       sessionID: "session_1",
@@ -130,12 +128,7 @@ describe("channel runtime submit mode", () => {
   })
 
   test("fails when tui runtime submit fails instead of falling back", async () => {
-    const startCalls: Array<{
-      mode: "spawn"
-      directory: string
-      sessionID: string
-      bin?: string
-    }> = []
+    const startCalls: RuntimeStartInput[] = []
     const sent: string[] = []
     const submitCalls: Array<{ sessionID: string; text: string; wait: boolean }> = []
     const promptCalls: Array<{ sessionID: string; parts: Array<{ type: "text"; text: string }>; system: string }> = []
@@ -154,12 +147,7 @@ describe("channel runtime submit mode", () => {
       client: {
         tui: {
           runtime: {
-            start(input: {
-              mode: "spawn"
-              directory: string
-              sessionID: string
-              bin?: string
-            }): Promise<{ error?: unknown }>
+            start(input: RuntimeStartInput): Promise<{ error?: unknown }>
             submitTask(input: {
               sessionID: string
               text: string
@@ -217,12 +205,7 @@ describe("channel runtime submit mode", () => {
   })
 
   test("fails when tui runtime start fails instead of falling back", async () => {
-    const startCalls: Array<{
-      mode: "spawn"
-      directory: string
-      sessionID: string
-      bin?: string
-    }> = []
+    const startCalls: RuntimeStartInput[] = []
     const sent: string[] = []
     const submitCalls: Array<{ sessionID: string; text: string; wait: boolean }> = []
     const promptCalls: Array<{ sessionID: string; parts: Array<{ type: "text"; text: string }>; system: string }> = []
@@ -241,12 +224,7 @@ describe("channel runtime submit mode", () => {
       client: {
         tui: {
           runtime: {
-            start(input: {
-              mode: "spawn"
-              directory: string
-              sessionID: string
-              bin?: string
-            }): Promise<{ error?: unknown }>
+            start(input: RuntimeStartInput): Promise<{ error?: unknown }>
             submitTask(input: {
               sessionID: string
               text: string
@@ -324,12 +302,7 @@ describe("channel runtime submit mode", () => {
       client: {
         tui: {
           runtime: {
-            start(input: {
-              mode: "spawn"
-              directory: string
-              sessionID: string
-              bin?: string
-            }): Promise<{ error?: unknown }>
+            start(input: RuntimeStartInput): Promise<{ error?: unknown }>
             submitTask(input: {
               sessionID: string
               text: string
@@ -423,12 +396,7 @@ describe("channel runtime submit mode", () => {
         client: {
           tui: {
             runtime: {
-              start(input: {
-                mode: "spawn"
-                directory: string
-                sessionID: string
-                bin?: string
-              }): Promise<{ error?: unknown }>
+              start(input: RuntimeStartInput): Promise<{ error?: unknown }>
               submitTask(input: {
                 sessionID: string
                 text: string
@@ -517,12 +485,7 @@ describe("channel runtime submit mode", () => {
         client: {
           tui: {
             runtime: {
-              start(input: {
-                mode: "spawn"
-                directory: string
-                sessionID: string
-                bin?: string
-              }): Promise<{ error?: unknown }>
+              start(input: RuntimeStartInput): Promise<{ error?: unknown }>
               submitTask(input: {
                 sessionID: string
                 text: string
@@ -615,12 +578,7 @@ describe("channel runtime submit mode", () => {
       client: {
         tui: {
           runtime: {
-            start(input: {
-              mode: "spawn"
-              directory: string
-              sessionID: string
-              bin?: string
-            }): Promise<{ error?: unknown }>
+            start(input: RuntimeStartInput): Promise<{ error?: unknown }>
             submitTask(input: {
               sessionID: string
               text: string
@@ -704,12 +662,7 @@ describe("channel runtime submit mode", () => {
       client: {
         tui: {
           runtime: {
-            start(input: {
-              mode: "spawn"
-              directory: string
-              sessionID: string
-              bin?: string
-            }): Promise<{ error?: unknown }>
+            start(input: RuntimeStartInput): Promise<{ error?: unknown }>
             submitTask(input: {
               sessionID: string
               text: string
@@ -793,12 +746,7 @@ describe("channel runtime submit mode", () => {
 
   test("supports OPENCORVUS_CHANNEL_TASK_MODE=session-async", async () => {
     process.env.OPENCORVUS_CHANNEL_TASK_MODE = "session-async"
-    const startCalls: Array<{
-      mode: "spawn"
-      directory: string
-      sessionID: string
-      bin?: string
-    }> = []
+    const startCalls: RuntimeStartInput[] = []
     const submitCalls: Array<{ sessionID: string; text: string; wait: boolean }> = []
     const promptCalls: Array<{ sessionID: string; parts: Array<{ type: "text"; text: string }>; system: string }> = []
     const a = adapter()
@@ -811,12 +759,7 @@ describe("channel runtime submit mode", () => {
       client: {
         tui: {
           runtime: {
-            start(input: {
-              mode: "spawn"
-              directory: string
-              sessionID: string
-              bin?: string
-            }): Promise<{ error?: unknown }>
+            start(input: RuntimeStartInput): Promise<{ error?: unknown }>
             submitTask(input: {
               sessionID: string
               text: string

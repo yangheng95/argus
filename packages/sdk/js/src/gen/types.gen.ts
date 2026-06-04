@@ -4,623 +4,6 @@ export type ClientOptions = {
   baseUrl: `${string}://${string}` | (string & {})
 }
 
-export type EventServerConnected = {
-  type: "server.connected"
-  properties: {
-    [key: string]: unknown
-  }
-}
-
-export type EventGlobalDisposed = {
-  type: "global.disposed"
-  properties: {
-    [key: string]: unknown
-  }
-}
-
-export type EventTuiPromptAppend = {
-  type: "tui.prompt.append"
-  properties: {
-    text: string
-  }
-}
-
-export type EventTuiCommandExecute = {
-  type: "tui.command.execute"
-  properties: {
-    command:
-      | "session.list"
-      | "session.new"
-      | "session.interrupt"
-      | "session.compact"
-      | "session.page.up"
-      | "session.page.down"
-      | "session.line.up"
-      | "session.line.down"
-      | "session.half.page.up"
-      | "session.half.page.down"
-      | "session.first"
-      | "session.last"
-      | "prompt.clear"
-      | "prompt.submit"
-      | "agent.cycle"
-      | string
-  }
-}
-
-export type EventTuiToastShow = {
-  type: "tui.toast.show"
-  properties: {
-    title?: string
-    message: string
-    variant: "info" | "success" | "warning" | "error"
-    /**
-     * Duration in milliseconds
-     */
-    duration?: number
-  }
-}
-
-export type EventTuiSessionSelect = {
-  type: "tui.session.select"
-  properties: {
-    /**
-     * Session ID to navigate to
-     */
-    sessionID: string
-  }
-}
-
-export type EventTaskCreated = {
-  type: "task.created"
-  properties: {
-    taskID: string
-    status: "queued" | "active" | "completed" | "failed" | "cancelled"
-    summary: string
-  }
-}
-
-export type EventTaskUpdated = {
-  type: "task.updated"
-  properties: {
-    taskID: string
-    status: "queued" | "active" | "completed" | "failed" | "cancelled"
-    summary: string
-  }
-}
-
-export type EventTaskCompleted = {
-  type: "task.completed"
-  properties: {
-    taskID: string
-    status: "queued" | "active" | "completed" | "failed" | "cancelled"
-    summary: string
-  }
-}
-
-export type EventTaskFailed = {
-  type: "task.failed"
-  properties: {
-    taskID: string
-    status: "queued" | "active" | "completed" | "failed" | "cancelled"
-    summary: string
-    error?: string
-  }
-}
-
-export type EventTaskCancelled = {
-  type: "task.cancelled"
-  properties: {
-    taskID: string
-    status: "queued" | "active" | "completed" | "failed" | "cancelled"
-    summary: string
-  }
-}
-
-export type EventSpecCreated = {
-  type: "spec.created"
-  properties: {
-    taskID: string
-    specID: string
-    summary: string
-  }
-}
-
-export type EventSpecUpdated = {
-  type: "spec.updated"
-  properties: {
-    taskID: string
-    specID: string
-    status: string
-    summary: string
-  }
-}
-
-export type EventSpecApproved = {
-  type: "spec.approved"
-  properties: {
-    taskID: string
-    specID: string
-    summary: string
-  }
-}
-
-export type EventPlanCreated = {
-  type: "plan.created"
-  properties: {
-    taskID: string
-    planID: string
-    summary: string
-  }
-}
-
-export type EventPlanActivated = {
-  type: "plan.activated"
-  properties: {
-    taskID: string
-    planID: string
-    summary: string
-  }
-}
-
-export type EventGoalProgress = {
-  type: "goal.progress"
-  properties: {
-    taskID: string
-    goalRunID: string
-    summary: string
-  }
-}
-
-export type EventGoalRunUpdated = {
-  type: "goal_run.updated"
-  properties: {
-    taskID: string
-    goalRunID: string
-    goalID: string
-    status: string
-    previousStatus: string
-    summary: string
-  }
-}
-
-export type EventGoalPassed = {
-  type: "goal.passed"
-  properties: {
-    taskID: string
-    goalID: string
-    summary: string
-  }
-}
-
-export type EventGoalFailed = {
-  type: "goal.failed"
-  properties: {
-    taskID: string
-    goalID: string
-    summary: string
-  }
-}
-
-export type EventTaskRewound = {
-  type: "task.rewound"
-  properties: {
-    taskID: string
-    cursorTime: number
-    anchorEventID?: string
-    reason?: string
-    rewindCount: number
-    resetWorktree: boolean
-    anchorKind: "cursorTime" | "message"
-  }
-}
-
-export type EventMilestoneActivated = {
-  type: "milestone.activated"
-  properties: {
-    taskID: string
-    milestoneID: string
-    summary: string
-  }
-}
-
-export type EventMilestonePassed = {
-  type: "milestone.passed"
-  properties: {
-    taskID: string
-    milestoneID: string
-    summary: string
-  }
-}
-
-export type EventMilestoneFailed = {
-  type: "milestone.failed"
-  properties: {
-    taskID: string
-    milestoneID: string
-    summary: string
-  }
-}
-
-export type EventRunCreated = {
-  type: "run.created"
-  properties: {
-    taskID: string
-    runID: string
-    status: "queued" | "accepted" | "running" | "blocked" | "completed" | "failed" | "aborted"
-    summary: string
-  }
-}
-
-export type EventRunUpdated = {
-  type: "run.updated"
-  properties: {
-    taskID: string
-    runID: string
-    status: "queued" | "accepted" | "running" | "blocked" | "completed" | "failed" | "aborted"
-    summary: string
-  }
-}
-
-export type EventInteractionRequested = {
-  type: "interaction.requested"
-  properties: {
-    taskID: string
-    runID?: string
-    interactionID: string
-    requestType: "permission" | "question"
-    summary: string
-  }
-}
-
-export type EventInteractionResolved = {
-  type: "interaction.resolved"
-  properties: {
-    taskID: string
-    runID?: string
-    interactionID: string
-    status: "pending" | "answered" | "rejected" | "expired"
-    summary: string
-  }
-}
-
-export type EventAcceptanceReady = {
-  type: "acceptance.ready"
-  properties: {
-    taskID: string
-    runID: string
-    acceptanceID: string
-    summary: string
-  }
-}
-
-export type EventEvaluationCompleted = {
-  type: "evaluation.completed"
-  properties: {
-    taskID: string
-    runID: string
-    evaluationID: string
-    status: "pending" | "passed" | "failed" | "inconclusive"
-    verdict: "accepted" | "rejected" | "inconclusive"
-    summary: string
-  }
-}
-
-export type EventTaskMessage = {
-  type: "task.message"
-  properties: {
-    taskID: string
-    kind: "goal" | "plan" | "note"
-    source: string
-    text: string
-    summary: string
-  }
-}
-
-export type EventRunProgress = {
-  type: "run.progress"
-  properties: {
-    taskID: string
-    runID: string
-    type: string
-    summary: string
-    payload?: {
-      [key: string]: unknown
-    }
-  }
-}
-
-export type EventRunOutput = {
-  type: "run.output"
-  properties: {
-    taskID: string
-    runID: string
-    type: string
-    text: string
-  }
-}
-
-export type EventMessageInjected = {
-  type: "message.injected"
-  properties: {
-    taskID: string
-    runID: string
-    text: string
-    summary: string
-  }
-}
-
-export type EventWorkflowSelected = {
-  type: "workflow.selected"
-  properties: {
-    taskID: string
-    workflowID: string
-    workflowName: string
-    summary: string
-  }
-}
-
-export type EventWorkflowStepUpdated = {
-  type: "workflow.step.updated"
-  properties: {
-    taskID: string
-    stepID: string
-    goalID?: string
-    status: "pending" | "running" | "completed" | "skipped" | "failed"
-    summary: string
-  }
-}
-
-export type EventGoalWorkflowProgress = {
-  type: "goal.workflow.progress"
-  properties: {
-    taskID: string
-    goalID: string
-    completedSteps: number
-    totalSteps: number
-    currentStep?: string
-    summary: string
-  }
-}
-
-export type EventReviewStreamStarted = {
-  type: "review.stream.started"
-  properties: {
-    taskID: string
-    reviewID: string
-    phase: "integrity" | "acceptance"
-    sessionID?: string
-  }
-}
-
-export type EventReviewStreamProgress = {
-  type: "review.stream.progress"
-  properties: {
-    taskID: string
-    reviewID: string
-    phase: "integrity" | "acceptance"
-    currentStep?: "manifest" | "runtime" | "visual" | "specialist" | "agent" | "post_repair"
-    activity?: string
-    reviewerID?: string
-    roundID?: string
-    attempt: number
-    elapsedMs: number
-    summary?: string
-  }
-}
-
-export type EventReviewStreamChunk = {
-  type: "review.stream.chunk"
-  properties: {
-    taskID: string
-    reviewID: string
-    phase: "integrity" | "acceptance"
-    kind: "reasoning"
-    delta: string
-    attempt: number
-  }
-}
-
-export type EventAcceptanceEvidenceUpdated = {
-  type: "acceptance.evidence.updated"
-  properties: {
-    taskID: string
-    runID?: string
-    acceptanceID: string
-    manifestID: string
-    iteration: number
-    status: "passed" | "failed"
-    summary: string
-    failedCheckCount: number
-    failedReviewCount: number
-    failureDetails: Array<{
-      kind: "readiness" | "check" | "coverage" | "review"
-      id: string
-      name: string
-      status?: string
-      command?: string
-      exitCode?: number
-      evidence: string
-    }>
-  }
-}
-
-export type FactCheckItem = {
-  claim: string
-  confidence: "low" | "medium" | "high"
-  category: "api" | "library" | "number" | "history" | "path" | "protocol" | "other"
-  source: string
-}
-
-export type EventIntegrityReviewCompleted = {
-  type: "integrity.review.completed"
-  properties: {
-    verdict: "pass" | "concerns" | "needs_correction"
-    summary: string
-    teamReportMarkdown: string
-    reviewers: Array<{
-      reviewerID: string
-      scope: string
-      verdict: "pass" | "concerns" | "needs_correction"
-      summary: string
-      investigationPlan?: {
-        requestPromise: string
-        hypothesis: string
-        evidencePlan: Array<string>
-        passCriteria: Array<string>
-      }
-      drilldowns?: Array<{
-        /**
-         * Evidence tool or inspection category.
-         */
-        kind: string
-        /**
-         * Concrete file, directory, command, evidence section, or artifact inspected.
-         */
-        target: string
-        /**
-         * Why this evidence was inspected for the reviewer scope.
-         */
-        purpose: string
-        /**
-         * What the inspection showed. Do not add finding fields such as affectedSymbols here.
-         */
-        result: string
-      }>
-      coverage?: Array<{
-        /**
-         * Singular coverage anchor such as REQ-1. Do not use requirementIDs here.
-         */
-        requirementID?: string
-        /**
-         * Singular coverage anchor for one acceptance spec id. Do not use specIDs here.
-         */
-        specID?: string
-        /**
-         * Singular literal user-request quote. Do not use userRequestQuotes here.
-         */
-        userRequestQuote?: string
-        /**
-         * Coverage status only. Do not use verdict values such as pass, concerns, or needs_correction here.
-         */
-        status: "covered" | "missing" | "inconclusive"
-        evidence: string
-      }>
-      evidence?: Array<string>
-      findings?: Array<{
-        id: string
-        severity: "blocking" | "advisory"
-        verdictImpact: "pass" | "concerns" | "needs_correction"
-        fingerprint?: string
-        canonicalSymptom?: string
-        title: string
-        description: string
-        evidence: Array<string>
-        targetIDs?: Array<string>
-        requirementIDs?: Array<string>
-        specIDs?: Array<string>
-        userRequestQuotes?: Array<string>
-        filePaths?: Array<string>
-        affectedSymbols?: Array<string>
-        repair: string
-        verify?: Array<string>
-        sourceFindingIDs?: Array<string>
-        priorAttemptRefs?: Array<string>
-        reviewers?: Array<string>
-        consensus?: "agreed" | "disputed" | "unresolved"
-      }>
-      openQuestions?: Array<string>
-    }>
-    coverageAudit?: Array<{
-      promise: string
-      reviewerIDs?: Array<string>
-      /**
-       * Coverage status only. Do not use verdict values such as pass, concerns, or needs_correction here.
-       */
-      status: "covered" | "missing" | "inconclusive"
-      notes: string
-    }>
-    uninspectedRisks?: Array<{
-      risk: string
-      reason: string
-      action: "block" | "re-review" | "advisory"
-    }>
-    findings?: Array<{
-      id: string
-      severity: "blocking" | "advisory"
-      verdictImpact: "pass" | "concerns" | "needs_correction"
-      fingerprint?: string
-      canonicalSymptom?: string
-      title: string
-      description: string
-      evidence: Array<string>
-      targetIDs?: Array<string>
-      requirementIDs?: Array<string>
-      specIDs?: Array<string>
-      userRequestQuotes?: Array<string>
-      filePaths?: Array<string>
-      affectedSymbols?: Array<string>
-      repair: string
-      verify?: Array<string>
-      sourceFindingIDs?: Array<string>
-      priorAttemptRefs?: Array<string>
-      reviewers?: Array<string>
-      consensus?: "agreed" | "disputed" | "unresolved"
-    }>
-    rounds?: Array<{
-      roundID: string
-      prompt: string
-      reviewerIDs: Array<string>
-      outcome: string
-    }>
-    requiredRepairs?: Array<{
-      id: string
-      fingerprint?: string
-      severity?: "blocking" | "advisory"
-      title?: string
-      canonicalSymptom?: string
-      description: string
-      evidence: Array<string>
-      targetIDs?: Array<string>
-      requirementIDs?: Array<string>
-      specIDs?: Array<string>
-      filePaths?: Array<string>
-      affectedSymbols?: Array<string>
-      repair?: string
-      verify?: Array<string>
-      sourceFindingIDs?: Array<string>
-      priorAttemptRefs?: Array<string>
-    }>
-    unresolvedDisagreements?: Array<{
-      id: string
-      description: string
-      reviewerIDs: Array<string>
-      consequence: string
-    }>
-    /**
-     * Every factual claim (API behaviour, library version, third-party protocol, number, path, history) the integrity team has NOT verified via tool calls in this session. Empty when only review judgments or in-session-verified statements.
-     */
-    fact_check_items?: Array<FactCheckItem>
-    taskID: string
-    sessionID: string
-    attempts: number
-  }
-}
-
-export type EventInstallationUpdated = {
-  type: "installation.updated"
-  properties: {
-    version: string
-  }
-}
-
-export type EventInstallationUpdateAvailable = {
-  type: "installation.update-available"
-  properties: {
-    version: string
-  }
-}
-
 export type Project = {
   id: string
   worktree: string
@@ -644,1129 +27,39 @@ export type Project = {
   sandboxes: Array<string>
 }
 
-export type EventProjectUpdated = {
-  type: "project.updated"
-  properties: Project
+export type ProjectInitGitResult = {
+  created: boolean
+  project: Project
 }
 
-export type EventServerInstanceDisposed = {
-  type: "server.instance.disposed"
-  properties: {
-    directory: string
-  }
-}
-
-export type EventLspClientDiagnostics = {
-  type: "lsp.client.diagnostics"
-  properties: {
-    serverID: string
-    path: string
-  }
-}
-
-export type EventLspUpdated = {
-  type: "lsp.updated"
-  properties: {
+export type BadRequestError = {
+  data: unknown
+  errors: Array<{
     [key: string]: unknown
-  }
+  }>
+  success: false
 }
 
-export type Todo = {
-  /**
-   * Brief description of the task
-   */
-  content: string
-  /**
-   * Current status of the task: pending, in_progress, completed, cancelled
-   */
-  status: string
-  /**
-   * Priority level of the task: high, medium, low
-   */
-  priority: string
-}
-
-export type EventTodoUpdated = {
-  type: "todo.updated"
-  properties: {
-    sessionID: string
-    todos: Array<Todo>
-  }
-}
-
-export type OutputFormatText = {
-  type: "text"
-}
-
-export type JsonSchema = {
-  [key: string]: unknown
-}
-
-export type OutputFormatJsonSchema = {
-  type: "json_schema"
-  schema: JsonSchema
-  retryCount?: number
-}
-
-export type OutputFormat = OutputFormatText | OutputFormatJsonSchema
-
-export type UserMessage = {
-  id: string
-  sessionID: string
-  role: "user"
-  time: {
-    created: number
-  }
-  format?: OutputFormat
-  summary?: {
-    title?: string
-    body?: string
-  }
-  agent: string
-  model: {
-    providerID: string
-    modelID: string
-  }
-  system?: string
-  systemMode?: "append_to_agent" | "complete"
-  tools?: {
-    [key: string]: boolean
-  }
-  variant?: string
-  extra?: {
-    [key: string]: unknown
-  }
-}
-
-export type ProviderAuthError = {
-  name: "ProviderAuthError"
-  data: {
-    providerID: string
-    message: string
-  }
-}
-
-export type UnknownError = {
-  name: "UnknownError"
+export type NotFoundError = {
+  name: "NotFoundError"
   data: {
     message: string
   }
 }
 
-export type MessageOutputLengthError = {
-  name: "MessageOutputLengthError"
-  data: {
-    [key: string]: unknown
-  }
-}
-
-export type MessageAbortedError = {
-  name: "MessageAbortedError"
-  data: {
-    message: string
-  }
-}
-
-export type StructuredOutputError = {
-  name: "StructuredOutputError"
-  data: {
-    message: string
-    retries: number
-  }
-}
-
-export type StructuredOutputPayloadError = {
-  name: "StructuredOutputPayloadError"
-  data: {
-    message: string
-    reason: string
-  }
-}
-
-export type TerminalToolMissingError = {
-  name: "TerminalToolMissingError"
-  data: {
-    message: string
-    toolName: string
-    retries: number
-  }
-}
-
-export type SnapshotIntegrityError = {
-  name: "SnapshotIntegrityError"
-  data: {
-    message: string
-    operation: string
-    cwd: string
-    worktree: string
-    gitDir: string
-    exitCode?: number
-    stderr?: string
-    stdout?: string
-  }
-}
-
-export type SnapshotEmptyTreeError = {
-  name: "SnapshotEmptyTreeError"
-  data: {
-    message: string
-    operation: string
-    cwd: string
-    worktree: string
-    gitDir: string
-    fileCount?: number
-  }
-}
-
-export type ContextOverflowError = {
-  name: "ContextOverflowError"
-  data: {
-    message: string
-    responseBody?: string
-  }
-}
-
-export type PromptBudgetOverflowError = {
-  name: "PromptBudgetOverflowError"
-  data: {
-    message: string
-    systemTokensEst: number
-    messagePayloadChars: number
-    toolSchemaChars: number
-    compressibleMessageChars: number
-    nonCompressiblePromptChars: number
-    usableBudget: number
-    limit: number
-    toolNames: string
-  }
-}
-
-export type ToolSchemaBudgetError = {
-  name: "ToolSchemaBudgetError"
-  data: {
-    message: string
-    toolSchemaChars: number
-    usableBudget: number
-    ratio: number
-    toolNames: string
-  }
-}
-
-export type ApiError = {
-  name: "APIError"
-  data: {
-    message: string
-    statusCode?: number
-    isRetryable: boolean
-    responseHeaders?: {
-      [key: string]: string
-    }
-    responseBody?: string
-    metadata?: {
-      [key: string]: string
-    }
-  }
-}
-
-export type AssistantMessage = {
+export type TerminalProfile = {
   id: string
-  sessionID: string
-  role: "assistant"
-  time: {
-    created: number
-    completed?: number
-  }
-  error?:
-    | ProviderAuthError
-    | UnknownError
-    | MessageOutputLengthError
-    | MessageAbortedError
-    | StructuredOutputError
-    | StructuredOutputPayloadError
-    | TerminalToolMissingError
-    | SnapshotIntegrityError
-    | SnapshotEmptyTreeError
-    | ContextOverflowError
-    | PromptBudgetOverflowError
-    | ToolSchemaBudgetError
-    | ApiError
-  parentID: string
-  modelID: string
-  providerID: string
-  agent: string
-  path: {
-    cwd: string
-    root: string
-  }
-  summary?: boolean
-  cost: number
-  tokens: {
-    total?: number
-    input: number
-    output: number
-    reasoning: number
-    cache: {
-      read: number
-      write: number
-    }
-  }
-  structured?: unknown
-  variant?: string
-  finish?: string
-}
-
-export type Message = UserMessage | AssistantMessage
-
-export type EventMessageUpdated = {
-  type: "message.updated"
-  properties: {
-    info: Message
-  }
-}
-
-export type EventMessageRemoved = {
-  type: "message.removed"
-  properties: {
-    sessionID: string
-    messageID: string
-  }
-}
-
-export type TextPart = {
-  id: string
-  sessionID: string
-  messageID: string
-  type: "text"
-  text: string
-  kind?: "user_content" | "control" | "context"
-  source?: "user" | "system" | "evaluator" | "goal_gate" | "task_tool"
-  time?: {
-    start: number
-    end?: number
-  }
-  metadata?: {
-    [key: string]: unknown
-  }
-}
-
-export type SubtaskPart = {
-  id: string
-  sessionID: string
-  messageID: string
-  type: "subtask"
-  prompt: string
-  description: string
-  agent: string
-  model?: {
-    providerID: string
-    modelID: string
-  }
-  command?: string
-}
-
-export type ReasoningPart = {
-  id: string
-  sessionID: string
-  messageID: string
-  type: "reasoning"
-  text: string
-  metadata?: {
-    [key: string]: unknown
-  }
-  time: {
-    start: number
-    end?: number
-  }
-}
-
-export type FilePartSourceText = {
-  value: string
-  start: number
-  end: number
-}
-
-export type FileSource = {
-  text: FilePartSourceText
-  type: "file"
-  path: string
-}
-
-export type Range = {
-  start: {
-    line: number
-    character: number
-  }
-  end: {
-    line: number
-    character: number
-  }
-}
-
-export type SymbolSource = {
-  text: FilePartSourceText
-  type: "symbol"
-  path: string
-  range: Range
-  name: string
-  kind: number
-}
-
-export type ResourceSource = {
-  text: FilePartSourceText
-  type: "resource"
-  clientName: string
-  uri: string
-}
-
-export type FilePartSource = FileSource | SymbolSource | ResourceSource
-
-export type FilePart = {
-  id: string
-  sessionID: string
-  messageID: string
-  type: "file"
-  mime: string
-  filename?: string
-  url: string
-  source?: FilePartSource
-}
-
-export type ToolStatePending = {
-  status: "pending"
-  input: unknown
-  raw: string
-}
-
-export type ToolStateRunning = {
-  status: "running"
-  input: unknown
-  title?: string
-  metadata?: {
-    [key: string]: unknown
-  }
-  time: {
-    start: number
-  }
-}
-
-export type ToolStateCompleted = {
-  status: "completed"
-  input: unknown
-  output: string
-  title: string
-  metadata: {
-    [key: string]: unknown
-  }
-  time: {
-    start: number
-    end: number
-    compacted?: number
-  }
-  attachments?: Array<FilePart>
-}
-
-export type ToolFailureCause = {
-  kind: string
-  name: string
-  message: string
-  originSite: string
-  classification: "tool-input-invalid" | "tool-execution" | "llm-activity" | "processor-contract"
-  data?: {
-    [key: string]: unknown
-  }
-}
-
-export type ToolStateError = {
-  status: "error"
-  input: unknown
-  failure: ToolFailureCause
-  metadata?: {
-    [key: string]: unknown
-  }
-  time: {
-    start: number
-    end: number
-  }
-}
-
-export type ToolState = ToolStatePending | ToolStateRunning | ToolStateCompleted | ToolStateError
-
-export type ToolPart = {
-  id: string
-  sessionID: string
-  messageID: string
-  type: "tool"
-  callID: string
-  tool: string
-  state: ToolState
-  metadata?: {
-    [key: string]: unknown
-  }
-}
-
-export type StepStartPart = {
-  id: string
-  sessionID: string
-  messageID: string
-  type: "step-start"
-  snapshot?: string
-}
-
-export type StepFinishPart = {
-  id: string
-  sessionID: string
-  messageID: string
-  type: "step-finish"
-  reason: string
-  snapshot?: string
-  cost: number
-  tokens: {
-    total?: number
-    input: number
-    output: number
-    reasoning: number
-    cache: {
-      read: number
-      write: number
-    }
-  }
-}
-
-export type SnapshotPart = {
-  id: string
-  sessionID: string
-  messageID: string
-  type: "snapshot"
-  snapshot: string
-}
-
-export type PatchPart = {
-  id: string
-  sessionID: string
-  messageID: string
-  type: "patch"
-  hash: string
-  files: Array<string>
-}
-
-export type AgentPart = {
-  id: string
-  sessionID: string
-  messageID: string
-  type: "agent"
-  name: string
-  source?: {
-    value: string
-    start: number
-    end: number
-  }
-}
-
-export type RetryPart = {
-  id: string
-  sessionID: string
-  messageID: string
-  type: "retry"
-  attempt: number
-  error: ApiError
-  time: {
-    created: number
-  }
-}
-
-export type CompactionPart = {
-  id: string
-  sessionID: string
-  messageID: string
-  type: "compaction"
-  auto: boolean
-  overflow?: boolean
-  tail_start_id?: string
-  anchor_id?: string
-  focus?: string
-}
-
-export type Part =
-  | TextPart
-  | SubtaskPart
-  | ReasoningPart
-  | FilePart
-  | ToolPart
-  | StepStartPart
-  | StepFinishPart
-  | SnapshotPart
-  | PatchPart
-  | AgentPart
-  | RetryPart
-  | CompactionPart
-
-export type EventMessagePartUpdated = {
-  type: "message.part.updated"
-  properties: {
-    part: Part
-  }
-}
-
-export type EventMessagePartDelta = {
-  type: "message.part.delta"
-  properties: {
-    sessionID: string
-    messageID: string
-    partID: string
-    field: string
-    delta: string
-  }
-}
-
-export type EventMessagePartRemoved = {
-  type: "message.part.removed"
-  properties: {
-    sessionID: string
-    messageID: string
-    partID: string
-  }
-}
-
-export type EventSessionError = {
-  type: "session.error"
-  properties: {
-    sessionID?: string
-    error?:
-      | ProviderAuthError
-      | UnknownError
-      | MessageOutputLengthError
-      | MessageAbortedError
-      | StructuredOutputError
-      | StructuredOutputPayloadError
-      | TerminalToolMissingError
-      | SnapshotIntegrityError
-      | SnapshotEmptyTreeError
-      | ContextOverflowError
-      | PromptBudgetOverflowError
-      | ToolSchemaBudgetError
-      | ApiError
-  }
-}
-
-export type EventMcpToolsChanged = {
-  type: "mcp.tools.changed"
-  properties: {
-    server: string
-  }
-}
-
-export type EventMcpBrowserOpenFailed = {
-  type: "mcp.browser.open.failed"
-  properties: {
-    mcpName: string
-    url: string
-  }
-}
-
-export type EventMcpPromptsChanged = {
-  type: "mcp.prompts.changed"
-  properties: {
-    server?: string
-  }
-}
-
-export type EventMcpResourcesChanged = {
-  type: "mcp.resources.changed"
-  properties: {
-    server?: string
-  }
-}
-
-export type EventCommandExecuted = {
-  type: "command.executed"
-  properties: {
-    name: string
-    sessionID: string
-    arguments: string
-    messageID: string
-  }
-}
-
-export type PermissionRequest = {
-  id: string
-  sessionID: string
-  permission: string
-  patterns: Array<string>
-  metadata: {
-    [key: string]: unknown
-  }
-  always: Array<string>
-  tool?: {
-    messageID: string
-    callID: string
-  }
-}
-
-export type EventPermissionAsked = {
-  type: "permission.asked"
-  properties: PermissionRequest
-}
-
-export type EventPermissionReplied = {
-  type: "permission.replied"
-  properties: {
-    sessionID: string
-    requestID: string
-    reply: "once" | "always" | "reject"
-    autoReply: boolean
-  }
-}
-
-export type SessionStatus =
-  | {
-      type: "idle"
-    }
-  | {
-      type: "retry"
-      attempt: number
-      message: string
-      next: number
-    }
-  | {
-      type: "streaming"
-    }
-  | {
-      type: "terminal"
-      reason: "completed" | "error" | "aborted" | "artifact_missing"
-      error?: string
-    }
-
-export type EventSessionStatus = {
-  type: "session.status"
-  properties: {
-    sessionID: string
-    status: SessionStatus
-  }
-}
-
-export type EventSessionIdle = {
-  type: "session.idle"
-  properties: {
-    sessionID: string
-  }
-}
-
-export type EventTaskQueueCompleted = {
-  type: "task-queue.completed"
-  properties: {
-    queueTaskID: string
-    sessionID: string
-  }
-}
-
-export type QuestionOption = {
-  /**
-   * Display text (1-5 words, concise)
-   */
   label: string
-  /**
-   * Explanation of choice
-   */
-  description: string
+  icon: "terminal" | "powershell" | "command-prompt" | "bash"
 }
 
-export type QuestionInfo = {
-  /**
-   * Complete question
-   */
-  question: string
-  /**
-   * Very short label (max 30 chars)
-   */
-  header: string
-  /**
-   * Available choices
-   */
-  options: Array<QuestionOption>
-  /**
-   * Allow selecting multiple choices
-   */
-  multiple?: boolean
-  /**
-   * Allow typing a custom answer
-   */
-  custom?: boolean
+export type TerminalProfileList = {
+  defaultProfileID: string
+  profiles: Array<TerminalProfile>
 }
 
-export type QuestionRequest = {
-  id: string
-  sessionID: string
-  /**
-   * Questions to ask
-   */
-  questions: Array<QuestionInfo>
-  tool?: {
-    messageID: string
-    callID: string
-  }
-}
-
-export type EventQuestionAsked = {
-  type: "question.asked"
-  properties: QuestionRequest
-}
-
-export type QuestionAnswer = Array<string>
-
-export type EventQuestionReplied = {
-  type: "question.replied"
-  properties: {
-    sessionID: string
-    requestID: string
-    answers: Array<QuestionAnswer>
-  }
-}
-
-export type EventQuestionRejected = {
-  type: "question.rejected"
-  properties: {
-    sessionID: string
-    requestID: string
-  }
-}
-
-export type EventTaskReport = {
-  type: "task.report"
-  properties: {
-    sessionID: string
-    status: "progress" | "need_input" | "done" | "failed"
-    summary: string
-    question?: string
-    next_plan?: string
-    artifacts?: Array<string>
-    error?: string
-  }
-}
-
-export type EventFileWatcherUpdated = {
-  type: "file.watcher.updated"
-  properties: {
-    file: string
-    event: "add" | "change" | "unlink"
-  }
-}
-
-export type EventVcsBranchUpdated = {
-  type: "vcs.branch.updated"
-  properties: {
-    branch?: string
-  }
-}
-
-export type EventWorktreeReady = {
-  type: "worktree.ready"
-  properties: {
-    name: string
-    branch: string
-  }
-}
-
-export type EventWorktreeFailed = {
-  type: "worktree.failed"
-  properties: {
-    message: string
-  }
-}
-
-export type EventTaskPlanUpdated = {
-  type: "task_plan.updated"
-  properties: {
-    task: {
-      id: string
-      sessionID: string
-      goal: string
-      status: string
-    }
-  }
-}
-
-export type EventSessionCompacted = {
-  type: "session.compacted"
-  properties: {
-    sessionID: string
-  }
-}
-
-export type EventFileEdited = {
-  type: "file.edited"
-  properties: {
-    file: string
-  }
-}
-
-export type EventGoalReport = {
-  type: "goal.report"
-  properties: {
-    sessionID: string
-    report: {
-      /**
-       * Every file touched in this goal. May be empty if the goal's acceptance was met by reusing a prior attempt's worktree without further edits — the orchestrator cross-checks against the host's actual_changed_files ground truth.
-       */
-      files_changed: Array<{
-        path: string
-        /**
-         * What changed in this file and why. One or two sentences, concrete — not 'updated foo'.
-         */
-        summary: string
-      }>
-      /**
-       * Commands executed to verify the goal (build / test / lint / verify). Empty array is allowed only for goals whose acceptance is entirely rubric/semantic.
-       */
-      checks_run?: Array<{
-        name: string
-        command: string
-        exit_code: number
-        /**
-         * Last relevant lines of stdout/stderr (≤ 2000 chars). Omit when trivially green.
-         */
-        output_excerpt?: string
-      }>
-      /**
-       * The actual implementation plan: what scheme you used, core structure, key APIs, and data flow. Must describe the approach concretely so an evaluator can cross-check the diff against it.
-       */
-      implementation_approach: string
-      /**
-       * Key decisions and why. Each entry names the alternatives considered and the reason the chosen one won. Empty array means the goal required no non-trivial decision.
-       */
-      design_decisions?: Array<{
-        /**
-         * The decision made, stated as a concrete claim.
-         */
-        choice: string
-        /**
-         * Alternatives that were considered and rejected. Empty array if none were weighed.
-         */
-        alternatives?: Array<string>
-        /**
-         * Why this choice won over the alternatives. Must be a real reason, not a restatement of the choice.
-         */
-        reason: string
-      }>
-      /**
-       * Hard blockers hit during execution. Empty when none. A filled array signals the goal did not fully complete.
-       */
-      blockers?: Array<string>
-      /**
-       * Explicit warning for subsequent agents about hidden or remaining work surface, evidence they must read deeper, and whether goal workload analysis or Architect re-sizing should be revisited.
-       */
-      followup_workload_guidance?: string
-    }
-  }
-}
-
-export type PermissionAction = "allow" | "deny" | "ask"
-
-export type PermissionRule = {
-  permission: string
-  pattern: string
-  action: PermissionAction
-}
-
-export type PermissionRuleset = Array<PermissionRule>
-
-export type Session = {
-  id: string
-  slug: string
-  projectID: string
-  directory: string
-  parentID?: string
-  summary?: {
-    additions: number
-    deletions: number
-    files: number
-  }
-  share?: {
-    url: string
-  }
-  title: string
-  version: string
-  kind:
-    | "root"
-    | "orchestrator"
-    | "assistant"
-    | "mission"
-    | "intent-analysis"
-    | "requirements"
-    | "frontend-design"
-    | "goal"
-    | "architect"
-    | "goal-workload-analyst"
-    | "integrity"
-    | "fact-check"
-    | "acceptance"
-    | "executor"
-    | "build"
-    | "explore"
-    | "research"
-    | "frontend-research"
-    | "evaluator"
-    | "system"
-  goalID?: string
-  metadata?: {
-    [key: string]: unknown
-  }
-  time: {
-    created: number
-    updated: number
-    compacting?: number
-    archived?: number
-  }
-  permission?: PermissionRuleset
-}
-
-export type EventSessionCreated = {
-  type: "session.created"
-  properties: {
-    info: Session
-  }
-}
-
-export type EventSessionUpdated = {
-  type: "session.updated"
-  properties: {
-    info: Session
-  }
-}
-
-export type EventSessionDeleted = {
-  type: "session.deleted"
-  properties: {
-    info: Session
-  }
-}
-
-export type FileDiff = {
-  file: string
-  before: string
-  after: string
-  additions: number
-  deletions: number
-  status?: "added" | "deleted" | "modified"
-}
-
-export type EventSessionDiff = {
-  type: "session.diff"
-  properties: {
-    sessionID: string
-    diff: Array<FileDiff>
-  }
-}
-
-export type EventConfigChanged = {
-  type: "config.changed"
-  properties: {
-    sessionID: string
-  }
-}
-
-export type EventWorkspaceReady = {
-  type: "workspace.ready"
-  properties: {
-    name: string
-  }
-}
-
-export type EventWorkspaceFailed = {
-  type: "workspace.failed"
-  properties: {
-    message: string
-  }
-}
-
-export type Event =
-  | EventServerConnected
-  | EventGlobalDisposed
-  | EventTuiPromptAppend
-  | EventTuiCommandExecute
-  | EventTuiToastShow
-  | EventTuiSessionSelect
-  | EventTaskCreated
-  | EventTaskUpdated
-  | EventTaskCompleted
-  | EventTaskFailed
-  | EventTaskCancelled
-  | EventSpecCreated
-  | EventSpecUpdated
-  | EventSpecApproved
-  | EventPlanCreated
-  | EventPlanActivated
-  | EventGoalProgress
-  | EventGoalRunUpdated
-  | EventGoalPassed
-  | EventGoalFailed
-  | EventTaskRewound
-  | EventMilestoneActivated
-  | EventMilestonePassed
-  | EventMilestoneFailed
-  | EventRunCreated
-  | EventRunUpdated
-  | EventInteractionRequested
-  | EventInteractionResolved
-  | EventAcceptanceReady
-  | EventEvaluationCompleted
-  | EventTaskMessage
-  | EventRunProgress
-  | EventRunOutput
-  | EventMessageInjected
-  | EventWorkflowSelected
-  | EventWorkflowStepUpdated
-  | EventGoalWorkflowProgress
-  | EventReviewStreamStarted
-  | EventReviewStreamProgress
-  | EventReviewStreamChunk
-  | EventAcceptanceEvidenceUpdated
-  | EventIntegrityReviewCompleted
-  | EventInstallationUpdated
-  | EventInstallationUpdateAvailable
-  | EventProjectUpdated
-  | EventServerInstanceDisposed
-  | EventLspClientDiagnostics
-  | EventLspUpdated
-  | EventTodoUpdated
-  | EventMessageUpdated
-  | EventMessageRemoved
-  | EventMessagePartUpdated
-  | EventMessagePartDelta
-  | EventMessagePartRemoved
-  | EventSessionError
-  | EventMcpToolsChanged
-  | EventMcpBrowserOpenFailed
-  | EventMcpPromptsChanged
-  | EventMcpResourcesChanged
-  | EventCommandExecuted
-  | EventPermissionAsked
-  | EventPermissionReplied
-  | EventSessionStatus
-  | EventSessionIdle
-  | EventTaskQueueCompleted
-  | EventQuestionAsked
-  | EventQuestionReplied
-  | EventQuestionRejected
-  | EventTaskReport
-  | EventFileWatcherUpdated
-  | EventVcsBranchUpdated
-  | EventWorktreeReady
-  | EventWorktreeFailed
-  | EventTaskPlanUpdated
-  | EventSessionCompacted
-  | EventFileEdited
-  | EventGoalReport
-  | EventSessionCreated
-  | EventSessionUpdated
-  | EventSessionDeleted
-  | EventSessionDiff
-  | EventConfigChanged
-  | EventWorkspaceReady
-  | EventWorkspaceFailed
-
-export type GlobalEvent = {
-  directory: string
-  payload: Event
+export type SystemTerminalOpenResponse = {
+  ok: boolean
 }
 
 /**
@@ -2861,69 +1154,6 @@ export type Config = {
   }
 }
 
-export type BadRequestError = {
-  data: unknown
-  errors: Array<{
-    [key: string]: unknown
-  }>
-  success: false
-}
-
-export type ReplyTargetEnvelopeMissingError = {
-  name: "ReplyTargetEnvelopeMissingError"
-  data: {
-    [key: string]: unknown
-  }
-}
-
-export type OAuth = {
-  type: "oauth"
-  refresh: string
-  access: string
-  expires: number
-  accountId?: string
-}
-
-export type ApiAuth = {
-  type: "api"
-  key: string
-}
-
-export type WellKnownAuth = {
-  type: "wellknown"
-  key: string
-  token: string
-}
-
-export type Auth = OAuth | ApiAuth | WellKnownAuth
-
-export type ProjectInitGitResult = {
-  created: boolean
-  project: Project
-}
-
-export type NotFoundError = {
-  name: "NotFoundError"
-  data: {
-    message: string
-  }
-}
-
-export type TerminalProfile = {
-  id: string
-  label: string
-  icon: "terminal" | "powershell" | "command-prompt" | "bash"
-}
-
-export type TerminalProfileList = {
-  defaultProfileID: string
-  profiles: Array<TerminalProfile>
-}
-
-export type SystemTerminalOpenResponse = {
-  ok: boolean
-}
-
 export type Model = {
   id: string
   providerID: string
@@ -3081,6 +1311,66 @@ export type McpResource = {
   client: string
 }
 
+export type PermissionAction = "allow" | "deny" | "ask"
+
+export type PermissionRule = {
+  permission: string
+  pattern: string
+  action: PermissionAction
+}
+
+export type PermissionRuleset = Array<PermissionRule>
+
+export type Session = {
+  id: string
+  slug: string
+  projectID: string
+  directory: string
+  parentID?: string
+  summary?: {
+    additions: number
+    deletions: number
+    files: number
+  }
+  share?: {
+    url: string
+  }
+  title: string
+  version: string
+  kind:
+    | "root"
+    | "orchestrator"
+    | "assistant"
+    | "mission"
+    | "intent-analysis"
+    | "requirements"
+    | "frontend-design"
+    | "goal"
+    | "architect"
+    | "goal-workload-analyst"
+    | "integrity"
+    | "fact-check"
+    | "acceptance"
+    | "executor"
+    | "build"
+    | "explore"
+    | "research"
+    | "frontend-research"
+    | "evaluator"
+    | "system"
+  goalID?: string
+  metadata?: {
+    [key: string]: unknown
+  }
+  time: {
+    created: number
+    updated: number
+    compacting?: number
+    archived?: number
+  }
+  permission?: PermissionRuleset
+}
+
 export type ProjectSummary = {
   id: string
   name?: string
@@ -3138,6 +1428,25 @@ export type GlobalSession = {
   project: ProjectSummary | null
 }
 
+export type SessionStatus =
+  | {
+      type: "idle"
+    }
+  | {
+      type: "retry"
+      attempt: number
+      message: string
+      next: number
+    }
+  | {
+      type: "streaming"
+    }
+  | {
+      type: "terminal"
+      reason: "completed" | "error" | "aborted" | "artifact_missing"
+      error?: string
+    }
+
 export type SessionConfig = {
   config: Config
   /**
@@ -3147,6 +1456,521 @@ export type SessionConfig = {
     [key: string]: unknown
   }
 }
+
+export type Todo = {
+  /**
+   * Brief description of the task
+   */
+  content: string
+  /**
+   * Current status of the task: pending, in_progress, completed, cancelled
+   */
+  status: string
+  /**
+   * Priority level of the task: high, medium, low
+   */
+  priority: string
+}
+
+export type FileDiff = {
+  file: string
+  before: string
+  after: string
+  additions: number
+  deletions: number
+  status?: "added" | "deleted" | "modified"
+}
+
+export type OutputFormatText = {
+  type: "text"
+}
+
+export type JsonSchema = {
+  [key: string]: unknown
+}
+
+export type OutputFormatJsonSchema = {
+  type: "json_schema"
+  schema: JsonSchema
+  retryCount?: number
+}
+
+export type OutputFormat = OutputFormatText | OutputFormatJsonSchema
+
+export type UserMessage = {
+  id: string
+  sessionID: string
+  role: "user"
+  time: {
+    created: number
+  }
+  format?: OutputFormat
+  summary?: {
+    title?: string
+    body?: string
+  }
+  agent: string
+  model: {
+    providerID: string
+    modelID: string
+  }
+  system?: string
+  systemMode?: "append_to_agent" | "complete"
+  tools?: {
+    [key: string]: boolean
+  }
+  variant?: string
+  extra?: {
+    [key: string]: unknown
+  }
+}
+
+export type ProviderAuthError = {
+  name: "ProviderAuthError"
+  data: {
+    providerID: string
+    message: string
+  }
+}
+
+export type UnknownError = {
+  name: "UnknownError"
+  data: {
+    message: string
+  }
+}
+
+export type MessageOutputLengthError = {
+  name: "MessageOutputLengthError"
+  data: {
+    [key: string]: unknown
+  }
+}
+
+export type MessageAbortedError = {
+  name: "MessageAbortedError"
+  data: {
+    message: string
+  }
+}
+
+export type StructuredOutputError = {
+  name: "StructuredOutputError"
+  data: {
+    message: string
+    retries: number
+  }
+}
+
+export type StructuredOutputPayloadError = {
+  name: "StructuredOutputPayloadError"
+  data: {
+    message: string
+    reason: string
+  }
+}
+
+export type TerminalToolMissingError = {
+  name: "TerminalToolMissingError"
+  data: {
+    message: string
+    toolName: string
+    retries: number
+  }
+}
+
+export type SnapshotIntegrityError = {
+  name: "SnapshotIntegrityError"
+  data: {
+    message: string
+    operation: string
+    cwd: string
+    worktree: string
+    gitDir: string
+    exitCode?: number
+    stderr?: string
+    stdout?: string
+  }
+}
+
+export type SnapshotEmptyTreeError = {
+  name: "SnapshotEmptyTreeError"
+  data: {
+    message: string
+    operation: string
+    cwd: string
+    worktree: string
+    gitDir: string
+    fileCount?: number
+  }
+}
+
+export type ContextOverflowError = {
+  name: "ContextOverflowError"
+  data: {
+    message: string
+    responseBody?: string
+  }
+}
+
+export type PromptBudgetOverflowError = {
+  name: "PromptBudgetOverflowError"
+  data: {
+    message: string
+    systemTokensEst: number
+    messagePayloadChars: number
+    toolSchemaChars: number
+    compressibleMessageChars: number
+    nonCompressiblePromptChars: number
+    usableBudget: number
+    limit: number
+    toolNames: string
+  }
+}
+
+export type ToolSchemaBudgetError = {
+  name: "ToolSchemaBudgetError"
+  data: {
+    message: string
+    toolSchemaChars: number
+    usableBudget: number
+    ratio: number
+    toolNames: string
+  }
+}
+
+export type ApiError = {
+  name: "APIError"
+  data: {
+    message: string
+    statusCode?: number
+    isRetryable: boolean
+    responseHeaders?: {
+      [key: string]: string
+    }
+    responseBody?: string
+    metadata?: {
+      [key: string]: string
+    }
+  }
+}
+
+export type AssistantMessage = {
+  id: string
+  sessionID: string
+  role: "assistant"
+  time: {
+    created: number
+    completed?: number
+  }
+  error?:
+    | ProviderAuthError
+    | UnknownError
+    | MessageOutputLengthError
+    | MessageAbortedError
+    | StructuredOutputError
+    | StructuredOutputPayloadError
+    | TerminalToolMissingError
+    | SnapshotIntegrityError
+    | SnapshotEmptyTreeError
+    | ContextOverflowError
+    | PromptBudgetOverflowError
+    | ToolSchemaBudgetError
+    | ApiError
+  parentID: string
+  modelID: string
+  providerID: string
+  agent: string
+  path: {
+    cwd: string
+    root: string
+  }
+  summary?: boolean
+  cost: number
+  tokens: {
+    total?: number
+    input: number
+    output: number
+    reasoning: number
+    cache: {
+      read: number
+      write: number
+    }
+  }
+  structured?: unknown
+  variant?: string
+  finish?: string
+}
+
+export type Message = UserMessage | AssistantMessage
+
+export type TextPart = {
+  id: string
+  sessionID: string
+  messageID: string
+  type: "text"
+  text: string
+  kind?: "user_content" | "control" | "context"
+  source?: "user" | "system" | "evaluator" | "goal_gate" | "task_tool"
+  time?: {
+    start: number
+    end?: number
+  }
+  metadata?: {
+    [key: string]: unknown
+  }
+}
+
+export type SubtaskPart = {
+  id: string
+  sessionID: string
+  messageID: string
+  type: "subtask"
+  prompt: string
+  description: string
+  agent: string
+  model?: {
+    providerID: string
+    modelID: string
+  }
+  command?: string
+}
+
+export type ReasoningPart = {
+  id: string
+  sessionID: string
+  messageID: string
+  type: "reasoning"
+  text: string
+  metadata?: {
+    [key: string]: unknown
+  }
+  time: {
+    start: number
+    end?: number
+  }
+}
+
+export type FilePartSourceText = {
+  value: string
+  start: number
+  end: number
+}
+
+export type FileSource = {
+  text: FilePartSourceText
+  type: "file"
+  path: string
+}
+
+export type Range = {
+  start: {
+    line: number
+    character: number
+  }
+  end: {
+    line: number
+    character: number
+  }
+}
+
+export type SymbolSource = {
+  text: FilePartSourceText
+  type: "symbol"
+  path: string
+  range: Range
+  name: string
+  kind: number
+}
+
+export type ResourceSource = {
+  text: FilePartSourceText
+  type: "resource"
+  clientName: string
+  uri: string
+}
+
+export type FilePartSource = FileSource | SymbolSource | ResourceSource
+
+export type FilePart = {
+  id: string
+  sessionID: string
+  messageID: string
+  type: "file"
+  mime: string
+  filename?: string
+  url: string
+  source?: FilePartSource
+}
+
+export type ToolStatePending = {
+  status: "pending"
+  input: unknown
+  raw: string
+}
+
+export type ToolStateRunning = {
+  status: "running"
+  input: unknown
+  title?: string
+  metadata?: {
+    [key: string]: unknown
+  }
+  time: {
+    start: number
+  }
+}
+
+export type ToolStateCompleted = {
+  status: "completed"
+  input: unknown
+  output: string
+  title: string
+  metadata: {
+    [key: string]: unknown
+  }
+  time: {
+    start: number
+    end: number
+    compacted?: number
+  }
+  attachments?: Array<FilePart>
+}
+
+export type ToolFailureCause = {
+  kind: string
+  name: string
+  message: string
+  originSite: string
+  classification: "tool-input-invalid" | "tool-execution" | "llm-activity" | "processor-contract"
+  data?: {
+    [key: string]: unknown
+  }
+}
+
+export type ToolStateError = {
+  status: "error"
+  input: unknown
+  failure: ToolFailureCause
+  metadata?: {
+    [key: string]: unknown
+  }
+  time: {
+    start: number
+    end: number
+  }
+}
+
+export type ToolState = ToolStatePending | ToolStateRunning | ToolStateCompleted | ToolStateError
+
+export type ToolPart = {
+  id: string
+  sessionID: string
+  messageID: string
+  type: "tool"
+  callID: string
+  tool: string
+  state: ToolState
+  metadata?: {
+    [key: string]: unknown
+  }
+}
+
+export type StepStartPart = {
+  id: string
+  sessionID: string
+  messageID: string
+  type: "step-start"
+  snapshot?: string
+}
+
+export type StepFinishPart = {
+  id: string
+  sessionID: string
+  messageID: string
+  type: "step-finish"
+  reason: string
+  snapshot?: string
+  cost: number
+  tokens: {
+    total?: number
+    input: number
+    output: number
+    reasoning: number
+    cache: {
+      read: number
+      write: number
+    }
+  }
+}
+
+export type SnapshotPart = {
+  id: string
+  sessionID: string
+  messageID: string
+  type: "snapshot"
+  snapshot: string
+}
+
+export type PatchPart = {
+  id: string
+  sessionID: string
+  messageID: string
+  type: "patch"
+  hash: string
+  files: Array<string>
+}
+
+export type AgentPart = {
+  id: string
+  sessionID: string
+  messageID: string
+  type: "agent"
+  name: string
+  source?: {
+    value: string
+    start: number
+    end: number
+  }
+}
+
+export type RetryPart = {
+  id: string
+  sessionID: string
+  messageID: string
+  type: "retry"
+  attempt: number
+  error: ApiError
+  time: {
+    created: number
+  }
+}
+
+export type CompactionPart = {
+  id: string
+  sessionID: string
+  messageID: string
+  type: "compaction"
+  auto: boolean
+  overflow?: boolean
+  tail_start_id?: string
+  anchor_id?: string
+  focus?: string
+}
+
+export type Part =
+  | TextPart
+  | SubtaskPart
+  | ReasoningPart
+  | FilePart
+  | ToolPart
+  | StepStartPart
+  | StepFinishPart
+  | SnapshotPart
+  | PatchPart
+  | AgentPart
+  | RetryPart
+  | CompactionPart
 
 export type TextPartInput = {
   id?: string
@@ -3196,6 +2020,70 @@ export type SubtaskPartInput = {
   command?: string
 }
 
+export type PermissionRequest = {
+  id: string
+  sessionID: string
+  permission: string
+  patterns: Array<string>
+  metadata: {
+    [key: string]: unknown
+  }
+  always: Array<string>
+  tool?: {
+    messageID: string
+    callID: string
+  }
+}
+
+export type QuestionOption = {
+  /**
+   * Display text (1-5 words, concise)
+   */
+  label: string
+  /**
+   * Explanation of choice
+   */
+  description: string
+}
+
+export type QuestionInfo = {
+  /**
+   * Complete question
+   */
+  question: string
+  /**
+   * Very short label (max 30 chars)
+   */
+  header: string
+  /**
+   * Available choices
+   */
+  options: Array<QuestionOption>
+  /**
+   * Allow selecting multiple choices
+   */
+  multiple?: boolean
+  /**
+   * Allow typing a custom answer
+   */
+  custom?: boolean
+}
+
+export type QuestionRequest = {
+  id: string
+  sessionID: string
+  /**
+   * Questions to ask
+   */
+  questions: Array<QuestionInfo>
+  tool?: {
+    messageID: string
+    callID: string
+  }
+}
+
+export type QuestionAnswer = Array<string>
+
 export type ProviderAuthMethod = {
   type: "oauth" | "api"
   label: string
@@ -3231,6 +2119,13 @@ export type CodingCliProfileList = {
 
 export type CodingCliOpenResponse = {
   ok: boolean
+}
+
+export type ReplyTargetEnvelopeMissingError = {
+  name: "ReplyTargetEnvelopeMissingError"
+  data: {
+    [key: string]: unknown
+  }
 }
 
 export type SessionRuntimeContractMissingError = {
@@ -3325,6 +2220,59 @@ export type McpStatus =
   | McpStatusNeedsAuth
   | McpStatusNeedsClientRegistration
 
+export type EventTuiPromptAppend = {
+  type: "tui.prompt.append"
+  properties: {
+    text: string
+  }
+}
+
+export type EventTuiCommandExecute = {
+  type: "tui.command.execute"
+  properties: {
+    command:
+      | "session.list"
+      | "session.new"
+      | "session.interrupt"
+      | "session.compact"
+      | "session.page.up"
+      | "session.page.down"
+      | "session.line.up"
+      | "session.line.down"
+      | "session.half.page.up"
+      | "session.half.page.down"
+      | "session.first"
+      | "session.last"
+      | "prompt.clear"
+      | "prompt.submit"
+      | "agent.cycle"
+      | string
+  }
+}
+
+export type EventTuiToastShow = {
+  type: "tui.toast.show"
+  properties: {
+    title?: string
+    message: string
+    variant: "info" | "success" | "warning" | "error"
+    /**
+     * Duration in milliseconds
+     */
+    duration?: number
+  }
+}
+
+export type EventTuiSessionSelect = {
+  type: "tui.session.select"
+  properties: {
+    /**
+     * Session ID to navigate to
+     */
+    sessionID: string
+  }
+}
+
 export type Path = {
   home: string
   state: string
@@ -3398,199 +2346,1065 @@ export type FormatterStatus = {
   enabled: boolean
 }
 
-export type GlobalHealthData = {
-  body?: never
-  path?: never
-  query?: never
-  url: "/global/health"
+export type EventServerConnected = {
+  type: "server.connected"
+  properties: {
+    [key: string]: unknown
+  }
 }
 
-export type GlobalHealthResponses = {
-  /**
-   * Health information
-   */
-  200: {
-    healthy: true
-    version: string
-    paths: {
-      database: string
-      data: string
-      home: string
+export type EventGlobalDisposed = {
+  type: "global.disposed"
+  properties: {
+    [key: string]: unknown
+  }
+}
+
+export type EventTaskCreated = {
+  type: "task.created"
+  properties: {
+    taskID: string
+    status: "queued" | "active" | "completed" | "failed" | "cancelled"
+    summary: string
+  }
+}
+
+export type EventTaskUpdated = {
+  type: "task.updated"
+  properties: {
+    taskID: string
+    status: "queued" | "active" | "completed" | "failed" | "cancelled"
+    summary: string
+  }
+}
+
+export type EventTaskCompleted = {
+  type: "task.completed"
+  properties: {
+    taskID: string
+    status: "queued" | "active" | "completed" | "failed" | "cancelled"
+    summary: string
+  }
+}
+
+export type EventTaskFailed = {
+  type: "task.failed"
+  properties: {
+    taskID: string
+    status: "queued" | "active" | "completed" | "failed" | "cancelled"
+    summary: string
+    error?: string
+  }
+}
+
+export type EventTaskCancelled = {
+  type: "task.cancelled"
+  properties: {
+    taskID: string
+    status: "queued" | "active" | "completed" | "failed" | "cancelled"
+    summary: string
+  }
+}
+
+export type EventSpecCreated = {
+  type: "spec.created"
+  properties: {
+    taskID: string
+    specID: string
+    summary: string
+  }
+}
+
+export type EventSpecUpdated = {
+  type: "spec.updated"
+  properties: {
+    taskID: string
+    specID: string
+    status: string
+    summary: string
+  }
+}
+
+export type EventSpecApproved = {
+  type: "spec.approved"
+  properties: {
+    taskID: string
+    specID: string
+    summary: string
+  }
+}
+
+export type EventPlanCreated = {
+  type: "plan.created"
+  properties: {
+    taskID: string
+    planID: string
+    summary: string
+  }
+}
+
+export type EventPlanActivated = {
+  type: "plan.activated"
+  properties: {
+    taskID: string
+    planID: string
+    summary: string
+  }
+}
+
+export type EventGoalProgress = {
+  type: "goal.progress"
+  properties: {
+    taskID: string
+    goalRunID: string
+    summary: string
+  }
+}
+
+export type EventGoalRunUpdated = {
+  type: "goal_run.updated"
+  properties: {
+    taskID: string
+    goalRunID: string
+    goalID: string
+    status: string
+    previousStatus: string
+    summary: string
+  }
+}
+
+export type EventGoalPassed = {
+  type: "goal.passed"
+  properties: {
+    taskID: string
+    goalID: string
+    summary: string
+  }
+}
+
+export type EventGoalFailed = {
+  type: "goal.failed"
+  properties: {
+    taskID: string
+    goalID: string
+    summary: string
+  }
+}
+
+export type EventTaskRewound = {
+  type: "task.rewound"
+  properties: {
+    taskID: string
+    cursorTime: number
+    anchorEventID?: string
+    reason?: string
+    rewindCount: number
+    resetWorktree: boolean
+    anchorKind: "cursorTime" | "message"
+  }
+}
+
+export type EventMilestoneActivated = {
+  type: "milestone.activated"
+  properties: {
+    taskID: string
+    milestoneID: string
+    summary: string
+  }
+}
+
+export type EventMilestonePassed = {
+  type: "milestone.passed"
+  properties: {
+    taskID: string
+    milestoneID: string
+    summary: string
+  }
+}
+
+export type EventMilestoneFailed = {
+  type: "milestone.failed"
+  properties: {
+    taskID: string
+    milestoneID: string
+    summary: string
+  }
+}
+
+export type EventRunCreated = {
+  type: "run.created"
+  properties: {
+    taskID: string
+    runID: string
+    status: "queued" | "accepted" | "running" | "blocked" | "completed" | "failed" | "aborted"
+    summary: string
+  }
+}
+
+export type EventRunUpdated = {
+  type: "run.updated"
+  properties: {
+    taskID: string
+    runID: string
+    status: "queued" | "accepted" | "running" | "blocked" | "completed" | "failed" | "aborted"
+    summary: string
+  }
+}
+
+export type EventInteractionRequested = {
+  type: "interaction.requested"
+  properties: {
+    taskID: string
+    runID?: string
+    interactionID: string
+    requestType: "permission" | "question"
+    summary: string
+  }
+}
+
+export type EventInteractionResolved = {
+  type: "interaction.resolved"
+  properties: {
+    taskID: string
+    runID?: string
+    interactionID: string
+    status: "pending" | "answered" | "rejected" | "expired"
+    summary: string
+  }
+}
+
+export type EventAcceptanceReady = {
+  type: "acceptance.ready"
+  properties: {
+    taskID: string
+    runID: string
+    acceptanceID: string
+    summary: string
+  }
+}
+
+export type EventEvaluationCompleted = {
+  type: "evaluation.completed"
+  properties: {
+    taskID: string
+    runID: string
+    evaluationID: string
+    status: "pending" | "passed" | "failed" | "inconclusive"
+    verdict: "accepted" | "rejected" | "inconclusive"
+    summary: string
+  }
+}
+
+export type EventTaskMessage = {
+  type: "task.message"
+  properties: {
+    taskID: string
+    kind: "goal" | "plan" | "note"
+    source: string
+    text: string
+    summary: string
+  }
+}
+
+export type EventRunProgress = {
+  type: "run.progress"
+  properties: {
+    taskID: string
+    runID: string
+    type: string
+    summary: string
+    payload?: {
+      [key: string]: unknown
     }
   }
 }
 
-export type GlobalHealthResponse = GlobalHealthResponses[keyof GlobalHealthResponses]
-
-export type GlobalEventData = {
-  body?: never
-  path?: never
-  query?: never
-  url: "/global/event"
-}
-
-export type GlobalEventResponses = {
-  /**
-   * Event stream
-   */
-  200: GlobalEvent
-}
-
-export type GlobalEventResponse = GlobalEventResponses[keyof GlobalEventResponses]
-
-export type GlobalConfigGetData = {
-  body?: never
-  path?: never
-  query?: never
-  url: "/global/config"
-}
-
-export type GlobalConfigGetResponses = {
-  /**
-   * Get global config info
-   */
-  200: Config
-}
-
-export type GlobalConfigGetResponse = GlobalConfigGetResponses[keyof GlobalConfigGetResponses]
-
-export type GlobalConfigUpdateData = {
-  body?: Config
-  path?: never
-  query?: never
-  url: "/global/config"
-}
-
-export type GlobalConfigUpdateErrors = {
-  /**
-   * Bad request
-   */
-  400: BadRequestError
-}
-
-export type GlobalConfigUpdateError = GlobalConfigUpdateErrors[keyof GlobalConfigUpdateErrors]
-
-export type GlobalConfigUpdateResponses = {
-  /**
-   * Successfully updated global config
-   */
-  200: Config
-}
-
-export type GlobalConfigUpdateResponse = GlobalConfigUpdateResponses[keyof GlobalConfigUpdateResponses]
-
-export type GlobalDisposeData = {
-  body?: never
-  path?: never
-  query?: never
-  url: "/global/dispose"
-}
-
-export type GlobalDisposeResponses = {
-  /**
-   * Global disposed
-   */
-  200: boolean
-}
-
-export type GlobalDisposeResponse = GlobalDisposeResponses[keyof GlobalDisposeResponses]
-
-export type GlobalDbResetData = {
-  body?: {
-    /**
-     * Absolute filesystem path of the project whose .opencorvus scratch directories should be wiped alongside the shared DB.
-     */
-    projectDir: string
+export type EventRunOutput = {
+  type: "run.output"
+  properties: {
+    taskID: string
+    runID: string
+    type: string
+    text: string
   }
-  path?: never
-  query?: never
-  url: "/global/db/reset"
 }
 
-export type GlobalDbResetErrors = {
-  /**
-   * Reply target not ready
-   */
-  409: ReplyTargetEnvelopeMissingError
+export type EventMessageInjected = {
+  type: "message.injected"
+  properties: {
+    taskID: string
+    runID: string
+    text: string
+    summary: string
+  }
 }
 
-export type GlobalDbResetError = GlobalDbResetErrors[keyof GlobalDbResetErrors]
+export type EventWorkflowSelected = {
+  type: "workflow.selected"
+  properties: {
+    taskID: string
+    workflowID: string
+    workflowName: string
+    summary: string
+  }
+}
 
-export type GlobalDbResetResponses = {
-  /**
-   * Reset results
-   */
-  200: {
-    ok: boolean
-    targets: Array<{
-      label: string
-      path: string
-      ok: boolean
-      error?: string
+export type EventWorkflowStepUpdated = {
+  type: "workflow.step.updated"
+  properties: {
+    taskID: string
+    stepID: string
+    goalID?: string
+    status: "pending" | "running" | "completed" | "skipped" | "failed"
+    summary: string
+  }
+}
+
+export type EventGoalWorkflowProgress = {
+  type: "goal.workflow.progress"
+  properties: {
+    taskID: string
+    goalID: string
+    completedSteps: number
+    totalSteps: number
+    currentStep?: string
+    summary: string
+  }
+}
+
+export type EventReviewStreamStarted = {
+  type: "review.stream.started"
+  properties: {
+    taskID: string
+    reviewID: string
+    phase: "integrity" | "acceptance"
+    sessionID?: string
+  }
+}
+
+export type EventReviewStreamProgress = {
+  type: "review.stream.progress"
+  properties: {
+    taskID: string
+    reviewID: string
+    phase: "integrity" | "acceptance"
+    currentStep?: "manifest" | "runtime" | "visual" | "specialist" | "agent" | "post_repair"
+    activity?: string
+    reviewerID?: string
+    roundID?: string
+    attempt: number
+    elapsedMs: number
+    summary?: string
+  }
+}
+
+export type EventReviewStreamChunk = {
+  type: "review.stream.chunk"
+  properties: {
+    taskID: string
+    reviewID: string
+    phase: "integrity" | "acceptance"
+    kind: "reasoning"
+    delta: string
+    attempt: number
+  }
+}
+
+export type EventAcceptanceEvidenceUpdated = {
+  type: "acceptance.evidence.updated"
+  properties: {
+    taskID: string
+    runID?: string
+    acceptanceID: string
+    manifestID: string
+    iteration: number
+    status: "passed" | "failed"
+    summary: string
+    failedCheckCount: number
+    failedReviewCount: number
+    failureDetails: Array<{
+      kind: "readiness" | "check" | "coverage" | "review"
+      id: string
+      name: string
+      status?: string
+      command?: string
+      exitCode?: number
+      evidence: string
     }>
   }
 }
 
-export type GlobalDbResetResponse = GlobalDbResetResponses[keyof GlobalDbResetResponses]
+export type FactCheckItem = {
+  claim: string
+  confidence: "low" | "medium" | "high"
+  category: "api" | "library" | "number" | "history" | "path" | "protocol" | "other"
+  source: string
+}
 
-export type AuthRemoveData = {
-  body?: never
-  path: {
-    providerID: string
+export type EventIntegrityReviewCompleted = {
+  type: "integrity.review.completed"
+  properties: {
+    verdict: "pass" | "concerns" | "needs_correction"
+    summary: string
+    teamReportMarkdown: string
+    reviewers: Array<{
+      reviewerID: string
+      scope: string
+      verdict: "pass" | "concerns" | "needs_correction"
+      summary: string
+      investigationPlan?: {
+        requestPromise: string
+        hypothesis: string
+        evidencePlan: Array<string>
+        passCriteria: Array<string>
+      }
+      drilldowns?: Array<{
+        /**
+         * Evidence tool or inspection category.
+         */
+        kind: string
+        /**
+         * Concrete file, directory, command, evidence section, or artifact inspected.
+         */
+        target: string
+        /**
+         * Why this evidence was inspected for the reviewer scope.
+         */
+        purpose: string
+        /**
+         * What the inspection showed. Do not add finding fields such as affectedSymbols here.
+         */
+        result: string
+      }>
+      coverage?: Array<{
+        /**
+         * Singular coverage anchor such as REQ-1. Do not use requirementIDs here.
+         */
+        requirementID?: string
+        /**
+         * Singular coverage anchor for one acceptance spec id. Do not use specIDs here.
+         */
+        specID?: string
+        /**
+         * Singular literal user-request quote. Do not use userRequestQuotes here.
+         */
+        userRequestQuote?: string
+        /**
+         * Coverage status only. Do not use verdict values such as pass, concerns, or needs_correction here.
+         */
+        status: "covered" | "missing" | "inconclusive"
+        evidence: string
+      }>
+      evidence?: Array<string>
+      findings?: Array<{
+        id: string
+        severity: "blocking" | "advisory"
+        verdictImpact: "pass" | "concerns" | "needs_correction"
+        fingerprint?: string
+        canonicalSymptom?: string
+        title: string
+        description: string
+        evidence: Array<string>
+        targetIDs?: Array<string>
+        requirementIDs?: Array<string>
+        specIDs?: Array<string>
+        userRequestQuotes?: Array<string>
+        filePaths?: Array<string>
+        affectedSymbols?: Array<string>
+        repair: string
+        verify?: Array<string>
+        sourceFindingIDs?: Array<string>
+        priorAttemptRefs?: Array<string>
+        reviewers?: Array<string>
+        consensus?: "agreed" | "disputed" | "unresolved"
+      }>
+      openQuestions?: Array<string>
+    }>
+    coverageAudit?: Array<{
+      promise: string
+      reviewerIDs?: Array<string>
+      /**
+       * Coverage status only. Do not use verdict values such as pass, concerns, or needs_correction here.
+       */
+      status: "covered" | "missing" | "inconclusive"
+      notes: string
+    }>
+    uninspectedRisks?: Array<{
+      risk: string
+      reason: string
+      action: "block" | "re-review" | "advisory"
+    }>
+    findings?: Array<{
+      id: string
+      severity: "blocking" | "advisory"
+      verdictImpact: "pass" | "concerns" | "needs_correction"
+      fingerprint?: string
+      canonicalSymptom?: string
+      title: string
+      description: string
+      evidence: Array<string>
+      targetIDs?: Array<string>
+      requirementIDs?: Array<string>
+      specIDs?: Array<string>
+      userRequestQuotes?: Array<string>
+      filePaths?: Array<string>
+      affectedSymbols?: Array<string>
+      repair: string
+      verify?: Array<string>
+      sourceFindingIDs?: Array<string>
+      priorAttemptRefs?: Array<string>
+      reviewers?: Array<string>
+      consensus?: "agreed" | "disputed" | "unresolved"
+    }>
+    rounds?: Array<{
+      roundID: string
+      prompt: string
+      reviewerIDs: Array<string>
+      outcome: string
+    }>
+    requiredRepairs?: Array<{
+      id: string
+      fingerprint?: string
+      severity?: "blocking" | "advisory"
+      title?: string
+      canonicalSymptom?: string
+      description: string
+      evidence: Array<string>
+      targetIDs?: Array<string>
+      requirementIDs?: Array<string>
+      specIDs?: Array<string>
+      filePaths?: Array<string>
+      affectedSymbols?: Array<string>
+      repair?: string
+      verify?: Array<string>
+      sourceFindingIDs?: Array<string>
+      priorAttemptRefs?: Array<string>
+    }>
+    unresolvedDisagreements?: Array<{
+      id: string
+      description: string
+      reviewerIDs: Array<string>
+      consequence: string
+    }>
+    /**
+     * Every factual claim (API behaviour, library version, third-party protocol, number, path, history) the integrity team has NOT verified via tool calls in this session. Empty when only review judgments or in-session-verified statements.
+     */
+    fact_check_items?: Array<FactCheckItem>
+    taskID: string
+    sessionID: string
+    attempts: number
   }
-  query?: never
-  url: "/auth/{providerID}"
 }
 
-export type AuthRemoveErrors = {
-  /**
-   * Bad request
-   */
-  400: BadRequestError
-}
-
-export type AuthRemoveError = AuthRemoveErrors[keyof AuthRemoveErrors]
-
-export type AuthRemoveResponses = {
-  /**
-   * Successfully removed authentication credentials
-   */
-  200: boolean
-}
-
-export type AuthRemoveResponse = AuthRemoveResponses[keyof AuthRemoveResponses]
-
-export type AuthSetData = {
-  body?: Auth
-  path: {
-    providerID: string
+export type EventInstallationUpdated = {
+  type: "installation.updated"
+  properties: {
+    version: string
   }
-  query?: never
-  url: "/auth/{providerID}"
 }
 
-export type AuthSetErrors = {
-  /**
-   * Bad request
-   */
-  400: BadRequestError
+export type EventInstallationUpdateAvailable = {
+  type: "installation.update-available"
+  properties: {
+    version: string
+  }
 }
 
-export type AuthSetError = AuthSetErrors[keyof AuthSetErrors]
-
-export type AuthSetResponses = {
-  /**
-   * Successfully set authentication credentials
-   */
-  200: boolean
+export type EventProjectUpdated = {
+  type: "project.updated"
+  properties: Project
 }
 
-export type AuthSetResponse = AuthSetResponses[keyof AuthSetResponses]
+export type EventServerInstanceDisposed = {
+  type: "server.instance.disposed"
+  properties: {
+    directory: string
+  }
+}
+
+export type EventLspClientDiagnostics = {
+  type: "lsp.client.diagnostics"
+  properties: {
+    serverID: string
+    path: string
+  }
+}
+
+export type EventLspUpdated = {
+  type: "lsp.updated"
+  properties: {
+    [key: string]: unknown
+  }
+}
+
+export type EventTodoUpdated = {
+  type: "todo.updated"
+  properties: {
+    sessionID: string
+    todos: Array<Todo>
+  }
+}
+
+export type EventMessageUpdated = {
+  type: "message.updated"
+  properties: {
+    info: Message
+  }
+}
+
+export type EventMessageRemoved = {
+  type: "message.removed"
+  properties: {
+    sessionID: string
+    messageID: string
+  }
+}
+
+export type EventMessagePartUpdated = {
+  type: "message.part.updated"
+  properties: {
+    part: Part
+  }
+}
+
+export type EventMessagePartDelta = {
+  type: "message.part.delta"
+  properties: {
+    sessionID: string
+    messageID: string
+    partID: string
+    field: string
+    delta: string
+  }
+}
+
+export type EventMessagePartRemoved = {
+  type: "message.part.removed"
+  properties: {
+    sessionID: string
+    messageID: string
+    partID: string
+  }
+}
+
+export type EventSessionError = {
+  type: "session.error"
+  properties: {
+    sessionID?: string
+    error?:
+      | ProviderAuthError
+      | UnknownError
+      | MessageOutputLengthError
+      | MessageAbortedError
+      | StructuredOutputError
+      | StructuredOutputPayloadError
+      | TerminalToolMissingError
+      | SnapshotIntegrityError
+      | SnapshotEmptyTreeError
+      | ContextOverflowError
+      | PromptBudgetOverflowError
+      | ToolSchemaBudgetError
+      | ApiError
+  }
+}
+
+export type EventMcpToolsChanged = {
+  type: "mcp.tools.changed"
+  properties: {
+    server: string
+  }
+}
+
+export type EventMcpBrowserOpenFailed = {
+  type: "mcp.browser.open.failed"
+  properties: {
+    mcpName: string
+    url: string
+  }
+}
+
+export type EventMcpPromptsChanged = {
+  type: "mcp.prompts.changed"
+  properties: {
+    server?: string
+  }
+}
+
+export type EventMcpResourcesChanged = {
+  type: "mcp.resources.changed"
+  properties: {
+    server?: string
+  }
+}
+
+export type EventCommandExecuted = {
+  type: "command.executed"
+  properties: {
+    name: string
+    sessionID: string
+    arguments: string
+    messageID: string
+  }
+}
+
+export type EventPermissionAsked = {
+  type: "permission.asked"
+  properties: PermissionRequest
+}
+
+export type EventPermissionReplied = {
+  type: "permission.replied"
+  properties: {
+    sessionID: string
+    requestID: string
+    reply: "once" | "always" | "reject"
+    autoReply: boolean
+  }
+}
+
+export type EventSessionStatus = {
+  type: "session.status"
+  properties: {
+    sessionID: string
+    status: SessionStatus
+  }
+}
+
+export type EventSessionIdle = {
+  type: "session.idle"
+  properties: {
+    sessionID: string
+  }
+}
+
+export type EventTaskQueueCompleted = {
+  type: "task-queue.completed"
+  properties: {
+    queueTaskID: string
+    sessionID: string
+  }
+}
+
+export type EventQuestionAsked = {
+  type: "question.asked"
+  properties: QuestionRequest
+}
+
+export type EventQuestionReplied = {
+  type: "question.replied"
+  properties: {
+    sessionID: string
+    requestID: string
+    answers: Array<QuestionAnswer>
+  }
+}
+
+export type EventQuestionRejected = {
+  type: "question.rejected"
+  properties: {
+    sessionID: string
+    requestID: string
+  }
+}
+
+export type EventTaskReport = {
+  type: "task.report"
+  properties: {
+    sessionID: string
+    status: "progress" | "need_input" | "done" | "failed"
+    summary: string
+    question?: string
+    next_plan?: string
+    artifacts?: Array<string>
+    error?: string
+  }
+}
+
+export type EventFileWatcherUpdated = {
+  type: "file.watcher.updated"
+  properties: {
+    file: string
+    event: "add" | "change" | "unlink"
+  }
+}
+
+export type EventVcsBranchUpdated = {
+  type: "vcs.branch.updated"
+  properties: {
+    branch?: string
+  }
+}
+
+export type EventWorktreeReady = {
+  type: "worktree.ready"
+  properties: {
+    name: string
+    branch: string
+  }
+}
+
+export type EventWorktreeFailed = {
+  type: "worktree.failed"
+  properties: {
+    message: string
+  }
+}
+
+export type EventTaskPlanUpdated = {
+  type: "task_plan.updated"
+  properties: {
+    task: {
+      id: string
+      sessionID: string
+      goal: string
+      status: string
+    }
+  }
+}
+
+export type EventSessionCompacted = {
+  type: "session.compacted"
+  properties: {
+    sessionID: string
+  }
+}
+
+export type EventFileEdited = {
+  type: "file.edited"
+  properties: {
+    file: string
+  }
+}
+
+export type EventGoalReport = {
+  type: "goal.report"
+  properties: {
+    sessionID: string
+    report: {
+      /**
+       * Every file touched in this goal. May be empty if the goal's acceptance was met by reusing a prior attempt's worktree without further edits — the orchestrator cross-checks against the host's actual_changed_files ground truth.
+       */
+      files_changed: Array<{
+        path: string
+        /**
+         * What changed in this file and why. One or two sentences, concrete — not 'updated foo'.
+         */
+        summary: string
+      }>
+      /**
+       * Commands executed to verify the goal (build / test / lint / verify). Empty array is allowed only for goals whose acceptance is entirely rubric/semantic.
+       */
+      checks_run?: Array<{
+        name: string
+        command: string
+        exit_code: number
+        /**
+         * Last relevant lines of stdout/stderr (≤ 2000 chars). Omit when trivially green.
+         */
+        output_excerpt?: string
+      }>
+      /**
+       * The actual implementation plan: what scheme you used, core structure, key APIs, and data flow. Must describe the approach concretely so an evaluator can cross-check the diff against it.
+       */
+      implementation_approach: string
+      /**
+       * Key decisions and why. Each entry names the alternatives considered and the reason the chosen one won. Empty array means the goal required no non-trivial decision.
+       */
+      design_decisions?: Array<{
+        /**
+         * The decision made, stated as a concrete claim.
+         */
+        choice: string
+        /**
+         * Alternatives that were considered and rejected. Empty array if none were weighed.
+         */
+        alternatives?: Array<string>
+        /**
+         * Why this choice won over the alternatives. Must be a real reason, not a restatement of the choice.
+         */
+        reason: string
+      }>
+      /**
+       * Hard blockers hit during execution. Empty when none. A filled array signals the goal did not fully complete.
+       */
+      blockers?: Array<string>
+      /**
+       * Explicit warning for subsequent agents about hidden or remaining work surface, evidence they must read deeper, and whether goal workload analysis or Architect re-sizing should be revisited.
+       */
+      followup_workload_guidance?: string
+    }
+  }
+}
+
+export type EventSessionCreated = {
+  type: "session.created"
+  properties: {
+    info: Session
+  }
+}
+
+export type EventSessionUpdated = {
+  type: "session.updated"
+  properties: {
+    info: Session
+  }
+}
+
+export type EventSessionDeleted = {
+  type: "session.deleted"
+  properties: {
+    info: Session
+  }
+}
+
+export type EventSessionDiff = {
+  type: "session.diff"
+  properties: {
+    sessionID: string
+    diff: Array<FileDiff>
+  }
+}
+
+export type EventConfigChanged = {
+  type: "config.changed"
+  properties: {
+    sessionID: string
+  }
+}
+
+export type EventWorkspaceReady = {
+  type: "workspace.ready"
+  properties: {
+    name: string
+  }
+}
+
+export type EventWorkspaceFailed = {
+  type: "workspace.failed"
+  properties: {
+    message: string
+  }
+}
+
+export type Event =
+  | EventServerConnected
+  | EventGlobalDisposed
+  | EventTuiPromptAppend
+  | EventTuiCommandExecute
+  | EventTuiToastShow
+  | EventTuiSessionSelect
+  | EventTaskCreated
+  | EventTaskUpdated
+  | EventTaskCompleted
+  | EventTaskFailed
+  | EventTaskCancelled
+  | EventSpecCreated
+  | EventSpecUpdated
+  | EventSpecApproved
+  | EventPlanCreated
+  | EventPlanActivated
+  | EventGoalProgress
+  | EventGoalRunUpdated
+  | EventGoalPassed
+  | EventGoalFailed
+  | EventTaskRewound
+  | EventMilestoneActivated
+  | EventMilestonePassed
+  | EventMilestoneFailed
+  | EventRunCreated
+  | EventRunUpdated
+  | EventInteractionRequested
+  | EventInteractionResolved
+  | EventAcceptanceReady
+  | EventEvaluationCompleted
+  | EventTaskMessage
+  | EventRunProgress
+  | EventRunOutput
+  | EventMessageInjected
+  | EventWorkflowSelected
+  | EventWorkflowStepUpdated
+  | EventGoalWorkflowProgress
+  | EventReviewStreamStarted
+  | EventReviewStreamProgress
+  | EventReviewStreamChunk
+  | EventAcceptanceEvidenceUpdated
+  | EventIntegrityReviewCompleted
+  | EventInstallationUpdated
+  | EventInstallationUpdateAvailable
+  | EventProjectUpdated
+  | EventServerInstanceDisposed
+  | EventLspClientDiagnostics
+  | EventLspUpdated
+  | EventTodoUpdated
+  | EventMessageUpdated
+  | EventMessageRemoved
+  | EventMessagePartUpdated
+  | EventMessagePartDelta
+  | EventMessagePartRemoved
+  | EventSessionError
+  | EventMcpToolsChanged
+  | EventMcpBrowserOpenFailed
+  | EventMcpPromptsChanged
+  | EventMcpResourcesChanged
+  | EventCommandExecuted
+  | EventPermissionAsked
+  | EventPermissionReplied
+  | EventSessionStatus
+  | EventSessionIdle
+  | EventTaskQueueCompleted
+  | EventQuestionAsked
+  | EventQuestionReplied
+  | EventQuestionRejected
+  | EventTaskReport
+  | EventFileWatcherUpdated
+  | EventVcsBranchUpdated
+  | EventWorktreeReady
+  | EventWorktreeFailed
+  | EventTaskPlanUpdated
+  | EventSessionCompacted
+  | EventFileEdited
+  | EventGoalReport
+  | EventSessionCreated
+  | EventSessionUpdated
+  | EventSessionDeleted
+  | EventSessionDiff
+  | EventConfigChanged
+  | EventWorkspaceReady
+  | EventWorkspaceFailed
+
+export type GlobalEvent = {
+  directory: string
+  payload: Event
+}
+
+export type OAuth = {
+  type: "oauth"
+  refresh: string
+  access: string
+  expires: number
+  accountId?: string
+}
+
+export type ApiAuth = {
+  type: "api"
+  key: string
+}
+
+export type WellKnownAuth = {
+  type: "wellknown"
+  key: string
+  token: string
+}
+
+export type Auth = OAuth | ApiAuth | WellKnownAuth
 
 export type ProjectListData = {
   body?: never
   path?: never
   query?: {
+    /**
+     * Project directory for project-scoped routes. Equivalent to the x-opencorvus-directory request header.
+     */
     directory?: string
   }
   url: "/project"
@@ -3609,6 +3423,9 @@ export type ProjectCurrentData = {
   body?: never
   path?: never
   query?: {
+    /**
+     * Project directory for project-scoped routes. Equivalent to the x-opencorvus-directory request header.
+     */
     directory?: string
   }
   url: "/project/current"
@@ -3627,6 +3444,9 @@ export type ProjectCurrentInitGitData = {
   body?: never
   path?: never
   query?: {
+    /**
+     * Project directory for project-scoped routes. Equivalent to the x-opencorvus-directory request header.
+     */
     directory?: string
   }
   url: "/project/current/init-git"
@@ -3673,6 +3493,9 @@ export type ProjectUpdateData = {
     projectID: string
   }
   query?: {
+    /**
+     * Project directory for project-scoped routes. Equivalent to the x-opencorvus-directory request header.
+     */
     directory?: string
   }
   url: "/project/{projectID}"
@@ -3704,6 +3527,9 @@ export type TerminalProfilesData = {
   body?: never
   path?: never
   query?: {
+    /**
+     * Project directory for project-scoped routes. Equivalent to the x-opencorvus-directory request header.
+     */
     directory?: string
   }
   url: "/terminal/profiles"
@@ -3734,6 +3560,9 @@ export type TerminalOpenData = {
   }
   path?: never
   query?: {
+    /**
+     * Project directory for project-scoped routes. Equivalent to the x-opencorvus-directory request header.
+     */
     directory?: string
   }
   url: "/terminal/open"
@@ -3761,6 +3590,9 @@ export type ConfigGetData = {
   body?: never
   path?: never
   query?: {
+    /**
+     * Project directory for project-scoped routes. Equivalent to the x-opencorvus-directory request header.
+     */
     directory?: string
   }
   url: "/config"
@@ -3781,6 +3613,9 @@ export type ConfigUpdateData = {
   }
   path?: never
   query?: {
+    /**
+     * Project directory for project-scoped routes. Equivalent to the x-opencorvus-directory request header.
+     */
     directory?: string
   }
   url: "/config"
@@ -3808,6 +3643,9 @@ export type ConfigPromptData = {
   body?: never
   path?: never
   query?: {
+    /**
+     * Project directory for project-scoped routes. Equivalent to the x-opencorvus-directory request header.
+     */
     directory?: string
   }
   url: "/config/prompt"
@@ -3826,6 +3664,9 @@ export type ConfigProvidersData = {
   body?: never
   path?: never
   query?: {
+    /**
+     * Project directory for project-scoped routes. Equivalent to the x-opencorvus-directory request header.
+     */
     directory?: string
   }
   url: "/config/providers"
@@ -3849,6 +3690,9 @@ export type ChannelListData = {
   body?: never
   path?: never
   query?: {
+    /**
+     * Project directory for project-scoped routes. Equivalent to the x-opencorvus-directory request header.
+     */
     directory?: string
   }
   url: "/channel"
@@ -3884,6 +3728,9 @@ export type ChannelAttachmentCreateData = {
   }
   path?: never
   query?: {
+    /**
+     * Project directory for project-scoped routes. Equivalent to the x-opencorvus-directory request header.
+     */
     directory?: string
   }
   url: "/channel/attachment"
@@ -3919,6 +3766,9 @@ export type ChannelAttachmentGetData = {
     id: string
   }
   query?: {
+    /**
+     * Project directory for project-scoped routes. Equivalent to the x-opencorvus-directory request header.
+     */
     directory?: string
   }
   url: "/channel/attachment/{id}"
@@ -3982,6 +3832,9 @@ export type ChannelMessageData = {
   }
   path?: never
   query?: {
+    /**
+     * Project directory for project-scoped routes. Equivalent to the x-opencorvus-directory request header.
+     */
     directory?: string
   }
   url: "/channel/message"
@@ -4028,6 +3881,9 @@ export type ChannelRuntimeData = {
   body?: never
   path?: never
   query?: {
+    /**
+     * Project directory for project-scoped routes. Equivalent to the x-opencorvus-directory request header.
+     */
     directory?: string
   }
   url: "/channel/runtime"
@@ -4052,6 +3908,9 @@ export type ChannelRuntimeRestartData = {
   body?: never
   path?: never
   query?: {
+    /**
+     * Project directory for project-scoped routes. Equivalent to the x-opencorvus-directory request header.
+     */
     directory?: string
   }
   url: "/channel/runtime/restart"
@@ -4076,6 +3935,9 @@ export type ExecutorListData = {
   body?: never
   path?: never
   query?: {
+    /**
+     * Project directory for project-scoped routes. Equivalent to the x-opencorvus-directory request header.
+     */
     directory?: string
   }
   url: "/executor"
@@ -4121,6 +3983,9 @@ export type ExecutorGetModelData = {
     executorID: string
   }
   query?: {
+    /**
+     * Project directory for project-scoped routes. Equivalent to the x-opencorvus-directory request header.
+     */
     directory?: string
   }
   url: "/executor/{executorID}/model"
@@ -4143,6 +4008,9 @@ export type ExecutorSetModelData = {
     executorID: string
   }
   query?: {
+    /**
+     * Project directory for project-scoped routes. Equivalent to the x-opencorvus-directory request header.
+     */
     directory?: string
   }
   url: "/executor/{executorID}/model"
@@ -4170,6 +4038,9 @@ export type ToolIdsData = {
   body?: never
   path?: never
   query?: {
+    /**
+     * Project directory for project-scoped routes. Equivalent to the x-opencorvus-directory request header.
+     */
     directory?: string
   }
   url: "/experimental/tool/ids"
@@ -4197,6 +4068,9 @@ export type ToolListData = {
   body?: never
   path?: never
   query: {
+    /**
+     * Project directory for project-scoped routes. Equivalent to the x-opencorvus-directory request header.
+     */
     directory?: string
     provider: string
     model: string
@@ -4226,6 +4100,9 @@ export type WorktreeRemoveData = {
   body?: WorktreeRemoveInput
   path?: never
   query?: {
+    /**
+     * Project directory for project-scoped routes. Equivalent to the x-opencorvus-directory request header.
+     */
     directory?: string
   }
   url: "/experimental/worktree"
@@ -4253,6 +4130,9 @@ export type WorktreeListData = {
   body?: never
   path?: never
   query?: {
+    /**
+     * Project directory for project-scoped routes. Equivalent to the x-opencorvus-directory request header.
+     */
     directory?: string
   }
   url: "/experimental/worktree"
@@ -4271,6 +4151,9 @@ export type WorktreeCreateData = {
   body?: WorktreeCreateInput
   path?: never
   query?: {
+    /**
+     * Project directory for project-scoped routes. Equivalent to the x-opencorvus-directory request header.
+     */
     directory?: string
   }
   url: "/experimental/worktree"
@@ -4300,6 +4183,9 @@ export type ExperimentalWorkspaceRemoveData = {
     id: string
   }
   query?: {
+    /**
+     * Project directory for project-scoped routes. Equivalent to the x-opencorvus-directory request header.
+     */
     directory?: string
   }
   url: "/experimental/workspace/{id}"
@@ -4337,6 +4223,9 @@ export type ExperimentalWorkspaceCreateData = {
     id: string
   }
   query?: {
+    /**
+     * Project directory for project-scoped routes. Equivalent to the x-opencorvus-directory request header.
+     */
     directory?: string
   }
   url: "/experimental/workspace/{id}"
@@ -4366,6 +4255,9 @@ export type ExperimentalWorkspaceListData = {
   body?: never
   path?: never
   query?: {
+    /**
+     * Project directory for project-scoped routes. Equivalent to the x-opencorvus-directory request header.
+     */
     directory?: string
   }
   url: "/experimental/workspace"
@@ -4385,6 +4277,9 @@ export type WorktreeResetData = {
   body?: WorktreeResetInput
   path?: never
   query?: {
+    /**
+     * Project directory for project-scoped routes. Equivalent to the x-opencorvus-directory request header.
+     */
     directory?: string
   }
   url: "/experimental/worktree/reset"
@@ -4412,6 +4307,9 @@ export type ExperimentalScheduleListData = {
   body?: never
   path?: never
   query: {
+    /**
+     * Project directory for project-scoped routes. Equivalent to the x-opencorvus-directory request header.
+     */
     directory?: string
     projectId: string
   }
@@ -4450,6 +4348,9 @@ export type ExperimentalScheduleCreateData = {
   }
   path?: never
   query?: {
+    /**
+     * Project directory for project-scoped routes. Equivalent to the x-opencorvus-directory request header.
+     */
     directory?: string
   }
   url: "/experimental/schedule"
@@ -4475,6 +4376,9 @@ export type ExperimentalScheduleDeleteData = {
     id: string
   }
   query: {
+    /**
+     * Project directory for project-scoped routes. Equivalent to the x-opencorvus-directory request header.
+     */
     directory?: string
     projectId: string
   }
@@ -4497,6 +4401,9 @@ export type ExperimentalEventscheduleListData = {
   body?: never
   path?: never
   query: {
+    /**
+     * Project directory for project-scoped routes. Equivalent to the x-opencorvus-directory request header.
+     */
     directory?: string
     projectId: string
   }
@@ -4541,6 +4448,9 @@ export type ExperimentalEventscheduleCreateData = {
   }
   path?: never
   query?: {
+    /**
+     * Project directory for project-scoped routes. Equivalent to the x-opencorvus-directory request header.
+     */
     directory?: string
   }
   url: "/experimental/event-schedule"
@@ -4566,6 +4476,9 @@ export type ExperimentalEventscheduleDeleteData = {
     id: string
   }
   query: {
+    /**
+     * Project directory for project-scoped routes. Equivalent to the x-opencorvus-directory request header.
+     */
     directory?: string
     projectId: string
   }
@@ -4588,6 +4501,9 @@ export type ExperimentalTaskplanListData = {
   body?: never
   path?: never
   query: {
+    /**
+     * Project directory for project-scoped routes. Equivalent to the x-opencorvus-directory request header.
+     */
     directory?: string
     sessionId: string
   }
@@ -4614,6 +4530,9 @@ export type ExperimentalScratchpadGetData = {
   body?: never
   path?: never
   query: {
+    /**
+     * Project directory for project-scoped routes. Equivalent to the x-opencorvus-directory request header.
+     */
     directory?: string
     sessionId: string
   }
@@ -4636,6 +4555,9 @@ export type ExperimentalResourceListData = {
   body?: never
   path?: never
   query?: {
+    /**
+     * Project directory for project-scoped routes. Equivalent to the x-opencorvus-directory request header.
+     */
     directory?: string
   }
   url: "/experimental/resource"
@@ -4717,9 +4639,15 @@ export type SessionCreateData = {
     parentID?: string
     title?: string
     permission?: PermissionRuleset
+    metadata?: {
+      [key: string]: unknown
+    }
   }
   path?: never
   query?: {
+    /**
+     * Project directory for project-scoped routes. Equivalent to the x-opencorvus-directory request header.
+     */
     directory?: string
   }
   url: "/session"
@@ -4792,6 +4720,9 @@ export type SessionStatusData = {
   body?: never
   path?: never
   query?: {
+    /**
+     * Project directory for project-scoped routes. Equivalent to the x-opencorvus-directory request header.
+     */
     directory?: string
   }
   url: "/session/status"
@@ -4826,6 +4757,9 @@ export type SessionConfigGetData = {
     sessionID: string
   }
   query?: {
+    /**
+     * Project directory for project-scoped routes. Equivalent to the x-opencorvus-directory request header.
+     */
     directory?: string
   }
   url: "/session/{sessionID}/config"
@@ -4877,6 +4811,9 @@ export type SessionConfigUpdateData = {
     sessionID: string
   }
   query?: {
+    /**
+     * Project directory for project-scoped routes. Equivalent to the x-opencorvus-directory request header.
+     */
     directory?: string
   }
   url: "/session/{sessionID}/config"
@@ -4913,6 +4850,9 @@ export type SessionConversationData = {
     sessionID: string
   }
   query?: {
+    /**
+     * Project directory for project-scoped routes. Equivalent to the x-opencorvus-directory request header.
+     */
     directory?: string
   }
   url: "/session/{sessionID}/conversation"
@@ -5013,6 +4953,9 @@ export type SessionEventsData = {
     sessionID: string
   }
   query?: {
+    /**
+     * Project directory for project-scoped routes. Equivalent to the x-opencorvus-directory request header.
+     */
     directory?: string
   }
   url: "/session/{sessionID}/events"
@@ -5048,6 +4991,9 @@ export type SessionDeleteData = {
     sessionID: string
   }
   query?: {
+    /**
+     * Project directory for project-scoped routes. Equivalent to the x-opencorvus-directory request header.
+     */
     directory?: string
     deleteTasks?: boolean
   }
@@ -5082,6 +5028,9 @@ export type SessionGetData = {
     sessionID: string
   }
   query?: {
+    /**
+     * Project directory for project-scoped routes. Equivalent to the x-opencorvus-directory request header.
+     */
     directory?: string
   }
   url: "/session/{sessionID}"
@@ -5120,6 +5069,9 @@ export type SessionUpdateData = {
     sessionID: string
   }
   query?: {
+    /**
+     * Project directory for project-scoped routes. Equivalent to the x-opencorvus-directory request header.
+     */
     directory?: string
   }
   url: "/session/{sessionID}"
@@ -5153,6 +5105,9 @@ export type SessionChildrenData = {
     sessionID: string
   }
   query?: {
+    /**
+     * Project directory for project-scoped routes. Equivalent to the x-opencorvus-directory request header.
+     */
     directory?: string
   }
   url: "/session/{sessionID}/children"
@@ -5189,6 +5144,9 @@ export type SessionTodoData = {
     sessionID: string
   }
   query?: {
+    /**
+     * Project directory for project-scoped routes. Equivalent to the x-opencorvus-directory request header.
+     */
     directory?: string
   }
   url: "/session/{sessionID}/todo"
@@ -5229,6 +5187,9 @@ export type SessionInitData = {
     sessionID: string
   }
   query?: {
+    /**
+     * Project directory for project-scoped routes. Equivalent to the x-opencorvus-directory request header.
+     */
     directory?: string
   }
   url: "/session/{sessionID}/init"
@@ -5264,6 +5225,9 @@ export type SessionForkData = {
     sessionID: string
   }
   query?: {
+    /**
+     * Project directory for project-scoped routes. Equivalent to the x-opencorvus-directory request header.
+     */
     directory?: string
   }
   url: "/session/{sessionID}/fork"
@@ -5284,6 +5248,9 @@ export type SessionAbortData = {
     sessionID: string
   }
   query?: {
+    /**
+     * Project directory for project-scoped routes. Equivalent to the x-opencorvus-directory request header.
+     */
     directory?: string
   }
   url: "/session/{sessionID}/abort"
@@ -5317,6 +5284,9 @@ export type SessionDiffData = {
     sessionID: string
   }
   query?: {
+    /**
+     * Project directory for project-scoped routes. Equivalent to the x-opencorvus-directory request header.
+     */
     directory?: string
     messageID?: string
   }
@@ -5346,6 +5316,9 @@ export type SessionSummarizeData = {
     sessionID: string
   }
   query?: {
+    /**
+     * Project directory for project-scoped routes. Equivalent to the x-opencorvus-directory request header.
+     */
     directory?: string
   }
   url: "/session/{sessionID}/summarize"
@@ -5382,6 +5355,9 @@ export type SessionMessagesData = {
     sessionID: string
   }
   query?: {
+    /**
+     * Project directory for project-scoped routes. Equivalent to the x-opencorvus-directory request header.
+     */
     directory?: string
     limit?: number
   }
@@ -5441,6 +5417,9 @@ export type SessionPromptData = {
     sessionID: string
   }
   query?: {
+    /**
+     * Project directory for project-scoped routes. Equivalent to the x-opencorvus-directory request header.
+     */
     directory?: string
   }
   url: "/session/{sessionID}/message"
@@ -5484,6 +5463,9 @@ export type SessionDeleteMessageData = {
     messageID: string
   }
   query?: {
+    /**
+     * Project directory for project-scoped routes. Equivalent to the x-opencorvus-directory request header.
+     */
     directory?: string
   }
   url: "/session/{sessionID}/message/{messageID}"
@@ -5524,6 +5506,9 @@ export type SessionMessageData = {
     messageID: string
   }
   query?: {
+    /**
+     * Project directory for project-scoped routes. Equivalent to the x-opencorvus-directory request header.
+     */
     directory?: string
   }
   url: "/session/{sessionID}/message/{messageID}"
@@ -5571,6 +5556,9 @@ export type PartDeleteData = {
     partID: string
   }
   query?: {
+    /**
+     * Project directory for project-scoped routes. Equivalent to the x-opencorvus-directory request header.
+     */
     directory?: string
   }
   url: "/session/{sessionID}/message/{messageID}/part/{partID}"
@@ -5615,6 +5603,9 @@ export type PartUpdateData = {
     partID: string
   }
   query?: {
+    /**
+     * Project directory for project-scoped routes. Equivalent to the x-opencorvus-directory request header.
+     */
     directory?: string
   }
   url: "/session/{sessionID}/message/{messageID}/part/{partID}"
@@ -5670,6 +5661,9 @@ export type SessionPromptAsyncData = {
     sessionID: string
   }
   query?: {
+    /**
+     * Project directory for project-scoped routes. Equivalent to the x-opencorvus-directory request header.
+     */
     directory?: string
   }
   url: "/session/{sessionID}/prompt_async"
@@ -5712,6 +5706,9 @@ export type SessionPromptAsyncStatusData = {
     taskID: string
   }
   query?: {
+    /**
+     * Project directory for project-scoped routes. Equivalent to the x-opencorvus-directory request header.
+     */
     directory?: string
   }
   url: "/session/{sessionID}/prompt_async/{taskID}"
@@ -5776,6 +5773,9 @@ export type SessionCommandData = {
     sessionID: string
   }
   query?: {
+    /**
+     * Project directory for project-scoped routes. Equivalent to the x-opencorvus-directory request header.
+     */
     directory?: string
   }
   url: "/session/{sessionID}/command"
@@ -5822,6 +5822,9 @@ export type SessionShellData = {
     sessionID: string
   }
   query?: {
+    /**
+     * Project directory for project-scoped routes. Equivalent to the x-opencorvus-directory request header.
+     */
     directory?: string
   }
   url: "/session/{sessionID}/shell"
@@ -5859,6 +5862,9 @@ export type PermissionReplyData = {
     requestID: string
   }
   query?: {
+    /**
+     * Project directory for project-scoped routes. Equivalent to the x-opencorvus-directory request header.
+     */
     directory?: string
   }
   url: "/permission/{requestID}/reply"
@@ -5890,6 +5896,9 @@ export type PermissionListData = {
   body?: never
   path?: never
   query?: {
+    /**
+     * Project directory for project-scoped routes. Equivalent to the x-opencorvus-directory request header.
+     */
     directory?: string
   }
   url: "/permission"
@@ -5908,6 +5917,9 @@ export type QuestionListData = {
   body?: never
   path?: never
   query?: {
+    /**
+     * Project directory for project-scoped routes. Equivalent to the x-opencorvus-directory request header.
+     */
     directory?: string
   }
   url: "/question"
@@ -5933,6 +5945,9 @@ export type QuestionReplyData = {
     requestID: string
   }
   query?: {
+    /**
+     * Project directory for project-scoped routes. Equivalent to the x-opencorvus-directory request header.
+     */
     directory?: string
   }
   url: "/question/{requestID}/reply"
@@ -5966,6 +5981,9 @@ export type QuestionRejectData = {
     requestID: string
   }
   query?: {
+    /**
+     * Project directory for project-scoped routes. Equivalent to the x-opencorvus-directory request header.
+     */
     directory?: string
   }
   url: "/question/{requestID}/reject"
@@ -5997,6 +6015,9 @@ export type ProviderListData = {
   body?: never
   path?: never
   query?: {
+    /**
+     * Project directory for project-scoped routes. Equivalent to the x-opencorvus-directory request header.
+     */
     directory?: string
   }
   url: "/provider"
@@ -6082,6 +6103,9 @@ export type ProviderAuthData = {
   body?: never
   path?: never
   query?: {
+    /**
+     * Project directory for project-scoped routes. Equivalent to the x-opencorvus-directory request header.
+     */
     directory?: string
   }
   url: "/provider/auth"
@@ -6102,6 +6126,9 @@ export type ProviderRefreshData = {
   body?: never
   path?: never
   query?: {
+    /**
+     * Project directory for project-scoped routes. Equivalent to the x-opencorvus-directory request header.
+     */
     directory?: string
   }
   url: "/provider/refresh"
@@ -6124,6 +6151,9 @@ export type ProviderHexinRefreshData = {
   body?: never
   path?: never
   query?: {
+    /**
+     * Project directory for project-scoped routes. Equivalent to the x-opencorvus-directory request header.
+     */
     directory?: string
   }
   url: "/provider/hexin/refresh"
@@ -6160,6 +6190,9 @@ export type ProviderDiscoverModelsData = {
   }
   path?: never
   query?: {
+    /**
+     * Project directory for project-scoped routes. Equivalent to the x-opencorvus-directory request header.
+     */
     directory?: string
   }
   url: "/provider/discover-models"
@@ -6199,6 +6232,9 @@ export type ProviderTestData = {
     providerID: string
   }
   query?: {
+    /**
+     * Project directory for project-scoped routes. Equivalent to the x-opencorvus-directory request header.
+     */
     directory?: string
   }
   url: "/provider/{providerID}/test"
@@ -6248,6 +6284,9 @@ export type ProviderAuthPromptsData = {
     providerID: string
   }
   query?: {
+    /**
+     * Project directory for project-scoped routes. Equivalent to the x-opencorvus-directory request header.
+     */
     directory?: string
   }
   url: "/provider/{providerID}/auth/prompts"
@@ -6291,6 +6330,9 @@ export type ProviderAuthExecuteData = {
     providerID: string
   }
   query?: {
+    /**
+     * Project directory for project-scoped routes. Equivalent to the x-opencorvus-directory request header.
+     */
     directory?: string
   }
   url: "/provider/{providerID}/auth/execute"
@@ -6334,6 +6376,9 @@ export type ProviderOauthAuthorizeData = {
     providerID: string
   }
   query?: {
+    /**
+     * Project directory for project-scoped routes. Equivalent to the x-opencorvus-directory request header.
+     */
     directory?: string
   }
   url: "/provider/{providerID}/oauth/authorize"
@@ -6375,6 +6420,9 @@ export type ProviderOauthCallbackData = {
     providerID: string
   }
   query?: {
+    /**
+     * Project directory for project-scoped routes. Equivalent to the x-opencorvus-directory request header.
+     */
     directory?: string
   }
   url: "/provider/{providerID}/oauth/callback"
@@ -6402,6 +6450,9 @@ export type AppSkillsData = {
   body?: never
   path?: never
   query?: {
+    /**
+     * Project directory for project-scoped routes. Equivalent to the x-opencorvus-directory request header.
+     */
     directory?: string
   }
   url: "/skill"
@@ -6455,6 +6506,9 @@ export type SkillInstalledData = {
   body?: never
   path?: never
   query?: {
+    /**
+     * Project directory for project-scoped routes. Equivalent to the x-opencorvus-directory request header.
+     */
     directory?: string
   }
   url: "/skill/installed"
@@ -6507,6 +6561,9 @@ export type SkillMarketData = {
   body?: never
   path?: never
   query?: {
+    /**
+     * Project directory for project-scoped routes. Equivalent to the x-opencorvus-directory request header.
+     */
     directory?: string
   }
   url: "/skill/market"
@@ -6536,6 +6593,9 @@ export type SkillDirectoriesData = {
   body?: never
   path?: never
   query?: {
+    /**
+     * Project directory for project-scoped routes. Equivalent to the x-opencorvus-directory request header.
+     */
     directory?: string
   }
   url: "/skill/directories"
@@ -6562,6 +6622,9 @@ export type SkillInstallData = {
   }
   path?: never
   query?: {
+    /**
+     * Project directory for project-scoped routes. Equivalent to the x-opencorvus-directory request header.
+     */
     directory?: string
   }
   url: "/skill/install"
@@ -6587,6 +6650,9 @@ export type SkillRemoveData = {
   }
   path?: never
   query?: {
+    /**
+     * Project directory for project-scoped routes. Equivalent to the x-opencorvus-directory request header.
+     */
     directory?: string
   }
   url: "/skill/remove"
@@ -6608,6 +6674,9 @@ export type SkillPolicyData = {
   }
   path?: never
   query?: {
+    /**
+     * Project directory for project-scoped routes. Equivalent to the x-opencorvus-directory request header.
+     */
     directory?: string
   }
   url: "/skill/policy"
@@ -6626,6 +6695,9 @@ export type PanelCapabilitiesData = {
   body?: never
   path?: never
   query?: {
+    /**
+     * Project directory for project-scoped routes. Equivalent to the x-opencorvus-directory request header.
+     */
     directory?: string
     surface?:
       | "panel"
@@ -6761,6 +6833,9 @@ export type PanelMessageData = {
   }
   path?: never
   query?: {
+    /**
+     * Project directory for project-scoped routes. Equivalent to the x-opencorvus-directory request header.
+     */
     directory?: string
   }
   url: "/panel/message"
@@ -6843,6 +6918,9 @@ export type PanelMessageStreamData = {
   }
   path?: never
   query?: {
+    /**
+     * Project directory for project-scoped routes. Equivalent to the x-opencorvus-directory request header.
+     */
     directory?: string
   }
   url: "/panel/message/stream"
@@ -6889,6 +6967,9 @@ export type PanelKnowledgeMemoryListData = {
   body?: never
   path?: never
   query?: {
+    /**
+     * Project directory for project-scoped routes. Equivalent to the x-opencorvus-directory request header.
+     */
     directory?: string
     sessionID?: string
     taskID?: string
@@ -6923,6 +7004,9 @@ export type PanelKnowledgeMemoryDeleteData = {
     id: string
   }
   query?: {
+    /**
+     * Project directory for project-scoped routes. Equivalent to the x-opencorvus-directory request header.
+     */
     directory?: string
   }
   url: "/panel/knowledge/memory/{id}"
@@ -6946,6 +7030,9 @@ export type PanelKnowledgeMemoryGetData = {
     id: string
   }
   query?: {
+    /**
+     * Project directory for project-scoped routes. Equivalent to the x-opencorvus-directory request header.
+     */
     directory?: string
   }
   url: "/panel/knowledge/memory/{id}"
@@ -6983,6 +7070,9 @@ export type PanelKnowledgeMemorySearchData = {
   }
   path?: never
   query?: {
+    /**
+     * Project directory for project-scoped routes. Equivalent to the x-opencorvus-directory request header.
+     */
     directory?: string
   }
   url: "/panel/knowledge/memory/search"
@@ -7014,6 +7104,9 @@ export type ControlTimelineData = {
   body?: never
   path?: never
   query?: {
+    /**
+     * Project directory for project-scoped routes. Equivalent to the x-opencorvus-directory request header.
+     */
     directory?: string
     taskID?: string
     sessionID?: string
@@ -7078,6 +7171,9 @@ export type CodingCliProfilesData = {
   body?: never
   path?: never
   query?: {
+    /**
+     * Project directory for project-scoped routes. Equivalent to the x-opencorvus-directory request header.
+     */
     directory?: string
   }
   url: "/coding/cli/profiles"
@@ -7100,6 +7196,9 @@ export type CodingCliOpenData = {
   }
   path?: never
   query?: {
+    /**
+     * Project directory for project-scoped routes. Equivalent to the x-opencorvus-directory request header.
+     */
     directory?: string
   }
   url: "/coding/cli/open"
@@ -7114,51 +7213,82 @@ export type CodingCliOpenResponses = {
 
 export type CodingCliOpenResponse2 = CodingCliOpenResponses[keyof CodingCliOpenResponses]
 
-export type CodingMessageStreamData = {
-  body?: {
-    text: string
-    sessionID?: string
-    parts?: Array<{
-      type: "text"
-      text: string
-    }>
+export type CodingSessionCreateData = {
+  body?: never
+  path?: never
+  query?: {
+    /**
+     * Project directory for project-scoped routes. Equivalent to the x-opencorvus-directory request header.
+     */
+    directory?: string
   }
+  url: "/coding/session"
+}
+
+export type CodingSessionCreateResponses = {
+  /**
+   * Coding assistant session
+   */
+  201: {
+    session: Session
+  }
+}
+
+export type CodingSessionCreateResponse = CodingSessionCreateResponses[keyof CodingSessionCreateResponses]
+
+export type CodingSessionsListData = {
+  body?: never
   path?: never
   query?: {
     directory?: string
+    limit?: number
   }
-  url: "/coding/message/stream"
+  url: "/coding/sessions"
 }
 
-export type CodingMessageStreamResponses = {
+export type CodingSessionsListResponses = {
   /**
-   * Streaming coding assistant events
+   * Coding assistant sessions
    */
-  200: unknown
+  200: {
+    sessions: Array<Session>
+  }
 }
 
-export type CodingSessionMessagesData = {
+export type CodingSessionsListResponse = CodingSessionsListResponses[keyof CodingSessionsListResponses]
+
+export type CodingSessionGetData = {
   body?: never
   path: {
     sessionID: string
   }
   query?: {
+    /**
+     * Project directory for project-scoped routes. Equivalent to the x-opencorvus-directory request header.
+     */
     directory?: string
   }
-  url: "/coding/session/{sessionID}/messages"
+  url: "/coding/session/{sessionID}"
 }
 
-export type CodingSessionMessagesResponses = {
+export type CodingSessionGetResponses = {
   /**
-   * Session messages
+   * Coding assistant session
    */
-  200: unknown
+  200: {
+    session: Session
+  }
 }
+
+export type CodingSessionGetResponse = CodingSessionGetResponses[keyof CodingSessionGetResponses]
 
 export type GatewayCapabilitiesData = {
   body?: never
   path?: never
   query?: {
+    /**
+     * Project directory for project-scoped routes. Equivalent to the x-opencorvus-directory request header.
+     */
     directory?: string
   }
   url: "/gateway/capabilities"
@@ -7314,6 +7444,9 @@ export type GatewayControlMessageData = {
   }
   path?: never
   query?: {
+    /**
+     * Project directory for project-scoped routes. Equivalent to the x-opencorvus-directory request header.
+     */
     directory?: string
   }
   url: "/gateway/control/message"
@@ -7681,6 +7814,9 @@ export type GatewayControlActionData = {
       }
   path?: never
   query?: {
+    /**
+     * Project directory for project-scoped routes. Equivalent to the x-opencorvus-directory request header.
+     */
     directory?: string
   }
   url: "/gateway/control/action"
@@ -7743,6 +7879,9 @@ export type GatewayChannelMessageData = {
     platform: string
   }
   query?: {
+    /**
+     * Project directory for project-scoped routes. Equivalent to the x-opencorvus-directory request header.
+     */
     directory?: string
   }
   url: "/gateway/channel/{platform}/message"
@@ -7816,6 +7955,85 @@ export type MissionListResponses = {
 
 export type MissionListResponse = MissionListResponses[keyof MissionListResponses]
 
+export type MissionRenameData = {
+  body?: {
+    title: string
+  }
+  path: {
+    missionID: string
+  }
+  query?: {
+    /**
+     * Project directory for project-scoped routes. Equivalent to the x-opencorvus-directory request header.
+     */
+    directory?: string
+  }
+  url: "/mission/{missionID}/title"
+}
+
+export type MissionRenameResponses = {
+  /**
+   * Renamed Mission record
+   */
+  200: {
+    missionID: string
+    sessionID: string
+    title: string
+    directory: string
+    created: number
+    updated: number
+    archived?: number
+  }
+}
+
+export type MissionRenameResponse = MissionRenameResponses[keyof MissionRenameResponses]
+
+export type MissionAbortData = {
+  body?: never
+  path: {
+    missionID: string
+  }
+  query?: {
+    /**
+     * Project directory for project-scoped routes. Equivalent to the x-opencorvus-directory request header.
+     */
+    directory?: string
+  }
+  url: "/mission/{missionID}/abort"
+}
+
+export type MissionAbortResponses = {
+  /**
+   * Mission abort accepted
+   */
+  200: boolean
+}
+
+export type MissionAbortResponse = MissionAbortResponses[keyof MissionAbortResponses]
+
+export type MissionDeleteData = {
+  body?: never
+  path: {
+    missionID: string
+  }
+  query?: {
+    /**
+     * Project directory for project-scoped routes. Equivalent to the x-opencorvus-directory request header.
+     */
+    directory?: string
+  }
+  url: "/mission/{missionID}"
+}
+
+export type MissionDeleteResponses = {
+  /**
+   * Mission deleted
+   */
+  200: boolean
+}
+
+export type MissionDeleteResponse = MissionDeleteResponses[keyof MissionDeleteResponses]
+
 export type MissionWakeData = {
   body?: {
     missionID?: string
@@ -7824,6 +8042,9 @@ export type MissionWakeData = {
   }
   path?: never
   query?: {
+    /**
+     * Project directory for project-scoped routes. Equivalent to the x-opencorvus-directory request header.
+     */
     directory?: string
   }
   url: "/mission/wake"
@@ -7842,12 +8063,118 @@ export type MissionWakeResponses = {
 
 export type MissionWakeResponse = MissionWakeResponses[keyof MissionWakeResponses]
 
-export type ServerShutdownData = {
+export type BrowserPreviewTargetData = {
   body?: never
   path?: never
   query?: {
+    /**
+     * Project directory for project-scoped routes. Equivalent to the x-opencorvus-directory request header.
+     */
+    directory?: string
+    url?: string
+  }
+  url: "/browser-preview/target"
+}
+
+export type BrowserPreviewTargetResponses = {
+  /**
+   * Browser preview target
+   */
+  200: {
+    kind: "explicit-url" | "manifest-url" | "manifest-command" | "missing" | "failed"
+    status: "ready" | "configured" | "missing" | "failed"
+    projectRoot: string
+    url?: string
+    command?: string
+    packageManager?: string
+    viewports: Array<{
+      id: "desktop" | "tablet" | "mobile"
+      labelKey: string
+      width: number
+      height: number
+    }>
+    diagnostics: Array<string>
+    source: "query" | "package-json" | "none"
+  }
+}
+
+export type BrowserPreviewTargetResponse = BrowserPreviewTargetResponses[keyof BrowserPreviewTargetResponses]
+
+export type BrowserPreviewVerifyData = {
+  body?: {
+    url?: string
+    viewportID?: "desktop" | "tablet" | "mobile"
+  }
+  path?: never
+  query?: {
+    /**
+     * Project directory for project-scoped routes. Equivalent to the x-opencorvus-directory request header.
+     */
     directory?: string
   }
+  url: "/browser-preview/verify"
+}
+
+export type BrowserPreviewVerifyResponses = {
+  /**
+   * Browser preview verification result
+   */
+  200: {
+    status: "passed" | "failed"
+    projectRoot: string
+    target: {
+      kind: "explicit-url" | "manifest-url" | "manifest-command" | "missing" | "failed"
+      status: "ready" | "configured" | "missing" | "failed"
+      projectRoot: string
+      url?: string
+      command?: string
+      packageManager?: string
+      viewports: Array<{
+        id: "desktop" | "tablet" | "mobile"
+        labelKey: string
+        width: number
+        height: number
+      }>
+      diagnostics: Array<string>
+      source: "query" | "package-json" | "none"
+    }
+    viewport: {
+      id: "desktop" | "tablet" | "mobile"
+      labelKey: string
+      width: number
+      height: number
+    }
+    capture?: {
+      captured: boolean
+      passed: boolean
+      url: string
+      requested_viewport: {
+        width: number
+        height: number
+      }
+      viewport: {
+        width: number
+        height: number
+        capped: boolean
+      }
+      summary: string
+      path?: string
+      sha?: string
+      bytes?: number
+      layers?: unknown
+      dom?: unknown
+      capture_error?: unknown
+    }
+    diagnostics: Array<string>
+  }
+}
+
+export type BrowserPreviewVerifyResponse = BrowserPreviewVerifyResponses[keyof BrowserPreviewVerifyResponses]
+
+export type ServerShutdownData = {
+  body?: never
+  path?: never
+  query?: never
   url: "/shutdown"
 }
 
@@ -7865,9 +8192,7 @@ export type ServerShutdownResponse = ServerShutdownResponses[keyof ServerShutdow
 export type ServerRestartData = {
   body?: never
   path?: never
-  query?: {
-    directory?: string
-  }
+  query?: never
   url: "/restart"
 }
 
@@ -8306,6 +8631,9 @@ export type TaskCreateData = {
   }
   path?: never
   query?: {
+    /**
+     * Project directory for project-scoped routes. Equivalent to the x-opencorvus-directory request header.
+     */
     directory?: string
   }
   url: "/task"
@@ -8339,6 +8667,9 @@ export type TaskListData = {
   body?: never
   path?: never
   query?: {
+    /**
+     * Project directory for project-scoped routes. Equivalent to the x-opencorvus-directory request header.
+     */
     directory?: string
   }
   url: "/tasks"
@@ -8636,6 +8967,9 @@ export type TaskQueueReorderData = {
   }
   path?: never
   query?: {
+    /**
+     * Project directory for project-scoped routes. Equivalent to the x-opencorvus-directory request header.
+     */
     directory?: string
   }
   url: "/task-queue/reorder"
@@ -8671,6 +9005,9 @@ export type TaskQueueStartNowData = {
     taskID: string
   }
   query?: {
+    /**
+     * Project directory for project-scoped routes. Equivalent to the x-opencorvus-directory request header.
+     */
     directory?: string
   }
   url: "/task/{taskID}/start-now"
@@ -8754,6 +9091,9 @@ export type TaskListEventsData = {
   body?: never
   path?: never
   query?: {
+    /**
+     * Project directory for project-scoped routes. Equivalent to the x-opencorvus-directory request header.
+     */
     directory?: string
   }
   url: "/task/events"
@@ -8783,6 +9123,9 @@ export type TaskDeleteData = {
     taskID: string
   }
   query?: {
+    /**
+     * Project directory for project-scoped routes. Equivalent to the x-opencorvus-directory request header.
+     */
     directory?: string
   }
   url: "/task/{taskID}"
@@ -8810,6 +9153,9 @@ export type TaskGetData = {
     taskID: string
   }
   query?: {
+    /**
+     * Project directory for project-scoped routes. Equivalent to the x-opencorvus-directory request header.
+     */
     directory?: string
   }
   url: "/task/{taskID}"
@@ -8881,6 +9227,9 @@ export type TaskBindingsData = {
     taskID: string
   }
   query?: {
+    /**
+     * Project directory for project-scoped routes. Equivalent to the x-opencorvus-directory request header.
+     */
     directory?: string
   }
   url: "/task/{taskID}/bindings"
@@ -8912,6 +9261,9 @@ export type TaskProgressData = {
     taskID: string
   }
   query?: {
+    /**
+     * Project directory for project-scoped routes. Equivalent to the x-opencorvus-directory request header.
+     */
     directory?: string
   }
   url: "/task/{taskID}/progress"
@@ -9147,6 +9499,9 @@ export type TaskEventsData = {
     taskID: string
   }
   query?: {
+    /**
+     * Project directory for project-scoped routes. Equivalent to the x-opencorvus-directory request header.
+     */
     directory?: string
   }
   url: "/task/{taskID}/events"
@@ -9185,6 +9540,9 @@ export type TaskConversationData = {
     taskID: string
   }
   query?: {
+    /**
+     * Project directory for project-scoped routes. Equivalent to the x-opencorvus-directory request header.
+     */
     directory?: string
     tail_limit?: number
   }
@@ -9677,6 +10035,9 @@ export type TaskConversationSessionData = {
     sessionID: string
   }
   query?: {
+    /**
+     * Project directory for project-scoped routes. Equivalent to the x-opencorvus-directory request header.
+     */
     directory?: string
   }
   url: "/task/{taskID}/conversation/session/{sessionID}"
@@ -9698,6 +10059,25 @@ export type TaskConversationSessionResponses = {
   200: {
     transcript: Array<unknown>
     timeline: Array<unknown>
+    events: Array<{
+      event_id: string
+      task_id: string
+      run_id?: string
+      type: string
+      emittedAt: number
+      timestamp: number
+      sequence?: number
+      live_sequence?: number
+      live_epoch?: number
+      summary: string
+      payload: {
+        [key: string]: unknown
+      }
+      notify?: {
+        tier: 1 | 2 | 3
+        badge?: boolean
+      }
+    }>
     view: {
       topLevelSessionIDs: Array<string>
       sessions: Array<{
@@ -9733,6 +10113,9 @@ export type TaskConversationHistoryData = {
     taskID: string
   }
   query: {
+    /**
+     * Project directory for project-scoped routes. Equivalent to the x-opencorvus-directory request header.
+     */
     directory?: string
     before: number
     before_id?: string
@@ -9757,6 +10140,25 @@ export type TaskConversationHistoryResponses = {
   200: {
     transcript: Array<unknown>
     timeline: Array<unknown>
+    events: Array<{
+      event_id: string
+      task_id: string
+      run_id?: string
+      type: string
+      emittedAt: number
+      timestamp: number
+      sequence?: number
+      live_sequence?: number
+      live_epoch?: number
+      summary: string
+      payload: {
+        [key: string]: unknown
+      }
+      notify?: {
+        tier: 1 | 2 | 3
+        badge?: boolean
+      }
+    }>
     view: {
       topLevelSessionIDs: Array<string>
       sessions: Array<{
@@ -9792,6 +10194,9 @@ export type TaskConversationEventsData = {
     taskID: string
   }
   query?: {
+    /**
+     * Project directory for project-scoped routes. Equivalent to the x-opencorvus-directory request header.
+     */
     directory?: string
     after?: number
     until?: number
@@ -9852,6 +10257,9 @@ export type TaskBriefData = {
     taskID: string
   }
   query?: {
+    /**
+     * Project directory for project-scoped routes. Equivalent to the x-opencorvus-directory request header.
+     */
     directory?: string
   }
   url: "/task/{taskID}/brief"
@@ -9891,6 +10299,9 @@ export type TaskBoardData = {
     taskID: string
   }
   query?: {
+    /**
+     * Project directory for project-scoped routes. Equivalent to the x-opencorvus-directory request header.
+     */
     directory?: string
   }
   url: "/task/{taskID}/board"
@@ -10307,6 +10718,9 @@ export type TaskTranscriptData = {
     taskID: string
   }
   query?: {
+    /**
+     * Project directory for project-scoped routes. Equivalent to the x-opencorvus-directory request header.
+     */
     directory?: string
   }
   url: "/task/{taskID}/transcript"
@@ -10339,6 +10753,9 @@ export type TaskRunsData = {
     taskID: string
   }
   query?: {
+    /**
+     * Project directory for project-scoped routes. Equivalent to the x-opencorvus-directory request header.
+     */
     directory?: string
   }
   url: "/task/{taskID}/runs"
@@ -10392,6 +10809,9 @@ export type TaskInteractionsData = {
     taskID: string
   }
   query?: {
+    /**
+     * Project directory for project-scoped routes. Equivalent to the x-opencorvus-directory request header.
+     */
     directory?: string
   }
   url: "/task/{taskID}/interactions"
@@ -10453,6 +10873,9 @@ export type TaskMessageData = {
     taskID: string
   }
   query?: {
+    /**
+     * Project directory for project-scoped routes. Equivalent to the x-opencorvus-directory request header.
+     */
     directory?: string
   }
   url: "/task/{taskID}/message"
@@ -10496,6 +10919,9 @@ export type TaskInjectData = {
     taskID: string
   }
   query?: {
+    /**
+     * Project directory for project-scoped routes. Equivalent to the x-opencorvus-directory request header.
+     */
     directory?: string
   }
   url: "/task/{taskID}/inject"
@@ -10543,6 +10969,9 @@ export type TaskSessionReplyData = {
     sessionID: string
   }
   query?: {
+    /**
+     * Project directory for project-scoped routes. Equivalent to the x-opencorvus-directory request header.
+     */
     directory?: string
   }
   url: "/task/{taskID}/session/{sessionID}/reply"
@@ -10607,6 +11036,9 @@ export type TaskSessionCancelData = {
     sessionID: string
   }
   query?: {
+    /**
+     * Project directory for project-scoped routes. Equivalent to the x-opencorvus-directory request header.
+     */
     directory?: string
   }
   url: "/task/{taskID}/session/{sessionID}/cancel"
@@ -10644,6 +11076,9 @@ export type TaskCancelData = {
     taskID: string
   }
   query?: {
+    /**
+     * Project directory for project-scoped routes. Equivalent to the x-opencorvus-directory request header.
+     */
     directory?: string
   }
   url: "/task/{taskID}/cancel"
@@ -10688,6 +11123,9 @@ export type TaskRewindData = {
     taskID: string
   }
   query?: {
+    /**
+     * Project directory for project-scoped routes. Equivalent to the x-opencorvus-directory request header.
+     */
     directory?: string
   }
   url: "/task/{taskID}/rewind"
@@ -10723,6 +11161,9 @@ export type TaskRewindClearData = {
     taskID: string
   }
   query?: {
+    /**
+     * Project directory for project-scoped routes. Equivalent to the x-opencorvus-directory request header.
+     */
     directory?: string
   }
   url: "/task/{taskID}/rewind/clear"
@@ -10752,6 +11193,9 @@ export type TaskRetryData = {
     taskID: string
   }
   query?: {
+    /**
+     * Project directory for project-scoped routes. Equivalent to the x-opencorvus-directory request header.
+     */
     directory?: string
   }
   url: "/task/{taskID}/retry"
@@ -10805,6 +11249,9 @@ export type TaskReplanData = {
     taskID: string
   }
   query?: {
+    /**
+     * Project directory for project-scoped routes. Equivalent to the x-opencorvus-directory request header.
+     */
     directory?: string
   }
   url: "/task/{taskID}/replan"
@@ -10858,6 +11305,9 @@ export type TaskFollowupData = {
     taskID: string
   }
   query?: {
+    /**
+     * Project directory for project-scoped routes. Equivalent to the x-opencorvus-directory request header.
+     */
     directory?: string
   }
   url: "/task/{taskID}/followup"
@@ -10889,6 +11339,9 @@ export type RunGetData = {
     runID: string
   }
   query?: {
+    /**
+     * Project directory for project-scoped routes. Equivalent to the x-opencorvus-directory request header.
+     */
     directory?: string
   }
   url: "/run/{runID}"
@@ -10942,6 +11395,9 @@ export type RunBriefData = {
     runID: string
   }
   query?: {
+    /**
+     * Project directory for project-scoped routes. Equivalent to the x-opencorvus-directory request header.
+     */
     directory?: string
   }
   url: "/run/{runID}/brief"
@@ -10981,6 +11437,9 @@ export type RunAbortData = {
     runID: string
   }
   query?: {
+    /**
+     * Project directory for project-scoped routes. Equivalent to the x-opencorvus-directory request header.
+     */
     directory?: string
   }
   url: "/run/{runID}/abort"
@@ -11010,6 +11469,9 @@ export type RunAcceptanceData = {
     runID: string
   }
   query?: {
+    /**
+     * Project directory for project-scoped routes. Equivalent to the x-opencorvus-directory request header.
+     */
     directory?: string
   }
   url: "/run/{runID}/acceptance"
@@ -11064,6 +11526,9 @@ export type GoalRunAcceptanceData = {
     goalRunID: string
   }
   query?: {
+    /**
+     * Project directory for project-scoped routes. Equivalent to the x-opencorvus-directory request header.
+     */
     directory?: string
   }
   url: "/goal-run/{goalRunID}/acceptance"
@@ -11118,6 +11583,9 @@ export type SessionTraceData = {
     sessionID: string
   }
   query?: {
+    /**
+     * Project directory for project-scoped routes. Equivalent to the x-opencorvus-directory request header.
+     */
     directory?: string
   }
   url: "/session/{sessionID}/trace"
@@ -11154,6 +11622,9 @@ export type TaskTraceData = {
     taskID: string
   }
   query?: {
+    /**
+     * Project directory for project-scoped routes. Equivalent to the x-opencorvus-directory request header.
+     */
     directory?: string
   }
   url: "/task/{taskID}/trace"
@@ -11199,6 +11670,9 @@ export type RunArtifactsData = {
     runID: string
   }
   query?: {
+    /**
+     * Project directory for project-scoped routes. Equivalent to the x-opencorvus-directory request header.
+     */
     directory?: string
   }
   url: "/run/{runID}/artifacts"
@@ -11242,6 +11716,9 @@ export type RunEvaluationsData = {
     runID: string
   }
   query?: {
+    /**
+     * Project directory for project-scoped routes. Equivalent to the x-opencorvus-directory request header.
+     */
     directory?: string
   }
   url: "/run/{runID}/evaluations"
@@ -11296,6 +11773,9 @@ export type InteractionReplyData = {
     interactionID: string
   }
   query?: {
+    /**
+     * Project directory for project-scoped routes. Equivalent to the x-opencorvus-directory request header.
+     */
     directory?: string
   }
   url: "/interaction/{interactionID}/reply"
@@ -11353,6 +11833,9 @@ export type InteractionRejectData = {
     interactionID: string
   }
   query?: {
+    /**
+     * Project directory for project-scoped routes. Equivalent to the x-opencorvus-directory request header.
+     */
     directory?: string
   }
   url: "/interaction/{interactionID}/reject"
@@ -11407,6 +11890,9 @@ export type GoalDeleteData = {
     goalID: string
   }
   query?: {
+    /**
+     * Project directory for project-scoped routes. Equivalent to the x-opencorvus-directory request header.
+     */
     directory?: string
   }
   url: "/goal/{goalID}"
@@ -11564,6 +12050,9 @@ export type GoalUpdateData = {
     goalID: string
   }
   query?: {
+    /**
+     * Project directory for project-scoped routes. Equivalent to the x-opencorvus-directory request header.
+     */
     directory?: string
   }
   url: "/goal/{goalID}"
@@ -11597,6 +12086,9 @@ export type TaskUpdateBudgetData = {
     taskID: string
   }
   query?: {
+    /**
+     * Project directory for project-scoped routes. Equivalent to the x-opencorvus-directory request header.
+     */
     directory?: string
   }
   url: "/task/{taskID}/budget"
@@ -11626,6 +12118,9 @@ export type TaskUpdateTitleData = {
     taskID: string
   }
   query?: {
+    /**
+     * Project directory for project-scoped routes. Equivalent to the x-opencorvus-directory request header.
+     */
     directory?: string
   }
   url: "/task/{taskID}/title"
@@ -11657,6 +12152,9 @@ export type ExportSessionData = {
     sessionID: string
   }
   query?: {
+    /**
+     * Project directory for project-scoped routes. Equivalent to the x-opencorvus-directory request header.
+     */
     directory?: string
   }
   url: "/export/session/{sessionID}"
@@ -11687,6 +12185,9 @@ export type FindTextData = {
   body?: never
   path?: never
   query: {
+    /**
+     * Project directory for project-scoped routes. Equivalent to the x-opencorvus-directory request header.
+     */
     directory?: string
     pattern: string
   }
@@ -11722,6 +12223,9 @@ export type FindFilesData = {
   body?: never
   path?: never
   query: {
+    /**
+     * Project directory for project-scoped routes. Equivalent to the x-opencorvus-directory request header.
+     */
     directory?: string
     query: string
     dirs?: "true" | "false"
@@ -11744,6 +12248,9 @@ export type FindSymbolsData = {
   body?: never
   path?: never
   query: {
+    /**
+     * Project directory for project-scoped routes. Equivalent to the x-opencorvus-directory request header.
+     */
     directory?: string
     query: string
   }
@@ -11763,6 +12270,9 @@ export type FileListData = {
   body?: never
   path?: never
   query: {
+    /**
+     * Project directory for project-scoped routes. Equivalent to the x-opencorvus-directory request header.
+     */
     directory?: string
     path: string
   }
@@ -11782,6 +12292,9 @@ export type FileReadData = {
   body?: never
   path?: never
   query: {
+    /**
+     * Project directory for project-scoped routes. Equivalent to the x-opencorvus-directory request header.
+     */
     directory?: string
     path: string
   }
@@ -11804,6 +12317,9 @@ export type FileWriteData = {
   }
   path?: never
   query?: {
+    /**
+     * Project directory for project-scoped routes. Equivalent to the x-opencorvus-directory request header.
+     */
     directory?: string
   }
   url: "/file/content"
@@ -11822,6 +12338,9 @@ export type FileStatusData = {
   body?: never
   path?: never
   query?: {
+    /**
+     * Project directory for project-scoped routes. Equivalent to the x-opencorvus-directory request header.
+     */
     directory?: string
   }
   url: "/file/status"
@@ -11843,6 +12362,9 @@ export type AttachmentGetData = {
     name: string
   }
   query?: {
+    /**
+     * Project directory for project-scoped routes. Equivalent to the x-opencorvus-directory request header.
+     */
     directory?: string
   }
   url: "/attachment/{projectID}/{name}"
@@ -11866,6 +12388,9 @@ export type McpStatusData = {
   body?: never
   path?: never
   query?: {
+    /**
+     * Project directory for project-scoped routes. Equivalent to the x-opencorvus-directory request header.
+     */
     directory?: string
   }
   url: "/mcp"
@@ -11889,6 +12414,9 @@ export type McpAddData = {
   }
   path?: never
   query?: {
+    /**
+     * Project directory for project-scoped routes. Equivalent to the x-opencorvus-directory request header.
+     */
     directory?: string
   }
   url: "/mcp"
@@ -11920,6 +12448,9 @@ export type McpAuthRemoveData = {
     name: string
   }
   query?: {
+    /**
+     * Project directory for project-scoped routes. Equivalent to the x-opencorvus-directory request header.
+     */
     directory?: string
   }
   url: "/mcp/{name}/auth"
@@ -11951,6 +12482,9 @@ export type McpAuthStartData = {
     name: string
   }
   query?: {
+    /**
+     * Project directory for project-scoped routes. Equivalent to the x-opencorvus-directory request header.
+     */
     directory?: string
   }
   url: "/mcp/{name}/auth"
@@ -11994,6 +12528,9 @@ export type McpAuthCallbackData = {
     name: string
   }
   query?: {
+    /**
+     * Project directory for project-scoped routes. Equivalent to the x-opencorvus-directory request header.
+     */
     directory?: string
   }
   url: "/mcp/{name}/auth/callback"
@@ -12027,6 +12564,9 @@ export type McpAuthAuthenticateData = {
     name: string
   }
   query?: {
+    /**
+     * Project directory for project-scoped routes. Equivalent to the x-opencorvus-directory request header.
+     */
     directory?: string
   }
   url: "/mcp/{name}/auth/authenticate"
@@ -12060,6 +12600,9 @@ export type McpConnectData = {
     name: string
   }
   query?: {
+    /**
+     * Project directory for project-scoped routes. Equivalent to the x-opencorvus-directory request header.
+     */
     directory?: string
   }
   url: "/mcp/{name}/connect"
@@ -12080,6 +12623,9 @@ export type McpDisconnectData = {
     name: string
   }
   query?: {
+    /**
+     * Project directory for project-scoped routes. Equivalent to the x-opencorvus-directory request header.
+     */
     directory?: string
   }
   url: "/mcp/{name}/disconnect"
@@ -12098,7 +12644,6 @@ export type TuiRuntimeStartData = {
   body?: {
     mode?: "spawn" | "connect"
     url?: string
-    directory?: string
     sessionID?: string
     model?: string
     agent?: string
@@ -12111,6 +12656,9 @@ export type TuiRuntimeStartData = {
   }
   path?: never
   query?: {
+    /**
+     * Project directory for project-scoped routes. Equivalent to the x-opencorvus-directory request header.
+     */
     directory?: string
   }
   url: "/tui/runtime/start"
@@ -12141,6 +12689,9 @@ export type TuiRuntimeStatusData = {
   body?: never
   path?: never
   query?: {
+    /**
+     * Project directory for project-scoped routes. Equivalent to the x-opencorvus-directory request header.
+     */
     directory?: string
   }
   url: "/tui/runtime/status"
@@ -12164,6 +12715,9 @@ export type TuiRuntimeStopData = {
   body?: never
   path?: never
   query?: {
+    /**
+     * Project directory for project-scoped routes. Equivalent to the x-opencorvus-directory request header.
+     */
     directory?: string
   }
   url: "/tui/runtime/stop"
@@ -12182,6 +12736,9 @@ export type TuiStatusData = {
   body?: never
   path?: never
   query?: {
+    /**
+     * Project directory for project-scoped routes. Equivalent to the x-opencorvus-directory request header.
+     */
     directory?: string
   }
   url: "/tui/status"
@@ -12219,6 +12776,9 @@ export type TuiRuntimeSubmitTaskData = {
   }
   path?: never
   query?: {
+    /**
+     * Project directory for project-scoped routes. Equivalent to the x-opencorvus-directory request header.
+     */
     directory?: string
   }
   url: "/tui/runtime/submit-task"
@@ -12256,6 +12816,9 @@ export type TuiRuntimeProxyData = {
   }
   path?: never
   query?: {
+    /**
+     * Project directory for project-scoped routes. Equivalent to the x-opencorvus-directory request header.
+     */
     directory?: string
   }
   url: "/tui/runtime/proxy"
@@ -12283,6 +12846,9 @@ export type TuiRuntimeTaskStatusData = {
   }
   path?: never
   query?: {
+    /**
+     * Project directory for project-scoped routes. Equivalent to the x-opencorvus-directory request header.
+     */
     directory?: string
   }
   url: "/tui/runtime/task-status"
@@ -12319,6 +12885,9 @@ export type TuiOpenHelpData = {
   body?: never
   path?: never
   query?: {
+    /**
+     * Project directory for project-scoped routes. Equivalent to the x-opencorvus-directory request header.
+     */
     directory?: string
   }
   url: "/tui/open-help"
@@ -12337,6 +12906,9 @@ export type TuiOpenSessionsData = {
   body?: never
   path?: never
   query?: {
+    /**
+     * Project directory for project-scoped routes. Equivalent to the x-opencorvus-directory request header.
+     */
     directory?: string
   }
   url: "/tui/open-sessions"
@@ -12355,6 +12927,9 @@ export type TuiOpenThemesData = {
   body?: never
   path?: never
   query?: {
+    /**
+     * Project directory for project-scoped routes. Equivalent to the x-opencorvus-directory request header.
+     */
     directory?: string
   }
   url: "/tui/open-themes"
@@ -12373,6 +12948,9 @@ export type TuiOpenModelsData = {
   body?: never
   path?: never
   query?: {
+    /**
+     * Project directory for project-scoped routes. Equivalent to the x-opencorvus-directory request header.
+     */
     directory?: string
   }
   url: "/tui/open-models"
@@ -12393,6 +12971,9 @@ export type TuiExecuteCommandData = {
   }
   path?: never
   query?: {
+    /**
+     * Project directory for project-scoped routes. Equivalent to the x-opencorvus-directory request header.
+     */
     directory?: string
   }
   url: "/tui/execute-command"
@@ -12428,6 +13009,9 @@ export type TuiShowToastData = {
   }
   path?: never
   query?: {
+    /**
+     * Project directory for project-scoped routes. Equivalent to the x-opencorvus-directory request header.
+     */
     directory?: string
   }
   url: "/tui/show-toast"
@@ -12446,6 +13030,9 @@ export type TuiPublishData = {
   body?: EventTuiPromptAppend | EventTuiCommandExecute | EventTuiToastShow | EventTuiSessionSelect
   path?: never
   query?: {
+    /**
+     * Project directory for project-scoped routes. Equivalent to the x-opencorvus-directory request header.
+     */
     directory?: string
   }
   url: "/tui/publish"
@@ -12478,6 +13065,9 @@ export type TuiSelectSessionData = {
   }
   path?: never
   query?: {
+    /**
+     * Project directory for project-scoped routes. Equivalent to the x-opencorvus-directory request header.
+     */
     directory?: string
   }
   url: "/tui/select-session"
@@ -12509,6 +13099,9 @@ export type TuiControlNextData = {
   body?: never
   path?: never
   query?: {
+    /**
+     * Project directory for project-scoped routes. Equivalent to the x-opencorvus-directory request header.
+     */
     directory?: string
   }
   url: "/tui/control/next"
@@ -12535,6 +13128,9 @@ export type TuiControlResponseData = {
   }
   path?: never
   query?: {
+    /**
+     * Project directory for project-scoped routes. Equivalent to the x-opencorvus-directory request header.
+     */
     directory?: string
   }
   url: "/tui/control/response"
@@ -12553,6 +13149,9 @@ export type InstanceDisposeData = {
   body?: never
   path?: never
   query?: {
+    /**
+     * Project directory for project-scoped routes. Equivalent to the x-opencorvus-directory request header.
+     */
     directory?: string
   }
   url: "/instance/dispose"
@@ -12571,6 +13170,9 @@ export type PathGetData = {
   body?: never
   path?: never
   query?: {
+    /**
+     * Project directory for project-scoped routes. Equivalent to the x-opencorvus-directory request header.
+     */
     directory?: string
   }
   url: "/path"
@@ -12589,6 +13191,9 @@ export type VcsGetData = {
   body?: never
   path?: never
   query?: {
+    /**
+     * Project directory for project-scoped routes. Equivalent to the x-opencorvus-directory request header.
+     */
     directory?: string
   }
   url: "/vcs"
@@ -12607,6 +13212,9 @@ export type CommandListData = {
   body?: never
   path?: never
   query?: {
+    /**
+     * Project directory for project-scoped routes. Equivalent to the x-opencorvus-directory request header.
+     */
     directory?: string
   }
   url: "/command"
@@ -12643,9 +13251,7 @@ export type AppLogData = {
     }
   }
   path?: never
-  query?: {
-    directory?: string
-  }
+  query?: never
   url: "/log"
 }
 
@@ -12693,6 +13299,9 @@ export type AppAgentsData = {
   body?: never
   path?: never
   query?: {
+    /**
+     * Project directory for project-scoped routes. Equivalent to the x-opencorvus-directory request header.
+     */
     directory?: string
   }
   url: "/agent"
@@ -12711,6 +13320,9 @@ export type LspStatusData = {
   body?: never
   path?: never
   query?: {
+    /**
+     * Project directory for project-scoped routes. Equivalent to the x-opencorvus-directory request header.
+     */
     directory?: string
   }
   url: "/lsp"
@@ -12729,6 +13341,9 @@ export type FormatterStatusData = {
   body?: never
   path?: never
   query?: {
+    /**
+     * Project directory for project-scoped routes. Equivalent to the x-opencorvus-directory request header.
+     */
     directory?: string
   }
   url: "/formatter"
@@ -12747,6 +13362,9 @@ export type EventSubscribeData = {
   body?: never
   path?: never
   query?: {
+    /**
+     * Project directory for project-scoped routes. Equivalent to the x-opencorvus-directory request header.
+     */
     directory?: string
   }
   url: "/event"
@@ -12760,3 +13378,192 @@ export type EventSubscribeResponses = {
 }
 
 export type EventSubscribeResponse = EventSubscribeResponses[keyof EventSubscribeResponses]
+
+export type GlobalHealthData = {
+  body?: never
+  path?: never
+  query?: never
+  url: "/global/health"
+}
+
+export type GlobalHealthResponses = {
+  /**
+   * Health information
+   */
+  200: {
+    healthy: true
+    version: string
+    paths: {
+      database: string
+      data: string
+      home: string
+    }
+  }
+}
+
+export type GlobalHealthResponse = GlobalHealthResponses[keyof GlobalHealthResponses]
+
+export type GlobalEventData = {
+  body?: never
+  path?: never
+  query?: never
+  url: "/global/event"
+}
+
+export type GlobalEventResponses = {
+  /**
+   * Event stream
+   */
+  200: GlobalEvent
+}
+
+export type GlobalEventResponse = GlobalEventResponses[keyof GlobalEventResponses]
+
+export type GlobalConfigGetData = {
+  body?: never
+  path?: never
+  query?: never
+  url: "/global/config"
+}
+
+export type GlobalConfigGetResponses = {
+  /**
+   * Get global config info
+   */
+  200: Config
+}
+
+export type GlobalConfigGetResponse = GlobalConfigGetResponses[keyof GlobalConfigGetResponses]
+
+export type GlobalConfigUpdateData = {
+  body?: Config
+  path?: never
+  query?: never
+  url: "/global/config"
+}
+
+export type GlobalConfigUpdateErrors = {
+  /**
+   * Bad request
+   */
+  400: BadRequestError
+}
+
+export type GlobalConfigUpdateError = GlobalConfigUpdateErrors[keyof GlobalConfigUpdateErrors]
+
+export type GlobalConfigUpdateResponses = {
+  /**
+   * Successfully updated global config
+   */
+  200: Config
+}
+
+export type GlobalConfigUpdateResponse = GlobalConfigUpdateResponses[keyof GlobalConfigUpdateResponses]
+
+export type GlobalDisposeData = {
+  body?: never
+  path?: never
+  query?: never
+  url: "/global/dispose"
+}
+
+export type GlobalDisposeResponses = {
+  /**
+   * Global disposed
+   */
+  200: boolean
+}
+
+export type GlobalDisposeResponse = GlobalDisposeResponses[keyof GlobalDisposeResponses]
+
+export type GlobalDbResetData = {
+  body?: {
+    /**
+     * Absolute filesystem path of the project whose .opencorvus scratch directories should be wiped alongside the shared DB.
+     */
+    projectDir: string
+  }
+  path?: never
+  query?: never
+  url: "/global/db/reset"
+}
+
+export type GlobalDbResetErrors = {
+  /**
+   * Reply target not ready
+   */
+  409: ReplyTargetEnvelopeMissingError
+}
+
+export type GlobalDbResetError = GlobalDbResetErrors[keyof GlobalDbResetErrors]
+
+export type GlobalDbResetResponses = {
+  /**
+   * Reset results
+   */
+  200: {
+    ok: boolean
+    targets: Array<{
+      label: string
+      path: string
+      ok: boolean
+      error?: string
+    }>
+  }
+}
+
+export type GlobalDbResetResponse = GlobalDbResetResponses[keyof GlobalDbResetResponses]
+
+export type AuthRemoveData = {
+  body?: never
+  path: {
+    providerID: string
+  }
+  query?: never
+  url: "/auth/{providerID}"
+}
+
+export type AuthRemoveErrors = {
+  /**
+   * Bad request
+   */
+  400: BadRequestError
+}
+
+export type AuthRemoveError = AuthRemoveErrors[keyof AuthRemoveErrors]
+
+export type AuthRemoveResponses = {
+  /**
+   * Successfully removed authentication credentials
+   */
+  200: boolean
+}
+
+export type AuthRemoveResponse = AuthRemoveResponses[keyof AuthRemoveResponses]
+
+export type AuthSetData = {
+  body?: Auth
+  path: {
+    providerID: string
+  }
+  query?: never
+  url: "/auth/{providerID}"
+}
+
+export type AuthSetErrors = {
+  /**
+   * Bad request
+   */
+  400: BadRequestError
+}
+
+export type AuthSetError = AuthSetErrors[keyof AuthSetErrors]
+
+export type AuthSetResponses = {
+  /**
+   * Successfully set authentication credentials
+   */
+  200: boolean
+}
+
+export type AuthSetResponse = AuthSetResponses[keyof AuthSetResponses]

@@ -254,7 +254,7 @@ describe("ProviderTransform - Hexin GLM thinking configuration", () => {
       providerID: "hexin",
       api: {
         id: "glm-5.1",
-        url: "https://arsenal-openai.10jqka.com.cn:8443/ai-gateway/v1",
+        url: "https://aimemodeldev.myhexin.com/litellm/v1",
         npm: "@ai-sdk/openai-compatible",
       },
       name: "GLM-5.1",
@@ -367,7 +367,7 @@ describe("ProviderTransform - Hexin GLM thinking configuration", () => {
       id: "hexin/glm-4.6",
       api: {
         id: "glm-4.6",
-        url: "https://arsenal-openai.10jqka.com.cn:8443/ai-gateway/v1",
+        url: "https://aimemodeldev.myhexin.com/litellm/v1",
         npm: "@ai-sdk/openai-compatible",
       },
       capabilities: {
@@ -397,7 +397,7 @@ describe("ProviderTransform - Hexin GLM thinking configuration", () => {
       id: "hexin/kimi-k2.6",
       api: {
         id: "kimi-k2.6",
-        url: "https://arsenal-openai.10jqka.com.cn:8443/ai-gateway/v1",
+        url: "https://aimemodeldev.myhexin.com/litellm/v1",
         npm: "@ai-sdk/openai-compatible",
       },
       name: "Kimi K2.6",

@@ -223,6 +223,7 @@ export namespace Session {
       parentID: Identifier.schema("session").optional(),
       title: z.string().optional(),
       permission: Info.shape.permission,
+      metadata: Info.shape.metadata,
     }),
     async (input) => {
       return createNext({
@@ -232,6 +233,7 @@ export namespace Session {
         directory: Instance.directory,
         title: input.title,
         permission: input.permission,
+        metadata: input.metadata,
       })
     },
   )
@@ -313,6 +315,7 @@ export namespace Session {
     parentID?: string
     directory: string
     permission?: PermissionNext.Ruleset
+    metadata?: Record<string, unknown>
   }) {
     const result: Info = {
       id: Identifier.descending("session", input.id),
@@ -324,6 +327,7 @@ export namespace Session {
       title: input.title ?? createDefaultTitle(!!input.parentID),
       kind: input.kind,
       goalID: input.goalID,
+      metadata: input.metadata,
       permission: input.permission,
       time: {
         created: Date.now(),
@@ -802,10 +806,27 @@ export namespace Session {
     })
   })
 
+  function messageWithPersistedCreated(msg: Message.Info, timeCreated: number): Message.Info {
+    return {
+      ...msg,
+      time: {
+        ...msg.time,
+        created: timeCreated,
+      },
+    } as Message.Info
+  }
+
   export const updateMessage = fn(Message.Info, async (msg) => {
-    const time_created = msg.time.created
-    const { id, sessionID, ...data } = msg
+    let persisted = msg
     Database.use((db) => {
+      const existing = db
+        .select({ time_created: MessageTable.time_created })
+        .from(MessageTable)
+        .where(eq(MessageTable.id, msg.id))
+        .get()
+      persisted = messageWithPersistedCreated(msg, existing?.time_created ?? msg.time.created)
+      const time_created = persisted.time.created
+      const { id, sessionID, ...data } = persisted
       db.insert(MessageTable)
         .values({
           id,
@@ -817,11 +838,11 @@ export namespace Session {
         .run()
       Database.effect(() =>
         Bus.publish(Message.Event.Updated, {
-          info: msg,
+          info: persisted,
         }),
       )
     })
-    return msg
+    return persisted
   })
 
   /**
@@ -831,9 +852,16 @@ export namespace Session {
    * fully assembled. Follow up with `updateMessage` to publish the event.
    */
   export const saveMessage = fn(Message.Info, async (msg) => {
-    const time_created = msg.time.created
-    const { id, sessionID, ...data } = msg
+    let persisted = msg
     Database.use((db) => {
+      const existing = db
+        .select({ time_created: MessageTable.time_created })
+        .from(MessageTable)
+        .where(eq(MessageTable.id, msg.id))
+        .get()
+      persisted = messageWithPersistedCreated(msg, existing?.time_created ?? msg.time.created)
+      const time_created = persisted.time.created
+      const { id, sessionID, ...data } = persisted
       db.insert(MessageTable)
         .values({
           id,
@@ -844,7 +872,7 @@ export namespace Session {
         .onConflictDoUpdate({ target: MessageTable.id, set: { data } })
         .run()
     })
-    return msg
+    return persisted
   })
 
   /**

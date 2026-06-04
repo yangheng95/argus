@@ -15,6 +15,7 @@ node_modules
 playground
 tmp
 .tmp
+.tmp-*
 packages/opencorvus/.*.tmp/
 dist
 ts-dist

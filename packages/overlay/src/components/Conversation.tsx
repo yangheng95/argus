@@ -18,6 +18,7 @@ import { createAnimationFrameScheduler } from "../utils/animation-frame";
 
 const VIRTUAL_OVERSCAN_ITEMS = 16;
 const ESTIMATED_CARD_HEIGHT = 132;
+const CARD_SCROLL_TARGET_MAX_FRAMES = 12;
 
 function clipText(value: string, limit = 96): string {
   const text = String(value || "").replace(/\s+/g, " ").trim();
@@ -127,6 +128,15 @@ function VirtualizedConversationCards(props: {
     ) || card;
   };
 
+  const waitForScrollTargetElement = async (request: ConversationCardScrollRequest): Promise<HTMLElement | null> => {
+    for (let frame = 0; frame < CARD_SCROLL_TARGET_MAX_FRAMES; frame += 1) {
+      const target = scrollTargetElement(request);
+      if (target) return target;
+      await waitForAnimationFrame();
+    }
+    return scrollTargetElement(request);
+  };
+
   const highlightCard = (cardID: string) => {
     const target = props.container.querySelector<HTMLElement>(`[data-card-id="${CSS.escape(cardID)}"]`);
     if (!target) return;
@@ -143,9 +153,7 @@ function VirtualizedConversationCards(props: {
     props.onCardScrollRequest();
     setScrollPinID(topLevelID);
     virtualizer.scrollToIndex(index, { align: request.block ?? "start" });
-    await waitForAnimationFrame();
-    await waitForAnimationFrame();
-    const target = scrollTargetElement(request);
+    const target = await waitForScrollTargetElement(request);
     if (!target) {
       setScrollPinID(null);
       return false;

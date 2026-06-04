@@ -99,6 +99,14 @@
   transform: none;
 }
 
+.chat-bubble-row[data-role="mission"] .chat-bubble {
+  border-color: color-mix(in srgb, var(--card-stage) 42%, var(--card-border));
+}
+
+.chat-bubble-row[data-role="mission"] .chat-bubble__title {
+  color: var(--card-stage);
+}
+
 .chat-bubble--collapsed {
   gap: calc(6px * var(--ui-scale));
 }

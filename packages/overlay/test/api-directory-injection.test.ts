@@ -115,6 +115,11 @@ describe("apiUrl directory injection (W2-V31)", () => {
     test("skill/market", () => expectInjects("skill/market"));
     test("skill/directories", () => expectInjects("skill/directories"));
     test("mcp", () => expectInjects("mcp"));
+    test("browser preview target", () => expectInjects("browser-preview/target"));
+    test("browser preview verify", () => expectInjects("browser-preview/verify"));
+    test("coding assistant session list", () => expectInjects("coding/sessions"));
+    test("coding assistant session create", () => expectInjects("coding/session"));
+    test("coding assistant session claim", () => expectInjects("coding/session/ses_123"));
   });
 
   describe("when no directory is configured, no path receives the query", () => {

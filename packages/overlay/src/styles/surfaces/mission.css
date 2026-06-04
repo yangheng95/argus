@@ -1,5 +1,5 @@
 /* Mission surface — operator control room.
-   Layout: header on top, then 3 columns (ledger | workbench | channels).
+   Layout: 3 columns (ledger | workbench | channels).
    Dense, table-leaning. No card-heavy decoration (PRD §13).
 
    Every value here routes through the design tokens declared in
@@ -56,163 +56,6 @@ body[data-page-mode="mission"] > main.panel {
   isolation: isolate;
 }
 
-/* Header ------------------------------------------------------------- */
-
-.mission-header {
-  flex: 0 0 auto;
-  display: flex;
-  align-items: center;
-  padding: var(--ui-gap-sm) var(--ui-gap-lg);
-  border-bottom: var(--oc-border-width) solid var(--border);
-  /* Match the panel `.task-bar` chrome: translucent surface with a
-     theme-aware blur. The blur token is `none` on dark themes per the
-     cascade; light theme adds the vibrancy blur. */
-  background: color-mix(in srgb, var(--chrome) 82%, var(--surface-strong));
-  backdrop-filter: var(--task-bar-backdrop-filter);
-}
-
-.mission-header-row {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: var(--ui-gap-md);
-  flex-wrap: nowrap;
-  width: 100%;
-}
-
-.mission-header-cluster {
-  display: flex;
-  flex-direction: column;
-  gap: var(--ui-gap-xs);
-  min-width: calc(180px * var(--ui-scale));
-  max-width: calc(320px * var(--ui-scale));
-  flex: 1 1 calc(220px * var(--ui-scale));
-}
-
-.mission-header-eyebrow {
-  display: inline-flex;
-  align-items: center;
-  gap: var(--ui-gap-sm);
-  min-width: 0;
-  font-size: var(--ui-font-body);
-  font-weight: var(--ui-font-weight-strong);
-  color: var(--text-strong);
-}
-
-.mission-header-eyebrow svg {
-  color: var(--accent);
-}
-
-.mission-header-subtitle {
-  min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  font-size: var(--ui-font-tiny);
-  color: var(--text-muted);
-}
-
-.mission-header-actions {
-  display: flex;
-  gap: var(--ui-gap-xs);
-  align-items: center;
-  flex: 0 0 auto;
-  margin-left: auto;
-}
-
-.mission-header-row--stats {
-  align-items: center;
-  gap: var(--ui-gap-md);
-}
-
-.mission-stat {
-  display: flex;
-  align-items: baseline;
-  gap: var(--ui-gap-xs);
-  min-width: 0;
-  flex: 0 1 auto;
-  padding: 0 var(--ui-gap-sm);
-  border-left: var(--oc-border-width) solid var(--border);
-}
-
-.mission-stat:first-child {
-  padding-left: 0;
-  border-left: 0;
-}
-
-.mission-stat-label {
-  font-size: var(--ui-font-tiny);
-  text-transform: uppercase;
-  letter-spacing: var(--ui-letter-spacing-loose);
-  color: var(--text-muted);
-}
-
-.mission-stat-value {
-  font-size: var(--ui-font-small);
-  font-weight: var(--ui-font-weight-strong);
-  display: flex;
-  gap: var(--ui-gap-xs);
-  align-items: center;
-  flex-wrap: wrap;
-  min-width: 0;
-}
-
-.mission-stat[data-stat="workspace"] {
-  max-width: calc(260px * var(--ui-scale));
-}
-
-.mission-stat[data-stat="workspace"] .mission-stat-value {
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.mission-stat[data-status="error"] .mission-stat-value,
-.mission-stat[data-status="error"] .mission-stat-label {
-  color: var(--bad);
-}
-
-.mission-stat[data-status="running"] .mission-stat-value {
-  color: var(--good);
-}
-
-.mission-count {
-  display: inline-flex;
-  align-items: center;
-  gap: var(--ui-gap-xs);
-  padding: var(--ui-gap-xs) var(--ui-gap-md);
-  border-radius: var(--oc-radius-pill);
-  font-size: var(--ui-font-tiny);
-  background: color-mix(in srgb, var(--text-muted) 8%, transparent);
-  color: var(--text-soft);
-}
-
-.mission-count[data-status="active"] {
-  background: var(--good-dim);
-  color: var(--good);
-}
-.mission-count[data-status="queued"] {
-  background: var(--accent-dim);
-  color: var(--accent);
-}
-.mission-count[data-status="waiting"] {
-  background: var(--warn-dim);
-  color: var(--warn);
-}
-.mission-count[data-status="failed"] {
-  background: var(--bad-dim);
-  color: var(--bad);
-}
-/* completed + cancelled share the "consumed" tone — both states are
-   terminal, neither demands operator action. Pre-fix the two selectors
-   declared the identical color-mix / color pair (rule 9 — pattern
-   should be hoisted, not copy-pasted). */
-.mission-count[data-status="completed"],
-.mission-count[data-status="cancelled"] {
-  background: color-mix(in srgb, var(--text-muted) 12%, transparent);
-  color: var(--text-muted);
-}
-
 /* Body ---------------------------------------------------------------- */
 
 /* Three resizable columns mirroring the default Panel's `.panel-body`
@@ -240,54 +83,6 @@ body[data-page-mode="mission"] > main.panel {
 }
 
 @media (max-width: 760px) /* breakpoint: --ui-breakpoint-md */ {
-  .mission-header {
-    position: relative;
-    padding: var(--ui-gap-sm) var(--ui-gap-md);
-  }
-
-  .mission-header-row {
-    flex-wrap: wrap;
-    align-items: flex-start;
-    gap: var(--ui-gap-sm);
-  }
-
-  .mission-header-cluster {
-    flex: 1 1 100%;
-    max-width: none;
-    padding-right: calc(32px * var(--ui-scale));
-  }
-
-  .mission-stat {
-    flex: 1 1 calc(88px * var(--ui-scale));
-    padding: 0;
-    border-left: 0;
-  }
-
-  .mission-stat[data-stat="workspace"] {
-    max-width: none;
-  }
-
-  .mission-stat[data-stat="counts"] {
-    flex: 1 1 100%;
-    padding-top: var(--ui-gap-sm);
-    border-top: var(--oc-border-width) solid color-mix(in srgb, var(--border) 72%, transparent);
-  }
-
-  .mission-stat[data-stat="counts"] .mission-stat-value {
-    gap: var(--ui-gap-xs);
-  }
-
-  .mission-count {
-    padding: var(--ui-gap-xs) var(--ui-gap-sm);
-  }
-
-  .mission-header-actions {
-    position: absolute;
-    top: var(--ui-gap-sm);
-    right: var(--ui-gap-md);
-    margin-left: 0;
-  }
-
   /* Hide the ledger column AND its resize handle together. */
   .mission-body .mission-ledger,
   .mission-body #missionLedgerResizer {
@@ -369,7 +164,6 @@ body[data-page-mode="mission"] > main.panel {
 }
 
 .ledger-row {
-  appearance: none;
   border: 0;
   border-radius: 0;
   width: 100%;
@@ -437,6 +231,56 @@ body[data-page-mode="mission"] > main.panel {
 .ledger-row-stamp {
   font-size: var(--ui-font-tiny);
   color: var(--text-muted);
+}
+
+.ledger-row-right {
+  min-width: calc(70px * var(--ui-scale));
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: var(--ui-gap-xs);
+}
+
+.mission-row-actions {
+  display: inline-flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: calc(2px * var(--ui-scale));
+  opacity: var(--ui-opacity-hidden);
+  pointer-events: none;
+  transition: opacity var(--ui-duration-fast) var(--ui-timing-standard);
+}
+
+.ledger-row:hover .mission-row-actions,
+.ledger-row:focus-within .mission-row-actions {
+  opacity: 1;
+  pointer-events: auto;
+}
+
+.mission-row-abort-icon[data-icon="confirm"],
+.mission-row-delete-icon[data-icon="confirm"] {
+  display: none;
+}
+
+.oc-button[data-ui="mission-row-abort"][data-confirm="true"] .mission-row-abort-icon[data-icon="abort"],
+.oc-button[data-ui="mission-row-delete"][data-confirm="true"] .mission-row-delete-icon[data-icon="delete"] {
+  display: none;
+}
+
+.oc-button[data-ui="mission-row-abort"][data-confirm="true"] .mission-row-abort-icon[data-icon="confirm"],
+.oc-button[data-ui="mission-row-delete"][data-confirm="true"] .mission-row-delete-icon[data-icon="confirm"] {
+  display: inline-flex;
+}
+
+.mission-row-rename-input {
+  width: 100%;
+  min-width: 0;
+  border: var(--oc-border-width) solid var(--accent);
+  border-radius: var(--oc-radius-soft);
+  background: var(--surface-hover);
+  color: var(--text-strong);
+  padding: calc(2px * var(--ui-scale)) var(--ui-gap-xs);
+  font: inherit;
 }
 
 .ledger-empty,
@@ -520,16 +364,15 @@ body[data-page-mode="mission"] > main.panel {
 .mission-composer {
   display: flex;
   flex-direction: column;
-  gap: var(--ui-gap-md);
+  gap: var(--ui-gap-sm);
   min-height: 100%;
-  justify-content: flex-start;
-  padding: calc(var(--ui-gap-lg) * 1.5) calc(var(--ui-gap-lg) * 2);
+  justify-content: flex-end;
+  padding: 0;
   background: var(--chat-canvas);
 }
 
 .mission-composer > * {
-  width: min(100%, calc(980px * var(--ui-scale)));
-  margin-inline: auto;
+  width: 100%;
 }
 
 .mission-composer-header {
@@ -537,6 +380,7 @@ body[data-page-mode="mission"] > main.panel {
   align-items: flex-start;
   justify-content: space-between;
   gap: var(--ui-gap-lg);
+  padding: var(--ui-gap-lg) var(--ui-gap-lg) 0;
 }
 
 .mission-composer-title {
@@ -565,46 +409,11 @@ body[data-page-mode="mission"] > main.panel {
   display: flex;
   min-height: 0;
   flex-direction: column;
-  gap: var(--ui-gap-md);
-  padding: var(--ui-gap-lg);
-  border: var(--oc-border-width) solid color-mix(in srgb, var(--border) 84%, transparent);
-  border-radius: var(--oc-radius-soft);
-  background: color-mix(in srgb, var(--surface-inset) 86%, var(--chat-canvas));
-}
-
-.mission-composer-input-head {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: var(--ui-gap-md);
-}
-
-/* Chrome + auto-grow come from `.composer-textarea` (single source). The
-   launcher fills a dedicated compose area, so it only overrides the floor
-   to start tall; the primitive's line cap (maxLines) governs the ceiling. */
-.mission-composer-textarea {
-  min-height: calc(280px * var(--ui-scale));
-}
-
-/* Live "<n> / 32000" counter under the composer textarea. Hits a warning
-   colour 200 chars before the server cap (rule 7 — surface failure
-   conditions early) and pegs to bad once the operator is at the limit
-   (textarea `maxLength` stops further input, the colour confirms why). */
-.mission-composer-counter {
-  display: flex;
-  justify-content: flex-end;
-  font-size: var(--ui-font-tiny);
-  color: var(--text-muted);
-  font-variant-numeric: tabular-nums;
-}
-
-.mission-composer-counter [data-near-limit="true"] {
-  color: var(--warn);
-}
-
-.mission-composer-counter [data-at-limit="true"] {
-  color: var(--bad);
-  font-weight: var(--ui-font-weight-strong);
+  gap: var(--ui-gap-sm);
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
 }
 
 .mission-composer-controls {
@@ -613,6 +422,7 @@ body[data-page-mode="mission"] > main.panel {
   align-items: flex-end;
   justify-content: space-between;
   flex-wrap: wrap;
+  padding: 0 var(--ui-gap-lg);
 }
 
 .mission-composer-mission-id {
@@ -884,7 +694,6 @@ body[data-page-mode="mission"] > main.panel {
 .ledger-row:focus-visible,
 .mission-ledger-search-input:focus-visible,
 .mission-ledger-search-clear:focus-visible,
-.mission-composer-textarea:focus-visible,
 .mission-composer-mission-id-input:focus-visible,
 .mission-action-error-dismiss:focus-visible {
   outline: var(--oc-border-width) solid var(--accent);

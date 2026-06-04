@@ -105,8 +105,8 @@ function normalizeRuntimePath(input: string) {
   return normalized || "/"
 }
 
-function runtimeRoutes() {
-  const app = Server.App() as unknown as {
+async function runtimeRoutes() {
+  const app = await Server.routeInventoryApp() as unknown as {
     routes: Array<{ method: string; path: string }>
   }
   const routes = new Set<string>()
@@ -156,7 +156,7 @@ async function scanInventory(): Promise<InventoryViolation[]> {
   const tracked = readJsonFile(SDK_OPENAPI) as {
     paths?: Record<string, Record<string, unknown>>
   }
-  const runtime = runtimeRoutes()
+  const runtime = await runtimeRoutes()
   const generatedOpenapi = openapiRoutes(generated)
   const trackedOpenapi = openapiRoutes(tracked)
   const generatedSdk = sdkRoutes()

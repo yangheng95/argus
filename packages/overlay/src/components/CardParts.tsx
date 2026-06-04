@@ -4,49 +4,10 @@ import { ReasoningPart, isEmptyReasoning } from "./ReasoningPart";
 import { InteractionCard } from "./InteractionCard";
 import { Card } from "./Card";
 import { FilePart } from "./FilePart";
-import { type CardNode } from "../utils/card-tree";
 import { stamp, fullStampWithRelative } from "../utils/time";
-import { toolNameKey, displayToolArguments, shortRelativePath } from "../utils/tool";
+import { shortRelativePath } from "../utils/tool";
 import { selectedTaskDirectory } from "../store/board";
-
-const TODO_CARD_TITLES: Record<string, string> = {
-  todowrite: "Todos",
-  todoread: "Todos",
-  todoupdate: "Todos",
-  updateplan: "Plan",
-};
-
-/** Build a transient CardNode for a tool part so every tool shares the same
- *  card chrome. Completed tools intentionally inherit the card default of
- *  starting collapsed so the timeline only shows header-level summary. */
-function toolToCardNode(part: any): CardNode {
-  const status = (() => {
-    const s = String(part?.state?.status || "").toLowerCase();
-    if (s === "pending" || s === "running" || s === "completed" || s === "error") return s as any;
-    if (s === "failed") return "error";
-    return undefined;
-  })();
-  const toolName = String(part?.tool || "tool");
-  const state = part?.state || {};
-  const key = toolNameKey(toolName);
-  const args = displayToolArguments(toolName, state.input, state, selectedTaskDirectory());
-  const title = TODO_CARD_TITLES[key] || toolName;
-  return {
-    id: String(part?.id || `tool:${toolName}:${Math.random().toString(36).slice(2)}`),
-    kind: "tool",
-    stage: key,
-    status,
-    title,
-    subtitle: args || undefined,
-    parts: [],
-    children: [],
-    toolPart: part,
-    // Transient tool cards are always nested; this value never enters the
-    // top-level sort (rebuildTopLevelOrder filters on card.kind === "tool").
-    // Observation time is sufficient for the required `time` field.
-    time: Date.now(),
-  };
-}
+import { toolToCardNode } from "../utils/tool-card-node";
 
 /** Render the parts list of a card body. Handles boundary separators,
  *  inline text / reasoning, and nested tool cards. Each part renders as its

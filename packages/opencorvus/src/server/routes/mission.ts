@@ -3,8 +3,10 @@ import { describeRoute, resolver, validator } from "hono-openapi"
 import z from "zod"
 import { randomBytes } from "node:crypto"
 import { Instance } from "@/project/instance"
-import { ensureMissionSession, findExistingMissionSession, listGlobalMissionSessions } from "@/mission/session"
+import { ensureMissionSession, findExistingMissionSession, getMissionSession, listGlobalMissionSessions } from "@/mission/session"
 import { MissionID } from "@/mission/schema"
+import { Session } from "@/session"
+import { SessionPrompt } from "@/session/prompt"
 import { SessionWake } from "@/session/wake"
 
 function newMissionID(): string {
@@ -46,6 +48,14 @@ const MissionListQuery = z
     message: "cursorUpdated and cursorSessionID must be provided together",
     path: ["cursorUpdated"],
   })
+
+const MissionParam = z.object({
+  missionID: MissionID,
+})
+
+const MissionTitleInput = z.object({
+  title: z.string().trim().min(1).max(200),
+})
 
 export function MissionRoutes() {
   return new Hono().get(
@@ -89,6 +99,75 @@ export function MissionRoutes() {
         )
       }
       return c.json(records)
+    },
+  ).patch(
+    "/:missionID/title",
+    describeRoute({
+      summary: "Rename a Mission",
+      description: "Rename the Mission session title. The Mission record remains backed by the same mission session.",
+      operationId: "mission.rename",
+      responses: {
+        200: {
+          description: "Renamed Mission record",
+          content: { "application/json": { schema: resolver(MissionRecord) } },
+        },
+      },
+    }),
+    validator("param", MissionParam),
+    validator("json", MissionTitleInput),
+    async (c) => {
+      const missionID = c.req.valid("param").missionID
+      const session = await getMissionSession(missionID)
+      const updated = await Session.setTitle({ sessionID: session.id, title: c.req.valid("json").title })
+      return c.json(
+        MissionRecord.parse({
+          missionID,
+          sessionID: updated.id,
+          title: updated.title,
+          directory: updated.directory,
+          created: updated.time.created,
+          updated: updated.time.updated,
+          archived: updated.time.archived,
+        }),
+      )
+    },
+  ).post(
+    "/:missionID/abort",
+    describeRoute({
+      summary: "Abort a Mission",
+      description: "Abort the active Mission session loop for this Mission.",
+      operationId: "mission.abort",
+      responses: {
+        200: {
+          description: "Mission abort accepted",
+          content: { "application/json": { schema: resolver(z.boolean()) } },
+        },
+      },
+    }),
+    validator("param", MissionParam),
+    async (c) => {
+      const session = await getMissionSession(c.req.valid("param").missionID)
+      SessionPrompt.cancel(session.id)
+      return c.json(true)
+    },
+  ).delete(
+    "/:missionID",
+    describeRoute({
+      summary: "Delete a Mission",
+      description: "Delete the Mission session and its conversation history.",
+      operationId: "mission.delete",
+      responses: {
+        200: {
+          description: "Mission deleted",
+          content: { "application/json": { schema: resolver(z.boolean()) } },
+        },
+      },
+    }),
+    validator("param", MissionParam),
+    async (c) => {
+      const session = await getMissionSession(c.req.valid("param").missionID)
+      await Session.remove(session.id)
+      return c.json(true)
     },
   ).post(
     "/wake",

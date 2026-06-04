@@ -12,6 +12,8 @@ export const PanelLocalActionType = z.enum(["set_executor", "select_task", "sele
  *   panel_ui        external UI / mobile gateway client / direct HTTP call
  *   control_agent   the OpenCorvus control LLM agent (`control`)
  *   mission         the OpenCorvus Mission LLM agent (`mission`)
+ *   right_sidebar_assistant
+ *                  the project-bound coding assistant embedded in the right sidebar
  *
  * `actor` is the provenance dimension (who); `surface` is the channel
  * dimension (where). They are independent: a control_agent can run on
@@ -23,7 +25,7 @@ export const PanelLocalActionType = z.enum(["set_executor", "select_task", "sele
  * for authorization decisions and audit trails. `source` is preserved
  * for business-meaningful labels (e.g. "channel:slack:thread-123").
  */
-export const PanelActor = z.enum(["panel_ui", "control_agent", "mission"])
+export const PanelActor = z.enum(["panel_ui", "control_agent", "mission", "right_sidebar_assistant"])
 export type PanelActor = z.infer<typeof PanelActor>
 
 /**

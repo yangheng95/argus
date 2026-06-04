@@ -21,7 +21,7 @@
    - 不许用 `--no-verify` 绕 hook（rule 33）。pre-push hook 跑 typecheck / api:routes-check / docs:check，挂了就修根因。
    - 不许加 fallback / 双源 / 状态机式 if-else（rule 7 / 8 / 13 / 20）。
    - 不许碰 Layer 2（capability probe）——那是独立 PR，本次只做 Layer 1 + kimik26 flip。
-   - 不许碰当前 branch 已有的 main.tsx frontend-preview 半截重构（不属于本任务范围；如果它阻塞 build:overlay 可以 skip overlay 验收，但不能擅自删它）。
+   - 不许碰当前 branch 已有的 overlay 半截重构（不属于本任务范围；如果它阻塞 build:overlay 可以 skip overlay 验收，但不能擅自删它）。
 
 3. **commit + push**：
    - 落 commit 前先把 spec（含你的 Codex Review 追加）一并 stage。
@@ -39,7 +39,7 @@
 ## 上下文（可能影响判断）
 
 - 当前分支 `codex/task-session-runtime-isolation`，最新 commit `a635d7e4e`（task session runtime isolation）。
-- 这分支的 overlay 部分有半截重构（main.tsx 还 import 已删的 `./services/frontend-preview`），不是本任务范围。
+- 这分支的 overlay 部分有半截重构，不是本任务范围。
 - `bun.lock` / `package.json` 有未 stash 的本地改动（之前已 stash 走），工作区干净。
 - 用户已实测 CZ kimik26 网关：远程 URL fetch 超时（gateway 不出公网），data URL 成功（HTTP 200 + 准确描述 1x1 PNG）。这是 spec §1.1 证据。
 - 用户实测 `attachment: false` 是声明 drift 不是真不支持，所以 capability declaration 那一行（spec §1.2）必修。

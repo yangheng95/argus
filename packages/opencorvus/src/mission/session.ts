@@ -1,4 +1,4 @@
-import { Database, and, desc, eq, isNull, like, or, sql } from "@/storage/db"
+import { Database, NotFoundError, and, desc, eq, isNull, like, or, sql } from "../storage/db"
 import { Instance } from "@/project/instance"
 import { Session } from "@/session"
 import { SessionTable } from "@/session/session.sql"
@@ -89,6 +89,15 @@ function missionSessionConditions(input?: {
  */
 export function findExistingMissionSession(missionID: string): string | undefined {
   return findMissionSessionID(missionID)
+}
+
+export async function getMissionSession(missionID: string): Promise<MissionSession> {
+  const sessionID = findMissionSessionID(missionID)
+  if (!sessionID) throw new NotFoundError({ message: `Mission not found: ${missionID}` })
+  const session = await Session.get(sessionID)
+  const parsedMissionID = missionIDFromInfo(session)
+  if (parsedMissionID !== missionID) throw new NotFoundError({ message: `Mission not found: ${missionID}` })
+  return withMissionID(session, parsedMissionID)
 }
 
 export async function* listMissionSessions(input?: {

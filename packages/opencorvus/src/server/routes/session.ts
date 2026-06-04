@@ -25,11 +25,24 @@ import { Log } from "../../util/log"
 import { errors } from "../error"
 import { lazy } from "../../util/lazy"
 import { ProtocolStore } from "@/protocol/store"
-import { enrichMissionSessionTranscript, subscribeMissionSessionMirror } from "@/protocol/session-mirror"
+import { enrichMissionSessionTranscript, subscribeSessionMirror } from "@/protocol/session-mirror"
 import { BusEvent } from "@/bus/bus-event"
 import { SessionConversationHydration, SessionEvent } from "@/engine/model"
+import {
+  applyRightSidebarCodingAssistantPromptOverlay,
+  isRightSidebarCodingAssistantSession,
+} from "@/coding-assistant/session"
 
 const log = Log.create({ service: "server" })
+
+async function applySessionPromptRouteOverlay(
+  sessionID: string,
+  prompt: Omit<SessionPrompt.PromptInput, "sessionID">,
+) {
+  const session = await Session.get(sessionID)
+  if (!isRightSidebarCodingAssistantSession(session)) return prompt
+  return applyRightSidebarCodingAssistantPromptOverlay(prompt)
+}
 
 function protocolSessionEvent(event: ReturnType<typeof ProtocolStore.listTaskEventsAfter>[number]) {
   const timestamp = event.time.emitted
@@ -389,7 +402,7 @@ export const SessionRoutes = lazy(() =>
             },
             { sessionID },
           )
-          const stopMirror = subscribeMissionSessionMirror(sessionID)
+          const stopMirror = subscribeSessionMirror(sessionID)
           await writeData(JSON.stringify({
             event_id: `session-connected-${Date.now()}`,
             session_id: sessionID,
@@ -979,7 +992,7 @@ export const SessionRoutes = lazy(() =>
         const body = c.req.valid("json")
         const msg = await TaskQueueService.executePrompt({
           sessionID,
-          prompt: body,
+          prompt: await applySessionPromptRouteOverlay(sessionID, body),
           source: "session.prompt",
         })
         return c.json(msg)
@@ -1012,7 +1025,7 @@ export const SessionRoutes = lazy(() =>
         const body = c.req.valid("json")
         const taskID = TaskQueueService.enqueuePrompt({
           sessionID,
-          prompt: body,
+          prompt: await applySessionPromptRouteOverlay(sessionID, body),
           source: "session.prompt_async",
         })
         return c.json({ taskID }, 202)

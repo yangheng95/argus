@@ -8,6 +8,7 @@ import { PanelTool } from "../../src/tool/panel"
 import { Log } from "../../src/util/log"
 import { resetDatabase } from "../fixture/db"
 import { tmpdir } from "../fixture/fixture"
+import { RIGHT_SIDEBAR_CODING_ASSISTANT_METADATA } from "../../src/coding-assistant/session"
 
 Log.init({ print: false })
 
@@ -91,6 +92,92 @@ describe("panel tool", () => {
           type: "invalidate_session",
           sessionID: session.id,
         })
+      },
+    })
+  }, 15_000)
+
+  test("right sidebar assistant create_task writes server-derived provenance", async () => {
+    await using tmp = await tmpdir({ git: true })
+
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const session = await Session.create({
+          kind: "assistant",
+          title: "right sidebar assistant",
+          metadata: RIGHT_SIDEBAR_CODING_ASSISTANT_METADATA,
+        })
+
+        const tool = await PanelTool.init()
+        const result = await tool.execute(
+          {
+            action: "create_task",
+            request: "inspect project tasks",
+            queue: true,
+            source: "mission",
+            metadata: {
+              actor: "forged",
+              mission: { id: "forged" },
+              keep: "value",
+            },
+          },
+          {
+            sessionID: session.id,
+            messageID: Identifier.ascending("message"),
+            agent: "coding",
+            abort: new AbortController().signal,
+            messages: [],
+            metadata() {},
+            async ask() {},
+            extra: { surface: "right-sidebar", source: "panel" },
+          },
+        )
+
+        const output = JSON.parse(result.output) as { task_id: string }
+        const task = Database.use((db) =>
+          db.select().from(EngineTaskTable).where(eq(EngineTaskTable.id, output.task_id)).get(),
+        )
+
+        expect(task?.source).toBe("right-sidebar-assistant")
+        expect(task?.metadata).toMatchObject({
+          actor: "right_sidebar_assistant",
+          keep: "value",
+        })
+        expect((task?.metadata as Record<string, unknown> | undefined)?.mission).toBeUndefined()
+      },
+    })
+  }, 15_000)
+
+  test("right sidebar assistant cannot manage sessions through panel tool", async () => {
+    await using tmp = await tmpdir({ git: true })
+
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const session = await Session.create({
+          kind: "assistant",
+          metadata: RIGHT_SIDEBAR_CODING_ASSISTANT_METADATA,
+        })
+        const tool = await PanelTool.init()
+
+        await expect(
+          tool.execute(
+            {
+              action: "delete_session",
+              sessionID: session.id,
+            },
+            {
+              sessionID: session.id,
+              messageID: Identifier.ascending("message"),
+              agent: "coding",
+              abort: new AbortController().signal,
+              messages: [],
+              metadata() {},
+              async ask() {},
+              extra: { surface: "right-sidebar" },
+            },
+          ),
+        ).rejects.toThrow("not permitted for the right sidebar assistant")
       },
     })
   })

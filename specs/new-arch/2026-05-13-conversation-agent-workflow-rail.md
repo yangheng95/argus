@@ -14,7 +14,7 @@
 
 ## 现状证据
 
-- `packages/overlay/src/index.html` 仍保留右栏三 tab：`rightPanelWorkflow` / `rightPanelInspector` / `rightPanelPreview`，Workflow 挂载点是 `solidAgentWorkflowMount`。
+- `packages/overlay/src/index.html` 的历史右栏 Workflow tab 已移除；agent workflow 的 owner surface 是 Conversation 底部 rail。
 - `packages/overlay/src/components/AgentWorkflowPanel.tsx` 是现有 Workflow 视图，当前 owner surface 是右栏 tab，不属于 Conversation。
 - `packages/overlay/src/utils/agent-workflow.ts` 是 agent workflow 投影层，合并 task trace 与 `cardTreeStore`，已经输出 `AgentWorkflowRecord` / `AgentWorkflowStack`，包含 `sessionID`、`cardID`、`status`、`report`、`parentSessionID`、`goalID`、`round`、`attempt` 等字段。
 - `packages/overlay/src/components/Conversation.tsx` 是 Conversation 渲染入口，直接读取 `cardTreeStore.order`，用 `renderAsBubble()` 单点路由 `ChatBubble` / `Card`。
@@ -219,15 +219,12 @@ Markdown 安全不能在 `AgentReportDialog` 内单独处理。当前 `renderMar
   - 退役右栏 Workflow 入口。可删除组件，或先改为只被新 rail 复用的内部小组件；最终不能保留右栏 tab 和 Conversation rail 双入口。
 - `packages/overlay/src/index.html`
   - 移除 `rightPanelWorkflow` 和 `solidAgentWorkflowMount`。
-  - 如果右栏仍保留 Inspector/Preview，应移除 Workflow tab。
+  - 移除 Workflow tab。
   - 新增 `conversationBody` / `solidConversationAgentRailMount`，并保留 `chatScroll` 作为唯一消息滚动容器。
 - `packages/overlay/src/main.tsx`
   - 移除 `AgentWorkflowPanel` mount。
   - 移除 `right_panel.workflow` tab 逻辑。
-  - 保留 Preview 自动切换逻辑时，不能再把 Workflow 当成 tab 候选。
-- `packages/overlay/src/services/frontend-preview.ts`
-  - `RightPanelTab` 改为 `"inspector" | "preview"`。
-  - `nextTabForPreviewResolution()` 不能再接受或返回 `"workflow"`。
+  - 移除右栏 Workflow tab 候选。
 - `packages/overlay/src/utils/agent-workflow.ts`
   - 拆 `traceReport` / `displaySummary`。
   - 增加 `lastObservedAt` / `renderedCardID`。

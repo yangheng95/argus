@@ -154,8 +154,9 @@ All endpoints are protected by `OPENCORVUS_SERVER_PASSWORD` when it is set. Clie
 |---|---|---|---|
 | POST | `/coding/cli/open` | Open coding CLI | `coding.cli.open` |
 | GET | `/coding/cli/profiles` | List installed coding CLIs | `coding.cli.profiles` |
-| POST | `/coding/message/stream` | Send coding assistant message with streaming | `coding.message.stream` |
-| GET | `/coding/session/{sessionID}/messages` | Get coding session messages | `coding.session.messages` |
+| POST | `/coding/session` | Create right sidebar coding assistant session | `coding.session.create` |
+| GET | `/coding/session/{sessionID}` | Claim right sidebar coding assistant session | `coding.session.get` |
+| GET | `/coding/sessions` | List right sidebar coding assistant sessions | `coding.sessions.list` |
 
 ### Channel
 
@@ -322,12 +323,22 @@ All endpoints are protected by `OPENCORVUS_SERVER_PASSWORD` when it is set. Clie
 | POST | `/experimental/worktree` | Create worktree | `worktree.create` |
 | POST | `/experimental/worktree/reset` | Reset worktree | `worktree.reset` |
 
+### Browser-preview
+
+| Method | Path | Summary | operationId |
+|---|---|---|---|
+| GET | `/browser-preview/target` | Resolve browser preview target | `browserPreview.target` |
+| POST | `/browser-preview/verify` | Capture browser preview verification evidence | `browserPreview.verify` |
+
 ### Mission
 
 | Method | Path | Summary | operationId |
 |---|---|---|---|
 | GET | `/mission` | List Missions | `mission.list` |
 | POST | `/mission/wake` | Wake the Mission agent | `mission.wake` |
+| DELETE | `/mission/{missionID}` | Delete a Mission | `mission.delete` |
+| POST | `/mission/{missionID}/abort` | Abort a Mission | `mission.abort` |
+| PATCH | `/mission/{missionID}/title` | Rename a Mission | `mission.rename` |
 
 ### Terminal
 

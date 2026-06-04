@@ -1,30 +1,40 @@
 import { Hono } from "hono"
 import { describeRoute, validator, resolver } from "hono-openapi"
-import { streamSSE } from "hono/streaming"
 import z from "zod"
-import { Bus } from "@/bus"
 import { Session } from "@/session"
-import { SessionPrompt } from "@/session/prompt"
-import { SessionStatus, Message } from "@/session"
-import { Log } from "@/util/log"
 import { CodingCli } from "@/coding-cli"
 import { SystemTerminal } from "@/system-terminal"
 import { HTTPException } from "hono/http-exception"
+import { Instance } from "@/project/instance"
+import {
+  RIGHT_SIDEBAR_CODING_ASSISTANT_METADATA,
+  isRightSidebarCodingAssistantSession,
+  listRightSidebarCodingAssistantSessions,
+} from "@/coding-assistant/session"
 
-const log = Log.create({ service: "coding" })
-
-const CodingInput = z.object({
-  text: z.string().min(1),
-  sessionID: z.string().optional(),
-  parts: z
-    .array(
-      z.object({
-        type: z.literal("text"),
-        text: z.string(),
-      }),
-    )
-    .optional(),
+const CodingSessionQuery = z.object({
+  directory: z.string().optional(),
+  limit: z.coerce.number().int().min(1).max(100).default(20),
 })
+
+const CodingSessionResponse = z.object({
+  session: Session.Info,
+})
+
+const CodingSessionsResponse = z.object({
+  sessions: Session.Info.array(),
+})
+
+async function assertRightSidebarCodingSession(sessionID: string) {
+  const session = await Session.get(sessionID)
+  if (session.projectID !== Instance.project.id || session.directory !== Instance.directory) {
+    throw new HTTPException(404, { message: `Coding assistant session not found: ${sessionID}` })
+  }
+  if (!isRightSidebarCodingAssistantSession(session)) {
+    throw new HTTPException(404, { message: `Coding assistant session not found: ${sessionID}` })
+  }
+  return session
+}
 
 export function CodingRoutes() {
   return new Hono()
@@ -84,164 +94,79 @@ export function CodingRoutes() {
       },
     )
     .post(
-      "/message/stream",
+      "/session",
       describeRoute({
-        summary: "Send coding assistant message with streaming",
+        summary: "Create right sidebar coding assistant session",
         description:
-          "Send a message to the coding agent for direct coding assistance. Streams text deltas, tool calls, and results via SSE.",
-        operationId: "coding.message.stream",
+          "Create a project-bound assistant session for the right sidebar coding assistant. Prompting and history use canonical /session routes.",
+        operationId: "coding.session.create",
         responses: {
-          200: {
-            description: "Streaming coding assistant events",
+          201: {
+            description: "Coding assistant session",
             content: {
-              "text/event-stream": {
-                schema: resolver(z.unknown()),
+              "application/json": {
+                schema: resolver(CodingSessionResponse),
               },
             },
           },
         },
       }),
-      validator("json", CodingInput),
       async (c) => {
-        const input = c.req.valid("json")
-        c.header("X-Accel-Buffering", "no")
-        c.header("X-Content-Type-Options", "nosniff")
-
-        return streamSSE(c, async (stream) => {
-          let sessionID = input.sessionID
-
-          // Create or reuse session
-          if (!sessionID) {
-            const session = await Session.create({ kind: "assistant", title: "Coding assistant" })
-            sessionID = session.id
-          }
-
-          log.info("coding message", { sessionID, text: input.text.slice(0, 80) })
-
-          await stream.writeSSE({
-            data: JSON.stringify({ type: "session", sessionID }),
-          })
-
-          const unsubs: (() => void)[] = []
-
-          try {
-            // Subscribe to part deltas (text streaming chunks)
-            unsubs.push(
-              Bus.subscribe(Message.Event.PartDelta, (event) => {
-                if (event.properties.sessionID !== sessionID) return
-                stream.writeSSE({
-                  data: JSON.stringify({
-                    type: "delta",
-                    partID: event.properties.partID,
-                    messageID: event.properties.messageID,
-                    field: event.properties.field,
-                    delta: event.properties.delta,
-                  }),
-                })
-              }),
-            )
-
-            // Subscribe to part updates (tool calls, results, step markers)
-            unsubs.push(
-              Bus.subscribe(Message.Event.PartUpdated, (event) => {
-                const part = event.properties.part as Record<string, unknown>
-                if (part.sessionID !== sessionID) return
-                stream.writeSSE({
-                  data: JSON.stringify({
-                    type: "part",
-                    part,
-                  }),
-                })
-              }),
-            )
-
-            // Subscribe to message updates (completion, tokens)
-            unsubs.push(
-              Bus.subscribe(Message.Event.Updated, (event) => {
-                const info = event.properties.info as Record<string, unknown>
-                if (info.sessionID !== sessionID) return
-                if (info.role !== "assistant") return
-                stream.writeSSE({
-                  data: JSON.stringify({
-                    type: "message",
-                    info,
-                  }),
-                })
-              }),
-            )
-
-            // Subscribe to session status (busy/idle/retry)
-            unsubs.push(
-              Bus.subscribe(SessionStatus.Event.Status, (event) => {
-                if (event.properties.sessionID !== sessionID) return
-                stream.writeSSE({
-                  data: JSON.stringify({
-                    type: "status",
-                    status: event.properties.status,
-                  }),
-                })
-              }),
-            )
-
-            // Subscribe to errors
-            unsubs.push(
-              Bus.subscribe(Session.Event.Error, (event) => {
-                if (event.properties.sessionID !== sessionID) return
-                stream.writeSSE({
-                  data: JSON.stringify({
-                    type: "error",
-                    error: event.properties.error,
-                  }),
-                })
-              }),
-            )
-
-            // Send direct coding requests to the coding agent, independent of
-            // the operator's workflow/default_agent selection.
-            const parts = input.parts ?? [{ type: "text" as const, text: input.text }]
-
-            await SessionPrompt.prompt({
-              sessionID,
-              agent: "coding",
-              parts,
-            })
-
-            await stream.writeSSE({
-              data: JSON.stringify({ type: "done", sessionID }),
-            })
-          } catch (err) {
-            const message = err instanceof Error ? err.message : String(err)
-            log.error("coding message failed", { sessionID, error: message })
-            await stream.writeSSE({
-              data: JSON.stringify({ type: "error", error: { message } }),
-            })
-          } finally {
-            for (const unsub of unsubs) unsub()
-          }
+        const session = await Session.create({
+          kind: "assistant",
+          title: "Coding assistant",
+          metadata: RIGHT_SIDEBAR_CODING_ASSISTANT_METADATA,
         })
+        return c.json({ session }, 201)
       },
     )
     .get(
-      "/session/:sessionID/messages",
+      "/sessions",
       describeRoute({
-        summary: "Get coding session messages",
-        description: "Retrieve message history for a coding assistant session.",
-        operationId: "coding.session.messages",
+        summary: "List right sidebar coding assistant sessions",
+        description:
+          "List project-bound right sidebar coding assistant sessions. Prompting and history use canonical /session routes.",
+        operationId: "coding.sessions.list",
         responses: {
           200: {
-            description: "Session messages",
+            description: "Coding assistant sessions",
             content: {
               "application/json": {
-                schema: resolver(z.unknown()),
+                schema: resolver(CodingSessionsResponse),
               },
             },
           },
         },
       }),
+      validator("query", CodingSessionQuery),
       async (c) => {
-        const sessionID = c.req.param("sessionID")
-        const messages = await Session.messages({ sessionID, limit: 200 })
-        return c.json(messages)
+        const input = c.req.valid("query")
+        const sessions = listRightSidebarCodingAssistantSessions(input)
+        return c.json({ sessions })
+      },
+    )
+    .get(
+      "/session/:sessionID",
+      describeRoute({
+        summary: "Claim right sidebar coding assistant session",
+        description:
+          "Validate and return an existing project-bound right sidebar coding assistant session.",
+        operationId: "coding.session.get",
+        responses: {
+          200: {
+            description: "Coding assistant session",
+            content: {
+              "application/json": {
+                schema: resolver(CodingSessionResponse),
+              },
+            },
+          },
+        },
+      }),
+      validator("param", z.object({ sessionID: z.string() })),
+      async (c) => {
+        const session = await assertRightSidebarCodingSession(c.req.valid("param").sessionID)
+        return c.json({ session })
       },
     )
 }
