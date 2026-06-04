@@ -6,6 +6,9 @@ import SidebarLsp from "../feature-plugins/sidebar/lsp"
 import SidebarTodo from "../feature-plugins/sidebar/todo"
 import SidebarFiles from "../feature-plugins/sidebar/files"
 import SidebarFooter from "../feature-plugins/sidebar/footer"
+import PluginManager from "../feature-plugins/system/plugins"
+import Notifications from "../feature-plugins/system/notifications"
+import WhichKey from "../feature-plugins/system/which-key"
 
 export type InternalTuiPlugin = Omit<TuiPluginModule, "id"> & {
   id: string
@@ -14,5 +17,5 @@ export type InternalTuiPlugin = Omit<TuiPluginModule, "id"> & {
 }
 
 export function internalTuiPlugins(): InternalTuiPlugin[] {
-  return [SidebarContext, SidebarMcp, SidebarLsp, SidebarTodo, SidebarFiles, SidebarFooter]
+  return [SidebarContext, SidebarMcp, SidebarLsp, SidebarTodo, SidebarFiles, SidebarFooter, Notifications, PluginManager, WhichKey]
 }

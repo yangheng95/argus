@@ -71,6 +71,9 @@ describe("OpenCode-derived TUI plugin substrate", () => {
     const slots = await readFile(path.join(tuiRoot, "plugin/slots.tsx"), "utf8")
     const sidebar = await readFile(path.join(tuiRoot, "routes/session/sidebar.tsx"), "utf8")
     const internal = await readFile(path.join(tuiRoot, "plugin/internal.ts"), "utf8")
+    const whichKey = await readFile(path.join(tuiRoot, "feature-plugins/system/which-key.tsx"), "utf8")
+    const pluginManager = await readFile(path.join(tuiRoot, "feature-plugins/system/plugins.tsx"), "utf8")
+    const notifications = await readFile(path.join(tuiRoot, "feature-plugins/system/notifications.ts"), "utf8")
 
     expect(app).toContain('from "./plugin/api"')
     expect(app).toContain('from "./plugin/runtime"')
@@ -89,8 +92,27 @@ describe("OpenCode-derived TUI plugin substrate", () => {
     expect(sidebar).not.toContain("sync.data.mcp")
     expect(sidebar).not.toContain("sync.data.lsp")
     expect(sidebar).not.toContain("session_diff")
-    for (const plugin of ["SidebarContext", "SidebarMcp", "SidebarLsp", "SidebarTodo", "SidebarFiles", "SidebarFooter"]) {
+    for (const plugin of [
+      "SidebarContext",
+      "SidebarMcp",
+      "SidebarLsp",
+      "SidebarTodo",
+      "SidebarFiles",
+      "SidebarFooter",
+      "Notifications",
+      "PluginManager",
+      "WhichKey",
+    ]) {
       expect(internal).toContain(plugin)
     }
+    expect(whichKey).toContain('toggle: "which-key.toggle"')
+    expect(whichKey).toContain('app_bottom()')
+    expect(whichKey).toContain('app()')
+    expect(pluginManager).toContain("props.api.plugins.list()")
+    expect(pluginManager).toContain("props.api.plugins.deactivate")
+    expect(pluginManager).toContain("props.api.plugins.activate")
+    expect(notifications).toContain('api.event.on("question.asked"')
+    expect(notifications).toContain('api.event.on("permission.asked"')
+    expect(notifications).toContain('api.event.on("session.status"')
   })
 })
