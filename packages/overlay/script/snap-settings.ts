@@ -14,8 +14,7 @@
  *      | providers | agentModels | about    (default: providers)
  */
 
-import { findBrowserExecutable } from "../../opencorvus/src/acceptance/checks/visual"
-import puppeteer from "puppeteer-core"
+import { launchBrowser } from "../test/launch"
 import path from "node:path"
 
 const out = process.argv[2]
@@ -27,20 +26,15 @@ const tab = process.argv[3] ?? "providers"
 const w = Number(process.argv[4] ?? 1280)
 const h = Number(process.argv[5] ?? 800)
 
-const exe = await findBrowserExecutable()
-const browser = await puppeteer.launch({
-  executablePath: exe,
-  headless: true,
-  args: ["--no-sandbox", "--disable-gpu", "--disable-dev-shm-usage"],
-})
+const browser = await launchBrowser(["--no-sandbox", "--disable-gpu", "--disable-dev-shm-usage"])
 try {
   const page = await browser.newPage()
-  await page.setViewport({ width: w, height: h, deviceScaleFactor: 1 })
+  await page.setViewportSize({ width: w, height: h })
   page.on("pageerror", (e) => console.error("[page-error]", e.message))
   page.on("console", (msg) => {
     if (msg.type() === "error") console.error("[console-error]", msg.text())
   })
-  await page.goto("http://localhost:5173/", { waitUntil: "networkidle2", timeout: 15000 }).catch((e) => {
+  await page.goto("http://localhost:5173/", { waitUntil: "networkidle", timeout: 15000 }).catch((e) => {
     console.error(`page.goto warning: ${e.message ?? e}`)
   })
   await new Promise((r) => setTimeout(r, 800))

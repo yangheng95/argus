@@ -217,7 +217,7 @@ async function buildWindowsSupervisorHelper() {
 async function buildBrowserMcpNodeBundle(outdir: string) {
   await fs.promises.mkdir(outdir, { recursive: true })
   const result = await Bun.build({
-    entrypoints: ["./src/mcp/browser/stdio.ts"],
+    entrypoints: ["./src/mcp/browser/stdio.ts", "./src/mcp/browser/http.ts"],
     outdir,
     target: "node",
     external: artifactBrowserMcpNodeExternalModules(),
@@ -227,6 +227,7 @@ async function buildBrowserMcpNodeBundle(outdir: string) {
     throw new Error(`Failed to build Browser MCP node bundle: ${detail}`)
   }
   await fs.promises.rename(path.join(outdir, "stdio.js"), path.join(outdir, "stdio.mjs"))
+  await fs.promises.rename(path.join(outdir, "http.js"), path.join(outdir, "http.mjs"))
 }
 
 async function copyPackageDirectory(source: string, destination: string) {

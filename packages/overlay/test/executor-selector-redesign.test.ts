@@ -1,4 +1,4 @@
-// Puppeteer-driven behavioral test for the dual-chip executor bar.
+// Playwright-driven behavioral test for the dual-chip executor bar.
 //
 //   - Two chips (OpenCorvus + external) render side-by-side under the
 //     composer.
@@ -190,7 +190,7 @@ test("dual executor chip — mirror vs external popovers with availability", asy
     // Clicking the external chip closes the mirror popover and opens its own.
     // Dispatch via .click() directly because startup notifications can hover
     // over the bottom-right of the composer at low viewports and intercept a
-    // pixel-based puppeteer click.
+    // pixel-based Playwright click.
     await page.evaluate(() =>
       (document.querySelector('[data-ui="executor-chip-external"]') as HTMLButtonElement).click(),
     )

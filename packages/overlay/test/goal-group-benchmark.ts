@@ -10,9 +10,7 @@
  * The browser stays open for visual inspection. Press Ctrl+C to exit.
  */
 
-const { default: puppeteer } = await import(
-  new URL("../../opencorvus/node_modules/puppeteer-core/lib/esm/puppeteer/puppeteer-core.js", import.meta.url).href
-)
+import { launchBrowser } from "./launch"
 
 // Static assets: serve from dist-vite/ (built bundle) so the browser receives
 // already-compiled JS/CSS instead of raw .tsx that no browser can parse.
@@ -424,39 +422,15 @@ const server = Bun.serve({
 const serverUrl = `http://127.0.0.1:${server.port}`
 console.log(`\n  Mock server: ${serverUrl}`)
 
-// ── Launch browser (headed) ──
-
-const browsers = [
-  "C:/Program Files/Google/Chrome/Application/chrome.exe",
-  "C:/Program Files (x86)/Google/Chrome/Application/chrome.exe",
-  "C:/Program Files/Microsoft/Edge/Application/msedge.exe",
-  "C:/Program Files (x86)/Microsoft/Edge/Application/msedge.exe",
-]
-
-let exe = ""
-for (const path of browsers) {
-  if (await Bun.file(path).exists()) {
-    exe = path
-    break
-  }
-}
-if (!exe) {
-  console.error("No Chrome/Edge found")
-  process.exit(1)
-}
+// ── Launch browser through the Node sidecar ──
 
 // Set OVERLAY_BENCHMARK_SHOT=1 to run headless and dump screenshots to
 // docs/cards-visual/, then exit. Useful for non-interactive verification.
 const SHOT_MODE = process.env.OVERLAY_BENCHMARK_SHOT === "1"
 
-const browser = await puppeteer.launch({
-  executablePath: exe,
-  headless: SHOT_MODE,
-  defaultViewport: { width: 900, height: 1200, deviceScaleFactor: 2 },
-  args: ["--no-sandbox", "--no-first-run", "--no-default-browser-check"],
-})
-
+const browser = await launchBrowser(["--no-sandbox", "--no-first-run", "--no-default-browser-check"])
 const page = await browser.newPage()
+await page.setViewportSize({ width: 900, height: 1200 })
 
 // Inject Tauri mock
 await page.evaluateOnNewDocument((url: string) => {

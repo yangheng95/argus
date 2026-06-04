@@ -206,6 +206,41 @@ export const ResearchBundleSchema = z.object({
 })
 export type ResearchBundle = z.infer<typeof ResearchBundleSchema>
 
+const ResearchBundleLine = (max: number) =>
+  z.string()
+    .min(1)
+    .max(max)
+    .regex(/^[^\r\n]+$/, "must be single-line text; split multiline notes into multiple array items")
+
+export const ResearchBundleMarkdownSectionSchema = z.object({
+  title: ResearchBundleLine(160),
+  evidence_ids: z.array(z.string().min(1)).default([]),
+  points: z.array(ResearchBundleLine(1200)).min(1).max(80),
+})
+export type ResearchBundleMarkdownSection = z.infer<typeof ResearchBundleMarkdownSectionSchema>
+
+export const ResearchBundleEvidenceNoteSchema = z.object({
+  evidence_id: z.string().min(1),
+  observations: z.array(ResearchBundleLine(1200)).min(1).max(80),
+  artifact_refs: z.array(ResearchBundleLine(500)).default([]),
+})
+export type ResearchBundleEvidenceNote = z.infer<typeof ResearchBundleEvidenceNoteSchema>
+
+export const ResearchBundleCitationEntrySchema = z.object({
+  claim_id: ResearchBundleLine(160),
+  evidence_ids: z.array(z.string().min(1)).min(1),
+  pointer: ResearchBundleLine(500),
+  usage: ResearchBundleLine(1200),
+})
+export type ResearchBundleCitationEntry = z.infer<typeof ResearchBundleCitationEntrySchema>
+
+export const ResearchBundleInputSchema = z.object({
+  full_markdown_sections: z.array(ResearchBundleMarkdownSectionSchema).min(1).max(80),
+  evidence_notes: z.array(ResearchBundleEvidenceNoteSchema).min(1).max(160),
+  citation_map: z.array(ResearchBundleCitationEntrySchema).min(1).max(240),
+})
+export type ResearchBundleInput = z.infer<typeof ResearchBundleInputSchema>
+
 export type ResearchStaleness = {
   stale: boolean
   reasons: string[]

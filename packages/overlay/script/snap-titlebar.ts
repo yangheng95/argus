@@ -5,8 +5,7 @@
  *
  * Usage: bun run script/snap-titlebar.ts <out.png> [menu] [w] [h] [theme]
  */
-import { findBrowserExecutable } from "../../opencorvus/src/acceptance/checks/visual"
-import puppeteer from "puppeteer-core"
+import { launchBrowser } from "../test/launch"
 import path from "node:path"
 
 const out = process.argv[2]
@@ -19,17 +18,12 @@ const w = Number(process.argv[4] ?? 1280)
 const h = Number(process.argv[5] ?? 800)
 const theme = process.argv[6] ?? "dark"
 
-const exe = await findBrowserExecutable()
-const browser = await puppeteer.launch({
-  executablePath: exe,
-  headless: true,
-  args: ["--no-sandbox", "--disable-gpu", "--disable-dev-shm-usage"],
-})
+const browser = await launchBrowser(["--no-sandbox", "--disable-gpu", "--disable-dev-shm-usage"])
 try {
   const page = await browser.newPage()
-  await page.setViewport({ width: w, height: h, deviceScaleFactor: 1 })
+  await page.setViewportSize({ width: w, height: h })
   page.on("pageerror", (e) => console.error("[page-error]", e.message))
-  await page.goto("http://localhost:5173/", { waitUntil: "networkidle2", timeout: 15000 }).catch((e) => {
+  await page.goto("http://localhost:5173/", { waitUntil: "networkidle", timeout: 15000 }).catch((e) => {
     console.error(`page.goto warning: ${e.message ?? e}`)
   })
   await page.evaluate((wantTheme) => {

@@ -6,7 +6,7 @@
 //   --rendered <url>              live page URL to evaluate
 //   --rendered-dir <projectDir>   serve dist/, build/, out/, or project root
 //   --reference <pngPath>         reference screenshot
-//   --viewport <WxH>              puppeteer viewport (default: reference image size)
+//   --viewport <WxH>              Playwright viewport (default: reference image size)
 //   --threshold <0..1>            mean SSIM floor (default 0.85)
 //   --worst-threshold <0..1>      worst-5% window SSIM floor (default 0.55)
 //   --browser-launch-timeout-ms <n> browser launch timeout (default 60000)
@@ -71,7 +71,6 @@ async function main() {
   const worstThreshold = Number(flag("--worst-threshold") ?? "0.55")
   const browserLaunchTimeoutMs = Number(flag("--browser-launch-timeout-ms") ?? process.env.OPENCORVUS_BROWSER_LAUNCH_TIMEOUT_MS ?? 60_000)
   const headless = process.argv.includes("--headless") || process.env.OPENCORVUS_VISUAL_DIFF_HEADLESS === "1"
-  const chromeCliFallback = process.argv.includes("--chrome-cli-fallback") || process.env.OPENCORVUS_VISUAL_DIFF_CHROME_CLI_FALLBACK === "1"
   const defaultOutDir = path.resolve(import.meta.dir, "../../../..", ".scratch", "benchmark-runs", "visual-diff-out")
   const outDir = path.resolve(flag("--out") ?? defaultOutDir)
   const viewportFlag = flag("--viewport")
@@ -95,7 +94,6 @@ async function main() {
       outDir,
       browserLaunchTimeoutMs,
       headless,
-      chromeCliFallback,
     })
     const verdict = report.passed ? "PASS" : "FAIL"
     console.log(`[visual-diff] ${verdict} ${summarizeVisualReport(report)} out=${outDir}`)

@@ -100,17 +100,12 @@ export const McpBrowserCommand = cmd({
   command: "browser",
   describe: false,
   async handler() {
-    if (process.env.MCP_TRANSPORT !== "http" && process.env.OPENCORVUS_BROWSER_MCP_DIRECT_BUN !== "1") {
-      const { BrowserMCPNodeLauncher } = await import("../../mcp/browser/node-launcher")
-      await BrowserMCPNodeLauncher.serveStdio()
-      return
-    }
-    const { BrowserMCP } = await import("../../mcp/browser")
+    const { BrowserMCPNodeLauncher } = await import("../../mcp/browser/node-launcher")
     if (process.env.MCP_TRANSPORT === "http") {
-      await BrowserMCP.serveHttp()
+      await BrowserMCPNodeLauncher.serveHttp()
       return
     }
-    await BrowserMCP.serveStdio()
+    await BrowserMCPNodeLauncher.serveStdio()
   },
 })
 

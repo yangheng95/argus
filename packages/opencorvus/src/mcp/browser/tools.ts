@@ -63,6 +63,7 @@ const summarizeArgs = (args: Record<string, unknown>): Record<string, unknown> =
     "sourceY",
     "targetX",
     "targetY",
+    "clip",
     "promptText",
   ] as const
   const out: Record<string, unknown> = {}
@@ -790,10 +791,19 @@ export const registerTools = (server: McpServer) => {
     "screenshot",
     {
       description:
-        "截取当前视口截图，返回 base64 PNG。模拟人眼视角（仅可见区域）。如需查看页面其他部分，请先调用 scroll。可选截取指定元素区域。",
+        "截取当前视口截图，返回 base64 PNG。模拟人眼视角（仅可见区域）。如需查看页面其他部分，请先调用 scroll。可选截取指定元素区域或指定视口坐标矩形。",
       inputSchema: {
         sessionId: z.string(),
         selector: z.string().optional().describe("仅截取该 CSS selector 对应元素（可选）"),
+        clip: z
+          .object({
+            x: z.number().describe("裁剪矩形左上角相对当前视口的 x 坐标，单位 px。"),
+            y: z.number().describe("裁剪矩形左上角相对当前视口的 y 坐标，单位 px。"),
+            width: z.number().positive().describe("裁剪矩形宽度，单位 px。"),
+            height: z.number().positive().describe("裁剪矩形高度，单位 px。"),
+          })
+          .optional()
+          .describe("按当前视口坐标裁剪截图。适合局部视觉对比；与 selector 类似，只返回指定区域。"),
         hideCursor: z.boolean().optional().describe("截图时隐藏虚拟光标，默认 false。用于获取不含光标的干净页面截图。"),
         fullPage: z
           .boolean()
@@ -807,7 +817,7 @@ export const registerTools = (server: McpServer) => {
         height: z.number().describe("截图原始高度（像素）"),
       },
     },
-    async ({ sessionId, selector, hideCursor, fullPage }) => {
+    async ({ sessionId, selector, clip, hideCursor, fullPage }) => {
       const session = getSession(sessionId)
       const { page } = session
       const shouldHide = hideCursor && session.virtualCursor
@@ -820,6 +830,11 @@ export const registerTools = (server: McpServer) => {
       try {
         if (selector) {
           const buf = await page.locator(selector).screenshot({ timeout: 10_000 })
+          const { width, height } = pngDimensions(buf)
+          return okImage(buf.toString("base64"), width, height)
+        }
+        if (clip) {
+          const buf = await page.screenshot({ clip })
           const { width, height } = pngDimensions(buf)
           return okImage(buf.toString("base64"), width, height)
         }

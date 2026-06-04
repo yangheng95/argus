@@ -5,7 +5,6 @@ import path from "node:path"
 import {
   assessCaptureDiagnostics,
   captureReferenceManifest,
-  shouldUseNodeCaptureSidecar,
   type CaptureManifestType,
 } from "../../src/frontend-design/capture-gate"
 
@@ -56,15 +55,15 @@ describe("capture reference diagnostics", () => {
     expect(warnings.some((v) => v.field === "non_white_pixel_ratio")).toBe(true)
   })
 
-  test("allows forcing in-process browser capture for diagnostics", () => {
-    const previous = process.env.OPENCORVUS_CAPTURE_BROWSER_IN_PROCESS
-    process.env.OPENCORVUS_CAPTURE_BROWSER_IN_PROCESS = "1"
-    try {
-      expect(shouldUseNodeCaptureSidecar()).toBe(false)
-    } finally {
-      if (previous === undefined) delete process.env.OPENCORVUS_CAPTURE_BROWSER_IN_PROCESS
-      else process.env.OPENCORVUS_CAPTURE_BROWSER_IN_PROCESS = previous
-    }
+  test("does not keep an in-process browser capture override", () => {
+    const source = readFileSync(
+      path.join(import.meta.dir, "../../src/frontend-design/capture-gate.ts"),
+      "utf8",
+    )
+
+    expect(source).not.toContain("OPENCORVUS_CAPTURE_BROWSER_IN_PROCESS")
+    expect(source).not.toContain("captureBrowserEvidenceInProcess")
+    expect(source).not.toContain("launchPlaywrightBrowser")
   })
 
   test("node capture script uses the shared launch timeout instead of a hard-coded Chrome startup cap", () => {

@@ -8,8 +8,7 @@
  *
  * The script is deliberately self-contained:
  *   • starts the overlay's vite dev server on :5173 (no Tauri shell);
- *   • launches a real Chrome/Edge via puppeteer (rule 25 — NEVER headless
- *     for overlay visual capture);
+ *   • launches Chrome/Edge through the Node-sidecar Playwright runtime;
  *   • intercepts every server-bound HTTP request and returns deterministic
  *     mock payloads, so we don't need the opencorvus sidecar running;
  *   • drives the overlay through the Mission page-mode transitions and
@@ -27,8 +26,7 @@
 import { mkdir, writeFile } from "node:fs/promises"
 import { tmpdir } from "node:os"
 import path from "node:path"
-import puppeteer, { type Browser, type HTTPRequest, type Page } from "puppeteer-core"
-import { findBrowserExecutable } from "../../opencorvus/src/browser/runtime"
+import { launchBrowser, type OverlayBrowser, type OverlayPage, type OverlayRoute } from "./launch"
 
 const OUT_DIR_ARG = process.argv[2]
 const OUT_DIR = path.resolve(OUT_DIR_ARG ?? path.join(tmpdir(), "mission-visual-loop"))
@@ -187,7 +185,7 @@ async function isPortBound(port: number): Promise<boolean> {
   return false
 }
 
-async function applyMocks(page: Page): Promise<void> {
+async function applyMocks(page: OverlayPage): Promise<void> {
   // Page-level "force this route to error" toggle. The reviewer agent can
   // flip this from inside page.evaluate() so error states sit on a real
   // failed fetch, not a hand-rolled fake DOM. Read inside the interceptor
@@ -195,8 +193,8 @@ async function applyMocks(page: Page): Promise<void> {
   await page.evaluateOnNewDocument(() => {
     ;(window as unknown as { __statsForceError?: string }).__statsForceError = undefined
   })
-  await page.setRequestInterception(true)
-  page.on("request", async (req: HTTPRequest) => {
+  await page.route("**/*", async (route: OverlayRoute) => {
+    const req = route.request()
     const url = req.url()
     // Only intercept opencorvus server calls. The previous regex also
     // matched any vite-served URL whose path contained "mission" /
@@ -205,7 +203,7 @@ async function applyMocks(page: Page): Promise<void> {
     // and bricked overlay init. Pin interception to the opencorvus
     // sidecar port so vite source assets always pass through.
     if (!/:7878\//.test(url)) {
-      return req.continue()
+      return route.continue()
     }
     const method = req.method().toUpperCase()
     // Vite serves the overlay at :5173 but the overlay's apiJson hits
@@ -218,24 +216,24 @@ async function applyMocks(page: Page): Promise<void> {
       "Access-Control-Allow-Headers": "Content-Type, Authorization",
     }
     if (method === "OPTIONS") {
-      return void req.respond({ status: 204, headers: corsHeaders })
+      return void route.fulfill({ status: 204, headers: corsHeaders })
     }
     const ok = (body: unknown) =>
-      req.respond({
+      route.fulfill({
         status: 200,
         contentType: "application/json",
         headers: corsHeaders,
         body: JSON.stringify(body),
       })
     const fail = (status: number, message: string) =>
-      req.respond({
+      route.fulfill({
         status,
         contentType: "application/json",
         headers: corsHeaders,
         body: JSON.stringify({ error: message }),
       })
     const eventStream = () =>
-      req.respond({
+      route.fulfill({
         status: 200,
         contentType: "text/event-stream",
         headers: {
@@ -363,7 +361,7 @@ async function applyMocks(page: Page): Promise<void> {
   })
 }
 
-async function bootstrapOverlay(page: Page): Promise<void> {
+async function bootstrapOverlay(page: OverlayPage): Promise<void> {
   // Surface anything that lands in the page console while we wait for
   // overlay init — without this, a syntax error or thrown import in
   // main.tsx silently turns into "setPageMode never appears" with no
@@ -420,8 +418,8 @@ async function bootstrapOverlay(page: Page): Promise<void> {
   await new Promise((r) => setTimeout(r, 800))
 }
 
-async function snap(page: Page, state: string, viewport = VIEWPORT_WIDE): Promise<string> {
-  await page.setViewport({ ...viewport, deviceScaleFactor: 1 })
+async function snap(page: OverlayPage, state: string, viewport = VIEWPORT_WIDE): Promise<string> {
+  await page.setViewportSize(viewport)
   // Let the next layout pass complete after the viewport flip.
   await new Promise((r) => setTimeout(r, 250))
   const fileName = `${state}.png`
@@ -432,7 +430,7 @@ async function snap(page: Page, state: string, viewport = VIEWPORT_WIDE): Promis
 
 type StateResult = { state: string; ok: boolean; path?: string; error?: string }
 
-async function captureStates(page: Page): Promise<StateResult[]> {
+async function captureStates(page: OverlayPage): Promise<StateResult[]> {
   const results: StateResult[] = []
 
   async function step(state: string, fn: () => Promise<void>): Promise<void> {
@@ -525,7 +523,7 @@ async function captureStates(page: Page): Promise<StateResult[]> {
   } catch (err) {
     results.push({ state: "06-narrow-breakpoint", ok: false, error: err instanceof Error ? err.message : String(err) })
   }
-  await page.setViewport({ ...VIEWPORT_WIDE, deviceScaleFactor: 1 })
+  await page.setViewportSize(VIEWPORT_WIDE)
 
   await step("07-error-stats-banner", async () => {
     // The error-state shot is captured by toggling stats to an error
@@ -562,7 +560,7 @@ async function run(): Promise<void> {
     )
   }
   console.log(`[mission-visual-loop] connecting to external vite on :${VITE_PORT}`)
-  let browser: Browser | undefined
+  let browser: OverlayBrowser | undefined
   const cleanup = async () => {
     try { await browser?.close() } catch {}
     // Vite is operator-managed — never kill it from inside the loop.
@@ -572,14 +570,9 @@ async function run(): Promise<void> {
 
   try {
     console.log(`[mission-visual-loop] launching chrome`)
-    const executablePath = await findBrowserExecutable()
-    browser = await puppeteer.launch({
-      executablePath,
-      headless: false,
-      args: ["--no-sandbox", "--disable-gpu", "--disable-dev-shm-usage"],
-    })
+    browser = await launchBrowser(["--no-sandbox", "--disable-gpu", "--disable-dev-shm-usage"])
     const page = await browser.newPage()
-    await page.setViewport({ ...VIEWPORT_WIDE, deviceScaleFactor: 1 })
+    await page.setViewportSize(VIEWPORT_WIDE)
     await applyMocks(page)
     await bootstrapOverlay(page)
     const results = await captureStates(page)

@@ -308,6 +308,24 @@ describe("built-in browser MCP stdio", () => {
       const shotBytes = Buffer.from(shotData.data ?? "", "base64")
       expect([...shotBytes.subarray(0, 8)]).toEqual([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a])
 
+      const clippedScreenshot = await mcp.callTool(
+        {
+          name: "screenshot",
+          arguments: {
+            sessionId,
+            hideCursor: true,
+            clip: { x: 0, y: 0, width: 120, height: 80 },
+          },
+        },
+        undefined,
+        { timeout: 30_000 },
+      )
+      const clippedData = clippedScreenshot.structuredContent as { data?: string; width?: number; height?: number }
+      expect(clippedData.width).toBe(120)
+      expect(clippedData.height).toBe(80)
+      const clippedBytes = Buffer.from(clippedData.data ?? "", "base64")
+      expect([...clippedBytes.subarray(0, 8)]).toEqual([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a])
+
       const exported = await mcp.callTool(
         { name: "storage_state_export", arguments: { sessionId } },
         undefined,

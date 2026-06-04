@@ -12,10 +12,10 @@ import {
 } from "../../../src/browser/webpage/runtime-state"
 
 describe("runtime-state evidence", () => {
-  const originalLaunch = BrowserRuntime.launchPlaywrightBrowser
+  const originalLaunch = BrowserRuntime.launchPlaywrightBrowserInNodeProcess
 
   afterEach(() => {
-    ;(BrowserRuntime as { launchPlaywrightBrowser: typeof originalLaunch }).launchPlaywrightBrowser = originalLaunch
+    ;(BrowserRuntime as { launchPlaywrightBrowserInNodeProcess: typeof originalLaunch }).launchPlaywrightBrowserInNodeProcess = originalLaunch
   })
 
   test("captures interaction states through Node sidecar without Bun Playwright launch", async () => {
@@ -33,7 +33,7 @@ describe("runtime-state evidence", () => {
       "utf8",
     )
     let launchCount = 0
-    ;(BrowserRuntime as { launchPlaywrightBrowser: typeof originalLaunch }).launchPlaywrightBrowser = async () => {
+    ;(BrowserRuntime as { launchPlaywrightBrowserInNodeProcess: typeof originalLaunch }).launchPlaywrightBrowserInNodeProcess = async () => {
       launchCount++
       throw new Error("runtime-state must not use Bun Playwright launch")
     }

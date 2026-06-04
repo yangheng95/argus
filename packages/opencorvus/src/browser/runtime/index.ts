@@ -86,12 +86,20 @@ export namespace BrowserRuntime {
     })
   }
 
-  export async function launchPlaywrightBrowser(input: {
+  export async function launchPlaywrightBrowserInNodeProcess(input: {
     headless: boolean
     executablePath?: string
     args?: string[]
     timeoutMs?: number
   }): Promise<any> {
+    if (typeof Bun !== "undefined") {
+      throw new RuntimeError({
+        code: "browser_launch_failed",
+        message: "Playwright browser launch must run in the Browser Node sidecar, not in a Bun process.",
+        checkedCandidates: [],
+        recoveryCommand: "Start browser work through the Browser Node sidecar runtime.",
+      })
+    }
     const executablePath = await findBrowserExecutable(input.executablePath)
     try {
       const { chromium } = await loadPlaywright()
@@ -168,4 +176,3 @@ export namespace BrowserRuntime {
 }
 
 export const findBrowserExecutable = BrowserRuntime.findBrowserExecutable
-export const launchPlaywrightBrowser = BrowserRuntime.launchPlaywrightBrowser

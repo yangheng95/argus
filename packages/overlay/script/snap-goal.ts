@@ -11,8 +11,7 @@
  *   bun run script/snap-goal.ts <out.png> [w] [h] [theme]
  */
 
-import { findBrowserExecutable } from "../../opencorvus/src/acceptance/checks/visual"
-import puppeteer from "puppeteer-core"
+import { launchBrowser } from "../test/launch"
 import path from "node:path"
 
 const out = process.argv[2]
@@ -29,20 +28,15 @@ const LONG_TITLE =
 const LONG_ACCEPTANCE =
   "1. All orchestrator-spawned sub-agents receive a non-empty mission brief (no empty <input> XML blocks).\n2. The goal acceptance specs are validated against the Zod schema before execution.\n3. A regression test asserts the dispatcher constructs the brief, not the agent prompt.\n4. The build dashboard shows the goal transitioning queued -> running -> completed with no stuck states.\n5. No fallback / compatibility shims are introduced; old dispatch path is deleted.\n6. Typecheck + api:routes-check + docs:check all pass on pre-push."
 
-const exe = await findBrowserExecutable()
-const browser = await puppeteer.launch({
-  executablePath: exe,
-  headless: true,
-  args: ["--no-sandbox", "--disable-gpu", "--disable-dev-shm-usage"],
-})
+const browser = await launchBrowser(["--no-sandbox", "--disable-gpu", "--disable-dev-shm-usage"])
 try {
   const page = await browser.newPage()
-  await page.setViewport({ width: w, height: h, deviceScaleFactor: 1 })
+  await page.setViewportSize({ width: w, height: h })
   page.on("pageerror", (e) => console.error("[page-error]", e.message))
   page.on("console", (msg) => {
     if (msg.type() === "error") console.error("[console-error]", msg.text())
   })
-  await page.goto("http://localhost:5173/", { waitUntil: "networkidle2", timeout: 15000 }).catch((e) => {
+  await page.goto("http://localhost:5173/", { waitUntil: "networkidle", timeout: 15000 }).catch((e) => {
     console.error(`page.goto warning: ${e.message ?? e}`)
   })
   await page.evaluate((wantTheme) => {

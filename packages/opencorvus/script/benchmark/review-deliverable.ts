@@ -1,7 +1,7 @@
 /**
  * Rule-7 self-review helper for the overlay-web-benchmark deliverable.
  *
- * Boots an isolated puppeteer-core, screenshots `http://localhost:3000`
+ * Boots an isolated Playwright browser, screenshots `http://localhost:3000`
  * (the running Vite dev), and writes the result to
  * `<deliverable>/review-rendered.png`. Returns a summary string the
  * operator can compare side-by-side with whatever reference image the
@@ -9,28 +9,19 @@
  */
 import path from "node:path"
 import fs from "node:fs/promises"
-import puppeteer from "puppeteer-core"
+import { launchBrowser } from "../../../overlay/test/launch"
 
 const TARGET = process.argv[2] ?? "http://localhost:3000"
 const OUT_DIR = process.argv[3]
   ?? "C:/Users/hengu/AppData/Local/Temp/opencorvus-overlay-benchmark-project-w5RoTK"
 const OUT = path.join(OUT_DIR, "review-rendered.png")
 
-function findChrome(): string {
-  const root = path.join(process.env.USERPROFILE ?? process.env.HOME ?? "", ".cache", "puppeteer", "chrome")
-  return path.join(root, "win64-147.0.7727.57", "chrome-win64", "chrome.exe")
-}
-
-const browser = await puppeteer.launch({
-  executablePath: findChrome(),
-  headless: true,
-  args: ["--no-sandbox", "--disable-setuid-sandbox"],
-})
+const browser = await launchBrowser(["--no-sandbox", "--disable-setuid-sandbox"])
 try {
   const page = await browser.newPage()
-  await page.setViewport({ width: 1440, height: 900, deviceScaleFactor: 1 })
+  await page.setViewportSize({ width: 1440, height: 900 })
   console.log(`[review] navigating ${TARGET}`)
-  const resp = await page.goto(TARGET, { waitUntil: "networkidle2", timeout: 60_000 })
+  const resp = await page.goto(TARGET, { waitUntil: "networkidle", timeout: 60_000 })
   console.log(`[review] HTTP ${resp?.status() ?? "?"}`)
   await new Promise((r) => setTimeout(r, 3_000))
   await page.screenshot({ path: OUT, type: "png", fullPage: true })

@@ -1,46 +1,17 @@
 import { expect, test } from "bun:test"
-import { launchBrowser } from "./launch"
+import { launchBrowser, type OverlayPage } from "./launch"
 import { ensureOverlayDist, overlayStaticResponse } from "./overlay-dist"
 
-const { default: puppeteer } = await import(
-  new URL("../../opencorvus/node_modules/puppeteer-core/lib/esm/puppeteer/puppeteer-core.js", import.meta.url).href,
-)
 
 await ensureOverlayDist()
 
-async function clickVisible(tab: Awaited<ReturnType<Awaited<ReturnType<typeof puppeteer.launch>>["newPage"]>>, selector: string) {
-  await tab.waitForSelector(selector)
-  const point = await tab.evaluate((value) => {
-    const nodes = Array.from(document.querySelectorAll<HTMLElement>(value))
-    const node = nodes.find((candidate) => {
-      const style = getComputedStyle(candidate)
-      const rect = candidate.getBoundingClientRect()
-      return style.display !== "none" && style.visibility !== "hidden" && rect.width > 0 && rect.height > 0
-    })
-    if (!node) return null
-    node.scrollIntoView({ block: "center", inline: "nearest" })
-    const rect = node.getBoundingClientRect()
-    return { x: rect.left + rect.width / 2, y: rect.top + rect.height / 2 }
-  }, selector)
-  if (!point) throw new Error(`No visible element for ${selector}`)
-  await tab.mouse.click(point.x, point.y)
+async function clickVisible(tab: OverlayPage, selector: string) {
+  await tab.waitForSelector(selector, { visible: true })
+  await tab.click(selector)
 }
 
-async function browser() {
-  const list = [
-    "C:/Program Files/Google/Chrome/Application/chrome.exe",
-    "C:/Program Files (x86)/Google/Chrome/Application/chrome.exe",
-    "C:/Program Files (x86)/Microsoft/Edge/Application/msedge.exe",
-    "C:/Program Files/Microsoft/Edge/Application/msedge.exe",
-  ]
-  for (const item of list) {
-    if (await Bun.file(item).exists()) return item
-  }
-  throw new Error("No local Edge/Chrome executable found for overlay provider oauth test")
-}
 
 test("selecting an oauth-capable provider starts oauth before provider test", async () => {
-  const exe = await browser()
   const data = {
     config: {
       model: "anthropic/claude-3-7-sonnet",

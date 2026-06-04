@@ -2,25 +2,16 @@
 // Pull computed styles / layout of the first few cards to diagnose why
 // titles / bodies don't render in the fixture.
 
-const { default: puppeteer } = await import(
-  new URL("../../opencorvus/node_modules/puppeteer-core/lib/esm/puppeteer/puppeteer-core.js", import.meta.url).href,
-);
 import path from "node:path";
-
-const exe =
-  [
-    "C:/Program Files/Google/Chrome/Application/chrome.exe",
-    "C:/Program Files/Microsoft/Edge/Application/msedge.exe",
-  ].find((p) => Bun.file(p).exists()) ?? "";
-if (!exe) throw new Error("no browser");
+import { launchBrowser } from "./launch";
 
 const fixtureURL =
   "file:///" +
   path.resolve(new URL("./card-visual.html", import.meta.url).pathname.replace(/^\/+/, "")).replace(/\\/g, "/");
 
-const browser = await puppeteer.launch({ executablePath: exe, headless: true, args: ["--no-sandbox"] });
+const browser = await launchBrowser(["--no-sandbox"]);
 const page = await browser.newPage();
-await page.setViewport({ width: 900, height: 1400 });
+await page.setViewportSize({ width: 900, height: 1400 });
 await page.goto(fixtureURL, { waitUntil: "load" });
 await new Promise((r) => setTimeout(r, 300));
 

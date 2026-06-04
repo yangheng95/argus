@@ -116,7 +116,7 @@ Env 必须在**进程启动前**就绪。`Env.state()` 在实例创建时快照 
 
 ## 严禁 headless overlay benchmark
 
-CLAUDE.md rule 13：visual-related benchmark 必须以视觉呈现。`--no-browser` 让 puppeteer 跳过 → overlay UI 完全没被压到，违背 benchmark 的本意。请**不要**用 `--no-browser`。
+CLAUDE.md rule 13：visual-related benchmark 必须以视觉呈现。`--no-browser` 让 Playwright 跳过 → overlay UI 完全没被压到，违背 benchmark 的本意。请**不要**用 `--no-browser`。
 
 ## 二次复核（不只看 verdict）
 

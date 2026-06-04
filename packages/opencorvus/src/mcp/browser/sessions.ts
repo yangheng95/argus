@@ -119,7 +119,7 @@ const acquireBrowser = async (): Promise<Browser> => {
   if (browser?.isConnected()) return browser
   browser = null
   if (!browserLaunch) {
-    browserLaunch = BrowserRuntime.launchPlaywrightBrowser({
+    browserLaunch = BrowserRuntime.launchPlaywrightBrowserInNodeProcess({
       headless: HEADLESS,
     }).then((launched) => {
       browser = launched

@@ -1551,6 +1551,10 @@ export type EventGoalReport = {
        * Hard blockers hit during execution. Empty when none. A filled array signals the goal did not fully complete.
        */
       blockers?: Array<string>
+      /**
+       * Explicit warning for subsequent agents about hidden or remaining work surface, evidence they must read deeper, and whether goal workload analysis or Architect re-sizing should be revisited.
+       */
+      followup_workload_guidance?: string
     }
   }
 }
@@ -7415,7 +7419,7 @@ export type GatewayControlActionData = {
             timeout_ms?: number
             mode?: "soft" | "strict"
           }
-          puppeteer?: {
+          playwright?: {
             target: "web"
             url: string
             browser?: "chrome" | "edge" | "chromium"
@@ -7577,7 +7581,7 @@ export type GatewayControlActionData = {
             timeout_ms?: number
             mode?: "soft" | "strict"
           }
-          puppeteer?: {
+          playwright?: {
             target: "web"
             url: string
             browser?: "chrome" | "edge" | "chromium"
@@ -7935,7 +7939,7 @@ export type TaskCreateData = {
         timeout_ms?: number
         mode?: "soft" | "strict"
       }
-      puppeteer?: {
+      playwright?: {
         target: "web"
         url: string
         browser?: "chrome" | "edge" | "chromium"

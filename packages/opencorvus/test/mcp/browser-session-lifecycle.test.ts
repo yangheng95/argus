@@ -95,7 +95,7 @@ class FakeBrowser {
 }
 
 describe("browser MCP session lifecycle", () => {
-  const originalLaunch = BrowserRuntime.launchPlaywrightBrowser
+  const originalLaunch = BrowserRuntime.launchPlaywrightBrowserInNodeProcess
   const launchedBrowsers: FakeBrowser[] = []
 
   afterEach(async () => {
@@ -105,14 +105,14 @@ describe("browser MCP session lifecycle", () => {
     for (const browser of launchedBrowsers.splice(0)) {
       await browser.close()
     }
-    ;(BrowserRuntime as { launchPlaywrightBrowser: typeof originalLaunch }).launchPlaywrightBrowser = originalLaunch
+    ;(BrowserRuntime as { launchPlaywrightBrowserInNodeProcess: typeof originalLaunch }).launchPlaywrightBrowserInNodeProcess = originalLaunch
   })
 
   test("coalesces concurrent browser launch requests", async () => {
     let launchCount = 0
     const browser = new FakeBrowser(() => new FakeContext())
     launchedBrowsers.push(browser)
-    ;(BrowserRuntime as { launchPlaywrightBrowser: typeof originalLaunch }).launchPlaywrightBrowser = async () => {
+    ;(BrowserRuntime as { launchPlaywrightBrowserInNodeProcess: typeof originalLaunch }).launchPlaywrightBrowserInNodeProcess = async () => {
       launchCount++
       await new Promise((resolve) => setTimeout(resolve, 20))
       return browser as never
@@ -132,7 +132,7 @@ describe("browser MCP session lifecycle", () => {
     const context = new FakeContext(true)
     const browser = new FakeBrowser(() => context)
     launchedBrowsers.push(browser)
-    ;(BrowserRuntime as { launchPlaywrightBrowser: typeof originalLaunch }).launchPlaywrightBrowser = async () =>
+    ;(BrowserRuntime as { launchPlaywrightBrowserInNodeProcess: typeof originalLaunch }).launchPlaywrightBrowserInNodeProcess = async () =>
       browser as never
 
     await expect(createSession({ virtualCursor: false })).rejects.toThrow("new page failed")
@@ -145,7 +145,7 @@ describe("browser MCP session lifecycle", () => {
     const context = new FakeContext()
     const browser = new FakeBrowser(() => context)
     launchedBrowsers.push(browser)
-    ;(BrowserRuntime as { launchPlaywrightBrowser: typeof originalLaunch }).launchPlaywrightBrowser = async () =>
+    ;(BrowserRuntime as { launchPlaywrightBrowserInNodeProcess: typeof originalLaunch }).launchPlaywrightBrowserInNodeProcess = async () =>
       browser as never
 
     const first = await createSession({ virtualCursor: false })
@@ -168,7 +168,7 @@ describe("browser MCP session lifecycle", () => {
     const context = new FakeContext()
     const browser = new FakeBrowser(() => context)
     launchedBrowsers.push(browser)
-    ;(BrowserRuntime as { launchPlaywrightBrowser: typeof originalLaunch }).launchPlaywrightBrowser = async () =>
+    ;(BrowserRuntime as { launchPlaywrightBrowserInNodeProcess: typeof originalLaunch }).launchPlaywrightBrowserInNodeProcess = async () =>
       browser as never
 
     const created = await createSession({ virtualCursor: false })

@@ -2,29 +2,13 @@ import { expect, test } from "bun:test"
 import { launchBrowser } from "./launch"
 import { ensureOverlayDist, overlayStaticResponse } from "./overlay-dist"
 
-const { default: puppeteer } = await import(
-  new URL("../../opencorvus/node_modules/puppeteer-core/lib/esm/puppeteer/puppeteer-core.js", import.meta.url).href
-)
 
 await ensureOverlayDist()
 
-async function browser() {
-  const list = [
-    "C:/Program Files (x86)/Microsoft/Edge/Application/msedge.exe",
-    "C:/Program Files/Microsoft/Edge/Application/msedge.exe",
-    "C:/Program Files/Google/Chrome/Application/chrome.exe",
-    "C:/Program Files (x86)/Google/Chrome/Application/chrome.exe",
-  ]
-  for (const item of list) {
-    if (await Bun.file(item).exists()) return item
-  }
-  throw new Error("No local Edge/Chrome executable found for overlay control test")
-}
 
 test(
   "overlay controls trigger without runtime failures",
   async () => {
-    const exe = await browser()
     const now = Date.now()
     const task = {
       id: "task-1",

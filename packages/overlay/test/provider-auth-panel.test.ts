@@ -1,13 +1,9 @@
 import { expect, test } from "bun:test"
-import { launchBrowser } from "./launch"
+import { launchBrowser, type OverlayBrowser, type OverlayPage } from "./launch"
 import { ensureOverlayDist, overlayStaticResponse } from "./overlay-dist"
 
-const { default: puppeteer } = await import(
-  new URL("../../opencorvus/node_modules/puppeteer-core/lib/esm/puppeteer/puppeteer-core.js", import.meta.url).href
-)
-
-type Browser = Awaited<ReturnType<typeof puppeteer.launch>>
-type Page = Awaited<ReturnType<Browser["newPage"]>>
+type Browser = OverlayBrowser
+type Page = OverlayPage
 type Calls = {
   authorize: Array<Record<string, unknown>>
   callback: Array<Record<string, unknown>>
@@ -37,18 +33,6 @@ type HarnessData = {
 
 await ensureOverlayDist()
 
-async function browser() {
-  const list = [
-    "C:/Program Files/Google/Chrome/Application/chrome.exe",
-    "C:/Program Files (x86)/Google/Chrome/Application/chrome.exe",
-    "C:/Program Files (x86)/Microsoft/Edge/Application/msedge.exe",
-    "C:/Program Files/Microsoft/Edge/Application/msedge.exe",
-  ]
-  for (const item of list) {
-    if (await Bun.file(item).exists()) return item
-  }
-  throw new Error("No local Edge/Chrome executable found for overlay provider auth panel test")
-}
 
 function route(url: URL) {
   return url.pathname.replace(/\/+$/, "") || "/"
@@ -97,7 +81,6 @@ async function withOverlay(
     },
   ) => Promise<void>,
 ) {
-  const exe = await browser()
   const calls: Calls = {
     authorize: [],
     callback: [],

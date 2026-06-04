@@ -2,6 +2,9 @@ import { describe, expect, test } from "bun:test"
 import {
   buildResearchBriefFromDraft,
   createResearchOutputTools,
+  materializeResearchBundle,
+  ResearchSubmitSchema,
+  researchBundleFromDraft,
 } from "../../src/research/output-tools"
 import { researchRequestHash, validateResearchBriefIntegrity } from "../../src/research/schema"
 
@@ -19,9 +22,28 @@ function validSubmit(overrides: Record<string, unknown> = {}) {
       assumed_non_goals: [],
     },
     bundle: {
-      full_markdown: "# Full research bundle",
-      evidence_json: "{\"items\":[]}",
-      citation_map_json: "{\"citations\":[]}",
+      full_markdown_sections: [
+        {
+          title: "Full research bundle",
+          evidence_ids: ["ev_1"],
+          points: ["A compact source-backed research note."],
+        },
+      ],
+      evidence_notes: [
+        {
+          evidence_id: "ev_1",
+          observations: ["Example source supports the compact brief."],
+          artifact_refs: ["research-bundle.md#ev_1"],
+        },
+      ],
+      citation_map: [
+        {
+          claim_id: "fact_1",
+          evidence_ids: ["ev_1"],
+          pointer: "research-bundle.md#ev_1",
+          usage: "Supports fact_1.",
+        },
+      ],
     },
     summary: "Research summary.",
     evidence_index: [
@@ -50,20 +72,39 @@ function validSubmit(overrides: Record<string, unknown> = {}) {
   }
 }
 
-function validWebpagePrdMarkdown(lines = 12): string {
+function validWebpagePrdPoints(lines = 12): string[] {
   return Array.from(
     { length: lines },
     (_item, index) => `Line ${index + 1}: evidence-backed webpage region, component, style, interaction, data, acceptance, and risk detail.`,
-  ).join("\n")
+  )
 }
 
 function withWebpagePrdBundle(overrides: Record<string, unknown> = {}) {
   return {
     ...overrides,
     bundle: {
-      full_markdown: validWebpagePrdMarkdown(),
-      evidence_json: "{\"items\":[]}",
-      citation_map_json: "{\"citations\":[]}",
+      full_markdown_sections: [
+        {
+          title: "Work Packets in visible order",
+          evidence_ids: ["ev_1"],
+          points: validWebpagePrdPoints(),
+        },
+      ],
+      evidence_notes: [
+        {
+          evidence_id: "ev_1",
+          observations: ["Prepared webpage evidence identifies the visible page flow."],
+          artifact_refs: ["web-clone-source/reference.png"],
+        },
+      ],
+      citation_map: [
+        {
+          claim_id: "fact_1",
+          evidence_ids: ["ev_1"],
+          pointer: "research-bundle.md#work-packets-in-visible-order",
+          usage: "Supports the webpage investigation packet summary.",
+        },
+      ],
     },
   }
 }
@@ -170,6 +211,103 @@ describe("research output tools", () => {
     expect(result).toContain("PASS")
     expect(kit.getCollector().finalized).toBe(true)
     expect(kit.getCollector().fact_check_items).toHaveLength(1)
+  })
+
+  test("submit_research_brief rejects legacy raw bundle string fields", () => {
+    const legacy = validSubmit({
+      bundle: {
+        full_markdown: "# Raw markdown document",
+        evidence_json: "{\"items\":[]}",
+        citation_map_json: "{\"citations\":[]}",
+      },
+    })
+
+    const parsed = ResearchSubmitSchema.safeParse(legacy)
+
+    expect(parsed.success).toBe(false)
+    if (parsed.success) throw new Error("legacy raw bundle unexpectedly passed")
+    expect(parsed.error.issues.some((issue) => issue.path.join(".") === "bundle.full_markdown_sections")).toBe(true)
+    expect(parsed.error.issues.some((issue) => issue.path.join(".") === "bundle.evidence_notes")).toBe(true)
+    expect(parsed.error.issues.some((issue) => issue.path.join(".") === "bundle.citation_map")).toBe(true)
+  })
+
+  test("researchBundleFromDraft materializes structured notes with quotes and split multiline notes", () => {
+    const submit = validSubmit({
+      bundle: {
+        full_markdown_sections: [
+          {
+            title: "Evidence Index",
+            evidence_ids: ["ev_1"],
+            points: [
+              "Quoted label: \"Economy overview\".",
+              "Multiline source note first visible row.",
+              "Multiline source note second visible row.",
+            ],
+          },
+        ],
+        evidence_notes: [
+          {
+            evidence_id: "ev_1",
+            observations: [
+              "The source says \"GDP growth\".",
+              "The note was split into multiple single-line observations.",
+            ],
+            artifact_refs: ["source-ir/content-model.json"],
+          },
+        ],
+        citation_map: [
+          {
+            claim_id: "fact_1",
+            evidence_ids: ["ev_1"],
+            pointer: "research-bundle.md#evidence-index",
+            usage: "Preserves quoted and newline-heavy evidence through JSON.stringify.",
+          },
+        ],
+      },
+    })
+    const { fact_check_items: _factCheckItems, ...draft } = submit
+
+    const materialized = researchBundleFromDraft(draft)
+
+    expect(materialized.full_markdown).toContain("## Evidence Index")
+    expect(materialized.full_markdown).toContain("\"Economy overview\"")
+    expect(JSON.parse(materialized.evidence_json).evidence_notes[0].observations[0]).toContain("\"GDP growth\"")
+    expect(JSON.parse(materialized.evidence_json).evidence_notes[0].observations[1]).toContain("single-line observations")
+    expect(JSON.parse(materialized.citation_map_json).citations[0].claim_id).toBe("fact_1")
+    expect(materializeResearchBundle(draft.bundle)).toEqual(materialized)
+  })
+
+  test("submit_research_brief rejects embedded newlines in bundle text fields", () => {
+    const parsed = ResearchSubmitSchema.safeParse(validSubmit({
+      bundle: {
+        full_markdown_sections: [
+          {
+            title: "Evidence Index",
+            evidence_ids: ["ev_1"],
+            points: ["This point contains an embedded newline\ninstead of a separate array item."],
+          },
+        ],
+        evidence_notes: [
+          {
+            evidence_id: "ev_1",
+            observations: ["Example source supports the compact brief."],
+            artifact_refs: ["research-bundle.md#ev_1"],
+          },
+        ],
+        citation_map: [
+          {
+            claim_id: "fact_1",
+            evidence_ids: ["ev_1"],
+            pointer: "research-bundle.md#ev_1",
+            usage: "Supports fact_1.",
+          },
+        ],
+      },
+    }))
+
+    expect(parsed.success).toBe(false)
+    if (parsed.success) throw new Error("bundle text with embedded newline unexpectedly passed")
+    expect(parsed.error.issues.some((issue) => issue.path.join(".") === "bundle.full_markdown_sections.0.points.0")).toBe(true)
   })
 
   test("submit_research_brief accepts a source-backed webpage contract", async () => {

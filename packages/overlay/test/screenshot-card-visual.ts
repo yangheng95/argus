@@ -5,29 +5,8 @@
  * auto-downscale threshold and remains legible.
  */
 
-const { default: puppeteer } = await import(
-  new URL("../../opencorvus/node_modules/puppeteer-core/lib/esm/puppeteer/puppeteer-core.js", import.meta.url).href,
-);
-
 import path from "node:path";
-
-const candidates = [
-  "C:/Program Files/Google/Chrome/Application/chrome.exe",
-  "C:/Program Files (x86)/Google/Chrome/Application/chrome.exe",
-  "C:/Program Files/Microsoft/Edge/Application/msedge.exe",
-  "C:/Program Files (x86)/Microsoft/Edge/Application/msedge.exe",
-];
-let exe = "";
-for (const p of candidates) {
-  if (await Bun.file(p).exists()) {
-    exe = p;
-    break;
-  }
-}
-if (!exe) {
-  console.error("No Chrome/Edge found");
-  process.exit(1);
-}
+import { launchBrowser } from "./launch";
 
 const fixtureURL =
   "file:///" +
@@ -38,14 +17,10 @@ const outDir = path.resolve(
 );
 await Bun.$`mkdir -p ${outDir}`.quiet().catch(() => {});
 
-const browser = await puppeteer.launch({
-  executablePath: exe,
-  headless: true,
-  args: ["--no-sandbox", "--disable-gpu"],
-});
+const browser = await launchBrowser(["--no-sandbox", "--disable-gpu"]);
 try {
   const page = await browser.newPage();
-  await page.setViewport({ width: 900, height: 3000, deviceScaleFactor: 2 });
+  await page.setViewportSize({ width: 900, height: 3000 });
   await page.goto(fixtureURL, { waitUntil: "load", timeout: 15_000 });
   await new Promise((r) => setTimeout(r, 400));
 

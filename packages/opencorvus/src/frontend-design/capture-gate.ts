@@ -259,11 +259,6 @@ export async function captureReferenceManifest(input: {
   return { manifest, screenshotPng: pngBuf, artifactPaths }
 }
 
-export function shouldUseNodeCaptureSidecar(): boolean {
-  if (process.env.OPENCORVUS_CAPTURE_BROWSER_IN_PROCESS === "1") return false
-  return process.platform === "win32" && typeof Bun !== "undefined"
-}
-
 async function captureBrowserEvidence(input: {
   url: string
   viewport: { width: number; height: number }
@@ -271,151 +266,7 @@ async function captureBrowserEvidence(input: {
   timeoutMs: number
   browserExecutable?: string
 }): Promise<BrowserEvidence> {
-  if (shouldUseNodeCaptureSidecar()) {
-    return captureBrowserEvidenceViaNode(input)
-  }
-  return captureBrowserEvidenceInProcess(input)
-}
-
-async function captureBrowserEvidenceInProcess(input: {
-  url: string
-  viewport: { width: number; height: number }
-  deviceScaleFactor: number
-  timeoutMs: number
-  browserExecutable?: string
-}): Promise<BrowserEvidence> {
-  const browser = await BrowserRuntime.launchPlaywrightBrowser({
-    executablePath: input.browserExecutable,
-    headless: true,
-    args: ["--no-sandbox", "--disable-gpu", "--disable-dev-shm-usage"],
-    timeoutMs: 15_000,
-  }).catch((e) => {
-    throw new CaptureReferenceError(`browser runtime launch failed: ${formatBrowserRuntimeError(e)}`, "browser", e)
-  })
-
-  try {
-    const context = await browser.newContext({
-      viewport: { width: input.viewport.width, height: input.viewport.height },
-      deviceScaleFactor: input.deviceScaleFactor,
-      userAgent: "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/143.0.0.0 Safari/537.36",
-    })
-    const page = await context.newPage()
-
-    // HAR 大小近似：累加 content-length（抓图不追求完整 HAR 字节对齐，仅作真实性信号）。
-    let harByteSize = 0
-    page.on("response", (res) => {
-      const len = Number(res.headers()["content-length"])
-      if (Number.isFinite(len) && len > 0) harByteSize += len
-    })
-
-    try {
-      await page.goto(input.url, { waitUntil: "networkidle", timeout: input.timeoutMs })
-    } catch (e) {
-      throw new CaptureReferenceError(`navigation failed for ${input.url}`, "navigate", e)
-    }
-
-    // Render settle
-    try {
-      await Promise.race([
-        page.evaluateHandle(() => document.fonts?.ready),
-        new Promise((_, reject) =>
-          setTimeout(() => reject(new Error("document.fonts.ready timeout")), input.timeoutMs),
-        ),
-      ])
-      await page.waitForFunction(() => document.readyState === "complete", { timeout: input.timeoutMs })
-    } catch (e) {
-      throw new CaptureReferenceError("render settle failed", "content_paint", e)
-    }
-
-    // Extra paint wait only. Low-density captures are recorded as diagnostics
-    // after the screenshot; they are not workflow blockers.
-    try {
-      await page.waitForFunction(
-        () => {
-          const canvases = Array.from(document.querySelectorAll("canvas")) as HTMLCanvasElement[]
-          for (const c of canvases) {
-            if (c.width > 0 && c.height > 0) return true
-          }
-          const mainCandidates = [
-            document.querySelector("main"),
-            document.querySelector('[role="main"]'),
-            document.querySelector("article"),
-            document.body.firstElementChild as Element | null,
-          ]
-          for (const el of mainCandidates) {
-            if (!el) continue
-            const r = (el as HTMLElement).getBoundingClientRect()
-            if (r.width > 200 && r.height > 200) return true
-          }
-          return false
-        },
-        { timeout: Math.min(input.timeoutMs, 5_000), polling: 250 },
-      )
-    } catch {
-      // Keep the screenshot path alive; diagnostics below will carry density evidence.
-    }
-
-    // 额外的 tail buffer 给 hydration / 懒加载 / 动画首帧落位
-    await new Promise((r) => setTimeout(r, 2_000))
-
-    // 抓 fullpage screenshot
-    let pngBuf: Buffer
-    try {
-      const raw = await page.screenshot({ type: "png", fullPage: true })
-      pngBuf = Buffer.isBuffer(raw) ? raw : Buffer.from(raw as Uint8Array)
-    } catch (e) {
-      throw new CaptureReferenceError("screenshot failed", "screenshot", e)
-    }
-
-    // DOM + innerText
-    const domOuter = await page.evaluate(() => document.documentElement.outerHTML)
-    const innerText = await page.evaluate(() => (document.body?.innerText ?? "").normalize())
-
-    // Layout bbox（heuristic 命名区域）
-    const layoutRaw = await page.evaluate(() => {
-      const pick = (selector: string): { x: number; y: number; width: number; height: number } | null => {
-        const nodes = Array.from(document.querySelectorAll(selector)) as HTMLElement[]
-        let best: HTMLElement | null = null
-        let bestArea = 0
-        for (const n of nodes) {
-          const r = n.getBoundingClientRect()
-          const area = r.width * r.height
-          if (area > bestArea) {
-            bestArea = area
-            best = n
-          }
-        }
-        if (!best) return null
-        const r = best.getBoundingClientRect()
-        if (r.width <= 0 || r.height <= 0) return null
-        return {
-          x: Math.max(0, Math.round(r.left + window.scrollX)),
-          y: Math.max(0, Math.round(r.top + window.scrollY)),
-          width: Math.max(1, Math.round(r.width)),
-          height: Math.max(1, Math.round(r.height)),
-        }
-      }
-      const out: Record<string, { x: number; y: number; width: number; height: number }> = {}
-      const candidates: Array<[string, string]> = [
-        ["chart", "canvas, svg, [role='img'], .chart, .recharts-wrapper, .echarts"],
-        ["sidebar", "aside, nav, [role='navigation'], .sidebar"],
-        ["toolbar", "[role='toolbar'], header, .toolbar"],
-        ["header", "header, [role='banner']"],
-        ["footer", "footer, [role='contentinfo']"],
-        ["main", "main, [role='main'], article"],
-      ]
-      for (const [name, selector] of candidates) {
-        const r = pick(selector)
-        if (r) out[name] = r
-      }
-      return out
-    })
-
-    const chromeVersion = safeBrowserVersion(browser)
-    return { screenshotPng: pngBuf, domOuter, innerText, layoutRaw, harByteSize, chromeVersion }
-  } finally {
-    await browser.close().catch(() => undefined)
-  }
+  return captureBrowserEvidenceViaNode(input)
 }
 
 async function captureBrowserEvidenceViaNode(input: {
@@ -591,14 +442,6 @@ main();
 
 function sha256(buf: Buffer): string {
   return createHash("sha256").update(buf).digest("hex")
-}
-
-function safeBrowserVersion(browser: { version: () => string }): string | undefined {
-  try {
-    return browser.version()
-  } catch {
-    return undefined
-  }
 }
 
 async function readBrowserRuntimeVersion(): Promise<string | undefined> {

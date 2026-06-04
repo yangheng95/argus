@@ -1,10 +1,9 @@
 #!/usr/bin/env bun
 // One-shot screenshot of the running overlay vite dev server.
-// Lives in opencorvus pkg so it can resolve puppeteer-core directly.
+// Uses the shared Node-sidecar browser launcher so Bun never connects to Playwright.
 //   bun run script/overlay-snap.ts <out.png> [url] [w] [h]
 
-import puppeteer from "puppeteer-core"
-import { findBrowserExecutable } from "../src/acceptance/checks/visual"
+import { launchBrowser } from "../../overlay/test/launch"
 import path from "node:path"
 
 const out = process.argv[2]
@@ -16,16 +15,11 @@ const url = process.argv[3] ?? "http://localhost:5173/"
 const w = Number(process.argv[4] ?? 1400)
 const h = Number(process.argv[5] ?? 900)
 
-const exe = await findBrowserExecutable()
-const browser = await puppeteer.launch({
-  executablePath: exe,
-  headless: true,
-  args: ["--no-sandbox", "--disable-gpu", "--disable-dev-shm-usage"],
-})
+const browser = await launchBrowser(["--no-sandbox", "--disable-gpu", "--disable-dev-shm-usage"])
 try {
   const page = await browser.newPage()
-  await page.setViewport({ width: w, height: h, deviceScaleFactor: 1 })
-  await page.goto(url, { waitUntil: "networkidle2", timeout: 15000 }).catch((e) => {
+  await page.setViewportSize({ width: w, height: h })
+  await page.goto(url, { waitUntil: "networkidle", timeout: 15000 }).catch((e) => {
     console.error(`page.goto warning: ${e.message ?? e}`)
   })
   await new Promise((r) => setTimeout(r, 800))

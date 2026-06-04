@@ -50,6 +50,7 @@ describe("browser Node sidecar runtime", () => {
       nodeExecutable: path.join(tmp.path, "browser-mcp-node", "node.exe"),
       playwrightRequirePath: path.join(tmp.path, "browser-mcp-node", "node_modules", "playwright", "index.js"),
       mcpBundle: path.join(tmp.path, "browser-mcp-node", "stdio.mjs"),
+      mcpHttpBundle: path.join(tmp.path, "browser-mcp-node", "http.mjs"),
     })
   })
 

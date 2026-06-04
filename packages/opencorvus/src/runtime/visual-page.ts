@@ -21,13 +21,11 @@
  */
 import fs from "node:fs/promises"
 import path from "node:path"
-import { spawn } from "node:child_process"
 import { PNG } from "pngjs"
 import ssim from "ssim.js"
-import { isBrowserImplicitAssetRequest, isResourceLoadConsoleError } from "./browser-noise"
-import { BrowserRuntime, findBrowserExecutable } from "@/browser/runtime"
-
-type Page = any
+import { BrowserNodeSidecarError, runBrowserNodeSidecar } from "@/browser/runtime/node-executor"
+import { resolveBrowserNodeSidecarRuntime } from "@/browser/runtime/node-sidecar"
+import { BrowserRuntime } from "@/browser/runtime"
 
 export interface VisualDiffOptions {
   /** Live http(s) URL. File paths are intentionally rejected by renderPage. */
@@ -49,8 +47,6 @@ export interface VisualDiffOptions {
   browserLaunchTimeoutMs?: number
   /** Run Chromium headless. Default false to preserve overlay benchmark visual mode. */
   headless?: boolean
-  /** Fall back to Chrome's CLI screenshot path when Playwright cannot launch. */
-  chromeCliFallback?: boolean
 }
 
 export interface VisualDiffReport {
@@ -125,8 +121,6 @@ export async function renderPage(opts: {
   browserLaunchTimeoutMs?: number
   /** Run Chromium headless. Default false to preserve overlay benchmark visual mode. */
   headless?: boolean
-  /** Fall back to Chrome's CLI screenshot path when Playwright cannot launch. */
-  chromeCliFallback?: boolean
   /** Override browser page.goto navigation timeout. Default: 90_000ms. */
   navigationTimeoutMs?: number
   /** Extra settle delay after window load. Default: 2_500ms. */
@@ -177,235 +171,57 @@ export async function renderPage(opts: {
   }
   const target = opts.rendered
 
-  let browser
-  try {
-    browser = await BrowserRuntime.launchPlaywrightBrowser({
-      executablePath: opts.browserExecutable,
-      headless: opts.headless ?? false,
-      args: ["--no-sandbox", "--disable-gpu", "--disable-dev-shm-usage"],
-      timeoutMs: BrowserRuntime.resolveBrowserLaunchTimeoutMs(opts.browserLaunchTimeoutMs),
-    })
-  } catch (error) {
-    if (!opts.chromeCliFallback) throw error
-    return renderPageWithChromeCli({
-      target,
-      viewport,
-      outDir: opts.outDir,
-      browserExecutable: opts.browserExecutable,
-      navigationTimeoutMs: opts.navigationTimeoutMs,
-    })
-  }
   const renderedPath = path.join(opts.outDir, "rendered.png")
-  let dom: {
-    textLength: number
-    nodeCount: number
-    bodyDescendantCount: number
-    hasBodyChildren: boolean
-    isEmptyRootShell: boolean
-  }
-  let interaction: RuntimeInteractionProbe | undefined
-  let capture: RenderPageCapture | undefined
-  try {
-    const context = await browser.newContext({
-      viewport: { width: viewport.width, height: viewport.height },
-      deviceScaleFactor: 1,
-    })
-    const page = await context.newPage()
-    const failedRequests: Array<{ url: string; status: number; reason: string }> = []
-    let totalResponses = 0
-    page.on("response", (res) => {
-      totalResponses += 1
-      const status = res.status()
-      if (status >= 400 && status < 600 && !isBrowserImplicitAssetRequest(res.url())) {
-        failedRequests.push({ url: res.url(), status, reason: res.statusText() || `HTTP ${status}` })
-      }
-    })
-    page.on("requestfailed", (req) => {
-      if (isBrowserImplicitAssetRequest(req.url())) return
-      failedRequests.push({ url: req.url(), status: 0, reason: req.failure()?.errorText ?? "request failed" })
-    })
-    const consoleErrors: string[] = []
-    page.on("console", (msg) => {
-      if (msg.type() !== "error") return
-      const text = msg.text().slice(0, 400)
-      // Network-load failures are owned by the asset layer (single source);
-      // Chromium's mirrored "Failed to load resource" console error is not an
-      // app JS fault.
-      if (isResourceLoadConsoleError(text)) return
-      consoleErrors.push(text)
-    })
-    const pageErrors: string[] = []
-    page.on("pageerror", (err) => {
-      const e = err as Error
-      pageErrors.push(e.message?.slice(0, 400) ?? String(err))
-    })
-    await page.exposeFunction("__opencorvusCaptureUnhandledRejection", (message: string) => {
-      pageErrors.push(`unhandledrejection: ${message}`.slice(0, 400))
-    })
-    await page.addInitScript(() => {
-      const globalWindow = window as unknown as {
-        __opencorvusCaptureUnhandledRejection?: (message: string) => void
-      }
-      window.addEventListener("unhandledrejection", (event) => {
-        const reason = event.reason
-        const message =
-          reason instanceof Error ? reason.message : typeof reason === "string" ? reason : JSON.stringify(reason)
-        globalWindow.__opencorvusCaptureUnhandledRejection?.(message)
-      })
-    })
-    // A live preview URL can still need a non-trivial first-paint window once
-    // the server accepts connections. Configurable via opts.navigationTimeoutMs
-    // so benchmarks with slower runners can override without editing source.
-    const navigationTimeoutMs = opts.navigationTimeoutMs ?? 90_000
-    // `load` (window.onload) instead of `networkidle0`: live frontend previews
-    // commonly keep websockets open indefinitely, so network-idle is not a
-    // faithful completion signal for a rendered interactive page.
-    // `load` fires when DOM + initial CSS/JS/fonts are loaded, which is
-    // sufficient for a faithful screenshot. The settle wait below covers
-    // React hydration that runs after the load event.
-    const response = await page.goto(target, { waitUntil: "load", timeout: navigationTimeoutMs })
-    const status = response?.status() ?? 0
-    const contentType = String(response?.headers()["content-type"] ?? "").toLowerCase()
-    const bodyBuf = response ? await response.body().catch(() => Buffer.alloc(0)) : Buffer.alloc(0)
-    let httpReason = ""
-    if (status < 200 || status >= 300) {
-      httpReason = `status=${status}`
-    } else if (!contentType.includes("text/html")) {
-      httpReason = `content-type=${contentType || "(missing)"} — app root must serve text/html`
-    } else if (bodyBuf.length < 200) {
-      httpReason = `body=${bodyBuf.length}B — too small to be an app shell`
-    }
-    let missingWaitSelector: string | undefined
-    if (opts.waitForSelector) {
-      await page.waitForSelector(opts.waitForSelector, { timeout: navigationTimeoutMs }).catch(() => {
-        missingWaitSelector = opts.waitForSelector
-      })
-    }
-    // React/Vue/SPA hydration often fires after `load`. Without this delay
-    // the screenshot can capture the un-hydrated shell ("Loading…" / empty
-    // root). 2.5s is a conservative cap — most apps hydrate in <500ms but
-    // a cold first-paint with code-splitting can stretch to 1-2s.
-    await new Promise((r) => setTimeout(r, opts.settleMs ?? 2_500))
-    const collectDom = () =>
-      page.evaluate(() => {
-        const body = document.body
-        const text = body ? (body.innerText ?? "").trim() : ""
-        const nodeCount = document.querySelectorAll("*").length
-        const bodyDescendantCount = body ? body.getElementsByTagName("*").length : 0
-        const hasBodyChildren = !!body && body.children.length > 0
-        // 检测 Vite/CRA 空壳：`<div id="root">` 是 body 的唯一非脚本子元素且其内部
-        // 元素 <= 1。React SPA 渲染失败 / 未 hydrate / hydrate 了空 App 都会命中。
-        const isEmptyRootShell = (() => {
-          if (!body) return true
-          const elementChildren = Array.from(body.children).filter(
-            (c) => c.tagName !== "SCRIPT" && c.tagName !== "STYLE" && c.tagName !== "NOSCRIPT",
-          )
-          if (elementChildren.length !== 1) return false
-          const sole = elementChildren[0] as HTMLElement
-          if (sole.id !== "root" && sole.id !== "app" && sole.id !== "__next") return false
-          return sole.querySelectorAll("*").length <= 1
-        })()
-        return {
-          textLength: text.length,
-          nodeCount,
-          bodyDescendantCount,
-          hasBodyChildren,
-          isEmptyRootShell,
-        }
-      })
-    dom = await collectDom()
-    if (opts.probeInteractions) {
-      interaction = await probeRuntimeInteractions(page)
-      if (interaction.textChanged || interaction.htmlChanged) {
-        dom = await collectDom()
-      }
-    }
-    await page.screenshot({
-      path: renderedPath,
-      type: "png",
-      clip: { x: 0, y: 0, width: viewport.width, height: viewport.height },
-    })
-    const rendered = await decodePNG(renderedPath)
-    const variance = pngLuminanceVariance(rendered)
-    const missingSelectors: string[] = []
-    for (const sel of opts.expectSelectors ?? []) {
-      const found = await page
-        .$(sel)
-        .then((e) => !!e)
-        .catch(() => false)
-      if (!found) missingSelectors.push(sel)
-    }
-    if (missingWaitSelector && !missingSelectors.includes(missingWaitSelector)) {
-      missingSelectors.push(missingWaitSelector)
-    }
-    const bodyText = await page.evaluate(() => document.body?.textContent ?? "")
-    const missingTexts = (opts.expectTexts ?? []).filter((text) => !bodyText.includes(text))
-    const requiredDomDescendants = opts.minDomDescendants ?? 1
-    capture = {
-      targetUrl: target,
-      layers: {
-        http: {
-          passed: status >= 200 && status < 300 && contentType.includes("text/html") && bodyBuf.length >= 200,
-          status,
-          content_type: contentType,
-          body_length: bodyBuf.length,
-          reason: httpReason,
-        },
-        asset: {
-          passed: failedRequests.length === 0,
-          total: totalResponses,
-          failed: failedRequests,
-        },
-        dom: {
-          passed: dom.bodyDescendantCount >= requiredDomDescendants,
-          body_descendants: dom.bodyDescendantCount,
-          required: requiredDomDescendants,
-        },
-        js: {
-          passed: consoleErrors.length === 0 && pageErrors.length === 0,
-          console_errors: consoleErrors,
-          page_errors: pageErrors,
-        },
-        pixel: {
-          passed: variance >= 25,
-          variance: Number(variance.toFixed(2)),
-          floor: 25,
-          screenshot_path: renderedPath,
-        },
-        expected: {
-          passed: missingSelectors.length === 0 && missingTexts.length === 0,
-          missing_selectors: missingSelectors,
-          missing_texts: missingTexts,
-        },
-      },
-    }
-  } finally {
-    await browser.close()
-  }
-  if (!capture) {
-    throw new Error("renderPage: capture was not produced")
-  }
+  const run = await renderPageViaNode({
+    target,
+    renderedPath,
+    viewport,
+    outDir: opts.outDir,
+    browserExecutable: opts.browserExecutable,
+    browserLaunchTimeoutMs: opts.browserLaunchTimeoutMs,
+    headless: opts.headless ?? false,
+    navigationTimeoutMs: opts.navigationTimeoutMs,
+    settleMs: opts.settleMs,
+    waitForSelector: opts.waitForSelector,
+    minDomDescendants: opts.minDomDescendants,
+    expectSelectors: opts.expectSelectors,
+    expectTexts: opts.expectTexts,
+    probeInteractions: opts.probeInteractions,
+  })
   const rendered = await decodePNG(renderedPath)
+  const variance = pngLuminanceVariance(rendered)
+  run.capture.layers.pixel = {
+    passed: variance >= 25,
+    variance: Number(variance.toFixed(2)),
+    floor: 25,
+    screenshot_path: renderedPath,
+  }
   return {
     renderedPath,
     viewport,
     size: { width: rendered.width, height: rendered.height },
-    dom,
-    interaction,
-    capture,
+    dom: run.dom,
+    interaction: run.interaction,
+    capture: run.capture,
   }
 }
 
-async function renderPageWithChromeCli(opts: {
+async function renderPageViaNode(input: {
   target: string
+  renderedPath: string
   viewport: { width: number; height: number }
   outDir: string
   browserExecutable?: string
+  browserLaunchTimeoutMs?: number
+  headless: boolean
   navigationTimeoutMs?: number
+  settleMs?: number
+  waitForSelector?: string
+  minDomDescendants?: number
+  expectSelectors?: string[]
+  expectTexts?: string[]
+  probeInteractions?: boolean
 }): Promise<{
-  renderedPath: string
-  viewport: { width: number; height: number }
-  size: { width: number; height: number }
   dom: {
     textLength: number
     nodeCount: number
@@ -413,64 +229,304 @@ async function renderPageWithChromeCli(opts: {
     hasBodyChildren: boolean
     isEmptyRootShell: boolean
   }
+  interaction?: RuntimeInteractionProbe
   capture: RenderPageCapture
 }> {
-  const chromePath = await findBrowserExecutable(opts.browserExecutable)
-  const renderedPath = path.join(opts.outDir, "rendered.png")
-  await fs.rm(renderedPath, { force: true })
-  await new Promise<void>((resolve, reject) => {
-    const child = spawn(
-      chromePath,
-      [
-        "--headless",
-        "--disable-gpu",
-        "--no-sandbox",
-        "--disable-dev-shm-usage",
-        "--hide-scrollbars",
-        `--virtual-time-budget=${opts.navigationTimeoutMs ?? 5_000}`,
-        `--screenshot=${renderedPath}`,
-        `--window-size=${opts.viewport.width},${opts.viewport.height}`,
-        opts.target,
-      ],
-      { stdio: "ignore", windowsHide: true },
-    )
-    child.on("error", reject)
-    child.on("exit", (code) =>
-      code === 0 ? resolve() : reject(new Error(`Chrome CLI screenshot exited with code ${code}`)),
-    )
-  })
-  const rendered = await decodePNG(renderedPath)
-  const variance = pngLuminanceVariance(rendered)
-  const dom = {
-    textLength: 0,
-    nodeCount: 0,
-    bodyDescendantCount: 0,
-    hasBodyChildren: false,
-    isEmptyRootShell: false,
-  }
-  return {
-    renderedPath,
-    viewport: opts.viewport,
-    size: { width: rendered.width, height: rendered.height },
-    dom,
-    capture: {
-      targetUrl: opts.target,
-      layers: {
-        http: { passed: true, status: 200, content_type: "unknown", body_length: 0, reason: "chrome-cli-fallback" },
-        asset: { passed: true, total: 0, failed: [] },
-        dom: { passed: true, body_descendants: 0, required: 0 },
-        js: { passed: true, console_errors: [], page_errors: [] },
-        pixel: {
-          passed: variance >= 25,
-          variance: Number(variance.toFixed(2)),
-          floor: 25,
-          screenshot_path: renderedPath,
-        },
-        expected: { passed: true, missing_selectors: [], missing_texts: [] },
-      },
+  const executablePath = await BrowserRuntime.findBrowserExecutable(input.browserExecutable)
+  const launchTimeoutMs = BrowserRuntime.resolveBrowserLaunchTimeoutMs(input.browserLaunchTimeoutMs)
+  const navigationTimeoutMs = input.navigationTimeoutMs ?? 90_000
+  const hardTimeoutMs = launchTimeoutMs + navigationTimeoutMs + (input.settleMs ?? 2_500) + 30_000
+  const runtime = await resolveBrowserNodeSidecarRuntime()
+  const run = await runBrowserNodeSidecar<
+    | {
+        ok: true
+        dom: {
+          textLength: number
+          nodeCount: number
+          bodyDescendantCount: number
+          hasBodyChildren: boolean
+          isEmptyRootShell: boolean
+        }
+        interaction?: RuntimeInteractionProbe
+        capture: RenderPageCapture
+      }
+    | { ok: false; message: string; stack?: string }
+  >({
+    runtime,
+    script: NODE_VISUAL_RENDER_SCRIPT,
+    payload: {
+      ...input,
+      executablePath,
+      launchTimeoutMs,
+      navigationTimeoutMs,
+      requiredDomDescendants: input.minDomDescendants ?? 1,
     },
+    payloadEnvName: "OPENCORVUS_VISUAL_RENDER_INPUT",
+    hardTimeoutMs,
+    label: "Node visual render",
+  }).catch((error) => {
+    if (error instanceof BrowserNodeSidecarError) throw error
+    throw new Error(error instanceof Error ? error.message : String(error), { cause: error })
+  })
+  const result = run.result
+  if (!result.ok) {
+    throw new Error(`renderPage: Node sidecar failed: ${result.message}${result.stack ? `\n${result.stack}` : ""}`)
+  }
+  if (run.exitCode !== 0) {
+    throw new Error(`renderPage: Node sidecar exited with ${run.signal ?? run.exitCode}. ${run.stderr.trim()}`)
+  }
+  return result
+}
+
+const NODE_VISUAL_RENDER_SCRIPT = String.raw`
+const { chromium } = require(process.env.OPENCORVUS_PLAYWRIGHT_REQUIRE_PATH || "playwright");
+
+function isBrowserImplicitAssetRequest(rawUrl) {
+  try {
+    return new URL(rawUrl).pathname === "/favicon.ico";
+  } catch {
+    return false;
   }
 }
+
+function isResourceLoadConsoleError(text) {
+  return String(text || "").trimStart().startsWith("Failed to load resource:");
+}
+
+async function collectDom(page) {
+  return page.evaluate(() => {
+    const body = document.body;
+    const text = body ? (body.innerText || "").trim() : "";
+    const nodeCount = document.querySelectorAll("*").length;
+    const bodyDescendantCount = body ? body.getElementsByTagName("*").length : 0;
+    const hasBodyChildren = !!body && body.children.length > 0;
+    const isEmptyRootShell = (() => {
+      if (!body) return true;
+      const elementChildren = Array.from(body.children).filter(
+        (c) => c.tagName !== "SCRIPT" && c.tagName !== "STYLE" && c.tagName !== "NOSCRIPT",
+      );
+      if (elementChildren.length !== 1) return false;
+      const sole = elementChildren[0];
+      if (sole.id !== "root" && sole.id !== "app" && sole.id !== "__next") return false;
+      return sole.querySelectorAll("*").length <= 1;
+    })();
+    return {
+      textLength: text.length,
+      nodeCount,
+      bodyDescendantCount,
+      hasBodyChildren,
+      isEmptyRootShell,
+    };
+  });
+}
+
+async function probeRuntimeInteractions(page) {
+  const before = await page.evaluate(() => ({
+    text: document.body?.innerText || "",
+    html: document.body?.innerHTML || "",
+  }));
+  const seen = new Set();
+  const errors = [];
+  let attempted = 0;
+  let visibleControlCount = 0;
+  let textInputCount = 0;
+  let fileInputCount = 0;
+
+  for (let round = 0; round < 3; round++) {
+    const controls = await page.evaluate(() => {
+      window.__opencorvusRuntimeProbeNext ??= 0;
+      const visible = (el) => {
+        const rect = el.getBoundingClientRect();
+        const style = window.getComputedStyle(el);
+        return rect.width > 0 && rect.height > 0 && style.visibility !== "hidden" && style.display !== "none";
+      };
+      const elements = Array.from(
+        document.querySelectorAll("button,a[href],input,textarea,select,[role='button'],[contenteditable='true']"),
+      ).filter((el) => visible(el));
+      return elements.map((el) => {
+        let id = el.getAttribute("data-opencorvus-runtime-probe-id");
+        if (!id) {
+          id = String(window.__opencorvusRuntimeProbeNext++);
+          el.setAttribute("data-opencorvus-runtime-probe-id", id);
+        }
+        const isFileInput = el instanceof HTMLInputElement && (el.type || "").toLowerCase() === "file";
+        const isTextInput =
+          el instanceof HTMLTextAreaElement ||
+          (el instanceof HTMLInputElement &&
+            ["email", "password", "search", "text", "url"].includes((el.type || "text").toLowerCase()));
+        return { id, selector: '[data-opencorvus-runtime-probe-id="' + id + '"]', isTextInput, isFileInput };
+      });
+    });
+    visibleControlCount = Math.max(visibleControlCount, controls.length);
+    const roundTextInputCount = controls.filter((item) => item.isTextInput).length;
+    textInputCount = Math.max(textInputCount, roundTextInputCount);
+    fileInputCount = Math.max(fileInputCount, controls.filter((item) => item.isFileInput).length);
+    for (const item of controls.filter((control) => control.isTextInput).slice(0, 3)) {
+      try {
+        await page.click(item.selector, { delay: 10 });
+        await page.keyboard.down("Control");
+        await page.keyboard.press("KeyA");
+        await page.keyboard.up("Control");
+        await page.keyboard.type("opencorvus runtime probe", { delay: 5 });
+        attempted++;
+      } catch (error) {
+        errors.push(error instanceof Error ? error.message : String(error));
+      }
+    }
+    const clickTargets = controls.filter((item) => !item.isFileInput && !seen.has(item.id)).slice(0, 5);
+    if (clickTargets.length === 0 && roundTextInputCount === 0) break;
+    for (const item of clickTargets) {
+      seen.add(item.id);
+      try {
+        await page.click(item.selector, { delay: 20 });
+        attempted++;
+      } catch (error) {
+        errors.push(error instanceof Error ? error.message : String(error));
+      }
+    }
+    await new Promise((resolve) => setTimeout(resolve, 1_200));
+  }
+  await new Promise((resolve) => setTimeout(resolve, 2_000));
+  const after = await page.evaluate(() => ({
+    text: document.body?.innerText || "",
+    html: document.body?.innerHTML || "",
+  }));
+  return {
+    visibleControlCount,
+    textInputCount,
+    fileInputCount,
+    attemptedInteractionCount: attempted,
+    textChanged: before.text !== after.text,
+    htmlChanged: before.html !== after.html,
+    errorCount: errors.length,
+    errors: errors.slice(0, 5),
+  };
+}
+
+async function main() {
+  const input = JSON.parse(Buffer.from(process.env.OPENCORVUS_VISUAL_RENDER_INPUT || "", "base64").toString("utf8"));
+  let browser;
+  try {
+    browser = await chromium.launch({
+      executablePath: input.executablePath,
+      headless: input.headless,
+      timeout: input.launchTimeoutMs,
+      args: ["--no-sandbox", "--disable-gpu", "--disable-dev-shm-usage"],
+    });
+    const context = await browser.newContext({
+      viewport: { width: input.viewport.width, height: input.viewport.height },
+      deviceScaleFactor: 1,
+    });
+    const page = await context.newPage();
+    const failedRequests = [];
+    let totalResponses = 0;
+    page.on("response", (res) => {
+      totalResponses += 1;
+      const status = res.status();
+      if (status >= 400 && status < 600 && !isBrowserImplicitAssetRequest(res.url())) {
+        failedRequests.push({ url: res.url(), status, reason: res.statusText() || "HTTP " + status });
+      }
+    });
+    page.on("requestfailed", (req) => {
+      if (isBrowserImplicitAssetRequest(req.url())) return;
+      failedRequests.push({ url: req.url(), status: 0, reason: req.failure()?.errorText || "request failed" });
+    });
+    const consoleErrors = [];
+    page.on("console", (msg) => {
+      if (msg.type() !== "error") return;
+      const text = msg.text().slice(0, 400);
+      if (isResourceLoadConsoleError(text)) return;
+      consoleErrors.push(text);
+    });
+    const pageErrors = [];
+    page.on("pageerror", (err) => {
+      pageErrors.push((err && err.message ? err.message : String(err)).slice(0, 400));
+    });
+    await page.exposeFunction("__opencorvusCaptureUnhandledRejection", (message) => {
+      pageErrors.push(("unhandledrejection: " + message).slice(0, 400));
+    });
+    await page.addInitScript(() => {
+      window.addEventListener("unhandledrejection", (event) => {
+        const reason = event.reason;
+        const message =
+          reason instanceof Error ? reason.message : typeof reason === "string" ? reason : JSON.stringify(reason);
+        window.__opencorvusCaptureUnhandledRejection?.(message);
+      });
+    });
+    const response = await page.goto(input.target, { waitUntil: "load", timeout: input.navigationTimeoutMs });
+    const status = response?.status() || 0;
+    const contentType = String(response?.headers()["content-type"] || "").toLowerCase();
+    const bodyBuf = response ? await response.body().catch(() => Buffer.alloc(0)) : Buffer.alloc(0);
+    let httpReason = "";
+    if (status < 200 || status >= 300) httpReason = "status=" + status;
+    else if (!contentType.includes("text/html")) httpReason = "content-type=" + (contentType || "(missing)") + " - app root must serve text/html";
+    else if (bodyBuf.length < 200) httpReason = "body=" + bodyBuf.length + "B - too small to be an app shell";
+    let missingWaitSelector;
+    if (input.waitForSelector) {
+      await page.waitForSelector(input.waitForSelector, { timeout: input.navigationTimeoutMs }).catch(() => {
+        missingWaitSelector = input.waitForSelector;
+      });
+    }
+    await new Promise((resolve) => setTimeout(resolve, input.settleMs ?? 2_500));
+    let dom = await collectDom(page);
+    let interaction;
+    if (input.probeInteractions) {
+      interaction = await probeRuntimeInteractions(page);
+      if (interaction.textChanged || interaction.htmlChanged) dom = await collectDom(page);
+    }
+    await page.screenshot({
+      path: input.renderedPath,
+      type: "png",
+      clip: { x: 0, y: 0, width: input.viewport.width, height: input.viewport.height },
+    });
+    const missingSelectors = [];
+    for (const sel of input.expectSelectors || []) {
+      const found = await page.$(sel).then((e) => !!e).catch(() => false);
+      if (!found) missingSelectors.push(sel);
+    }
+    if (missingWaitSelector && !missingSelectors.includes(missingWaitSelector)) missingSelectors.push(missingWaitSelector);
+    const bodyText = await page.evaluate(() => document.body?.textContent || "");
+    const missingTexts = (input.expectTexts || []).filter((text) => !bodyText.includes(text));
+    process.stdout.write(JSON.stringify({
+      ok: true,
+      dom,
+      interaction,
+      capture: {
+        targetUrl: input.target,
+        layers: {
+          http: {
+            passed: status >= 200 && status < 300 && contentType.includes("text/html") && bodyBuf.length >= 200,
+            status,
+            content_type: contentType,
+            body_length: bodyBuf.length,
+            reason: httpReason,
+          },
+          asset: { passed: failedRequests.length === 0, total: totalResponses, failed: failedRequests },
+          dom: {
+            passed: dom.bodyDescendantCount >= input.requiredDomDescendants,
+            body_descendants: dom.bodyDescendantCount,
+            required: input.requiredDomDescendants,
+          },
+          js: { passed: consoleErrors.length === 0 && pageErrors.length === 0, console_errors: consoleErrors, page_errors: pageErrors },
+          pixel: { passed: false, variance: 0, floor: 25, screenshot_path: input.renderedPath },
+          expected: { passed: missingSelectors.length === 0 && missingTexts.length === 0, missing_selectors: missingSelectors, missing_texts: missingTexts },
+        },
+      },
+    }));
+  } catch (error) {
+    process.stdout.write(JSON.stringify({
+      ok: false,
+      message: error && error.message ? error.message : String(error),
+      stack: error && error.stack ? error.stack : undefined,
+    }));
+    process.exitCode = 1;
+  } finally {
+    if (browser) await browser.close().catch(() => {});
+  }
+}
+
+main();
+`
 
 export type RuntimeInteractionProbe = {
   visibleControlCount: number
@@ -481,96 +537,6 @@ export type RuntimeInteractionProbe = {
   htmlChanged: boolean
   errorCount: number
   errors: string[]
-}
-
-async function probeRuntimeInteractions(page: Page): Promise<RuntimeInteractionProbe> {
-  const before = await page.evaluate(() => ({
-    text: document.body?.innerText ?? "",
-    html: document.body?.innerHTML ?? "",
-  }))
-  const seen = new Set<string>()
-  const errors: string[] = []
-  let attempted = 0
-  let visibleControlCount = 0
-  let textInputCount = 0
-  let fileInputCount = 0
-
-  for (let round = 0; round < 3; round++) {
-    const controls = await page.evaluate(() => {
-      const state = window as unknown as { __opencorvusRuntimeProbeNext?: number }
-      state.__opencorvusRuntimeProbeNext ??= 0
-      const visible = (el: Element) => {
-        const rect = el.getBoundingClientRect()
-        const style = window.getComputedStyle(el)
-        return rect.width > 0 && rect.height > 0 && style.visibility !== "hidden" && style.display !== "none"
-      }
-      const elements = Array.from(
-        document.querySelectorAll("button,a[href],input,textarea,select,[role='button'],[contenteditable='true']"),
-      ).filter((el) => visible(el))
-      return elements.map((el) => {
-        let id = el.getAttribute("data-opencorvus-runtime-probe-id")
-        if (!id) {
-          const next = state.__opencorvusRuntimeProbeNext ?? 0
-          id = String(next)
-          state.__opencorvusRuntimeProbeNext = next + 1
-          el.setAttribute("data-opencorvus-runtime-probe-id", id)
-        }
-        const selector = `[data-opencorvus-runtime-probe-id="${id}"]`
-        const isFileInput = el instanceof HTMLInputElement && (el.type || "").toLowerCase() === "file"
-        const isTextInput =
-          el instanceof HTMLTextAreaElement ||
-          (el instanceof HTMLInputElement &&
-            ["email", "password", "search", "text", "url"].includes((el.type || "text").toLowerCase()))
-        return { id, selector, isTextInput, isFileInput }
-      })
-    })
-    visibleControlCount = Math.max(visibleControlCount, controls.length)
-    const roundTextInputCount = controls.filter((item) => item.isTextInput).length
-    textInputCount = Math.max(textInputCount, roundTextInputCount)
-    fileInputCount = Math.max(fileInputCount, controls.filter((item) => item.isFileInput).length)
-
-    for (const item of controls.filter((control) => control.isTextInput).slice(0, 3)) {
-      try {
-        await page.click(item.selector, { delay: 10 })
-        await page.keyboard.down("Control")
-        await page.keyboard.press("KeyA")
-        await page.keyboard.up("Control")
-        await page.keyboard.type("opencorvus runtime probe", { delay: 5 })
-        attempted++
-      } catch (error) {
-        errors.push(error instanceof Error ? error.message : String(error))
-      }
-    }
-
-    const clickTargets = controls.filter((item) => !item.isFileInput && !seen.has(item.id)).slice(0, 5)
-    if (clickTargets.length === 0 && roundTextInputCount === 0) break
-    for (const item of clickTargets) {
-      seen.add(item.id)
-      try {
-        await page.click(item.selector, { delay: 20 })
-        attempted++
-      } catch (error) {
-        errors.push(error instanceof Error ? error.message : String(error))
-      }
-    }
-    await new Promise((resolve) => setTimeout(resolve, 1_200))
-  }
-  await new Promise((resolve) => setTimeout(resolve, 2_000))
-
-  const after = await page.evaluate(() => ({
-    text: document.body?.innerText ?? "",
-    html: document.body?.innerHTML ?? "",
-  }))
-  return {
-    visibleControlCount,
-    textInputCount,
-    fileInputCount,
-    attemptedInteractionCount: attempted,
-    textChanged: before.text !== after.text,
-    htmlChanged: before.html !== after.html,
-    errorCount: errors.length,
-    errors: errors.slice(0, 5),
-  }
 }
 
 /** SSIM visual diff — retained for the external benchmark CLI and operator
@@ -602,7 +568,6 @@ export async function runVisualDiff(opts: VisualDiffOptions): Promise<VisualDiff
     browserExecutable: opts.browserExecutable,
     browserLaunchTimeoutMs: opts.browserLaunchTimeoutMs,
     headless: opts.headless,
-    chromeCliFallback: opts.chromeCliFallback,
   })
 
   const rendImg = await decodePNG(renderedPath)

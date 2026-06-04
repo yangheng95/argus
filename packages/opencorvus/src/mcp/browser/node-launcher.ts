@@ -10,7 +10,15 @@ import {
 
 export namespace BrowserMCPNodeLauncher {
   export async function serveStdio() {
-    const runtime = await resolveRuntime()
+    await serve("stdio")
+  }
+
+  export async function serveHttp() {
+    await serve("http")
+  }
+
+  async function serve(transport: "http" | "stdio") {
+    const runtime = await resolveRuntime({ transport })
     const { node, bundle } = runtime
     const env = { ...process.env }
     if (runtime.packaged) {
@@ -37,7 +45,7 @@ export namespace BrowserMCPNodeLauncher {
       })
       child.once("exit", (code, signal) => {
         if (code === 0 || signal === "SIGTERM" || signal === "SIGINT") return resolve()
-        reject(new Error(`browser MCP node process exited with ${signal ?? code}`))
+        reject(new Error(`browser MCP node ${transport} process exited with ${signal ?? code}`))
       })
     })
   }
@@ -46,6 +54,7 @@ export namespace BrowserMCPNodeLauncher {
     runtime: {
       execPath?: string
       platform?: NodeJS.Platform
+      transport?: "http" | "stdio"
     } = {},
   ) {
     const packaged = packagedRuntimePaths(runtime)
@@ -54,7 +63,7 @@ export namespace BrowserMCPNodeLauncher {
       const browserRuntime = await resolveBrowserNodeSidecarRuntime(runtime)
       return {
         node: browserRuntime.nodeExecutable,
-        bundle: await resolveSourceBundle(),
+        bundle: await resolveSourceBundle(runtime.transport ?? "stdio"),
         packaged: false,
       }
     }
@@ -67,27 +76,30 @@ export namespace BrowserMCPNodeLauncher {
     runtime: {
       execPath?: string
       platform?: NodeJS.Platform
+      transport?: "http" | "stdio"
     } = {},
   ) {
     const packaged = packagedBrowserNodeRuntimePaths(runtime)
+    const transport = runtime.transport ?? "stdio"
     return {
       node: packaged.nodeExecutable,
-      bundle: packaged.mcpBundle,
+      bundle: transport === "http" ? packaged.mcpHttpBundle : packaged.mcpBundle,
     }
   }
 
-  async function resolveSourceBundle() {
-    return buildSourceBundle()
+  async function resolveSourceBundle(transport: "http" | "stdio") {
+    return buildSourceBundle(transport)
   }
 
-  async function buildSourceBundle() {
+  async function buildSourceBundle(transport: "http" | "stdio") {
     if (typeof Bun === "undefined") {
       throw new Error("Browser MCP node bundle is missing and this runtime cannot build it.")
     }
     const outdir = path.join(os.tmpdir(), "opencorvus-browser-mcp-node")
     await fs.mkdir(outdir, { recursive: true })
+    const entrypoint = `${transport}.ts`
     const result = await Bun.build({
-      entrypoints: [path.join(import.meta.dir, "stdio.ts")],
+      entrypoints: [path.join(import.meta.dir, entrypoint)],
       outdir,
       target: "node",
       external: ["electron"],
@@ -96,8 +108,8 @@ export namespace BrowserMCPNodeLauncher {
       const detail = result.logs.map((item) => item.message).join("; ")
       throw new Error(`Failed to build Browser MCP node bundle: ${detail}`)
     }
-    const js = path.join(outdir, "stdio.js")
-    const mjs = path.join(outdir, "stdio.mjs")
+    const js = path.join(outdir, `${transport}.js`)
+    const mjs = path.join(outdir, `${transport}.mjs`)
     await fs.rename(js, mjs).catch(async () => {
       await fs.copyFile(js, mjs)
     })
