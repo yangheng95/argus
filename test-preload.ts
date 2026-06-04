@@ -22,7 +22,6 @@ process.env["OPENCORVUS_MODELS_PATH"] = path.join(
   "fixtures",
   "models-api.json",
 );
-process.env["OPENCORVUS_DISABLE_DEFAULT_PLUGINS"] = "1";
 
 afterAll(async () => {
   await fs.rm(opencorvusTestRoot, { recursive: true, force: true }).catch(() => undefined);

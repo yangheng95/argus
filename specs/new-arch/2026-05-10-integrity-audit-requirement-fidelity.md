@@ -119,7 +119,7 @@ mock 改名（仅替换字面量）：
     - `bun test packages/opencorvus/test/integrity packages/opencorvus/test/orchestrator/tools.test.ts packages/opencorvus/test/engine/workflow-integrity-step.test.ts packages/opencorvus/test/acceptance/project-gate.test.ts packages/opencorvus/test/server/task-conversation-routes.test.ts`
     - `cd packages/overlay && bun test test/tree-writer-hierarchy.test.ts`
 12. **api:routes-check + docs:check**（pre-push hook 会自动跑，不绕 hook — rule 33）。
-13. **DB reset + 一次 bench dry-run** 验真：`cd packages/opencorvus && OPENCORVUS_DISABLE_DEFAULT_PLUGINS=1 ... bun run script/benchmark/overlay-web-benchmark.ts --executor=opencorvus`，确认 overlay 正常显示新维度名 + REQ-id chip。
+13. **DB reset + 一次 bench dry-run** 验真：`cd packages/opencorvus && ... bun run script/benchmark/overlay-web-benchmark.ts --executor=opencorvus`，确认 overlay 正常显示新维度名 + REQ-id chip。
 14. **commit + push**。
 
 ---

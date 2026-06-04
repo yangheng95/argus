@@ -44,7 +44,6 @@
 
 | 变量 | 用途 |
 |---|---|
-| `OPENCORVUS_DISABLE_DEFAULT_PLUGINS=1` | 跳过 `opencode-anthropic-auth@0.0.13` 默认插件安装（避免 npm 阻塞） |
 | `OPENCORVUS_DISABLE_EXTERNAL_SKILLS=1` | 跳过 `.claude/` 与 `.agents/` 目录的 skill 发现 |
 | `OPENCORVUS_DISABLE_CLAUDE_CODE_SKILLS=1` | 同上，仅针对 `.claude/skills/` |
 

@@ -1,4 +1,4 @@
-import { afterAll, afterEach, test, expect } from "bun:test"
+import { afterEach, test, expect } from "bun:test"
 import { $ } from "bun"
 import fs from "fs/promises"
 import path from "path"
@@ -9,12 +9,6 @@ import { Process } from "../../src/util/process"
 import { tmpdir } from "../fixture/fixture"
 import { ProjectRuntimePaths } from "../../src/project/runtime-paths"
 
-const previousDisableDefaultPlugins = process.env.OPENCORVUS_DISABLE_DEFAULT_PLUGINS
-process.env.OPENCORVUS_DISABLE_DEFAULT_PLUGINS = "1"
-afterAll(() => {
-  if (previousDisableDefaultPlugins === undefined) delete process.env.OPENCORVUS_DISABLE_DEFAULT_PLUGINS
-  else process.env.OPENCORVUS_DISABLE_DEFAULT_PLUGINS = previousDisableDefaultPlugins
-})
 afterEach(async () => {
   await Instance.disposeAll()
 })

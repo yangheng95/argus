@@ -18,30 +18,21 @@ Plugin 是 OpenCorvus 的深层扩展机制。与 Skill（通过 `skill` 工具�
 
 ## 2. 默认插件
 
-### `opencode-anthropic-auth`（npm）
-
-启动时自动安装加载（`src/plugin/index.ts:18`）：
-
-```typescript
-const BUILTIN = ["opencode-anthropic-auth@0.0.13"]
-```
-
-为 Anthropic 模型提供 OAuth 认证流程。无 npm 环境（CI / 开发）必须禁用（见第 6 节）。
-
 ### GitLab Auth（内部）
 
 `@gitlab/opencode-gitlab-auth` 编译时静态导入，无需 npm（`src/plugin/index.ts:12-23`）。
+
+OpenCorvus 不再默认安装 npm 插件。已废弃的 `opencode-anthropic-auth` 不再自动加载；如需第三方认证插件，必须在 `plugin` 配置中显式声明。
 
 ## 3. 加载流程
 
 `Plugin.state()`（`src/plugin/index.ts:25-102`）：
 
 1. 加载 `INTERNAL_PLUGINS`（GitLab Auth）
-2. 若未设 `OPENCORVUS_DISABLE_DEFAULT_PLUGINS`，前置 `BUILTIN`
-3. 合并 config 的 `plugin` 数组，逐项：
+2. 合并 config 的 `plugin` 数组，逐项：
    - `file://` 前缀 → 直接 `import()`
    - 否则 → `BunProc.install(pkg, version)` 后 `import()`
-4. 对每个导出的 Plugin 函数，调用 `fn(ctx)` 得到 `Hooks` 对象推入全局 hooks
+3. 对每个导出的 Plugin 函数，调用 `fn(ctx)` 得到 `Hooks` 对象推入全局 hooks
 
 ```typescript
 // packages/plugin/src/index.ts:35
@@ -128,17 +119,7 @@ export const MyPlugin: Plugin = async (ctx) => {
 
 或把插件文件放在 `.opencorvus/plugin/` 目录（`*.ts` / `*.js`），自动发现（`src/config/config.ts:467-479`）。
 
-## 7. 禁用默认插件
-
-```bash
-OPENCORVUS_DISABLE_DEFAULT_PLUGINS=1 opencorvus serve
-```
-
-跳过 `opencode-anthropic-auth` 的 npm 安装与加载（`src/plugin/index.ts:52-54`）。内部插件不受影响。
-
-必须禁用的场景：CI / 无网络 / 使用 DashScope 等替代认证 / 运行 benchmark 避免 `bun install` 阻塞。
-
-## 8. Plugin vs Provider vs Executor
+## 7. Plugin vs Provider vs Executor
 
 Plugin 不直接替换 Provider 或 Executor，但可通过：
 - `auth` hook — 为特定 Provider 实现自定义认证

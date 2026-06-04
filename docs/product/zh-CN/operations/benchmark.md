@@ -17,7 +17,6 @@ Mission 模式使用独立 benchmark，因为根对象是 Mission session，不�
 ```bash
 cd packages/opencorvus
 
-OPENCORVUS_DISABLE_DEFAULT_PLUGINS=1 \
 CODING_DASHSCOPE_API_KEY=sk-sp-... \
 ALIBABA_CODING_PLAN_API_KEY=sk-sp-... \
 DASHSCOPE_API_URL=https://coding.dashscope.aliyuncs.com/v1 \
@@ -48,7 +47,6 @@ Mission benchmark 会调用 `POST /mission/wake`，等待 Mission 通过 `panel.
 ```bash
 cd packages/opencorvus
 
-OPENCORVUS_DISABLE_DEFAULT_PLUGINS=1 \
 CODING_DASHSCOPE_API_KEY=sk-sp-... \
 ALIBABA_CODING_PLAN_API_KEY=sk-sp-... \
 DASHSCOPE_API_URL=https://coding.dashscope.aliyuncs.com/v1 \
@@ -94,7 +92,6 @@ Env 必须在**进程启动前**就绪。`Env.state()` 在实例创建时快照 
 - `CODING_DASHSCOPE_API_KEY`
 - `ALIBABA_CODING_PLAN_API_KEY`
 - `DASHSCOPE_API_URL=https://coding.dashscope.aliyuncs.com/v1`
-- `OPENCORVUS_DISABLE_DEFAULT_PLUGINS=1`（避免 npm install hang）
 
 ## 通过判据
 
@@ -153,7 +150,6 @@ bun install && bun run build && bun run start
 - name: Benchmark
   env:
     CODING_DASHSCOPE_API_KEY: ${{ secrets.DASHSCOPE_KEY }}
-    OPENCORVUS_DISABLE_DEFAULT_PLUGINS: 1
   run: |
     cd packages/opencorvus
     bun run script/benchmark/overlay-web-benchmark.ts \

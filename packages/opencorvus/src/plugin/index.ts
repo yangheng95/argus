@@ -5,7 +5,6 @@ import { Log } from "../util/log"
 import { createOpenCorvusClient } from "@opencorvus-ai/sdk"
 import { BunProc } from "../bun"
 import { Instance, lazyInstanceState } from "../project/instance"
-import { Flag } from "../flag/flag"
 import { Session } from "../session"
 import { NamedError } from "@opencorvus-ai/util/error"
 import { gitlabAuthPlugin as GitlabAuthPlugin } from "@gitlab/opencode-gitlab-auth"
@@ -14,8 +13,6 @@ import { runHookIsolated } from "./isolate"
 
 export namespace Plugin {
   const log = Log.create({ service: "plugin" })
-
-  const BUILTIN = ["opencode-anthropic-auth@0.0.13"]
 
   // Built-in plugins that are directly imported (not installed from npm)
   // GitlabAuthPlugin is compiled against an older @opencode-ai/plugin version whose
@@ -49,9 +46,6 @@ export namespace Plugin {
 
     let plugins = config.plugin ?? []
     if (plugins.length) await Config.waitForDependencies()
-    if (!Flag.OPENCORVUS_DISABLE_DEFAULT_PLUGINS) {
-      plugins = [...BUILTIN, ...plugins]
-    }
 
     for (let plugin of plugins) {
       log.info("loading plugin", { path: plugin })

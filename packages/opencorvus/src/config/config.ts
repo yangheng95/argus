@@ -188,7 +188,8 @@ export namespace Config {
       // then collides with build-agent commits at `git merge --ff-only`
       // time. Those collisions were the root cause of the 2026-04-29
       // gemini-task scaffold merge failure.
-      if (isOpencorvusDir) {
+      const localPlugins = await loadPlugin(dir)
+      if (isOpencorvusDir && localPlugins.length > 0) {
         deps.push(
           iife(async () => {
             const shouldInstall = await needsInstall(dir)
@@ -200,7 +201,7 @@ export namespace Config {
       result.command = mergeDeep(result.command ?? {}, await loadCommand(dir))
       result.agent = mergeDeep(result.agent, await loadAgent(dir))
       result.agent = mergeDeep(result.agent, await loadMode(dir))
-      result.plugin.push(...(await loadPlugin(dir)))
+      result.plugin.push(...localPlugins)
     }
 
     // Inline config content overrides all non-managed config sources.
@@ -281,14 +282,6 @@ export namespace Config {
   }
 
   export async function installDependencies(dir: string) {
-    // Skip plugin installation when plugins are disabled (e.g. benchmark, CI).
-    // The @opencorvus-ai/plugin package is only used for type definitions and
-    // fetching it requires a private registry that may be unreachable.
-    if (process.env.OPENCORVUS_DISABLE_DEFAULT_PLUGINS === "1") {
-      log.debug("plugins disabled, skipping dependency install", { dir })
-      return
-    }
-
     const pkg = path.join(dir, "package.json")
     const targetVersion = Installation.isLocal() ? "*" : Installation.VERSION
 
@@ -330,8 +323,6 @@ export namespace Config {
   }
 
   export async function needsInstall(dir: string) {
-    if (process.env.OPENCORVUS_DISABLE_DEFAULT_PLUGINS === "1") return false
-
     // Some config dirs may be read-only.
     // Installing deps there will fail; skip installation in that case.
     const writable = await isWritable(dir)
