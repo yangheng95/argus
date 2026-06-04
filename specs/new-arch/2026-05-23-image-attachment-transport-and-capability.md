@@ -34,7 +34,6 @@ curl ... -d '{... "image_url":{"url":"data:image/png;base64,iVBOR..."} ...}'
 ### 1.2 声明 drift
 
 `packages/opencorvus/src/provider/builtin-test-providers.ts`：
-- L37 `glm-5.1-fp8`: `attachment: false`
 - L64 `glm51`: `attachment: false`
 - **L88 `kimik26`: `attachment: false`** — 实测 true
 
@@ -151,8 +150,8 @@ L1 + L2.step2 一个 PR 闭环（"立即能用"），L2 单独 PR（"系统性�
   - case D: AttachmentStore.read throw → assert 原 part 保留（不被静默删除）
   - case E: mediaType=`application/pdf` → 同 case A 处理
   - case F: 多条消息混合 file/text part → assert 只动 file part
-- `test/integration/openai-compatible-vision.test.ts` 新增（**真打三个 builtin 网关**，需 `OPENCORVUS_INTEGRATION=1` 环境变量门控）：
-  - kimik26 / glm51 / iwc-aime（如果支持图）：发 1x1 PNG，assert HTTP 200 + 响应里能 reference 到图片
+- `test/integration/openai-compatible-vision.test.ts` 新增（**真打 builtin 网关**，需 `OPENCORVUS_INTEGRATION=1` 环境变量门控）：
+  - kimik26 / glm51（如果支持图）：发 1x1 PNG，assert HTTP 200 + 响应里能 reference 到图片
   - 一旦上游 capability drift，CI 失败
 
 ### 3.2 kimik26 capability flip
