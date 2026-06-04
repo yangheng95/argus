@@ -115,7 +115,7 @@ export function WorkspaceOnboardingDialog() {
               variant="solid"
               size="md"
               tone="neutral"
-              data-testid="workspace-onboarding-create-project"
+              data-testid="workspace-onboarding-create-directory"
               disabled={actionRunner.pending()}
               aria-busy={activeAction() === "create" ? "true" : "false"}
               onClick={() => void runAction("create", () => createDirectory())}

@@ -536,7 +536,7 @@ test(
       const intro = await page.evaluate(() => {
         const dialog = document.querySelector<HTMLElement>('[data-testid="workspace-onboarding-dialog"]')
         const openFolder = document.querySelector<HTMLElement>('[data-testid="workspace-onboarding-open-folder"]')
-        const createProject = document.querySelector<HTMLElement>('[data-testid="workspace-onboarding-create-project"]')
+        const createDirectory = document.querySelector<HTMLElement>('[data-testid="workspace-onboarding-create-directory"]')
         const title = document.querySelector<HTMLElement>(".workspace-onboarding-titleblock")
         const brandWordmark = document.querySelector<HTMLElement>(".brand-guide-wordmark")
         const brandLabel = document.querySelector<HTMLElement>(".brand-guide-label")
@@ -548,7 +548,7 @@ test(
         return {
           hasStartup: !!dialog,
           openFolderText: openFolder?.textContent || "",
-          createProjectText: createProject?.textContent || "",
+          createDirectoryText: createDirectory?.textContent || "",
           title: title?.textContent || "",
           brandWordmark: brandWordmark?.textContent || "",
           brandLabel: brandLabel?.textContent || "",
@@ -559,13 +559,15 @@ test(
       expect(intro.hasStartup).toBe(true)
       expect(intro.pickDirInvokes).toBe(0)
       expect(intro.openFolderText).toContain("Open Local Directory")
-      expect(intro.createProjectText).toContain("Create New Project")
-      expect(intro.title).toContain("Open a project directory")
+      expect(intro.createDirectoryText).toContain("Create New Directory")
+      expect(intro.title).toContain("Open a workspace directory")
       expect(intro.brandWordmark).toBe("OpenCorvus")
       expect(intro.brandLabel).toBe("Workspace")
       expect(intro.rightTabs).toEqual([
-        { text: "Explorer", active: "true" },
         { text: "Files", active: "false" },
+        { text: "Explorer", active: "true" },
+        { text: "Assistant", active: "false" },
+        { text: "Preview", active: "false" },
         { text: "Inspector", active: "false" },
       ])
       await page.close()
@@ -701,7 +703,7 @@ test(
       expect(state.vcs).toBeNull()
       expect(state.config).toBeNull()
       expect(state.recent).toContain("D:/overlay/workspace/app")
-      expect(state.persistedDirectory).toBeUndefined()
+      expect(state.persistedDirectory).toBeNull()
       await page.close()
     } finally {
       await browser.close().catch(() => undefined)
