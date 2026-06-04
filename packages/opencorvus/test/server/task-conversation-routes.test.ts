@@ -1,4 +1,6 @@
 import { afterEach, describe, expect, mock, test } from "bun:test"
+import z from "zod"
+import { BusEvent } from "../../src/bus/bus-event"
 import { EngineTaskTable } from "../../src/engine/engine.sql"
 import { Event } from "../../src/engine/model"
 import { EngineProtocol } from "../../src/engine/protocol"
@@ -18,6 +20,18 @@ import { resetDatabase } from "../fixture/db"
 import { tmpdir } from "../fixture/fixture"
 
 Log.init({ print: false })
+
+const SessionStatusProtocolEvent = BusEvent.define(
+  "session.status",
+  z.object({
+    taskID: z.string(),
+    sessionID: z.string(),
+    channel: z.string(),
+    resolvedRole: z.string(),
+    parentSessionID: z.string().optional(),
+    status: z.record(z.string(), z.any()),
+  }),
+)
 
 function sseReader(response: Response): () => Promise<any> {
   const reader = response.body?.getReader()
@@ -150,6 +164,211 @@ describe("task conversation routes", () => {
         expect(event?.payload?.sessionID).toBe(session.id)
         expect(event?.emittedAt).toBeGreaterThan(0)
         expect(event?.emittedAt).toBe(event?.timestamp)
+      },
+    })
+  })
+
+  test("GET /task/:taskID/conversation/session/:sessionID returns lifecycle-only agent sessions", async () => {
+    await using tmp = await tmpdir({ git: true })
+
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const app = Server.App()
+        const taskID = Identifier.ascending("task")
+        const now = Date.now()
+        const root = await Session.create({
+          kind: "root",
+          title: "lifecycle route root",
+        })
+        const frontendResearch = await Session.create({
+          kind: "frontend-research",
+          parentID: root.id,
+          title: "lifecycle-only frontend research",
+        })
+
+        Database.use((db) =>
+          db.insert(EngineTaskTable).values({
+            id: taskID,
+            project_id: Instance.project.id,
+            session_id: root.id,
+            source: "panel",
+            title: "lifecycle-only session route",
+            request: "lifecycle-only session route",
+            priority: "normal",
+            time_created: now,
+            time_updated: now,
+            time_started: now,
+          }).run(),
+        )
+
+        await EngineProtocol.emit(
+          SessionStatusProtocolEvent,
+          {
+            taskID,
+            sessionID: frontendResearch.id,
+            channel: "frontend-research",
+            resolvedRole: "frontend-research",
+            parentSessionID: root.id,
+            status: { type: "terminal", reason: "error", error: "prepared evidence missing" },
+          },
+          { source: "test.server", sessionID: frontendResearch.id },
+        )
+
+        const response = await app.request(`/task/${taskID}/conversation/session/${frontendResearch.id}`, {
+          headers: {
+            "x-opencorvus-directory": tmp.path,
+          },
+        })
+
+        expect(response.status).toBe(200)
+        const body = await response.json() as {
+          transcript: unknown[]
+          timeline: unknown[]
+          events?: Array<{ type?: string; payload?: Record<string, unknown> }>
+          view?: { sessions?: Array<{ sessionID?: string; stage?: string; messageIDs?: string[] }> }
+          history?: { limit?: number }
+        }
+
+        expect(body.transcript).toEqual([])
+        expect(body.timeline).toEqual([])
+        expect(body.history?.limit).toBe(1)
+        expect(body.events?.map((event) => event.type)).toEqual(["session.status"])
+        expect(body.events?.[0]?.payload?.sessionID).toBe(frontendResearch.id)
+        expect(body.view?.sessions).toEqual([
+          expect.objectContaining({
+            sessionID: frontendResearch.id,
+            stage: "frontend-research",
+            messageIDs: [],
+          }),
+        ])
+      },
+    })
+  })
+
+  test("GET /task/:taskID/conversation/history returns lifecycle events in the visible history window", async () => {
+    await using tmp = await tmpdir({ git: true })
+
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const app = Server.App()
+        const taskID = Identifier.ascending("task")
+        const now = Date.now()
+        const root = await Session.create({
+          kind: "root",
+          title: "history lifecycle root",
+        })
+        const assistant = await Session.create({
+          kind: "assistant",
+          parentID: root.id,
+          title: "history lifecycle assistant",
+        })
+        const frontendResearch = await Session.create({
+          kind: "frontend-research",
+          parentID: root.id,
+          title: "history lifecycle frontend research",
+        })
+
+        Database.use((db) => {
+          db.insert(EngineTaskTable).values({
+            id: taskID,
+            project_id: Instance.project.id,
+            session_id: root.id,
+            source: "panel",
+            title: "history lifecycle window",
+            request: "history lifecycle window",
+            priority: "normal",
+            time_created: now,
+            time_updated: now,
+            time_started: now,
+          }).run()
+          db.insert(MessageTable).values({
+            id: "msg_history_old",
+            session_id: assistant.id,
+            time_created: now - 100,
+            time_updated: now - 100,
+            data: {
+              role: "assistant",
+              time: { created: now - 100 },
+            } as any,
+          }).run()
+          db.insert(PartTable).values({
+            id: "prt_history_old",
+            message_id: "msg_history_old",
+            session_id: assistant.id,
+            time_created: now - 100,
+            time_updated: now - 100,
+            data: {
+              type: "text",
+              text: "Older visible message.",
+            } as any,
+          }).run()
+          db.insert(MessageTable).values({
+            id: "msg_history_latest",
+            session_id: assistant.id,
+            time_created: now + 1_000,
+            time_updated: now + 1_000,
+            data: {
+              role: "assistant",
+              time: { created: now + 1_000 },
+            } as any,
+          }).run()
+          db.insert(PartTable).values({
+            id: "prt_history_latest",
+            message_id: "msg_history_latest",
+            session_id: assistant.id,
+            time_created: now + 1_000,
+            time_updated: now + 1_000,
+            data: {
+              type: "text",
+              text: "Latest visible message.",
+            } as any,
+          }).run()
+        })
+
+        await EngineProtocol.emit(
+          SessionStatusProtocolEvent,
+          {
+            taskID,
+            sessionID: frontendResearch.id,
+            channel: "frontend-research",
+            resolvedRole: "frontend-research",
+            parentSessionID: root.id,
+            status: { type: "terminal", reason: "error", error: "history preparation failed" },
+          },
+          { source: "test.server", sessionID: frontendResearch.id },
+        )
+
+        const response = await app.request(
+          `/task/${taskID}/conversation/history?before=${now + 1_000}&before_id=msg_history_latest&limit=1`,
+          {
+            headers: {
+              "x-opencorvus-directory": tmp.path,
+            },
+          },
+        )
+
+        if (response.status !== 200) {
+          throw new Error(await response.text())
+        }
+        expect(response.status).toBe(200)
+        const body = await response.json() as {
+          transcript: Array<{ info?: { id?: string } }>
+          events?: Array<{ type?: string; payload?: Record<string, unknown> }>
+          view?: { sessions?: Array<{ sessionID?: string; stage?: string; messageIDs?: string[] }> }
+        }
+
+        expect(body.transcript.map((message) => message.info?.id)).toEqual(["msg_history_old"])
+        expect(body.events?.map((event) => event.type)).toEqual(["session.status"])
+        expect(body.events?.[0]?.payload?.sessionID).toBe(frontendResearch.id)
+        expect(body.view?.sessions).toContainEqual(
+          expect.objectContaining({
+            sessionID: frontendResearch.id,
+            stage: "frontend-research",
+            messageIDs: [],
+          }),
+        )
       },
     })
   })

@@ -304,6 +304,7 @@ test("hydrateTaskConversation renders the live tail first and prepends older his
           body: {
             transcript: [oldMessage],
             timeline: [],
+            events: [],
             view: {
               sessions: [
                 {
@@ -344,6 +345,171 @@ test("hydrateTaskConversation renders the live tail first and prepends older his
   expect(requests.map((req) => req.path)).toEqual([
     "task/tsk_lazy/conversation",
     "task/tsk_lazy/conversation/history",
+  ]);
+});
+
+test("history paging replays lifecycle-only frontend agent cards", async () => {
+  resetWriter();
+  setBoardStore("selectedTaskID", "tsk_lifecycle_history");
+  setBoardStore("selectedSource", { kind: "task", id: "tsk_lifecycle_history" });
+  const requests: TransportRequest[] = [];
+  const cardID = "frontend-research:session:ses_frontend_lifecycle";
+
+  const board = {
+    snapshotVersion: "board:lifecycle-history",
+    task: {
+      id: "tsk_lifecycle_history",
+      status: "active",
+      request: "restore lifecycle-only frontend agent",
+      sessionID: "ses_root",
+      time: { created: 1_776_000_030_000 },
+      attachments: [],
+    },
+    goalWorkflows: [],
+    interactions: [],
+  };
+  const latestMessage = {
+    info: {
+      id: "msg_lifecycle_latest",
+      sessionID: "ses_root",
+      role: "assistant",
+      resolvedRole: "assistant",
+      channel: "assistant",
+      time: { created: 1_776_000_030_900 },
+    },
+    parts: [
+      {
+        id: "part_lifecycle_latest",
+        sessionID: "ses_root",
+        messageID: "msg_lifecycle_latest",
+        type: "text",
+        text: "Latest tail.",
+      },
+    ],
+  };
+  const lifecycleEvent = {
+    event_id: "pev_lifecycle_history",
+    task_id: "tsk_lifecycle_history",
+    type: "session.status",
+    emittedAt: 1_776_000_030_200,
+    timestamp: 1_776_000_030_200,
+    sequence: 7,
+    summary: "Frontend research failed before writing a message",
+    payload: {
+      taskID: "tsk_lifecycle_history",
+      sessionID: "ses_frontend_lifecycle",
+      channel: "frontend-research",
+      resolvedRole: "frontend-research",
+      parentSessionID: "ses_root",
+      status: { type: "terminal", reason: "error", error: "prepared evidence missing" },
+    },
+  };
+
+  __setHostTransportForTest(
+    fakeTransport((req) => {
+      requests.push(req);
+      if (req.path === "task/tsk_lifecycle_history/conversation") {
+        return {
+          status: 200,
+          ok: true,
+          headers: {},
+          body: {
+            board,
+            transcript: [latestMessage],
+            timeline: [],
+            events: [],
+            view: {
+              sessions: [
+                {
+                  sessionID: "ses_root",
+                  stage: "assistant",
+                  messageIDs: ["msg_lifecycle_latest"],
+                  firstMessageTime: 1_776_000_030_900,
+                  lastMessageTime: 1_776_000_030_900,
+                  placement: "top_level",
+                },
+              ],
+              topLevelSessionIDs: ["ses_root"],
+            },
+            agentView: {
+              sessions: [
+                {
+                  sessionID: "ses_frontend_lifecycle",
+                  stage: "frontend-research",
+                  parentSessionID: "ses_root",
+                  messageIDs: [],
+                  firstMessageTime: 1_776_000_030_200,
+                  lastMessageTime: 1_776_000_030_200,
+                  placement: "top_level",
+                },
+                {
+                  sessionID: "ses_root",
+                  stage: "assistant",
+                  messageIDs: ["msg_lifecycle_latest"],
+                  firstMessageTime: 1_776_000_030_900,
+                  lastMessageTime: 1_776_000_030_900,
+                  placement: "top_level",
+                },
+              ],
+              topLevelSessionIDs: ["ses_frontend_lifecycle", "ses_root"],
+            },
+            eventReplay: { cursor: 8, latestSequence: 8, complete: true, limit: 500 },
+            history: {
+              oldestTimestamp: 1_776_000_030_900,
+              oldestMessageID: "msg_lifecycle_latest",
+              hasMore: true,
+              limit: 1,
+            },
+            lastSequence: 8,
+          },
+        };
+      }
+      if (req.path === "task/tsk_lifecycle_history/conversation/history") {
+        return {
+          status: 200,
+          ok: true,
+          headers: {},
+          body: {
+            transcript: [],
+            timeline: [],
+            events: [lifecycleEvent],
+            view: {
+              sessions: [
+                {
+                  sessionID: "ses_frontend_lifecycle",
+                  stage: "frontend-research",
+                  parentSessionID: "ses_root",
+                  messageIDs: [],
+                  firstMessageTime: 1_776_000_030_200,
+                  lastMessageTime: 1_776_000_030_200,
+                  placement: "top_level",
+                },
+              ],
+              topLevelSessionIDs: ["ses_frontend_lifecycle"],
+            },
+            history: {
+              oldestTimestamp: null,
+              oldestMessageID: null,
+              hasMore: false,
+              limit: 160,
+            },
+          },
+        };
+      }
+      throw new Error(`unexpected request path: ${req.path}`);
+    }),
+  );
+
+  await expect(hydrateTaskConversation("tsk_lifecycle_history", { tailLimit: 1 })).resolves.toBe(8);
+  expect(conversationAgentStore.records[0]?.renderedCardID).toBe(cardID);
+  expect(cardTreeStore.cards[cardID]).toBeUndefined();
+
+  await expect(loadConversationHistoryUntilCard(cardID, "tsk_lifecycle_history")).resolves.toBe(true);
+  expect(cardTreeStore.cards[cardID]).toBeDefined();
+  expect(cardTreeStore.cards[cardID]?.status).toBe("error");
+  expect(requests.map((req) => req.path)).toEqual([
+    "task/tsk_lifecycle_history/conversation",
+    "task/tsk_lifecycle_history/conversation/history",
   ]);
 });
 
@@ -509,6 +675,7 @@ test("history paging continues when a goal phase card exists but its target mess
           body: {
             transcript: [oldBuildMessage],
             timeline: [],
+            events: [],
             view: {
               sessions: [
                 {
@@ -707,6 +874,7 @@ test("goal phase history can hydrate a build session directly by session id", as
           body: {
             transcript: [buildMessage],
             timeline: [],
+            events: [],
             view: {
               sessions: [
                 {
@@ -751,5 +919,173 @@ test("goal phase history can hydrate a build session directly by session id", as
   expect(requests.map((req) => req.path)).toEqual([
     "task/tsk_phase_session/conversation",
     "task/tsk_phase_session/conversation/session/ses_build_session",
+  ]);
+});
+
+test("session-scoped history replays lifecycle-only frontend agent cards", async () => {
+  resetWriter();
+  setBoardStore("selectedTaskID", "tsk_lifecycle_session");
+  setBoardStore("selectedSource", { kind: "task", id: "tsk_lifecycle_session" });
+  const requests: TransportRequest[] = [];
+  const cardID = "frontend-research:session:ses_frontend_session";
+
+  const board = {
+    snapshotVersion: "board:lifecycle-session",
+    task: {
+      id: "tsk_lifecycle_session",
+      status: "active",
+      request: "restore lifecycle-only session card",
+      sessionID: "ses_root",
+      time: { created: 1_776_000_040_000 },
+      attachments: [],
+    },
+    goalWorkflows: [],
+    interactions: [],
+  };
+  const latestMessage = {
+    info: {
+      id: "msg_lifecycle_session_latest",
+      sessionID: "ses_root",
+      role: "assistant",
+      resolvedRole: "assistant",
+      channel: "assistant",
+      time: { created: 1_776_000_040_900 },
+    },
+    parts: [
+      {
+        id: "part_lifecycle_session_latest",
+        sessionID: "ses_root",
+        messageID: "msg_lifecycle_session_latest",
+        type: "text",
+        text: "Latest tail.",
+      },
+    ],
+  };
+  const lifecycleEvent = {
+    event_id: "pev_lifecycle_session",
+    task_id: "tsk_lifecycle_session",
+    type: "session.status",
+    emittedAt: 1_776_000_040_200,
+    timestamp: 1_776_000_040_200,
+    sequence: 6,
+    summary: "Frontend research failed before writing a message",
+    payload: {
+      taskID: "tsk_lifecycle_session",
+      sessionID: "ses_frontend_session",
+      channel: "frontend-research",
+      resolvedRole: "frontend-research",
+      parentSessionID: "ses_root",
+      status: { type: "terminal", reason: "error", error: "browser evidence failed" },
+    },
+  };
+
+  __setHostTransportForTest(
+    fakeTransport((req) => {
+      requests.push(req);
+      if (req.path === "task/tsk_lifecycle_session/conversation") {
+        return {
+          status: 200,
+          ok: true,
+          headers: {},
+          body: {
+            board,
+            transcript: [latestMessage],
+            timeline: [],
+            events: [],
+            view: {
+              sessions: [
+                {
+                  sessionID: "ses_root",
+                  stage: "assistant",
+                  messageIDs: ["msg_lifecycle_session_latest"],
+                  firstMessageTime: 1_776_000_040_900,
+                  lastMessageTime: 1_776_000_040_900,
+                  placement: "top_level",
+                },
+              ],
+              topLevelSessionIDs: ["ses_root"],
+            },
+            agentView: {
+              sessions: [
+                {
+                  sessionID: "ses_frontend_session",
+                  stage: "frontend-research",
+                  parentSessionID: "ses_root",
+                  messageIDs: [],
+                  firstMessageTime: 1_776_000_040_200,
+                  lastMessageTime: 1_776_000_040_200,
+                  placement: "top_level",
+                },
+                {
+                  sessionID: "ses_root",
+                  stage: "assistant",
+                  messageIDs: ["msg_lifecycle_session_latest"],
+                  firstMessageTime: 1_776_000_040_900,
+                  lastMessageTime: 1_776_000_040_900,
+                  placement: "top_level",
+                },
+              ],
+              topLevelSessionIDs: ["ses_frontend_session", "ses_root"],
+            },
+            eventReplay: { cursor: 7, latestSequence: 7, complete: true, limit: 500 },
+            history: {
+              oldestTimestamp: 1_776_000_040_900,
+              oldestMessageID: "msg_lifecycle_session_latest",
+              hasMore: true,
+              limit: 1,
+            },
+            lastSequence: 7,
+          },
+        };
+      }
+      if (req.path === "task/tsk_lifecycle_session/conversation/session/ses_frontend_session") {
+        return {
+          status: 200,
+          ok: true,
+          headers: {},
+          body: {
+            transcript: [],
+            timeline: [],
+            events: [lifecycleEvent],
+            view: {
+              sessions: [
+                {
+                  sessionID: "ses_frontend_session",
+                  stage: "frontend-research",
+                  parentSessionID: "ses_root",
+                  messageIDs: [],
+                  firstMessageTime: 1_776_000_040_200,
+                  lastMessageTime: 1_776_000_040_200,
+                  placement: "top_level",
+                },
+              ],
+              topLevelSessionIDs: ["ses_frontend_session"],
+            },
+            history: {
+              oldestTimestamp: 1_776_000_040_200,
+              oldestMessageID: null,
+              hasMore: false,
+              limit: 1,
+            },
+          },
+        };
+      }
+      throw new Error(`unexpected request path: ${req.path}`);
+    }),
+  );
+
+  await expect(hydrateTaskConversation("tsk_lifecycle_session", { tailLimit: 1 })).resolves.toBe(7);
+  expect(cardTreeStore.cards[cardID]).toBeUndefined();
+
+  await expect(
+    loadConversationHistoryUntilCard(cardID, "tsk_lifecycle_session", {
+      sessionID: "ses_frontend_session",
+    }),
+  ).resolves.toBe(true);
+  expect(cardTreeStore.cards[cardID]).toBeDefined();
+  expect(cardTreeStore.cards[cardID]?.status).toBe("error");
+  expect(requests.map((req) => req.path)).toEqual([
+    "task/tsk_lifecycle_session/conversation",
+    "task/tsk_lifecycle_session/conversation/session/ses_frontend_session",
   ]);
 });

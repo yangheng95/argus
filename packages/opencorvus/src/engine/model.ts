@@ -1000,6 +1000,7 @@ export const TaskConversationEventPage = z.object({
 export const TaskConversationHistoryPage = z.object({
   transcript: z.array(z.any()),
   timeline: z.array(z.any()),
+  events: TaskEvent.array(),
   view: TaskConversationView,
   history: TaskConversationHistoryState,
 })
