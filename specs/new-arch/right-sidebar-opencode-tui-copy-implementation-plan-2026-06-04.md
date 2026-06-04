@@ -1237,3 +1237,50 @@ Independent review feedback to carry into the next round:
 - Add route-level host tests for successful `/tui/host/start`, `/tui/host/input`, `/tui/host/resize`, `/tui/host/stop`, plus empty input and stopped-host errors.
 - Add component behavior tests with mocked `ghostty-web`: active=false does not start, active=true starts, snapshot writes to the terminal, non-prefix snapshot resets the terminal, terminal input reaches `tui/host/input`, resize de-duplicates and reaches `tui/host/resize`.
 - Add browser visual acceptance after repairing browser automation: right TUI active by default, ghostty canvas visible, no `.tui-runtime-panel`, host error/connected state visible, and no overlap with right toolbar or editor.
+
+### 2026-06-05 Round 13: closed route/test gaps and removed overlay browser-assistant double source
+
+Implemented:
+
+- Rechecked latest OpenCode dev before editing. Upstream remained at `107180701f626eaf97e0f032c4a46fe4b4e9c0ec`; no new TUI, PTY, app, or terminal files changed since Round 12.
+- Added route-level behavior coverage for the embedded host:
+  - invalid resize payload remains a 400 validation error;
+  - empty input remains a 400 validation error;
+  - stopped-host input and resize now return 400 through the host route contract instead of falling through as a default 500;
+  - route input reaches the real Pseudo Terminal (PTY);
+  - route resize updates `cols` and `rows`;
+  - route snapshot returns the terminal buffer;
+  - route stop tears down the host.
+- Mapped `TUI host is not running` in `/tui/host/input` and `/tui/host/resize` to `HTTPException(400)`, matching the route's documented `errors(400)` response.
+- Extracted real terminal buffer/resize behavior into `packages/overlay/src/services/tui-host-terminal.ts`:
+  - growing snapshot writes only the delta;
+  - unchanged snapshot writes nothing;
+  - non-prefix snapshot resets the terminal before replaying;
+  - duplicate terminal resize events are ignored.
+- Updated `TuiHostPanel` to use the helper instead of keeping untested inline buffer/resize logic.
+- Deleted retired overlay browser-side coding assistant files that were no longer mounted or imported by runtime code:
+  - `packages/overlay/src/services/coding-assistant.ts`
+  - `packages/overlay/src/services/coding-assistant-transcript.ts`
+  - `packages/overlay/test/coding-assistant-service.test.ts`
+- Added a deletion guard in `packages/overlay/test/coding-assistant-panel.test.ts` so the removed browser-assistant service does not silently return as a right-sidebar TUI double source.
+- Kept the server-side `/coding/session*` and `coding-assistant/session.ts` provenance path intact because it remains the canonical right-sidebar session metadata source used by agent workflow tests.
+
+Verified:
+
+- `bun test packages/opencorvus/test/server/tui-host-routes.test.ts`
+- `bun test packages/opencorvus/test/server/tui-host-routes.test.ts packages/opencorvus/test/tui/host.test.ts`
+- `bun test packages/overlay/test/coding-assistant-panel.test.ts packages/overlay/test/tui-host-terminal.test.ts packages/overlay/test/tui-host-service.test.ts packages/overlay/test/tui-host-panel.test.ts packages/overlay/test/acceptance-panel-mount.test.ts`
+- `bun run --cwd packages/overlay typecheck`
+
+OpenCode comparison after the round:
+
+- Matched more of OpenCode's PTY route discipline by adding explicit route behavior coverage for input, resize, snapshot, stop, and stopped-host errors.
+- Improved overlay terminal correctness by testing buffer cursor-like replay behavior, even though the transport is still snapshot-based rather than OpenCode's WebSocket cursor stream.
+- Reduced right-sidebar double-source risk by deleting the old overlay browser assistant session/transcript client. The remaining right-sidebar mounted surface is the ghostty-backed TUI host.
+
+OpenCode gap after the round:
+
+- `/tui/host/start` success is still covered indirectly through `TuiHost.startPrepared()` and lower-level `Tui.resolveEmbeddedCommand()` tests, not by a stable full route-start process test. A direct route-start test should wait for the OpenCode-style PTY service/ticket model or a deterministic embedded command injection seam.
+- OpenCode's `/pty` WebSocket/cursor/connect-token/list/remove model is still missing. The current route tests intentionally validate the existing host surface; they do not claim parity with OpenCode's PTY service.
+- Full component lifecycle behavior still lacks a browser/DOM test because overlay has no DOM test runtime and browser automation was blocked in Round 12. The pure terminal helper tests cover buffer and resize behavior, but not ghostty canvas rendering, focus, active=false startup suppression, or toolbar interaction in a real document.
+- Project-bound Agent Team tool/plugin surface, external TUI plugin loader/install, move-session/workspace prompt flow, and `SessionV2Debug` remain missing.
