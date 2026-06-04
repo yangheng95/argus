@@ -4172,7 +4172,20 @@ export function createOrchestratorTools(input: {
             SessionStatus.set(runnerSessionID, { type: "terminal", reason: "error", error: msg })
           }
           log.error("frontend_research tool failed", { taskID, error: msg })
-          throw err
+          return SubAgentProtocol.yieldResult({
+            headline: "Frontend research failed before producing an artifact.",
+            summary: msg,
+            fields: [
+              ["session", runnerSessionID ?? "not-created"],
+              ["status", "failed"],
+              ["source_urls", source_urls],
+              ["focus", focus?.trim() ? focus : "none"],
+              ["artifact_id", "none"],
+            ],
+            pointer: runnerSessionID
+              ? `frontend-research session ${runnerSessionID}; inspect session error status for details`
+              : "frontend_research failed before child session creation; inspect orchestrator logs and workflow step failure",
+          })
         }
       },
     }),

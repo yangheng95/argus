@@ -100,6 +100,8 @@
 
 **28b.** 如果编排器最终判断当前任务无法交付，必须坦诚承认未达成验收，明确列出未解决的问题、影响到的 requirement / 交付面、已验证过的证据、失败原因分析，以及为什么当前回合未能根治。禁止把失败包装成“基本完成”“仅剩小问题”，禁止省略关键阻塞点，禁止用模糊表述掩盖未解决事实。
 
+**28c（消息流验收教训 — 2026-06-04）**：涉及 orchestrator tool、sub-agent、frontend_research/frontend_design/research 等启动链路的修复，不能只验证 schema、prompt 或 typecheck。必须覆盖真实可观测消息流：启动前准备失败、agent session 未创建或创建后失败、terminal tool 未提交等错误路径，都必须有可见的 tool result / sub-agent yield / session terminal 状态，不能让 UI 只表现为“没有消息卡片”。涉及网页/视觉调查的修复，还必须验证页面证据准备或浏览器/渲染调查确实被触发，不能用静态提示词测试替代运行链路证据。
+
 ---
 
 ## 六、工作流程与协作
