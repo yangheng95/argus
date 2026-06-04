@@ -1717,3 +1717,38 @@ OpenCode gap after the round:
 - Full OpenCode workspace/connectivity UI remains incomplete: `workspace-label.tsx`, workspace dialogs, move-session prompt flow, and unavailable-workspace dialog are still missing.
 - The current host is still a single project-bound embedded TUI process, not OpenCode's full multi-PTY `list/create/get/update/remove` service.
 - Browser visual E2E, external TUI plugin loader/install, `SessionV2Debug`, background pulse, and session/subagent footer modules remain missing.
+
+### 2026-06-05 Round 24: workspace label in sidebar footer
+
+Implemented:
+
+- Rechecked latest OpenCode dev before editing. Upstream remained at `b1a7ee5695bded3ebe4282a17bfe91717edea363`; no upstream TUI/PTY/terminal files changed since Round 23.
+- Copied OpenCode's `component/workspace-label.tsx` into OpenCorvus.
+- Replaced the sidebar footer's hand-styled project path tail with `WorkspaceLabel`.
+- Bound the label to existing OpenCorvus project state:
+  - `connected` when `api.state.ready` is true and the project directory is present;
+  - `connecting` while sync is not ready;
+  - `disconnected` when no project directory is available.
+- Kept branch display as label type (`git:<branch>`) when VCS state has a branch, otherwise `project`.
+- Did not add fake workspace APIs or an OpenCode workspace control-plane compatibility layer.
+
+Verified in tests:
+
+- `plugin-runtime-guard.test.ts` now asserts `workspace-label.tsx` exists, keeps OpenCode's status color semantics, and is used by the sidebar footer.
+- `bun test packages/opencorvus/test/tui/plugin-runtime-guard.test.ts`
+- `bun run --cwd packages/opencorvus typecheck`
+- `bun run --cwd packages/plugin typecheck`
+- `bun typecheck`
+- `bun run api:routes-check`
+- `bun run docs:check`
+
+OpenCode comparison after the round:
+
+- OpenCorvus now has the same visual label primitive OpenCode uses for workspace/session context display.
+- The right sidebar project binding is more visible and closer to the target screenshot's right-side status panel, while still using OpenCorvus' actual project sync state.
+
+OpenCode gap after the round:
+
+- OpenCode's full workspace management remains missing: workspace list/create/unavailable dialogs, move-session prompt flow, workspace commands, and workspace status event sync are not implemented yet.
+- The current host is still a single project-bound embedded TUI process, not OpenCode's full multi-PTY `list/create/get/update/remove` service.
+- Browser visual E2E, external TUI plugin loader/install, `SessionV2Debug`, background pulse, and session/subagent footer modules remain missing.

@@ -4,6 +4,7 @@ import type { InternalTuiPlugin } from "../../plugin/internal"
 import { createMemo, Show } from "solid-js"
 import { Global } from "@/global"
 import { isProviderConnected } from "../../component/use-connected"
+import { WorkspaceLabel, type WorkspaceStatus } from "../../component/workspace-label"
 
 const id = "internal:sidebar-footer"
 
@@ -15,12 +16,16 @@ function View(props: { api: TuiPluginApi }) {
   const path = createMemo(() => {
     const dir = props.api.state.path.directory || process.cwd()
     const out = dir.replace(Global.Path.home, "~")
-    const text = props.api.state.vcs?.branch ? out + ":" + props.api.state.vcs.branch : out
-    const list = text.split("/")
+    const list = out.split("/")
     return {
       parent: list.slice(0, -1).join("/"),
       name: list.at(-1) ?? "",
+      type: props.api.state.vcs?.branch ? `git:${props.api.state.vcs.branch}` : "project",
     }
+  })
+  const projectStatus = createMemo<WorkspaceStatus>(() => {
+    if (!props.api.state.path.directory) return "disconnected"
+    return props.api.state.ready ? "connected" : "connecting"
   })
 
   return (
@@ -60,7 +65,7 @@ function View(props: { api: TuiPluginApi }) {
       </Show>
       <text>
         <span style={{ fg: theme().textMuted }}>{path().parent}/</span>
-        <span style={{ fg: theme().text }}>{path().name}</span>
+        <WorkspaceLabel type={path().type} name={path().name} status={projectStatus()} icon />
       </text>
       <text fg={theme().textMuted}>
         <span style={{ fg: theme().success }}>•</span> <b>Open</b>
