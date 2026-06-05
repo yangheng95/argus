@@ -219,6 +219,12 @@ test("right sidebar TUI host panel renders as a real browser surface", async () 
     expect(layout.terminalWidth).toBeGreaterThan(220)
     expect(layout.terminalHeight).toBeGreaterThan(400)
 
+    await page.click('[data-ui="tui-host-refresh"]')
+    for (let attempt = 0; attempt < 60 && connectCursors.length < 2; attempt += 1) {
+      await new Promise((resolve) => setTimeout(resolve, 50))
+    }
+    expect(connectCursors.length).toBeGreaterThanOrEqual(2)
+
     await page.screenshot({ path: screenshotPath, fullPage: false })
     const png = readFileSync(screenshotPath)
     const image = sharp(png)
