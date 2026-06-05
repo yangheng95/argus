@@ -2,6 +2,8 @@ import { afterEach, describe, expect, test } from "bun:test"
 import path from "node:path"
 import { Tui } from "../../src/tui"
 import { TuiHost } from "../../src/tui/host"
+import { Bus } from "../../src/bus"
+import { Pty } from "../../src/pty"
 import { PtyRoutes } from "../../src/server/routes/pty"
 import { Server } from "../../src/server/server"
 import { Instance } from "../../src/project/instance"
@@ -233,6 +235,59 @@ describe("server.pty-routes", () => {
           async () => ((await (await app.request("/")).json()) as unknown[]).length === 0,
           "exited PTY session remained in /pty list",
         )
+      },
+    })
+  })
+
+  test("publishes OpenCode-style PTY lifecycle events", async () => {
+    await using tmp = await tmpdir()
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const app = PtyRoutes()
+        const events: string[] = []
+        const unsubs = [
+          Bus.subscribe(Pty.Event.Created, (event) => events.push(`${event.type}:${event.properties.info.title}`)),
+          Bus.subscribe(Pty.Event.Updated, (event) => events.push(`${event.type}:${event.properties.info.title}`)),
+          Bus.subscribe(Pty.Event.Deleted, (event) => events.push(`${event.type}:${event.properties.id}`)),
+          Bus.subscribe(Pty.Event.Exited, (event) => events.push(`${event.type}:${event.properties.id}:${event.properties.exitCode}`)),
+        ]
+        try {
+          const create = await app.request("/", {
+            method: "POST",
+            headers: { "content-type": "application/json" },
+            body: ptyCreateBody(inputEchoCommand(tmp.path), "Event TUI"),
+          })
+          expect(create.status).toBe(200)
+          const active = (await create.json()) as { id: string }
+          expect(events).toContain("pty.created:Event TUI")
+
+          const update = await app.request(`/${active.id}`, {
+            method: "PUT",
+            headers: { "content-type": "application/json" },
+            body: JSON.stringify({ title: "Event TUI Renamed" }),
+          })
+          expect(update.status).toBe(200)
+          expect(events).toContain("pty.updated:Event TUI Renamed")
+
+          const remove = await app.request(`/${active.id}`, { method: "DELETE" })
+          expect(remove.status).toBe(200)
+          expect(events).toContain(`pty.deleted:${active.id}`)
+
+          const exiting = await app.request("/", {
+            method: "POST",
+            headers: { "content-type": "application/json" },
+            body: ptyCreateBody(exitCommand(tmp.path), "Event Exit TUI"),
+          })
+          expect(exiting.status).toBe(200)
+          const exitingInfo = (await exiting.json()) as { id: string }
+          await waitForCheck(
+            async () => events.some((event) => event === `pty.exited:${exitingInfo.id}:0`),
+            "natural PTY exit event was not published",
+          )
+        } finally {
+          for (const unsub of unsubs) unsub()
+        }
       },
     })
   })

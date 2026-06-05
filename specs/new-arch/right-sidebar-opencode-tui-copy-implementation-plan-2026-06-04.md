@@ -2179,3 +2179,39 @@ OpenCode gap after the round:
 - OpenCode's full workspace management remains missing: workspace list/create/unavailable dialogs, move-session prompt flow, workspace commands, and workspace status event sync are not implemented yet.
 - External TUI plugin loader/install remains missing; upstream depends on shared plugin loader modules that OpenCorvus does not yet expose in the copied TUI runtime.
 - `SessionV2Debug` and `context/sync-v2.tsx` remain missing until the real V2 session-message/event source exists.
+
+### 2026-06-05 Round 36: OpenCode PTY lifecycle bus events
+
+Implemented:
+
+- Rechecked latest OpenCode dev before editing. Upstream advanced from `75557000de3a3c53c536102bf5de6536c9ee0ce2` to `9211ef7e95b7cd55f08b27b066d635cc42cbb362`. The changed watched app files are theme/settings related (`settings-v2`, `home.tsx`) and do not alter PTY/TUI core behavior.
+- Copied OpenCode's PTY lifecycle event surface into `packages/opencorvus/src/pty/index.ts`:
+  - `pty.created`;
+  - `pty.updated`;
+  - `pty.exited`;
+  - `pty.deleted`.
+- Added an internal `TuiHost.onExit(id, handler)` hook so the `Pty` adapter can publish `pty.exited` without importing `Pty` back into the lower-level host implementation.
+- Published:
+  - `pty.created` after `Pty.create`;
+  - `pty.updated` after title/size updates;
+  - `pty.deleted` after explicit removal;
+  - `pty.exited` on natural PTY process exit.
+- Kept `/pty` as the only public terminal route surface; no `/tui/host/*` route was reintroduced.
+
+Verified in tests:
+
+- Extended `packages/opencorvus/test/server/pty-routes.test.ts` to observe lifecycle events through `Bus.subscribe(Pty.Event.*)` while driving real `/pty` route operations.
+- The new test covers create, update, delete, and natural exit events.
+- Re-ran `packages/opencorvus/test/server/pty-routes.test.ts` and `packages/opencorvus/test/tui/host.test.ts` separately on Windows because running those DB-backed files together can contend on the same test SQLite file and produce `EBUSY`.
+
+OpenCode comparison after the round:
+
+- OpenCorvus now has the same PTY lifecycle event names and payload shape for created/updated/deleted, plus an exited event compatible with the local bridge's nullable exit code.
+- PTY list/create/update/remove/connect now have both route behavior and bus visibility, closing the lifecycle-observability gap from Round 35.
+
+OpenCode gap after the round:
+
+- OpenCode's app terminal component includes richer terminal lifecycle behavior (`SerializeAddon`, restore/cursor persistence, focus/copy-paste details). OpenCorvus' right-sidebar ghostty host still implements the smaller subset needed for the embedded coding assistant.
+- OpenCode's full workspace management remains missing: workspace list/create/unavailable dialogs, move-session prompt flow, workspace commands, and workspace status event sync are not implemented yet.
+- External TUI plugin loader/install remains missing; upstream depends on shared plugin loader modules that OpenCorvus does not yet expose in the copied TUI runtime.
+- `SessionV2Debug` and `context/sync-v2.tsx` remain missing until the real V2 session-message/event source exists.
