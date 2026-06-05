@@ -8,6 +8,8 @@ import { ensureOverlayDist, overlayStaticResponse } from "./overlay-dist"
 
 await ensureOverlayDist()
 
+const PASTE_INPUT = "pasted-from-browser-test\r"
+
 function route(url: URL) {
   return url.pathname.replace(/\/+$/, "") || "/"
 }
@@ -38,6 +40,7 @@ test("right sidebar TUI host panel renders as a real browser surface", async () 
   const screenshotDir = mkdtempSync(join(tmpdir(), "opencorvus-tui-visual-"))
   const screenshotPath = join(screenshotDir, "right-tui.png")
   const connectCursors: string[] = []
+  const receivedInput: string[] = []
   const server = Bun.serve({
     idleTimeout: 255,
     port: 0,
@@ -49,7 +52,9 @@ test("right sidebar TUI host panel renders as a real browser surface", async () 
         ws.send(new Uint8Array([0, ...new TextEncoder().encode(JSON.stringify({ cursor: 99 }))]))
       },
       message(ws, message) {
-        ws.send(typeof message === "string" ? message : new TextDecoder().decode(message))
+        const text = typeof message === "string" ? message : new TextDecoder().decode(message)
+        receivedInput.push(text)
+        ws.send(text)
       },
     },
     async fetch(req, serverInstance) {
@@ -135,6 +140,33 @@ test("right sidebar TUI host panel renders as a real browser surface", async () 
       return typeof snapshot.buffer === "string" && snapshot.buffer.includes("OpenCorvus")
     }, { timeout: 30_000 })
 
+    const focusResult = await page.evaluate((pasteInput) => {
+      const terminal = document.querySelector<HTMLElement>('[data-testid="tui-host-terminal"]')
+      if (!terminal) throw new Error("Missing TUI terminal")
+      terminal.dispatchEvent(new PointerEvent("pointerdown", { bubbles: true }))
+      const data = new DataTransfer()
+      data.setData("text/plain", pasteInput)
+      terminal.dispatchEvent(new ClipboardEvent("paste", { bubbles: true, cancelable: true, clipboardData: data }))
+      return {
+        activeTag: document.activeElement?.tagName,
+        activeLabel: document.activeElement?.getAttribute("aria-label"),
+      }
+    }, PASTE_INPUT)
+    expect(focusResult).toMatchObject({ activeTag: "TEXTAREA", activeLabel: "Terminal input" })
+    await page.waitForFunction(() => {
+      let key: string | null | undefined
+      for (let index = 0; index < localStorage.length; index += 1) {
+        const item = localStorage.key(index)
+        if (item?.startsWith("opencorvus:tui-host:v1:D:/overlay/workspace/app:pty_visual")) {
+          key = item
+          break
+        }
+      }
+      if (!key) return false
+      const snapshot = JSON.parse(localStorage.getItem(key) ?? "{}") as { buffer?: string }
+      return typeof snapshot.buffer === "string" && snapshot.buffer.includes("pasted-from-browser-test")
+    }, { timeout: 30_000 })
+
     const layout = await page.evaluate(() => {
       const panel = document.querySelector<HTMLElement>(".tui-host-panel")
       const terminal = document.querySelector<HTMLElement>('[data-testid="tui-host-terminal"]')
@@ -175,7 +207,9 @@ test("right sidebar TUI host panel renders as a real browser surface", async () 
     })
     expect(layout.snapshotBuffer).toContain("OpenCorvus")
     expect(layout.snapshotBuffer).toContain("Restored OpenCode snapshot")
-    expect(layout.snapshotCursor).toBe(99)
+    expect(layout.snapshotBuffer).toContain("pasted-from-browser-test")
+    expect(receivedInput.join("")).toContain("pasted-from-browser-test")
+    expect(layout.snapshotCursor).toBe(99 + PASTE_INPUT.length)
     expect(layout.snapshotRows).toBeGreaterThan(0)
     expect(layout.snapshotCols).toBeGreaterThan(0)
     expect(layout.snapshotScrollY).toBeGreaterThanOrEqual(0)
