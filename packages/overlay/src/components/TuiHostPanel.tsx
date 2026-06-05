@@ -288,8 +288,10 @@ export function TuiHostPanel(props: TuiHostPanelProps) {
     nextSocket.onerror = () => {
       if (!disposed) setError("TUI host WebSocket failed")
     }
-    nextSocket.onclose = () => {
+    nextSocket.onclose = (event) => {
       if (socket === nextSocket) socket = undefined
+      if (disposed || event.code === 1000) return
+      setError(`TUI host WebSocket closed abnormally: ${event.code}`)
     }
   }
 
