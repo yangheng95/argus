@@ -109,11 +109,33 @@ test("right sidebar TUI host panel renders as a real browser surface", async () 
       const terminal = document.querySelector<HTMLElement>('[data-testid="tui-host-terminal"]')
       return !error && terminal?.dataset.state === "running" && terminal.getBoundingClientRect().height > 200
     }, { timeout: 30_000 })
+    await page.waitForFunction(() => {
+      let key: string | null | undefined
+      for (let index = 0; index < localStorage.length; index += 1) {
+        const item = localStorage.key(index)
+        if (item?.startsWith("opencorvus:tui-host:v1:D:/overlay/workspace/app:pty_visual")) {
+          key = item
+          break
+        }
+      }
+      if (!key) return false
+      const snapshot = JSON.parse(localStorage.getItem(key) ?? "{}") as { buffer?: string }
+      return typeof snapshot.buffer === "string" && snapshot.buffer.includes("OpenCorvus")
+    }, { timeout: 30_000 })
 
     const layout = await page.evaluate(() => {
       const panel = document.querySelector<HTMLElement>(".tui-host-panel")
       const terminal = document.querySelector<HTMLElement>('[data-testid="tui-host-terminal"]')
       if (!panel || !terminal) throw new Error("Missing TUI host panel")
+      let snapshotKey: string | null | undefined
+      for (let index = 0; index < localStorage.length; index += 1) {
+        const item = localStorage.key(index)
+        if (item?.startsWith("opencorvus:tui-host:v1:D:/overlay/workspace/app:pty_visual")) {
+          snapshotKey = item
+          break
+        }
+      }
+      const snapshot = snapshotKey ? JSON.parse(localStorage.getItem(snapshotKey) ?? "{}") as { buffer?: string } : undefined
       const panelRect = panel.getBoundingClientRect()
       const terminalRect = terminal.getBoundingClientRect()
       return {
@@ -125,6 +147,7 @@ test("right sidebar TUI host panel renders as a real browser surface", async () 
         terminalWidth: Math.round(terminalRect.width),
         terminalHeight: Math.round(terminalRect.height),
         errorText: document.querySelector<HTMLElement>(".tui-host-error")?.textContent ?? "",
+        snapshotBuffer: snapshot?.buffer ?? "",
       }
     })
 
@@ -134,6 +157,7 @@ test("right sidebar TUI host panel renders as a real browser surface", async () 
       state: "running",
       errorText: "",
     })
+    expect(layout.snapshotBuffer).toContain("OpenCorvus")
     expect(layout.panelWidth).toBeGreaterThan(240)
     expect(layout.panelHeight).toBeGreaterThan(500)
     expect(layout.terminalWidth).toBeGreaterThan(220)

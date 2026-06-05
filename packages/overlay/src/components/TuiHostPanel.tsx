@@ -9,6 +9,8 @@ import {
   type TuiHostPanelInfo,
 } from "../services/tui-host"
 import { hasTuiHostTerminalSizeChanged } from "../services/tui-host-terminal"
+import { SerializeAddon } from "../addons/serialize"
+import { terminalWriter } from "../utils/terminal-writer"
 import { t } from "../utils/i18n"
 import { Icon } from "./Icon"
 import { Button } from "./ui/Button"
@@ -19,6 +21,7 @@ const DEFAULT_ROWS = 30
 type GhosttyModule = typeof import("ghostty-web")
 
 let sharedGhostty: Promise<{ mod: GhosttyModule; ghostty: Ghostty }> | undefined
+const SNAPSHOT_VERSION = "v1"
 
 function loadGhostty() {
   if (sharedGhostty) return sharedGhostty
@@ -39,8 +42,11 @@ export function TuiHostPanel(props: TuiHostPanelProps) {
   let container!: HTMLDivElement
   let term: GhosttyTerminal | undefined
   let fitAddon: FitAddon | undefined
+  let serializeAddon: SerializeAddon | undefined
+  let output: ReturnType<typeof terminalWriter> | undefined
   let socket: WebSocket | undefined
   let resizeFrame: number | undefined
+  let snapshotSaveFrame: number | undefined
   let resizeObserver: ResizeObserver | undefined
   let disposed = false
   let hostStarted = false
@@ -63,11 +69,66 @@ export function TuiHostPanel(props: TuiHostPanelProps) {
     return hostInfo()?.running ? t("tui.host_running") : t("tui.host_stopped")
   }
 
-  function writeSocketOutput(data: string) {
+  function snapshotKey(info: TuiHostPanelInfo | null | undefined) {
+    if (!info?.id || !info.directory) return
+    return `opencorvus:tui-host:${SNAPSHOT_VERSION}:${info.directory}:${info.id}`
+  }
+
+  function saveTerminalSnapshot(info = hostInfo()) {
+    const key = snapshotKey(info)
+    const addon = serializeAddon
+    if (!key || !addon) return
+    try {
+      const buffer = addon.serialize({ scrollback: 10_000 })
+      localStorage.setItem(key, JSON.stringify({ buffer, cursor: hostCursor }))
+    } catch (err) {
+      console.warn("[tui-host] failed to save terminal snapshot", err)
+    }
+  }
+
+  function removeTerminalSnapshot(info = hostInfo()) {
+    const key = snapshotKey(info)
+    if (!key) return
+    localStorage.removeItem(key)
+  }
+
+  function scheduleTerminalSnapshotSave() {
+    if (disposed) return
+    if (snapshotSaveFrame !== undefined) return
+    snapshotSaveFrame = requestAnimationFrame(() => {
+      snapshotSaveFrame = undefined
+      if (!disposed) saveTerminalSnapshot()
+    })
+  }
+
+  function restoreTerminalSnapshot(info: TuiHostPanelInfo | null | undefined) {
+    const key = snapshotKey(info)
     const current = term
-    if (!current) return
-    current.write(data)
+    if (!key || !current) return
+    const raw = localStorage.getItem(key)
+    if (!raw) return
+    try {
+      const parsed = JSON.parse(raw) as { buffer?: unknown; cursor?: unknown }
+      if (typeof parsed.buffer === "string" && parsed.buffer) current.write(parsed.buffer)
+      if (typeof parsed.cursor === "number" && Number.isSafeInteger(parsed.cursor)) hostCursor = parsed.cursor
+    } catch (err) {
+      console.warn("[tui-host] failed to restore terminal snapshot", err)
+    }
+  }
+
+  function writeSocketOutput(data: string) {
     hostCursor += data.length
+    output?.push(data)
+    scheduleTerminalSnapshotSave()
+  }
+
+  function flushTerminalOutput(done?: VoidFunction) {
+    const writer = output
+    if (!writer) {
+      done?.()
+      return
+    }
+    writer.flush(done)
   }
 
   function closeSocket() {
@@ -82,12 +143,16 @@ export function TuiHostPanel(props: TuiHostPanelProps) {
     if (disposed) return
     setHostInfo(current)
     hostStarted = current.running
-    if (hostStarted) return current
+    if (hostStarted) {
+      restoreTerminalSnapshot(current)
+      return current
+    }
     const cols = term?.cols && term.cols > 0 ? term.cols : DEFAULT_COLS
     const rows = term?.rows && term.rows > 0 ? term.rows : DEFAULT_ROWS
     const started = await startTuiHost({ cols, rows })
     setHostInfo(started)
     hostStarted = true
+    restoreTerminalSnapshot(started)
     return started
   }
 
@@ -128,6 +193,7 @@ export function TuiHostPanel(props: TuiHostPanelProps) {
 
   async function start() {
     if (!props.active()) return
+    if (!term) return
     setLoading(true)
     setError("")
     try {
@@ -169,6 +235,10 @@ export function TuiHostPanel(props: TuiHostPanelProps) {
       const id = hostInfo()?.id
       if (id) await stopTuiHost({ id })
       closeSocket()
+      await new Promise<void>((resolve) => flushTerminalOutput(resolve))
+      if (snapshotSaveFrame !== undefined) cancelAnimationFrame(snapshotSaveFrame)
+      snapshotSaveFrame = undefined
+      removeTerminalSnapshot()
       hostStarted = false
       hostCursor = 0
       term?.reset()
@@ -217,7 +287,16 @@ export function TuiHostPanel(props: TuiHostPanelProps) {
       term = next
       const fit = new mod.FitAddon()
       fitAddon = fit
+      const serialize = new SerializeAddon()
+      serializeAddon = serialize
       next.loadAddon(fit)
+      next.loadAddon(serialize)
+      output = terminalWriter((data, done) => {
+        next.write(data, () => {
+          saveTerminalSnapshot()
+          done?.()
+        })
+      })
       next.open(container)
       resizeObserver = new ResizeObserver(() => scheduleFit())
       resizeObserver.observe(container)
@@ -238,9 +317,17 @@ export function TuiHostPanel(props: TuiHostPanelProps) {
     disposed = true
     closeSocket()
     if (resizeFrame !== undefined) cancelAnimationFrame(resizeFrame)
+    if (snapshotSaveFrame !== undefined) cancelAnimationFrame(snapshotSaveFrame)
     resizeObserver?.disconnect()
-    fitAddon?.dispose()
-    term?.dispose()
+
+    const finalize = () => {
+      saveTerminalSnapshot()
+      fitAddon?.dispose()
+      serializeAddon?.dispose()
+      term?.dispose()
+    }
+
+    flushTerminalOutput(finalize)
   })
 
   return (

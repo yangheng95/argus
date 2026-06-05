@@ -2215,3 +2215,47 @@ OpenCode gap after the round:
 - OpenCode's full workspace management remains missing: workspace list/create/unavailable dialogs, move-session prompt flow, workspace commands, and workspace status event sync are not implemented yet.
 - External TUI plugin loader/install remains missing; upstream depends on shared plugin loader modules that OpenCorvus does not yet expose in the copied TUI runtime.
 - `SessionV2Debug` and `context/sync-v2.tsx` remain missing until the real V2 session-message/event source exists.
+
+### 2026-06-05 Round 37: OpenCode terminal serialization and writer lifecycle
+
+Implemented:
+
+- Rechecked latest OpenCode dev before editing. Upstream remains `9211ef7e95b7cd55f08b27b066d635cc42cbb362`; the latest watched app delta is still theme/settings-only and does not change PTY/TUI core behavior.
+- Copied OpenCode's `packages/app/src/addons/serialize.ts` into `packages/overlay/src/addons/serialize.ts`.
+- Copied OpenCode's `packages/app/src/utils/terminal-writer.ts` into `packages/overlay/src/utils/terminal-writer.ts`.
+- Updated the right-sidebar `TuiHostPanel` to load `SerializeAddon` into the ghostty terminal and persist serialized terminal buffer plus cursor in project-bound localStorage keys:
+  - key shape: `opencorvus:tui-host:v1:{directory}:{ptyID}`;
+  - restore happens before `/pty/{ptyID}/connect` so the cursor query resumes from the restored point;
+  - cleanup flushes OpenCode's writer before serializing;
+  - explicit restart removes the old snapshot so a new PTY does not inherit stale buffer.
+- Replaced direct terminal writes with OpenCode's `terminalWriter` batching model.
+- Fixed a real attach-order bug found by the browser probe: the Solid active effect could connect the PTY before ghostty/SerializeAddon/output writer existed, causing the first WebSocket output to be lost. `start()` now waits for the terminal to exist; the load callback performs the actual attach after `next.open(container)`.
+- Added a frame-scheduled snapshot save after PTY output. This still serializes the real ghostty buffer through copied `SerializeAddon`; it does not maintain a second text buffer.
+
+Verified in tests:
+
+- Extended `packages/overlay/test/tui-host-panel.test.ts` to guard:
+  - copied `SerializeAddon`;
+  - copied `terminalWriter`;
+  - project/PTY keyed snapshot persistence;
+  - no attach before terminal readiness;
+  - no reintroduction of `/tui/host/*` polling/input.
+- Extended `packages/overlay/test/tui-host-panel-visual.test.ts` so the real browser right-sidebar test waits for a localStorage snapshot whose serialized buffer contains `OpenCorvus`.
+- `bun test packages/overlay/test/tui-host-panel-visual.test.ts`
+- `bun test packages/overlay/test/tui-host-panel.test.ts`
+- `bun run --cwd packages/overlay typecheck`
+
+OpenCode comparison after the round:
+
+- OpenCorvus now uses the same OpenCode terminal serialization addon and terminal writer utility in the right-sidebar PTY host.
+- The right-sidebar terminal now preserves serialized ghostty buffer and cursor per project and PTY id, closing the largest terminal lifecycle gap listed in Round 36.
+- The attach lifecycle now matches OpenCode's ordering more closely: create/open terminal first, then connect the PTY websocket.
+
+OpenCode gap after the round:
+
+- OpenCode's terminal component also persists `rows`, `cols`, and `scrollY`; OpenCorvus currently persists buffer and cursor only.
+- OpenCode includes richer terminal interaction bindings for copy/paste, pointer focus, link opening, terminal keybinds, theme/font synchronization, and debounced size update. OpenCorvus' right-sidebar host still has a smaller interaction subset.
+- OpenCode's terminal tabs/workspace store (`active`, `all`, title numbering, clone/open/next/previous/move/close`) is not copied into the right sidebar yet.
+- OpenCode's full workspace management remains missing: workspace list/create/unavailable dialogs, move-session prompt flow, workspace commands, and workspace status event sync are not implemented yet.
+- External TUI plugin loader/install remains missing; upstream depends on shared plugin loader modules that OpenCorvus does not yet expose in the copied TUI runtime.
+- `SessionV2Debug` and `context/sync-v2.tsx` remain missing until the real V2 session-message/event source exists.
