@@ -1,5 +1,7 @@
 // Copied from OpenCode `packages/opencode/src/pty/index.ts` API shape and adapted to the project-bound TUI host.
 import z from "zod"
+import { Bus } from "@/bus"
+import { BusEvent } from "@/bus/bus-event"
 import { Identifier } from "@/id/id"
 import { Instance } from "@/project/instance"
 import { Tui } from "@/tui"
@@ -42,6 +44,13 @@ export namespace Pty {
   })
 
   export type UpdateInput = z.infer<typeof UpdateInput>
+
+  export const Event = {
+    Created: BusEvent.define("pty.created", z.object({ info: Info })),
+    Updated: BusEvent.define("pty.updated", z.object({ info: Info })),
+    Exited: BusEvent.define("pty.exited", z.object({ id: Identifier.schema("pty"), exitCode: z.number().nullable() })),
+    Deleted: BusEvent.define("pty.deleted", z.object({ id: Identifier.schema("pty") })),
+  }
 
   function fromHost(info: TuiHost.Info): Info | undefined {
     if (!info.id) return
@@ -95,6 +104,10 @@ export namespace Pty {
     })
     const mapped = fromHost(info)
     if (!mapped) throw new Error("PTY session was not created")
+    TuiHost.onExit(mapped.id, (event) => {
+      void Bus.publish(Event.Exited, { id: mapped.id, exitCode: event.exitCode })
+    })
+    void Bus.publish(Event.Created, { info: mapped })
     return mapped
   }
 
@@ -103,12 +116,15 @@ export namespace Pty {
     let info: TuiHost.Info | undefined
     if (input.title) info = TuiHost.rename({ id, title: input.title })
     if (input.size) info = TuiHost.resizePty({ id, ...input.size })
-    return fromHost(info ?? TuiHost.get(id))
+    const mapped = fromHost(info ?? TuiHost.get(id))
+    if (mapped) void Bus.publish(Event.Updated, { info: mapped })
+    return mapped
   }
 
   export async function remove(id: string) {
     if (!get(id)) return
     await TuiHost.remove({ id })
+    void Bus.publish(Event.Deleted, { id })
   }
 
   export function connect(

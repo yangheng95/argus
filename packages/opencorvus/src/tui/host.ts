@@ -79,6 +79,7 @@ interface HostSession {
   bufferCursor: number
   cursor: number
   connections: Set<HostConnection>
+  exitHandlers: Set<ExitHandler>
   exitCode: number | null
   createdAt: number
   updatedAt: number
@@ -364,6 +365,7 @@ async function spawnPrepared(input: { command: Tui.EmbeddedCommand; cols: number
     bufferCursor: 0,
     cursor: 0,
     connections: new Set(),
+    exitHandlers: new Set(),
     exitCode: null,
     createdAt: now,
     updatedAt: now,
@@ -392,6 +394,8 @@ async function spawnPrepared(input: { command: Tui.EmbeddedCommand; cols: number
       connection.close(1000, "TUI host exited")
     }
     session.connections.clear()
+    for (const handler of session.exitHandlers) handler(event)
+    session.exitHandlers.clear()
     const s = state()
     if (s.sessions.get(session.id) === session) {
       s.sessions.delete(session.id)
@@ -467,6 +471,15 @@ export namespace TuiHost {
 
   export function get(id: string) {
     return info(state().sessions.get(id) ?? null)
+  }
+
+  export function onExit(id: string, handler: ExitHandler) {
+    const session = state().sessions.get(id)
+    if (!session) return () => {}
+    session.exitHandlers.add(handler)
+    return () => {
+      session.exitHandlers.delete(handler)
+    }
   }
 
   export function snapshot(): Snapshot {
