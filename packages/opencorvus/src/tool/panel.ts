@@ -11,9 +11,9 @@ import {
   isRightSidebarCodingAssistantSession,
 } from "@/coding-assistant/session"
 
-// Action whitelist by actor. Only `mission` is restricted — it is a
-// coordinator that drives squad/team work through a bounded set of panel
-// actions. control_agent and panel_ui retain their full existing surface.
+// Action whitelist by actor. `mission` is a coordinator that drives
+// squad/team work through a bounded set of panel actions; `explore` is a
+// read-only investigator. control_agent and panel_ui retain their full existing surface.
 // The coordination set covers dispatch (create_task), reconciliation
 // (query_task / view_*), follow-up (send_task_message), interaction
 // answering (reply/reject_interaction), and stopping work (cancel_task). It
@@ -32,6 +32,12 @@ const MISSION_ALLOWED_ACTIONS = new Set([
   "cancel_task",
   "reply_interaction",
   "reject_interaction",
+])
+const EXPLORE_ALLOWED_ACTIONS = new Set([
+  "query_task",
+  "view_board",
+  "view_plan",
+  "view_tasks",
 ])
 import { isDecodableText, decodeDataUrlText, decodeDataUrlBase64 } from "@/session/text-mime"
 
@@ -295,6 +301,12 @@ export const PanelTool = Tool.define("panel", {
           `Mission may call: ${[...MISSION_ALLOWED_ACTIONS].join(", ")}. ` +
           `It coordinates squad/team work but does not replace the orchestrator — ` +
           `replan/retry/goal/session operations belong to the orchestrator and the desktop panel.`,
+      )
+    }
+    if (actor === "explore" && !EXPLORE_ALLOWED_ACTIONS.has(params.action)) {
+      throw new Error(
+        `panel action "${params.action}" is not permitted for the explore agent. ` +
+          `Explore may call: ${[...EXPLORE_ALLOWED_ACTIONS].join(", ")}.`,
       )
     }
     const rightSidebarActions = actor === "right_sidebar_assistant" ? panelCapabilityActionSet("right-sidebar") : undefined

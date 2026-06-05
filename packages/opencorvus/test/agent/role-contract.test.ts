@@ -6,6 +6,7 @@ import { AgentRoleContract } from "../../src/agent/role-contract"
 import { PromptCatalog } from "../../src/config/prompt-catalog"
 import { Config } from "../../src/config/config"
 import { Instance } from "../../src/project/instance"
+import { PermissionNext } from "../../src/permission/next"
 import { tmpdir } from "../fixture/fixture"
 import BUILD_CORE from "../../src/prompt/core/build-core.txt"
 import VISUAL_QA_CORE from "../../src/prompt/core/visual-qa-core.txt"
@@ -143,6 +144,32 @@ test("coding override and build append catalog entries stay distinct", async () 
       expect(build!.effective_prompt).toBe(`${BUILD_CORE}\n\nExtra build-stage instruction`)
       expect(coding!.default_prompt).not.toBe(build!.default_prompt)
       expect(coding!.effective_prompt).not.toBe(build!.effective_prompt)
+    },
+  })
+})
+
+test("mission may dispatch only the explore subagent", async () => {
+  await using tmp = await tmpdir({ git: true })
+  await Instance.provide({
+    directory: tmp.path,
+    fn: async () => {
+      const mission = await Agent.get("mission")
+      expect(mission?.tools?.include).toContain("task")
+      expect(PermissionNext.evaluate("task", "explore", mission?.permission).action).toBe("allow")
+      expect(PermissionNext.evaluate("task", "general", mission?.permission).action).toBe("deny")
+      expect(PermissionNext.evaluate("task", "build", mission?.permission).action).toBe("deny")
+    },
+  })
+})
+
+test("explore has read-only panel status tools available", async () => {
+  await using tmp = await tmpdir({ git: true })
+  await Instance.provide({
+    directory: tmp.path,
+    fn: async () => {
+      const explore = await Agent.get("explore")
+      expect(explore?.tools?.include).toContain("panel")
+      expect(PermissionNext.evaluate("panel", "*", explore?.permission).action).toBe("allow")
     },
   })
 })
