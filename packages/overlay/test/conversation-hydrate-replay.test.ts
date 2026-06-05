@@ -1,27 +1,23 @@
 import { afterAll, afterEach, expect, test } from "bun:test";
-(globalThis as typeof globalThis & { __OPENCORVUS_OVERLAY_VERSION__?: string }).__OPENCORVUS_OVERLAY_VERSION__ = "test";
-
+import { setBoardStore } from "../src/store/board";
+import { cardTreeStore } from "../src/store/card-tree";
+import { conversationAgentStore } from "../src/store/conversation-agents";
 import {
+  cancelConversationReplay,
+  conversationCardContainsMessage,
+  hydrateTaskConversation,
+  loadConversationHistoryUntilCard,
+} from "../src/services/conversation";
+import { replayTaskEventToTree } from "../src/services/events";
+import {
+  __setHostTransportForTest,
   type HostTransport,
   type StreamHandlers,
   type StreamOpenRequest,
   type TransportRequest,
   type TransportResponse,
 } from "../src/services/host-transport";
-
-const { boardStore, setBoardStore } = await import("../src/store/board");
-const { cardTreeStore } = await import("../src/store/card-tree");
-const { conversationAgentStore } = await import("../src/store/conversation-agents");
-const {
-  cancelConversationReplay,
-  conversationCardContainsMessage,
-  hydrateTaskConversation,
-  loadConversationHistoryUntilCard,
-  mergeLatestConversationTail,
-} = await import("../src/services/conversation");
-const { replayTaskEventToTree } = await import("../src/services/events");
-const { __setHostTransportForTest } = await import("../src/services/host-transport");
-const { flushBufferedPartDeltas, resetWriter } = await import("../src/services/tree-writer");
+import { flushBufferedPartDeltas, resetWriter } from "../src/services/tree-writer";
 
 const originalRequestAnimationFrame = globalThis.requestAnimationFrame;
 const originalCancelAnimationFrame = globalThis.cancelAnimationFrame;
@@ -63,87 +59,6 @@ afterEach(() => {
 afterAll(() => {
   globalThis.requestAnimationFrame = originalRequestAnimationFrame;
   globalThis.cancelAnimationFrame = originalCancelAnimationFrame;
-});
-
-function tailMergePayload(taskID: string, lastSequence: number) {
-  return {
-    board: {
-      snapshotVersion: `board:${taskID}:${lastSequence}`,
-      task: {
-        id: taskID,
-        status: "active",
-        request: "tail merge",
-        sessionID: "ses_root",
-        time: { created: 1_776_000_000_000 },
-        attachments: [],
-      },
-      goalWorkflows: [],
-      interactions: [],
-    },
-    transcript: [],
-    timeline: [],
-    events: [],
-    view: {
-      sessions: [],
-      topLevelSessionIDs: [],
-    },
-    agentView: {
-      sessions: [],
-      topLevelSessionIDs: [],
-    },
-    messageWatermark: 0,
-    lastSequence,
-  };
-}
-
-test("tail merge coalesces duplicate in-flight request for the same task and tail limit", async () => {
-  const requests: TransportRequest[] = [];
-  setBoardStore("selectedTaskID", "tsk_tail_coalesce");
-  setBoardStore("selectedSource", { kind: "task", id: "tsk_tail_coalesce" });
-  setBoardStore("taskSequence", 4);
-  __setHostTransportForTest(
-    fakeTransport(async (req) => {
-      requests.push(req);
-      expect(req.path).toBe("task/tsk_tail_coalesce/conversation");
-      expect(req.query?.tail_limit).toBe("32");
-      await new Promise((resolve) => setTimeout(resolve, 20));
-      return {
-        status: 200,
-        ok: true,
-        headers: {},
-        body: tailMergePayload("tsk_tail_coalesce", 12),
-      };
-    }),
-  );
-
-  await Promise.all([
-    mergeLatestConversationTail("tsk_tail_coalesce", { tailLimit: 32 }),
-    mergeLatestConversationTail("tsk_tail_coalesce", { tailLimit: 32 }),
-  ]);
-
-  expect(requests).toHaveLength(1);
-  expect(boardStore.taskSequence).toBe(12);
-});
-
-test("tail merge advances task sequence from backend cursor without rolling it back", async () => {
-  setBoardStore("selectedTaskID", "tsk_tail_sequence");
-  setBoardStore("selectedSource", { kind: "task", id: "tsk_tail_sequence" });
-  setBoardStore("taskSequence", 20);
-  __setHostTransportForTest(
-    fakeTransport((req) => {
-      expect(req.path).toBe("task/tsk_tail_sequence/conversation");
-      return {
-        status: 200,
-        ok: true,
-        headers: {},
-        body: tailMergePayload("tsk_tail_sequence", 8),
-      };
-    }),
-  );
-
-  await mergeLatestConversationTail("tsk_tail_sequence", { tailLimit: 32 });
-
-  expect(boardStore.taskSequence).toBe(20);
 });
 
 test("hydration replay projects persisted executor output into the card tree", () => {

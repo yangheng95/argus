@@ -11,7 +11,6 @@ import { startSSE } from "./sse";
 
 let recoveryGeneration = 0;
 let recoveryAbort: AbortController | null = null;
-let recoveryInFlight: { taskID: string; promise: Promise<number> } | null = null;
 
 function abortError(message: string): DOMException {
   return new DOMException(message, "AbortError");
@@ -60,21 +59,7 @@ export async function recoverSelectedTaskConversation(
   if (activeTaskID() !== taskID) {
     throw abortError("Selected task recovery task changed");
   }
-  if (recoveryInFlight?.taskID === taskID) return recoveryInFlight.promise;
 
-  const promise = recoverSelectedTaskConversationOnce(reason, taskID);
-  recoveryInFlight = { taskID, promise };
-  try {
-    return await promise;
-  } finally {
-    if (recoveryInFlight?.promise === promise) recoveryInFlight = null;
-  }
-}
-
-async function recoverSelectedTaskConversationOnce(
-  reason: string,
-  taskID: string,
-): Promise<number> {
   recoveryAbort?.abort(abortError("Selected task recovery superseded"));
   const controller = new AbortController();
   recoveryAbort = controller;

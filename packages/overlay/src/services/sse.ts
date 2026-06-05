@@ -314,8 +314,8 @@ function stopTaskListRefreshTimer() {
 
 export function startTaskListSSE() {
   stopTaskListSSE()
-  if (!settingsStore.directory.trim()) return
   startTaskListRefreshTimer()
+  if (!settingsStore.directory.trim()) return
   const transport = getHostTransport()
   const handle = transport.openStream(
     { path: "task/events" },
