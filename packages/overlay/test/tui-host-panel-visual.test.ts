@@ -245,3 +245,96 @@ test("right sidebar TUI host panel renders as a real browser surface", async () 
     rmSync(screenshotDir, { recursive: true, force: true })
   }
 }, { timeout: 90_000 })
+
+test("right sidebar TUI host panel shows disconnected input failures", async () => {
+  let closedSockets = 0
+  const server = Bun.serve({
+    idleTimeout: 255,
+    port: 0,
+    websocket: {
+      open(ws) {
+        ws.send("OpenCorvus disconnected input smoke\r\n")
+        ws.send(new Uint8Array([0, ...new TextEncoder().encode(JSON.stringify({ cursor: 40 }))]))
+        ws.close(1000, "normal close before input")
+      },
+      close() {
+        closedSockets += 1
+      },
+    },
+    async fetch(req, serverInstance) {
+      const url = new URL(req.url)
+      const path = route(url)
+      if (path === "/pty/pty_visual/connect") {
+        const upgraded = serverInstance.upgrade(req)
+        return upgraded ? undefined : new Response("WebSocket upgrade failed", { status: 400 })
+      }
+      if (path === "/" || path === "/ui") return Response.redirect(`${url.origin}/ui/index.html`, 302)
+      const staticResponse = await overlayStaticResponse(path)
+      if (staticResponse) return staticResponse
+      if (path === "/global/health") return send({ version: "1.2.3" })
+      if (path === "/tasks" || path === "/global/tasks") return send({ tasks: [] })
+      if (path === "/session") return send([])
+      if (path === "/path") return send({ directory: "D:/overlay/workspace/app" })
+      if (path === "/vcs") return send({ branch: "dev", clean: true, dirty: false, staged: 0, modified: 0, untracked: 0, conflicts: 0, ahead: 0, behind: 0 })
+      if (path === "/provider") return send({ all: [], connected: [], default: {} })
+      if (path === "/provider/auth") return send({})
+      if (path === "/config/providers") return send({ providers: [] })
+      if (path === "/config") return send({ model: "" })
+      if (path === "/agent") return send([])
+      if (path === "/channel") return send([])
+      if (path === "/executor") return send([])
+      if (path === "/skill/installed" || path === "/skill") return send([])
+      if (path === "/mcp") return send({})
+      if (path === "/panel/knowledge/memory") return send([])
+      if (path === "/panel/knowledge/preference") return send([])
+      if (path === "/pty") {
+        if (req.method === "GET") return send([hostInfo()])
+        if (req.method === "POST") return send(hostInfo())
+      }
+      if (path === "/pty/pty_visual") {
+        if (req.method === "PUT") return send(hostInfo())
+        if (req.method === "DELETE") return send(true)
+      }
+      if (path === "/file") return send({ entries: [] })
+      if (path === "/find/file") return send({ entries: [] })
+      return send({})
+    },
+  })
+
+  const browser = await launchBrowser(["--disable-dev-shm-usage"])
+  try {
+    const page = await browser.newPage()
+    await page.setViewport({ width: 1200, height: 800 })
+    await page.evaluateOnNewDocument((portValue) => {
+      localStorage.setItem("oc_directory", "D:/overlay/workspace/app")
+      localStorage.setItem("oc_server_url", `http://127.0.0.1:${portValue}`)
+    }, server.port)
+
+    await page.goto(`http://127.0.0.1:${server.port}/ui/index.html`, { waitUntil: "domcontentloaded" })
+    await page.waitForSelector('[data-ui="side-activity-button"][data-side="right"][data-activity="tui"]')
+    await page.click('[data-ui="side-activity-button"][data-side="right"][data-activity="tui"]')
+    await page.waitForSelector('[data-testid="tui-host-terminal"]')
+    await page.waitForFunction(() => document.querySelector<HTMLElement>('[data-testid="tui-host-terminal"]')?.dataset.state === "running")
+    for (let attempt = 0; attempt < 60 && closedSockets === 0; attempt += 1) {
+      await new Promise((resolve) => setTimeout(resolve, 50))
+    }
+    expect(closedSockets).toBeGreaterThan(0)
+
+    await page.evaluate(() => {
+      const terminal = document.querySelector<HTMLElement>('[data-testid="tui-host-terminal"]')
+      if (!terminal) throw new Error("Missing TUI terminal")
+      terminal.dispatchEvent(new PointerEvent("pointerdown", { bubbles: true }))
+      const data = new DataTransfer()
+      data.setData("text/plain", "lost-input-should-be-visible\r")
+      terminal.dispatchEvent(new ClipboardEvent("paste", { bubbles: true, cancelable: true, clipboardData: data }))
+    })
+
+    await page.waitForFunction(() => {
+      const text = document.querySelector<HTMLElement>(".tui-host-error")?.textContent ?? ""
+      return text.includes("TUI host is not connected. Press refresh to reconnect.")
+    }, { timeout: 30_000 })
+  } finally {
+    await browser.close()
+    server.stop(true)
+  }
+}, { timeout: 90_000 })

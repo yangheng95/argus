@@ -2362,6 +2362,38 @@ OpenCode gap after the round:
 
 - Same intentional MVP gaps remain: link opening, terminal keybind integration, theme/font synchronization, debounced size update, terminal tab/workspace store, full workspace management, external TUI plugin loader, and `SessionV2Debug`/`sync-v2`.
 
+### 2026-06-05 Round 43: MVP disconnected input visibility
+
+Implemented:
+
+- Rechecked latest OpenCode dev before editing. Upstream remains `9211ef7e95b7cd55f08b27b066d635cc42cbb362`; no new PTY/TUI core changes were present.
+- Investigated the reported "TUI connects poorly / cannot type" symptom and found a concrete right-sidebar failure point: `TuiHostPanel` swallowed all terminal `onData` input whenever the PTY host had not started or the websocket was not `OPEN`.
+- Replaced the silent `return` path with a single `sendTerminalInput(data)` path:
+  - if the host is not running, the panel shows `TUI host is not running. Press refresh to reconnect.`;
+  - if the websocket is not open, the panel shows `TUI host is not connected. Press refresh to reconnect.`;
+  - only an open websocket sends input to `/pty/{ptyID}/connect`.
+- Kept normal code `1000` websocket close quiet. A normal close followed by user input is now visible as a disconnected-input error instead of a swallowed keystroke.
+
+Verified in tests:
+
+- Extended `packages/overlay/test/tui-host-panel.test.ts` to guard the `sendTerminalInput(data)` path and the two visible disconnected-input messages.
+- Extended `packages/overlay/test/tui-host-panel-visual.test.ts` with a real browser case where the server accepts the PTY websocket, sends initial output, closes normally, then the test pastes into the terminal and verifies the visible disconnected-input error.
+- Re-ran the existing real browser TUI smoke to prove normal connection, paste input, snapshot persistence, and refresh reconnect still work.
+- `bun test packages/overlay/test/tui-host-panel.test.ts`
+- `bun test packages/overlay/test/tui-host-panel-visual.test.ts`
+- `bun run --cwd packages/overlay typecheck`
+
+OpenCode comparison after the round:
+
+- OpenCode's native terminal-first TUI does not have this browser-embedded ghostty/websocket split, so it does not need this exact guard. The comparable OpenCode principle is that PTY transport state must be visible and recoverable rather than silently dropping input.
+- OpenCorvus still uses the copied OpenCode-shaped `/pty` attach route and retained cursor protocol; this round only fixes the browser wrapper's disconnected-input behavior around that copied route.
+
+OpenCode gap after the round:
+
+- This improves diagnosis and recoverability, but does not yet root-cause real connection failures from `Pty.create -> Tui.resolveEmbeddedCommand -> TuiHost.startPrepared -> TuiHost.preparePtyConnect`.
+- The embedded terminal theme still does not follow overlay theme variables or OpenCode's `useTheme()` token source.
+- Same intentional MVP gaps remain: link opening, terminal keybind integration, debounced size update, terminal tab/workspace store, full workspace management, external TUI plugin loader, and `SessionV2Debug`/`sync-v2`.
+
 ### 2026-06-05 Round 42: MVP default right panel returns to Inspector
 
 Implemented:
