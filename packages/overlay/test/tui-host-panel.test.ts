@@ -45,6 +45,8 @@ describe("tui host panel wiring", () => {
     expect(panel).toContain("bytes[0] === 0")
     expect(panel).toContain("hostCursor += data.length")
     expect(panel).toContain("if (!term) return")
+    expect(panel).toContain("TUI host WebSocket closed abnormally")
+    expect(panel).toContain("event.code === 1000")
     expect(panel).not.toContain("sendTuiHostInput(data)")
     expect(panel).not.toContain("loadTuiHostOutput(hostCursor)")
     expect(panel).not.toContain("loadTuiHostSnapshot")

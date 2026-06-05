@@ -2361,3 +2361,30 @@ OpenCode comparison after the round:
 OpenCode gap after the round:
 
 - Same intentional MVP gaps remain: link opening, terminal keybind integration, theme/font synchronization, debounced size update, terminal tab/workspace store, full workspace management, external TUI plugin loader, and `SessionV2Debug`/`sync-v2`.
+
+### 2026-06-05 Round 41: MVP abnormal websocket close visibility
+
+Implemented:
+
+- Rechecked latest OpenCode dev before editing. Upstream remains `9211ef7e95b7cd55f08b27b066d635cc42cbb362`; no new PTY/TUI core changes were present.
+- Kept the MVP boundary: no new terminal tabs, workspace shell, plugin loader, or OpenCode app-wide context copy.
+- Made abnormal PTY websocket closure visible in the right-sidebar TUI:
+  - normal code `1000` closure remains quiet;
+  - non-1000 close now sets a visible `TUI host WebSocket closed abnormally: {code}` error.
+- This pairs with Round 40's refresh reconnect behavior so a user can see the terminal attachment is broken and recover it with refresh.
+
+Verified in tests:
+
+- Extended `packages/overlay/test/tui-host-panel.test.ts` to guard abnormal close handling and quiet normal close handling.
+- Re-ran the real browser TUI host visual test to ensure the normal render/input/refresh path still works.
+- `bun run --cwd packages/overlay typecheck`
+- `bun test packages/overlay/test/tui-host-panel.test.ts`
+- `bun test packages/overlay/test/tui-host-panel-visual.test.ts`
+
+OpenCode comparison after the round:
+
+- OpenCode's app terminal also distinguishes normal PTY closure from abnormal transport failure. This MVP implementation keeps the same user-facing principle without copying the full OpenCode terminal workspace shell.
+
+OpenCode gap after the round:
+
+- Same intentional MVP gaps remain: link opening, terminal keybind integration, theme/font synchronization, debounced size update, terminal tab/workspace store, full workspace management, external TUI plugin loader, and `SessionV2Debug`/`sync-v2`.
