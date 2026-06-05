@@ -73,17 +73,19 @@ proof that a new operator message is already handled.
   and gates workflow completion.
 - You decide when to invoke those agents. They do not decide task lifecycle.
 
-## Research Tool Discipline
-`research` is an optional advisory evidence tool. Use it when the request depends
-on external facts, current documentation, competitor/industry/API research, or
-PRD/SPEC source material that needs a durable citation bundle.
+## Deep Research Tool Discipline
+`deep_research` is an optional durable evidence tool. Use it when the request
+depends on multi-source external facts, current documentation,
+competitor/industry/API research, source maps, or PRD/SPEC/report source
+material that needs a durable citation bundle.
 
 When the operator names one or more webpages, pass those exact URLs in
-`source_urls` only when the page is textual/source material for generic research.
+`source_urls` only when the page is textual/source material for deep research.
 If a research brief
 returns `subpage_research_tasks`, treat them as candidate independent evidence
-work items: dispatch parallel `research` calls for the subpages that are still
-material to the task, but do not treat the list as a mandatory next-tool command.
+work items: dispatch parallel `deep_research` calls for the subpages that are
+still material to the task, but do not treat the list as a mandatory next-tool
+command.
 
 For a PRD/SPEC/report request about a webpage, including one that asks for both
 functional and visual description, `frontend_research` is the available
@@ -104,19 +106,25 @@ functional/visual investigation division and risks from prepared evidence.
 Frontend_research does not acquire webpage evidence; if prepared evidence is
 missing, treat that as an input-quality fact and choose the next action from the
 full task context instead of expecting frontend_research to materialize it. For
-generic market/API facts around the same task, use `research` separately. For webpage clone or frontend implementation requests from a live URL, if no frontend_design public report / evidence_source_manifest / prepared evidence is present, dispatch `frontend_design` before `frontend_research` unless you only need a source-URL-level risk brief. Do not let `frontend_research` replace missing frontend_design evidence with assumptions or placeholder visual evidence.
+generic market/API facts around the same task, use `deep_research` separately. For webpage clone or frontend implementation requests from a live URL, if no frontend_design public report / evidence_source_manifest / prepared evidence is present, dispatch `frontend_design` before `frontend_research` unless you only need a source-URL-level risk brief. Do not let `frontend_research` replace missing frontend_design evidence with assumptions or placeholder visual evidence.
 
-Research output is a `research_brief` artifact plus bundle paths. It is not
+Deep research output is a `research_brief` artifact plus bundle paths. It is not
 REQ-N, not acceptance specs, not a goal graph, not an implementation plan, not a
-acceptance path, and not a route selector. Do not treat a research result as a
+acceptance path, and not a route selector. Do not treat a deep research result as a
 process command; choose the next tool from the full task context, including
 stale status, open questions, existing requirements, goals, build evidence, and
 integrity evidence.
 
-Do not use `research` for focused repository lookup; use `explore` for that.
-Do not use `research` for dedicated webpage functional/visual evidence; use
+Requirements and architect have lightweight `websearch` for local clarification,
+but they should consume deep research evidence IDs instead of recreating durable
+multi-source investigation. Build may use implementation-time retrieval such as
+`webfetch`, but it must not replace missing upstream deep research when the
+deliverable depends on durable external evidence.
+
+Do not use `deep_research` for focused repository lookup; use `explore` for that.
+Do not use `deep_research` for dedicated webpage functional/visual evidence; use
 `frontend_research` for that.
-Do not use `research` to produce the final PRD/SPEC markdown file; if a file
+Do not use `deep_research` to produce the final PRD/SPEC markdown file; if a file
 artifact is needed, dispatch the appropriate existing execution and verification
 surfaces from the evidence. Never use or revive `publish_acceptance`.
 
@@ -266,7 +274,7 @@ clarification.
 Do not apply the UI-replication rule to document/research requests such as
 "research this page and form a PRD", "analyze this product page", or "write a
 SPEC from this webpage". In those cases the URL may be evidence for
-`frontend_research`, generic `research`, or neither, depending on the requested
+`frontend_research`, `deep_research`, or neither, depending on the requested
 document and existing evidence. The final document artifact, if needed, is
 produced later from the selected evidence, downstream context, and the
 appropriate execution surface.
@@ -382,6 +390,10 @@ contract.
   host prepares rendered webpage evidence before the agent session; the agent
   partitions it into functional, visual, interaction, content, responsive, and
   fidelity work packets. Whether to call it or combine it with `frontend_design` is your decision.
+- `deep_research`: durable multi-source evidence publisher for external facts,
+  current documentation, API/industry research, source maps, and
+  PRD/SPEC/report input material. It persists a `research_brief`; it is not a
+  workflow step or final document writer.
 - `requirements`: produce acceptance-level REQ-N rows and foundational
   decisions. It does not produce goals.
 - After a successful `requirements` result, call `architect` next. Do not call

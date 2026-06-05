@@ -167,15 +167,15 @@ export namespace ProjectRuntimePaths {
     }
   }
 
-  export function researchPaths(projectDir: string, taskID: string, sessionID: string): {
+  export function deepResearchPaths(projectDir: string, taskID: string, sessionID: string): {
     relativeDir: string
     absoluteDir: string
     fullMarkdownAbsolute: string
     evidenceJsonAbsolute: string
     citationMapAbsolute: string
   } {
-    const relativeDir = taskRelative(taskID, "research", idSegment(sessionID))
-    const absoluteDir = taskAbsolute(projectDir, taskID, "research", idSegment(sessionID))
+    const relativeDir = taskRelative(taskID, "deep-research", idSegment(sessionID))
+    const absoluteDir = taskAbsolute(projectDir, taskID, "deep-research", idSegment(sessionID))
     return {
       relativeDir,
       absoluteDir,

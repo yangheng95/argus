@@ -56,8 +56,8 @@ import { Timestamps } from "@/storage/schema.sql"
  *                  the orchestrator `explore` tool. Distinct from "assistant"
  *                  so the overlay splits each explore call into its own agent
  *                  card instead of collapsing them into the generic lane.
- *   research       read-only advisory evidence-gathering subagent for external
- *                  facts and PRD/SPEC input bundles. It emits durable
+ *   deep-research  read-only durable evidence-gathering subagent for external
+ *                  facts, current source material, and PRD/SPEC input bundles. It emits durable
  *                  research_brief artifacts; it is not a workflow step.
  *   frontend-research submit-only webpage investigation-division publisher.
  *                  It pairs with frontend-design and emits durable
@@ -86,7 +86,7 @@ export const SESSION_KINDS = [
   "executor",
   "build",
   "explore",
-  "research",
+  "deep-research",
   "frontend-research",
   "evaluator",
   "system",

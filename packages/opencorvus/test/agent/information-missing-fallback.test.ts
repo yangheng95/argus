@@ -31,7 +31,7 @@ const AGENT_PROMPTS = [
   "intent-analysis-core.txt",
   "orchestrator-core.txt",
   "requirements-core.txt",
-  "research-core.txt",
+  "deep-research-core.txt",
   "visual-qa-core.txt",
 ] as const
 

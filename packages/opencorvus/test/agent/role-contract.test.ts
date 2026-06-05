@@ -169,13 +169,13 @@ test("compaction prompt is host-owned and not configurable", async () => {
   ).toThrow("prompt configuration is not editable")
 })
 
-test("research and frontend-design role descriptions keep document research distinct from UI replication", () => {
+test("deep-research and frontend-design role descriptions keep document research distinct from UI replication", () => {
   expect(AgentRoleContract.description("frontend-design")).toContain("frontend implementation template")
   expect(AgentRoleContract.description("frontend-design")).toContain("not the owner for PRD/SPEC/report webpage research")
   expect(AgentRoleContract.description("frontend-design")).toContain("UI implementation or replication")
 
-  expect(AgentRoleContract.description("research")).toContain("PRD/SPEC/report source material")
-  expect(AgentRoleContract.description("research")).toContain("Dedicated webpage functional/visual investigation division belongs to frontend-research")
+  expect(AgentRoleContract.description("deep-research")).toContain("PRD/SPEC/report source material")
+  expect(AgentRoleContract.description("deep-research")).toContain("Dedicated webpage functional/visual investigation division belongs to frontend-research")
 
   expect(AgentRoleContract.description("frontend-research")).toContain("Frontend research agent")
   expect(AgentRoleContract.description("frontend-research")).toContain("host-prepared rendered webpage evidence")

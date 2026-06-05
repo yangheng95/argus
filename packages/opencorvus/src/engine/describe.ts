@@ -741,7 +741,7 @@ export function renderTaskDescription(desc: TaskDesc, options: { autoIteration?:
   lines.push(renderUserRequestSection({ heading: "## Request", request: desc.request, taskID: desc.id }))
   if (desc.spec_summary) lines.push(`Spec: ${desc.spec_summary}`)
   if (desc.plan_summary) lines.push(`Plan: ${desc.plan_summary}`)
-  lines.push(...renderResearchBriefDesc("Research Brief", desc.research))
+  lines.push(...renderResearchBriefDesc("Deep Research Brief", desc.research))
   lines.push(...renderResearchBriefDesc("Frontend Research Brief", desc.frontend_research))
   if (desc.active_run_id) {
     const orphanTag = desc.run_orphan ? " ORPHAN" : ""

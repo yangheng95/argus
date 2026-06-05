@@ -1,9 +1,9 @@
 import FRONTEND_RESEARCH_CORE from "@/prompt/core/frontend-research-core.txt"
-import { ResearchAgent, runResearchSession, type ResearchSessionConfig } from "@/research/agent"
+import { DeepResearchAgent, runResearchSession, type ResearchSessionConfig } from "@/research/agent"
 
 export namespace FrontendResearchAgent {
-  export type RunInput = ResearchAgent.RunInput
-  export type RunResult = ResearchAgent.RunResult
+  export type RunInput = DeepResearchAgent.RunInput
+  export type RunResult = DeepResearchAgent.RunResult
 
   export async function run(input: RunInput): Promise<RunResult> {
     return runResearchSession(input, frontendResearchSessionConfig())

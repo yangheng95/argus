@@ -15,7 +15,7 @@ export namespace AutomaticCompaction {
     "goal-workload-analyst",
     "intent-analysis",
     "orchestrator",
-    "research",
+    "deep-research",
     "requirements",
   ] as const satisfies readonly SessionKind[]
 

@@ -30,9 +30,9 @@ export function validResearchBrief(request = "research request", overrides: Part
       assumed_non_goals: [],
     },
     bundle: {
-      full_markdown_path: ".opencorvus/runtime/tasks/t/research/s/research-bundle.md",
-      evidence_json_path: ".opencorvus/runtime/tasks/t/research/s/evidence.json",
-      citation_map_path: ".opencorvus/runtime/tasks/t/research/s/citation-map.json",
+      full_markdown_path: ".opencorvus/runtime/tasks/t/deep-research/s/research-bundle.md",
+      evidence_json_path: ".opencorvus/runtime/tasks/t/deep-research/s/evidence.json",
+      citation_map_path: ".opencorvus/runtime/tasks/t/deep-research/s/citation-map.json",
     },
     summary: "Evidence-backed summary.",
     evidence_index: evidence,

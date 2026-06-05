@@ -263,9 +263,9 @@ describe("research output tools", () => {
         created_at: "2026-05-31T00:00:00.000Z",
       },
       bundlePaths: {
-        full_markdown_path: ".opencorvus/runtime/tasks/t/research/s/research-bundle.md",
-        evidence_json_path: ".opencorvus/runtime/tasks/t/research/s/evidence.json",
-        citation_map_path: ".opencorvus/runtime/tasks/t/research/s/citation-map.json",
+        full_markdown_path: ".opencorvus/runtime/tasks/t/deep-research/s/research-bundle.md",
+        evidence_json_path: ".opencorvus/runtime/tasks/t/deep-research/s/evidence.json",
+        citation_map_path: ".opencorvus/runtime/tasks/t/deep-research/s/citation-map.json",
       },
     })
 

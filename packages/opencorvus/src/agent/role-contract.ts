@@ -16,7 +16,7 @@ export type AgentRoleID =
   | "intent-analysis"
   | "integrity"
   | "fact-check"
-  | "research"
+  | "deep-research"
   | "frontend-research"
   | "goal-workload-analyst"
 
@@ -151,10 +151,10 @@ export namespace AgentRoleContract {
       defaultPromptRequired: true,
       promptConfigMode: "append",
     },
-    research: {
-      id: "research",
+    "deep-research": {
+      id: "deep-research",
       description:
-        "Research agent. Read-only advisory evidence gatherer for external facts, source maps, current documentation, PRD/SPEC/report source material, constraints, document outlines, and open questions. Dedicated webpage functional/visual investigation division belongs to frontend-research. Research never chooses routes or delivers final documents.",
+        "Deep research agent. Read-only durable evidence gatherer for multi-source external facts, source maps, current documentation, API/industry research, PRD/SPEC/report source material, constraints, document outlines, and open questions. Dedicated webpage functional/visual investigation division belongs to frontend-research. Deep research never chooses routes or delivers final documents.",
       promptEditable: true,
       defaultPromptRequired: true,
       promptConfigMode: "append",
