@@ -33,7 +33,7 @@ describe("OpenCode TUI dependency substrate", () => {
     expect(opencorvusPackage.dependencies["@opentui/solid"]).toBe("catalog:")
     expect(opencorvusPackage.dependencies["@opentui/keymap"]).toBe("catalog:")
     expect(opencorvusPackage.dependencies["@lydell/node-pty"]).toBe("catalog:")
-    expect(overlayPackage.dependencies["ghostty-web"]).toBe("github:anomalyco/ghostty-web#main")
+    expect(overlayPackage.dependencies["ghostty-web"]).toBeUndefined()
   })
 
   test("does not keep the old OpenTUI 0.1.81 packages in the lockfile", () => {
@@ -43,9 +43,8 @@ describe("OpenCode TUI dependency substrate", () => {
     expect(lockfile).toContain('"@opentui/solid": "0.3.1"')
     expect(lockfile).toContain('"@opentui/keymap": "0.3.1"')
     expect(lockfile).toContain('"@lydell/node-pty": "1.2.0-beta.12"')
-    expect(lockfile).toContain('"ghostty-web": "github:anomalyco/ghostty-web#main"')
+    expect(lockfile).not.toContain('"ghostty-web": "github:anomalyco/ghostty-web#main"')
     expect(lockfile).not.toContain("@opentui/core@0.1.81")
     expect(lockfile).not.toContain("@opentui/solid@0.1.81")
   })
 })
-

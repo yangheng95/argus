@@ -303,6 +303,11 @@ All endpoints are protected by `OPENCORVUS_SERVER_PASSWORD` when it is set. Clie
 |---|---|---|---|
 | GET | `/tui/control/next` | Get next TUI request | `tui.control.next` |
 | POST | `/tui/control/response` | Submit TUI response | `tui.control.response` |
+| POST | `/tui/embed/input` | Send input to embedded OpenTUI renderer | `tui.embed.input` |
+| POST | `/tui/embed/resize` | Resize embedded OpenTUI renderer | `tui.embed.resize` |
+| POST | `/tui/embed/start` | Start embedded OpenTUI renderer | `tui.embed.start` |
+| GET | `/tui/embed/status` | Get embedded OpenTUI renderer status | `tui.embed.status` |
+| POST | `/tui/embed/stop` | Stop embedded OpenTUI renderer | `tui.embed.stop` |
 | POST | `/tui/execute-command` | Execute TUI command | `tui.executeCommand` |
 | POST | `/tui/open-help` | Open help dialog | `tui.openHelp` |
 | POST | `/tui/open-models` | Open models dialog | `tui.openModels` |

@@ -1,159 +1,80 @@
-import { createEffect, createSignal, onCleanup, type Accessor } from "solid-js"
-import type { FitAddon, Ghostty, Terminal as GhosttyTerminal } from "ghostty-web"
+import { createEffect, createSignal, For, onCleanup, Show, type Accessor } from "solid-js"
 import {
-  buildTuiHostConnectUrl,
-  formatTuiHostError,
-  loadTuiHostStatus,
-  resizeTuiHost,
-  startTuiHost,
-  stopTuiHost,
+  formatTuiEmbedError,
+  loadTuiEmbedStatus,
+  resizeTuiEmbed,
+  sendTuiEmbedInput,
+  startTuiEmbed,
+  stopTuiEmbed,
   type CodingAgentTuiPanelInfo,
-} from "./pty-target"
+  type EmbeddedTuiSpan,
+} from "./embedded-target"
 import { hasTuiHostTerminalSizeChanged } from "./terminal-size"
-import { SerializeAddon } from "../../addons/serialize"
-import { terminalWriter } from "../../utils/terminal-writer"
 import { t } from "../../utils/i18n"
 import { Icon } from "../../components/Icon"
 import { Button } from "../../components/ui/Button"
 
 const DEFAULT_COLS = 100
 const DEFAULT_ROWS = 30
-
-type GhosttyModule = typeof import("ghostty-web")
-type TerminalSnapshot = {
-  buffer?: unknown
-  cursor?: unknown
-  rows?: unknown
-  cols?: unknown
-  scrollY?: unknown
-}
-type TerminalTheme = {
-  background: string
-  foreground: string
-  cursor: string
-  selectionBackground: string
-}
-
-let sharedGhostty: Promise<{ mod: GhosttyModule; ghostty: Ghostty }> | undefined
-const SNAPSHOT_VERSION = "v1"
-
-function loadGhostty() {
-  if (sharedGhostty) return sharedGhostty
-  sharedGhostty = import("ghostty-web")
-    .then(async (mod) => ({ mod, ghostty: await mod.Ghostty.load() }))
-    .catch((error) => {
-      sharedGhostty = undefined
-      throw error
-    })
-  return sharedGhostty
-}
-
-function resolveCssColor(host: HTMLElement, token: string, property: "backgroundColor" | "color"): string {
-  const raw = getComputedStyle(host).getPropertyValue(token).trim()
-  if (!raw) throw new Error(`Missing overlay theme token ${token}`)
-  const probe = document.createElement("span")
-  probe.style.position = "absolute"
-  probe.style.pointerEvents = "none"
-  probe.style.opacity = "0"
-  if (property === "backgroundColor") probe.style.backgroundColor = raw
-  else probe.style.color = raw
-  host.append(probe)
-  const resolved = getComputedStyle(probe)[property].trim()
-  probe.remove()
-  if (!resolved || resolved === "rgba(0, 0, 0, 0)") throw new Error(`Invalid overlay theme token ${token}: ${raw}`)
-  return resolved
-}
-
-function overlayTerminalTheme(host: HTMLElement): TerminalTheme {
-  return {
-    background: resolveCssColor(host, "--surface-inset", "backgroundColor"),
-    foreground: resolveCssColor(host, "--text-strong", "color"),
-    cursor: resolveCssColor(host, "--accent", "color"),
-    selectionBackground: resolveCssColor(host, "--accent-dim", "backgroundColor"),
-  }
-}
-
-function useTerminalUiBindings(input: {
-  container: HTMLDivElement
-  term: GhosttyTerminal
-  cleanups: VoidFunction[]
-  focusTerminal: () => void
-}) {
-  const handleCopy = (event: ClipboardEvent) => {
-    const selection = input.term.getSelection()
-    if (!selection) return
-
-    const clipboard = event.clipboardData
-    if (!clipboard) return
-
-    event.preventDefault()
-    clipboard.setData("text/plain", selection)
-  }
-
-  const handlePaste = (event: ClipboardEvent) => {
-    const clipboard = event.clipboardData
-    const text = clipboard?.getData("text/plain") ?? clipboard?.getData("text") ?? ""
-    if (!text) return
-
-    event.preventDefault()
-    event.stopPropagation()
-    input.term.paste(text)
-  }
-
-  const handlePointerDown = () => {
-    const activeElement = document.activeElement
-    if (activeElement instanceof HTMLElement && activeElement !== input.container && !input.container.contains(activeElement)) {
-      activeElement.blur()
-    }
-    input.focusTerminal()
-  }
-
-  const handleTextareaFocus = () => {
-    input.term.options.cursorBlink = true
-  }
-
-  const handleTextareaBlur = () => {
-    input.term.options.cursorBlink = false
-  }
-
-  input.container.addEventListener("copy", handleCopy, true)
-  input.cleanups.push(() => input.container.removeEventListener("copy", handleCopy, true))
-
-  input.container.addEventListener("paste", handlePaste, true)
-  input.cleanups.push(() => input.container.removeEventListener("paste", handlePaste, true))
-
-  input.container.addEventListener("pointerdown", handlePointerDown)
-  input.cleanups.push(() => input.container.removeEventListener("pointerdown", handlePointerDown))
-
-  input.term.textarea?.addEventListener("focus", handleTextareaFocus)
-  input.term.textarea?.addEventListener("blur", handleTextareaBlur)
-  input.cleanups.push(() => input.term.textarea?.removeEventListener("focus", handleTextareaFocus))
-  input.cleanups.push(() => input.term.textarea?.removeEventListener("blur", handleTextareaBlur))
-}
+const ATTR_BOLD = 1 << 0
+const ATTR_DIM = 1 << 1
+const ATTR_ITALIC = 1 << 2
+const ATTR_UNDERLINE = 1 << 3
+type TuiInputPayload = Omit<Parameters<typeof sendTuiEmbedInput>[0], "directory">
 
 export interface CodingAgentTuiPanelProps {
   active: Accessor<boolean>
   directory: Accessor<string>
 }
 
-export function CodingAgentTuiPanel(props: CodingAgentTuiPanelProps) {
-  let container!: HTMLDivElement
-  let term: GhosttyTerminal | undefined
-  let fitAddon: FitAddon | undefined
-  let serializeAddon: SerializeAddon | undefined
-  let output: ReturnType<typeof terminalWriter> | undefined
-  let socket: WebSocket | undefined
-  let resizeFrame: number | undefined
-  let snapshotSaveFrame: number | undefined
-  let resizeObserver: ResizeObserver | undefined
-  let themeObserver: MutationObserver | undefined
-  let disposed = false
-  let hostStarted = false
-  let hostCursor = 0
-  let lastSize: { cols: number; rows: number } | undefined
-  const cleanups: VoidFunction[] = []
+function spanStyle(span: EmbeddedTuiSpan) {
+  const styles = [`color: ${span.fg}`, `background-color: ${span.bg}`]
+  if (span.attributes & ATTR_BOLD) styles.push("font-weight: 700")
+  if (span.attributes & ATTR_DIM) styles.push("opacity: 0.72")
+  if (span.attributes & ATTR_ITALIC) styles.push("font-style: italic")
+  if (span.attributes & ATTR_UNDERLINE) styles.push("text-decoration: underline")
+  return styles.join("; ")
+}
 
-  const [hostInfo, setHostInfo] = createSignal<CodingAgentTuiPanelInfo | null>(null)
+function keyPayload(event: KeyboardEvent): TuiInputPayload | undefined {
+  if (event.metaKey || event.altKey) return
+  if (event.ctrlKey && event.key.toLowerCase() !== "c") return
+  if (event.key.length === 1 && !event.ctrlKey) return { text: event.key }
+  if (event.ctrlKey && event.key.toLowerCase() === "c") return { text: "\u0003", ctrl: true }
+  switch (event.key) {
+    case "Enter":
+      return { key: "enter", ctrl: event.ctrlKey }
+    case "Escape":
+      return { key: "escape", ctrl: event.ctrlKey }
+    case "Tab":
+      return { key: "tab", ctrl: event.ctrlKey }
+    case "Backspace":
+      return { key: "backspace", ctrl: event.ctrlKey }
+    case "Delete":
+      return { key: "delete", ctrl: event.ctrlKey }
+    case "ArrowUp":
+      return { key: "arrow-up", ctrl: event.ctrlKey }
+    case "ArrowDown":
+      return { key: "arrow-down", ctrl: event.ctrlKey }
+    case "ArrowLeft":
+      return { key: "arrow-left", ctrl: event.ctrlKey }
+    case "ArrowRight":
+      return { key: "arrow-right", ctrl: event.ctrlKey }
+  }
+  return
+}
+
+export function CodingAgentTuiPanel(props: CodingAgentTuiPanelProps) {
+  let viewport!: HTMLDivElement
+  let measure!: HTMLSpanElement
+  let resizeObserver: ResizeObserver | undefined
+  let refreshTimer: ReturnType<typeof setInterval> | undefined
+  let disposed = false
+  let started = false
+  let startTask: Promise<CodingAgentTuiPanelInfo | undefined> | undefined
+  let lastSize: { cols: number; rows: number } | undefined
+
+  const [info, setInfo] = createSignal<CodingAgentTuiPanelInfo | null>(null)
   const [loading, setLoading] = createSignal(false)
   const [error, setError] = createSignal("")
 
@@ -166,363 +87,163 @@ export function CodingAgentTuiPanel(props: CodingAgentTuiPanelProps) {
   }
 
   function hostDirectory() {
-    return hostInfo()?.directory?.trim() || requireActiveDirectory()
+    return info()?.directory?.trim() || requireActiveDirectory()
   }
 
   const hostState = () => {
     if (error()) return "error"
-    if (loading() && !hostInfo()) return "loading"
-    return hostInfo()?.running ? "running" : "stopped"
+    if (loading() && !info()) return "loading"
+    return info()?.running ? "running" : "stopped"
   }
 
   const hostLabel = () => {
     if (error()) return t("tui.host_error")
-    if (loading() && !hostInfo()) return t("common.loading")
-    return hostInfo()?.running ? t("tui.host_running") : t("tui.host_stopped")
+    if (loading() && !info()) return t("common.loading")
+    return info()?.running ? t("tui.host_running") : t("tui.host_stopped")
   }
 
-  function snapshotKey(info: CodingAgentTuiPanelInfo | null | undefined) {
-    if (!info?.id || !info.directory) return
-    return `opencorvus:tui-host:${SNAPSHOT_VERSION}:${info.directory}:${info.id}`
-  }
-
-  function saveTerminalSnapshot(info = hostInfo()) {
-    const key = snapshotKey(info)
-    const addon = serializeAddon
-    const current = term
-    if (!key || !addon || !current) return
-    try {
-      const buffer = addon.serialize({ scrollback: 10_000 })
-      localStorage.setItem(
-        key,
-        JSON.stringify({
-          buffer,
-          cursor: hostCursor,
-          rows: current.rows,
-          cols: current.cols,
-          scrollY: current.getViewportY(),
-        }),
-      )
-    } catch (err) {
-      console.warn("[tui-host] failed to save terminal snapshot", err)
+  function measuredSize() {
+    const width = viewport?.clientWidth || 0
+    const height = viewport?.clientHeight || 0
+    const rect = measure?.getBoundingClientRect()
+    const charWidth = rect?.width && rect.width > 0 ? rect.width : 8
+    const lineHeight = rect?.height && rect.height > 0 ? rect.height : 16
+    return {
+      cols: Math.max(20, Math.floor(width / charWidth) || DEFAULT_COLS),
+      rows: Math.max(5, Math.floor(height / lineHeight) || DEFAULT_ROWS),
     }
   }
 
-  function removeTerminalSnapshot(info = hostInfo()) {
-    const key = snapshotKey(info)
-    if (!key) return
-    localStorage.removeItem(key)
-  }
-
-  function scheduleTerminalSnapshotSave() {
-    if (disposed) return
-    if (snapshotSaveFrame !== undefined) return
-    snapshotSaveFrame = requestAnimationFrame(() => {
-      snapshotSaveFrame = undefined
-      if (!disposed) saveTerminalSnapshot()
-    })
-  }
-
-  function restoreTerminalSnapshot(info: CodingAgentTuiPanelInfo | null | undefined) {
-    const key = snapshotKey(info)
-    const current = term
-    if (!key || !current) return
-    const raw = localStorage.getItem(key)
-    if (!raw) return
-    try {
-      const parsed = JSON.parse(raw) as TerminalSnapshot
-      if (
-        typeof parsed.cols === "number" &&
-        Number.isSafeInteger(parsed.cols) &&
-        parsed.cols > 0 &&
-        typeof parsed.rows === "number" &&
-        Number.isSafeInteger(parsed.rows) &&
-        parsed.rows > 0
-      ) {
-        current.resize(parsed.cols, parsed.rows)
-      }
-      if (typeof parsed.buffer === "string" && parsed.buffer) {
-        current.write(parsed.buffer, () => {
-          if (typeof parsed.scrollY === "number" && Number.isFinite(parsed.scrollY) && parsed.scrollY >= 0) {
-            current.scrollToLine(parsed.scrollY)
-          }
-        })
-      } else if (typeof parsed.scrollY === "number" && Number.isFinite(parsed.scrollY) && parsed.scrollY >= 0) {
-        current.scrollToLine(parsed.scrollY)
-      }
-      if (typeof parsed.cursor === "number" && Number.isSafeInteger(parsed.cursor)) hostCursor = parsed.cursor
-    } catch (err) {
-      console.warn("[tui-host] failed to restore terminal snapshot", err)
-    }
-  }
-
-  function writeSocketOutput(data: string) {
-    hostCursor += data.length
-    output?.push(data)
-    scheduleTerminalSnapshotSave()
-  }
-
-  function flushTerminalOutput(done?: VoidFunction) {
-    const writer = output
-    if (!writer) {
-      done?.()
-      return
-    }
-    writer.flush(done)
-  }
-
-  function closeSocket() {
-    const current = socket
-    socket = undefined
-    current?.close(1000)
-  }
-
-  function focusTerminal() {
-    const current = term
-    if (!current) return
-    current.focus()
-    current.textarea?.focus()
-    setTimeout(() => current.textarea?.focus(), 0)
-  }
-
-  function sendTerminalInput(data: string) {
-    if (!hostStarted) {
-      setError("TUI host is not running. Press refresh to reconnect.")
-      return
-    }
-    if (socket?.readyState !== WebSocket.OPEN) {
-      setError("TUI host is not connected. Press refresh to reconnect.")
-      return
-    }
-    socket.send(data)
-  }
-
-  function socketFailureMessage(id: string): string {
-    return `TUI host WebSocket failed for ${id}`
-  }
-
-  function socketCloseMessage(id: string, event: CloseEvent): string {
-    const reason = event.reason.trim()
-    return `TUI host WebSocket closed abnormally for ${id}: ${event.code}${reason ? ` ${reason}` : ""}`
-  }
-
-  function applyTerminalTheme() {
-    const current = term
-    if (!current) return
-    current.options.theme = overlayTerminalTheme(container)
-  }
-
-  async function ensureHostStarted() {
-    if (hostStarted) return hostInfo()
+  async function refreshStatus() {
     const directory = requireActiveDirectory()
-    const current = await loadTuiHostStatus({ directory })
+    const next = await loadTuiEmbedStatus({ directory })
     if (disposed) return
-    setHostInfo(current)
-    hostStarted = current.running
-    if (hostStarted) {
-      restoreTerminalSnapshot(current)
-      return current
-    }
-    const cols = term?.cols && term.cols > 0 ? term.cols : DEFAULT_COLS
-    const rows = term?.rows && term.rows > 0 ? term.rows : DEFAULT_ROWS
-    const started = await startTuiHost({ cols, rows, directory })
-    setHostInfo(started)
-    hostStarted = true
-    restoreTerminalSnapshot(started)
-    return started
+    setInfo(next)
+    started = next.running
   }
 
-  async function connectHostSocket() {
-    if (!props.active() || socket) return
-    const id = hostInfo()?.id
-    if (!id) return
-    if (disposed || !props.active()) return
-    const nextSocket = new WebSocket(buildTuiHostConnectUrl({ id, cursor: hostCursor, directory: hostDirectory() }))
-    socket = nextSocket
-    nextSocket.binaryType = "arraybuffer"
-    nextSocket.onopen = () => {
-      if (!disposed) setError("")
-    }
-    nextSocket.onmessage = (event) => {
+  async function ensureStarted() {
+    if (started) return info()
+    if (startTask) return startTask
+    const directory = requireActiveDirectory()
+    startTask = (async () => {
+      const current = await loadTuiEmbedStatus({ directory })
       if (disposed) return
-      if (typeof event.data === "string") {
-        writeSocketOutput(event.data)
-        return
+      if (current.running) {
+        setInfo(current)
+        started = true
+        return current
       }
-      if (event.data instanceof ArrayBuffer) {
-        const bytes = new Uint8Array(event.data)
-        if (bytes[0] === 0) {
-          const meta = JSON.parse(new TextDecoder().decode(bytes.slice(1))) as { cursor?: unknown }
-          if (typeof meta.cursor === "number" && Number.isSafeInteger(meta.cursor)) hostCursor = meta.cursor
-          return
-        }
-        writeSocketOutput(new TextDecoder().decode(bytes))
-      }
-    }
-    nextSocket.onerror = () => {
-      if (!disposed) setError(socketFailureMessage(id))
-    }
-    nextSocket.onclose = (event) => {
-      if (socket === nextSocket) socket = undefined
-      if (disposed || event.code === 1000) return
-      setError(socketCloseMessage(id, event))
-    }
-  }
-
-  async function reconnectHostSocket() {
-    if (!props.active()) return
-    setLoading(true)
-    setError("")
+      const size = measuredSize()
+      const next = await startTuiEmbed({ ...size, directory })
+      if (disposed) return
+      setInfo(next)
+      started = true
+      lastSize = size
+      return next
+    })()
     try {
-      closeSocket()
-      await ensureHostStarted()
-      await connectHostSocket()
-      focusTerminal()
-    } catch (err) {
-      if (!disposed) setError(formatTuiHostError(err))
+      return await startTask
     } finally {
-      if (!disposed) setLoading(false)
+      startTask = undefined
     }
   }
 
   async function start() {
     if (!props.active()) return
-    if (!term) return
     setLoading(true)
     setError("")
     try {
-      await ensureHostStarted()
-      await connectHostSocket()
+      await ensureStarted()
+      viewport?.focus()
     } catch (err) {
-      if (!disposed) setError(formatTuiHostError(err))
+      if (!disposed) setError(formatTuiEmbedError(err))
     } finally {
       if (!disposed) setLoading(false)
     }
   }
 
-  function scheduleFit() {
-    if (disposed || !fitAddon) return
-    if (resizeFrame !== undefined) return
-    resizeFrame = requestAnimationFrame(() => {
-      resizeFrame = undefined
-      if (disposed || !fitAddon) return
-      fitAddon.fit()
-    })
+  function schedulePolling() {
+    if (refreshTimer !== undefined) return
+    refreshTimer = setInterval(() => {
+      if (!props.active() || !started) return
+      void refreshStatus().catch((err) => {
+        if (!disposed) setError(formatTuiEmbedError(err))
+      })
+    }, 250)
   }
 
-  function pushSize(cols: number, rows: number) {
-    const nextSize = { cols, rows }
+  function stopPolling() {
+    if (refreshTimer === undefined) return
+    clearInterval(refreshTimer)
+    refreshTimer = undefined
+  }
+
+  function pushSize() {
+    if (!started || !props.active()) return
+    const nextSize = measuredSize()
     if (!hasTuiHostTerminalSizeChanged(lastSize, nextSize)) return
     lastSize = nextSize
-    if (!hostStarted) return
-    const id = hostInfo()?.id
-    if (!id) return
-    void resizeTuiHost({ id, cols, rows, directory: hostDirectory() }).catch((err) => {
-      if (!disposed) setError(formatTuiHostError(err))
-    })
+    void resizeTuiEmbed({ ...nextSize, directory: hostDirectory() })
+      .then((next) => {
+        if (!disposed) setInfo(next)
+      })
+      .catch((err) => {
+        if (!disposed) setError(formatTuiEmbedError(err))
+      })
+  }
+
+  function sendInput(payload: TuiInputPayload) {
+    if (!started) return
+    void sendTuiEmbedInput({ ...payload, directory: hostDirectory() })
+      .then((next) => {
+        if (!disposed) setInfo(next)
+      })
+      .catch((err) => {
+        if (!disposed) setError(formatTuiEmbedError(err))
+      })
   }
 
   async function restartHost() {
     setLoading(true)
     setError("")
     try {
-      const id = hostInfo()?.id
-      const directory = hostDirectory()
-      if (id) await stopTuiHost({ id, directory })
-      closeSocket()
-      await new Promise<void>((resolve) => flushTerminalOutput(resolve))
-      if (snapshotSaveFrame !== undefined) cancelAnimationFrame(snapshotSaveFrame)
-      snapshotSaveFrame = undefined
-      removeTerminalSnapshot()
-      hostStarted = false
-      hostCursor = 0
-      term?.reset()
+      await stopTuiEmbed({ directory: hostDirectory() })
+      started = false
+      lastSize = undefined
+      setInfo(null)
       await start()
     } catch (err) {
-      if (!disposed) setError(formatTuiHostError(err))
+      if (!disposed) setError(formatTuiEmbedError(err))
     } finally {
       if (!disposed) setLoading(false)
     }
   }
 
   createEffect(() => {
-    if (props.active()) {
-      void start()
-    } else {
-      closeSocket()
+    if (!props.active()) {
+      stopPolling()
+      return
     }
+    activeDirectory()
+    schedulePolling()
+    started = false
+    startTask = undefined
+    lastSize = undefined
+    setInfo(null)
+    void start()
   })
 
-  createEffect(() => {
-    if (!props.active()) return
-    scheduleFit()
+  queueMicrotask(() => {
+    if (disposed) return
+    resizeObserver = new ResizeObserver(() => pushSize())
+    resizeObserver.observe(viewport)
   })
-
-  loadGhostty()
-    .then(({ mod, ghostty }) => {
-      if (disposed) return
-      const next = new mod.Terminal({
-        cursorBlink: true,
-        cursorStyle: "bar",
-        cols: DEFAULT_COLS,
-        rows: DEFAULT_ROWS,
-        fontSize: 13,
-        fontFamily: "ui-monospace, SFMono-Regular, Menlo, Consolas, monospace",
-        allowTransparency: false,
-        convertEol: false,
-        scrollback: 10_000,
-        theme: overlayTerminalTheme(container),
-        ghostty,
-      })
-      term = next
-      const fit = new mod.FitAddon()
-      fitAddon = fit
-      const serialize = new SerializeAddon()
-      serializeAddon = serialize
-      next.loadAddon(fit)
-      next.loadAddon(serialize)
-      output = terminalWriter((data, done) => {
-        next.write(data, () => {
-          saveTerminalSnapshot()
-          done?.()
-        })
-      })
-      next.open(container)
-      useTerminalUiBindings({ container, term: next, cleanups, focusTerminal })
-      resizeObserver = new ResizeObserver(() => scheduleFit())
-      resizeObserver.observe(container)
-      themeObserver = new MutationObserver(() => applyTerminalTheme())
-      themeObserver.observe(document.documentElement, { attributes: true, attributeFilter: ["data-theme"] })
-      themeObserver.observe(document.body, { attributes: true, attributeFilter: ["data-theme"] })
-      next.onData((data) => {
-        sendTerminalInput(data)
-      })
-      next.onResize((size) => pushSize(size.cols, size.rows))
-      focusTerminal()
-      scheduleFit()
-      if (props.active()) void start()
-    })
-    .catch((err) => {
-      if (!disposed) setError(err instanceof Error ? err.message : String(err))
-    })
 
   onCleanup(() => {
     disposed = true
-    closeSocket()
-    if (resizeFrame !== undefined) cancelAnimationFrame(resizeFrame)
-    if (snapshotSaveFrame !== undefined) cancelAnimationFrame(snapshotSaveFrame)
+    stopPolling()
     resizeObserver?.disconnect()
-    themeObserver?.disconnect()
-
-    const finalize = () => {
-      saveTerminalSnapshot()
-      for (const fn of cleanups.splice(0).reverse()) fn()
-      fitAddon?.dispose()
-      serializeAddon?.dispose()
-      term?.dispose()
-    }
-
-    flushTerminalOutput(finalize)
   })
 
   return (
@@ -546,7 +267,7 @@ export function CodingAgentTuiPanel(props: CodingAgentTuiPanelProps) {
             title={t("common.refresh")}
             aria-label={t("common.refresh")}
             disabled={loading()}
-            onClick={() => void reconnectHostSocket()}
+            onClick={() => void start()}
           >
             <Icon name="refresh" />
           </Button>
@@ -567,7 +288,44 @@ export function CodingAgentTuiPanel(props: CodingAgentTuiPanelProps) {
         </div>
       </header>
 
-      <div ref={container} class="tui-host-terminal" data-state={hostState()} data-testid="tui-host-terminal" />
+      <div
+        ref={viewport}
+        class="tui-host-terminal tui-host-frame"
+        data-state={hostState()}
+        data-testid="tui-host-terminal"
+        tabIndex={0}
+        onKeyDown={(event) => {
+          const payload = keyPayload(event)
+          if (!payload) return
+          event.preventDefault()
+          event.stopPropagation()
+          sendInput(payload)
+        }}
+        onPaste={(event) => {
+          const text = event.clipboardData?.getData("text/plain") ?? ""
+          if (!text) return
+          event.preventDefault()
+          sendInput({ text })
+        }}
+        onPointerDown={() => viewport.focus()}
+      >
+        <span ref={measure} class="tui-host-measure">
+          W
+        </span>
+        <Show when={info()?.frame}>
+          {(frame) => (
+            <div class="tui-host-frame-lines" style={{ "--tui-cols": String(frame().cols), "--tui-rows": String(frame().rows) }}>
+              <For each={frame().lines}>
+                {(line) => (
+                  <div class="tui-host-frame-line">
+                    <For each={line.spans}>{(span) => <span style={spanStyle(span)}>{span.text}</span>}</For>
+                  </div>
+                )}
+              </For>
+            </div>
+          )}
+        </Show>
+      </div>
 
       {error() ? (
         <div class="tui-host-error" role="status">
