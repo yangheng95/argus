@@ -44,7 +44,7 @@ Webpage research workflow:
 Webpage contract:
 - Register webpage contract source and chunks whenever prepared webpage evidence or source URLs describe a webpage surface.
 - Treat `webpage_contract` as an investigation partition contract, not a final PRD fact contract.
-- `reference_image_evidence_ids`: evidence id(s) for the visual reference image/capture. Use an empty array when no screenshot/rendered visual capture exists; never create placeholder evidence solely to satisfy this field.
+- `reference_image_evidence_ids`: evidence id(s) for the visual reference image/capture. When prepared webpage evidence names a visual reference image and required evidence id, register that screenshot as primary evidence, use that id here, and cite it from visual layout/style/fidelity work packets. Use an empty array only when no screenshot/rendered visual capture exists; never create placeholder evidence solely to satisfy this field.
 - `functional_surfaces`: visible surfaces that need downstream investigation, with behavior questions or likely component kinds.
 - `visual_layout`: desktop/mobile/responsive regions that need downstream layout verification.
 - `style_requirements`: source-backed style areas or token selectors that downstream agents must inspect.
@@ -57,7 +57,7 @@ Output contract:
 - Build the brief with small registration tools, then call submit_research_brief exactly once with final=true when finished.
 - Register scope, summary, evidence_index, facts, inferences, problem_statements, user_needs, constraints, document_outline, subpage_research_tasks, webpage_contract chunks, bundle sections, evidence notes, citation map, and open_questions before finalizing.
 - Evidence index `bundle_ref` values are optional; omit them when no precise bundle anchor exists and the host will derive stable references from the evidence ids.
-- The bundle must include full_markdown_sections, evidence_notes, and citation_map. For webpage work, full_markdown_sections are the durable investigation-division artifact: they must expand the compact webpage_contract into work packets, evidence pointers, unknowns, expected downstream outputs, and risks. Do not submit a final PRD or a raw artifact list as full_markdown_sections.
+- The bundle must include full_markdown_sections, evidence_notes, and citation_map. For webpage work, full_markdown_sections are the durable investigation-division artifact: they must expand the compact webpage_contract into work packets, evidence pointers, unknowns, expected downstream outputs, and risks. When a prepared reference image exists, the report must explicitly state that downstream implementation must inspect and reference that image while writing code; do not let build infer visual layout from prose alone. Do not submit a final PRD or a raw artifact list as full_markdown_sections.
 - Do not submit raw markdown or JSON documents as string fields. Use register_research_bundle_section with short single-line points; split multiline notes into separate array items. The host will render those sections into research-bundle.md and serialize evidence_notes / citation_map into JSON files.
 - Use fact_check_items only for factual claims in your own final report that you did not verify through tools.
 - Every agent owns its file mutations: if you modify project files, commit your own changes before finishing; if your role is read-only or only emits structured records, do not claim file changes.

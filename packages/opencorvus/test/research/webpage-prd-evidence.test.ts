@@ -7,6 +7,7 @@ import {
   type LiveWebpageEvidencePipeline,
 } from "../../src/orchestrator/webpage-evidence"
 import {
+  WEBPAGE_REFERENCE_IMAGE_EVIDENCE_ID,
   readPreparedWebpagePrdEvidence,
   prepareWebpagePrdEvidence,
   renderWebpagePrdEvidencePromptSection,
@@ -58,6 +59,11 @@ describe("research webpage PRD evidence", () => {
     expect(prompt).toContain("Do not substitute a raw artifact/material list for this contract")
     expect(prompt).toContain("source-ir/content-model.json")
     expect(prompt).toContain("web-clone-source/reference.png")
+    expect(prompt).toContain(`Required reference image evidence id: ${WEBPAGE_REFERENCE_IMAGE_EVIDENCE_ID}`)
+    expect(prompt).toContain(`Register the captured reference screenshot as research evidence with id \`${WEBPAGE_REFERENCE_IMAGE_EVIDENCE_ID}\``)
+    expect(prompt).toContain(`Use \`${WEBPAGE_REFERENCE_IMAGE_EVIDENCE_ID}\` in \`webpage_contract.reference_image_evidence_ids\``)
+    expect(prompt).toContain("include a downstream implementation point stating that build must inspect and reference")
+    expect(prompt).toContain("using the screenshot as visual truth instead of reconstructing layout from prose alone")
     expect(prompt).not.toContain("singlefile.html")
     expect(prompt).not.toContain("extracted-page.json")
   }, { timeout: WEBPAGE_PRD_EVIDENCE_TIMEOUT_MS })
@@ -102,6 +108,7 @@ describe("research webpage PRD evidence", () => {
     expect(evidence.webpageEvidenceRelative).toBe(paths.webpageEvidenceRelative)
     expect(evidence.sourcePackageRelative).toBe(paths.sourcePackageRelative)
     expect(evidence.referenceImageRelative).toBe(`${paths.sourcePackageRelative}/reference.png`)
+    expect(evidence.referenceImageEvidenceID).toBe(WEBPAGE_REFERENCE_IMAGE_EVIDENCE_ID)
     expect(evidence.artifacts).toContain(`${paths.webpageEvidenceRelative}/prd-evidence-summary.md`)
     expect(evidence.artifacts).toContain(`${paths.sourcePackageRelative}/implementation-blueprint.md`)
     expect(evidence.excerpts.some((item) => item.excerpt.includes("Economic trends"))).toBe(true)
