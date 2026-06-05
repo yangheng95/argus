@@ -825,16 +825,7 @@ export function handleTaskListNotification(event: any): void {
     return;
   }
   const taskID = eventTaskID(event);
-  const sequence = eventSequence(event);
-  if (taskID && taskID === activeTaskID() && sequence > 0) {
-    const current = boardStore.taskSequence;
-    if (current > 0 && sequence > current + 1) {
-      scheduleSelectedTaskRecovery("task-list selected task sequence gap", taskID);
-      scheduleTasksCompat(BOARD_EVENT_DEBOUNCE);
-      return;
-    }
-  }
-  if (taskID) {
+  if (taskID && boardInvalidatingEvent(type)) {
     scheduleTasksCompat(BOARD_EVENT_DEBOUNCE);
   }
   if (taskID && taskID === activeTaskID() && shouldRefreshSelectedBoard(type)) {

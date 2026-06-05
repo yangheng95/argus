@@ -69,6 +69,7 @@ export namespace AgentTrace {
   const DISABLED_VALUES = new Set(["0", "false", "no", "off"])
   const ENABLED = !DISABLED_VALUES.has((process.env.OPENCORVUS_AGENT_TRACE ?? "").toLowerCase())
   const REDACT_ATTACHMENTS = process.env.OPENCORVUS_AGENT_TRACE_REDACT_ATTACHMENTS === "1"
+  const READ_TAIL_BYTES = 2 * 1024 * 1024
 
   export function isEnabled(): boolean {
     return ENABLED
@@ -367,13 +368,7 @@ export namespace AgentTrace {
     if (!sessionID) return []
     const file = findSessionTraceFile(sessionID)
     if (!file) return []
-    let raw: string
-    try {
-      raw = fs.readFileSync(file, { encoding: "utf-8" })
-    } catch {
-      return []
-    }
-    return parseJsonl(raw)
+    return readJsonlTail(file)
   }
 
   /** Read all events for a task from the task rollup. The rollup is the
@@ -383,13 +378,7 @@ export namespace AgentTrace {
     if (!taskID) return []
     const file = firstExisting(ProjectRuntimePaths.taskAbsoluteReadCandidatesFromRuntimeRoot(traceDir(), taskID, "trace.jsonl"))
       ?? taskFile(taskID)
-    let raw: string
-    try {
-      raw = fs.readFileSync(file, { encoding: "utf-8" })
-    } catch {
-      return []
-    }
-    const all = parseJsonl(raw)
+    const all = readJsonlTail(file)
     all.sort((a, b) => (Number(a.ts) || 0) - (Number(b.ts) || 0))
     return all
   }
@@ -399,9 +388,34 @@ export namespace AgentTrace {
     if (!domain || !taskID) return []
     const file = firstExisting(ProjectRuntimePaths.taskAbsoluteReadCandidatesFromRuntimeRoot(traceDir(), taskID, "trace", `_${domain}.jsonl`))
       ?? domainFile(taskID, domain)
+    return readJsonlTail(file)
+  }
+
+  function readJsonlTail(file: string): TraceEvent[] {
+    let stat: fs.Stats
+    try {
+      stat = fs.statSync(file)
+    } catch {
+      return []
+    }
+    if (stat.size <= 0) return []
+    const start = Math.max(0, stat.size - READ_TAIL_BYTES)
     let raw: string
     try {
-      raw = fs.readFileSync(file, { encoding: "utf-8" })
+      if (start === 0) {
+        raw = fs.readFileSync(file, { encoding: "utf-8" })
+      } else {
+        const fd = fs.openSync(file, "r")
+        try {
+          const buffer = Buffer.allocUnsafe(stat.size - start)
+          const bytesRead = fs.readSync(fd, buffer, 0, buffer.length, start)
+          raw = buffer.subarray(0, bytesRead).toString("utf-8")
+        } finally {
+          fs.closeSync(fd)
+        }
+        const firstNewline = raw.indexOf("\n")
+        raw = firstNewline >= 0 ? raw.slice(firstNewline + 1) : ""
+      }
     } catch {
       return []
     }

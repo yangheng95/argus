@@ -1,4 +1,4 @@
-import { spawn } from "node:child_process"
+import { spawn, type ChildProcess } from "node:child_process"
 
 import {
   type BrowserNodeSidecarRuntime,
@@ -27,6 +27,39 @@ export class BrowserNodeSidecarError extends Error {
   }
 }
 
+async function waitForProcessExit(child: ChildProcess): Promise<void> {
+  if (child.exitCode !== null || child.signalCode !== null) return
+  await new Promise<void>((resolve) => {
+    child.once("exit", () => resolve())
+  })
+}
+
+async function terminateChildTree(child: ChildProcess): Promise<void> {
+  const pid = child.pid
+  if (!pid) return
+  if (process.platform === "win32") {
+    await new Promise<void>((resolve) => {
+      const killer = spawn("taskkill.exe", ["/PID", String(pid), "/T", "/F"], {
+        stdio: "ignore",
+        windowsHide: true,
+      })
+      killer.once("exit", () => resolve())
+      killer.once("error", () => {
+        child.kill()
+        resolve()
+      })
+    })
+    await waitForProcessExit(child)
+    return
+  }
+  try {
+    process.kill(-pid, "SIGKILL")
+  } catch {
+    child.kill("SIGKILL")
+  }
+  await waitForProcessExit(child)
+}
+
 export async function runBrowserNodeSidecar<TResult>(input: {
   runtime?: BrowserNodeSidecarRuntime
   script: string
@@ -50,6 +83,7 @@ export async function runBrowserNodeSidecar<TResult>(input: {
     },
     stdio: ["pipe", "pipe", "pipe"],
     windowsHide: true,
+    detached: process.platform !== "win32",
   })
   child.stdin.end(input.script)
 
@@ -67,17 +101,18 @@ export async function runBrowserNodeSidecar<TResult>(input: {
   let aborted = false
   const abortHandler = () => {
     aborted = true
-    child.kill()
+    void terminateChildTree(child)
   }
   input.signal?.addEventListener("abort", abortHandler, { once: true })
+  let timeoutError: BrowserNodeSidecarError | undefined
   const exit = await new Promise<{ code: number | null; signal: NodeJS.Signals | null }>((resolve, reject) => {
     const timer = setTimeout(() => {
-      child.kill()
-      reject(new BrowserNodeSidecarError(
+      timeoutError = new BrowserNodeSidecarError(
         "timeout",
         `${input.label} timed out after ${input.hardTimeoutMs}ms. stderr=${stderr.slice(-2000)}`,
         { stderr },
-      ))
+      )
+      void terminateChildTree(child)
     }, input.hardTimeoutMs)
     child.once("error", (error) => {
       clearTimeout(timer)
@@ -107,6 +142,7 @@ export async function runBrowserNodeSidecar<TResult>(input: {
       { stderr },
     )
   }
+  if (timeoutError) throw timeoutError
 
   let result: TResult
   try {

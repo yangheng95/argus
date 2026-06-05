@@ -1,6 +1,7 @@
 import { createEffect, createSignal } from "solid-js";
 
-export const STREAMING_ACTIVE_TEXT_LIMIT = Infinity;
+export const STREAMING_ACTIVE_TEXT_LIMIT = 12_000;
+const STREAMING_TRUNCATION_PREFIX = "... ";
 
 interface BlockScanState {
   completed: string[];
@@ -70,8 +71,11 @@ function blocksFromScan(state: BlockScanState): string[] {
   return active ? [...state.completed, active] : state.completed;
 }
 
-export function visibleStreamingText(text: string, _limit = STREAMING_ACTIVE_TEXT_LIMIT): string {
-  return text;
+export function visibleStreamingText(text: string, limit = STREAMING_ACTIVE_TEXT_LIMIT): string {
+  const source = String(text || "");
+  const n = Math.max(0, Math.floor(Number(limit) || 0));
+  if (source.length <= n) return source;
+  return `${STREAMING_TRUNCATION_PREFIX}${source.slice(-n)}`;
 }
 
 export function createStreamingTextPartModel(
