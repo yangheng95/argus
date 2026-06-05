@@ -10,6 +10,7 @@
 // why worktree is a per-goal surface, not a task-header one.
 
 import { createMemo, createSignal, For, Show, onCleanup, onMount } from "solid-js";
+import { Portal } from "solid-js/web";
 import { boardStore } from "../store/board";
 import { pathBreadcrumb } from "../utils/dom-utils";
 import {
@@ -177,60 +178,62 @@ export function TaskDirContent() {
           <span class="task-cwd-caret" aria-hidden="true">▾</span>
         </div>
       </div>
-      <Show when={open()}>
-        <div class="recent-dir-panel" style={panelStyle()} role="listbox">
-          <div class="recent-dir-panel-shell">
-            <div class="recent-dir-panel-head">
-              <div class="recent-dir-panel-title">{t("cwd.recent")}</div>
-              <Show when={dir()}>
-                <div class="recent-dir-panel-meta" title={dir()}>{recentPathLabel(dir())}</div>
+      <Portal mount={document.body}>
+        <Show when={open()}>
+          <div class="recent-dir-panel" style={panelStyle()} role="listbox">
+            <div class="recent-dir-panel-shell">
+              <div class="recent-dir-panel-head">
+                <div class="recent-dir-panel-title">{t("cwd.recent")}</div>
+                <Show when={dir()}>
+                  <div class="recent-dir-panel-meta" title={dir()}>{recentPathLabel(dir())}</div>
+                </Show>
+              </div>
+              <Show
+                when={recentDirs().length > 0}
+                fallback={<div class="recent-dir-empty">{t("cwd.recent_empty")}</div>}
+              >
+                <div class="recent-dir-list">
+                  <For each={recentDirs()}>
+                    {(recent) => {
+                      const isActive = () => !!dir() && recent.toLowerCase() === dir().toLowerCase();
+                      return (
+                        <div class="recent-dir-row" data-active={isActive() ? "true" : "false"}>
+                          <button
+                            type="button"
+                            class="recent-dir-item"
+                            title={recent}
+                            onClick={() => void chooseRecentDirectory(recent)}
+                          >
+                            <span class="recent-dir-copy">
+                              <span class="recent-dir-label">{recentPathLabel(recent)}</span>
+                              <span class="recent-dir-path">{recent}</span>
+                            </span>
+                            <Show when={isActive()}>
+                              <span class="recent-dir-state" aria-hidden="true">•</span>
+                            </Show>
+                          </button>
+                          <button
+                            type="button"
+                            class="recent-dir-remove"
+                            title={t("common.delete")}
+                            aria-label={t("common.delete")}
+                            onClick={(event) => {
+                              event.stopPropagation();
+                              removeRecent(recent);
+                            }}
+                          >
+                            <Icon name="close" size={11} />
+                          </button>
+                        </div>
+                      );
+                    }}
+                  </For>
+                </div>
               </Show>
             </div>
-            <Show
-              when={recentDirs().length > 0}
-              fallback={<div class="recent-dir-empty">{t("cwd.recent_empty")}</div>}
-            >
-              <div class="recent-dir-list">
-                <For each={recentDirs()}>
-                  {(recent) => {
-                    const isActive = () => !!dir() && recent.toLowerCase() === dir().toLowerCase();
-                    return (
-                      <div class="recent-dir-row" data-active={isActive() ? "true" : "false"}>
-                        <button
-                          type="button"
-                          class="recent-dir-item"
-                          title={recent}
-                          onClick={() => void chooseRecentDirectory(recent)}
-                        >
-                          <span class="recent-dir-copy">
-                            <span class="recent-dir-label">{recentPathLabel(recent)}</span>
-                            <span class="recent-dir-path">{recent}</span>
-                          </span>
-                          <Show when={isActive()}>
-                            <span class="recent-dir-state" aria-hidden="true">•</span>
-                          </Show>
-                        </button>
-                        <button
-                          type="button"
-                          class="recent-dir-remove"
-                          title={t("common.delete")}
-                          aria-label={t("common.delete")}
-                          onClick={(event) => {
-                            event.stopPropagation();
-                            removeRecent(recent);
-                          }}
-                        >
-                          <Icon name="close" size={11} />
-                        </button>
-                      </div>
-                    );
-                  }}
-                </For>
-              </div>
-            </Show>
           </div>
-        </div>
-      </Show>
+        </Show>
+      </Portal>
     </>
   );
 }

@@ -666,7 +666,16 @@ document.addEventListener(
 const missionMountEl = document.getElementById("solidMissionMount")
 if (missionMountEl) {
   missionMountEl.innerHTML = ""
-  render(() => <Mission />, missionMountEl)
+  render(
+    () => (
+      <Mission
+        workspaceTarget={workspaceTarget}
+        workspaceOpen={workspaceOpen}
+        closeWorkspace={closeWorkspace}
+      />
+    ),
+    missionMountEl,
+  )
 }
 
 // Reflect the active page mode onto <body> so the surface CSS in

@@ -68,6 +68,23 @@ test("Mission wake result opens the shared mission conversation surface", () => 
   expect(MISSION_TSX).toContain("MissionConversation")
 })
 
+test("Mission conversation reuses the shared agent rail and workspace components", () => {
+  expect(MISSION_TSX).toContain('import { ConversationAgentRail } from "./ConversationAgentRail"')
+  expect(MISSION_TSX).toContain('import { WorkspacePanel } from "./WorkspacePanel"')
+  expect(MISSION_TSX).toContain("<ConversationAgentRail />")
+  expect(MISSION_TSX).toContain("<WorkspacePanel target={props.workspaceTarget()} onClose={props.closeWorkspace} />")
+  expect(MISSION_TSX).toContain('data-ui="mission-agent-rail"')
+  expect(MISSION_TSX).toContain('data-ui="mission-workspace"')
+})
+
+test("Mission channels do not load or render task-scoped bindings", () => {
+  expect(MISSION_TSX).not.toContain("loadTaskBindings")
+  expect(MISSION_TSX).not.toContain('data-ui="mission-channels-bindings"')
+  expect(MISSION_TSX).not.toContain("activeTaskID")
+  expect(MISSION_TSX).not.toContain("bindings_empty_no_task")
+  expect(SERVICES_MISSION).toContain("export async function loadTaskBindings")
+})
+
 test("Mission list refreshes after follow-up Mission messages", () => {
   expect(MISSION_TSX).toContain("handleMissionMessageSubmitted")
   expect(MISSION_TSX).toContain("setMissionRefreshToken")

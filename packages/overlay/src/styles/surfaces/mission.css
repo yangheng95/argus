@@ -44,6 +44,11 @@ body[data-page-mode="mission"] > main.panel {
   display: none;
 }
 
+body[data-page-mode="mission"] > .workbench-project-bar,
+body:not([data-page-mode="mission"]) > .workbench-project-bar {
+  display: flex;
+}
+
 .mission {
   display: flex;
   flex-direction: column;
@@ -346,6 +351,29 @@ body[data-page-mode="mission"] > main.panel {
   min-height: 0;
 }
 
+.mission-chat-content-frame,
+.mission-chat-message-pane,
+.mission-conversation-body-frame {
+  min-height: 0;
+  min-width: 0;
+}
+
+.mission-chat-content-frame {
+  flex: 1 1 auto;
+}
+
+.mission-chat-message-pane {
+  flex: 1 1 auto;
+}
+
+.mission-agent-rail-host {
+  flex: 0 0 auto;
+}
+
+.mission-workspace-mount {
+  flex: 0 0 auto;
+}
+
 /* The conversation body IS a `.chat-scroll`, so it inherits the Panel's
    card layout verbatim (conversation.css): full-width cards, user bubbles
    right-aligned, system cards centred, goal-progress strip identical. No
@@ -459,8 +487,7 @@ body[data-page-mode="mission"] > main.panel {
 }
 
 .mission-channels-runtime,
-.mission-channels-list,
-.mission-channels-bindings {
+.mission-channels-list {
   display: flex;
   flex-direction: column;
   gap: var(--ui-gap-sm);
@@ -468,8 +495,7 @@ body[data-page-mode="mission"] > main.panel {
   border-bottom: var(--oc-border-width) dashed var(--border);
 }
 
-.mission-channels-runtime h3,
-.mission-channels-bindings h3 {
+.mission-channels-runtime h3 {
   margin: 0;
   font-size: var(--ui-font-tiny);
   font-weight: var(--ui-font-weight-strong);

@@ -1,7 +1,7 @@
 {
   "_meta": {
     "language": "en-US",
-    "panel_revision": "236b0d6eb7500231"
+    "panel_revision": "6290323f1a195743"
   },
   "about.author_name": "Yang, Heng",
   "about.go_version": "Go Version",
@@ -896,7 +896,6 @@
   "mission.ledger.rename_title": "Rename this mission (or double-click the title).",
   "mission.ledger.rename_placeholder": "Mission title",
   "mission.workbench.error_action_failed": "{{action}} failed: {{error}}",
-  "mission.workbench.bindings_load_failed": "Failed to load channel bindings: {{error}}",
   "mission.channels.heading": "Channels",
   "mission.channels.empty": "No channels available.",
   "mission.channels.runtime_heading": "Managed runtime",
@@ -906,9 +905,6 @@
   "mission.channels.restart": "Restart runtime",
   "mission.channels.restart_title": "Restart the managed channel runtime — try this first if detail shows a connection error.",
   "mission.channels.restarting": "Restarting…",
-  "mission.channels.bindings_heading": "Channel bindings",
-  "mission.channels.bindings_empty_no_task": "No channel binding is selected.",
-  "mission.channels.bindings_empty": "No channel bindings available.",
   "mission.error.channel_runtime_failed": "Failed to load channel runtime status: {{error}}",
   "mission.error.channels_failed": "Failed to load channel list: {{error}}",
   "mission.error.restart_failed": "Failed to restart channel runtime: {{error}}",

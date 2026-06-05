@@ -59,6 +59,19 @@ including `ConversationAgentRail` and `WorkspacePanel`, is still required for
 complete parity. This slice does not add fake rail/workspace placeholders and
 does not add a parallel workspace implementation.
 
+## Implementation Update: second parity slice
+
+Follow-up review found that the first slice still left Mission with duplicated
+workspace chrome and a custom middle shell:
+
+| Surface | Evidence | Decision |
+| --- | --- | --- |
+| CWD single owner | `Mission.tsx` mounted `<ProjectDirectoryBar />` while `main.tsx` also mounted `solidProjectDirectoryBarMount`; the Mission component stays mounted in Panel mode, so there are two cwd components and two document listeners. | Move `solidProjectDirectoryBarMount` out of `main.panel` into the page-level workbench chrome and delete the Mission-local `ProjectDirectoryBar` mount. |
+| Recent directory popup | `TaskDirBar.tsx` rendered `.recent-dir-panel` inline under the current page stack; visual probe showed the Mission ledger search input above it. | Render the popup through Solid `Portal` to `document.body`; keep the directory service as the single data source. |
+| Mission conversation shell | `MissionConversation` still rendered only a local header/body/composer and omitted the real agent rail/workspace components. | Wire Mission to the same `ConversationAgentRail`, `WorkspacePanel`, and `ChatComposer` primitives. Workspace target/open state is passed from `main.tsx`; no synthetic placeholder surface is introduced. |
+| History source | `services/conversation.ts` stored `historyTaskID` and `Conversation.tsx` always asked for task history. Session hydration correctly used `/session/:id/conversation`, but older-history intent still fell through task semantics. | Replace task-only history identity with `BoardSource`; session hydration must never call task history. Server currently returns `hasMore: false` for session conversation, so Mission history remains disabled until a real session-history route is added. |
+| Channel bindings | `Mission.tsx` loaded task bindings from `activeTaskID()` even while a Mission session was active. | Remove task binding UI/data from Mission channels. The right column remains channel runtime/catalog only; task binding belongs to the task inspector, not Mission. |
+
 ## Verification
 
 - Targeted source/component tests for Mission launcher/list/i18n/role styling.
