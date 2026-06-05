@@ -25,7 +25,7 @@ test("critical icon affordances keep readable computed contrast", async () => {
   const browser = await launchBrowser()
   try {
     const page = await browser.newPage()
-    await page.setContent(`
+    const fixtureHtml = `
       <!doctype html>
       <html data-theme="light">
         <head><style>${styleSheet()}</style></head>
@@ -38,7 +38,7 @@ test("critical icon affordances keep readable computed contrast", async () => {
                 </div>
                 <button class="chat-send" disabled>
                   <span class="chat-send-icon">
-                    <svg viewBox="0 0 16 16" fill="none" stroke="currentColor"><path d="M2 8l10-5-3 5 3 5z" fill="currentColor" stroke="none"/></svg>
+                    <span aria-hidden="true">Send</span>
                   </span>
                   <span class="chat-send-label">Send</span>
                 </button>
@@ -47,7 +47,8 @@ test("critical icon affordances keep readable computed contrast", async () => {
           </main>
         </body>
       </html>
-    `)
+    `
+    await page.goto(`data:text/html;charset=utf-8,${encodeURIComponent(fixtureHtml)}`)
 
     const report = await page.evaluate(() => {
       type Rgb = { r: number; g: number; b: number; a: number }

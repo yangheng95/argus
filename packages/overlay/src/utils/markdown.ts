@@ -17,6 +17,7 @@ import langBash from "highlight.js/lib/languages/bash"
 import langSQL from "highlight.js/lib/languages/sql"
 import langMD from "highlight.js/lib/languages/markdown"
 import langDiff from "highlight.js/lib/languages/diff"
+import { iconHtml } from "./icon-html"
 
 // Register languages (selective import keeps bundle small)
 const LANGUAGES: [string, any][] = [
@@ -104,10 +105,7 @@ function wrapCodeBlock(rawText: string, language: string, highlightedHtml: strin
     `<div class="md-code-toolbar">`,
     `<span class="md-code-lang">${escapeHtml(langLabel)}</span>`,
     `<button type="button" class="md-code-copy" data-md-copy="${dataSource}" title="Copy code" aria-label="Copy code">`,
-    `<svg width="12" height="12" viewBox="0 0 16 16" fill="none" aria-hidden="true">`,
-    `<rect x="5" y="3" width="8" height="10" rx="1.3" stroke="currentColor" stroke-width="1.3"/>`,
-    `<path d="M3.5 5.5V12a1.5 1.5 0 0 0 1.5 1.5h5.5" stroke="currentColor" stroke-width="1.3" fill="none"/>`,
-    `</svg>`,
+    iconHtml("copy", 12),
     `</button>`,
     `</div>`,
     `<pre><code class="${language ? `hljs ${langAttr}` : ""}">${highlightedHtml}</code></pre>`,

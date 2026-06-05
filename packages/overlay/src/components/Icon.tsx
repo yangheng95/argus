@@ -1,20 +1,61 @@
 // ── Icon ──
 //
-// Single-source icon primitive for the overlay. All icons use:
-//   - viewBox 16 16
-//   - stroke="currentColor" so the icon inherits the parent's color
-//   - stroke-width 1.4 (visual midpoint between status-icon's 1.6 and
-//     the older section-icon stroke-width 1.3 — the two pre-existing
-//     icon sets are unified here)
-//   - stroke-linecap/linejoin "round"
-//   - fill="none" by default (filled paths opt in via fill prop on
-//     the inner element using `fill="currentColor"` selectors)
-//
-// Adding a new icon: append to the ICON_PATHS map. Don't drop
-// inline SVG anywhere else in the codebase — `flat-redesign-icon-
-// coverage.test.ts` rejects that drift.
+// Single-source icon primitive for the overlay. Commodity glyphs render
+// through lucide-solid; custom SVG remains only for product-specific
+// brand, agent, workflow, and mission glyphs. Callers always use this
+// component instead of importing icon packages or writing inline SVG.
 
-import { createUniqueId, Show, type JSX } from "solid-js";
+import { createUniqueId, Show, type JSX } from "solid-js"
+import type { LucideIcon } from "lucide-solid"
+import {
+  Ban,
+  Bot,
+  BrainCircuit,
+  Cable,
+  Check,
+  ChevronDown,
+  ChevronRight,
+  ChevronUp,
+  Circle,
+  CircleCheck,
+  CircleX,
+  Clock,
+  Copy,
+  Download,
+  ExternalLink,
+  FileText,
+  Folder,
+  FolderOpen,
+  Globe,
+  GripVertical,
+  Info,
+  Layers,
+  Logs,
+  Maximize,
+  Maximize2,
+  MessageSquare,
+  Minimize,
+  Package,
+  PanelLeft,
+  PanelRight,
+  Paperclip,
+  Pencil,
+  Play,
+  Plus,
+  RefreshCw,
+  Rss,
+  Search,
+  ScanSearch,
+  Send,
+  Settings,
+  Shield,
+  ShoppingBag,
+  Square,
+  Terminal,
+  Undo2,
+  Upload,
+  X,
+} from "lucide-solid"
 
 export type IconName =
   // Window / dismiss / control
@@ -114,106 +155,90 @@ export type IconName =
   | "status-cancelled"
   // Mission entry / control room glyph
   | "mission"
-  | "channel-link";
+  | "channel-link"
+  // Config dialog navigation
+  | "config-general"
+  | "config-permissions"
+  | "config-prompt"
+  | "config-channel"
+  | "config-skill"
+  | "config-skill-market"
+  | "config-mcp"
+  | "config-memory"
+  | "config-providers"
+  | "config-agent-models"
+  | "config-about"
 
 interface IconRecord {
   /** Inner SVG markup. Must be self-contained (no external defs). */
-  body: (idPrefix: string) => JSX.Element;
+  body: (idPrefix: string) => JSX.Element
   /** Override stroke-width if the path is dense; defaults to 1.4. */
-  strokeWidth?: number;
+  strokeWidth?: number
 }
 
-const ICON_PATHS: Record<IconName, IconRecord> = {
-  close: {
-    body: () => (
-      <>
-        <line x1="4" y1="4" x2="12" y2="12" />
-        <line x1="12" y1="4" x2="4" y2="12" />
-      </>
-    ),
-  },
-  chevron: {
-    body: () => <polyline points="6,4 10,8 6,12" />,
-  },
-  "caret-down": {
-    body: () => <polyline points="4,6 8,10 12,6" />,
-  },
-  plus: {
-    body: () => (
-      <>
-        <line x1="8" y1="3" x2="8" y2="13" />
-        <line x1="3" y1="8" x2="13" y2="8" />
-      </>
-    ),
-  },
-  // Window controls — single horizontal/box stroke; same viewBox 16
-  // as the rest so the three金刚 line up against the close button.
-  minimize: {
-    body: () => <line x1="3" y1="8" x2="13" y2="8" />,
-  },
-  maximize: {
-    body: () => <rect x="3" y="3" width="10" height="10" rx="0.5" />,
-  },
-  restore: {
-    body: () => (
-      <>
-        <rect x="5" y="2.5" width="8.5" height="8.5" rx="0.5" />
-        <path d="M2.5 5V13.5h8.5" />
-      </>
-    ),
-  },
-  "panel-left": {
-    body: () => (
-      <>
-        <rect x="2.5" y="3" width="11" height="10" rx="1.3" />
-        <line x1="6" y1="3" x2="6" y2="13" />
-      </>
-    ),
-  },
-  "panel-right": {
-    body: () => (
-      <>
-        <rect x="2.5" y="3" width="11" height="10" rx="1.3" />
-        <line x1="10" y1="3" x2="10" y2="13" />
-      </>
-    ),
-  },
-  terminal: {
-    body: () => (
-      <>
-        <rect x="2.5" y="3" width="11" height="10" rx="1.3" />
-        <path d="M5 6.2 7 8 5 9.8" />
-        <line x1="8.2" y1="10" x2="11" y2="10" />
-      </>
-    ),
-  },
-  "terminal-powershell": {
-    body: () => (
-      <>
-        <rect x="2.5" y="3" width="11" height="10" rx="1.3" />
-        <path d="M5 6.1 7.2 8 5 9.9" />
-        <line x1="8.4" y1="10.2" x2="11.2" y2="10.2" />
-      </>
-    ),
-  },
-  "terminal-command-prompt": {
-    body: () => (
-      <>
-        <rect x="2.5" y="3" width="11" height="10" rx="1.3" />
-        <path d="M5 6.2 7 8 5 9.8" />
-        <line x1="8.2" y1="10" x2="11" y2="10" />
-      </>
-    ),
-  },
-  "terminal-bash": {
-    body: () => (
-      <>
-        <rect x="2.5" y="3" width="11" height="10" rx="1.3" />
-        <path d="M5 6.3 6.8 8 5 9.7" />
-        <path d="M8.1 6.3h2.7M8.1 8h2.2M8.1 9.7h2.7" />
-      </>
-    ),
-  },
+interface LucideIconRecord {
+  component: LucideIcon
+  strokeWidth?: number
+}
+
+const LUCIDE_ICON_MAP: Partial<Record<IconName, LucideIconRecord>> = {
+  close: { component: X },
+  chevron: { component: ChevronRight },
+  "chevron-up": { component: ChevronUp },
+  "chevron-down": { component: ChevronDown },
+  "caret-down": { component: ChevronDown },
+  "caret-up": { component: ChevronUp },
+  plus: { component: Plus },
+  minimize: { component: Minimize },
+  maximize: { component: Maximize },
+  restore: { component: Maximize2 },
+  "panel-left": { component: PanelLeft },
+  "panel-right": { component: PanelRight },
+  terminal: { component: Terminal },
+  "terminal-powershell": { component: Terminal },
+  "terminal-command-prompt": { component: Terminal },
+  "terminal-bash": { component: Terminal },
+  folder: { component: Folder },
+  "folder-open": { component: FolderOpen },
+  attach: { component: Paperclip },
+  "web-search": { component: Globe },
+  send: { component: Send },
+  stop: { component: Square },
+  copy: { component: Copy },
+  check: { component: Check },
+  inspect: { component: ScanSearch },
+  cancel: { component: X },
+  edit: { component: Pencil },
+  rewind: { component: Undo2 },
+  search: { component: Search },
+  refresh: { component: RefreshCw },
+  "external-link": { component: ExternalLink },
+  "file-document": { component: FileText },
+  "info-circle": { component: Info },
+  "log-lines": { component: Logs },
+  "drag-handle": { component: GripVertical },
+  download: { component: Download },
+  upload: { component: Upload },
+  "status-idle": { component: Circle },
+  "status-queued": { component: Clock },
+  "status-active": { component: Play },
+  "status-completed": { component: CircleCheck },
+  "status-failed": { component: CircleX },
+  "status-cancelled": { component: Ban },
+  "config-general": { component: Settings },
+  "config-permissions": { component: Shield },
+  "config-prompt": { component: MessageSquare },
+  "config-channel": { component: Rss },
+  "config-skill": { component: Package },
+  "config-skill-market": { component: ShoppingBag },
+  "config-mcp": { component: Cable },
+  "config-memory": { component: BrainCircuit },
+  "config-providers": { component: Layers },
+  "config-agent-models": { component: Bot },
+  "config-about": { component: Info },
+}
+
+const CUSTOM_ICON_PATHS: Partial<Record<IconName, IconRecord>> = {
   "editor-vscode": {
     body: (idPrefix) => (
       <>
@@ -245,17 +270,10 @@ const ICON_PATHS: Record<IconName, IconRecord> = {
             color-interpolation-filters="sRGB"
           >
             <feFlood flood-opacity="0" result="BackgroundImageFix" />
-            <feColorMatrix
-              in="SourceAlpha"
-              type="matrix"
-              values="0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 127 0"
-            />
+            <feColorMatrix in="SourceAlpha" type="matrix" values="0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 127 0" />
             <feOffset />
             <feGaussianBlur stdDeviation="4.16667" />
-            <feColorMatrix
-              type="matrix"
-              values="0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0.25 0"
-            />
+            <feColorMatrix type="matrix" values="0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0.25 0" />
             <feBlend mode="normal" in2="BackgroundImageFix" result="effect1_dropShadow" />
             <feBlend mode="normal" in="SourceGraphic" in2="effect1_dropShadow" result="shape" />
           </filter>
@@ -269,17 +287,10 @@ const ICON_PATHS: Record<IconName, IconRecord> = {
             color-interpolation-filters="sRGB"
           >
             <feFlood flood-opacity="0" result="BackgroundImageFix" />
-            <feColorMatrix
-              in="SourceAlpha"
-              type="matrix"
-              values="0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 127 0"
-            />
+            <feColorMatrix in="SourceAlpha" type="matrix" values="0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 127 0" />
             <feOffset />
             <feGaussianBlur stdDeviation="4.16667" />
-            <feColorMatrix
-              type="matrix"
-              values="0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0.25 0"
-            />
+            <feColorMatrix type="matrix" values="0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0.25 0" />
             <feBlend mode="normal" in2="BackgroundImageFix" result="effect1_dropShadow" />
             <feBlend mode="normal" in="SourceGraphic" in2="effect1_dropShadow" result="shape" />
           </filter>
@@ -385,11 +396,7 @@ const ICON_PATHS: Record<IconName, IconRecord> = {
   "editor-webstorm": {
     body: () => (
       <>
-        <path
-          d="M3.1 4 8.2 2.4 13 4.4l-.8 8.1-5.7 1.1L3 10.9Z"
-          fill="currentColor"
-          stroke="none"
-        />
+        <path d="M3.1 4 8.2 2.4 13 4.4l-.8 8.1-5.7 1.1L3 10.9Z" fill="currentColor" stroke="none" />
         <rect x="5" y="5" width="6" height="6" rx="0.6" fill="var(--task-bar-bg)" stroke="none" />
         <path d="M6.3 8.4 7 6.7l1 1.7 1-1.7.8 1.7" />
       </>
@@ -475,14 +482,8 @@ const ICON_PATHS: Record<IconName, IconRecord> = {
           fill="#FFFFFF"
           d="M15.47,7.1l-1.3,1.85c-0.2,0.29-0.54,0.47-0.9,0.47h-7.1V7.09C6.16,7.1,15.47,7.1,15.47,7.1z"
         />
-        <polygon
-          fill="#FFFFFF"
-          points="24.3,7.1 13.14,22.91 5.7,22.91 16.86,7.1"
-        />
-        <path
-          fill="#FFFFFF"
-          d="M14.53,22.91l1.31-1.86c0.2-0.29,0.54-0.47,0.9-0.47h7.09v2.33H14.53z"
-        />
+        <polygon fill="#FFFFFF" points="24.3,7.1 13.14,22.91 5.7,22.91 16.86,7.1" />
+        <path fill="#FFFFFF" d="M14.53,22.91l1.31-1.86c0.2-0.29,0.54-0.47,0.9-0.47h7.09v2.33H14.53z" />
       </g>
     ),
   },
@@ -657,19 +658,6 @@ const ICON_PATHS: Record<IconName, IconRecord> = {
       </>
     ),
   },
-  folder: {
-    body: () => (
-      <path d="M2.5 4.5h4l1.5 1.5h5.5v6.5a1 1 0 0 1-1 1H3.5a1 1 0 0 1-1-1V4.5Z" />
-    ),
-  },
-  "folder-open": {
-    body: () => (
-      <>
-        <path d="M2.5 4.5h4l1.5 1.5h5.5v1.5H2.5V4.5Z" />
-        <path d="M2.5 7.5h11l-1 5.5a1 1 0 0 1-1 .5H4a1 1 0 0 1-1-.5l-.5-5.5Z" />
-      </>
-    ),
-  },
   // Section header icons — migrated from Board.tsx SECTION_ICONS map
   // 2026-05-04 (flat-redesign Step 3). Stroke-width was 1.3 there;
   // unified to the Icon primitive's 1.4 default.
@@ -744,134 +732,6 @@ const ICON_PATHS: Record<IconName, IconRecord> = {
       </>
     ),
   },
-  // Composer toolbar — migrated 2026-05-04 (Step 8b) from ChatComposer
-  // inline svg. Stroke-width was 1.2 there; unified to primitive 1.4.
-  "chevron-up": {
-    body: () => <path d="M4 10l4-4 4 4" />,
-  },
-  "chevron-down": {
-    body: () => <path d="M4 6l4 4 4-4" />,
-  },
-  attach: {
-    body: () => (
-      <path d="M13.5 7.5l-5.8 5.8a3.2 3.2 0 01-4.5-4.5L9 3a2 2 0 012.8 2.8L6 11.6a.8.8 0 01-1.1-1.1L10.5 5" />
-    ),
-  },
-  "web-search": {
-    body: () => (
-      <>
-        <circle cx="8" cy="8" r="6.5" />
-        <path d="M8 1.5C8 1.5 5.5 4.5 5.5 8S8 14.5 8 14.5M8 1.5C8 1.5 10.5 4.5 10.5 8S8 14.5 8 14.5" />
-        <path d="M1.5 8h13" />
-      </>
-    ),
-  },
-  send: {
-    body: () => <path d="M2 8l10-5-3 5 3 5z" fill="currentColor" stroke="none" />,
-  },
-  stop: {
-    body: () => (
-      <rect
-        x="4.25"
-        y="4.25"
-        width="7.5"
-        height="7.5"
-        rx="1.2"
-        fill="currentColor"
-        stroke="none"
-      />
-    ),
-  },
-  // Card header actions — migrated 2026-05-04 (Step 8b) from CardHeader
-  // inline svg.
-  copy: {
-    body: () => (
-      <>
-        <rect x="5" y="3" width="8" height="10" rx="1.3" />
-        <path d="M3.5 5.5V12a1.5 1.5 0 0 0 1.5 1.5h5.5" />
-      </>
-    ),
-  },
-  check: {
-    body: () => <path d="M3.5 8.5l3 3 6-6.5" />,
-    strokeWidth: 1.6,
-  },
-  inspect: {
-    body: () => (
-      <>
-        <circle cx="7" cy="7" r="4" />
-        <path d="M10 10l3 3" />
-      </>
-    ),
-  },
-  cancel: {
-    body: () => <path d="M5 5l6 6M11 5l-6 6" />,
-    strokeWidth: 1.7,
-  },
-  edit: {
-    // Pencil glyph: angled body with a tip at the bottom-left and a
-    // small eraser cap at the top-right. Strokes only, so it tracks
-    // currentColor like the other action chrome.
-    // Sized to occupy ~7.5/16 of the viewBox so it reads at the same
-    // visual weight as `stop`/`close` when shown in the task row's
-    // action cluster — otherwise the larger pencil dominates its
-    // smaller-glyph neighbours at the same icon size.
-    body: () => (
-      <>
-        <path d="M9.4 4.2 11.8 6.6 6.7 11.7H4.3V9.3Z" />
-        <path d="M8.6 5 11 7.4" />
-      </>
-    ),
-  },
-  rewind: {
-    body: () => (
-      <>
-        <path d="M6.5 3.5L3 7l3.5 3.5" />
-        <path d="M13 12.5c0-2.7-2.1-4.9-4.8-4.9H3.4" />
-      </>
-    ),
-    strokeWidth: 1.6,
-  },
-  // Misc UI — migrated 2026-05-04 (Step 8b) from scattered inline svg
-  // across TaskList / ChangesPanel / ExecutorSelector / FilesSection /
-  // TitlebarMenubar / Card.
-  "caret-up": {
-    body: () => <polyline points="4,10 8,6 12,10" />,
-  },
-  search: {
-    body: () => (
-      <>
-        <circle cx="7" cy="7" r="4.5" />
-        <path d="M10.5 10.5L13 13" />
-      </>
-    ),
-  },
-  refresh: {
-    body: () => (
-      <>
-        <path d="M13 4.5V8h-3.5" />
-        <path d="M12.6 8A5 5 0 103.8 10.5" />
-      </>
-    ),
-  },
-  "external-link": {
-    body: () => (
-      <>
-        <path d="M6 4h6v6" />
-        <path d="M12 4L5 11" />
-        <path d="M4 6v6h6" />
-      </>
-    ),
-  },
-  "file-document": {
-    body: () => (
-      <>
-        <path d="M4 2.5h5l3 3V13.5H4z" />
-        <path d="M9 2.5v3h3" />
-        <path d="M6 8h4M6 10.5h4" />
-      </>
-    ),
-  },
   github: {
     body: () => (
       <path
@@ -879,93 +739,6 @@ const ICON_PATHS: Record<IconName, IconRecord> = {
         fill="currentColor"
         stroke="none"
       />
-    ),
-  },
-  "info-circle": {
-    body: () => (
-      <>
-        <circle cx="8" cy="8" r="6" />
-        <path d="M8 5v3M8 10h.01" />
-      </>
-    ),
-    strokeWidth: 1.3,
-  },
-  "log-lines": {
-    body: () => <path d="M3 3h10M3 6.5h8M3 10h6M3 13.5h9" />,
-  },
-  "drag-handle": {
-    // Six dots in two columns. The path uses moveto + dot at each
-    // location (a tiny `h.01` segment renders as a stroke-width dot
-    // with stroke-linecap="round").
-    body: () => (
-      <path d="M6 3h.01M10 3h.01M6 8h.01M10 8h.01M6 13h.01M10 13h.01" />
-    ),
-    strokeWidth: 2.2,
-  },
-  download: {
-    body: () => (
-      <>
-        <line x1="8" y1="2.5" x2="8" y2="10" />
-        <polyline points="5,7 8,10 11,7" />
-        <line x1="3" y1="13" x2="13" y2="13" />
-      </>
-    ),
-  },
-  upload: {
-    body: () => (
-      <>
-        <line x1="8" y1="10" x2="8" y2="2.5" />
-        <polyline points="5,5.5 8,2.5 11,5.5" />
-        <line x1="3" y1="13" x2="13" y2="13" />
-      </>
-    ),
-  },
-  // Status family — migrated 2026-05-04 (Step 8b) from Board.statusIcon
-  // innerHTML strings. Per-path `fill="currentColor"` opts into the
-  // filled-glyph variant (replaces the legacy `data-fill="true"`
-  // attribute the .status-icon CSS used to switch on).
-  "status-idle": {
-    body: () => (
-      <>
-        <circle cx="8" cy="8" r="4.5" />
-        <circle cx="8" cy="8" r="1.25" fill="currentColor" stroke="none" />
-      </>
-    ),
-  },
-  "status-queued": {
-    body: () => (
-      <>
-        <circle cx="8" cy="8" r="4.5" />
-        <path d="M8 5.4v2.8l2.1 1.3" />
-      </>
-    ),
-  },
-  "status-active": {
-    body: () => <path d="M6 4.6L11.3 8 6 11.4Z" fill="currentColor" stroke="none" />,
-  },
-  "status-completed": {
-    body: () => (
-      <>
-        <circle cx="8" cy="8" r="4.5" />
-        <path d="M5.1 8.2l2 2 3.8-3.8" />
-      </>
-    ),
-  },
-  "status-failed": {
-    body: () => (
-      <>
-        <circle cx="8" cy="8" r="4.5" />
-        <path d="M5.4 5.4l5.2 5.2" />
-        <path d="M10.6 5.4l-5.2 5.2" />
-      </>
-    ),
-  },
-  "status-cancelled": {
-    body: () => (
-      <>
-        <circle cx="8" cy="8" r="4.5" />
-        <path d="M5.2 10.8l5.6-5.6" />
-      </>
     ),
   },
   // Mission: a hub-and-spokes glyph — a central node with three radials
@@ -991,55 +764,79 @@ const ICON_PATHS: Record<IconName, IconRecord> = {
       </>
     ),
   },
-};
+}
 
 export interface IconProps {
-  name: IconName;
+  name: IconName
   /** Pixel size; defaults to 16. CSS still drives final size via
    * `font-size` / `width` on the parent — this is the SVG attribute
    * for accessibility tools that need a numeric default. */
-  size?: number;
-  class?: string;
+  size?: number
+  class?: string
   /** Override the default 1.4 stroke-width if the consumer needs a
    * specific weight (e.g. a dense overview icon may bump to 1.6). */
-  strokeWidth?: number;
+  strokeWidth?: number
   /** Hide from screen readers — most icons are decorative. */
-  decorative?: boolean;
+  decorative?: boolean
   /** Title for tooltip + aria-label fallback. */
-  title?: string;
+  title?: string
 }
 
 export function Icon(props: IconProps): JSX.Element {
-  const iconIDPrefix = createUniqueId();
-  const size = () => props.size ?? 16;
-  const decorative = () => props.decorative !== false;
-  const record = () => ICON_PATHS[props.name];
-  const strokeWidth = () =>
-    props.strokeWidth ?? record().strokeWidth ?? 1.4;
+  const iconIDPrefix = createUniqueId()
+  const size = () => props.size ?? 16
+  const decorative = () => props.decorative !== false
+  const lucideRecord = () => LUCIDE_ICON_MAP[props.name]
+  const customRecord = () => CUSTOM_ICON_PATHS[props.name]
+  const customStrokeWidth = () => props.strokeWidth ?? customRecord()?.strokeWidth ?? 1.4
+  const lucideStrokeWidth = () => props.strokeWidth ?? lucideRecord()?.strokeWidth ?? 2
+
   return (
-    <svg
-      class={props.class}
-      width={size()}
-      height={size()}
-      viewBox="0 0 16 16"
-      fill="none"
-      stroke="currentColor"
-      stroke-width={strokeWidth()}
-      stroke-linecap="round"
-      stroke-linejoin="round"
-      aria-hidden={decorative() ? "true" : undefined}
-      role={decorative() ? undefined : "img"}
+    <Show
+      when={lucideRecord()}
+      keyed
+      fallback={
+        <svg
+          class={props.class}
+          width={size()}
+          height={size()}
+          viewBox="0 0 16 16"
+          fill="none"
+          stroke="currentColor"
+          stroke-width={customStrokeWidth()}
+          stroke-linecap="round"
+          stroke-linejoin="round"
+          aria-hidden={decorative() ? "true" : undefined}
+          role={decorative() ? undefined : "img"}
+        >
+          <Show when={props.title}>
+            <title>{props.title}</title>
+          </Show>
+          {customRecord()?.body(iconIDPrefix)}
+        </svg>
+      }
     >
-      <Show when={props.title}>
-        <title>{props.title}</title>
-      </Show>
-      {record().body(iconIDPrefix)}
-    </svg>
-  );
+      {(record) => {
+        const Lucide = record.component
+        return (
+          <Lucide
+            class={props.class}
+            size={size()}
+            color="currentColor"
+            strokeWidth={lucideStrokeWidth()}
+            aria-hidden={decorative() ? "true" : undefined}
+            role={decorative() ? undefined : "img"}
+          >
+            <Show when={props.title}>
+              <title>{props.title}</title>
+            </Show>
+          </Lucide>
+        )
+      }}
+    </Show>
+  )
 }
 
-/** List of registered icon names. Exposed for the icon-coverage
- * test so it can assert the registry covers every callsite. */
-export const REGISTERED_ICONS: readonly IconName[] = Object.keys(
-  ICON_PATHS,
-) as IconName[];
+export const LUCIDE_ICON_NAMES = Object.keys(LUCIDE_ICON_MAP) as IconName[]
+export const CUSTOM_ICON_NAMES = Object.keys(CUSTOM_ICON_PATHS) as IconName[]
+export const REGISTERED_ICONS: readonly IconName[] = [...LUCIDE_ICON_NAMES, ...CUSTOM_ICON_NAMES]

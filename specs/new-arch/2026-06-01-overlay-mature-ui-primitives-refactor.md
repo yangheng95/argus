@@ -55,6 +55,55 @@ The overlay has several custom UI interaction implementations where mature Solid
 - Popovers / model picker: migrate `ExecutorSelector.tsx` and `WorkspaceSplitLauncher.tsx` to mature popover/menu primitives.
 - Icons: replace commodity entries in `Icon.tsx` with a mature icon library, keeping only product-specific custom shapes.
 
+## Phase 4 Icon primitive plan
+
+Evidence scan:
+
+| API / file | Current behavior | Replacement decision |
+| --- | --- | --- |
+| `packages/overlay/src/components/Icon.tsx` | One large local `ICON_PATHS` registry contains both commodity glyphs and product-specific glyphs. | Keep `Icon` as the single callsite API, add a `lucide-solid` adapter for commodity glyphs, and retain local SVG only for product-specific brand / agent / workflow glyphs. |
+| `packages/overlay/package.json` | `lucide-solid` is available in `node_modules` but is not declared by the overlay package. | Add `lucide-solid` as an explicit overlay dependency so the icon source is a real package contract. |
+| `packages/overlay/src/components/ConfigDialogHost.tsx` | Configuration navigation uses eleven inline 24px SVG definitions. | Replace with `Icon` names backed by Lucide; keep the existing `.config-nav-icon` CSS hook. |
+| `packages/overlay/src/index.html` | Sidebar Mission / New Chat buttons embed inline 16px SVG. | Remove inline SVG; leave `data-oc-icon` placeholders hydrated by `Icon` HTML from `main.tsx`. |
+| `packages/overlay/src/main.tsx` `renderRecentDirPanel` | Recent directory remove action embeds an inline close SVG string. | Use `iconHtml("close")`, generated through the same `Icon` primitive. |
+| `packages/overlay/src/utils/dom-utils.ts` `pathIcon` | Directory breadcrumb buttons return inline SVG strings for browse/new/close. | Use `iconHtml("folder")`, `iconHtml("plus")`, and `iconHtml("close")`. |
+| `packages/overlay/src/utils/markdown.ts` code-copy button | Markdown code blocks embed a copy SVG string. | Use `iconHtml("copy")` so markdown HTML keeps the same icon source. |
+| `packages/overlay/test/flat-redesign-icon-coverage.test.ts` | Allows `main.tsx` inline template SVG and requires every `IconName` to have an `ICON_PATHS` entry. | Update the guard to accept Lucide-backed icons, reject inline 16px/24px SVG across `src`, and assert commodity icons come from Lucide. |
+| `packages/overlay/test/icon-affordance-computed.test.ts` | Test fixture hand-writes a send SVG. | Replace fixture with a class shell or generated `Icon` HTML so tests no longer normalize inline SVG usage. |
+
+Callsite decisions:
+
+| Icon family | Names | Decision |
+| --- | --- | --- |
+| Commodity controls | `close`, `chevron*`, `caret-*`, `plus`, `minimize`, `maximize`, `restore`, `panel-*`, `terminal*`, `folder*`, `attach`, `web-search`, `send`, `stop`, `copy`, `check`, `inspect`, `cancel`, `edit`, `rewind`, `search`, `refresh`, `external-link`, `file-document`, `info-circle`, `log-lines`, `drag-handle`, `download`, `upload`, `status-*` | Back with `lucide-solid`. |
+| Config navigation | `config-general`, `config-permissions`, `config-prompt`, `config-channel`, `config-skill`, `config-skill-market`, `config-mcp`, `config-memory`, `config-providers`, `config-agent-models`, `config-about` | Add as `IconName`s backed by Lucide. |
+| Product / brand / agent glyphs | `editor-*`, `coding-*`, `avatar-*`, `overview`, `spec`, `plan`, `goals`, `executor`, `criteria`, `acceptance`, `github`, `mission`, `channel-link` | Keep local custom SVG records because these carry product semantics or brand shapes. |
+
+Constraints:
+
+- Preserve the public `Icon` component API and existing `IconName` callsites.
+- Preserve current CSS hooks: `.oc-button`, `.config-nav-icon`, `.sidebar-btn-icon`, `.recent-dir-remove`, `.task-dir-tool`, and markdown copy classes.
+- Do not introduce a second icon component for callers; `Icon` remains the only JSX icon primitive.
+- Do not hand-write new SVG paths outside `Icon.tsx`.
+- Keep icon-only buttons accessible with existing `title` / `aria-label` coverage.
+
+Checklist:
+
+- [x] Grep `Icon` callsites and inline SVG escapes.
+- [x] Grep existing icon/button primitive tests.
+- [x] Add explicit `lucide-solid` dependency.
+- [x] Convert `Icon.tsx` into a Lucide adapter plus custom registry.
+- [x] Replace inline SVG escape hatches with `Icon`-generated HTML or `Icon` JSX.
+- [x] Update tests to reject inline 16px/24px SVG and require Lucide-backed commodity icons.
+- [x] Run targeted overlay icon/button tests.
+  - `flat-redesign-icon-coverage.test.ts`, `icon-affordance-computed.test.ts`, `button-primitive.test.ts`, and `sidebar-header-buttons-primitive.test.ts` passed.
+- [x] Run overlay typecheck and i18n check.
+  - `bun run --cwd packages/overlay typecheck` and `bun run --cwd packages/overlay check:i18n` passed.
+- [x] Run browser visual smoke.
+  - Vite served `http://127.0.0.1:5173/`; Chrome smoke verified two sidebar icon SVGs and eleven config navigation Lucide SVGs with no relevant console errors.
+- [x] Review diff for user-change preservation.
+- [ ] Commit and push only this phase's files.
+
 ## Phase 2A Workspace Split Launcher plan
 
 Evidence scan:

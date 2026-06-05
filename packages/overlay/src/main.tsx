@@ -74,6 +74,7 @@ import { teardownApp } from "./services/init"
 import { stopTimers } from "./services/sync"
 import { nativeOpen, nativePrompt } from "./utils/native"
 import { eventClosest } from "./utils/dom-utils"
+import { hydrateIconPlaceholders, iconHtml } from "./utils/icon-html"
 import { installNativeContextMenuSuppression } from "./utils/context-menu"
 import { shortPath } from "./utils/tool"
 import { notifyError, notifyWarning, formatErrorDetails, recomputeBadgeFromTasks } from "./services/notify"
@@ -112,6 +113,7 @@ if ((import.meta as any).hot) {
 }
 const listenerOpts = { signal: moduleTeardown.signal } as const
 installNativeContextMenuSuppression(document, moduleTeardown.signal)
+hydrateIconPlaceholders(document)
 
 const BROWSER_RESIZE_OBSERVER_DELIVERY_MESSAGES = new Set([
   "ResizeObserver loop completed with undelivered notifications.",
@@ -1470,13 +1472,7 @@ function renderRecentDirPanel(): void {
           `</span>`,
           isActive ? `<span class="recent-dir-state" aria-hidden="true">•</span>` : "",
           `</button>`,
-          // Inline SVG matches the Icon primitive contract (viewBox 16,
-          // stroke=currentColor, stroke-width 1.4, line-cap/join round).
-          // Inline string here because the surrounding markup builder is
-          // an HTML-template-string flow; rewriting to JSX is bigger
-          // scope than Step 7 covers. The string itself is the single
-          // source — no `×` character anywhere in the codebase.
-          `<button type="button" class="recent-dir-remove" data-recent-remove="${escapeHtml(dir)}" title="${escapeHtml(t("common.delete"))}" aria-label="${escapeHtml(t("common.delete"))}"><svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><line x1="4" y1="4" x2="12" y2="12"/><line x1="12" y1="4" x2="4" y2="12"/></svg></button>`,
+          `<button type="button" class="recent-dir-remove" data-recent-remove="${escapeHtml(dir)}" title="${escapeHtml(t("common.delete"))}" aria-label="${escapeHtml(t("common.delete"))}">${iconHtml("close")}</button>`,
           `</div>`,
         ].join("")
       })
