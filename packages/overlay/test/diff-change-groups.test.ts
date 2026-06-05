@@ -1,5 +1,19 @@
-import { expect, test } from "bun:test"
-import { changeGroupsRevisionKey, type ChangeGroup } from "../src/services/diff"
+import { expect, mock, test } from "bun:test"
+import type { ChangeGroup } from "../src/services/diff"
+
+mock.module("../src/store/board", () => ({
+  boardStore: { board: null, changes: [], selectedSource: null, snapshotVersion: "" },
+  activeTaskID: () => "",
+  setPath: () => {},
+  setVcs: () => {},
+}))
+
+mock.module("../src/services/meta", () => ({
+  deriveChanges: () => [],
+  normalizeDiffs: (list: any[]) => list,
+}))
+
+const { changeGroupsRevisionKey } = await import("../src/services/diff")
 
 function group(changes: ChangeGroup["changes"]): ChangeGroup {
   return {

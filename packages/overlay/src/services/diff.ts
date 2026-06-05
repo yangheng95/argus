@@ -8,6 +8,7 @@ import { boardStore } from "../store/board";
 import { deriveChanges, normalizeDiffs } from "./meta";
 import type { FileChange } from "../components/DiffView";
 import { goalRevisionLabelFromIndexes } from "../utils/goal-label";
+import { parsePatch } from "diff";
 
 export interface DiffTarget {
   filePath: string;
@@ -32,6 +33,15 @@ export interface ChangeGroup {
 
 const diffCache = new Map<string, FileChange[]>();
 
+// VCS means Version Control System; rows come from the existing /vcs/diff endpoint.
+interface VcsDiffRow {
+  file?: unknown;
+  patch?: unknown;
+  additions?: unknown;
+  deletions?: unknown;
+  status?: unknown;
+}
+
 export function changeGroupsRevisionKey(groups: ChangeGroup[]): string {
   return groups
     .map((group) => [
@@ -55,6 +65,76 @@ export function changeGroupsRevisionKey(groups: ChangeGroup[]): string {
 
 function normalizeAcceptanceDiffs(rawDiffs: unknown): FileChange[] {
   return normalizeDiffs(Array.isArray(rawDiffs) ? rawDiffs : []) as FileChange[];
+}
+
+function normalizeDiffPath(file: string): string {
+  const normalized = String(file || "")
+    .replace(/\\/g, "/")
+    .replace(/^[ab]\//, "")
+    .replace(/\/+/g, "/")
+    .replace(/^\.?\//, "");
+  const base = String((boardStore.board as any)?.task?.directory || "")
+    .replace(/\\/g, "/")
+    .replace(/\/+$/, "");
+  const withoutBase = base && normalized.startsWith(`${base}/`)
+    ? normalized.slice(base.length + 1)
+    : normalized;
+  const arrowTarget = withoutBase.includes(" -> ")
+    ? withoutBase.split(" -> ").at(-1) || withoutBase
+    : withoutBase;
+  return arrowTarget.toLowerCase();
+}
+
+function hasDiffBody(change: FileChange | null | undefined): change is FileChange {
+  return !!change && (change.before !== undefined || change.after !== undefined);
+}
+
+function findDiffByPath(changes: FileChange[], filePath: string): FileChange | null {
+  const target = normalizeDiffPath(filePath);
+  return changes.find((change) => normalizeDiffPath(change.file) === target) || null;
+}
+
+function beforeAfterFromPatch(patch: string): Pick<FileChange, "before" | "after"> | null {
+  const parsed = parsePatch(patch);
+  const file = parsed[0];
+  if (!file) return null;
+  const before: string[] = [];
+  const after: string[] = [];
+  for (const hunk of file.hunks || []) {
+    for (const line of hunk.lines || []) {
+      if (!line || line.startsWith("\\")) continue;
+      const marker = line[0];
+      const text = line.slice(1);
+      if (marker === " ") {
+        before.push(text);
+        after.push(text);
+      } else if (marker === "-") {
+        before.push(text);
+      } else if (marker === "+") {
+        after.push(text);
+      }
+    }
+  }
+  return {
+    before: before.join("\n"),
+    after: after.join("\n"),
+  };
+}
+
+function normalizeVcsDiffs(rawDiffs: unknown): FileChange[] {
+  if (!Array.isArray(rawDiffs)) return [];
+  return rawDiffs.flatMap((raw: VcsDiffRow) => {
+    const file = typeof raw?.file === "string" ? raw.file : "";
+    if (!file) return [];
+    const patchBody = typeof raw.patch === "string" ? beforeAfterFromPatch(raw.patch) : null;
+    return [{
+      file: file.replace(/^[ab]\//, ""),
+      ...(patchBody || {}),
+      additions: Number.isFinite(Number(raw.additions)) ? Number(raw.additions) : 0,
+      deletions: Number.isFinite(Number(raw.deletions)) ? Number(raw.deletions) : 0,
+      status: raw.status === "added" || raw.status === "deleted" ? raw.status : "modified",
+    } satisfies FileChange];
+  }).sort((a, b) => a.file.localeCompare(b.file));
 }
 
 function sumAdditions(changes: FileChange[]): number {
@@ -207,6 +287,10 @@ async function fetchScopedDiffs(scope: { goalRunID?: string; runID?: string }): 
   return diffs;
 }
 
+async function fetchVcsDiffs(): Promise<FileChange[]> {
+  return normalizeVcsDiffs(await apiJson("vcs/diff"));
+}
+
 /**
  * Fetch full diffs for the given acceptance run. Returns cached result if the
  * runID matches the last fetch. Throws on network failure; callers decide
@@ -260,17 +344,27 @@ export async function resolveDiff(target: DiffTarget): Promise<FileChange | null
     ? groups.find((candidate) => candidate.goalRunID === target.goalRunID) || null
     : groups.find((candidate) => candidate.changes.some((change) => change.file === target.filePath)) || null;
   const stub = group?.changes.find((change) => change.file === target.filePath) || null;
-  if (stub && (stub.before !== undefined || stub.after !== undefined)) {
+  if (hasDiffBody(stub)) {
     return stub;
   }
   const goalRunID = target.goalRunID || group?.goalRunID;
   const runID = goalRunID ? group?.runID : group?.runID || acceptanceRunID();
-  if (!goalRunID && !runID) return stub;
+  let scopedHit: FileChange | null = null;
   try {
-    const full = goalRunID ? await fetchGoalRunDiffs(goalRunID) : await fetchFullDiffs(runID);
-    const hit = full.find((d) => d.file === target.filePath);
-    return hit || stub;
+    if (goalRunID || runID) {
+      const full = goalRunID ? await fetchGoalRunDiffs(goalRunID) : await fetchFullDiffs(String(runID));
+      scopedHit = findDiffByPath(full, target.filePath);
+      if (hasDiffBody(scopedHit)) return scopedHit;
+    }
   } catch {
-    return stub;
+    // Keep resolving from the live VCS diff below; scoped acceptance can be
+    // missing for agent/tool-derived rows that still represent real edits.
   }
+  try {
+    const vcsHit = findDiffByPath(await fetchVcsDiffs(), target.filePath);
+    if (hasDiffBody(vcsHit)) return vcsHit;
+  } catch {
+    return scopedHit || stub;
+  }
+  return scopedHit || stub;
 }
