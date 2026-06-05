@@ -4,6 +4,7 @@ import fs from "fs/promises"
 import path from "path"
 import { Snapshot } from "../../src/snapshot"
 import { Instance } from "../../src/project/instance"
+import { Project } from "../../src/project/project"
 import { Filesystem } from "../../src/util/filesystem"
 import { Process } from "../../src/util/process"
 import { tmpdir } from "../fixture/fixture"
@@ -17,6 +18,18 @@ afterEach(async () => {
 // with path.join (which produces \ on Windows) then normalizes back to /.
 // This helper does the same for expected values so assertions match cross-platform.
 const fwd = (...parts: string[]) => path.join(...parts).replaceAll("\\", "/")
+const rel = (...parts: string[]) => path.join(...parts).replaceAll("\\", "/")
+
+async function symlinkIfAvailable(target: string, link: string, type: "file" | "dir") {
+  try {
+    await fs.symlink(target, link, type)
+    return true
+  } catch (err) {
+    // EPERM is Node's Error PERMission code; Windows returns it when symlink privilege is unavailable.
+    if (process.platform === "win32" && (err as NodeJS.ErrnoException).code === "EPERM") return false
+    throw err
+  }
+}
 
 async function bootstrap() {
   return tmpdir({
@@ -68,7 +81,7 @@ test("tracks deleted files correctly", async () => {
 
       await $`rm ${tmp.path}/a.txt`.quiet()
 
-      expect((await Snapshot.patch(before!)).files).toContain(fwd(tmp.path, "a.txt"))
+      expect((await Snapshot.patch(before!)).files).toContain(rel("a.txt"))
     },
   })
 })
@@ -92,6 +105,37 @@ test("track initializes a pre-existing non-git snapshot directory before add", a
           .then(() => true)
           .catch(() => false),
       ).toBe(true)
+    },
+  })
+})
+
+test("track uses project worktree as the git precondition and skips the global root", async () => {
+  await using tmp = await tmpdir()
+  await Instance.provide({
+    directory: tmp.path,
+    fn: async () => {
+      expect(Instance.project.id).toBe("global")
+      expect(Instance.project.worktree).toBe("/")
+
+      const projectRef = Project as unknown as { isGitRepo: typeof Project.isGitRepo }
+      const processRef = Process as unknown as { run: typeof Process.run }
+      const originalIsGitRepo = projectRef.isGitRepo
+      const originalRun = processRef.run
+      const gitCalls: string[][] = []
+
+      projectRef.isGitRepo = (directory: string) => directory === Instance.directory || originalIsGitRepo(directory)
+      processRef.run = async (cmd, opts) => {
+        if (cmd[0] === "git") gitCalls.push(cmd.map(String))
+        return originalRun(cmd, opts)
+      }
+
+      try {
+        await expect(Snapshot.track()).resolves.toBeUndefined()
+        expect(gitCalls).toEqual([])
+      } finally {
+        projectRef.isGitRepo = originalIsGitRepo
+        processRef.run = originalRun
+      }
     },
   })
 })
@@ -127,7 +171,7 @@ test("patch repairs a partially initialized snapshot git directory before add", 
 
       const patch = await Snapshot.patch(before!)
 
-      expect(patch.files).toContain(fwd(tmp.path, "a.txt"))
+      expect(patch.files).toContain(rel("a.txt"))
       expect(
         await fs
           .access(path.join(gitDir, "HEAD"))
@@ -241,7 +285,7 @@ test("binary file handling", async () => {
       await Filesystem.write(`${tmp.path}/image.png`, new Uint8Array([0x89, 0x50, 0x4e, 0x47]))
 
       const patch = await Snapshot.patch(before!)
-      expect(patch.files).toContain(fwd(tmp.path, "image.png"))
+      expect(patch.files).toContain(rel("image.png"))
 
       await Snapshot.revert([patch])
       expect(
@@ -262,9 +306,9 @@ test("symlink handling", async () => {
       const before = await Snapshot.track()
       expect(before).toBeTruthy()
 
-      await fs.symlink(`${tmp.path}/a.txt`, `${tmp.path}/link.txt`, "file")
+      if (!(await symlinkIfAvailable(`${tmp.path}/a.txt`, `${tmp.path}/link.txt`, "file"))) return
 
-      expect((await Snapshot.patch(before!)).files).toContain(fwd(tmp.path, "link.txt"))
+      expect((await Snapshot.patch(before!)).files).toContain(rel("link.txt"))
     },
   })
 })
@@ -279,7 +323,7 @@ test("large file handling", async () => {
 
       await Filesystem.write(`${tmp.path}/large.txt`, "x".repeat(1024 * 1024))
 
-      expect((await Snapshot.patch(before!)).files).toContain(fwd(tmp.path, "large.txt"))
+      expect((await Snapshot.patch(before!)).files).toContain(rel("large.txt"))
     },
   })
 })
@@ -320,9 +364,9 @@ test("special characters in filenames", async () => {
       await Filesystem.write(`${tmp.path}/file_with_underscores.txt`, "UNDERSCORES")
 
       const files = (await Snapshot.patch(before!)).files
-      expect(files).toContain(fwd(tmp.path, "file with spaces.txt"))
-      expect(files).toContain(fwd(tmp.path, "file-with-dashes.txt"))
-      expect(files).toContain(fwd(tmp.path, "file_with_underscores.txt"))
+      expect(files).toContain(rel("file with spaces.txt"))
+      expect(files).toContain(rel("file-with-dashes.txt"))
+      expect(files).toContain(rel("file_with_underscores.txt"))
     },
   })
 })
@@ -461,7 +505,7 @@ test("unicode filenames", async () => {
       expect(patch.files.length).toBe(4)
 
       for (const file of unicodeFiles) {
-        expect(patch.files).toContain(file.path)
+        expect(patch.files).toContain(path.relative(tmp.path, file.path).replaceAll("\\", "/"))
       }
 
       await Snapshot.revert([patch])
@@ -520,7 +564,7 @@ test("unicode filenames in subdirectories", async () => {
       await Filesystem.write(deepFile, "deep unicode content")
 
       const patch = await Snapshot.patch(before!)
-      expect(patch.files).toContain(deepFile)
+      expect(patch.files).toContain(rel("目录", "подкаталог", "文件.txt"))
 
       await Snapshot.revert([patch])
       expect(
@@ -547,7 +591,7 @@ test("very long filenames", async () => {
       await Filesystem.write(longFile, "long filename content")
 
       const patch = await Snapshot.patch(before!)
-      expect(patch.files).toContain(longFile)
+      expect(patch.files).toContain(rel(longName))
 
       await Snapshot.revert([patch])
       expect(
@@ -573,9 +617,9 @@ test("hidden files", async () => {
       await Filesystem.write(`${tmp.path}/.config`, "config content")
 
       const patch = await Snapshot.patch(before!)
-      expect(patch.files).toContain(fwd(tmp.path, ".hidden"))
-      expect(patch.files).toContain(fwd(tmp.path, ".gitignore"))
-      expect(patch.files).toContain(fwd(tmp.path, ".config"))
+      expect(patch.files).toContain(rel(".hidden"))
+      expect(patch.files).toContain(rel(".gitignore"))
+      expect(patch.files).toContain(rel(".config"))
     },
   })
 })
@@ -590,12 +634,12 @@ test("nested symlinks", async () => {
 
       await $`mkdir -p ${tmp.path}/sub/dir`.quiet()
       await Filesystem.write(`${tmp.path}/sub/dir/target.txt`, "target content")
-      await fs.symlink(`${tmp.path}/sub/dir/target.txt`, `${tmp.path}/sub/dir/link.txt`, "file")
-      await fs.symlink(`${tmp.path}/sub`, `${tmp.path}/sub-link`, "dir")
+      if (!(await symlinkIfAvailable(`${tmp.path}/sub/dir/target.txt`, `${tmp.path}/sub/dir/link.txt`, "file"))) return
+      if (!(await symlinkIfAvailable(`${tmp.path}/sub`, `${tmp.path}/sub-link`, "dir"))) return
 
       const patch = await Snapshot.patch(before!)
-      expect(patch.files).toContain(fwd(tmp.path, "sub", "dir", "link.txt"))
-      expect(patch.files).toContain(fwd(tmp.path, "sub-link"))
+      expect(patch.files).toContain(rel("sub", "dir", "link.txt"))
+      expect(patch.files).toContain(rel("sub-link"))
     },
   })
 })
@@ -653,11 +697,11 @@ test("gitignore changes", async () => {
       const patch = await Snapshot.patch(before!)
 
       // Should track gitignore itself
-      expect(patch.files).toContain(fwd(tmp.path, ".gitignore"))
+      expect(patch.files).toContain(rel(".gitignore"))
       // Should track normal files
-      expect(patch.files).toContain(fwd(tmp.path, "normal.txt"))
+      expect(patch.files).toContain(rel("normal.txt"))
       // Should not track ignored files (git won't see them)
-      expect(patch.files).not.toContain(fwd(tmp.path, "test.ignored"))
+      expect(patch.files).not.toContain(rel("test.ignored"))
     },
   })
 })
@@ -677,8 +721,8 @@ test("git info exclude changes", async () => {
       await Bun.write(`${tmp.path}/normal.txt`, "normal content")
 
       const patch = await Snapshot.patch(before!)
-      expect(patch.files).toContain(fwd(tmp.path, "normal.txt"))
-      expect(patch.files).not.toContain(fwd(tmp.path, "ignored.txt"))
+      expect(patch.files).toContain(rel("normal.txt"))
+      expect(patch.files).not.toContain(rel("ignored.txt"))
 
       const after = await Snapshot.track()
       const diffs = await Snapshot.diffFull(before!, after!)
@@ -713,9 +757,9 @@ test("git info exclude keeps global excludes", async () => {
         await Bun.write(`${tmp.path}/normal.txt`, "normal content")
 
         const patch = await Snapshot.patch(before!)
-        expect(patch.files).toContain(fwd(tmp.path, "normal.txt"))
-        expect(patch.files).not.toContain(fwd(tmp.path, "global.tmp"))
-        expect(patch.files).not.toContain(fwd(tmp.path, "info.tmp"))
+        expect(patch.files).toContain(rel("normal.txt"))
+        expect(patch.files).not.toContain(rel("global.tmp"))
+        expect(patch.files).not.toContain(rel("info.tmp"))
       } finally {
         if (prev) process.env.GIT_CONFIG_GLOBAL = prev
         else delete process.env.GIT_CONFIG_GLOBAL
@@ -806,10 +850,10 @@ test("snapshot state isolation between projects", async () => {
       expect(before2).toBeTruthy()
       await Filesystem.write(`${tmp2.path}/project2.txt`, "project2 content")
       const patch2 = await Snapshot.patch(before2!)
-      expect(patch2.files).toContain(fwd(tmp2.path, "project2.txt"))
+      expect(patch2.files).toContain(rel("project2.txt"))
 
       // Ensure project1 files don't appear in project2
-      expect(patch2.files).not.toContain(fwd(tmp1?.path ?? "", "project1.txt"))
+      expect(patch2.files).not.toContain(rel("project1.txt"))
     },
   })
 })
@@ -830,7 +874,7 @@ test("patch detects changes in secondary worktree", async () => {
         await Filesystem.write(worktreeFile, "worktree content")
 
         const patch = await Snapshot.patch(before!)
-        expect(patch.files).toContain(worktreeFile)
+        expect(patch.files).toContain(rel("worktree.txt"))
       },
     })
   } finally {
@@ -996,7 +1040,7 @@ test("revert should not delete files that existed but were deleted in snapshot",
       await Filesystem.write(`${tmp.path}/a.txt`, "recreated content")
 
       const patch = await Snapshot.patch(snapshot2!)
-      expect(patch.files).toContain(fwd(tmp.path, "a.txt"))
+      expect(patch.files).toContain(rel("a.txt"))
 
       await Snapshot.revert([patch])
 
@@ -1025,8 +1069,8 @@ test("revert preserves file that existed in snapshot when deleted then recreated
       await Filesystem.write(`${tmp.path}/newfile.txt`, "new")
 
       const patch = await Snapshot.patch(snapshot!)
-      expect(patch.files).toContain(fwd(tmp.path, "existing.txt"))
-      expect(patch.files).toContain(fwd(tmp.path, "newfile.txt"))
+      expect(patch.files).toContain(rel("existing.txt"))
+      expect(patch.files).toContain(rel("newfile.txt"))
 
       await Snapshot.revert([patch])
 

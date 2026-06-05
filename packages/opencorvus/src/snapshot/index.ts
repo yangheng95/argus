@@ -69,7 +69,8 @@ export namespace Snapshot {
   const pendingGitDirs = new Map<string, Promise<void>>()
 
   export async function track() {
-    if (!Project.isGitRepo(Instance.directory) || Flag.OPENCORVUS_CLIENT === "acp") return
+    const project = Instance.project
+    if (project.worktree === "/" || !Project.isGitRepo(project.worktree) || Flag.OPENCORVUS_CLIENT === "acp") return
     const cfg = await Config.get()
     if (cfg.snapshot === false) return
     const git = gitdir()
