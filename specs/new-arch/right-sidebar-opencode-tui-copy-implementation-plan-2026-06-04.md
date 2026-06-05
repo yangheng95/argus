@@ -2362,6 +2362,39 @@ OpenCode gap after the round:
 
 - Same intentional MVP gaps remain: link opening, terminal keybind integration, theme/font synchronization, debounced size update, terminal tab/workspace store, full workspace management, external TUI plugin loader, and `SessionV2Debug`/`sync-v2`.
 
+### 2026-06-05 Round 45: MVP websocket close reason diagnostics
+
+Implemented:
+
+- Rechecked latest OpenCode dev before editing. Upstream remains `9211ef7e95b7cd55f08b27b066d635cc42cbb362`; no new PTY/TUI core changes were present.
+- Improved right-sidebar TUI connection failure diagnostics:
+  - websocket `error` now names the target PTY id;
+  - abnormal websocket `close` now includes the target PTY id, close code, and browser `CloseEvent.reason` when present.
+- This specifically surfaces backend close reasons such as `PTY session is not running`, which were previously collapsed into an opaque numeric close code.
+
+Verified in tests:
+
+- Extended `packages/overlay/test/tui-host-panel.test.ts` to guard:
+  - `socketFailureMessage(id)`;
+  - `socketCloseMessage(id, event)`;
+  - inclusion of `event.reason.trim()`;
+  - use of `socketCloseMessage(id, event)` on abnormal close.
+- Extended `packages/overlay/test/tui-host-panel-visual.test.ts` with a real browser websocket case where the server accepts `/pty/pty_visual/connect` and closes with `4404` / `PTY session is not running`; the UI must show the PTY id, code, and reason.
+- Re-ran the existing normal connection/input/refresh and disconnected-input browser cases.
+- `bun test packages/overlay/test/tui-host-panel.test.ts`
+- `bun test packages/overlay/test/tui-host-panel-visual.test.ts`
+- `bun run --cwd packages/overlay typecheck`
+
+OpenCode comparison after the round:
+
+- OpenCode's PTY attach code sends retained output, sends a metadata cursor, then writes socket messages directly to the PTY process; OpenCorvus' copied route shape remains aligned with that protocol.
+- The browser-embedded right sidebar adds a diagnostic layer OpenCode's native terminal does not need: when the browser websocket transport fails, the overlay must show the close reason rather than a bare close code.
+
+OpenCode gap after the round:
+
+- This makes connection failure evidence visible, but does not yet root-cause the failing chain from `Pty.create -> Tui.resolveEmbeddedCommand -> TuiHost.startPrepared -> TuiHost.preparePtyConnect`.
+- Same intentional MVP gaps remain: link opening, terminal keybind integration, terminal palette 0-15 mapping, debounced size update, terminal tab/workspace store, full workspace management, external TUI plugin loader, and `SessionV2Debug`/`sync-v2`.
+
 ### 2026-06-05 Round 44: MVP overlay theme token sync
 
 Implemented:

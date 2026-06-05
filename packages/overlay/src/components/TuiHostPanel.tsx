@@ -283,6 +283,15 @@ export function TuiHostPanel(props: TuiHostPanelProps) {
     socket.send(data)
   }
 
+  function socketFailureMessage(id: string): string {
+    return `TUI host WebSocket failed for ${id}`
+  }
+
+  function socketCloseMessage(id: string, event: CloseEvent): string {
+    const reason = event.reason.trim()
+    return `TUI host WebSocket closed abnormally for ${id}: ${event.code}${reason ? ` ${reason}` : ""}`
+  }
+
   function applyTerminalTheme() {
     const current = term
     if (!current) return
@@ -336,12 +345,12 @@ export function TuiHostPanel(props: TuiHostPanelProps) {
       }
     }
     nextSocket.onerror = () => {
-      if (!disposed) setError("TUI host WebSocket failed")
+      if (!disposed) setError(socketFailureMessage(id))
     }
     nextSocket.onclose = (event) => {
       if (socket === nextSocket) socket = undefined
       if (disposed || event.code === 1000) return
-      setError(`TUI host WebSocket closed abnormally: ${event.code}`)
+      setError(socketCloseMessage(id, event))
     }
   }
 
