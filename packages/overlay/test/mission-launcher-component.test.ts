@@ -101,15 +101,14 @@ test("MissionComposer exposes the standard data-ui hooks for downstream e2e", ()
   // tests select on them rather than on i18n text.
   expect(MISSION_TSX).toContain('textareaDataUI="mission-composer-input"')
   expect(MISSION_TSX).toContain('sendDataUI="mission-composer-submit"')
-  expect(MISSION_TSX).toContain('data-ui="mission-composer-mission-id"')
+  expect(MISSION_TSX).not.toContain('data-ui="mission-composer-mission-id"')
+  expect(MISSION_TSX).not.toContain("missionID().trim()")
 })
 
 // ── i18n launcher keys present in both locales ───────────────
 
 const LAUNCHER_KEYS = [
   "mission.launcher.title",
-  "mission.launcher.mission_id_label",
-  "mission.launcher.mission_id_placeholder",
   "mission.launcher.error",
   "mission.launcher.discard",
   "mission.launcher.discard_title",

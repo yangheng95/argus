@@ -28,14 +28,6 @@ export interface DomRefs {
   rightPaneResizer: HTMLElement | null;
   sections: HTMLElement | null;
 
- // Task / workspace
-  taskDir: HTMLElement | null;
-  recentDirPanel: HTMLElement | null;
-  btnBrowseCwd: HTMLButtonElement | null;
-  btnCreateCwd: HTMLButtonElement | null;
-  btnOpenCwd: HTMLButtonElement | null;
-  btnResetCwd: HTMLButtonElement | null;
-
  // Engine / model panels
   engineBar: HTMLElement | null;
   codexModelPanel: HTMLElement | null;
@@ -172,14 +164,6 @@ export function getDomRefs(): DomRefs {
     workspaceMain: $<HTMLElement>("#workspaceMain"),
     rightPaneResizer: $<HTMLElement>("#rightPaneResizer"),
     sections: $<HTMLElement>("#sections"),
-
- // Task / workspace
-    taskDir: $<HTMLElement>("#taskDir"),
-    recentDirPanel: $<HTMLElement>("#recentDirPanel"),
-    btnBrowseCwd: $<HTMLButtonElement>("#btnBrowseCwd"),
-    btnCreateCwd: $<HTMLButtonElement>("#btnCreateCwd"),
-    btnOpenCwd: $<HTMLButtonElement>("#btnOpenCwd"),
-    btnResetCwd: $<HTMLButtonElement>("#btnResetCwd"),
 
  // Engine / model panels
     engineBar: $<HTMLElement>("#engineBar"),

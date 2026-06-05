@@ -101,6 +101,18 @@
 
 .chat-bubble-row[data-role="mission"] .chat-bubble {
   border-color: color-mix(in srgb, var(--card-stage) 42%, var(--card-border));
+  border-left: calc(3px * var(--ui-scale)) solid var(--card-stage);
+  background:
+    linear-gradient(
+      180deg,
+      color-mix(in srgb, var(--card-stage) 10%, var(--surface-elevated, var(--surface))),
+      color-mix(in srgb, var(--surface) 94%, transparent)
+    );
+}
+
+.chat-bubble-row[data-role="mission"] .chat-avatar {
+  background: color-mix(in srgb, var(--card-stage) 16%, var(--surface-inset));
+  border-color: color-mix(in srgb, var(--card-stage) 42%, transparent);
 }
 
 .chat-bubble-row[data-role="mission"] .chat-bubble__title {

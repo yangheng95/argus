@@ -296,11 +296,11 @@ test(
 
       await page.evaluate(async () => {
         const selectStart = performance.now()
-        while (!document.querySelector('[data-ui="mission-new-requirement"]')) {
+        while (!document.querySelector('[data-ui="mission-new"]')) {
           if (performance.now() - selectStart > 10_000) throw new Error("Mission selection did not expose new requirement button")
           await new Promise((resolve) => setTimeout(resolve, 16))
         }
-        const newRequirement = document.querySelector<HTMLButtonElement>('[data-ui="mission-new-requirement"]')
+        const newRequirement = document.querySelector<HTMLButtonElement>('[data-ui="mission-new"]')
         if (!newRequirement) throw new Error("missing Mission new requirement button")
         newRequirement.click()
         const input = await new Promise<HTMLTextAreaElement>((resolve, reject) => {

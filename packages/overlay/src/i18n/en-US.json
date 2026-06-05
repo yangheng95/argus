@@ -1,7 +1,7 @@
 {
   "_meta": {
     "language": "en-US",
-    "panel_revision": "8e3436fc477063f4"
+    "panel_revision": "236b0d6eb7500231"
   },
   "about.author_name": "Yang, Heng",
   "about.go_version": "Go Version",
@@ -875,8 +875,8 @@
   "mission.back": "Panel",
   "mission.back_title": "Back to the default Panel",
   "mission.refresh_title": "Refresh channel info",
-  "mission.new_requirement": "Start mission",
-  "mission.new_requirement_title": "Hand a long-running goal to the Mission agent",
+  "mission.new": "New Mission",
+  "mission.new_title": "Start a new Mission",
   "mission.runtime.disabled": "Disabled",
   "mission.runtime.unavailable": "Unavailable",
   "mission.runtime.starting": "Starting",
@@ -925,9 +925,7 @@
   "mission.error.class.HTTPException": "Mission request failed. Retry shortly, or open the Logs panel for the detailed error.",
   "mission.error.class.AbortError": "Request was cancelled.",
   "mission.error.class.TypeError": "Mission returned an unexpected payload shape. Refresh, and if it persists open the Logs panel.",
-  "mission.launcher.title": "Start a mission",
-  "mission.launcher.mission_id_label": "Mission ID",
-  "mission.launcher.mission_id_placeholder": "Empty = new mission · type to resume an existing one",
+  "mission.launcher.title": "New Mission",
   "mission.launcher.error": "Mission wake failed: {{error}}",
   "mission.launcher.discard": "Close",
   "mission.launcher.discard_title": "Close the launcher",

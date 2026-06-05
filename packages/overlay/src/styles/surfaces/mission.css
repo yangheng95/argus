@@ -366,7 +366,7 @@ body[data-page-mode="mission"] > main.panel {
   flex-direction: column;
   gap: var(--ui-gap-sm);
   min-height: 100%;
-  justify-content: flex-end;
+  justify-content: flex-start;
   padding: 0;
   background: var(--chat-canvas);
 }
@@ -377,10 +377,9 @@ body[data-page-mode="mission"] > main.panel {
 
 .mission-composer-header {
   display: flex;
-  align-items: flex-start;
+  align-items: center;
   justify-content: space-between;
   gap: var(--ui-gap-lg);
-  padding: var(--ui-gap-lg) var(--ui-gap-lg) 0;
 }
 
 .mission-composer-title {
@@ -410,38 +409,11 @@ body[data-page-mode="mission"] > main.panel {
   min-height: 0;
   flex-direction: column;
   gap: var(--ui-gap-sm);
+  margin-top: auto;
   padding: 0;
   border: 0;
   border-radius: 0;
   background: transparent;
-}
-
-.mission-composer-controls {
-  display: flex;
-  gap: var(--ui-gap-md);
-  align-items: flex-end;
-  justify-content: space-between;
-  flex-wrap: wrap;
-  padding: 0 var(--ui-gap-lg);
-}
-
-.mission-composer-mission-id {
-  display: flex;
-  align-items: flex-start;
-  flex-direction: column;
-  gap: var(--ui-gap-xs);
-  color: var(--text-muted);
-  font-size: var(--ui-font-small);
-}
-
-.mission-composer-mission-id-input {
-  width: min(calc(360px * var(--ui-scale)), calc(100vw - (var(--ui-gap-lg) * 4)));
-  border-radius: var(--oc-radius-soft);
-  border: var(--oc-border-width) solid var(--border);
-  background: var(--surface-hover);
-  color: var(--text-strong);
-  padding: var(--ui-gap-sm) var(--ui-gap-md);
-  font: inherit;
 }
 
 .mission-launcher-result {
@@ -694,7 +666,6 @@ body[data-page-mode="mission"] > main.panel {
 .ledger-row:focus-visible,
 .mission-ledger-search-input:focus-visible,
 .mission-ledger-search-clear:focus-visible,
-.mission-composer-mission-id-input:focus-visible,
 .mission-action-error-dismiss:focus-visible {
   outline: var(--oc-border-width) solid var(--accent);
   outline-offset: calc(1px * var(--ui-scale));
