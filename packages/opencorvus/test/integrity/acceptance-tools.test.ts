@@ -2,6 +2,55 @@ import { expect, test } from "bun:test"
 import { Instance } from "../../src/project/instance"
 import { tmpdir } from "../fixture/fixture"
 
+test("provider-bound integrity run_command applies the default foreground timeout", async () => {
+  await import("../../src/session/prompt")
+  const { SessionLoop } = await import("../../src/session/loop")
+  const { createIntegrityAcceptanceTools } = await import("../../src/integrity/acceptance-tools")
+  const { Shell } = await import("../../src/shell/shell")
+  const { DEFAULT_BASH_TIMEOUT_MS } = await import("../../src/shell/timeout")
+  const dir = await tmpdir({ git: true })
+  const calls: Array<{ command: string; timeoutMs?: number }> = []
+  const originalRun = Shell.run
+
+  await Instance.provide({
+    directory: dir.path,
+    fn: async () => {
+      Shell.run = async (command, opts = {}) => {
+        calls.push({ command, timeoutMs: opts.timeoutMs })
+        return {
+          exitCode: 0,
+          stdout: "",
+          stderr: "",
+          timedOut: false,
+          idleTimedOut: false,
+          aborted: false,
+          pid: 12345,
+        }
+      }
+      try {
+        const tools = createIntegrityAcceptanceTools({ taskID: "tsk_integrity_default_timeout" })
+        const prepared = SessionLoop.prepareProviderTool({
+          name: "run_command",
+          source: "extra",
+          model: {
+            providerID: "alibaba-cn",
+            id: "kimi-k2.5",
+            api: { id: "kimi-k2.5" },
+          } as any,
+          tool: tools.run_command,
+        }) as any
+
+        await prepared.execute({ command: "printf ok" }, { toolCallId: "call_default_timeout" })
+      } finally {
+        Shell.run = originalRun
+      }
+    },
+  })
+
+  const foreground = calls.find((call) => call.command === "printf ok")
+  expect(foreground?.timeoutMs).toBe(DEFAULT_BASH_TIMEOUT_MS)
+}, 10_000)
+
 test("integrity evidence tools expose scoped drilldown without upstream full-context", async () => {
   const { createIntegrityAcceptanceTools } = await import("../../src/integrity/acceptance-tools")
   const dir = await tmpdir({ git: true })
@@ -147,4 +196,4 @@ test("integrity run_command can launch a background preview command with a lease
       expect(String(output)).toContain("lease_timeout_ms: 3000")
     },
   })
-})
+}, 10_000)
