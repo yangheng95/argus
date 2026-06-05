@@ -72,6 +72,15 @@ workspace chrome and a custom middle shell:
 | History source | `services/conversation.ts` stored `historyTaskID` and `Conversation.tsx` always asked for task history. Session hydration correctly used `/session/:id/conversation`, but older-history intent still fell through task semantics. | Replace task-only history identity with `BoardSource`; session hydration must never call task history. Server currently returns `hasMore: false` for session conversation, so Mission history remains disabled until a real session-history route is added. |
 | Channel bindings | `Mission.tsx` loaded task bindings from `activeTaskID()` even while a Mission session was active. | Remove task binding UI/data from Mission channels. The right column remains channel runtime/catalog only; task binding belongs to the task inspector, not Mission. |
 
+## Implementation Update: resizer and scrollbar regression
+
+User validation found two interaction defects after the second slice:
+
+| Surface | Evidence | Decision |
+| --- | --- | --- |
+| Right channel resizer | `resizePane("right")` measured `center.getBoundingClientRect().right - clientX`. On pointerdown the cursor is already on the boundary between center and right rail, so the first frame computes a near-zero right width and clamps the channel rail to the minimum. | Compute right rail width from the whole pane body right edge: `bodyRect.right - clientX`, with max bounded by left rail + handles + chat minimum. Remove the now-dead `PaneConfig.centerId`. |
+| Mission message scrollbar | `base.css` hides every scrollbar by default and only opted `#chatScroll` / `#taskListPanel` back into visible scrollbars. Mission uses `.mission-conversation-body.chat-scroll`, so the content could scroll but the gutter was hidden. | Add `.mission-conversation-body` to the same global visible-scrollbar whitelist as `#chatScroll`. |
+
 ## Verification
 
 - Targeted source/component tests for Mission launcher/list/i18n/role styling.

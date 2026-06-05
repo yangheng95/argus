@@ -33,8 +33,6 @@
 export interface PaneConfig {
   /** Element whose clientWidth bounds the whole row (left+center+right). */
   bodyId: string;
-  /** Center column element (used to bound the right-handle drag). */
-  centerId: string;
   /** Left (sidebar) resize handle element id. */
   leftHandleId: string;
   /** Right (sections) resize handle element id. */
@@ -48,7 +46,6 @@ export interface PaneConfig {
 /** Default Panel layout (index.html `.panel-body`). */
 export const PANEL_PANE_CONFIG: PaneConfig = {
   bodyId: "panelBody",
-  centerId: "workspaceMain",
   leftHandleId: "leftPaneResizer",
   rightHandleId: "rightPaneResizer",
   sidebarVar: "--ui-sidebar-width",
@@ -58,7 +55,6 @@ export const PANEL_PANE_CONFIG: PaneConfig = {
 /** Mission page layout (Mission.tsx `.mission-body`). */
 export const MISSION_PANE_CONFIG: PaneConfig = {
   bodyId: "missionBody",
-  centerId: "missionWorkbench",
   leftHandleId: "missionLedgerResizer",
   rightHandleId: "missionChannelsResizer",
   sidebarVar: "--ui-mission-ledger-width",
@@ -320,13 +316,20 @@ function resizePane(
   }
 
  // side === "right"
-  const workspaceMain = document.getElementById(config.centerId);
-  const rect = workspaceMain?.getBoundingClientRect();
+  const panelBody = document.getElementById(config.bodyId);
+  const rect = panelBody?.getBoundingClientRect();
   if (!rect) return;
+  const { sidebar } = resolvedPaneWidths(state, config);
+  const leftHandle = paneHandleWidth(
+    document.getElementById(config.leftHandleId),
+  );
   const rightHandle = paneHandleWidth(
     document.getElementById(config.rightHandleId),
   );
-  const max = Math.max(railMin, rect.width - rightHandle - chatMin);
+  const max = Math.max(
+    railMin,
+    rect.width - sidebar - leftHandle - rightHandle - chatMin,
+  );
   const newSectionsWidth = Math.round(
     clampNumber(rect.right - clientX, railMin, max),
   );
