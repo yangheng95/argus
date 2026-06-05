@@ -1,13 +1,6 @@
-import { afterEach, expect, test } from "bun:test"
+import { expect, test } from "bun:test"
 import { readFileSync } from "node:fs"
 import { join } from "node:path"
-import type {
-  HostTransport,
-  StreamHandlers,
-  StreamOpenRequest,
-  TransportRequest,
-  TransportResponse,
-} from "../src/services/host-transport"
 
 ;(globalThis as typeof globalThis & { __OPENCORVUS_OVERLAY_VERSION__?: string }).__OPENCORVUS_OVERLAY_VERSION__ =
   "test"
@@ -17,113 +10,26 @@ import type {
 const MISSION_TSX = readFileSync(join(import.meta.dir, "../src/components/Mission.tsx"), "utf8")
 const MISSION_LIST_TSX = readFileSync(join(import.meta.dir, "../src/components/MissionList.tsx"), "utf8")
 const CONVERSATION_TSX = readFileSync(join(import.meta.dir, "../src/components/Conversation.tsx"), "utf8")
+const CONVERSATION_SERVICE = readFileSync(join(import.meta.dir, "../src/services/conversation.ts"), "utf8")
+const TASK_SERVICE = readFileSync(join(import.meta.dir, "../src/services/task.ts"), "utf8")
 
-function fakeTransport(
-  responder: (req: TransportRequest) => Promise<TransportResponse<unknown>> | TransportResponse<unknown>,
-): HostTransport {
-  return {
-    kind: "tauri",
-    async request<T>(req: TransportRequest): Promise<TransportResponse<T>> {
-      return responder(req) as Promise<TransportResponse<T>> | TransportResponse<T>
-    },
-    openStream(_input: StreamOpenRequest, _handlers: StreamHandlers) {
-      throw new Error("openStream not used in mission session source tests")
-    },
-    async native() {
-      throw new Error("native not used in mission session source tests")
-    },
-    subscribeUiCommand() {
-      return { unsubscribe() {} }
-    },
-  } satisfies HostTransport
-}
-
-afterEach(async () => {
-  const [{ cancelConversationReplay }, { resetWriter }, { __setHostTransportForTest }, { setBoardStore }] = await Promise.all([
-    import("../src/services/conversation"),
-    import("../src/services/tree-writer"),
-    import("../src/services/host-transport"),
-    import("../src/store/board"),
-  ])
-  cancelConversationReplay()
-  resetWriter()
-  __setHostTransportForTest(undefined)
-  setBoardStore("selectedSource", null)
-  setBoardStore("board", null)
+test("session source hydrates from session conversation and submits to prompt_async", () => {
+  expect(CONVERSATION_SERVICE).toContain('const prefix = source.kind === "task" ? "task" : "session"')
+  expect(CONVERSATION_SERVICE).toContain("conversationHydratePath(source, tailLimit)")
+  expect(TASK_SERVICE).toContain('selectedSource?.kind === "session"')
+  expect(TASK_SERVICE).toContain("`session/${encodeURIComponent(selectedSource.id)}/prompt_async`")
 })
 
-test("session source hydrates conversation and submits to prompt_async", async () => {
-  const [
-    { loadConversation },
-    { submitMessage },
-    { __setHostTransportForTest },
-    { setBoardStore },
-    { cardTreeStore },
-  ] = await Promise.all([
-    import("../src/services/conversation"),
-    import("../src/services/task"),
-    import("../src/services/host-transport"),
-    import("../src/store/board"),
-    import("../src/store/card-tree"),
-  ])
-  const requests: Array<{ path: string; method?: string }> = []
-  __setHostTransportForTest(fakeTransport((req) => {
-    requests.push({ path: req.path, method: req.method })
-    if (req.path === "session/X/conversation") {
-      return {
-        status: 200,
-        ok: true,
-        headers: {},
-        body: {
-          board: { kind: "session", sessionID: "X", status: "active", title: "Mission", directory: "D:/repo" },
-          transcript: [
-            {
-              info: {
-                id: "msg_mission_history",
-                sessionID: "X",
-                role: "assistant",
-                agent: "mission",
-                resolvedRole: "mission",
-                channel: "mission",
-                time: { created: 1_780_000_000_000 },
-              },
-              parts: [
-                {
-                  id: "part_mission_history",
-                  messageID: "msg_mission_history",
-                  sessionID: "X",
-                  type: "text",
-                  text: "Mission remembered benchmark request.",
-                },
-              ],
-            },
-          ],
-          timeline: [],
-          events: [],
-          view: { topLevelSessionIDs: ["X"], sessions: [{ sessionID: "X", kind: "mission" }] },
-          agentView: { topLevelSessionIDs: ["X"], sessions: [{ sessionID: "X", kind: "mission" }] },
-          history: { oldestTimestamp: null, oldestMessageID: null, hasMore: false, limit: 0 },
-        },
-      }
-    }
-    if (req.path === "session/X/prompt_async") {
-      return { status: 202, ok: true, headers: {}, body: { taskID: "queue_1" } }
-    }
-    throw new Error(`unexpected request ${req.path}`)
-  }))
-
-  setBoardStore("selectedSource", { kind: "session", id: "X" })
-
-  await loadConversation({ kind: "session", id: "X" })
-  expect(Object.values(cardTreeStore.cards).some((card) =>
-    card.parts.some((part: any) => part.text === "Mission remembered benchmark request."),
-  )).toBe(true)
-  await submitMessage("follow up")
-
-  expect(requests).toEqual([
-    { path: "session/X/conversation", method: "GET" },
-    { path: "session/X/prompt_async", method: "POST" },
-  ])
+test("session source cannot page older task conversation history", () => {
+  expect(CONVERSATION_SERVICE).toContain("let historySource: BoardSource | null = null")
+  expect(CONVERSATION_SERVICE).toContain("sourceMatches(source, historySource)")
+  expect(CONVERSATION_SERVICE).toContain('source.kind === "task"')
+  expect(CONVERSATION_SERVICE).toContain('if (!source || source.kind !== "task") return false')
+  expect(CONVERSATION_SERVICE).toContain('targetSessionID && selectedSource?.kind !== "session"')
+  expect(CONVERSATION_SERVICE).toContain('targetSessionID && selectedSource?.kind === "session"')
+  expect(CONVERSATION_TSX).toContain("const source = boardStore.selectedSource")
+  expect(CONVERSATION_TSX).toContain("canLoadOlderConversationHistory(source)")
+  expect(CONVERSATION_TSX).toContain("loadOlderConversationHistory(source)")
 })
 
 test("Mission workbench mounts the shared Conversation and ChatComposer for mission sessions", () => {

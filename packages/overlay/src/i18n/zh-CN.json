@@ -1,7 +1,7 @@
 {
   "_meta": {
     "language": "zh-CN",
-    "panel_revision": "236b0d6eb7500231"
+    "panel_revision": "6290323f1a195743"
   },
   "about.author_name": "杨恒",
   "about.go_version": "Go 版本",
@@ -896,7 +896,6 @@
   "mission.ledger.rename_title": "重命名此 Mission（也可双击标题）。",
   "mission.ledger.rename_placeholder": "Mission 标题",
   "mission.workbench.error_action_failed": "{{action}} 失败：{{error}}",
-  "mission.workbench.bindings_load_failed": "通道绑定加载失败：{{error}}",
   "mission.channels.heading": "通道",
   "mission.channels.empty": "暂无可用通道。",
   "mission.channels.runtime_heading": "受管通道运行时",
@@ -906,9 +905,6 @@
   "mission.channels.restart": "重启运行时",
   "mission.channels.restart_title": "重启受管通道运行时；如果 detail 显示连接错误，先尝试这一步。",
   "mission.channels.restarting": "重启中…",
-  "mission.channels.bindings_heading": "通道绑定",
-  "mission.channels.bindings_empty_no_task": "暂无选中的通道绑定。",
-  "mission.channels.bindings_empty": "暂无通道绑定。",
   "mission.error.channel_runtime_failed": "通道运行时状态加载失败：{{error}}",
   "mission.error.channels_failed": "通道列表加载失败：{{error}}",
   "mission.error.restart_failed": "重启通道运行时失败：{{error}}",

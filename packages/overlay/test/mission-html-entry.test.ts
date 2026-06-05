@@ -19,11 +19,23 @@ test("Index ships a dedicated Mission mount node outside the conversation panel"
   expect(HTML).toContain('id="solidMissionMount"')
 })
 
+test("Project directory bar is page-level chrome, not hidden inside panel or Mission", () => {
+  const projectBarIndex = HTML.indexOf('id="solidProjectDirectoryBarMount"')
+  const mainIndex = HTML.indexOf('<main class="panel">')
+  const missionMountIndex = HTML.indexOf('id="solidMissionMount"')
+  expect(projectBarIndex).toBeGreaterThan(0)
+  expect(projectBarIndex).toBeLessThan(mainIndex)
+  expect(projectBarIndex).toBeLessThan(missionMountIndex)
+})
+
 test("main.tsx wires the Mission button and mounts the Mission component", () => {
   expect(MAIN).toContain('document.getElementById("btnMission")?.addEventListener("click"')
   expect(MAIN).toContain('setPageMode(pageMode() === "mission" ? "panel" : "mission")')
   expect(MAIN).toContain('document.getElementById("solidMissionMount")')
-  expect(MAIN).toContain("render(() => <Mission />, missionMountEl)")
+  expect(MAIN).toContain("<Mission")
+  expect(MAIN).toContain("workspaceTarget={workspaceTarget}")
+  expect(MAIN).toContain("workspaceOpen={workspaceOpen}")
+  expect(MAIN).toContain("closeWorkspace={closeWorkspace}")
 })
 
 test("Mission page exposes an in-page Back to Panel action", () => {
@@ -32,7 +44,8 @@ test("Mission page exposes an in-page Back to Panel action", () => {
   expect(missionList).toContain('data-ui="mission-back-panel"')
   expect(missionList).toContain('data-ui="mission-new"')
   expect(missionList).not.toContain('data-ui="mission-refresh"')
-  expect(mission).toContain('<ProjectDirectoryBar />')
+  expect(mission).not.toContain("ProjectDirectoryBar")
+  expect(mission).not.toContain('data-ui="mission-project-directory-bar"')
   expect(mission).toContain('onBackToPanel={() => setPageMode("panel")}')
 })
 

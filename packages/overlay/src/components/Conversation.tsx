@@ -330,12 +330,12 @@ export function Conversation(props: { container: HTMLElement }) {
     };
     const onHistoryScroll = () => {
       if (historyLoadInFlight || el.scrollTop > 96 || !hasHistoryIntent()) return;
-      const taskID = currentTaskID();
-      if (!canLoadOlderConversationHistory(taskID)) return;
+      const source = boardStore.selectedSource;
+      if (!canLoadOlderConversationHistory(source)) return;
       historyIntentUntil = 0;
       historyLoadInFlight = true;
       const anchor = firstVisibleConversationAnchor(el);
-      void loadOlderConversationHistory(taskID)
+      void loadOlderConversationHistory(source)
         .then((loaded) => {
           return new Promise<void>((resolve) => {
             if (loaded && anchor) setHistoryAnchorPinID(anchor.id);

@@ -39,7 +39,6 @@ const REQUIRED_KEYS = [
   "mission.channels.heading",
   "mission.channels.runtime_heading",
   "mission.channels.restart",
-  "mission.channels.bindings_heading",
   "mission.error.channel_runtime_failed",
   "mission.error.channels_failed",
   "mission.error.restart_failed",

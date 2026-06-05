@@ -81,6 +81,7 @@ describe("task-cwd cluster lays out left/right (dropdown left, workspace info ri
   })
 
   test("project directory bar owns cwd dropdown and branch badge from one Solid mount", () => {
+    expect(INDEX_HTML.match(/solidProjectDirectoryBarMount/g)?.length).toBe(1)
     expect(INDEX_HTML).toMatch(/<div id="solidProjectDirectoryBarMount"><\/div>/)
     expect(TASK_DIR_BAR).toMatch(/export function ProjectDirectoryBar\(\)/)
     expect(TASK_DIR_BAR).toMatch(/<TaskDirContent \/>/)
@@ -88,6 +89,12 @@ describe("task-cwd cluster lays out left/right (dropdown left, workspace info ri
     expect(TASK_DIR_BAR).toMatch(/export function VcsBadge\(\)/)
     expect(INDEX_HTML).not.toMatch(/solidTaskDirMount/)
     expect(INDEX_HTML).not.toMatch(/solidTaskVcsMount/)
+  })
+
+  test("recent directory popup is portalled above page stacking contexts", () => {
+    expect(TASK_DIR_BAR).toContain('import { Portal } from "solid-js/web"')
+    expect(TASK_DIR_BAR).toContain("<Portal mount={document.body}>")
+    expect(TASK_DIR_BAR).toContain('class="recent-dir-panel"')
   })
 
   test("path breadcrumb markup does not nest a second task-dir shell", () => {

@@ -46,7 +46,7 @@ let historyEpoch = 0;
 let historyAbort: AbortController | null = null;
 let tailMergeEpoch = 0;
 let tailMergeAbort: AbortController | null = null;
-let historyTaskID = "";
+let historySource: BoardSource | null = null;
 let scheduledTailMergeTaskID = "";
 let scheduledTailMergeRunning = false;
 let scheduledTailMergeAgain = false;
@@ -72,7 +72,7 @@ export function cancelConversationReplay(): void {
   scheduledTailMergeRunning = false;
   scheduledTailMergeAgain = false;
   historyLoading = false;
-  historyTaskID = "";
+  historySource = null;
   historyState = {
     oldestTimestamp: null,
     oldestMessageID: null,
@@ -171,6 +171,10 @@ function activeSourceMatches(source: BoardSource): boolean {
   return source.kind === "task" ? activeTaskID() === source.id : activeSessionID() === source.id;
 }
 
+function sourceMatches(left: BoardSource | null, right: BoardSource | null): boolean {
+  return !!left && !!right && left.kind === right.kind && left.id === right.id;
+}
+
 function conversationHydratePath(source: BoardSource, tailLimit: number): string {
   const prefix = source.kind === "task" ? "task" : "session";
   return `${prefix}/${encodeURIComponent(source.id)}/conversation?tail_limit=${encodeURIComponent(String(tailLimit))}`;
@@ -182,11 +186,11 @@ function assertActiveReplay(source: BoardSource, epoch: number, signal: AbortSig
   if (!activeSourceMatches(source)) throw new DOMException("Conversation replay source changed", "AbortError");
 }
 
-function assertActiveHistory(taskID: string, epoch: number, signal: AbortSignal): void {
+function assertActiveHistory(source: BoardSource, epoch: number, signal: AbortSignal): void {
   if (signal.aborted) throw signal.reason ?? new DOMException("Conversation history aborted", "AbortError");
   if (epoch !== historyEpoch) throw new DOMException("Conversation history superseded", "AbortError");
-  if (activeTaskID() !== taskID || historyTaskID !== taskID) {
-    throw new DOMException("Conversation history task changed", "AbortError");
+  if (!activeSourceMatches(source) || !sourceMatches(historySource, source)) {
+    throw new DOMException("Conversation history source changed", "AbortError");
   }
 }
 
@@ -338,7 +342,7 @@ export async function hydrateConversation(
     hydrateConversationView(view, mergedMessages);
     hydrateConversationAgentView(sourceKey(source), agentView);
     markSelectedMessageWatermark(messageWatermark);
-    historyTaskID = source.kind === "task" ? source.id : "";
+    historySource = source;
     historyState = history;
 
     for (const event of events) {
@@ -440,10 +444,11 @@ export function scheduleLatestConversationTailMerge(taskID: string): void {
   void run();
 }
 
-export function canLoadOlderConversationHistory(taskID = activeTaskID()): boolean {
+export function canLoadOlderConversationHistory(source: BoardSource | null = boardStore.selectedSource): boolean {
   return (
-    !!taskID &&
-    taskID === historyTaskID &&
+    !!source &&
+    sourceMatches(source, historySource) &&
+    source.kind === "task" &&
     historyState.hasMore &&
     historyState.oldestTimestamp !== null &&
     !historyLoading
@@ -473,10 +478,11 @@ export function conversationCardContainsMessage(cardID: string, messageID: strin
 }
 
 export async function loadOlderConversationHistory(
-  taskID = activeTaskID(),
+  source: BoardSource | null = boardStore.selectedSource,
 ): Promise<boolean> {
-  const selectedTaskID = String(taskID || "");
-  if (!canLoadOlderConversationHistory(selectedTaskID)) return false;
+  if (!source || source.kind !== "task") return false;
+  const selectedTaskID = String(source.id || "");
+  if (!canLoadOlderConversationHistory(source)) return false;
   const before = historyState.oldestTimestamp;
   const beforeID = historyState.oldestMessageID;
   if (before === null) return false;
@@ -486,12 +492,12 @@ export async function loadOlderConversationHistory(
   historyAbort = controller;
   const epoch = ++historyEpoch;
   try {
-    assertActiveHistory(selectedTaskID, epoch, controller.signal);
+    assertActiveHistory(source, epoch, controller.signal);
     const page = await apiJson(
       `task/${encodeURIComponent(selectedTaskID)}/conversation/history?before=${encodeURIComponent(String(before))}${beforeID ? `&before_id=${encodeURIComponent(beforeID)}` : ""}&limit=${encodeURIComponent(String(CONVERSATION_HISTORY_PAGE_LIMIT))}`,
       { signal: controller.signal },
     );
-    assertActiveHistory(selectedTaskID, epoch, controller.signal);
+    assertActiveHistory(source, epoch, controller.signal);
     const transcript = requireArray(page?.transcript, "transcript");
     const timeline = requireArray(page?.timeline, "timeline");
     const events = requireArray(page?.events, "events");
@@ -505,7 +511,7 @@ export async function loadOlderConversationHistory(
     for (const event of events) {
       replayTaskEventToTree(event);
     }
-    assertActiveHistory(selectedTaskID, epoch, controller.signal);
+    assertActiveHistory(source, epoch, controller.signal);
     historyState = nextHistory;
     return true;
   } finally {
@@ -551,14 +557,22 @@ export async function loadConversationHistoryUntilCard(
     !!cardTreeStore.cards[targetCardID] &&
     (!targetMessageID || conversationCardContainsMessage(targetCardID, targetMessageID));
   const targetSessionID = String(options.sessionID || "");
-  if (!loaded() && targetSessionID) {
+  const selectedSource = boardStore.selectedSource;
+  if (!loaded() && targetSessionID && selectedSource?.kind !== "session") {
     await loadConversationSessionHistory(targetSessionID, taskID).catch((error) => {
       console.warn("[conversation] session history hydrate failed", error);
       return false;
     });
   }
-  while (!loaded() && canLoadOlderConversationHistory(taskID)) {
-    const loaded = await loadOlderConversationHistory(taskID);
+  if (!loaded() && targetSessionID && selectedSource?.kind === "session") {
+    await loadOlderConversationHistory(selectedSource).catch((error) => {
+      console.warn("[conversation] session history hydrate failed", error);
+      return false;
+    });
+  }
+  const taskSource: BoardSource = { kind: "task", id: taskID };
+  while (!loaded() && canLoadOlderConversationHistory(taskSource)) {
+    const loaded = await loadOlderConversationHistory(taskSource);
     if (!loaded) break;
   }
   return loaded();

@@ -10,7 +10,7 @@
 //   header    : workspace, system health, channel runtime, counts, actions
 //   ledger    : mission list (project-scoped, searchable)
 //   workbench : shared mission-session conversation panel, OR mission launcher
-//   channels  : channel catalog, runtime status, restart, selected-task bindings
+//   channels  : channel catalog, runtime status, restart
 //
 // Data sources (template section 5, single source of truth):
 //   - /mission                  : mission session ledger records
@@ -31,7 +31,7 @@ import {
   onCleanup,
   onMount,
 } from "solid-js"
-import { boardStore, setBoardStore, activeTaskID } from "../store/board"
+import { boardStore, setBoardStore } from "../store/board"
 import { clearMessages, setChatAttachments } from "../store/messages"
 import { settingsStore, setSettingsStore, saveSettings } from "../store/settings"
 import { initPaneResizers, renderPaneLayout, MISSION_PANE_CONFIG } from "../services/pane"
@@ -41,7 +41,6 @@ import {
   loadChannelList,
   loadChannelRuntime,
   loadMissions,
-  loadTaskBindings,
   restartChannelRuntime,
   wakeMission,
   abortMission,
@@ -53,6 +52,7 @@ import {
 } from "../services/mission"
 import { ApiError } from "../services/api"
 import { loadConversation } from "../services/conversation"
+import type { DiffTarget } from "../services/diff"
 import { startSSE, stopSSE } from "../services/sse"
 import { resetWriter } from "../services/tree-writer"
 import { t } from "../utils/i18n"
@@ -63,9 +63,10 @@ import {
 import { Icon } from "./Icon"
 import { Button } from "./ui/Button"
 import { Conversation } from "./Conversation"
+import { ConversationAgentRail } from "./ConversationAgentRail"
 import { ChatComposer } from "./ChatComposer"
 import { MissionList } from "./MissionList"
-import { ProjectDirectoryBar } from "./TaskDirBar"
+import { WorkspacePanel } from "./WorkspacePanel"
 
 // ── Status taxonomies ──
 //
@@ -119,7 +120,11 @@ function actionVerbLabel(actionKey: string): string {
 
 // ── Top-level Mission component ──
 
-export function Mission() {
+export function Mission(props: {
+  workspaceTarget: () => DiffTarget
+  workspaceOpen: () => boolean
+  closeWorkspace: () => void
+}) {
   // ── Per-page state ─────────────────────────────────────────────────
   const [searchQuery, setSearchQuery] = createSignal("")
   const [missionRefreshToken, setMissionRefreshToken] = createSignal(0)
@@ -204,26 +209,6 @@ export function Mission() {
         throw new Error(errorMessage(err))
       }
     },
-  )
-
-  // Bindings belong to Mission's channel panel. The component stays
-  // mounted while the conversation panel is active, so park this resource
-  // outside Mission mode instead of doing hidden selected-task work.
-  const [bindings, bindingsCtl] = createResource(
-    () => {
-      const onMissionPage = isMissionPage()
-      const taskID = activeTaskID()
-      return onMissionPage && taskID ? taskID : null
-    },
-    async (taskID) => {
-      if (!taskID) return []
-      try {
-        return await loadTaskBindings(taskID)
-      } catch (err) {
-        throw new Error(errorMessage(err))
-      }
-    },
-    { initialValue: [] },
   )
 
   // ── Resizable three columns ────────────────────────────────────────
@@ -396,10 +381,6 @@ export function Mission() {
 
   return (
     <div class="mission" data-ui="mission-page">
-      <section class="task-bar mission-task-bar" data-ui="mission-project-directory-bar">
-        <ProjectDirectoryBar />
-      </section>
-
       <Show when={isMissionPage() && actionError()}>
         <div class="mission-action-error" role="alert" data-ui="mission-global-action-error">
           <span>
@@ -459,6 +440,9 @@ export function Mission() {
             composerOpen={composerOpen()}
             onCloseComposer={() => setComposerOpen(false)}
             selectedSource={boardStore.selectedSource}
+            workspaceTarget={props.workspaceTarget}
+            workspaceOpen={props.workspaceOpen}
+            closeWorkspace={props.closeWorkspace}
             onCloseMission={handleCloseMission}
             onMissionAwake={(result) => void handleMissionAwake(result)}
             onMissionMessageSubmitted={handleMissionMessageSubmitted}
@@ -479,9 +463,6 @@ export function Mission() {
             runtime={runtime()}
             runtimeError={runtime.error ? humanizeApiError(runtime.error) : ""}
             restartError={channelRestartError()}
-            bindings={bindings() ?? []}
-            bindingsError={bindings.error ? humanizeApiError(bindings.error) : ""}
-            selectedTaskID={boardStore.selectedSource?.kind === "task" ? activeTaskID() : ""}
             actionBusy={actionBusy()}
             onRestartRuntime={async () => {
               // Restart errors live in `channelRestartError` (rendered by
@@ -505,7 +486,7 @@ export function Mission() {
                 setActionBusy("")
               }
             }}
-            onRefreshChannels={() => void Promise.allSettled([channelsCtl.refetch(), runtimeCtl.refetch(), bindingsCtl.refetch()])}
+            onRefreshChannels={() => void Promise.allSettled([channelsCtl.refetch(), runtimeCtl.refetch()])}
           />
         </Show>
       </div>
@@ -518,6 +499,9 @@ function MissionWorkbench(props: {
   composerOpen: boolean
   onCloseComposer: () => void
   selectedSource: { kind: "task" | "session"; id: string } | null
+  workspaceTarget: () => DiffTarget
+  workspaceOpen: () => boolean
+  closeWorkspace: () => void
   onCloseMission: () => void
   onMissionAwake: (result: { missionID: string; sessionID: string; created: boolean }) => void
   onMissionMessageSubmitted: () => void
@@ -532,7 +516,13 @@ function MissionWorkbench(props: {
               when={props.selectedSource?.kind === "session"}
               fallback={<MissionComposer onClose={props.onCloseComposer} onAwake={props.onMissionAwake} />}
             >
-              <MissionConversation onClose={props.onCloseMission} onSubmitted={props.onMissionMessageSubmitted} />
+              <MissionConversation
+                workspaceTarget={props.workspaceTarget}
+                workspaceOpen={props.workspaceOpen}
+                closeWorkspace={props.closeWorkspace}
+                onClose={props.onCloseMission}
+                onSubmitted={props.onMissionMessageSubmitted}
+              />
             </Show>
           </Show>
         }
@@ -543,12 +533,20 @@ function MissionWorkbench(props: {
   )
 }
 
-function MissionConversation(props: { onClose: () => void; onSubmitted: () => void }) {
+function MissionConversation(props: {
+  workspaceTarget: () => DiffTarget
+  workspaceOpen: () => boolean
+  closeWorkspace: () => void
+  onClose: () => void
+  onSubmitted: () => void
+}) {
   let conversationContainer!: HTMLDivElement
   return (
     <div class="mission-conversation" data-kind="mission" data-ui="mission-conversation">
-      <header class="mission-conversation-header oc-surface-header">
-        <h2 class="mission-conversation-title oc-surface-header__title">{t("mission.launcher.conversation_title")}</h2>
+      <header class="mission-conversation-header chat-header oc-surface-header">
+        <div class="chat-header-main oc-surface-header__main">
+          <h2 class="mission-conversation-title chat-title oc-surface-header__title">{t("mission.launcher.conversation_title")}</h2>
+        </div>
         <div class="oc-surface-header__actions">
           <Button
             type="button"
@@ -563,9 +561,25 @@ function MissionConversation(props: { onClose: () => void; onSubmitted: () => vo
           </Button>
         </div>
       </header>
-      <div class="mission-conversation-body chat-scroll" ref={conversationContainer}>
-        <Conversation container={conversationContainer} />
+      <div class="chat-content-frame mission-chat-content-frame">
+        <div class="chat-message-pane mission-chat-message-pane">
+          <div class="conversation-body mission-conversation-body-frame">
+            <div class="conversation-scroll-shell">
+              <div class="mission-conversation-body chat-scroll session-content" ref={conversationContainer}>
+                <Conversation container={conversationContainer} />
+              </div>
+            </div>
+          </div>
+          <div class="conversation-agent-rail-host mission-agent-rail-host" data-ui="mission-agent-rail">
+            <ConversationAgentRail />
+          </div>
+        </div>
       </div>
+      <Show when={props.workspaceOpen()}>
+        <div class="workspace-mount mission-workspace-mount" data-ui="mission-workspace">
+          <WorkspacePanel target={props.workspaceTarget()} onClose={props.closeWorkspace} />
+        </div>
+      </Show>
       <div class="mission-conversation-composer">
         <ChatComposer
           enabled={true}
@@ -708,9 +722,6 @@ function MissionChannelPanel(props: {
   runtime: ChannelRuntimeStatus | null | undefined
   runtimeError: string
   restartError: string
-  bindings: any[]
-  bindingsError: string
-  selectedTaskID: string
   actionBusy: string
   onRestartRuntime: () => void
   onRefreshChannels: () => void
@@ -815,41 +826,6 @@ function MissionChannelPanel(props: {
               )}
             </For>
           </ul>
-        </Show>
-      </section>
-
-      <section class="mission-channels-bindings" data-ui="mission-channels-bindings">
-        <h3>{t("mission.channels.bindings_heading")}</h3>
-        <Show when={props.bindingsError}>
-          <div class="mission-error" role="alert">
-            <span>{t("mission.workbench.bindings_load_failed", { error: props.bindingsError })}</span>
-          </div>
-        </Show>
-        <Show
-          when={props.selectedTaskID}
-          fallback={<p class="mission-channels-empty">{t("mission.channels.bindings_empty_no_task")}</p>}
-        >
-          <Show
-            when={props.bindings.length > 0}
-            fallback={
-              <Show when={!props.bindingsError}>
-                <p class="mission-channels-empty">{t("mission.channels.bindings_empty")}</p>
-              </Show>
-            }
-          >
-            <ul class="mission-channels-binding-list">
-              <For each={props.bindings}>
-                {(b: any) => (
-                  <li class="mission-channels-binding" data-binding-id={String(b?.id ?? "")}>
-                    <Icon name="channel-link" size={12} />
-                    <span><strong>{String(b?.platform ?? "")}</strong></span>
-                    <span class="mission-channels-binding-channel">{String(b?.channel ?? "")}</span>
-                    <span class="mission-channels-binding-thread">{String(b?.thread ?? "")}</span>
-                  </li>
-                )}
-              </For>
-            </ul>
-          </Show>
         </Show>
       </section>
     </aside>
