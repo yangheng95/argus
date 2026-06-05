@@ -174,6 +174,23 @@ describe("build-artifact", () => {
     }
   })
 
+  test("runtime node module copy resolves packaged Playwright modules from opencorvus", async () => {
+    const outdir = await mkdtemp(resolve(tmpdir(), "opencorvus-playwright-runtime-node-modules-"))
+    try {
+      const target = { os: "win32", arch: "x64" } as const
+      await copyRuntimeNodeModules(target, outdir, resolve(import.meta.dir, "../../"), [
+        { name: "playwright" },
+        { name: "playwright-core" },
+        { name: "chromium-bidi" },
+      ])
+      expect(existsSync(resolve(outdir, "node_modules/playwright/package.json"))).toBe(true)
+      expect(existsSync(resolve(outdir, "node_modules/playwright-core/package.json"))).toBe(true)
+      expect(existsSync(resolve(outdir, "node_modules/chromium-bidi/package.json"))).toBe(true)
+    } finally {
+      await rm(outdir, { recursive: true, force: true })
+    }
+  })
+
   test("overlay browser automation modules do not statically import browser drivers", () => {
     const files = [
       "src/runtime/visual-page.ts",
