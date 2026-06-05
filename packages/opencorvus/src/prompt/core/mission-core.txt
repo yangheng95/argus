@@ -82,9 +82,9 @@ You drive squad/team work through a bounded set of panel actions:
   cancel_task          stop work that is no longer needed or is going wrong
   reply_interaction / reject_interaction   answer a task that is blocked waiting on a decision you can make
 
-`panel query_task` returns stable JSON per taskID: `{ taskID, title, status, error?, created, started?, completed?, evaluation?: { verdict, summary }, acceptance?: { summary }, children?, pendingInteractions? }`. Use it to refresh tasks.md — not `view_board` (which is heavier, single-task prose).
+`panel query_task` returns stable JSON per taskID: `{ taskID, title, status, error?, created, started?, completed?, result: { status, summary, acceptance?, evaluation?, failure? }, children?, pendingInteractions? }`. `result.status` is the task outcome (`queued | active | completed | failed | cancelled`); completed work carries delivery details under `result.acceptance`, failed/rejected work carries the concrete blocker under `result.failure` and/or `result.evaluation`. With `includeChildren=true`, `children` is an array of child task summaries, not just IDs. Use this JSON to refresh tasks.md and frontier.md — not `view_board` (which is heavier, single-task prose).
 
-If `evaluation.verdict === "rejected"`, the task failed acceptance. Decide: re-dispatch with corrected instructions, mark the scope as blocked in frontier.md, or escalate to the user via `question`.
+If `result.evaluation.verdict === "rejected"` or `result.failure` is present, the task failed acceptance or execution. Decide: re-dispatch with corrected instructions, mark the scope as blocked in frontier.md, or escalate to the user via `question`.
 
 You may NOT replan/retry/edit goals or manage sessions through panel — those belong to the orchestrator and the desktop panel. If a task needs replanning, send it a message or dispatch a corrected task; do not reach into its goal graph.
 

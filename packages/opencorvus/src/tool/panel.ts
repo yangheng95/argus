@@ -37,6 +37,207 @@ import { isDecodableText, decodeDataUrlText, decodeDataUrlBase64 } from "@/sessi
 
 const localOnly = (ctx: Tool.Context) => ctx.extra?.surface === "panel" || ctx.extra?.surface === "right-sidebar"
 
+const PanelTaskStatus = z.enum(["queued", "active", "completed", "failed", "cancelled"])
+const PanelTaskResultStatus = PanelTaskStatus
+const PanelTaskEvaluationResult = z.object({
+  status: z.string().optional(),
+  verdict: z.string().optional(),
+  summary: z.string(),
+})
+const PanelTaskAcceptanceArtifact = z.object({
+  kind: z.string(),
+  label: z.string(),
+  payload: z.record(z.string(), z.unknown()).optional(),
+})
+const PanelTaskAcceptanceResult = z.object({
+  status: z.string().optional(),
+  verdict: z.string().optional(),
+  summary: z.string(),
+  changedFiles: z.array(z.string()).optional(),
+  artifacts: z.array(PanelTaskAcceptanceArtifact).optional(),
+})
+const PanelTaskFailureResult = z.object({
+  source: z.string().optional(),
+  title: z.string().optional(),
+  summary: z.string(),
+})
+const PanelTaskResult = z.object({
+  status: PanelTaskResultStatus,
+  summary: z.string(),
+  acceptance: PanelTaskAcceptanceResult.optional(),
+  evaluation: PanelTaskEvaluationResult.optional(),
+  failure: PanelTaskFailureResult.optional(),
+})
+const PanelQueryTaskErrorRow = z.object({
+  taskID: z.string(),
+  error: z.string(),
+})
+const PanelQueryTaskSummaryRow = z.object({
+  taskID: z.string(),
+  title: z.string(),
+  status: PanelTaskStatus,
+  created: z.number().optional(),
+  started: z.number().optional(),
+  completed: z.number().optional(),
+  error: z.string().optional(),
+  result: PanelTaskResult,
+  pendingInteractions: z.number().int().nonnegative().optional(),
+})
+const PanelQueryTaskChildRow = z.union([PanelQueryTaskSummaryRow, PanelQueryTaskErrorRow])
+const PanelQueryTaskRow = z.union([
+  PanelQueryTaskSummaryRow.extend({
+    children: z.array(PanelQueryTaskChildRow).optional(),
+  }),
+  PanelQueryTaskErrorRow,
+])
+const PanelQueryTaskOutput = z.object({
+  tasks: z.array(PanelQueryTaskRow),
+})
+
+type PanelTaskBoard = Awaited<ReturnType<typeof EngineService.getBoard>>
+
+function nonEmptyString(input: unknown) {
+  return typeof input === "string" && input.trim().length > 0 ? input.trim() : undefined
+}
+
+function panelTaskAcceptance(board: PanelTaskBoard): z.infer<typeof PanelTaskAcceptanceResult> | undefined {
+  const acceptance = board.acceptance
+  if (!acceptance) return undefined
+  const result = acceptance.result as
+    | {
+        summary?: unknown
+        changedFiles?: unknown
+        artifacts?: unknown
+      }
+    | undefined
+  const changedFiles = Array.isArray(result?.changedFiles)
+    ? result.changedFiles.filter((item): item is string => typeof item === "string")
+    : undefined
+  const artifacts = Array.isArray(result?.artifacts)
+    ? result.artifacts.flatMap((item) => {
+        if (!item || typeof item !== "object") return []
+        const raw = item as Record<string, unknown>
+        const kind = nonEmptyString(raw.kind)
+        const label = nonEmptyString(raw.label)
+        if (!kind || !label) return []
+        const payload = raw.payload && typeof raw.payload === "object" && !Array.isArray(raw.payload)
+          ? raw.payload as Record<string, unknown>
+          : undefined
+        return [{ kind, label, ...(payload ? { payload } : {}) }]
+      })
+    : undefined
+  return {
+    status: nonEmptyString((acceptance as Record<string, unknown>).status),
+    verdict: nonEmptyString((acceptance as Record<string, unknown>).verdict),
+    summary: nonEmptyString(result?.summary) ?? acceptance.summary,
+    ...(changedFiles && changedFiles.length > 0 ? { changedFiles } : {}),
+    ...(artifacts && artifacts.length > 0 ? { artifacts } : {}),
+  }
+}
+
+function panelTaskEvaluation(board: PanelTaskBoard): z.infer<typeof PanelTaskEvaluationResult> | undefined {
+  const evaluation = board.evaluation
+  if (!evaluation) return undefined
+  return {
+    status: nonEmptyString(evaluation.status),
+    verdict: nonEmptyString(evaluation.verdict),
+    summary: evaluation.summary,
+  }
+}
+
+function panelTaskFailure(board: PanelTaskBoard): z.infer<typeof PanelTaskFailureResult> | undefined {
+  const failure = board.overview?.currentFailure
+  const taskError = nonEmptyString(board.task.error)
+  if (taskError) {
+    return {
+      source: "task",
+      title: "Task failed",
+      summary: taskError,
+    }
+  }
+  if (failure) {
+    return {
+      source: failure.source,
+      title: failure.title,
+      summary: failure.summary,
+    }
+  }
+  const evaluation = board.evaluation
+  if (evaluation?.verdict === "rejected" || evaluation?.status === "failed") {
+    return {
+      source: "evaluation",
+      title: "Evaluation rejected",
+      summary: evaluation.summary,
+    }
+  }
+  return undefined
+}
+
+function panelTaskResult(board: PanelTaskBoard): z.infer<typeof PanelTaskResult> {
+  const acceptance = panelTaskAcceptance(board)
+  const evaluation = panelTaskEvaluation(board)
+  const failure = panelTaskFailure(board)
+  const summary =
+    failure?.summary ??
+    acceptance?.summary ??
+    evaluation?.summary ??
+    nonEmptyString(board.overview?.summary) ??
+    `${board.task.title} is ${board.task.status}.`
+  return {
+    status: board.task.status,
+    summary,
+    ...(acceptance ? { acceptance } : {}),
+    ...(evaluation ? { evaluation } : {}),
+    ...(failure ? { failure } : {}),
+  }
+}
+
+function panelTaskSummaryRow(board: PanelTaskBoard): z.infer<typeof PanelQueryTaskSummaryRow> {
+  return PanelQueryTaskSummaryRow.parse({
+    taskID: board.task.id,
+    title: board.task.title,
+    status: board.task.status,
+    created: board.task.time?.created,
+    started: board.task.time?.started,
+    completed: board.task.time?.completed,
+    error: board.task.error,
+    result: panelTaskResult(board),
+  })
+}
+
+async function panelQueryTaskRow(
+  taskID: string,
+  input: { includeChildren?: boolean; includeInteractions?: boolean },
+): Promise<z.infer<typeof PanelQueryTaskRow>> {
+  try {
+    const board = await EngineService.getBoard(taskID)
+    const item: z.infer<typeof PanelQueryTaskRow> = {
+      ...panelTaskSummaryRow(board),
+      ...(input.includeInteractions
+        ? {
+            pendingInteractions: (board.interactions ?? []).filter(
+              (req) => req.status === "pending",
+            ).length,
+          }
+        : {}),
+    }
+    if (input.includeChildren) {
+      item.children = await Promise.all(
+        findChildrenOfTask(taskID).map(async (childTaskID) => {
+          try {
+            return panelTaskSummaryRow(await EngineService.getBoard(childTaskID))
+          } catch (err) {
+            return { taskID: childTaskID, error: err instanceof Error ? err.message : String(err) }
+          }
+        }),
+      )
+    }
+    return PanelQueryTaskRow.parse(item)
+  } catch (err) {
+    return PanelQueryTaskErrorRow.parse({ taskID, error: err instanceof Error ? err.message : String(err) })
+  }
+}
+
 async function resolvePanelActor(ctx: Tool.Context) {
   const session = await Session.get(ctx.sessionID).catch(() => undefined)
   if (session && isRightSidebarCodingAssistantSession(session)) return "right_sidebar_assistant"
@@ -160,41 +361,16 @@ export const PanelTool = Tool.define("panel", {
         // cross-project, etc.) surface as { taskID, error } so the caller
         // gets a deterministic 1:1 row count back.
         const results = await Promise.all(
-          params.taskIDs.map(async (taskID) => {
-            try {
-              const board = await EngineService.getBoard(taskID)
-              const item: Record<string, unknown> = {
-                taskID: board.task.id,
-                title: board.task.title,
-                status: board.task.status,
-                created: board.task.time?.created,
-              }
-              if (board.task.error) item.error = board.task.error
-              if (board.task.time?.started) item.started = board.task.time.started
-              if (board.task.time?.completed) item.completed = board.task.time.completed
-              if (board.evaluation) {
-                item.evaluation = { verdict: board.evaluation.verdict, summary: board.evaluation.summary }
-              }
-              if (board.acceptance) {
-                item.acceptance = { summary: board.acceptance.summary }
-              }
-              if (params.includeChildren) {
-                item.children = findChildrenOfTask(taskID)
-              }
-              if (params.includeInteractions) {
-                item.pendingInteractions = (board.interactions ?? []).filter(
-                  (req) => req.status === "pending",
-                ).length
-              }
-              return item
-            } catch (err) {
-              return { taskID, error: err instanceof Error ? err.message : String(err) }
-            }
-          }),
+          params.taskIDs.map((taskID) =>
+            panelQueryTaskRow(taskID, {
+              includeChildren: params.includeChildren,
+              includeInteractions: params.includeInteractions,
+            }),
+          ),
         )
         return {
           title: "Tasks",
-          output: JSON.stringify({ tasks: results }),
+          output: JSON.stringify(PanelQueryTaskOutput.parse({ tasks: results })),
           metadata: {},
         }
       }
