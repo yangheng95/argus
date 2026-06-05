@@ -2362,6 +2362,40 @@ OpenCode gap after the round:
 
 - Same intentional MVP gaps remain: link opening, terminal keybind integration, theme/font synchronization, debounced size update, terminal tab/workspace store, full workspace management, external TUI plugin loader, and `SessionV2Debug`/`sync-v2`.
 
+### 2026-06-05 Round 42: MVP default right panel returns to Inspector
+
+Implemented:
+
+- Rechecked latest OpenCode dev before editing. Upstream remains `9211ef7e95b7cd55f08b27b066d635cc42cbb362`; no new PTY/TUI core changes were present.
+- User reported the embedded TUI is not yet reliable enough as the default right panel: connection can fail and typing can be unavailable. The immediate MVP requirement is therefore: keep TUI as a right-sidebar peer activity, but make the first right-side surface the existing Inspector again.
+- Changed the single right-sidebar default source in `packages/overlay/src/main.tsx` from `tui` to `inspector`.
+- Changed the static first-paint DOM in `packages/overlay/src/index.html` to match that source:
+  - `#sections[data-right-activity="inspector"]`;
+  - `#rightPanelTitle` uses `sections.title`;
+  - `#rightPanelInspector[data-active="true"]`;
+  - `#rightPanelTui[data-active="false"]`.
+- Kept the TUI host mounted and selectable through the same right activity toolbar. The real-browser TUI test now explicitly clicks the TUI activity before verifying host connection, terminal focus, paste input, snapshot persistence, and refresh reconnect.
+- Synchronized `en-US` and `zh-CN` panel i18n revisions after the HTML change.
+
+Verified in tests:
+
+- `bun test packages/overlay/test/acceptance-panel-mount.test.ts packages/overlay/test/coding-assistant-panel.test.ts packages/overlay/test/tui-host-panel.test.ts`
+- `bun test packages/overlay/test/titlebar-menubar.test.ts`
+- `bun run --cwd packages/overlay typecheck`
+- `bun test packages/overlay/test/tui-host-panel-visual.test.ts`
+- `bun run --cwd packages/overlay check:i18n`
+
+OpenCode comparison after the round:
+
+- OpenCode's TUI remains a standalone terminal-first application; OpenCorvus is embedding an OpenCode-shaped TUI host as a side activity inside an existing overlay. For MVP usability, defaulting back to Inspector avoids forcing users into a still-incomplete terminal surface while preserving the copied PTY/websocket/ghostty terminal path for explicit use.
+- The current right-sidebar TUI still uses OpenCode-shaped `/pty` routes, retained-output cursor attach, `SerializeAddon`, terminal writer flushing, terminal focus, paste, snapshot, resize, and refresh reconnect behavior.
+
+OpenCode gap after the round:
+
+- The user's current symptoms remain the next TUI repair targets when TUI is selected: connection failures need runtime evidence from the `/pty` start/attach path, and input failures need evidence across ghostty focus, websocket open state, and `TuiHost.preparePtyConnect`.
+- The embedded terminal theme is still hard-coded (`#0b0b0b` / `#d4d4d4`) and does not yet follow overlay theme variables or OpenCode's `useTheme()` token source.
+- Same intentional MVP gaps remain: link opening, terminal keybind integration, debounced size update, terminal tab/workspace store, full workspace management, external TUI plugin loader, and `SessionV2Debug`/`sync-v2`.
+
 ### 2026-06-05 Round 41: MVP abnormal websocket close visibility
 
 Implemented:

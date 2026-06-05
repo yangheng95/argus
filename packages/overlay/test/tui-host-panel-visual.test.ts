@@ -119,6 +119,7 @@ test("right sidebar TUI host panel renders as a real browser surface", async () 
 
     await page.goto(`http://127.0.0.1:${server.port}/ui/index.html`, { waitUntil: "domcontentloaded" })
     await page.waitForSelector('[data-ui="side-activity-button"][data-side="right"][data-activity="tui"]')
+    await page.click('[data-ui="side-activity-button"][data-side="right"][data-activity="tui"]')
     await page.waitForSelector(".tui-host-panel")
     await page.waitForSelector('[data-testid="tui-host-terminal"]')
     await page.waitForFunction(() => {

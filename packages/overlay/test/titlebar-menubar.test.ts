@@ -567,9 +567,9 @@ test(
       expect(intro.brandWordmark).toBe("OpenCorvus")
       expect(intro.brandLabel).toBe("Workspace")
       expect(intro.rightActivities).toEqual([
-        { activity: "tui", active: "true" },
+        { activity: "tui", active: "false" },
         { activity: "browser", active: "false" },
-        { activity: "inspector", active: "false" },
+        { activity: "inspector", active: "true" },
       ])
       await page.close()
     } finally {
