@@ -2474,6 +2474,36 @@ OpenCode gap after the round:
 
 - Same intentional MVP gaps remain: link opening, terminal keybind integration, terminal palette 0-15 mapping, debounced size update, terminal tab/workspace store, full workspace management, external TUI plugin loader, Agent Team project control tools, and `SessionV2Debug`/`sync-v2`.
 
+### 2026-06-05 Round 49: restore OpenCode default TUI CLI entry
+
+Implemented:
+
+- Diagnosed the screenshot failure:
+  - the terminal printed `opencorvus [command]` help instead of rendering the TUI;
+  - the PTY process then exited;
+  - the overlay subsequently tried to attach `/pty/{id}/connect` after the PTY session had already been removed, producing `API 404 ... PTY session not found`.
+- Root cause: `Tui.resolveEmbeddedCommand()` was already generating the OpenCode-shaped invocation `opencorvus [project] --port ... --hostname ... --agent tui-coding`, but `packages/opencorvus/src/index.ts` did not register `TuiThreadCommand` as the `$0 [project]` default CLI command.
+- Copied the missing OpenCode root CLI registration:
+  - imported `TuiThreadCommand` from `./cli/cmd/tui/thread`;
+  - added `.command(TuiThreadCommand)` next to the other root commands, matching OpenCode's `packages/opencode/src/index.ts`.
+- Added a TUI host regression test that guards both the import and `.command(TuiThreadCommand)` registration so the embedded PTY argv cannot silently fall back to CLI help again.
+
+Verified in tests:
+
+- `bun test packages/opencorvus/test/tui/host.test.ts -t "registers the OpenCode-style default TUI command"`
+- `bun --preload @opentui/solid/preload --conditions=browser src/index.ts --help` from `packages/opencorvus`, verified `opencorvus [project] start opencorvus tui [default]` is present.
+- `bun test packages/opencorvus/test/tui/host.test.ts`
+- `bun run --cwd packages/opencorvus typecheck`
+
+OpenCode comparison after the round:
+
+- OpenCode registers `TuiThreadCommand` in the root yargs command chain, so `opencode [project]` is the default TUI entry. OpenCorvus now matches that entry-point shape again.
+- The right-sidebar PTY command no longer needs a local `tui` subcommand or browser-side workaround; it uses the same default CLI contract that OpenCode documents and implements.
+
+OpenCode gap after the round:
+
+- This fixes the process-entry bug shown in the screenshot. It does not address the remaining MVP gaps from Round 48: link opening, terminal keybind integration, terminal palette 0-15 mapping, debounced size update, terminal tab/workspace store, full workspace management, external TUI plugin loader, Agent Team project control tools, and `SessionV2Debug`/`sync-v2`.
+
 ### 2026-06-05 Round 45: MVP websocket close reason diagnostics
 
 Implemented:

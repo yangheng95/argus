@@ -33,6 +33,7 @@ import { DbCommand } from "./cli/cmd/db"
 import { SlackCommand } from "./cli/cmd/slack"
 import { Capability } from "./platform/capability"
 import { installProcessErrorLogging } from "./util/process-error-logging"
+import { TuiThreadCommand } from "./cli/cmd/tui/thread"
 
 installProcessErrorLogging()
 
@@ -94,6 +95,7 @@ let cli = yargs(hideBin(process.argv))
   .completion("completion", "generate shell completion script")
   .command(AcpCommand)
   .command(McpCommand)
+  .command(TuiThreadCommand)
   .command(RunCommand)
   .command(GenerateCommand)
   .command(DebugCommand)

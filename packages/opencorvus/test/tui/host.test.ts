@@ -3,6 +3,7 @@ import { Tui } from "../../src/tui"
 import { TuiHost } from "../../src/tui/host"
 import { Instance } from "../../src/project/instance"
 import { tmpdir } from "../fixture/fixture"
+import path from "path"
 
 function echoCommand(cwd: string, text: string): Tui.EmbeddedCommand {
   if (process.platform === "win32") {
@@ -93,6 +94,12 @@ async function waitFor(check: () => boolean, message: string) {
 describe("tui.host", () => {
   afterEach(async () => {
     await Instance.disposeAll()
+  })
+
+  test("registers the OpenCode-style default TUI command in the root CLI", async () => {
+    const entry = await Bun.file(path.resolve(import.meta.dir, "../../src/index.ts")).text()
+    expect(entry).toContain('import { TuiThreadCommand } from "./cli/cmd/tui/thread"')
+    expect(entry).toContain(".command(TuiThreadCommand)")
   })
 
   test("captures output from a real Pseudo Terminal process", async () => {
