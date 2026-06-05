@@ -41,6 +41,64 @@ function loadGhostty() {
   return sharedGhostty
 }
 
+function useTerminalUiBindings(input: {
+  container: HTMLDivElement
+  term: GhosttyTerminal
+  cleanups: VoidFunction[]
+  focusTerminal: () => void
+}) {
+  const handleCopy = (event: ClipboardEvent) => {
+    const selection = input.term.getSelection()
+    if (!selection) return
+
+    const clipboard = event.clipboardData
+    if (!clipboard) return
+
+    event.preventDefault()
+    clipboard.setData("text/plain", selection)
+  }
+
+  const handlePaste = (event: ClipboardEvent) => {
+    const clipboard = event.clipboardData
+    const text = clipboard?.getData("text/plain") ?? clipboard?.getData("text") ?? ""
+    if (!text) return
+
+    event.preventDefault()
+    event.stopPropagation()
+    input.term.paste(text)
+  }
+
+  const handlePointerDown = () => {
+    const activeElement = document.activeElement
+    if (activeElement instanceof HTMLElement && activeElement !== input.container && !input.container.contains(activeElement)) {
+      activeElement.blur()
+    }
+    input.focusTerminal()
+  }
+
+  const handleTextareaFocus = () => {
+    input.term.options.cursorBlink = true
+  }
+
+  const handleTextareaBlur = () => {
+    input.term.options.cursorBlink = false
+  }
+
+  input.container.addEventListener("copy", handleCopy, true)
+  input.cleanups.push(() => input.container.removeEventListener("copy", handleCopy, true))
+
+  input.container.addEventListener("paste", handlePaste, true)
+  input.cleanups.push(() => input.container.removeEventListener("paste", handlePaste, true))
+
+  input.container.addEventListener("pointerdown", handlePointerDown)
+  input.cleanups.push(() => input.container.removeEventListener("pointerdown", handlePointerDown))
+
+  input.term.textarea?.addEventListener("focus", handleTextareaFocus)
+  input.term.textarea?.addEventListener("blur", handleTextareaBlur)
+  input.cleanups.push(() => input.term.textarea?.removeEventListener("focus", handleTextareaFocus))
+  input.cleanups.push(() => input.term.textarea?.removeEventListener("blur", handleTextareaBlur))
+}
+
 export interface TuiHostPanelProps {
   active: Accessor<boolean>
 }
@@ -59,6 +117,7 @@ export function TuiHostPanel(props: TuiHostPanelProps) {
   let hostStarted = false
   let hostCursor = 0
   let lastSize: { cols: number; rows: number } | undefined
+  const cleanups: VoidFunction[] = []
 
   const [hostInfo, setHostInfo] = createSignal<TuiHostPanelInfo | null>(null)
   const [loading, setLoading] = createSignal(false)
@@ -170,6 +229,14 @@ export function TuiHostPanel(props: TuiHostPanelProps) {
     const current = socket
     socket = undefined
     current?.close(1000)
+  }
+
+  function focusTerminal() {
+    const current = term
+    if (!current) return
+    current.focus()
+    current.textarea?.focus()
+    setTimeout(() => current.textarea?.focus(), 0)
   }
 
   async function ensureHostStarted() {
@@ -333,6 +400,7 @@ export function TuiHostPanel(props: TuiHostPanelProps) {
         })
       })
       next.open(container)
+      useTerminalUiBindings({ container, term: next, cleanups, focusTerminal })
       resizeObserver = new ResizeObserver(() => scheduleFit())
       resizeObserver.observe(container)
       next.onData((data) => {
@@ -340,7 +408,7 @@ export function TuiHostPanel(props: TuiHostPanelProps) {
         socket.send(data)
       })
       next.onResize((size) => pushSize(size.cols, size.rows))
-      next.focus()
+      focusTerminal()
       scheduleFit()
       if (props.active()) void start()
     })
@@ -357,6 +425,7 @@ export function TuiHostPanel(props: TuiHostPanelProps) {
 
     const finalize = () => {
       saveTerminalSnapshot()
+      for (const fn of cleanups.splice(0).reverse()) fn()
       fitAddon?.dispose()
       serializeAddon?.dispose()
       term?.dispose()

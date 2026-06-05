@@ -2297,3 +2297,39 @@ OpenCode gap after the round:
 - OpenCode's full workspace management remains missing: workspace list/create/unavailable dialogs, move-session prompt flow, workspace commands, and workspace status event sync are not implemented yet.
 - External TUI plugin loader/install remains missing; upstream depends on shared plugin loader modules that OpenCorvus does not yet expose in the copied TUI runtime.
 - `SessionV2Debug` and `context/sync-v2.tsx` remain missing until the real V2 session-message/event source exists.
+
+### 2026-06-05 Round 39: MVP terminal focus and paste usability
+
+Implemented:
+
+- Rechecked latest OpenCode dev before editing. Upstream remains `9211ef7e95b7cd55f08b27b066d635cc42cbb362`; there are still no new PTY/TUI core changes after the theme/settings-only app delta.
+- User clarified the immediate target is a usable version, not OpenCode full-complexity parity.
+- Copied the small, user-visible subset of OpenCode terminal UI bindings into `TuiHostPanel`:
+  - copy selection into clipboard data;
+  - paste clipboard text through `term.paste(text)`;
+  - pointer-down focus behavior;
+  - textarea focus/blur cursor blink behavior;
+  - cleanup for those event listeners.
+- Intentionally did not copy OpenCode terminal tabs/workspace store, workspace management dialogs, plugin loader, or link-opening platform hooks in this MVP round.
+
+Verified in tests:
+
+- Extended `packages/overlay/test/tui-host-panel.test.ts` to guard copy/paste/pointer/focus wiring.
+- Extended the real browser `packages/overlay/test/tui-host-panel-visual.test.ts` so it:
+  - clicks the terminal and verifies the hidden terminal textarea receives focus;
+  - dispatches a paste event;
+  - proves the PTY websocket server receives the pasted text;
+  - proves the echoed pasted text appears in the serialized terminal snapshot.
+- `bun run --cwd packages/overlay typecheck`
+- `bun test packages/overlay/test/tui-host-panel.test.ts`
+- `bun test packages/overlay/test/tui-host-panel-visual.test.ts`
+
+OpenCode comparison after the round:
+
+- The right-sidebar TUI host now has the basic OpenCode terminal interaction affordances needed for a usable terminal: focus, copy, and paste.
+- This keeps the MVP scope small while still copying mature OpenCode interaction patterns instead of inventing local UI behavior.
+
+OpenCode gap after the round:
+
+- OpenCode still has richer link opening, terminal keybind integration, theme/font synchronization, debounced size update, terminal tab/workspace store, full workspace management, external TUI plugin loader, and `SessionV2Debug`/`sync-v2`.
+- For the current MVP, those gaps are intentionally not blockers unless they affect basic right-sidebar coding-assistant usability.
