@@ -293,6 +293,22 @@ export function TuiHostPanel(props: TuiHostPanelProps) {
     }
   }
 
+  async function reconnectHostSocket() {
+    if (!props.active()) return
+    setLoading(true)
+    setError("")
+    try {
+      closeSocket()
+      await ensureHostStarted()
+      await connectHostSocket()
+      focusTerminal()
+    } catch (err) {
+      if (!disposed) setError(err instanceof Error ? err.message : String(err))
+    } finally {
+      if (!disposed) setLoading(false)
+    }
+  }
+
   async function start() {
     if (!props.active()) return
     if (!term) return
@@ -455,7 +471,7 @@ export function TuiHostPanel(props: TuiHostPanelProps) {
             title={t("common.refresh")}
             aria-label={t("common.refresh")}
             disabled={loading()}
-            onClick={() => void connectHostSocket()}
+            onClick={() => void reconnectHostSocket()}
           >
             <Icon name="refresh" />
           </Button>

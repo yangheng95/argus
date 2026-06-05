@@ -2333,3 +2333,31 @@ OpenCode gap after the round:
 
 - OpenCode still has richer link opening, terminal keybind integration, theme/font synchronization, debounced size update, terminal tab/workspace store, full workspace management, external TUI plugin loader, and `SessionV2Debug`/`sync-v2`.
 - For the current MVP, those gaps are intentionally not blockers unless they affect basic right-sidebar coding-assistant usability.
+
+### 2026-06-05 Round 40: MVP refresh reconnect behavior
+
+Implemented:
+
+- Rechecked latest OpenCode dev before editing. Upstream remains `9211ef7e95b7cd55f08b27b066d635cc42cbb362`; no new PTY/TUI core changes were present.
+- Kept the user-requested MVP boundary: no terminal tab/workspace store, no plugin loader, no broad OpenCode app copy.
+- Changed the right-sidebar TUI refresh action from a no-op when a socket already exists into an explicit reconnect:
+  - close the current websocket;
+  - ensure the project-bound PTY host is running;
+  - attach a new `/pty/{ptyID}/connect` websocket;
+  - refocus the terminal.
+
+Verified in tests:
+
+- Extended `packages/overlay/test/tui-host-panel.test.ts` to guard the refresh button wiring to `reconnectHostSocket`.
+- Extended `packages/overlay/test/tui-host-panel-visual.test.ts` to click the refresh button in a real browser and verify the server observes a second PTY websocket connect.
+- `bun run --cwd packages/overlay typecheck`
+- `bun test packages/overlay/test/tui-host-panel.test.ts`
+- `bun test packages/overlay/test/tui-host-panel-visual.test.ts`
+
+OpenCode comparison after the round:
+
+- This is an MVP usability adaptation rather than a new OpenCode parity feature. OpenCode's full terminal component lives inside a richer workspace shell; for the current right-sidebar TUI, the important behavior is that a visible refresh control can recover the websocket attachment.
+
+OpenCode gap after the round:
+
+- Same intentional MVP gaps remain: link opening, terminal keybind integration, theme/font synchronization, debounced size update, terminal tab/workspace store, full workspace management, external TUI plugin loader, and `SessionV2Debug`/`sync-v2`.
