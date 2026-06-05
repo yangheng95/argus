@@ -471,11 +471,11 @@ export const PanelTool = Tool.define("panel", {
           actor,
           ...(missionProvenance ? { mission: missionProvenance } : {}),
         }
-        const source = actor === "right_sidebar_assistant"
-          ? RIGHT_SIDEBAR_CODING_ASSISTANT_SOURCE
-          : params.source ??
-            ctx.extra?.source ??
-            (params.platform ? `channel:${params.platform}` : actor === "mission" ? "mission" : "panel")
+        const source = actor === "mission"
+          ? "mission"
+          : actor === "right_sidebar_assistant"
+            ? RIGHT_SIDEBAR_CODING_ASSISTANT_SOURCE
+            : params.source ?? ctx.extra?.source ?? (params.platform ? `channel:${params.platform}` : "panel")
         const taskID = await EngineService.createTask({
           requestID: params.request_id ?? ctx.extra?.requestID,
           request,

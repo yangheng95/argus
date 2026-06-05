@@ -50,7 +50,7 @@ describe("panel.create_task actor provenance", () => {
   // metadata.mission.id.
   async function runCreateTask(
     agent: string,
-    opts: { userMetadata?: Record<string, unknown>; missionSession?: boolean } = {},
+    opts: { userMetadata?: Record<string, unknown>; missionSession?: boolean; source?: string } = {},
   ) {
     await using tmp = await tmpdir({ git: true })
     let captured: { metadata?: Record<string, unknown>; source?: string } | undefined
@@ -74,6 +74,7 @@ describe("panel.create_task actor provenance", () => {
             allow_create: true,
             queue: false,
             ...(opts.userMetadata ? { metadata: opts.userMetadata } : {}),
+            ...(opts.source ? { source: opts.source } : {}),
           },
           {
             sessionID,
@@ -99,7 +100,7 @@ describe("panel.create_task actor provenance", () => {
   })
 
   test("mission agent stamps actor=mission + source=mission + metadata.mission.{id,session_id}", async () => {
-    const { metadata, source, missionID } = await runCreateTask("mission", { missionSession: true })
+    const { metadata, source, missionID } = await runCreateTask("mission", { missionSession: true, source: "forged-source" })
     expect(metadata.actor).toBe(PanelActor.enum.mission)
     expect(source).toBe("mission")
     const mission = metadata.mission as { id?: string; session_id?: string } | undefined

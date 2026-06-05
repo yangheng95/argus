@@ -26,6 +26,7 @@ import {
   For,
   Show,
   createEffect,
+  createMemo,
   createResource,
   createSignal,
   onCleanup,
@@ -49,6 +50,7 @@ import {
   type ChannelInfo,
   type ChannelRuntimeStatus,
   type MissionRecord,
+  type MissionTaskStats,
 } from "../services/mission"
 import { ApiError } from "../services/api"
 import { loadConversation } from "../services/conversation"
@@ -60,6 +62,8 @@ import {
   humanizeApiError,
   runtimeLabel,
 } from "../utils/mission-helpers"
+import { useNowTick } from "../services/clock"
+import { detailStamp, formatDuration } from "../utils/time"
 import { Icon } from "./Icon"
 import { Button } from "./ui/Button"
 import { Conversation } from "./Conversation"
@@ -116,6 +120,22 @@ function actionVerbLabel(actionKey: string): string {
   const verb = String(actionKey || "").split(":", 1)[0] || actionKey
   const translated = t(`mission.error.action.${verb}`)
   return translated === `mission.error.action.${verb}` ? verb : translated
+}
+
+function emptyMissionTaskStats(): MissionTaskStats {
+  return { total: 0, queued: 0, active: 0, completed: 0, failed: 0, cancelled: 0 }
+}
+
+function aggregateMissionTaskStats(missions: MissionRecord[]): MissionTaskStats {
+  return missions.reduce((stats, mission) => {
+    stats.total += mission.taskStats.total
+    stats.queued += mission.taskStats.queued
+    stats.active += mission.taskStats.active
+    stats.completed += mission.taskStats.completed
+    stats.failed += mission.taskStats.failed
+    stats.cancelled += mission.taskStats.cancelled
+    return stats
+  }, emptyMissionTaskStats())
 }
 
 // ── Top-level Mission component ──
@@ -274,6 +294,12 @@ export function Mission(props: {
 
   const selectedMissionSessionID = () =>
     boardStore.selectedSource?.kind === "session" ? boardStore.selectedSource.id : ""
+  const selectedMissionRecord = createMemo(() => {
+    const selected = selectedMissionSessionID()
+    if (!selected) return undefined
+    return (missionRecords() ?? []).find((mission) => mission.sessionID === selected)
+  })
+  const missionChannelTaskStats = createMemo(() => selectedMissionRecord()?.taskStats ?? aggregateMissionTaskStats(missionRecords() ?? []))
 
   // ── Refresh / actions ──────────────────────────────────────────────
 
@@ -443,7 +469,7 @@ export function Mission(props: {
             workspaceTarget={props.workspaceTarget}
             workspaceOpen={props.workspaceOpen}
             closeWorkspace={props.closeWorkspace}
-            onCloseMission={handleCloseMission}
+            selectedMission={selectedMissionRecord()}
             onMissionAwake={(result) => void handleMissionAwake(result)}
             onMissionMessageSubmitted={handleMissionMessageSubmitted}
           />
@@ -462,6 +488,7 @@ export function Mission(props: {
             channelsError={channels.error ? humanizeApiError(channels.error) : ""}
             runtime={runtime()}
             runtimeError={runtime.error ? humanizeApiError(runtime.error) : ""}
+            taskStats={missionChannelTaskStats()}
             restartError={channelRestartError()}
             actionBusy={actionBusy()}
             onRestartRuntime={async () => {
@@ -502,7 +529,7 @@ function MissionWorkbench(props: {
   workspaceTarget: () => DiffTarget
   workspaceOpen: () => boolean
   closeWorkspace: () => void
-  onCloseMission: () => void
+  selectedMission?: MissionRecord
   onMissionAwake: (result: { missionID: string; sessionID: string; created: boolean }) => void
   onMissionMessageSubmitted: () => void
 }) {
@@ -520,7 +547,7 @@ function MissionWorkbench(props: {
                 workspaceTarget={props.workspaceTarget}
                 workspaceOpen={props.workspaceOpen}
                 closeWorkspace={props.closeWorkspace}
-                onClose={props.onCloseMission}
+                mission={props.selectedMission}
                 onSubmitted={props.onMissionMessageSubmitted}
               />
             </Show>
@@ -537,10 +564,16 @@ function MissionConversation(props: {
   workspaceTarget: () => DiffTarget
   workspaceOpen: () => boolean
   closeWorkspace: () => void
-  onClose: () => void
+  mission?: MissionRecord
   onSubmitted: () => void
 }) {
   let conversationContainer!: HTMLDivElement
+  const now = useNowTick()
+  const runtimeText = createMemo(() => {
+    const created = props.mission?.created
+    if (!created) return ""
+    return formatDuration(Math.max(0, now() - created))
+  })
   return (
     <div class="mission-conversation" data-kind="mission" data-ui="mission-conversation">
       <header class="mission-conversation-header chat-header oc-surface-header">
@@ -548,17 +581,13 @@ function MissionConversation(props: {
           <h2 class="mission-conversation-title chat-title oc-surface-header__title">{t("mission.launcher.conversation_title")}</h2>
         </div>
         <div class="oc-surface-header__actions">
-          <Button
-            type="button"
-            variant="ghost"
-            size="md"
-            tone="neutral"
-            data-ui="mission-close"
-            title={t("common.close")}
-            onClick={props.onClose}
+          <span
+            class="mission-conversation-runtime"
+            data-ui="mission-runtime"
+            title={props.mission?.created ? detailStamp(props.mission.created) : ""}
           >
-            <Icon name="close" size={12} />
-          </Button>
+            {runtimeText()}
+          </span>
         </div>
       </header>
       <div class="chat-content-frame mission-chat-content-frame">
@@ -721,6 +750,7 @@ function MissionChannelPanel(props: {
   channelsError: string
   runtime: ChannelRuntimeStatus | null | undefined
   runtimeError: string
+  taskStats: MissionTaskStats
   restartError: string
   actionBusy: string
   onRestartRuntime: () => void
@@ -745,6 +775,36 @@ function MissionChannelPanel(props: {
           </Button>
         </div>
       </header>
+
+      <section class="mission-created-task-stats" data-ui="mission-created-task-stats">
+        <h3>{t("mission.tasks.stats_heading")}</h3>
+        <dl class="mission-created-task-stats-grid">
+          <div>
+            <dt>{t("mission.tasks.total")}</dt>
+            <dd>{props.taskStats.total}</dd>
+          </div>
+          <div>
+            <dt>{t("mission.tasks.active")}</dt>
+            <dd>{props.taskStats.active}</dd>
+          </div>
+          <div>
+            <dt>{t("mission.tasks.queued")}</dt>
+            <dd>{props.taskStats.queued}</dd>
+          </div>
+          <div>
+            <dt>{t("mission.tasks.completed")}</dt>
+            <dd>{props.taskStats.completed}</dd>
+          </div>
+          <div>
+            <dt>{t("mission.tasks.failed")}</dt>
+            <dd>{props.taskStats.failed}</dd>
+          </div>
+          <div>
+            <dt>{t("mission.tasks.cancelled")}</dt>
+            <dd>{props.taskStats.cancelled}</dd>
+          </div>
+        </dl>
+      </section>
 
       <section class="mission-channels-runtime" data-ui="mission-channels-runtime">
         <h3>{t("mission.channels.runtime_heading")}</h3>

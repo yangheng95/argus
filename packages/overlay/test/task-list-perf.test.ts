@@ -74,6 +74,8 @@ function missionForTask(item: any): any {
     directory: item.task.directory,
     created: item.task.time.created,
     updated: item.task.time.updated,
+    tasks: [],
+    taskStats: { total: 0, queued: 0, active: 0, completed: 0, failed: 0, cancelled: 0 },
   }
 }
 

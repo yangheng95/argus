@@ -249,6 +249,25 @@ export function findChildrenOfTask(parentTaskID: string): string[] {
   )
 }
 
+export function listMissionTasks(input: { projectID: string; missionID: string; sessionID: string }): TaskRow[] {
+  return Database.use((db) =>
+    db
+      .select()
+      .from(EngineTaskTable)
+      .where(
+        and(
+          eq(EngineTaskTable.project_id, input.projectID),
+          eq(EngineTaskTable.source, "mission"),
+          sql`json_extract(${EngineTaskTable.metadata}, '$.actor') = 'mission'`,
+          sql`json_extract(${EngineTaskTable.metadata}, '$.mission.id') = ${input.missionID}`,
+          sql`json_extract(${EngineTaskTable.metadata}, '$.mission.session_id') = ${input.sessionID}`,
+        ),
+      )
+      .orderBy(desc(EngineTaskTable.time_updated), desc(EngineTaskTable.id))
+      .all(),
+  )
+}
+
 export function findTaskByRequest(projectID: string, requestID: string) {
   return Database.use((db) =>
     db

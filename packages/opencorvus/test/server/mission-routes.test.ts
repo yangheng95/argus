@@ -1,5 +1,7 @@
 import { afterEach, describe, expect, mock, spyOn, test } from "bun:test"
 import { Database, eq } from "../../src/storage/db"
+import { EngineTaskTable } from "../../src/engine/engine.sql"
+import { Identifier } from "../../src/id/id"
 import { Instance } from "../../src/project/instance"
 import { ensureMissionSession } from "../../src/mission/session"
 import { Server } from "../../src/server/server"
@@ -41,6 +43,100 @@ describe("mission routes", () => {
           title: "Renamed Mission",
         })
         expect((await Session.get(session.id)).title).toBe("Renamed Mission")
+      },
+    })
+  })
+
+  test("GET /mission projects mission-created tasks and scoped stats", async () => {
+    await using tmp = await tmpdir({ git: true })
+
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const app = Server.App()
+        const session = await ensureMissionSession({ missionID: "m-tasks", defaultCwd: tmp.path })
+        const other = await ensureMissionSession({ missionID: "m-other", defaultCwd: tmp.path })
+        const now = Date.now()
+
+        function insertTask(input: {
+          title: string
+          source: string
+          metadata: Record<string, unknown>
+          started?: number | null
+          completed?: number | null
+          error?: string | null
+        }) {
+          const id = Identifier.ascending("task")
+          Database.use((db) =>
+            db.insert(EngineTaskTable)
+              .values({
+                id,
+                project_id: Instance.project.id,
+                source: input.source,
+                title: input.title,
+                request: input.title,
+                metadata: input.metadata,
+                time_started: input.started ?? null,
+                time_completed: input.completed ?? null,
+                error: input.error ?? null,
+                time_created: now,
+                time_updated: now + id.length,
+              })
+              .run(),
+          )
+          return id
+        }
+
+        const activeTaskID = insertTask({
+          title: "Mission active task",
+          source: "mission",
+          metadata: { actor: "mission", mission: { id: session.missionID, session_id: session.id } },
+          started: now,
+        })
+        const completedTaskID = insertTask({
+          title: "Mission completed task",
+          source: "mission",
+          metadata: { actor: "mission", mission: { id: session.missionID, session_id: session.id } },
+          started: now,
+          completed: now + 1000,
+        })
+        insertTask({
+          title: "Other mission task",
+          source: "mission",
+          metadata: { actor: "mission", mission: { id: other.missionID, session_id: other.id } },
+          started: now,
+        })
+        insertTask({
+          title: "Forged mission metadata",
+          source: "panel",
+          metadata: { actor: "panel_ui", mission: { id: session.missionID, session_id: session.id } },
+          started: now,
+        })
+
+        const response = await app.request("/mission", {
+          headers: {
+            "x-opencorvus-directory": tmp.path,
+          },
+        })
+
+        expect(response.status).toBe(200)
+        const body = await response.json() as Array<{
+          missionID: string
+          tasks: Array<{ id: string; title: string; status: string }>
+          taskStats: Record<string, number>
+        }>
+        const record = body.find((item) => item.missionID === session.missionID)
+        expect(record).toBeDefined()
+        expect(record!.tasks.map((task) => task.id).sort()).toEqual([activeTaskID, completedTaskID].sort())
+        expect(record!.tasks.map((task) => task.title).sort()).toEqual(["Mission active task", "Mission completed task"])
+        expect(record!.taskStats).toMatchObject({
+          total: 2,
+          queued: 0,
+          active: 1,
+          completed: 1,
+          failed: 0,
+          cancelled: 0,
+        })
       },
     })
   })

@@ -288,6 +288,85 @@ body:not([data-page-mode="mission"]) > .workbench-project-bar {
   font: inherit;
 }
 
+.mission-row-shell {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.mission-task-projection-list {
+  display: flex;
+  flex-direction: column;
+  gap: calc(2px * var(--ui-scale));
+  margin: 0 0 var(--ui-gap-xs) calc(30px * var(--ui-scale));
+  padding: 0 0 0 var(--ui-gap-md);
+  border-left: var(--oc-border-width) solid var(--border);
+  list-style: none;
+}
+
+.mission-task-projection-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) max-content;
+  align-items: center;
+  gap: var(--ui-gap-sm);
+  min-height: calc(30px * var(--ui-scale));
+  padding: calc(3px * var(--ui-scale)) var(--ui-gap-sm);
+  color: var(--text);
+}
+
+.mission-task-projection-main {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  gap: calc(1px * var(--ui-scale));
+}
+
+.mission-task-projection-title,
+.mission-task-projection-meta {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.mission-task-projection-title {
+  font-size: var(--ui-font-tiny);
+  color: var(--text-strong);
+}
+
+.mission-task-projection-meta {
+  display: flex;
+  gap: var(--ui-gap-sm);
+  font-size: var(--ui-font-tiny);
+  color: var(--text-muted);
+}
+
+.mission-task-projection-status {
+  min-width: calc(54px * var(--ui-scale));
+  text-align: center;
+  padding: 0 var(--ui-gap-xs);
+  border-radius: var(--oc-radius-pill);
+  background: color-mix(in srgb, var(--text-muted) 12%, transparent);
+  color: var(--text-muted);
+  font-size: var(--ui-font-tiny);
+}
+
+.mission-task-projection-status[data-status="active"] {
+  background: var(--accent-dim);
+  color: var(--accent);
+}
+
+.mission-task-projection-status[data-status="completed"] {
+  background: var(--good-dim);
+  color: var(--good);
+}
+
+.mission-task-projection-status[data-status="failed"],
+.mission-task-projection-status[data-status="cancelled"] {
+  background: var(--bad-dim);
+  color: var(--bad);
+}
+
 .ledger-empty,
 .ledger-skeleton,
 .ledger-skeleton-row {
@@ -344,6 +423,16 @@ body:not([data-page-mode="mission"]) > .workbench-project-bar {
    default heading margin reset so it centres in the fixed-height header. */
 .mission-conversation-title {
   margin: 0;
+}
+
+.mission-conversation-runtime {
+  display: inline-flex;
+  align-items: center;
+  min-width: calc(64px * var(--ui-scale));
+  justify-content: flex-end;
+  color: var(--text-muted);
+  font-size: var(--ui-font-small);
+  font-variant-numeric: tabular-nums;
 }
 
 .mission-conversation-body {
@@ -486,6 +575,7 @@ body:not([data-page-mode="mission"]) > .workbench-project-bar {
   margin: 0;
 }
 
+.mission-created-task-stats,
 .mission-channels-runtime,
 .mission-channels-list {
   display: flex;
@@ -495,6 +585,7 @@ body:not([data-page-mode="mission"]) > .workbench-project-bar {
   border-bottom: var(--oc-border-width) dashed var(--border);
 }
 
+.mission-created-task-stats h3,
 .mission-channels-runtime h3 {
   margin: 0;
   font-size: var(--ui-font-tiny);
@@ -502,6 +593,31 @@ body:not([data-page-mode="mission"]) > .workbench-project-bar {
   text-transform: uppercase;
   letter-spacing: var(--ui-letter-spacing-loose);
   color: var(--text-muted);
+}
+
+.mission-created-task-stats-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: var(--ui-gap-sm);
+  margin: 0;
+}
+
+.mission-created-task-stats-grid div {
+  min-width: 0;
+}
+
+.mission-created-task-stats-grid dt {
+  font-size: var(--ui-font-tiny);
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: var(--ui-letter-spacing-loose);
+}
+
+.mission-created-task-stats-grid dd {
+  margin: calc(2px * var(--ui-scale)) 0 0;
+  color: var(--text-strong);
+  font-size: var(--ui-font-heading);
+  font-variant-numeric: tabular-nums;
 }
 
 .mission-channels-runtime-meta {

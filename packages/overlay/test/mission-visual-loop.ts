@@ -266,6 +266,32 @@ async function applyMocks(page: OverlayPage): Promise<void> {
           directory: "/workspace/mission-demo",
           created: Date.now() - 3_600_000,
           updated: Date.now() - 120_000,
+          tasks: [
+            {
+              id: "task_visual_active",
+              title: "Align Mission workbench parity",
+              status: "active",
+              priority: "high",
+              source: "mission",
+              directory: "/workspace/mission-demo",
+              created: Date.now() - 900_000,
+              updated: Date.now() - 120_000,
+              started: Date.now() - 850_000,
+            },
+            {
+              id: "task_visual_done",
+              title: "Audit channel stats projection",
+              status: "completed",
+              priority: "normal",
+              source: "mission",
+              directory: "/workspace/mission-demo",
+              created: Date.now() - 1_800_000,
+              updated: Date.now() - 1_200_000,
+              started: Date.now() - 1_760_000,
+              completed: Date.now() - 1_200_000,
+            },
+          ],
+          taskStats: { total: 2, queued: 0, active: 1, completed: 1, failed: 0, cancelled: 0 },
         },
         {
           missionID: "mission_visual_audit",
@@ -274,6 +300,8 @@ async function applyMocks(page: OverlayPage): Promise<void> {
           directory: "/workspace/mission-audit",
           created: Date.now() - 7_200_000,
           updated: Date.now() - 240_000,
+          tasks: [],
+          taskStats: { total: 0, queued: 0, active: 0, completed: 0, failed: 0, cancelled: 0 },
         },
       ])
     }
@@ -519,7 +547,9 @@ async function captureStates(page: OverlayPage): Promise<StateResult[]> {
       const panel = document.querySelector('[data-ui="mission-back-panel"]')
       const create = document.querySelector('[data-ui="mission-new"]')
       const refresh = document.querySelector('[data-ui="mission-refresh"]')
-      if (!panel) throw new Error("missing Mission Panel button")
+      if (!panel) throw new Error("missing Mission Task button")
+      if (panel.querySelector("[data-oc-icon], svg")) throw new Error("Mission Task button should not render an icon")
+      if (panel.textContent?.trim() !== "Task") throw new Error(`Mission Task button label mismatch: ${panel.textContent}`)
       if (!create) throw new Error("missing Mission create button")
       if (refresh) throw new Error("Mission refresh button should be removed")
     })

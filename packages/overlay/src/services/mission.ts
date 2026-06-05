@@ -89,6 +89,30 @@ export interface MissionWakeResult {
   created: boolean
 }
 
+export type MissionTaskStatus = "queued" | "active" | "completed" | "failed" | "cancelled"
+
+export interface MissionTaskProjection {
+  id: string
+  title: string
+  status: MissionTaskStatus
+  priority: "critical" | "high" | "normal" | "low"
+  source: string
+  directory: string
+  created: number
+  updated: number
+  started?: number
+  completed?: number
+}
+
+export interface MissionTaskStats {
+  total: number
+  queued: number
+  active: number
+  completed: number
+  failed: number
+  cancelled: number
+}
+
 export interface MissionRecord {
   missionID: string
   sessionID: string
@@ -97,6 +121,8 @@ export interface MissionRecord {
   created: number
   updated: number
   archived?: number
+  tasks: MissionTaskProjection[]
+  taskStats: MissionTaskStats
 }
 
 export interface ChannelBindingRow {
