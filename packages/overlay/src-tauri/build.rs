@@ -1,11 +1,14 @@
 use std::{
     collections::hash_map::DefaultHasher,
     env,
-    fs,
+    fs::{self, File},
     hash::{Hash, Hasher},
     path::{Path, PathBuf},
     time::UNIX_EPOCH,
 };
+
+use flate2::{write::GzEncoder, Compression};
+use tar::{Builder, Header};
 
 fn dist_os(target_os: &str) -> &str {
     match target_os {
@@ -59,13 +62,20 @@ fn collect_payload_files(source: &Path) -> Vec<PathBuf> {
             if path.is_dir() {
                 visit(root, &path, out);
             } else if path.is_file() {
-                out.push(path.strip_prefix(root).expect("embedded file under root").to_path_buf());
+                out.push(
+                    path.strip_prefix(root)
+                        .expect("embedded file under root")
+                        .to_path_buf(),
+                );
             }
         }
     }
 
     if source.is_file() {
-        return vec![source.file_name().expect("embedded sidecar file name").into()];
+        return vec![source
+            .file_name()
+            .expect("embedded sidecar file name")
+            .into()];
     }
 
     let mut result = Vec::new();
@@ -96,7 +106,52 @@ fn payload_stamp(source: &Path, files: &[PathBuf]) -> String {
     format!("{}-{:x}", files.len(), hasher.finish())
 }
 
-fn write_embed_module(source: &Path, target_os: &str, out_file: &Path) {
+fn payload_executable(rel_path: &str, server_name: &str, node: &str) -> bool {
+    rel_path == server_name || rel_path == node
+}
+
+fn write_payload_archive(source: &Path, files: &[PathBuf], target_os: &str, archive_file: &Path) {
+    let server_name = if target_os == "windows" {
+        "opencorvus.exe"
+    } else {
+        "opencorvus"
+    };
+    let node = format!("browser-mcp-node/{}", node_name(target_os));
+    let archive = File::create(archive_file).expect("create embedded sidecar archive");
+    let encoder = GzEncoder::new(archive, Compression::default());
+    let mut builder = Builder::new(encoder);
+
+    for rel in files {
+        let src = source.join(rel);
+        let rel_path = rel_slash(rel);
+        let mut input = File::open(&src)
+            .unwrap_or_else(|e| panic!("open embedded sidecar file {}: {e}", src.display()));
+        let meta = input
+            .metadata()
+            .unwrap_or_else(|e| panic!("stat embedded sidecar file {}: {e}", src.display()));
+        let mut header = Header::new_gnu();
+        header.set_size(meta.len());
+        header.set_mode(if payload_executable(&rel_path, server_name, &node) {
+            0o755
+        } else {
+            0o644
+        });
+        if let Ok(modified) = meta.modified() {
+            if let Ok(duration) = modified.duration_since(UNIX_EPOCH) {
+                header.set_mtime(duration.as_secs());
+            }
+        }
+        header.set_cksum();
+        builder
+            .append_data(&mut header, rel_path, &mut input)
+            .expect("append embedded sidecar file to archive");
+    }
+
+    let encoder = builder.into_inner().expect("finish embedded sidecar tar");
+    encoder.finish().expect("finish embedded sidecar gzip");
+}
+
+fn write_embed_module(source: &Path, target_os: &str, out_file: &Path, archive_file: &Path) {
     let server_name = if target_os == "windows" {
         "opencorvus.exe"
     } else {
@@ -113,7 +168,8 @@ fn write_embed_module(source: &Path, target_os: &str, out_file: &Path) {
             format!(
                 "pub const EMBEDDED_SERVER_NAME: &str = {server_name:?};\n\
                  pub const EMBEDDED_SERVER_STAMP: &str = \"missing\";\n\
-                 pub struct EmbeddedSidecarFile {{ pub path: &'static str, pub executable: bool, pub bytes: &'static [u8] }}\n\
+                 pub const EMBEDDED_SERVER_ARCHIVE_GZ: &[u8] = &[];\n\
+                 pub struct EmbeddedSidecarFile {{ pub path: &'static str, pub executable: bool, pub size: u64 }}\n\
                  pub const EMBEDDED_SERVER_FILES: &[EmbeddedSidecarFile] = &[];\n"
             ),
         )
@@ -129,24 +185,29 @@ fn write_embed_module(source: &Path, target_os: &str, out_file: &Path) {
     let files = collect_payload_files(source);
     let stamp = payload_stamp(root, &files);
     let node = format!("browser-mcp-node/{}", node_name(target_os));
+    write_payload_archive(root, &files, target_os, archive_file);
     let entries = files
         .iter()
         .map(|rel| {
             let rel_path = rel_slash(rel);
-            let source_literal = root.join(rel).to_string_lossy().to_string();
-            let executable = rel_path == server_name || rel_path == node;
+            let executable = payload_executable(&rel_path, server_name, &node);
+            let size = fs::metadata(root.join(rel))
+                .expect("stat embedded sidecar file")
+                .len();
             format!(
-                "    EmbeddedSidecarFile {{ path: {rel_path:?}, executable: {executable}, bytes: include_bytes!({source_literal:?}) }},\n"
+                "    EmbeddedSidecarFile {{ path: {rel_path:?}, executable: {executable}, size: {size} }},\n"
             )
         })
         .collect::<String>();
+    let archive_literal = archive_file.to_string_lossy().to_string();
 
     fs::write(
         out_file,
         format!(
             "pub const EMBEDDED_SERVER_NAME: &str = {server_name:?};\n\
              pub const EMBEDDED_SERVER_STAMP: &str = {stamp:?};\n\
-             pub struct EmbeddedSidecarFile {{ pub path: &'static str, pub executable: bool, pub bytes: &'static [u8] }}\n\
+             pub const EMBEDDED_SERVER_ARCHIVE_GZ: &[u8] = include_bytes!({archive_literal:?});\n\
+             pub struct EmbeddedSidecarFile {{ pub path: &'static str, pub executable: bool, pub size: u64 }}\n\
              pub const EMBEDDED_SERVER_FILES: &[EmbeddedSidecarFile] = &[\n\
              {entries}\
              ];\n"
@@ -176,7 +237,10 @@ fn write_server_defaults(manifest_dir: &Path, out_file: &Path) {
         .and_then(|v| v.as_u64())
         .unwrap_or_else(|| panic!("missing 'port' in {}", defaults_path.display()));
     if port > u16::MAX as u64 {
-        panic!("port {port} in {} exceeds u16::MAX", defaults_path.display());
+        panic!(
+            "port {port} in {} exceeds u16::MAX",
+            defaults_path.display()
+        );
     }
 
     fs::write(
@@ -200,11 +264,25 @@ fn main() {
         .unwrap_or_else(|| default_embed_path(&manifest_dir, &target_os, &target_arch));
     let out_dir = PathBuf::from(env::var("OUT_DIR").expect("OUT_DIR"));
     let embed_out = out_dir.join("embedded_sidecar.rs");
+    let archive_out = out_dir.join("embedded_sidecar.tar.gz");
     let defaults_out = out_dir.join("server_defaults.rs");
 
     println!("cargo:rerun-if-env-changed=OPENCORVUS_EMBED_PATH");
     println!("cargo:rerun-if-changed={}", embed_path.display());
-    write_embed_module(&embed_path, &target_os, &embed_out);
+    if embed_path.exists() {
+        let root = if embed_path.is_file() {
+            embed_path
+                .parent()
+                .expect("embedded sidecar file parent")
+                .to_path_buf()
+        } else {
+            embed_path.clone()
+        };
+        for rel in collect_payload_files(&embed_path) {
+            println!("cargo:rerun-if-changed={}", root.join(rel).display());
+        }
+    }
+    write_embed_module(&embed_path, &target_os, &embed_out, &archive_out);
     write_server_defaults(&manifest_dir, &defaults_out);
 
     tauri_build::build()

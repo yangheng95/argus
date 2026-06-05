@@ -26,6 +26,7 @@ type EventHandler = (payload: unknown) => void | Promise<void>
 export type OverlayPage = {
   setViewport(viewport: { width: number; height: number; deviceScaleFactor?: number }): Promise<void>
   setViewportSize(viewport: { width: number; height: number }): Promise<void>
+  setContent(html: string, options?: Record<string, unknown>): Promise<void>
   goto(url: string, options?: Record<string, unknown>): Promise<unknown>
   waitForSelector(selector: string, options?: Record<string, unknown> & { visible?: boolean }): Promise<unknown>
   waitForFunction(fn: Function | string, optionsOrArg?: unknown, argOrOptions?: unknown): Promise<unknown>
@@ -235,6 +236,7 @@ class OverlayBrowserSidecar {
     return {
       setViewport: (viewport) => remote("setViewportSize", [{ width: viewport.width, height: viewport.height }]) as Promise<void>,
       setViewportSize: (viewport) => remote("setViewportSize", [viewport]) as Promise<void>,
+      setContent: (html, options = {}) => remote("setContent", [html, options]) as Promise<void>,
       goto: (url, options) => remote("goto", [url, options]),
       waitForSelector: (selector, options) => remote("waitForSelector", [selector, options]),
       waitForFunction: (fn, optionsOrArg, argOrOptions) => remote("waitForFunction", [fn, optionsOrArg, argOrOptions]),

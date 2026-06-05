@@ -50,9 +50,11 @@ test("hover-only action rails do not overlap row text", async () => {
               <div class="task-row-right">
                 <small class="task-row-stamp">07:56:38</small>
                 <div class="task-row-actions">
-                  <button type="button" class="oc-button" data-ui="task-row-start-now">S</button>
-                  <button type="button" class="oc-button" data-ui="task-row-cancel">C</button>
-                  <button type="button" class="oc-button" data-ui="task-row-delete">D</button>
+                  <button type="button" class="oc-button" data-chrome="icon-action" data-ui="task-row-start-now">S</button>
+                  <button type="button" class="oc-button" data-chrome="icon-action" data-ui="task-row-cancel">C</button>
+                  <button type="button" class="oc-button" data-chrome="icon-action" data-ui="task-row-download">D</button>
+                  <button type="button" class="oc-button" data-chrome="icon-action" data-ui="task-row-rename">R</button>
+                  <button type="button" class="oc-button" data-chrome="icon-action" data-ui="task-row-delete">D</button>
                 </div>
               </div>
             </div>
