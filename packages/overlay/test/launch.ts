@@ -410,8 +410,12 @@ function decodeEvent(event: string, payload: JsonValue) {
     return { url: () => item.url ?? "", status: () => item.status ?? 0, statusText: () => item.statusText ?? "" }
   }
   if (event === "requestfailed" && payload && typeof payload === "object") {
-    const item = payload as { url?: string; errorText?: string }
-    return { url: () => item.url ?? "", failure: () => ({ errorText: item.errorText ?? "request failed" }) }
+    const item = payload as { url?: string; method?: string; errorText?: string }
+    return {
+      url: () => item.url ?? "",
+      method: () => item.method ?? "GET",
+      failure: () => ({ errorText: item.errorText ?? "request failed" }),
+    }
   }
   if (event === "pageerror" && payload && typeof payload === "object") {
     const item = payload as { message?: string; stack?: string }
@@ -539,7 +543,7 @@ async function callPage(page, method, rawArgs) {
 function pageEventPayload(event, item) {
   if (event === "console") return { type: item.type(), text: item.text() };
   if (event === "response") return { url: item.url(), status: item.status(), statusText: item.statusText() };
-  if (event === "requestfailed") return { url: item.url(), errorText: item.failure()?.errorText || "request failed" };
+  if (event === "requestfailed") return { url: item.url(), method: item.method(), errorText: item.failure()?.errorText || "request failed" };
   if (event === "pageerror") return { message: item.message, stack: item.stack };
   return String(item);
 }

@@ -1,5 +1,5 @@
 import { createMemo, createSignal, For, Show } from "solid-js"
-import type { MissionRecord } from "../services/mission"
+import type { MissionRecord, MissionTaskProjection, MissionTaskStatus } from "../services/mission"
 import { detailStamp, relativeTime } from "../utils/time"
 import { t } from "../utils/i18n"
 import { compactDirectory } from "../utils/mission-helpers"
@@ -117,6 +117,28 @@ function MissionRenameButton(props: { onClick: () => void }) {
   )
 }
 
+function missionTaskStatusLabel(status: MissionTaskStatus): string {
+  const value = t(`task.status.${status}`)
+  return value === `task.status.${status}` ? status : value
+}
+
+function MissionTaskProjectionRow(props: { task: MissionTaskProjection }) {
+  return (
+    <li class="mission-task-projection-row" data-ui="mission-task-projection" data-task-id={props.task.id} data-status={props.task.status}>
+      <span class="mission-task-projection-main">
+        <span class="mission-task-projection-title">{props.task.title || props.task.id}</span>
+        <span class="mission-task-projection-meta">
+          <span>{props.task.id}</span>
+          <span>{compactDirectory(props.task.directory)}</span>
+        </span>
+      </span>
+      <span class="mission-task-projection-status" data-status={props.task.status}>
+        {missionTaskStatusLabel(props.task.status)}
+      </span>
+    </li>
+  )
+}
+
 function MissionRow(props: {
   mission: MissionRecord
   selected: boolean
@@ -153,84 +175,93 @@ function MissionRow(props: {
   }
 
   return (
-    <div
-      role="button"
-      tabindex={0}
-      class="ledger-row mission-row"
-      data-ui="mission-row"
-      data-mission-id={props.mission.missionID}
-      data-session-id={props.mission.sessionID}
-      data-active={props.selected ? "true" : undefined}
-      onClick={() => {
-        if (editing()) return
-        props.onSelectMission(props.mission)
-      }}
-      onKeyDown={(event) => {
-        if (event.target !== event.currentTarget) return
-        if (event.key !== "Enter" && event.key !== " ") return
-        event.preventDefault()
-        if (!editing()) props.onSelectMission(props.mission)
-      }}
-      onDblClick={(event) => {
-        event.stopPropagation()
-        event.preventDefault()
-        beginRename()
-      }}
-    >
-      <span class="ledger-row-icon" aria-hidden="true">
-        <Icon name="mission" size={14} />
-      </span>
-      <span class="ledger-row-main">
-        <Show
-          when={!editing()}
-          fallback={
-            <input
-              ref={(el) => {
-                inputRef = el
-              }}
-              class="mission-row-rename-input"
-              data-ui="mission-row-rename-input"
-              type="text"
-              maxLength={200}
-              value={draftTitle()}
-              aria-label={t("mission.ledger.rename_placeholder")}
-              placeholder={t("mission.ledger.rename_placeholder")}
-              onInput={(event) => setDraftTitle(event.currentTarget.value)}
-              onClick={(event) => event.stopPropagation()}
-              onKeyDown={(event) => {
-                if (event.key === "Enter") {
-                  event.preventDefault()
-                  commitRename()
-                } else if (event.key === "Escape") {
-                  event.preventDefault()
-                  cancelRename()
-                }
-              }}
-              onBlur={() => {
-                queueMicrotask(() => {
-                  if (editing()) commitRename()
-                })
-              }}
-            />
-          }
-        >
-          <span class="ledger-row-title">{title()}</span>
-        </Show>
-        <span class="ledger-row-meta">
-          <span>{props.mission.missionID}</span>
-          <span>{compactDirectory(props.mission.directory)}</span>
+    <div class="mission-row-shell" data-ui="mission-row-shell" data-mission-id={props.mission.missionID}>
+      <div
+        role="button"
+        tabindex={0}
+        class="ledger-row mission-row"
+        data-ui="mission-row"
+        data-mission-id={props.mission.missionID}
+        data-session-id={props.mission.sessionID}
+        data-active={props.selected ? "true" : undefined}
+        onClick={() => {
+          if (editing()) return
+          props.onSelectMission(props.mission)
+        }}
+        onKeyDown={(event) => {
+          if (event.target !== event.currentTarget) return
+          if (event.key !== "Enter" && event.key !== " ") return
+          event.preventDefault()
+          if (!editing()) props.onSelectMission(props.mission)
+        }}
+        onDblClick={(event) => {
+          event.stopPropagation()
+          event.preventDefault()
+          beginRename()
+        }}
+      >
+        <span class="ledger-row-icon" aria-hidden="true">
+          <Icon name="mission" size={14} />
         </span>
-      </span>
-      <span class="ledger-row-right">
-        <span class="ledger-row-stamp" title={detailStamp(props.mission.updated)}>
-          {relativeTime(props.mission.updated) || t("mission.ledger.updated_unknown")}
+        <span class="ledger-row-main">
+          <Show
+            when={!editing()}
+            fallback={
+              <input
+                ref={(el) => {
+                  inputRef = el
+                }}
+                class="mission-row-rename-input"
+                data-ui="mission-row-rename-input"
+                type="text"
+                maxLength={200}
+                value={draftTitle()}
+                aria-label={t("mission.ledger.rename_placeholder")}
+                placeholder={t("mission.ledger.rename_placeholder")}
+                onInput={(event) => setDraftTitle(event.currentTarget.value)}
+                onClick={(event) => event.stopPropagation()}
+                onKeyDown={(event) => {
+                  if (event.key === "Enter") {
+                    event.preventDefault()
+                    commitRename()
+                  } else if (event.key === "Escape") {
+                    event.preventDefault()
+                    cancelRename()
+                  }
+                }}
+                onBlur={() => {
+                  queueMicrotask(() => {
+                    if (editing()) commitRename()
+                  })
+                }}
+              />
+            }
+          >
+            <span class="ledger-row-title">{title()}</span>
+          </Show>
+          <span class="ledger-row-meta">
+            <span>{props.mission.missionID}</span>
+            <span>{compactDirectory(props.mission.directory)}</span>
+          </span>
         </span>
-        <span class="mission-row-actions">
-          <MissionAbortButton mission={props.mission} onAbort={props.onAbortMission} />
-          <MissionRenameButton onClick={beginRename} />
-          <MissionDeleteButton mission={props.mission} onDelete={props.onDeleteMission} />
+        <span class="ledger-row-right">
+          <span class="ledger-row-stamp" title={detailStamp(props.mission.updated)}>
+            {relativeTime(props.mission.updated) || t("mission.ledger.updated_unknown")}
+          </span>
+          <span class="mission-row-actions">
+            <MissionAbortButton mission={props.mission} onAbort={props.onAbortMission} />
+            <MissionRenameButton onClick={beginRename} />
+            <MissionDeleteButton mission={props.mission} onDelete={props.onDeleteMission} />
+          </span>
         </span>
-      </span>
+      </div>
+      <Show when={props.mission.tasks.length > 0}>
+        <ul class="mission-task-projection-list" aria-label={t("mission.ledger.tasks_label")}>
+          <For each={props.mission.tasks}>
+            {(task) => <MissionTaskProjectionRow task={task} />}
+          </For>
+        </ul>
+      </Show>
     </div>
   )
 }
@@ -286,7 +317,6 @@ export function MissionList(props: MissionListProps) {
             aria-label={t("mission.back")}
             onClick={props.onBackToPanel}
           >
-            <Icon name="panel-left" size={13} />
             <span>{t("mission.back")}</span>
           </Button>
           <Button

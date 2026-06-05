@@ -5,6 +5,8 @@ import { randomBytes } from "node:crypto"
 import { Instance } from "@/project/instance"
 import { ensureMissionSession, findExistingMissionSession, getMissionSession, listGlobalMissionSessions } from "@/mission/session"
 import { MissionID } from "@/mission/schema"
+import { listMissionTasks, listTaskRows } from "@/engine/store"
+import { deriveTaskStatus } from "@/engine/task-status"
 import { Session } from "@/session"
 import { SessionPrompt } from "@/session/prompt"
 import { SessionWake } from "@/session/wake"
@@ -25,6 +27,30 @@ const MissionWakeResult = z.object({
   created: z.boolean(),
 })
 
+const MissionTaskStatus = z.enum(["queued", "active", "completed", "failed", "cancelled"])
+
+const MissionTaskProjection = z.object({
+  id: z.string(),
+  title: z.string(),
+  status: MissionTaskStatus,
+  priority: z.enum(["critical", "high", "normal", "low"]),
+  source: z.string(),
+  directory: z.string(),
+  created: z.number(),
+  updated: z.number(),
+  started: z.number().optional(),
+  completed: z.number().optional(),
+})
+
+const MissionTaskStats = z.object({
+  total: z.number(),
+  queued: z.number(),
+  active: z.number(),
+  completed: z.number(),
+  failed: z.number(),
+  cancelled: z.number(),
+})
+
 const MissionRecord = z.object({
   missionID: MissionID,
   sessionID: z.string(),
@@ -33,6 +59,8 @@ const MissionRecord = z.object({
   created: z.number(),
   updated: z.number(),
   archived: z.number().optional(),
+  tasks: MissionTaskProjection.array(),
+  taskStats: MissionTaskStats,
 })
 
 const MissionListQuery = z
@@ -56,6 +84,52 @@ const MissionParam = z.object({
 const MissionTitleInput = z.object({
   title: z.string().trim().min(1).max(200),
 })
+
+type MissionSessionRecord = Awaited<ReturnType<typeof getMissionSession>>
+type MissionTaskProjectionValue = z.infer<typeof MissionTaskProjection>
+
+function missionTaskStats(tasks: MissionTaskProjectionValue[]): z.infer<typeof MissionTaskStats> {
+  return tasks.reduce(
+    (stats, task) => {
+      stats.total += 1
+      stats[task.status] += 1
+      return stats
+    },
+    { total: 0, queued: 0, active: 0, completed: 0, failed: 0, cancelled: 0 },
+  )
+}
+
+function projectMissionTasks(session: MissionSessionRecord): MissionTaskProjectionValue[] {
+  return listTaskRows(listMissionTasks({ projectID: session.projectID, missionID: session.missionID, sessionID: session.id })).map(({ task, directory }) =>
+    MissionTaskProjection.parse({
+      id: task.id,
+      title: task.title,
+      status: deriveTaskStatus(task),
+      priority: task.priority,
+      source: task.source,
+      directory,
+      created: task.time_created,
+      updated: task.time_updated,
+      started: task.time_started ?? undefined,
+      completed: task.time_completed ?? undefined,
+    }),
+  )
+}
+
+function missionRecord(session: MissionSessionRecord): z.infer<typeof MissionRecord> {
+  const tasks = projectMissionTasks(session)
+  return MissionRecord.parse({
+    missionID: session.missionID,
+    sessionID: session.id,
+    title: session.title,
+    directory: session.directory,
+    created: session.time.created,
+    updated: session.time.updated,
+    archived: session.time.archived,
+    tasks,
+    taskStats: missionTaskStats(tasks),
+  })
+}
 
 export function MissionRoutes() {
   return new Hono().get(
@@ -86,17 +160,7 @@ export function MissionRoutes() {
         cursorSessionID: query.cursorSessionID,
         archived: query.archived,
       })) {
-        records.push(
-          MissionRecord.parse({
-            missionID: session.missionID,
-            sessionID: session.id,
-            title: session.title,
-            directory: session.directory,
-            created: session.time.created,
-            updated: session.time.updated,
-            archived: session.time.archived,
-          }),
-        )
+        records.push(missionRecord(session))
       }
       return c.json(records)
     },
@@ -119,17 +183,7 @@ export function MissionRoutes() {
       const missionID = c.req.valid("param").missionID
       const session = await getMissionSession(missionID)
       const updated = await Session.setTitle({ sessionID: session.id, title: c.req.valid("json").title })
-      return c.json(
-        MissionRecord.parse({
-          missionID,
-          sessionID: updated.id,
-          title: updated.title,
-          directory: updated.directory,
-          created: updated.time.created,
-          updated: updated.time.updated,
-          archived: updated.time.archived,
-        }),
-      )
+      return c.json(missionRecord({ ...updated, missionID }))
     },
   ).post(
     "/:missionID/abort",

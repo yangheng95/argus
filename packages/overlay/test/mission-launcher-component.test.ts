@@ -8,6 +8,7 @@ import { join } from "node:path"
   "test"
 
 const MISSION_TSX = readFileSync(join(import.meta.dir, "../src/components/Mission.tsx"), "utf8")
+const MISSION_LIST_TSX = readFileSync(join(import.meta.dir, "../src/components/MissionList.tsx"), "utf8")
 const SERVICES_MISSION = readFileSync(join(import.meta.dir, "../src/services/mission.ts"), "utf8")
 const HELPERS = readFileSync(join(import.meta.dir, "../src/utils/mission-helpers.ts"), "utf8")
 const I18N_ZH_CN = readFileSync(join(import.meta.dir, "../src/i18n/zh-CN.json"), "utf8")
@@ -101,8 +102,40 @@ test("services/mission.ts exports wakeMission pointed at /mission/wake", () => {
 test("services/mission.ts exports loadMissions pointed at /mission", () => {
   expect(SERVICES_MISSION).toContain("export async function loadMissions")
   expect(SERVICES_MISSION).toContain("MissionRecord")
+  expect(SERVICES_MISSION).toContain("MissionTaskProjection")
+  expect(SERVICES_MISSION).toContain("MissionTaskStats")
   expect(SERVICES_MISSION).toContain("apiJson(`mission${suffix}`")
   expect(SERVICES_MISSION).toContain("server returned non-array body")
+})
+
+test("Mission ledger renders mission-created task projections under each mission", () => {
+  expect(MISSION_LIST_TSX).toContain("MissionTaskProjectionRow")
+  expect(MISSION_LIST_TSX).toContain('data-ui="mission-task-projection"')
+  expect(MISSION_LIST_TSX).toContain("props.mission.tasks")
+  expect(MISSION_LIST_TSX).toContain("mission.ledger.tasks_label")
+})
+
+test("Mission ledger back action is a text-only Task button", () => {
+  const backButton = MISSION_LIST_TSX.match(/data-ui="mission-back-panel"[\s\S]*?<\/Button>/)?.[0] ?? ""
+  expect(backButton).toContain("<span>{t(\"mission.back\")}</span>")
+  expect(backButton).not.toContain("<Icon")
+  expect(I18N_EN_US).toContain('"mission.back": "Task"')
+  expect(I18N_ZH_CN).toContain('"mission.back": "Task"')
+})
+
+test("Mission conversation header shows runtime instead of close", () => {
+  expect(MISSION_TSX).toContain('data-ui="mission-runtime"')
+  expect(MISSION_TSX).toContain("formatDuration")
+  expect(MISSION_TSX).toContain("useNowTick")
+  expect(MISSION_TSX).not.toContain('data-ui="mission-close"')
+})
+
+test("Mission channel rail shows created task stats before channel runtime", () => {
+  const statsIndex = MISSION_TSX.indexOf('data-ui="mission-created-task-stats"')
+  const runtimeIndex = MISSION_TSX.indexOf('data-ui="mission-channels-runtime"')
+  expect(statsIndex).toBeGreaterThan(0)
+  expect(runtimeIndex).toBeGreaterThan(statsIndex)
+  expect(MISSION_TSX).toContain("missionChannelTaskStats")
 })
 
 test("MissionComposer reuses ChatComposer with mission-scoped DOM ids", () => {
