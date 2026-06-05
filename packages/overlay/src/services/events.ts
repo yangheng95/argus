@@ -486,6 +486,7 @@ export function replayTaskEventToTree(event: any): void {
 // ── Main router ──
 
 const BOARD_EVENT_DEBOUNCE = 500;
+const TASK_LIST_MESSAGE_REFRESH_DELAY = 500;
 const CONFIG_EVENT_DEBOUNCE = 50;
 
 let tasksKickTimer: ReturnType<typeof setTimeout> | null = null;
@@ -738,8 +739,12 @@ function shouldRefreshSelectedBoard(type: string): boolean {
   );
 }
 
-function scheduleTasksCompat(delay = 0): void {
-  if (tasksKickTimer) clearTimeout(tasksKickTimer);
+function scheduleTasksCompat(delay = 0, options: { resetExisting?: boolean } = {}): void {
+  const resetExisting = options.resetExisting ?? true;
+  if (tasksKickTimer) {
+    if (!resetExisting) return;
+    clearTimeout(tasksKickTimer);
+  }
   tasksKickTimer = setTimeout(() => {
     tasksKickTimer = null;
     void loadTasks();
@@ -825,6 +830,9 @@ export function handleTaskListNotification(event: any): void {
     return;
   }
   const taskID = eventTaskID(event);
+  if (taskID && isMessageStreamEvent(type)) {
+    scheduleTasksCompat(TASK_LIST_MESSAGE_REFRESH_DELAY, { resetExisting: false });
+  }
   if (taskID && boardInvalidatingEvent(type)) {
     scheduleTasksCompat(BOARD_EVENT_DEBOUNCE);
   }

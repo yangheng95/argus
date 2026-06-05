@@ -788,7 +788,7 @@ test("task-list selected sequence gap does not trigger selected-task recovery", 
   expect(boardStore.taskSequence).toBe(5);
 });
 
-test("task-list message delta notifications do not reload tasks", async () => {
+test("task-list message delta notifications reload tasks once per coalesced burst", async () => {
   await new Promise((resolve) => setTimeout(resolve, 650));
   const originalFetch = globalThis.fetch;
   const originalLocalStorage = globalThis.localStorage;
@@ -816,11 +816,20 @@ test("task-list message delta notifications do not reload tasks", async () => {
       taskID: "tsk_sidebar_refresh",
       sequence: 7,
     });
+    handleTaskListNotification({
+      type: "message.part.delta",
+      taskID: "tsk_sidebar_refresh",
+      sequence: 8,
+    });
+    handleTaskListNotification({
+      type: "message.updated",
+      taskID: "tsk_sidebar_refresh",
+      sequence: 9,
+    });
 
     await new Promise((resolve) => setTimeout(resolve, 650));
-    expect(
-      fetchMock.mock.calls.some(([url]) => String(url).includes("/global/tasks")),
-    ).toBe(false);
+    const taskReloads = fetchMock.mock.calls.filter(([url]) => String(url).includes("/global/tasks"));
+    expect(taskReloads).toHaveLength(1);
   } finally {
     globalThis.fetch = originalFetch;
     globalThis.localStorage = originalLocalStorage;
