@@ -255,8 +255,12 @@ async function resolvePtyNodeRuntime() {
 }
 
 function bridgeMessage(child: ChildProcess, message: unknown) {
-  if (!child.stdin?.writable) throw new Error("TUI PTY bridge is not writable")
-  child.stdin.write(JSON.stringify(message) + "\n")
+  if (!child.stdin?.writable || child.stdin.destroyed || child.exitCode !== null) return
+  try {
+    child.stdin.write(JSON.stringify(message) + "\n")
+  } catch {
+    // The bridge process can exit between the writable check and write.
+  }
 }
 
 async function nodeBridgePtyProcess(input: { command: Tui.EmbeddedCommand; cols: number; rows: number; env: Record<string, string> }): Promise<HostProcess> {
@@ -277,6 +281,9 @@ async function nodeBridgePtyProcess(input: { command: Tui.EmbeddedCommand; cols:
     cwd: runtime.cwd,
     stdio: ["pipe", "pipe", "pipe"],
     windowsHide: true,
+  })
+  child.stdin?.on("error", () => {
+    // The Pseudo Terminal (PTY) child may exit before a late kill/input message reaches stdin.
   })
   const dataHandlers: Array<(chunk: string) => void> = []
   const exitHandlers: ExitHandler[] = []

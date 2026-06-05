@@ -5,6 +5,7 @@ import { NamedError } from "@opencorvus-ai/util/error"
 import { Worktree } from "../../src/worktree/index"
 import { Server } from "../../src/server/server"
 import { Provider } from "../../src/provider/provider"
+import { Pty } from "../../src/pty"
 import { NotFoundError } from "../../src/storage/db"
 import { Filesystem } from "../../src/util/filesystem"
 import { Log } from "../../src/util/log"
@@ -54,6 +55,7 @@ function buildOnErrorProbe(throwFn: () => never): Hono {
       else if (err.name === "ChildSessionConfigError") status = 400
       else if (err.name === "WorktreeNotGitError") status = 412
       else if (err.name.startsWith("Worktree")) status = 400
+      else if (err.name === "PtyCreateFailedError") status = 400
       else status = 500
       return c.json((err as NamedError & { toObject(): { name: string; data: unknown } }).toObject(), { status })
     }
@@ -169,6 +171,21 @@ describe("server onError NamedError → status code mapping (W2-V31)", () => {
       },
       400,
       "ChildSessionConfigError",
+    )
+  })
+
+  test("PtyCreateFailedError maps to 400", async () => {
+    await expectMapping(
+      () => {
+        throw new Pty.CreateFailedError({
+          message: "spawn failed",
+          cwd: "C:\\project",
+          command: "missing-opencorvus",
+          args: [],
+        })
+      },
+      400,
+      "PtyCreateFailedError",
     )
   })
 

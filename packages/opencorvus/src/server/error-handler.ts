@@ -35,6 +35,7 @@ export function namedErrorStatus(err: { name: string }): ContentfulStatusCode {
   if (err.name === "ReplyTargetEnvelopeMissingError") return 409
   if (err.name === "SessionRuntimeContractMissingError") return 410
   if (err.name === "MissingModelConfigError") return 400
+  if (err.name === "PtyCreateFailedError") return 400
   return 500
 }
 
