@@ -7,6 +7,7 @@ import { Instance } from "@/project/instance"
 import { Tui } from "@/tui"
 import { TuiHost } from "@/tui/host"
 import { Filesystem } from "@/util/filesystem"
+import { NamedError } from "@opencorvus-ai/util/error"
 
 export namespace Pty {
   export const Info = z
@@ -44,6 +45,16 @@ export namespace Pty {
   })
 
   export type UpdateInput = z.infer<typeof UpdateInput>
+
+  export const CreateFailedError = NamedError.create(
+    "PtyCreateFailedError",
+    z.object({
+      message: z.string(),
+      cwd: z.string(),
+      command: z.string().optional(),
+      args: z.array(z.string()).optional(),
+    }),
+  )
 
   export const Event = {
     Created: BusEvent.define("pty.created", z.object({ info: Info })),
@@ -87,28 +98,39 @@ export namespace Pty {
 
   export async function create(input: CreateInput) {
     const cwd = projectCwd(input.cwd)
-    const command = input.command
-      ? {
-          command: input.command,
-          args: input.args ?? [],
-          cwd,
-          env: input.env,
-          url: "",
-          port: 0,
-          hostname: "",
-        }
-      : await Tui.resolveEmbeddedCommand({ directory: cwd })
-    const info = await TuiHost.startPrepared({
-      command,
-      title: input.title ?? "OpenCorvus TUI",
-    })
-    const mapped = fromHost(info)
-    if (!mapped) throw new Error("PTY session was not created")
-    TuiHost.onExit(mapped.id, (event) => {
-      void Bus.publish(Event.Exited, { id: mapped.id, exitCode: event.exitCode })
-    })
-    void Bus.publish(Event.Created, { info: mapped })
-    return mapped
+    let command: Tui.EmbeddedCommand | undefined
+    try {
+      command = input.command
+        ? {
+            command: input.command,
+            args: input.args ?? [],
+            cwd,
+            env: input.env,
+            url: "",
+            port: 0,
+            hostname: "",
+          }
+        : await Tui.resolveEmbeddedCommand({ directory: cwd })
+      const info = await TuiHost.startPrepared({
+        command,
+        title: input.title ?? "OpenCorvus TUI",
+      })
+      const mapped = fromHost(info)
+      if (!mapped) throw new Error("PTY session was not created")
+      TuiHost.onExit(mapped.id, (event) => {
+        void Bus.publish(Event.Exited, { id: mapped.id, exitCode: event.exitCode })
+      })
+      void Bus.publish(Event.Created, { info: mapped })
+      return mapped
+    } catch (error) {
+      if (error instanceof CreateFailedError) throw error
+      throw new CreateFailedError({
+        message: error instanceof Error ? error.message : String(error),
+        cwd,
+        command: command?.command ?? input.command,
+        args: command?.args ?? input.args,
+      })
+    }
   }
 
   export async function update(id: string, input: UpdateInput) {
@@ -135,10 +157,18 @@ export namespace Pty {
     },
     cursor?: number,
   ) {
-    const prepared = TuiHost.preparePtyConnect({ id, cursor })
-    return prepared.attach({
-      send: (data) => ws.send(data),
-      close: (code, reason) => ws.close(code, reason),
-    })
+    try {
+      const prepared = TuiHost.preparePtyConnect({ id, cursor })
+      return prepared.attach({
+        send: (data) => ws.send(data),
+        close: (code, reason) => ws.close(code, reason),
+      })
+    } catch (error) {
+      ws.close(4404, error instanceof Error ? error.message : "PTY session not found")
+      return {
+        onMessage() {},
+        onClose() {},
+      }
+    }
   }
 }

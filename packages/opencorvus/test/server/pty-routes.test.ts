@@ -40,8 +40,8 @@ function inputEchoCommand(cwd: string): Tui.EmbeddedCommand {
 function exitCommand(cwd: string): Tui.EmbeddedCommand {
   if (process.platform === "win32") {
     return {
-      command: "powershell.exe",
-      args: ["-NoLogo", "-NoProfile", "-ExecutionPolicy", "Bypass", "-Command", "Write-Output pty-exit"],
+      command: "cmd.exe",
+      args: ["/d", "/s", "/c", "echo pty-exit"],
       cwd,
       url: "",
       port: 0,
@@ -235,6 +235,27 @@ describe("server.pty-routes", () => {
           async () => ((await (await app.request("/")).json()) as unknown[]).length === 0,
           "exited PTY session remained in /pty list",
         )
+      },
+    })
+  })
+
+  test("closes stale PTY connects with a not found reason", async () => {
+    await using tmp = await tmpdir()
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const closed: Array<{ code?: number; reason?: string }> = []
+        const handler = Pty.connect("pty_missing_stale", {
+          send: () => {
+            throw new Error("stale PTY connection should not send output")
+          },
+          close: (code, reason) => {
+            closed.push({ code, reason })
+          },
+        })
+        expect(closed).toEqual([{ code: 4404, reason: "PTY session not found" }])
+        handler.onMessage("ignored")
+        handler.onClose()
       },
     })
   })

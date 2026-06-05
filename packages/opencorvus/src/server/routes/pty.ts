@@ -166,7 +166,6 @@ export const PtyRoutes = lazy(() =>
           return parsed
         })()
         let handler: ReturnType<typeof Pty.connect> | undefined
-        if (!Pty.get(id)) throw new NotFoundError({ message: "PTY session not found" })
 
         return {
           onOpen(_event, ws) {

@@ -2393,6 +2393,50 @@ OpenCode gap after the round:
 - This improves diagnosis for host processes that start and then exit, but it does not yet identify why `Pty.create -> Tui.resolveEmbeddedCommand -> TuiHost.startPrepared` might fail before a PTY connection exists.
 - Same intentional MVP gaps remain: link opening, terminal keybind integration, debounced size update, terminal tab/workspace store, full workspace management, external TUI plugin loader, and `SessionV2Debug`/`sync-v2`.
 
+### 2026-06-05 Round 47: MVP stale PTY attach diagnostics
+
+Implemented:
+
+- Rechecked latest OpenCode dev before editing. Upstream advanced to `64dc6d39ab39dee8a220736fd65e171ef476667a` (`feat(core): attach global native tools (#30832)`).
+- Compared the upstream diff from `9211ef7e95b7cd55f08b27b066d635cc42cbb362` to `64dc6d39ab39dee8a220736fd65e171ef476667a`; changed files are core native-tool/public API/package metadata files, not `packages/opencode/src/pty` or TUI source.
+- Copied the important OpenCode attach behavior for missing sessions:
+  - OpenCode `Pty.connect(id, ws)` closes the websocket when `state().get(id)` is missing instead of turning attach into a pre-upgrade route error.
+  - OpenCorvus `/pty/:id/connect` now delegates to `Pty.connect` without a route-level `Pty.get(id)` precheck.
+  - `Pty.connect` now closes stale/missing session attaches with `4404` and `PTY session not found`, giving the browser close-reason UI from Round 45 a backend reason to display.
+- Added `PtyCreateFailedError` as the structured creation failure for real `Pty.create` resolve/spawn failures:
+  - mapped to HTTP 400 in `server/error-handler.ts`;
+  - carries `message`, `cwd`, `command`, and `args`;
+  - intentionally does not include `env`, so PTY environment variables are not leaked into route error JSON.
+- Hardened the Windows Node PTY bridge against late cleanup writes:
+  - bridge messages are ignored after the child process has exited, stdin is destroyed, or the bridge pipe is no longer writable;
+  - stdin `error` events are handled so late `kill`/input cleanup cannot surface as an unhandled `EPIPE`.
+- Stabilized `packages/opencorvus/test/server/pty-routes.test.ts` short-exit Windows fixture with `cmd.exe /c echo pty-exit` instead of PowerShell.
+
+Verified in tests:
+
+- Added `packages/opencorvus/test/server/pty-routes.test.ts` coverage for stale PTY attach:
+  - `Pty.connect("pty_missing_stale", ...)` must close with `4404` and `PTY session not found`;
+  - the returned handler is no-op for late message/close calls.
+- Added `packages/opencorvus/test/server/onerror-mapping.test.ts` coverage that `PtyCreateFailedError` maps to HTTP 400.
+- Re-ran normal OpenCode-shaped PTY route coverage:
+  - list/get/update/delete;
+  - websocket input/output through `/pty/:id/connect`;
+  - public list cleanup after process exit;
+  - lifecycle event publication.
+- `bun test packages/opencorvus/test/server/pty-routes.test.ts packages/opencorvus/test/server/onerror-mapping.test.ts`
+- `bun test packages/opencorvus/test/tui/host.test.ts`
+- `bun run --cwd packages/opencorvus typecheck`
+
+OpenCode comparison after the round:
+
+- The missing-session attach behavior now matches OpenCode's PTY service principle: connect is handled at the PTY service boundary, not as a separate HTTP precheck.
+- OpenCorvus adds a concrete `4404` close code/reason for the browser-embedded right sidebar. This is an embedding diagnostic layer over the copied OpenCode behavior, not a second attach implementation.
+
+OpenCode gap after the round:
+
+- `Pty.create` still adapts OpenCode's generic multi-PTY service to a project-bound right-sidebar TUI command. Full OpenCode terminal tab/workspace store and richer terminal interaction bindings remain uncopied.
+- Same intentional MVP gaps remain: link opening, terminal keybind integration, terminal palette 0-15 mapping, debounced size update, terminal tab/workspace store, full workspace management, external TUI plugin loader, and `SessionV2Debug`/`sync-v2`.
+
 ### 2026-06-05 Round 45: MVP websocket close reason diagnostics
 
 Implemented:
