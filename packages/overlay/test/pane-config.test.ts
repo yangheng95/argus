@@ -17,7 +17,6 @@ function readSrc(rel: string): string {
 test("PANEL_PANE_CONFIG targets the default panel's elements + variables", () => {
   expect(PANEL_PANE_CONFIG).toEqual({
     bodyId: "panelBody",
-    centerId: "workspaceMain",
     leftHandleId: "leftPaneResizer",
     rightHandleId: "rightPaneResizer",
     sidebarVar: "--ui-sidebar-width",
@@ -28,7 +27,6 @@ test("PANEL_PANE_CONFIG targets the default panel's elements + variables", () =>
 test("MISSION_PANE_CONFIG targets the mission page's elements + variables", () => {
   expect(MISSION_PANE_CONFIG).toEqual({
     bodyId: "missionBody",
-    centerId: "missionWorkbench",
     leftHandleId: "missionLedgerResizer",
     rightHandleId: "missionChannelsResizer",
     sidebarVar: "--ui-mission-ledger-width",
@@ -38,7 +36,7 @@ test("MISSION_PANE_CONFIG targets the mission page's elements + variables", () =
 
 test("the two configs share NO element id or CSS variable (independent layouts)", () => {
   const fields: (keyof PaneConfig)[] = [
-    "bodyId", "centerId", "leftHandleId", "rightHandleId", "sidebarVar", "sectionsVar",
+    "bodyId", "leftHandleId", "rightHandleId", "sidebarVar", "sectionsVar",
   ]
   for (const field of fields) {
     expect(MISSION_PANE_CONFIG[field]).not.toBe(PANEL_PANE_CONFIG[field])
@@ -60,6 +58,20 @@ test("Mission wires the drag service with MISSION_PANE_CONFIG and its own width 
   expect(mission).toContain('id="missionWorkbench"')
   expect(mission).toContain('id="missionLedgerResizer"')
   expect(mission).toContain('id="missionChannelsResizer"')
+})
+
+test("right pane drag measures from the whole pane body, not the center column edge", () => {
+  const pane = readSrc("services/pane.ts")
+  expect(pane).toContain('const panelBody = document.getElementById(config.bodyId);')
+  expect(pane).toContain("clampNumber(rect.right - clientX, railMin, max)")
+  expect(pane).not.toContain("document.getElementById(config.centerId)")
+})
+
+test("Mission conversation scroll container opts into the visible chat scrollbar", () => {
+  const base = readSrc("styles/cascade/base.css")
+  expect(base).toContain(".mission-conversation-body,")
+  expect(base).toContain(".mission-conversation-body::-webkit-scrollbar")
+  expect(base).toContain(".mission-conversation-body::-webkit-scrollbar-thumb")
 })
 
 test("the default Panel still passes PANEL_PANE_CONFIG (no behavior change)", () => {
@@ -86,7 +98,7 @@ test("Mission column headers reuse the shared .oc-surface-header primitive (no b
   // Each of the three column headers carries the shared primitive class. The
   // ledger header belongs to MissionList, the single source for Mission rows.
   expect(missionList).toContain('class="mission-ledger-header oc-surface-header"')
-  expect(mission).toContain('class="mission-conversation-header oc-surface-header"')
+  expect(mission).toContain('class="mission-conversation-header chat-header oc-surface-header"')
   expect(mission).toContain('class="mission-channels-header oc-surface-header"')
   // The "Task context" kicker (mission.workbench.task_kicker) that duplicated
   // the column meaning above the task conversation is gone.
