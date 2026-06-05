@@ -26,6 +26,10 @@ const parameters = z.object({
   command: z.string().describe("The command that triggered this task").optional(),
 })
 
+export function sessionKindForSubagent(agentName: string) {
+  return agentName === "explore" ? "explore" : "assistant"
+}
+
 export const TaskTool = Tool.define("task", async (ctx) => {
   const agents = await Agent.list(ctx?.config ? { config: ctx.config } : undefined).then((x) => x.filter((a) => a.mode !== "primary"))
 
@@ -75,7 +79,7 @@ export const TaskTool = Tool.define("task", async (ctx) => {
         }
 
         return await Session.create({
-          kind: "assistant",
+          kind: sessionKindForSubagent(agent.name),
           parentID: ctx.sessionID,
           title: params.description + ` (@${agent.name} subagent)`,
           permission: [

@@ -182,6 +182,55 @@ describe("panel tool", () => {
     })
   })
 
+  test("explore agent may inspect project state but cannot mutate through panel tool", async () => {
+    await using tmp = await tmpdir({ git: true })
+
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const session = await Session.create({ kind: "explore", title: "explore status" })
+        const tool = await PanelTool.init()
+
+        const inspect = await tool.execute(
+          {
+            action: "view_tasks",
+          },
+          {
+            sessionID: session.id,
+            messageID: Identifier.ascending("message"),
+            agent: "explore",
+            abort: new AbortController().signal,
+            messages: [],
+            metadata() {},
+            async ask() {},
+            extra: { surface: "panel" },
+          },
+        )
+        expect(inspect.title).toBe("Tasks")
+
+        await expect(
+          tool.execute(
+            {
+              action: "create_task",
+              request: "should not be allowed",
+              queue: true,
+            },
+            {
+              sessionID: session.id,
+              messageID: Identifier.ascending("message"),
+              agent: "explore",
+              abort: new AbortController().signal,
+              messages: [],
+              metadata() {},
+              async ask() {},
+              extra: { surface: "panel" },
+            },
+          ),
+        ).rejects.toThrow("not permitted for the explore agent")
+      },
+    })
+  })
+
   test("right sidebar assistant local actions are authorized by the capability surface", async () => {
     await using tmp = await tmpdir({ git: true })
 

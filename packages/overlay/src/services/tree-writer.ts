@@ -2096,6 +2096,10 @@ function timelineCardID(stage: string, sessionID: string, messageID: string): st
   return stage === "integrity" ? integrityCardID(sessionID) : messageTurnCardID(stage, sessionID, messageID);
 }
 
+function timelineSegmentKey(sessionID: string, stage: string): string {
+  return `${sessionID}:${stage}`;
+}
+
 function isReviewStreamPart(part: any): boolean {
   return String(part?.partID || "").startsWith("review:integrity:");
 }
@@ -2144,7 +2148,7 @@ function regroupTimelineSegments(opts: { deferHierarchy?: boolean } = {}): void 
   if (ordered.length === 0) return;
 
   const segments: TimelineSegment[] = [];
-  const segmentBySession = new Map<string, TimelineSegment>();
+  const segmentBySessionStage = new Map<string, TimelineSegment>();
   const desiredCardByMessage = new Map<string, string>();
   const targetMessageIDs = new Set<string>();
 
@@ -2157,11 +2161,12 @@ function regroupTimelineSegments(opts: { deferHierarchy?: boolean } = {}): void 
       continue;
     }
 
-    let segment = segmentBySession.get(message.sessionID);
+    const segmentKey = timelineSegmentKey(message.sessionID, stage);
+    let segment = segmentBySessionStage.get(segmentKey);
     if (!segment) {
       const cardID = timelineCardID(stage, message.sessionID, message.id);
       segment = { cardID, session, stage, goalID, messages: [] };
-      segmentBySession.set(message.sessionID, segment);
+      segmentBySessionStage.set(segmentKey, segment);
       segments.push(segment);
     }
     segment.messages.push(message);

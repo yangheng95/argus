@@ -1374,6 +1374,86 @@ test("explore channel owns the card and in-card boundaries even when resolvedRol
   expect(card?.parts.some((part: any) => part.type === "boundary" && part.role === "explore")).toBe(true);
 });
 
+test("mission session splits user turns from mission agent turns", () => {
+  resetWriter();
+  setBoardStore("board", {
+    kind: "session",
+    sessionID: "ses_mission_split",
+    title: "Mission Control",
+  } as any);
+
+  hydrateConversationView(
+    {
+      sessions: [
+        {
+          sessionID: "ses_mission_split",
+          stage: "user",
+          messageIDs: ["msg_mission_user"],
+          placement: "top_level",
+        },
+        {
+          sessionID: "ses_mission_split",
+          stage: "mission",
+          messageIDs: ["msg_mission_agent"],
+          placement: "top_level",
+        },
+      ],
+    },
+    [
+      {
+        info: stampedInfo("main", {
+          id: "msg_mission_user",
+          sessionID: "ses_mission_split",
+          role: "user",
+          resolvedRole: "user",
+          time: { created: 1_776_000_000_100 },
+        }),
+        parts: [
+          stampedPart("main", {
+            id: "prt_mission_user",
+            messageID: "msg_mission_user",
+            sessionID: "ses_mission_split",
+            type: "text",
+            text: "start mission",
+          }),
+        ],
+      },
+      {
+        info: stampedInfo("mission", {
+          id: "msg_mission_agent",
+          sessionID: "ses_mission_split",
+          role: "assistant",
+          resolvedRole: "mission",
+          agent: "mission",
+          time: { created: 1_776_000_000_200 },
+        }),
+        parts: [
+          stampedPart("mission", {
+            id: "prt_mission_agent",
+            messageID: "msg_mission_agent",
+            sessionID: "ses_mission_split",
+            type: "text",
+            text: "mission accepted",
+          }),
+        ],
+      },
+    ],
+  );
+
+  const userCard = cardTreeStore.cards["user:session:ses_mission_split:message:msg_mission_user"];
+  const missionCard = cardTreeStore.cards["mission:session:ses_mission_split:message:msg_mission_agent"];
+
+  expect(userCard?.kind).toBe("message");
+  expect(userCard?.stage).toBe("user");
+  expect(userCard?.parts.map((part: any) => part.text)).toEqual(["start mission"]);
+  expect(missionCard?.kind).toBe("agent");
+  expect(missionCard?.stage).toBe("mission");
+  expect(missionCard?.title).toBe("chat.role.mission");
+  expect(missionCard?.parts.map((part: any) => part.text)).toEqual(["mission accepted"]);
+  expect(cardTreeStore.order).toContain(userCard!.id);
+  expect(cardTreeStore.order).toContain(missionCard!.id);
+});
+
 test("phase-absorbed agent does not split a later orchestrator turn", () => {
   seedTurnBoard("phase interruption");
 
