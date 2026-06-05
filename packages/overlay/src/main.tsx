@@ -120,6 +120,7 @@ function isBrowserResizeObserverDeliveryError(error: unknown): boolean {
 function reportOverlayRuntimeError(scope: string, error: unknown): void {
   const details = formatErrorDetails(error)
   const message = runtimeErrorMessage(error)
+  const diagnosticDetails = details ? `source: ${scope}\n\n${details}` : `source: ${scope}`
   if (isBrowserResizeObserverDeliveryError(error)) {
     AppLog.debug("runtime", scope, {
       message,
@@ -134,8 +135,8 @@ function reportOverlayRuntimeError(scope: string, error: unknown): void {
   notifyError({
     id: `runtime:${scope}`,
     title: t("common.error"),
-    message: scope,
-    details,
+    message,
+    details: diagnosticDetails,
   })
 }
 
