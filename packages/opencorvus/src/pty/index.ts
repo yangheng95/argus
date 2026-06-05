@@ -64,12 +64,14 @@ export namespace Pty {
   }
 
   export function list() {
-    const info = fromHost(TuiHost.status())
-    return info ? [info] : []
+    return TuiHost.list().flatMap((info) => {
+      const mapped = fromHost(info)
+      return mapped ? [mapped] : []
+    })
   }
 
   export function get(id: string) {
-    const info = fromHost(TuiHost.status())
+    const info = fromHost(TuiHost.get(id))
     if (!info || info.id !== id) return
     return info
   }
@@ -100,13 +102,13 @@ export namespace Pty {
     if (!get(id)) return
     let info: TuiHost.Info | undefined
     if (input.title) info = TuiHost.rename({ id, title: input.title })
-    if (input.size) info = TuiHost.resize(input.size)
-    return fromHost(info ?? TuiHost.status())
+    if (input.size) info = TuiHost.resizePty({ id, ...input.size })
+    return fromHost(info ?? TuiHost.get(id))
   }
 
   export async function remove(id: string) {
     if (!get(id)) return
-    await TuiHost.stop()
+    await TuiHost.remove({ id })
   }
 
   export function connect(

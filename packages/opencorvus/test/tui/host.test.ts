@@ -7,8 +7,8 @@ import { tmpdir } from "../fixture/fixture"
 function echoCommand(cwd: string, text: string): Tui.EmbeddedCommand {
   if (process.platform === "win32") {
     return {
-      command: "cmd.exe",
-      args: ["/d", "/s", "/c", `echo ${text}`],
+      command: "powershell.exe",
+      args: ["-NoLogo", "-NoProfile", "-ExecutionPolicy", "Bypass", "-Command", `Write-Output ${JSON.stringify(text)}; Start-Sleep -Seconds 30`],
       cwd,
       url: "http://127.0.0.1:1",
       port: 1,
@@ -17,7 +17,7 @@ function echoCommand(cwd: string, text: string): Tui.EmbeddedCommand {
   }
   return {
     command: "sh",
-    args: ["-lc", `printf '${text}'`],
+    args: ["-lc", `printf '%s' ${JSON.stringify(text)}; sleep 30`],
     cwd,
     url: "http://127.0.0.1:1",
     port: 1,

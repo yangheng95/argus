@@ -2084,7 +2084,7 @@ OpenCode gap after the round:
 
 Implemented:
 
-- Rechecked latest OpenCode dev before editing. Upstream remains `134f4136da372fdf8f0c3cec2cea3ff81010baf8`.
+- Rechecked latest OpenCode dev before editing and again before committing. Upstream advanced from `134f4136da372fdf8f0c3cec2cea3ff81010baf8` to `46e9863589746c3f84f148974582b6428bbbfdf8`, but the new commits only changed stats/homepage routes (`fix(stats): sort metric charts by top usage`, `feat(stats): refresh stats routes and homepage`). Watched TUI/PTY/app paths had no source changes in that delta.
 - Copied the latest OpenCode `/pty` route contract shape:
   - `GET /pty` (`pty.list`);
   - `POST /pty` (`pty.create`);
@@ -2133,6 +2133,48 @@ OpenCode comparison after the round:
 OpenCode gap after the round:
 
 - OpenCode's `Pty` service supports multiple concurrent PTY sessions with independent buffers and lifecycle. OpenCorvus currently exposes the same route shape over one project-bound embedded TUI PTY.
+- OpenCode's app terminal component includes richer terminal lifecycle behavior (`SerializeAddon`, restore/cursor persistence, focus/copy-paste details). OpenCorvus' right-sidebar ghostty host still implements the smaller subset needed for the embedded coding assistant.
+- OpenCode's full workspace management remains missing: workspace list/create/unavailable dialogs, move-session prompt flow, workspace commands, and workspace status event sync are not implemented yet.
+- External TUI plugin loader/install remains missing; upstream depends on shared plugin loader modules that OpenCorvus does not yet expose in the copied TUI runtime.
+- `SessionV2Debug` and `context/sync-v2.tsx` remain missing until the real V2 session-message/event source exists.
+
+### 2026-06-05 Round 35: OpenCode multi-PTY session state
+
+Implemented:
+
+- Rechecked latest OpenCode dev before editing. Upstream advanced from `46e9863589746c3f84f148974582b6428bbbfdf8` to `75557000de3a3c53c536102bf5de6536c9ee0ce2`, but the new commits (`feat(core): add public native API`, `chore: generate`) did not change watched TUI/PTY/app source paths.
+- Changed the internal PTY host state from one `session` slot to an Instance-scoped `Map<string, HostSession>` plus `primaryID`, matching OpenCode's multi-session `Pty` state model while retaining the existing Windows Node PTY bridge as the single process implementation source.
+- Kept the external route surface unchanged as OpenCode-shaped `/pty`.
+- Updated `TuiHost.startPrepared()` so it creates a new PTY session instead of stopping the previous one.
+- Matched OpenCode's PTY exit lifecycle more closely by removing a session from the map when its process exits, so dead PTYs do not remain in `GET /pty`.
+- Added internal id-based helpers used by the `/pty` adapter:
+  - `TuiHost.list()`;
+  - `TuiHost.get(id)`;
+  - `TuiHost.resizePty({ id, cols, rows })`;
+  - `TuiHost.remove({ id })`.
+- Updated `Pty.list/get/update/remove/connect` to operate by PTY id instead of reading the single current host.
+- Preserved the old no-argument `TuiHost.status/snapshot/output/input/resize/stop` behavior as internal primary-session helpers for tests and existing embedded-host utility code; no public `/tui/host/*` route was reintroduced.
+
+Verified in tests:
+
+- Extended `packages/opencorvus/test/server/pty-routes.test.ts` so `/pty` creates two concurrent PTY sessions through the route, lists both, updates only the addressed PTY, removes one without deleting the other, and then removes the remaining session.
+- Added an exited-session route test proving a short-lived PTY disappears from `GET /pty`.
+- Kept the mismatched `cwd` negative route test proving `POST /pty` stays project-bound.
+- Re-ran the lower-level real PTY host tests.
+- Re-ran overlay service/static tests and the browser visual smoke test to verify the right-sidebar attach path still renders through `/pty/{ptyID}/connect`.
+- `bun test packages/opencorvus/test/server/pty-routes.test.ts packages/opencorvus/test/tui/host.test.ts`
+- `bun run --cwd packages/opencorvus typecheck`
+- `bun test packages/overlay/test/tui-host-service.test.ts packages/overlay/test/tui-host-panel.test.ts packages/overlay/test/coding-assistant-panel.test.ts`
+- `bun test packages/overlay/test/tui-host-panel-visual.test.ts`
+
+OpenCode comparison after the round:
+
+- OpenCorvus now has real multiple concurrent PTY sessions with independent buffers and lifecycle behind the `/pty` route shape, instead of replacing the previous session on every `POST /pty`.
+- The implementation still adapts OpenCode's PTY service shape to the project-bound right-sidebar requirement by requiring `cwd === Instance.directory`.
+
+OpenCode gap after the round:
+
+- OpenCode publishes PTY lifecycle bus events (`pty.created`, `pty.updated`, `pty.exited`, `pty.deleted`); OpenCorvus does not yet emit equivalent PTY lifecycle events for sidebar/session consumers.
 - OpenCode's app terminal component includes richer terminal lifecycle behavior (`SerializeAddon`, restore/cursor persistence, focus/copy-paste details). OpenCorvus' right-sidebar ghostty host still implements the smaller subset needed for the embedded coding assistant.
 - OpenCode's full workspace management remains missing: workspace list/create/unavailable dialogs, move-session prompt flow, workspace commands, and workspace status event sync are not implemented yet.
 - External TUI plugin loader/install remains missing; upstream depends on shared plugin loader modules that OpenCorvus does not yet expose in the copied TUI runtime.

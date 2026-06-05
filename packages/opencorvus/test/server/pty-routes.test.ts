@@ -35,6 +35,45 @@ function inputEchoCommand(cwd: string): Tui.EmbeddedCommand {
   }
 }
 
+function exitCommand(cwd: string): Tui.EmbeddedCommand {
+  if (process.platform === "win32") {
+    return {
+      command: "powershell.exe",
+      args: ["-NoLogo", "-NoProfile", "-ExecutionPolicy", "Bypass", "-Command", "Write-Output pty-exit"],
+      cwd,
+      url: "",
+      port: 0,
+      hostname: "",
+    }
+  }
+  return {
+    command: "sh",
+    args: ["-lc", "printf pty-exit"],
+    cwd,
+    url: "",
+    port: 0,
+    hostname: "",
+  }
+}
+
+function ptyCreateBody(command: Tui.EmbeddedCommand, title: string) {
+  return JSON.stringify({
+    command: command.command,
+    args: command.args,
+    cwd: command.cwd,
+    title,
+  })
+}
+
+async function waitForCheck(check: () => Promise<boolean>, message: string) {
+  const deadline = Date.now() + 5_000
+  while (Date.now() < deadline) {
+    if (await check()) return
+    await new Promise((resolve) => setTimeout(resolve, 50))
+  }
+  throw new Error(message)
+}
+
 async function withTimeout<T>(promise: Promise<T>, message: string) {
   let timeout: ReturnType<typeof setTimeout> | undefined
   try {
@@ -106,12 +145,26 @@ describe("server.pty-routes", () => {
         expect(wrongCwd.status).toBe(400)
         expect(TuiHost.status().id).toBeNull()
 
-        await TuiHost.startPrepared({ command: inputEchoCommand(tmp.path), cols: 80, rows: 24, title: "Initial TUI" })
-        const active = TuiHost.status()
+        const first = await app.request("/", {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: ptyCreateBody(inputEchoCommand(tmp.path), "Initial TUI"),
+        })
+        expect(first.status).toBe(200)
+        const active = (await first.json()) as { id: string; title: string; command: string; args: string[]; cwd: string; status: string; pid: number }
         expect(active.id).toBeString()
 
+        const second = await app.request("/", {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: ptyCreateBody(inputEchoCommand(tmp.path), "Second TUI"),
+        })
+        expect(second.status).toBe(200)
+        const secondActive = (await second.json()) as { id: string; title: string }
+        expect(secondActive.id).not.toBe(active.id)
+
         const list = (await (await app.request("/")).json()) as Array<{ id: string; title: string }>
-        expect(list).toEqual([{ id: active.id, title: "Initial TUI", command: active.command, args: active.args, cwd: tmp.path, status: "running", pid: active.pid }])
+        expect(list.map((item) => item.title)).toEqual(["Initial TUI", "Second TUI"])
 
         const get = await app.request(`/${active.id}`)
         expect(get.status).toBe(200)
@@ -124,11 +177,16 @@ describe("server.pty-routes", () => {
         })
         expect(update.status).toBe(200)
         expect(await update.json()).toMatchObject({ id: active.id, title: "Renamed TUI" })
-        expect(TuiHost.status()).toMatchObject({ cols: 120, rows: 40, title: "Renamed TUI" })
+        expect(TuiHost.get(active.id)).toMatchObject({ cols: 120, rows: 40, title: "Renamed TUI" })
+        expect(TuiHost.get(secondActive.id)).toMatchObject({ title: "Second TUI" })
 
         const remove = await app.request(`/${active.id}`, { method: "DELETE" })
         expect(remove.status).toBe(200)
         expect(await remove.json()).toBe(true)
+        expect(((await (await app.request("/")).json()) as Array<{ id: string }>).map((item) => item.id)).toEqual([secondActive.id])
+
+        const removeSecond = await app.request(`/${secondActive.id}`, { method: "DELETE" })
+        expect(removeSecond.status).toBe(200)
         expect(await (await app.request("/")).json()).toEqual([])
       },
     })
@@ -157,5 +215,25 @@ describe("server.pty-routes", () => {
       await listener.stop(true)
       await Instance.disposeAll()
     }
+  })
+
+  test("removes exited PTY sessions from the public list", async () => {
+    await using tmp = await tmpdir()
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const app = PtyRoutes()
+        const create = await app.request("/", {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: ptyCreateBody(exitCommand(tmp.path), "Short TUI"),
+        })
+        expect(create.status).toBe(200)
+        await waitForCheck(
+          async () => ((await (await app.request("/")).json()) as unknown[]).length === 0,
+          "exited PTY session remained in /pty list",
+        )
+      },
+    })
   })
 })

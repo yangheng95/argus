@@ -86,11 +86,15 @@ interface HostSession {
 
 const state = lazyInstanceState(
   () => ({
-    session: null as HostSession | null,
+    sessions: new Map<string, HostSession>(),
+    primaryID: null as string | null,
   }),
   async (s) => {
-    s.session?.process?.kill()
-    s.session = null
+    for (const session of s.sessions.values()) {
+      closeSession(session, "TUI host stopped")
+    }
+    s.sessions.clear()
+    s.primaryID = null
   },
 )
 
@@ -175,6 +179,22 @@ function info(session: HostSession | null) {
     createdAt: session.createdAt,
     updatedAt: session.updatedAt,
   }
+}
+
+function currentSession() {
+  const s = state()
+  return s.primaryID ? (s.sessions.get(s.primaryID) ?? null) : null
+}
+
+function closeSession(session: HostSession, reason: string) {
+  for (const connection of session.connections) {
+    connection.close(1000, reason)
+  }
+  session.connections.clear()
+  session.process?.kill()
+  session.process = null
+  session.status = "exited"
+  session.updatedAt = Date.now()
 }
 
 function assertSize(cols: number, rows: number) {
@@ -372,6 +392,11 @@ async function spawnPrepared(input: { command: Tui.EmbeddedCommand; cols: number
       connection.close(1000, "TUI host exited")
     }
     session.connections.clear()
+    const s = state()
+    if (s.sessions.get(session.id) === session) {
+      s.sessions.delete(session.id)
+      if (s.primaryID === session.id) s.primaryID = Array.from(s.sessions.keys()).at(-1) ?? null
+    }
   })
   return session
 }
@@ -420,23 +445,32 @@ export namespace TuiHost {
   }
 
   export async function startPrepared(input: { command: Tui.EmbeddedCommand; cols?: number; rows?: number; title?: string }) {
-    await stop()
     const s = state()
-    s.session = await spawnPrepared({
+    const session = await spawnPrepared({
       command: input.command,
       cols: input.cols ?? 100,
       rows: input.rows ?? 30,
       title: input.title,
     })
-    return info(s.session)
+    s.sessions.set(session.id, session)
+    s.primaryID = session.id
+    return info(session)
   }
 
   export function status() {
-    return info(state().session)
+    return info(currentSession())
+  }
+
+  export function list() {
+    return Array.from(state().sessions.values()).map((session) => info(session))
+  }
+
+  export function get(id: string) {
+    return info(state().sessions.get(id) ?? null)
   }
 
   export function snapshot(): Snapshot {
-    const session = state().session
+    const session = currentSession()
     return {
       ...info(session),
       buffer: session?.buffer ?? "",
@@ -444,12 +478,12 @@ export namespace TuiHost {
   }
 
   export function output(input?: { cursor?: number }): Output {
-    return readOutput(state().session, input?.cursor)
+    return readOutput(currentSession(), input?.cursor)
   }
 
   export function preparePtyConnect(input: { id: string; cursor?: number }): PreparedConnection {
     const s = state()
-    const session = s.session
+    const session = s.sessions.get(input.id)
     if (!session?.process || session.status !== "running" || session.id !== input.id) {
       throw new Error("PTY session not found")
     }
@@ -485,7 +519,7 @@ export namespace TuiHost {
   }
 
   export function input(data: string) {
-    const session = state().session
+    const session = currentSession()
     if (!session?.process || session.status !== "running") throw new Error("TUI host is not running")
     session.process.write(data)
     session.updatedAt = Date.now()
@@ -494,7 +528,7 @@ export namespace TuiHost {
 
   export function resize(input: { cols: number; rows: number }) {
     assertSize(input.cols, input.rows)
-    const session = state().session
+    const session = currentSession()
     if (!session?.process || session.status !== "running") throw new Error("TUI host is not running")
     session.process.resize(input.cols, input.rows)
     session.cols = input.cols
@@ -504,26 +538,41 @@ export namespace TuiHost {
   }
 
   export function rename(input: { id: string; title: string }) {
-    const session = state().session
+    const session = state().sessions.get(input.id)
     if (!session || session.id !== input.id) throw new Error("PTY session not found")
     session.title = input.title
     session.updatedAt = Date.now()
     return info(session)
   }
 
+  export function resizePty(input: { id: string; cols: number; rows: number }) {
+    assertSize(input.cols, input.rows)
+    const session = state().sessions.get(input.id)
+    if (!session?.process || session.status !== "running") throw new Error("PTY session not found")
+    session.process.resize(input.cols, input.rows)
+    session.cols = input.cols
+    session.rows = input.rows
+    session.updatedAt = Date.now()
+    return info(session)
+  }
+
   export async function stop() {
     const s = state()
-    const session = s.session
+    const session = currentSession()
     if (!session) return true
-    for (const connection of session.connections) {
-      connection.close(1000, "TUI host stopped")
-    }
-    session.connections.clear()
-    session.process?.kill()
-    session.process = null
-    session.status = "exited"
-    session.updatedAt = Date.now()
-    s.session = null
+    closeSession(session, "TUI host stopped")
+    s.sessions.delete(session.id)
+    if (s.primaryID === session.id) s.primaryID = Array.from(s.sessions.keys()).at(-1) ?? null
+    return true
+  }
+
+  export async function remove(input: { id: string }) {
+    const s = state()
+    const session = s.sessions.get(input.id)
+    if (!session) return true
+    closeSession(session, "PTY session removed")
+    s.sessions.delete(input.id)
+    if (s.primaryID === input.id) s.primaryID = Array.from(s.sessions.keys()).at(-1) ?? null
     return true
   }
 }
