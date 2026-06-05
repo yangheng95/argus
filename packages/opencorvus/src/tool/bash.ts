@@ -12,7 +12,11 @@ import { Filesystem } from "@/util/filesystem"
 import { fileURLToPath } from "url"
 import { Flag } from "@/flag/flag.ts"
 import { Shell } from "@/shell/shell"
-import { BASH_BACKGROUND_READINESS_MAX_MS, DEFAULT_BASH_BACKGROUND_LEASE_MS, DEFAULT_BASH_TIMEOUT_MS } from "@/shell/timeout"
+import {
+  BASH_BACKGROUND_READINESS_MAX_MS,
+  DEFAULT_BASH_BACKGROUND_LEASE_MS,
+  DEFAULT_BASH_TIMEOUT_MS,
+} from "@/shell/timeout"
 import { ProcessSupervisor } from "@/shell/process-supervisor"
 
 import { BashArity } from "@/permission/arity"
@@ -29,23 +33,38 @@ export const log = Log.create({ service: "bash-tool" })
 const DYNAMIC_PATH_PATTERN = /[*?[\]{}$`~]/
 const FORBIDDEN_ENV_KEYS = new Set(["LD_PRELOAD", "LD_AUDIT", "DYLD_INSERT_LIBRARIES", "DYLD_FORCE_FLAT_NAMESPACE"])
 
+function foregroundLifecycleHint(timeout: number) {
+  return [
+    `foreground command lifecycle: this non-background command has completed or stopped; OpenCorvus disposed its process tree before returning this tool result`,
+    `foreground command timeout for this call: ${timeout} ms`,
+    `child/background processes started inside this foreground command, including servers started with shell '&', do not survive for later screenshot/browser tools`,
+    `for dev/preview/serve servers that must survive later tools, run the command with bash parameter background: true instead of shell '&'`,
+  ]
+}
+
+function canAppendForegroundLifecycleHint(output: string) {
+  if (output.length >= Truncate.MAX_BYTES) return false
+  const lineCount = output.length === 0 ? 0 : output.split(/\r?\n/).length
+  return lineCount < Truncate.MAX_LINES
+}
+
 // Commands that kill processes by name — can destroy the host process (benchmark,
 // server, other executors) when run inside an isolated worktree. Worktree isolation
 // protects the filesystem but NOT the process namespace.
 const HOST_KILLING_PATTERNS = [
-  /\btaskkill\b.*\/IM\b/i,                      // taskkill /F /IM bun.exe
-  /\bStop-Process\b.*-Name\b/i,                  // Stop-Process -Name 'bun'
-  /\bkillall\b/i,                                // killall bun
-  /\bpkill\b/i,                                  // pkill bun
-  /\bwmic\b.*process.*\bcall\b.*terminate/i,     // wmic process where name="bun.exe" call terminate
-  /\bxargs\s+kill\b/i,                           // ps | grep bun | xargs kill
-  /\bxargs\s+.*\bkill\b/i,                       // ps | xargs -I{} kill {}
-  /\bkill\b.*\$\(/i,                             // kill $(pgrep bun)
-  /\bkill\b.*`/i,                                // kill `pgrep bun`
+  /\btaskkill\b.*\/IM\b/i, // taskkill /F /IM bun.exe
+  /\bStop-Process\b.*-Name\b/i, // Stop-Process -Name 'bun'
+  /\bkillall\b/i, // killall bun
+  /\bpkill\b/i, // pkill bun
+  /\bwmic\b.*process.*\bcall\b.*terminate/i, // wmic process where name="bun.exe" call terminate
+  /\bxargs\s+kill\b/i, // ps | grep bun | xargs kill
+  /\bxargs\s+.*\bkill\b/i, // ps | xargs -I{} kill {}
+  /\bkill\b.*\$\(/i, // kill $(pgrep bun)
+  /\bkill\b.*`/i, // kill `pgrep bun`
 ]
 
 export function isHostKillingCommand(command: string): boolean {
-  return HOST_KILLING_PATTERNS.some(pattern => pattern.test(command))
+  return HOST_KILLING_PATTERNS.some((pattern) => pattern.test(command))
 }
 
 const resolveWasm = (asset: string) => {
@@ -184,7 +203,15 @@ export const BashTool = Tool.define("bash", async () => {
         return {
           title: "Refused",
           output: `Refused: this command kills processes by name and would destroy the host process. Use process-specific alternatives (e.g. kill a PID you spawned, or stop a service you started).`,
-          metadata: { refused: true as boolean, command: params.command, output: "", exit: null as number | null, pid: null as number | null, background: false, description: params.description },
+          metadata: {
+            refused: true as boolean,
+            command: params.command,
+            output: "",
+            exit: null as number | null,
+            pid: null as number | null,
+            background: false,
+            description: params.description,
+          },
         }
       }
 
@@ -327,13 +354,16 @@ export const BashTool = Tool.define("bash", async () => {
       if (params.background) {
         const backgroundLease = params.leaseTimeout ?? DEFAULT_BASH_BACKGROUND_LEASE_MS
         let backgroundLeaseTimer: ReturnType<typeof setTimeout> | undefined
-        supervisor.exited.then((code) => {
-          exited = true
-          exitCode = code
-        }, () => {
-          exited = true
-          exitCode = null
-        })
+        supervisor.exited.then(
+          (code) => {
+            exited = true
+            exitCode = code
+          },
+          () => {
+            exited = true
+            exitCode = null
+          },
+        )
         backgroundLeaseTimer = setTimeout(() => {
           timedOut = true
           void supervisor.dispose()
@@ -394,6 +424,10 @@ export const BashTool = Tool.define("bash", async () => {
       }
 
       const resultMetadata: string[] = []
+
+      if (canAppendForegroundLifecycleHint(output)) {
+        resultMetadata.push(...foregroundLifecycleHint(timeout))
+      }
 
       if (timedOut) {
         resultMetadata.push(`bash tool terminated command after exceeding timeout ${timeout} ms`)
