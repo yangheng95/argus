@@ -295,24 +295,10 @@ export namespace ProviderTransform {
     if (providerID !== "hexin") return body
     if (!body || typeof body !== "object" || Array.isArray(body)) return body
     const request = body as Record<string, unknown>
-    let normalizedRequest: Record<string, unknown> | undefined
-    const messages = request.messages
-    if (Array.isArray(messages)) {
-      const normalizedMessages = messages.map((message) => {
-        if (!message || typeof message !== "object" || Array.isArray(message)) return message
-        const item = message as Record<string, unknown>
-        if (item.content !== null) return message
-        return { ...item, content: "" }
-      })
-      if (normalizedMessages.some((message, index) => message !== messages[index])) {
-        normalizedRequest = { ...request, messages: normalizedMessages }
-      }
-    }
-    const bodyForModel = normalizedRequest ?? request
     const modelID = typeof request.model === "string" ? request.model.toLowerCase() : ""
-    if (!/(^|\/)kimi-k2\.6$/.test(modelID)) return bodyForModel
+    if (!/(^|\/)kimi-k2\.6$/.test(modelID)) return body
     return {
-      ...bodyForModel,
+      ...request,
       temperature: 1,
     }
   }

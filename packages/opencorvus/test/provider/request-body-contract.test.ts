@@ -402,7 +402,7 @@ describe("provider request-body contract", () => {
     })
   })
 
-  test("Hexin request body coerces assistant tool-call null content for LiteLLM Azure compatibility", () => {
+  test("Hexin request body preserves assistant tool-call null content", () => {
     const body = ProviderTransform.requestBody("hexin", {
       model: "gpt-5.4",
       messages: [
@@ -427,13 +427,13 @@ describe("provider request-body contract", () => {
 
     expect(body.messages[0]).toMatchObject({
       role: "assistant",
-      content: "",
+      content: null,
     })
     expect(body.messages[0].tool_calls[0].function.name).toBe("bash")
     expect(body.messages[1].content).toBe("ok")
   })
 
-  test("Hexin request body only coerces chat message content nulls", () => {
+  test("Hexin request body leaves chat message content nulls untouched", () => {
     const body = ProviderTransform.requestBody("hexin", {
       model: "gpt-5.4",
       metadata: {
@@ -454,7 +454,7 @@ describe("provider request-body contract", () => {
       ],
     }) as any
 
-    expect(body.messages[0].content).toBe("")
+    expect(body.messages[0].content).toBeNull()
     expect(body.messages[0].tool_calls[0].function.arguments).toBe("{\"content\":null}")
     expect(body.metadata.content).toBeNull()
   })
