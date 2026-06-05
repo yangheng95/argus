@@ -106,6 +106,7 @@ export namespace Pty {
             command: input.command,
             args: input.args ?? [],
             cwd,
+            directory: cwd,
             env: input.env,
             url: "",
             port: 0,

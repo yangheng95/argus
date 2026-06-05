@@ -10,7 +10,7 @@ import {
   startTuiHost,
   stopTuiHost,
   TUI_CODING_AGENT,
-} from "../src/services/tui-host"
+} from "../src/plugins/coding-agent-tui/pty-target"
 import { ApiError } from "../src/services/api"
 
 function fakeTransport(capture: (req: TransportRequest) => void): HostTransport {
@@ -55,13 +55,12 @@ afterEach(() => {
 describe("tui host service", () => {
   test("uses the OpenCode-style PTY routes instead of the old TUI host routes", async () => {
     const requests: TransportRequest[] = []
-    configure({ directory: "D:/repo" })
     __setHostTransportForTest(fakeTransport((req) => requests.push(req)))
 
-    await startTuiHost({ cols: 120, rows: 40 })
-    await loadTuiHostStatus()
-    await resizeTuiHost({ id: "pty_test", cols: 100, rows: 30 })
-    await stopTuiHost({ id: "pty_test" })
+    await startTuiHost({ cols: 120, rows: 40, directory: "D:/repo" })
+    await loadTuiHostStatus({ directory: "D:/repo" })
+    await resizeTuiHost({ id: "pty_test", cols: 100, rows: 30, directory: "D:/repo" })
+    await stopTuiHost({ id: "pty_test", directory: "D:/repo" })
 
     expect(requests.map((req) => `${req.method ?? "GET"} ${req.path}`)).toEqual([
       "POST pty",
@@ -73,19 +72,32 @@ describe("tui host service", () => {
     expect(requests.some((req) => req.path === "tui/runtime/status")).toBe(false)
     expect(requests.some((req) => req.path.startsWith("tui/host"))).toBe(false)
     expect(requests.every((req) => req.query?.directory === "D:/repo")).toBe(true)
-    expect(requests[0]?.body).toEqual({ kind: "json", value: { title: "OpenCorvus TUI", agent: TUI_CODING_AGENT } })
+    expect(requests[0]?.body).toEqual({
+      kind: "json",
+      value: {
+        title: "OpenCorvus TUI",
+        agent: TUI_CODING_AGENT,
+        env: { OPENCORVUS_OVERLAY_TUI_PLUGIN: "coding-agent-tui" },
+      },
+    })
     expect(requests[1]?.body).toEqual({ kind: "json", value: { size: { cols: 120, rows: 40 } } })
     expect(requests[3]?.body).toEqual({ kind: "json", value: { size: { cols: 100, rows: 30 } } })
   })
 
-  test("builds PTY websocket URLs through the API directory context", () => {
-    configure({ serverUrl: "http://127.0.0.1:4096", directory: "D:/repo" })
+  test("builds PTY websocket URLs through the plugin-owned directory", () => {
+    configure({ serverUrl: "http://127.0.0.1:4096", directory: "" })
 
-    const url = new URL(buildTuiHostConnectUrl({ id: "pty_1", cursor: 12 }))
+    const url = new URL(buildTuiHostConnectUrl({ id: "pty_1", cursor: 12, directory: "D:/repo" }))
     expect(url.protocol).toBe("ws:")
     expect(url.pathname).toBe("/pty/pty_1/connect")
     expect(url.searchParams.get("cursor")).toBe("12")
     expect(url.searchParams.get("directory")).toBe("D:/repo")
+  })
+
+  test("rejects PTY calls without an explicit plugin workspace directory", async () => {
+    await expect(startTuiHost({ cols: 120, rows: 40, directory: "" })).rejects.toThrow(
+      "Coding agent TUI requires an active workspace directory.",
+    )
   })
 
   test("formats named PTY creation failures for the visible TUI panel", () => {

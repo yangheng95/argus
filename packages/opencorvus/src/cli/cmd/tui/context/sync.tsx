@@ -390,8 +390,6 @@ export const { use: useSync, provider: SyncProvider } = createSimpleContext({
       const agentsPromise = sdk.client.app.agents({}, { throwOnError: true })
       const configPromise = sdk.client.config.get({}, { throwOnError: true })
       const blockingRequests: Promise<unknown>[] = [
-        providersPromise,
-        providerListPromise,
         agentsPromise,
         configPromise,
         ...(args.continue ? [sessionListPromise] : []),
@@ -399,29 +397,20 @@ export const { use: useSync, provider: SyncProvider } = createSimpleContext({
 
       await Promise.all(blockingRequests)
         .then(() => {
-          const providersResponse = providersPromise.then((x) => x.data!)
-          const providerListResponse = providerListPromise.then((x) => x.data!)
           const agentsResponse = agentsPromise.then((x) => x.data ?? [])
           const configResponse = configPromise.then((x) => x.data!)
           const sessionListResponse = args.continue ? sessionListPromise : undefined
 
           return Promise.all([
-            providersResponse,
-            providerListResponse,
             agentsResponse,
             configResponse,
             ...(sessionListResponse ? [sessionListResponse] : []),
           ]).then((responses) => {
-            const providers = responses[0]
-            const providerList = responses[1]
-            const agents = responses[2]
-            const config = responses[3]
-            const sessions = responses[4]
+            const agents = responses[0]
+            const config = responses[1]
+            const sessions = responses[2]
 
             batch(() => {
-              setStore("provider", reconcile(providers.providers))
-              setStore("provider_default", reconcile(providers.default))
-              setStore("provider_next", reconcile(providerList))
               setStore("agent", reconcile(agents))
               setStore("config", reconcile(config))
               if (sessions !== undefined) setStore("session", reconcile(sessions as unknown as Session[]))
@@ -432,6 +421,11 @@ export const { use: useSync, provider: SyncProvider } = createSimpleContext({
           if (store.status !== "complete") setStore("status", "partial")
           // non-blocking
           Promise.all([
+            providersPromise.then((providers) => {
+              setStore("provider", reconcile(providers.data!.providers))
+              setStore("provider_default", reconcile(providers.data!.default))
+            }),
+            providerListPromise.then((providers) => setStore("provider_next", reconcile(providers.data!))),
             ...(args.continue ? [] : [sessionListPromise.then((sessions) => setStore("session", reconcile(sessions as unknown as Session[])))]),
             sdk.client.command.list().then((x) => setStore("command", reconcile(x.data ?? []))),
             sdk.client.lsp.status().then((x) => setStore("lsp", reconcile(x.data!))),

@@ -1,6 +1,9 @@
-import { ApiError, apiJson, apiWebSocketUrl } from "./api"
+import { ApiError, apiJson, apiWebSocketUrl } from "../../services/api"
 
 export const TUI_CODING_AGENT = "tui-coding"
+const CODING_AGENT_TUI_ENV = {
+  OPENCORVUS_OVERLAY_TUI_PLUGIN: "coding-agent-tui",
+}
 
 export interface TuiHostInfo {
   id: string
@@ -12,7 +15,7 @@ export interface TuiHostInfo {
   pid: number
 }
 
-export interface TuiHostPanelInfo {
+export interface CodingAgentTuiPanelInfo {
   id: string | null
   running: boolean
   status: "idle" | TuiHostInfo["status"]
@@ -28,6 +31,7 @@ export interface TuiHostPanelInfo {
 export interface StartTuiHostInput {
   cols: number
   rows: number
+  directory: string
 }
 
 type NamedErrorBody = {
@@ -59,7 +63,24 @@ export function formatTuiHostError(error: unknown): string {
   return error instanceof Error ? error.message : String(error)
 }
 
-function toPanelInfo(info?: TuiHostInfo | null): TuiHostPanelInfo {
+function requireDirectory(directory: string): string {
+  const next = directory.trim()
+  if (!next) throw new Error("Coding agent TUI requires an active workspace directory.")
+  return next
+}
+
+function ptyPath(path: string, directory: string, query?: Record<string, string | number>): string {
+  const params = new URLSearchParams()
+  params.set("directory", requireDirectory(directory))
+  if (query) {
+    for (const [key, value] of Object.entries(query)) {
+      params.set(key, String(value))
+    }
+  }
+  return `${path}?${params.toString()}`
+}
+
+function toPanelInfo(info?: TuiHostInfo | null): CodingAgentTuiPanelInfo {
   if (!info) {
     return {
       id: null,
@@ -88,30 +109,29 @@ function toPanelInfo(info?: TuiHostInfo | null): TuiHostPanelInfo {
   }
 }
 
-export async function startTuiHost(input: StartTuiHostInput): Promise<TuiHostPanelInfo> {
-  const created = (await apiJson("pty", {
+export async function startTuiHost(input: StartTuiHostInput): Promise<CodingAgentTuiPanelInfo> {
+  const created = (await apiJson(ptyPath("pty", input.directory), {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ title: "OpenCorvus TUI", agent: TUI_CODING_AGENT }),
+    body: JSON.stringify({ title: "OpenCorvus TUI", agent: TUI_CODING_AGENT, env: CODING_AGENT_TUI_ENV }),
   })) as TuiHostInfo
-  const resized = await resizeTuiHost({ id: created.id, cols: input.cols, rows: input.rows })
+  const resized = await resizeTuiHost({ id: created.id, cols: input.cols, rows: input.rows, directory: input.directory })
   return { ...resized, cols: input.cols, rows: input.rows }
 }
 
-export async function loadTuiHostStatus(): Promise<TuiHostPanelInfo> {
-  const list = (await apiJson("pty")) as TuiHostInfo[]
+export async function loadTuiHostStatus(input: { directory: string }): Promise<CodingAgentTuiPanelInfo> {
+  const list = (await apiJson(ptyPath("pty", input.directory))) as TuiHostInfo[]
   return toPanelInfo(list[0])
 }
 
-export function buildTuiHostConnectUrl(input: { id: string; cursor?: number }): string {
-  const params = new URLSearchParams()
-  if (typeof input.cursor === "number") params.set("cursor", String(input.cursor))
-  const query = params.toString()
-  return apiWebSocketUrl(`pty/${encodeURIComponent(input.id)}/connect${query ? `?${query}` : ""}`)
+export function buildTuiHostConnectUrl(input: { id: string; cursor?: number; directory: string }): string {
+  const query: Record<string, string | number> = {}
+  if (typeof input.cursor === "number") query.cursor = input.cursor
+  return apiWebSocketUrl(ptyPath(`pty/${encodeURIComponent(input.id)}/connect`, input.directory, query))
 }
 
-export async function resizeTuiHost(input: { id: string; cols: number; rows: number }): Promise<TuiHostPanelInfo> {
-  const info = (await apiJson(`pty/${encodeURIComponent(input.id)}`, {
+export async function resizeTuiHost(input: { id: string; cols: number; rows: number; directory: string }): Promise<CodingAgentTuiPanelInfo> {
+  const info = (await apiJson(ptyPath(`pty/${encodeURIComponent(input.id)}`, input.directory), {
     method: "PUT",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ size: { cols: input.cols, rows: input.rows } }),
@@ -119,8 +139,8 @@ export async function resizeTuiHost(input: { id: string; cols: number; rows: num
   return { ...toPanelInfo(info), cols: input.cols, rows: input.rows }
 }
 
-export async function stopTuiHost(input: { id: string }): Promise<boolean> {
-  return await apiJson(`pty/${encodeURIComponent(input.id)}`, {
+export async function stopTuiHost(input: { id: string; directory: string }): Promise<boolean> {
+  return await apiJson(ptyPath(`pty/${encodeURIComponent(input.id)}`, input.directory), {
     method: "DELETE",
     headers: { "Content-Type": "application/json" },
   })
