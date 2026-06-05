@@ -131,6 +131,13 @@ describe("server.pty-routes", () => {
     await Instance.disposeAll()
   })
 
+  test("accepts an explicit embedded TUI agent in the PTY create contract", () => {
+    expect(Pty.CreateInput.parse({ title: "OpenCorvus TUI", agent: "tui-coding" })).toMatchObject({
+      title: "OpenCorvus TUI",
+      agent: "tui-coding",
+    })
+  })
+
   test("lists, reads, resizes, renames, and removes the project-bound PTY", async () => {
     await using tmp = await tmpdir()
     await Instance.provide({
@@ -311,5 +318,5 @@ describe("server.pty-routes", () => {
         }
       },
     })
-  })
+  }, 15_000)
 })

@@ -144,6 +144,22 @@ export namespace Agent {
         mode: "primary",
         native: true,
       },
+      "tui-coding": {
+        name: "tui-coding",
+        description: "Right-sidebar OpenCode-style coding assistant. Executes tools based on configured permissions.",
+        options: {},
+        permission: PermissionNext.merge(
+          defaults,
+          PermissionNext.fromConfig({
+            question: "allow",
+            plan_enter: "allow",
+          }),
+          user,
+        ),
+        mode: "primary",
+        native: true,
+        hidden: true,
+      },
       build: {
         name: "build",
         description: AgentRoleContract.description("build"),
@@ -721,6 +737,7 @@ export namespace Agent {
    *  into visually identical cards. */
   const NATIVE_DEFAULTS: Record<string, string> = {
     coding: PROMPT_CODING,
+    "tui-coding": "",
     build: BUILD_CORE,
     "visual-qa": VISUAL_QA_CORE,
     general: PROMPT_GENERAL,

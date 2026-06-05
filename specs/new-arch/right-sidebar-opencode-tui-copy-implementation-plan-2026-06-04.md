@@ -2437,6 +2437,43 @@ OpenCode gap after the round:
 - `Pty.create` still adapts OpenCode's generic multi-PTY service to a project-bound right-sidebar TUI command. Full OpenCode terminal tab/workspace store and richer terminal interaction bindings remain uncopied.
 - Same intentional MVP gaps remain: link opening, terminal keybind integration, terminal palette 0-15 mapping, debounced size update, terminal tab/workspace store, full workspace management, external TUI plugin loader, and `SessionV2Debug`/`sync-v2`.
 
+### 2026-06-05 Round 48: visible PTY create failures and dedicated TUI coding agent
+
+Implemented:
+
+- Rechecked latest OpenCode dev before editing. `git fetch origin dev` hit a transient Windows Schannel TLS handshake failure, but the local tracked `origin/dev` still resolves to `64dc6d39ab39dee8a220736fd65e171ef476667a` (`feat(core): attach global native tools (#30832)`), the latest baseline already compared in Round 47.
+- Kept the MVP boundary: no terminal tab/workspace store, external plugin loader, broad OpenCode app copy, or hand-written replacement TUI.
+- Made `PtyCreateFailedError` visible in the right-sidebar overlay:
+  - added a typed overlay formatter for OpenCorvus named API errors;
+  - `PtyCreateFailedError` renders as `TUI host failed to start (command): message`;
+  - route error `env` values are not rendered, so PTY environment variables remain hidden.
+- Routed all TUI host start/reconnect/resize/restart failures in `TuiHostPanel` through that formatter instead of dropping structured backend error names.
+- Added `TUI_CODING_AGENT = "tui-coding"` as the single overlay agent binding for the right-sidebar PTY create request.
+- Extended `Pty.CreateInput` with optional `agent` and passed it into `Tui.resolveEmbeddedCommand`, so the embedded command includes `--agent tui-coding`.
+- Added hidden native primary agent `tui-coding`:
+  - full-function tool surface, with no local `tools` exclusions;
+  - `question` and `plan_enter` allowed like the normal coding assistant surface;
+  - no custom `prompt` field. This matches OpenCode's current `build` agent behavior, where `build` is native/primary and does not override the provider/system prompt with a separate prompt file.
+
+Verified in tests:
+
+- `bun test packages/overlay/test/tui-host-service.test.ts packages/overlay/test/tui-host-panel.test.ts`
+- `bun run --cwd packages/opencorvus typecheck`
+- `bun run --cwd packages/overlay typecheck`
+- `bun test packages/overlay/test/tui-host-panel-visual.test.ts`
+- `bun test packages/opencorvus/test/agent/agent.test.ts -t "TUI coding agent"`
+- `bun test packages/opencorvus/test/tui/host.test.ts packages/opencorvus/test/server/pty-routes.test.ts`
+
+OpenCode comparison after the round:
+
+- The right-sidebar TUI still uses the copied OpenCode-shaped `/pty` route family, retained-output cursor attach, `SerializeAddon`, terminal writer flushing, ghostty renderer, focus/paste/copy behavior, and visible websocket diagnostics from prior rounds.
+- The new `tui-coding` agent copies OpenCode build agent's prompt shape by not adding a custom prompt. This avoids inventing a local prompt while giving the embedded right sidebar a dedicated full-function coding assistant identity.
+- OpenCorvus keeps the agent hidden and project-bound because the right-sidebar TUI is an embedded project panel, not a user-selectable standalone CLI agent.
+
+OpenCode gap after the round:
+
+- Same intentional MVP gaps remain: link opening, terminal keybind integration, terminal palette 0-15 mapping, debounced size update, terminal tab/workspace store, full workspace management, external TUI plugin loader, Agent Team project control tools, and `SessionV2Debug`/`sync-v2`.
+
 ### 2026-06-05 Round 45: MVP websocket close reason diagnostics
 
 Implemented:
