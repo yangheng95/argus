@@ -62,8 +62,7 @@ import {
   humanizeApiError,
   runtimeLabel,
 } from "../utils/mission-helpers"
-import { useNowTick } from "../services/clock"
-import { detailStamp, formatDuration } from "../utils/time"
+import { detailStamp, stamp } from "../utils/time"
 import { Icon } from "./Icon"
 import { Button } from "./ui/Button"
 import { Conversation } from "./Conversation"
@@ -568,11 +567,10 @@ function MissionConversation(props: {
   onSubmitted: () => void
 }) {
   let conversationContainer!: HTMLDivElement
-  const now = useNowTick()
-  const runtimeText = createMemo(() => {
+  const missionStartTimeText = createMemo(() => {
     const created = props.mission?.created
     if (!created) return ""
-    return formatDuration(Math.max(0, now() - created))
+    return stamp(created)
   })
   return (
     <div class="mission-conversation" data-kind="mission" data-ui="mission-conversation">
@@ -580,13 +578,13 @@ function MissionConversation(props: {
         <div class="chat-header-main oc-surface-header__main">
           <h2 class="mission-conversation-title chat-title oc-surface-header__title">{t("mission.launcher.conversation_title")}</h2>
         </div>
-        <div class="oc-surface-header__actions">
+        <div class="oc-surface-header__actions mission-conversation-header-actions">
           <span
             class="mission-conversation-runtime"
             data-ui="mission-runtime"
             title={props.mission?.created ? detailStamp(props.mission.created) : ""}
           >
-            {runtimeText()}
+            {missionStartTimeText()}
           </span>
         </div>
       </header>

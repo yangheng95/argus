@@ -9,6 +9,7 @@ import { join } from "node:path"
 
 const MISSION_TSX = readFileSync(join(import.meta.dir, "../src/components/Mission.tsx"), "utf8")
 const MISSION_LIST_TSX = readFileSync(join(import.meta.dir, "../src/components/MissionList.tsx"), "utf8")
+const MISSION_CSS = readFileSync(join(import.meta.dir, "../src/styles/surfaces/mission.css"), "utf8")
 const SERVICES_MISSION = readFileSync(join(import.meta.dir, "../src/services/mission.ts"), "utf8")
 const HELPERS = readFileSync(join(import.meta.dir, "../src/utils/mission-helpers.ts"), "utf8")
 const I18N_ZH_CN = readFileSync(join(import.meta.dir, "../src/i18n/zh-CN.json"), "utf8")
@@ -123,11 +124,17 @@ test("Mission ledger back action is a text-only Task button", () => {
   expect(I18N_ZH_CN).toContain('"mission.back": "Task"')
 })
 
-test("Mission conversation header shows runtime instead of close", () => {
+test("Mission conversation header shows fixed-position mission start time instead of close", () => {
   expect(MISSION_TSX).toContain('data-ui="mission-runtime"')
-  expect(MISSION_TSX).toContain("formatDuration")
-  expect(MISSION_TSX).toContain("useNowTick")
+  expect(MISSION_TSX).toContain("stamp")
+  expect(MISSION_TSX).toContain("missionStartTimeText")
+  expect(MISSION_TSX).not.toContain("formatDuration")
+  expect(MISSION_TSX).not.toContain("useNowTick")
   expect(MISSION_TSX).not.toContain('data-ui="mission-close"')
+  expect(MISSION_TSX).toContain("mission-conversation-header-actions")
+  expect(MISSION_CSS).toContain(".mission-conversation-header-actions")
+  expect(MISSION_CSS).toContain("flex: 0 0 calc(96px * var(--ui-scale));")
+  expect(MISSION_CSS).toContain("white-space: nowrap;")
 })
 
 test("Mission channel rail shows created task stats before channel runtime", () => {

@@ -425,14 +425,25 @@ body:not([data-page-mode="mission"]) > .workbench-project-bar {
   margin: 0;
 }
 
+.mission-conversation-header-actions {
+  flex: 0 0 calc(96px * var(--ui-scale));
+  width: calc(96px * var(--ui-scale));
+  min-width: calc(96px * var(--ui-scale));
+  justify-content: flex-end;
+}
+
 .mission-conversation-runtime {
   display: inline-flex;
   align-items: center;
-  min-width: calc(64px * var(--ui-scale));
+  width: 100%;
+  min-width: 0;
   justify-content: flex-end;
   color: var(--text-muted);
   font-size: var(--ui-font-small);
   font-variant-numeric: tabular-nums;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .mission-conversation-body {
