@@ -2259,3 +2259,41 @@ OpenCode gap after the round:
 - OpenCode's full workspace management remains missing: workspace list/create/unavailable dialogs, move-session prompt flow, workspace commands, and workspace status event sync are not implemented yet.
 - External TUI plugin loader/install remains missing; upstream depends on shared plugin loader modules that OpenCorvus does not yet expose in the copied TUI runtime.
 - `SessionV2Debug` and `context/sync-v2.tsx` remain missing until the real V2 session-message/event source exists.
+
+### 2026-06-05 Round 38: OpenCode terminal size and scroll snapshot fields
+
+Implemented:
+
+- Rechecked latest OpenCode dev before editing. Upstream remains `9211ef7e95b7cd55f08b27b066d635cc42cbb362`; there are still no new PTY/TUI core changes after the theme/settings-only app delta.
+- Copied the next part of OpenCode's `persistTerminal` behavior into the right-sidebar host snapshot payload:
+  - `rows: term.rows`;
+  - `cols: term.cols`;
+  - `scrollY: term.getViewportY()`.
+- Updated restore so a saved snapshot:
+  - resizes the ghostty terminal with saved `cols` and `rows` before replaying the serialized buffer;
+  - restores the saved scroll position with `scrollToLine(scrollY)` after replay;
+  - keeps cursor restoration before `/pty/{ptyID}/connect`, so retained output resumes from the OpenCode-style cursor instead of replaying from zero.
+
+Verified in tests:
+
+- Extended `packages/overlay/test/tui-host-panel.test.ts` to guard `rows`, `cols`, `scrollY`, `resize`, and `scrollToLine` wiring.
+- Extended `packages/overlay/test/tui-host-panel-visual.test.ts` to seed a prior OpenCode-shaped snapshot, then verify:
+  - the browser connects to `/pty/pty_visual/connect?cursor=42`;
+  - the final serialized snapshot contains both the restored text and new PTY output;
+  - the saved snapshot includes cursor, rows, cols, and scrollY.
+- `bun run --cwd packages/overlay typecheck`
+- `bun test packages/overlay/test/tui-host-panel.test.ts`
+- `bun test packages/overlay/test/tui-host-panel-visual.test.ts`
+
+OpenCode comparison after the round:
+
+- The right-sidebar TUI host now persists the same terminal lifecycle fields OpenCode stores for a local PTY: `buffer`, `cursor`, `rows`, `cols`, and `scrollY`.
+- The restore path now follows OpenCode's ordering more closely: restore size, replay buffer, restore scroll position, then connect with restored cursor.
+
+OpenCode gap after the round:
+
+- OpenCode includes richer terminal interaction bindings for copy/paste, pointer focus, link opening, terminal keybinds, theme/font synchronization, and debounced size update. OpenCorvus' right-sidebar host still has a smaller interaction subset.
+- OpenCode's terminal tabs/workspace store (`active`, `all`, title numbering, clone/open/next/previous/move/close`) is not copied into the right sidebar yet.
+- OpenCode's full workspace management remains missing: workspace list/create/unavailable dialogs, move-session prompt flow, workspace commands, and workspace status event sync are not implemented yet.
+- External TUI plugin loader/install remains missing; upstream depends on shared plugin loader modules that OpenCorvus does not yet expose in the copied TUI runtime.
+- `SessionV2Debug` and `context/sync-v2.tsx` remain missing until the real V2 session-message/event source exists.

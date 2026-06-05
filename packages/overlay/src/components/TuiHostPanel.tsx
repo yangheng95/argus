@@ -19,6 +19,13 @@ const DEFAULT_COLS = 100
 const DEFAULT_ROWS = 30
 
 type GhosttyModule = typeof import("ghostty-web")
+type TerminalSnapshot = {
+  buffer?: unknown
+  cursor?: unknown
+  rows?: unknown
+  cols?: unknown
+  scrollY?: unknown
+}
 
 let sharedGhostty: Promise<{ mod: GhosttyModule; ghostty: Ghostty }> | undefined
 const SNAPSHOT_VERSION = "v1"
@@ -77,10 +84,20 @@ export function TuiHostPanel(props: TuiHostPanelProps) {
   function saveTerminalSnapshot(info = hostInfo()) {
     const key = snapshotKey(info)
     const addon = serializeAddon
-    if (!key || !addon) return
+    const current = term
+    if (!key || !addon || !current) return
     try {
       const buffer = addon.serialize({ scrollback: 10_000 })
-      localStorage.setItem(key, JSON.stringify({ buffer, cursor: hostCursor }))
+      localStorage.setItem(
+        key,
+        JSON.stringify({
+          buffer,
+          cursor: hostCursor,
+          rows: current.rows,
+          cols: current.cols,
+          scrollY: current.getViewportY(),
+        }),
+      )
     } catch (err) {
       console.warn("[tui-host] failed to save terminal snapshot", err)
     }
@@ -108,8 +125,26 @@ export function TuiHostPanel(props: TuiHostPanelProps) {
     const raw = localStorage.getItem(key)
     if (!raw) return
     try {
-      const parsed = JSON.parse(raw) as { buffer?: unknown; cursor?: unknown }
-      if (typeof parsed.buffer === "string" && parsed.buffer) current.write(parsed.buffer)
+      const parsed = JSON.parse(raw) as TerminalSnapshot
+      if (
+        typeof parsed.cols === "number" &&
+        Number.isSafeInteger(parsed.cols) &&
+        parsed.cols > 0 &&
+        typeof parsed.rows === "number" &&
+        Number.isSafeInteger(parsed.rows) &&
+        parsed.rows > 0
+      ) {
+        current.resize(parsed.cols, parsed.rows)
+      }
+      if (typeof parsed.buffer === "string" && parsed.buffer) {
+        current.write(parsed.buffer, () => {
+          if (typeof parsed.scrollY === "number" && Number.isFinite(parsed.scrollY) && parsed.scrollY >= 0) {
+            current.scrollToLine(parsed.scrollY)
+          }
+        })
+      } else if (typeof parsed.scrollY === "number" && Number.isFinite(parsed.scrollY) && parsed.scrollY >= 0) {
+        current.scrollToLine(parsed.scrollY)
+      }
       if (typeof parsed.cursor === "number" && Number.isSafeInteger(parsed.cursor)) hostCursor = parsed.cursor
     } catch (err) {
       console.warn("[tui-host] failed to restore terminal snapshot", err)
