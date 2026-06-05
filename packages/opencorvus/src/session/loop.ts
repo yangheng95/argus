@@ -7,7 +7,15 @@ import { Session } from "."
 import { Agent } from "../agent/agent"
 import { WorkerTurnDescriptor } from "@/agent/worker-turn-descriptor"
 import { Provider } from "../provider/provider"
-import { type Tool as AITool, tool, jsonSchema, type ToolExecutionOptions, asSchema, type ModelMessage } from "ai"
+import {
+  type Tool as AITool,
+  tool,
+  jsonSchema,
+  type ToolExecutionOptions,
+  asSchema,
+  type ModelMessage,
+  InvalidToolInputError,
+} from "ai"
 import type { TextHooks } from "@/llm/api"
 import { SessionCompaction } from "./compaction"
 import { CompactionHandoff } from "./compaction-handoff"
@@ -975,7 +983,13 @@ export namespace SessionLoop {
     model: Provider.Model
     tool: AITool
   }): AITool {
-    const raw = input.tool as AITool & { inputSchema?: unknown; toModelOutput?: unknown }
+    type ToolWithExecution = AITool & {
+      inputSchema?: unknown
+      toModelOutput?: unknown
+      execute?: (...args: any[]) => any
+    }
+    const raw = input.tool as ToolWithExecution
+    const execute = raw.execute
     const prepared = {
       ...(input.tool as any),
       inputSchema: providerBoundInputSchema({
@@ -984,6 +998,18 @@ export namespace SessionLoop {
         model: input.model,
         inputSchema: raw.inputSchema,
       }),
+      ...(typeof execute === "function"
+        ? {
+            async execute(args: unknown, options: ToolExecutionOptions) {
+              const materializedArgs = await materializeProviderToolExecutionInput({
+                name: input.name,
+                inputSchema: raw.inputSchema,
+                args,
+              })
+              return execute(materializedArgs, options)
+            },
+          }
+        : {}),
       ...(typeof raw.toModelOutput === "function" ? {} : { toModelOutput: providerToolResultToModelOutput }),
     } as AITool
     const schemaPayload = asSchema((prepared as { inputSchema?: unknown }).inputSchema as never).jsonSchema
@@ -998,6 +1024,43 @@ export namespace SessionLoop {
       schemaChars: JSON.stringify(schemaPayload ?? {}).length,
     })
     return prepared
+  }
+
+  async function materializeProviderToolExecutionInput(input: {
+    name: string
+    inputSchema: unknown
+    args: unknown
+  }): Promise<unknown> {
+    type ValidationResult = { success: true; value: unknown } | { success: false; error: unknown }
+    const schema = asSchema(input.inputSchema as never) as {
+      validate?: (args: unknown) => Promise<ValidationResult>
+    }
+    if (typeof schema.validate !== "function") return input.args
+
+    let result: ValidationResult
+    try {
+      result = await schema.validate(input.args)
+    } catch (err) {
+      throw invalidProviderToolInput(input.name, input.args, err)
+    }
+    if (result.success) return result.value
+    throw invalidProviderToolInput(input.name, input.args, result.error)
+  }
+
+  function invalidProviderToolInput(toolName: string, args: unknown, cause: unknown): InvalidToolInputError {
+    return new InvalidToolInputError({
+      toolName,
+      toolInput: stringifyToolInput(args),
+      cause,
+    })
+  }
+
+  function stringifyToolInput(args: unknown): string {
+    try {
+      return JSON.stringify(args) ?? String(args)
+    } catch {
+      return String(args)
+    }
   }
 
   export function providerToolResultToModelOutput(args: unknown) {

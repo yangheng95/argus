@@ -580,6 +580,57 @@ describe("extra tool provider schema preparation", () => {
     expect(schema.properties.status.enum).toEqual(["passed", "failed"])
   })
 
+  test("materializes zod defaults before provider-bound tool execution", async () => {
+    let seenArgs: unknown
+    const prepared = SessionLoop.prepareProviderTool({
+      name: "run_command",
+      source: "extra",
+      model: dashScopeModel,
+      tool: tool({
+        description: "run command",
+        inputSchema: z.object({
+          command: z.string(),
+          timeout_ms: z.number().int().positive().default(120_000),
+          background: z.boolean().default(false),
+        }),
+        async execute(args) {
+          seenArgs = args
+          return { output: "ok", title: "", metadata: {} }
+        },
+      }),
+    }) as any
+
+    await prepared.execute({ command: "printf ok" }, { toolCallId: "call_defaults" })
+
+    expect(seenArgs).toEqual({
+      command: "printf ok",
+      timeout_ms: 120_000,
+      background: false,
+    })
+  })
+
+  test("rejects invalid provider-bound tool input before execute", async () => {
+    let executed = false
+    const prepared = SessionLoop.prepareProviderTool({
+      name: "numeric_tool",
+      source: "extra",
+      model: dashScopeModel,
+      tool: tool({
+        description: "numeric",
+        inputSchema: z.object({ count: z.number() }),
+        async execute() {
+          executed = true
+          return { output: "ok", title: "", metadata: {} }
+        },
+      }),
+    }) as any
+
+    await expect(prepared.execute({ count: "bad" }, { toolCallId: "call_invalid" })).rejects.toThrow(
+      "Invalid input for tool numeric_tool",
+    )
+    expect(executed).toBe(false)
+  })
+
   test("adds v6-aware model output conversion for project tool-result objects", () => {
     const prepared = SessionLoop.prepareProviderTool({
       name: "submit_requirements",
