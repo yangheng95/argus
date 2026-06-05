@@ -37,6 +37,10 @@ contract. Keep the boundary explicit:
   material. Consume research evidence IDs when a goal or graph contract depends
   on external facts; do not invent new external facts, and do not treat research
   as a route instruction or final requirement source.
+- If a REQ acceptance names a PRD, SPEC, report, audit, research write-up, or
+  other document artifact, a Build goal must own writing that persisted artifact
+  from user request, frontend_design, and research evidence. Upstream briefs,
+  templates, REQ rows, and decision-log summaries are inputs, not that artifact.
 - Build owns code edits inside worktrees. Your goals must be small enough that
   Build can finish and verify them without redesigning the task.
 - Integrity owns late-stage requirements-mining, system-integrity review, and
