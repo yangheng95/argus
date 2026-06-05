@@ -1,4 +1,6 @@
-import { apiJson, apiWebSocketUrl } from "./api"
+import { ApiError, apiJson, apiWebSocketUrl } from "./api"
+
+export const TUI_CODING_AGENT = "tui-coding"
 
 export interface TuiHostInfo {
   id: string
@@ -26,6 +28,35 @@ export interface TuiHostPanelInfo {
 export interface StartTuiHostInput {
   cols: number
   rows: number
+}
+
+type NamedErrorBody = {
+  name?: unknown
+  data?: unknown
+}
+
+function namedErrorData(body: unknown): { name: string; data: Record<string, unknown> } | undefined {
+  if (!body || typeof body !== "object") return
+  const candidate = body as NamedErrorBody
+  if (typeof candidate.name !== "string") return
+  if (!candidate.data || typeof candidate.data !== "object") return { name: candidate.name, data: {} }
+  return { name: candidate.name, data: candidate.data as Record<string, unknown> }
+}
+
+export function formatTuiHostError(error: unknown): string {
+  if (error instanceof ApiError) {
+    const named = namedErrorData(error.body)
+    if (named?.name === "PtyCreateFailedError") {
+      const message = typeof named.data.message === "string" && named.data.message.trim() ? named.data.message.trim() : error.message
+      const command = typeof named.data.command === "string" && named.data.command.trim() ? ` (${named.data.command.trim()})` : ""
+      return `TUI host failed to start${command}: ${message}`
+    }
+    if (named) {
+      const message = typeof named.data.message === "string" && named.data.message.trim() ? named.data.message.trim() : error.message
+      return `${named.name}: ${message}`
+    }
+  }
+  return error instanceof Error ? error.message : String(error)
 }
 
 function toPanelInfo(info?: TuiHostInfo | null): TuiHostPanelInfo {
@@ -61,7 +92,7 @@ export async function startTuiHost(input: StartTuiHostInput): Promise<TuiHostPan
   const created = (await apiJson("pty", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ title: "OpenCorvus TUI" }),
+    body: JSON.stringify({ title: "OpenCorvus TUI", agent: TUI_CODING_AGENT }),
   })) as TuiHostInfo
   const resized = await resizeTuiHost({ id: created.id, cols: input.cols, rows: input.rows })
   return { ...resized, cols: input.cols, rows: input.rows }

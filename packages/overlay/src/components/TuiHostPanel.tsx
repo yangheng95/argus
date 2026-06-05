@@ -2,6 +2,7 @@ import { createEffect, createSignal, onCleanup, type Accessor } from "solid-js"
 import type { FitAddon, Ghostty, Terminal as GhosttyTerminal } from "ghostty-web"
 import {
   buildTuiHostConnectUrl,
+  formatTuiHostError,
   loadTuiHostStatus,
   resizeTuiHost,
   startTuiHost,
@@ -364,7 +365,7 @@ export function TuiHostPanel(props: TuiHostPanelProps) {
       await connectHostSocket()
       focusTerminal()
     } catch (err) {
-      if (!disposed) setError(err instanceof Error ? err.message : String(err))
+      if (!disposed) setError(formatTuiHostError(err))
     } finally {
       if (!disposed) setLoading(false)
     }
@@ -379,7 +380,7 @@ export function TuiHostPanel(props: TuiHostPanelProps) {
       await ensureHostStarted()
       await connectHostSocket()
     } catch (err) {
-      if (!disposed) setError(err instanceof Error ? err.message : String(err))
+      if (!disposed) setError(formatTuiHostError(err))
     } finally {
       if (!disposed) setLoading(false)
     }
@@ -403,7 +404,7 @@ export function TuiHostPanel(props: TuiHostPanelProps) {
     const id = hostInfo()?.id
     if (!id) return
     void resizeTuiHost({ id, cols, rows }).catch((err) => {
-      if (!disposed) setError(err instanceof Error ? err.message : String(err))
+      if (!disposed) setError(formatTuiHostError(err))
     })
   }
 
@@ -423,7 +424,7 @@ export function TuiHostPanel(props: TuiHostPanelProps) {
       term?.reset()
       await start()
     } catch (err) {
-      if (!disposed) setError(err instanceof Error ? err.message : String(err))
+      if (!disposed) setError(formatTuiHostError(err))
     } finally {
       if (!disposed) setLoading(false)
     }

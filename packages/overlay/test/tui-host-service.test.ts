@@ -4,11 +4,14 @@ import { __setHostTransportForTest } from "../src/services/host-transport"
 import type { HostTransport, TransportRequest, TransportResponse } from "../src/services/host-transport"
 import {
   buildTuiHostConnectUrl,
+  formatTuiHostError,
   loadTuiHostStatus,
   resizeTuiHost,
   startTuiHost,
   stopTuiHost,
+  TUI_CODING_AGENT,
 } from "../src/services/tui-host"
+import { ApiError } from "../src/services/api"
 
 function fakeTransport(capture: (req: TransportRequest) => void): HostTransport {
   return {
@@ -70,7 +73,7 @@ describe("tui host service", () => {
     expect(requests.some((req) => req.path === "tui/runtime/status")).toBe(false)
     expect(requests.some((req) => req.path.startsWith("tui/host"))).toBe(false)
     expect(requests.every((req) => req.query?.directory === "D:/repo")).toBe(true)
-    expect(requests[0]?.body).toEqual({ kind: "json", value: { title: "OpenCorvus TUI" } })
+    expect(requests[0]?.body).toEqual({ kind: "json", value: { title: "OpenCorvus TUI", agent: TUI_CODING_AGENT } })
     expect(requests[1]?.body).toEqual({ kind: "json", value: { size: { cols: 120, rows: 40 } } })
     expect(requests[3]?.body).toEqual({ kind: "json", value: { size: { cols: 100, rows: 30 } } })
   })
@@ -83,5 +86,21 @@ describe("tui host service", () => {
     expect(url.pathname).toBe("/pty/pty_1/connect")
     expect(url.searchParams.get("cursor")).toBe("12")
     expect(url.searchParams.get("directory")).toBe("D:/repo")
+  })
+
+  test("formats named PTY creation failures for the visible TUI panel", () => {
+    const error = new ApiError(400, "pty", {
+      name: "PtyCreateFailedError",
+      data: {
+        message: "spawn opencorvus ENOENT",
+        cwd: "D:/repo",
+        command: "opencorvus",
+        args: ["D:/repo", "--agent", TUI_CODING_AGENT],
+        env: { SHOULD_NOT_RENDER: "secret" },
+      },
+    })
+
+    expect(formatTuiHostError(error)).toBe("TUI host failed to start (opencorvus): spawn opencorvus ENOENT")
+    expect(formatTuiHostError(error)).not.toContain("secret")
   })
 })

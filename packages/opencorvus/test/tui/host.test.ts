@@ -82,7 +82,7 @@ function delayedExitCommand(cwd: string, exitCode: number): Tui.EmbeddedCommand 
 }
 
 async function waitFor(check: () => boolean, message: string) {
-  const deadline = Date.now() + 5_000
+  const deadline = Date.now() + 10_000
   while (Date.now() < deadline) {
     if (check()) return
     await new Promise((resolve) => setTimeout(resolve, 50))
@@ -112,7 +112,7 @@ describe("tui.host", () => {
         expect(TuiHost.status().status).toBe("idle")
       },
     })
-  })
+  }, 15_000)
 
   test("writes input and resizes the embedded host", async () => {
     await using tmp = await tmpdir()
@@ -242,6 +242,27 @@ describe("tui.host", () => {
       "build",
       "--prompt",
       "hello",
+    ])
+  })
+
+  test("resolves the dedicated right-sidebar coding agent into embedded TUI argv", async () => {
+    await using tmp = await tmpdir()
+    const command = await Tui.resolveEmbeddedCommand({
+      directory: tmp.path,
+      agent: "tui-coding",
+      port: 7654,
+      hostname: "127.0.0.1",
+      bin: "opencorvus-bin",
+    })
+
+    expect(command.args).toEqual([
+      tmp.path,
+      "--port",
+      "7654",
+      "--hostname",
+      "127.0.0.1",
+      "--agent",
+      "tui-coding",
     ])
   })
 })

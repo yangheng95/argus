@@ -30,6 +30,7 @@ export namespace Pty {
     cwd: z.string().optional(),
     title: z.string().optional(),
     env: z.record(z.string(), z.string()).optional(),
+    agent: z.string().optional(),
   })
 
   export type CreateInput = z.infer<typeof CreateInput>
@@ -110,7 +111,7 @@ export namespace Pty {
             port: 0,
             hostname: "",
           }
-        : await Tui.resolveEmbeddedCommand({ directory: cwd })
+        : await Tui.resolveEmbeddedCommand({ directory: cwd, agent: input.agent })
       const info = await TuiHost.startPrepared({
         command,
         title: input.title ?? "OpenCorvus TUI",

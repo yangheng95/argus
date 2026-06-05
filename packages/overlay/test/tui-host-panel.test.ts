@@ -56,6 +56,7 @@ describe("tui host panel wiring", () => {
     expect(panel).toContain("onClick={() => void reconnectHostSocket()}")
     expect(panel).toContain("closeSocket()")
     expect(panel).toContain("function sendTerminalInput(data: string)")
+    expect(panel).toContain("formatTuiHostError")
     expect(panel).toContain("TUI host is not running. Press refresh to reconnect.")
     expect(panel).toContain("TUI host is not connected. Press refresh to reconnect.")
     expect(panel).toContain("function socketFailureMessage(id: string): string")
