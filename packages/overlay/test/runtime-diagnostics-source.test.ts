@@ -12,6 +12,14 @@ describe("overlay runtime diagnostics", () => {
     expect(source).toContain('"unhandledrejection"');
   });
 
+  test("runtime notification message is the failure summary, not the event source", () => {
+    expect(source).toContain("const message = runtimeErrorMessage(error)");
+    expect(source).toContain("const diagnosticDetails = details ? `source: ${scope}\\n\\n${details}` : `source: ${scope}`");
+    expect(source).toContain("message,");
+    expect(source).toContain("details: diagnosticDetails");
+    expect(source).not.toContain("message: scope");
+  });
+
   test("initApp failures are not console-only", () => {
     expect(source).toContain('reportOverlayRuntimeError("initApp", error)');
     expect(source).not.toContain("console.error(error)\n  } finally");
