@@ -46,12 +46,15 @@ describe("goal / mission / chat reuse the AutoGrowTextarea primitive", () => {
     const mission = read("components/Mission.tsx")
     expect(mission).toContain("<ChatComposer")
     expect(mission).toContain('textareaDataUI="mission-composer-input"')
+    expect(mission).toContain("draftKey={props.draftKey}")
     expect(mission).not.toMatch(/<textarea\b/)
   })
 
   test("chat composer renders the primitive and no longer owns the auto-grow cap", () => {
     const chat = read("components/ChatComposer.tsx")
     expect(chat).toContain("AutoGrowTextarea")
+    expect(chat).toContain("setComposerDraft")
+    expect(chat).toContain("clearComposerDraft")
     expect(chat).not.toMatch(/<textarea\b/)
     // The line cap is single-sourced in the primitive now.
     expect(chat).not.toContain("MAX_VISIBLE_LINES")

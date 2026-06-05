@@ -12,6 +12,7 @@ const MISSION_LIST_TSX = readFileSync(join(import.meta.dir, "../src/components/M
 const CONVERSATION_TSX = readFileSync(join(import.meta.dir, "../src/components/Conversation.tsx"), "utf8")
 const CONVERSATION_SERVICE = readFileSync(join(import.meta.dir, "../src/services/conversation.ts"), "utf8")
 const TASK_SERVICE = readFileSync(join(import.meta.dir, "../src/services/task.ts"), "utf8")
+const MAIN_TSX = readFileSync(join(import.meta.dir, "../src/main.tsx"), "utf8")
 
 test("session source hydrates from session conversation and submits to prompt_async", () => {
   expect(CONVERSATION_SERVICE).toContain('const prefix = source.kind === "task" ? "task" : "session"')
@@ -36,7 +37,18 @@ test("Mission workbench mounts the shared Conversation and ChatComposer for miss
   expect(MISSION_TSX).toContain("function MissionConversation")
   expect(MISSION_TSX).toContain("<Conversation container={conversationContainer} />")
   expect(MISSION_TSX).toContain("<ChatComposer")
+  expect(MISSION_TSX).toContain('composerDraftKey("mission", "session", props.sessionID)')
   expect(MISSION_TSX).toContain('data-ui="mission-conversation"')
+})
+
+test("composer draft keys are scoped to selected task and Mission launcher/session", () => {
+  expect(MAIN_TSX).toContain("const panelComposerDraftKey = () =>")
+  expect(MAIN_TSX).toContain('composerDraftKey("task", taskID)')
+  expect(MAIN_TSX).toContain('composerDraftKey("task", "new", directory)')
+  expect(MAIN_TSX).toContain("draftKey={panelComposerDraftKey()}")
+  expect(MISSION_TSX).toContain("const missionLauncherDraftKey = () =>")
+  expect(MISSION_TSX).toContain('composerDraftKey("mission", "new", directory)')
+  expect(MISSION_TSX).toContain("draftKey={props.missionLauncherDraftKey}")
 })
 
 test("Mission ledger uses MissionList and not the task list projection", () => {
