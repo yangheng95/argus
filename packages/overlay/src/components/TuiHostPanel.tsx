@@ -239,6 +239,18 @@ export function TuiHostPanel(props: TuiHostPanelProps) {
     setTimeout(() => current.textarea?.focus(), 0)
   }
 
+  function sendTerminalInput(data: string) {
+    if (!hostStarted) {
+      setError("TUI host is not running. Press refresh to reconnect.")
+      return
+    }
+    if (socket?.readyState !== WebSocket.OPEN) {
+      setError("TUI host is not connected. Press refresh to reconnect.")
+      return
+    }
+    socket.send(data)
+  }
+
   async function ensureHostStarted() {
     if (hostStarted) return hostInfo()
     const current = await loadTuiHostStatus()
@@ -422,8 +434,7 @@ export function TuiHostPanel(props: TuiHostPanelProps) {
       resizeObserver = new ResizeObserver(() => scheduleFit())
       resizeObserver.observe(container)
       next.onData((data) => {
-        if (!hostStarted || socket?.readyState !== WebSocket.OPEN) return
-        socket.send(data)
+        sendTerminalInput(data)
       })
       next.onResize((size) => pushSize(size.cols, size.rows))
       focusTerminal()
