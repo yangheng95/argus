@@ -212,7 +212,7 @@ describe("engine queue", () => {
     })
   })
 
-  test("operator message revival cannot bypass an active same-cwd task", async () => {
+  test("operator message wake to a terminal task is ignored even with an active same-cwd task", async () => {
     await using tmp = await tmpdir({ git: true })
 
     await Instance.provide({
@@ -240,7 +240,7 @@ describe("engine queue", () => {
             project_id: Instance.project.id,
             source: "test",
             title: "terminal task",
-            request: "must queue before revival",
+            request: "must stay completed",
             priority: "normal",
             time_started: now - 10_000,
             time_completed: now - 1_000,
@@ -259,7 +259,8 @@ describe("engine queue", () => {
         await new Promise((resolve) => setTimeout(resolve, 0))
 
         expect(taskStatus(activeID)).toBe("active")
-        expect(taskStatus(terminalID)).toBe("queued")
+        expect(taskStatus(terminalID)).toBe("completed")
+        expect(findTask(terminalID)?.time_completed).not.toBeNull()
         expect(runTaskLoop).not.toHaveBeenCalled()
       },
     })

@@ -446,9 +446,14 @@ export namespace Orchestrator {
           "When you call `requirements` / `frontend_design` / `architect` / `build` / `refine`, the engine forwards every attachment to the sub-agent automatically — but the sub-agent's prompt only cites them when YOU mention them by filename in your dispatch instructions. ALWAYS cite the relevant attachments by EXACT filename and explain their relevance. NEVER reference an attachment that is not listed below — if this section is empty, the user attached nothing in this wake and any phrase implying you saw a file is a hallucination.",
       })
       const enrichedUserText = appendUserMessage ? userText + inventoryText : ""
-      const runtimeSystem = appendUserMessage || !inventoryText.trim()
+      const internalWakeNotice = [
+        "## Wake Provenance",
+        "这是一条 wake 消息，不是用户发送的新消息。",
+        "This is a wake message, not a user-authored message. Do not claim the user said, asked, sent, or implied anything unless it appears in the visible user/operator messages.",
+      ].join("\n")
+      const runtimeSystem = appendUserMessage
         ? system
-        : [...system, inventoryText]
+        : [...system, internalWakeNotice, ...(inventoryText.trim() ? [inventoryText] : [])]
       // Build PromptInput.parts. Text first, then any multimodal attachments
       // as FilePart (data URL) so Session.saveMessage can persist the part
       // without re-resolving a local file path.

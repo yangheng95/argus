@@ -61,7 +61,7 @@ import {
   startQueuedTaskInCwd,
   taskCwd,
 } from "@/engine/queue"
-import { openTaskForOperatorMessage, reopenActiveRunForOperatorWake } from "@/engine/task-message-open"
+import { reopenActiveRunForOperatorWake } from "@/engine/task-message-open"
 import { OrchestratorEventNote } from "@/orchestrator/agent"
 import { updateGoal as updateGoalRow, deleteGoal as deleteGoalRow } from "@/engine/persist"
 import { EngineInteraction } from "@/engine/interaction"
@@ -414,7 +414,7 @@ async function continueTaskMessage(taskID: string, text: string, attachments: At
 
   return {
     mode: "scheduler" as const,
-    resumed: true,
+    resumed: wake.resumed,
     status: deriveTaskStatus(wake.task) as string,
     user_message: wake.userMessage,
   }
@@ -425,15 +425,21 @@ async function appendAndWakeTaskOperatorMessage(input: {
   text: string
   attachments?: AttachmentStore.Reference[]
   attachmentSummary?: string
-}): Promise<{ task: TaskRow; userMessage: { info: Message.User; parts: Message.Part[] } }> {
+}): Promise<{ task: TaskRow; userMessage: { info: Message.User; parts: Message.Part[] }; resumed: boolean }> {
   const task = requireTask(input.taskID)
 
   // Append the user message to session history. The describe layer and
   // orchestrator prompt both read session messages, so this is the single
   // task-level operator-message owner for /message and /inject.
   const userMessage = await appendTaskSessionMessage(task, input.text, input.attachments ?? [])
-  const openedTask = await openTaskForOperatorMessage(task)
-  await reopenActiveRunForOperatorWake(openedTask)
+  if (isTaskTerminal(task)) {
+    return {
+      task,
+      userMessage,
+      resumed: false,
+    }
+  }
+  await reopenActiveRunForOperatorWake(task)
 
   void dispatchTaskLoop({
     taskID: input.taskID,
@@ -451,8 +457,9 @@ async function appendAndWakeTaskOperatorMessage(input: {
   })
 
   return {
-    task: openedTask,
+    task,
     userMessage,
+    resumed: true,
   }
 }
 
@@ -1611,8 +1618,10 @@ export namespace EngineService {
     if (!run) {
       return { resumed: false, status: deriveTaskStatus(task) }
     }
-    const openedTask = await openTaskForOperatorMessage(task, "Operator note opened task")
-    const reopenedRun = await reopenActiveRunForOperatorWake(openedTask, "Operator note reopened blocked run")
+    if (isTaskTerminal(task)) {
+      return { resumed: false, status: deriveTaskStatus(task) }
+    }
+    const reopenedRun = await reopenActiveRunForOperatorWake(task, "Operator note reopened blocked run")
     if (!reopenedRun || reopenedRun.status === run.status) {
       return { resumed: false, status: reopenedRun?.status ?? deriveTaskStatus(requireTask(taskID)) }
     }
@@ -1691,10 +1700,10 @@ export namespace EngineService {
    * projection. Scoped agent steering must use /task/:id/session/:sessionID/reply.
    */
   export async function injectMessage(taskID: string, message: string) {
-    await appendAndWakeTaskOperatorMessage({ taskID, text: message })
+    const wake = await appendAndWakeTaskOperatorMessage({ taskID, text: message })
     return {
       appended: true,
-      orchestratorWoken: true,
+      orchestratorWoken: wake.resumed,
       executorResumed: false,
       // Deprecated compatibility field: task injection wakes the orchestrator,
       // it does not resume a child executor/session.
