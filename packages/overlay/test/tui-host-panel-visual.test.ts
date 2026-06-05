@@ -37,6 +37,7 @@ function hostInfo() {
 test("right sidebar TUI host panel renders as a real browser surface", async () => {
   const screenshotDir = mkdtempSync(join(tmpdir(), "opencorvus-tui-visual-"))
   const screenshotPath = join(screenshotDir, "right-tui.png")
+  const connectCursors: string[] = []
   const server = Bun.serve({
     idleTimeout: 255,
     port: 0,
@@ -55,6 +56,7 @@ test("right sidebar TUI host panel renders as a real browser surface", async () 
       const url = new URL(req.url)
       const path = route(url)
       if (path === "/pty/pty_visual/connect") {
+        connectCursors.push(url.searchParams.get("cursor") ?? "")
         const upgraded = serverInstance.upgrade(req)
         return upgraded ? undefined : new Response("WebSocket upgrade failed", { status: 400 })
       }
@@ -98,6 +100,16 @@ test("right sidebar TUI host panel renders as a real browser surface", async () 
     await page.evaluateOnNewDocument((portValue) => {
       localStorage.setItem("oc_directory", "D:/overlay/workspace/app")
       localStorage.setItem("oc_server_url", `http://127.0.0.1:${portValue}`)
+      localStorage.setItem(
+        "opencorvus:tui-host:v1:D:/overlay/workspace/app:pty_visual",
+        JSON.stringify({
+          buffer: "Restored OpenCode snapshot\r\n",
+          cursor: 42,
+          rows: 24,
+          cols: 88,
+          scrollY: 0,
+        }),
+      )
     }, server.port)
 
     await page.goto(`http://127.0.0.1:${server.port}/ui/index.html`, { waitUntil: "domcontentloaded" })
@@ -135,7 +147,7 @@ test("right sidebar TUI host panel renders as a real browser surface", async () 
           break
         }
       }
-      const snapshot = snapshotKey ? JSON.parse(localStorage.getItem(snapshotKey) ?? "{}") as { buffer?: string } : undefined
+      const snapshot = snapshotKey ? JSON.parse(localStorage.getItem(snapshotKey) ?? "{}") as { buffer?: string; cursor?: number; rows?: number; cols?: number; scrollY?: number } : undefined
       const panelRect = panel.getBoundingClientRect()
       const terminalRect = terminal.getBoundingClientRect()
       return {
@@ -148,6 +160,10 @@ test("right sidebar TUI host panel renders as a real browser surface", async () 
         terminalHeight: Math.round(terminalRect.height),
         errorText: document.querySelector<HTMLElement>(".tui-host-error")?.textContent ?? "",
         snapshotBuffer: snapshot?.buffer ?? "",
+        snapshotCursor: snapshot?.cursor,
+        snapshotRows: snapshot?.rows,
+        snapshotCols: snapshot?.cols,
+        snapshotScrollY: snapshot?.scrollY,
       }
     })
 
@@ -158,6 +174,12 @@ test("right sidebar TUI host panel renders as a real browser surface", async () 
       errorText: "",
     })
     expect(layout.snapshotBuffer).toContain("OpenCorvus")
+    expect(layout.snapshotBuffer).toContain("Restored OpenCode snapshot")
+    expect(layout.snapshotCursor).toBe(99)
+    expect(layout.snapshotRows).toBeGreaterThan(0)
+    expect(layout.snapshotCols).toBeGreaterThan(0)
+    expect(layout.snapshotScrollY).toBeGreaterThanOrEqual(0)
+    expect(connectCursors).toContain("42")
     expect(layout.panelWidth).toBeGreaterThan(240)
     expect(layout.panelHeight).toBeGreaterThan(500)
     expect(layout.terminalWidth).toBeGreaterThan(220)
