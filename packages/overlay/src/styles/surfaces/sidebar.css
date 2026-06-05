@@ -549,21 +549,24 @@
   z-index: 2;
 }
 
-.task-row-actions .oc-button[data-ui="task-row-delete"],
-.task-row-actions .oc-button[data-ui="task-row-cancel"],
-.task-row-actions .oc-button[data-ui="task-row-rename"],
-.task-row-actions .oc-button[data-ui="task-row-download"],
-.task-row-actions .oc-button[data-ui="task-row-start-now"] {
-  --oc-button-height: calc(22px * var(--ui-scale));
+.task-row-actions .oc-button[data-chrome="icon-action"][data-ui="task-row-delete"],
+.task-row-actions .oc-button[data-chrome="icon-action"][data-ui="task-row-cancel"],
+.task-row-actions .oc-button[data-chrome="icon-action"][data-ui="task-row-rename"],
+.task-row-actions .oc-button[data-chrome="icon-action"][data-ui="task-row-download"],
+.task-row-actions .oc-button[data-chrome="icon-action"][data-ui="task-row-start-now"] {
+  --oc-button-height: calc(20px * var(--ui-scale));
   --oc-button-padding-x: 0;
   --oc-button-border: 0 solid transparent;
   --oc-button-bg: transparent;
+  --oc-button-color: color-mix(in srgb, var(--text-soft) 82%, var(--text-muted));
+  --oc-button-shadow: none;
 
   position: static;
   width: calc(20px * var(--ui-scale));
   height: calc(20px * var(--ui-scale));
   min-width: calc(20px * var(--ui-scale));
   min-height: calc(20px * var(--ui-scale));
+  border-radius: var(--oc-radius-sm);
   /* Hover-only chrome: buttons stay hidden until the row is hovered or
      focused. The row switches its right grid track to an action slot only in
      those visible states, so hidden controls do not consume resting layout
@@ -576,6 +579,16 @@
     background var(--ui-duration-base) var(--ui-timing-standard),
     color var(--ui-duration-base) var(--ui-timing-standard),
     box-shadow var(--ui-duration-slow) var(--ui-timing-standard);
+}
+
+.task-row-actions .oc-button[data-ui="task-row-delete"] svg,
+.task-row-actions .oc-button[data-ui="task-row-cancel"] svg,
+.task-row-actions .oc-button[data-ui="task-row-rename"] svg,
+.task-row-actions .oc-button[data-ui="task-row-download"] svg,
+.task-row-actions .oc-button[data-ui="task-row-start-now"] svg {
+  width: calc(12px * var(--ui-scale));
+  height: calc(12px * var(--ui-scale));
+  stroke-width: 1.85;
 }
 
 .task-row-mini:hover .oc-button[data-ui="task-row-delete"],
@@ -600,7 +613,7 @@
 .task-row-actions .oc-button[data-ui="task-row-start-now"]:hover,
 .task-row-actions .oc-button[data-ui="task-row-start-now"]:focus-visible {
   opacity: var(--ui-opacity-full);
-  --oc-button-bg: color-mix(in srgb, var(--accent) 10%, transparent);
+  --oc-button-bg: color-mix(in srgb, var(--accent) 9%, transparent);
   --oc-button-color: var(--accent);
 }
 
@@ -612,7 +625,7 @@
 .task-row-actions .oc-button[data-ui="task-row-download"]:hover,
 .task-row-actions .oc-button[data-ui="task-row-download"]:focus-visible {
   opacity: var(--ui-opacity-full);
-  --oc-button-bg: color-mix(in srgb, var(--text-soft) 10%, transparent);
+  --oc-button-bg: color-mix(in srgb, var(--text-soft) 9%, transparent);
   --oc-button-color: var(--text);
 }
 
@@ -624,28 +637,28 @@
 .task-row-actions .oc-button[data-ui="task-row-delete"]:hover,
 .task-row-actions .oc-button[data-ui="task-row-delete"]:focus-visible {
   opacity: var(--ui-opacity-full);
-  --oc-button-bg: color-mix(in srgb, var(--bad) 10%, transparent);
+  --oc-button-bg: color-mix(in srgb, var(--bad) 9%, transparent);
   --oc-button-color: var(--bad);
 }
 
 .task-row-actions .oc-button[data-ui="task-row-delete"][data-confirm="true"] {
   opacity: var(--ui-opacity-full);
-  --oc-button-bg: color-mix(in srgb, var(--bad) 14%, transparent);
+  --oc-button-bg: color-mix(in srgb, var(--bad) 13%, transparent);
   --oc-button-color: var(--bad);
-  box-shadow: inset 0 0 0 var(--oc-border-width) color-mix(in srgb, var(--bad) 24%, transparent);
+  box-shadow: none;
 }
 
 .task-row-actions .oc-button[data-ui="task-row-cancel"]:hover,
 .task-row-actions .oc-button[data-ui="task-row-cancel"]:focus-visible {
   opacity: var(--ui-opacity-full);
-  --oc-button-bg: color-mix(in srgb, var(--warn) 10%, transparent);
+  --oc-button-bg: color-mix(in srgb, var(--warn) 9%, transparent);
   --oc-button-color: var(--warn);
 }
 
 .task-row-actions .oc-button[data-ui="task-row-rename"]:hover,
 .task-row-actions .oc-button[data-ui="task-row-rename"]:focus-visible {
   opacity: var(--ui-opacity-full);
-  --oc-button-bg: color-mix(in srgb, var(--accent) 10%, transparent);
+  --oc-button-bg: color-mix(in srgb, var(--accent) 9%, transparent);
   --oc-button-color: var(--accent);
 }
 
@@ -679,9 +692,9 @@
 
 .task-row-actions .oc-button[data-ui="task-row-cancel"][data-confirm="true"] {
   opacity: var(--ui-opacity-full);
-  --oc-button-bg: color-mix(in srgb, var(--warn) 14%, transparent);
+  --oc-button-bg: color-mix(in srgb, var(--warn) 13%, transparent);
   --oc-button-color: var(--warn);
-  box-shadow: inset 0 0 0 var(--oc-border-width) color-mix(in srgb, var(--warn) 24%, transparent);
+  box-shadow: none;
 }
 
 .task-row-delete-icon,
@@ -710,7 +723,9 @@
 .task-row-main:focus-visible,
 .task-row-actions .oc-button[data-ui="task-row-delete"]:focus-visible,
 .task-row-actions .oc-button[data-ui="task-row-cancel"]:focus-visible,
-.task-row-actions .oc-button[data-ui="task-row-download"]:focus-visible {
+.task-row-actions .oc-button[data-ui="task-row-rename"]:focus-visible,
+.task-row-actions .oc-button[data-ui="task-row-download"]:focus-visible,
+.task-row-actions .oc-button[data-ui="task-row-start-now"]:focus-visible {
   outline: var(--oc-border-width) solid var(--accent);
   outline-offset: calc(1px * var(--ui-scale));
 }

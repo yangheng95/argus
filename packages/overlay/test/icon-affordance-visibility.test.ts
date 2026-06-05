@@ -49,11 +49,19 @@ describe("icon affordances stay visible at rest", () => {
     const css = read("src/styles/surfaces/sidebar.css")
     const body = soloRuleBody(
       css,
-      '.task-row-actions .oc-button[data-ui="task-row-delete"],\n.task-row-actions .oc-button[data-ui="task-row-cancel"],\n.task-row-actions .oc-button[data-ui="task-row-rename"],\n.task-row-actions .oc-button[data-ui="task-row-download"],\n.task-row-actions .oc-button[data-ui="task-row-start-now"]',
+      '.task-row-actions .oc-button[data-chrome="icon-action"][data-ui="task-row-delete"],\n.task-row-actions .oc-button[data-chrome="icon-action"][data-ui="task-row-cancel"],\n.task-row-actions .oc-button[data-chrome="icon-action"][data-ui="task-row-rename"],\n.task-row-actions .oc-button[data-chrome="icon-action"][data-ui="task-row-download"],\n.task-row-actions .oc-button[data-chrome="icon-action"][data-ui="task-row-start-now"]',
     )
     expect(body).toContain("opacity: 0;")
     expect(body).toContain("pointer-events: none;")
+    expect(body).toContain("--oc-button-shadow: none;")
     expect(body).not.toContain("--oc-button-color: var(--text-muted);")
+
+    const iconBody = soloRuleBody(
+      css,
+      '.task-row-actions .oc-button[data-ui="task-row-delete"] svg,\n.task-row-actions .oc-button[data-ui="task-row-cancel"] svg,\n.task-row-actions .oc-button[data-ui="task-row-rename"] svg,\n.task-row-actions .oc-button[data-ui="task-row-download"] svg,\n.task-row-actions .oc-button[data-ui="task-row-start-now"] svg',
+    )
+    expect(iconBody).toContain("width: calc(12px * var(--ui-scale));")
+    expect(iconBody).toContain("height: calc(12px * var(--ui-scale));")
   })
 
   test("notification dismiss button does not default to muted text", () => {

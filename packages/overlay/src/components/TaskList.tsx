@@ -429,7 +429,7 @@ function TaskRow(props: {
           {/* Chevron lives in .task-row-body (row-head, after the badge
               / drag handle, before .task-row-main) instead of inside
               .task-row-right. .task-row-actions is position:absolute;
-              right:0; width:64px; z-index:2 — on row hover its buttons
+              right:0; width:var(--task-row-actions-width); z-index:2 — on row hover its buttons
               gain pointer-events:auto and overlay the right column,
               including any chevron rendered there. User reported "点不了"
               because cancel/rename were sitting on top of the chevron

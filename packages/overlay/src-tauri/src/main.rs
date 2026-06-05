@@ -4,29 +4,31 @@
 use std::{
     collections::VecDeque,
     fs,
-    io::{Read, Write},
+    io::{Cursor, Read, Write},
     net::{TcpListener, TcpStream},
-    path::PathBuf,
+    path::{Path, PathBuf},
     process::{Child, Command, Stdio},
     sync::{Condvar, Mutex, OnceLock},
     thread,
     time::{Duration, Instant},
 };
 
-#[cfg(windows)]
-use std::os::windows::process::CommandExt;
-#[cfg(windows)]
-use std::os::windows::io::AsRawHandle;
 #[cfg(unix)]
 use std::os::unix::fs::PermissionsExt;
+#[cfg(windows)]
+use std::os::windows::io::AsRawHandle;
+#[cfg(windows)]
+use std::os::windows::process::CommandExt;
 
+use base64::{engine::general_purpose::STANDARD, Engine as _};
+use flate2::read::GzDecoder;
 use serde::{Deserialize, Serialize};
+use tar::Archive;
 use tauri::{
     menu::{Menu, MenuItem},
     tray::TrayIconBuilder,
     AppHandle, Manager, Runtime, UserAttentionType,
 };
-use base64::{engine::general_purpose::STANDARD, Engine as _};
 use tauri_plugin_dialog::{DialogExt, MessageDialogKind};
 use tauri_plugin_notification::NotificationExt;
 use tauri_plugin_opener::OpenerExt;
@@ -61,8 +63,12 @@ mod job_object {
 
     #[repr(C)]
     struct IoCounters {
-        read_op: u64, write_op: u64, other_op: u64,
-        read_xfer: u64, write_xfer: u64, other_xfer: u64,
+        read_op: u64,
+        write_op: u64,
+        other_op: u64,
+        read_xfer: u64,
+        write_xfer: u64,
+        other_xfer: u64,
     }
 
     #[repr(C)]
@@ -90,9 +96,7 @@ mod job_object {
 
     extern "system" {
         fn CreateJobObjectW(attrs: *const c_void, name: *const u16) -> HANDLE;
-        fn SetInformationJobObject(
-            job: HANDLE, class: u32, info: *const c_void, len: u32,
-        ) -> i32;
+        fn SetInformationJobObject(job: HANDLE, class: u32, info: *const c_void, len: u32) -> i32;
         fn AssignProcessToJobObject(job: HANDLE, process: HANDLE) -> i32;
         fn CloseHandle(handle: HANDLE) -> i32;
     }
@@ -104,7 +108,9 @@ mod job_object {
     impl Drop for JobObject {
         fn drop(&mut self) {
             if !self.0.is_null() && self.0 != INVALID_HANDLE_VALUE {
-                unsafe { CloseHandle(self.0); }
+                unsafe {
+                    CloseHandle(self.0);
+                }
             }
         }
     }
@@ -139,10 +145,14 @@ mod job_object {
             )
         };
         if ok == 0 {
-            unsafe { CloseHandle(job); }
+            unsafe {
+                CloseHandle(job);
+            }
             return None;
         }
-        unsafe { AssignProcessToJobObject(job, child_handle); }
+        unsafe {
+            AssignProcessToJobObject(job, child_handle);
+        }
         Some(JobObject(job))
     }
 }
@@ -243,7 +253,10 @@ fn overlay_settings_load<R: Runtime>(app: AppHandle<R>) -> Result<OverlaySetting
 }
 
 #[tauri::command]
-fn overlay_settings_save<R: Runtime>(app: AppHandle<R>, settings: OverlaySettings) -> Result<bool, String> {
+fn overlay_settings_save<R: Runtime>(
+    app: AppHandle<R>,
+    settings: OverlaySettings,
+) -> Result<bool, String> {
     let path = overlay_settings_path(&app)?;
     if let Some(parent) = path.parent() {
         fs::create_dir_all(parent).map_err(|err| err.to_string())?;
@@ -366,7 +379,10 @@ fn overlay_write_file(path: String, content: String) -> Result<bool, String> {
 }
 
 #[tauri::command]
-fn overlay_pick_dir<R: Runtime>(app: AppHandle<R>, start: Option<String>) -> Result<Option<String>, String> {
+fn overlay_pick_dir<R: Runtime>(
+    app: AppHandle<R>,
+    start: Option<String>,
+) -> Result<Option<String>, String> {
     let start_clean = start
         .map(|item| item.trim().to_string())
         .filter(|item| !item.is_empty());
@@ -377,22 +393,29 @@ fn overlay_pick_dir<R: Runtime>(app: AppHandle<R>, start: Option<String>) -> Res
     };
 
     let picked = dialog.blocking_pick_folder();
-    let result = picked
-        .and_then(|item| {
-            // Try into_path first; fall back to display string for shell/virtual paths
-            match item.into_path() {
-                Ok(p) => Some(p.to_string_lossy().to_string()),
-                Err(item_back) => {
-                    let s = item_back.to_string();
-                    if s.is_empty() { None } else { Some(s) }
+    let result = picked.and_then(|item| {
+        // Try into_path first; fall back to display string for shell/virtual paths
+        match item.into_path() {
+            Ok(p) => Some(p.to_string_lossy().to_string()),
+            Err(item_back) => {
+                let s = item_back.to_string();
+                if s.is_empty() {
+                    None
+                } else {
+                    Some(s)
                 }
             }
-        });
+        }
+    });
 
     // Guard: if the dialog returned exactly the start directory, treat it as
     // a cancelled/no-op pick — the user did not select anything new.
     if let (Some(ref picked_path), Some(ref start_path)) = (&result, &start_clean) {
-        let norm = |s: &str| s.trim_end_matches(['/', '\\']).replace('\\', "/").to_lowercase();
+        let norm = |s: &str| {
+            s.trim_end_matches(['/', '\\'])
+                .replace('\\', "/")
+                .to_lowercase()
+        };
         if norm(picked_path) == norm(start_path) {
             return Ok(None);
         }
@@ -402,7 +425,11 @@ fn overlay_pick_dir<R: Runtime>(app: AppHandle<R>, start: Option<String>) -> Res
 }
 
 fn mime_from_ext(filename: &str) -> &'static str {
-    let ext = filename.rsplit('.').next().unwrap_or("").to_ascii_lowercase();
+    let ext = filename
+        .rsplit('.')
+        .next()
+        .unwrap_or("")
+        .to_ascii_lowercase();
     match ext.as_str() {
         "png" => "image/png",
         "jpg" | "jpeg" => "image/jpeg",
@@ -447,18 +474,23 @@ struct PickedFile {
 }
 
 #[tauri::command]
-fn overlay_pick_files<R: Runtime>(app: AppHandle<R>, start: Option<String>) -> Result<Vec<PickedFile>, String> {
+fn overlay_pick_files<R: Runtime>(
+    app: AppHandle<R>,
+    start: Option<String>,
+) -> Result<Vec<PickedFile>, String> {
     let mut builder = app.dialog().file().add_filter(
         "Supported Files",
         &[
-            "png", "jpg", "jpeg", "gif", "webp", "bmp", "svg", "ico",
-            "pdf", "txt", "md", "json", "csv", "xml", "yaml", "yml",
-            "log", "ts", "tsx", "js", "py", "go", "rs", "c", "cpp", "h",
-            "java", "rb", "sh", "bat", "ps1", "html", "css", "sql", "toml",
+            "png", "jpg", "jpeg", "gif", "webp", "bmp", "svg", "ico", "pdf", "txt", "md", "json",
+            "csv", "xml", "yaml", "yml", "log", "ts", "tsx", "js", "py", "go", "rs", "c", "cpp",
+            "h", "java", "rb", "sh", "bat", "ps1", "html", "css", "sql", "toml",
         ],
     );
 
-    if let Some(start) = start.map(|s| s.trim().to_string()).filter(|s| !s.is_empty()) {
+    if let Some(start) = start
+        .map(|s| s.trim().to_string())
+        .filter(|s| !s.is_empty())
+    {
         builder = builder.set_directory(start);
     }
 
@@ -483,7 +515,11 @@ fn overlay_pick_files<R: Runtime>(app: AppHandle<R>, start: Option<String>) -> R
             let mime = mime_from_ext(&filename);
             let b64 = STANDARD.encode(&data);
             let url = format!("data:{};base64,{}", mime, b64);
-            results.push(PickedFile { filename, mime: mime.to_string(), url });
+            results.push(PickedFile {
+                filename,
+                mime: mime.to_string(),
+                url,
+            });
         }
     }
 
@@ -519,6 +555,47 @@ fn embedded_server_payload_dir_name() -> String {
     format!("sidecar-{}", EMBEDDED_SERVER_STAMP)
 }
 
+fn embedded_payload_complete(root: &Path) -> bool {
+    EMBEDDED_SERVER_FILES.iter().all(|file| {
+        fs::metadata(root.join(file.path))
+            .map(|meta| meta.len() == file.size)
+            .unwrap_or(false)
+    })
+}
+
+fn unpack_embedded_payload(root: &Path) -> Result<(), String> {
+    if EMBEDDED_SERVER_ARCHIVE_GZ.is_empty() {
+        return Err("embedded opencorvus sidecar archive is empty".to_string());
+    }
+
+    if root.exists() {
+        fs::remove_dir_all(root).map_err(|err| err.to_string())?;
+    }
+    fs::create_dir_all(root).map_err(|err| err.to_string())?;
+
+    let decoder = GzDecoder::new(Cursor::new(EMBEDDED_SERVER_ARCHIVE_GZ));
+    let mut archive = Archive::new(decoder);
+    archive.unpack(root).map_err(|err| err.to_string())?;
+
+    #[cfg(unix)]
+    for file in EMBEDDED_SERVER_FILES {
+        if file.executable {
+            let path = root.join(file.path);
+            let perms = fs::Permissions::from_mode(0o755);
+            fs::set_permissions(path, perms).map_err(|err| err.to_string())?;
+        }
+    }
+
+    if !embedded_payload_complete(root) {
+        return Err(format!(
+            "embedded opencorvus sidecar extraction incomplete at {}",
+            root.to_string_lossy()
+        ));
+    }
+
+    Ok(())
+}
+
 fn ensure_embedded_server_path<R: Runtime>(app: &AppHandle<R>) -> Result<Option<PathBuf>, String> {
     if EMBEDDED_SERVER_FILES.is_empty() {
         return Ok(None);
@@ -530,32 +607,8 @@ fn ensure_embedded_server_path<R: Runtime>(app: &AppHandle<R>) -> Result<Option<
         .unwrap_or_else(|_| std::env::temp_dir());
     root.push("embedded");
     root.push(embedded_server_payload_dir_name());
-    fs::create_dir_all(&root).map_err(|err| err.to_string())?;
-
-    for file in EMBEDDED_SERVER_FILES {
-        let path = root.join(file.path);
-        let expected_len = file.bytes.len() as u64;
-        let up_to_date = fs::metadata(&path)
-            .map(|meta| meta.len() == expected_len)
-            .unwrap_or(false);
-        if up_to_date {
-            continue;
-        }
-
-        if let Some(parent) = path.parent() {
-            fs::create_dir_all(parent).map_err(|err| err.to_string())?;
-        }
-        let tmp = path.with_extension(format!("tmp-{}", std::process::id()));
-        fs::write(&tmp, file.bytes).map_err(|err| err.to_string())?;
-        #[cfg(unix)]
-        if file.executable {
-            let perms = fs::Permissions::from_mode(0o755);
-            fs::set_permissions(&tmp, perms).map_err(|err| err.to_string())?;
-        }
-        if path.exists() {
-            let _ = fs::remove_file(&path);
-        }
-        fs::rename(&tmp, &path).map_err(|err| err.to_string())?;
+    if !embedded_payload_complete(&root) {
+        unpack_embedded_payload(&root)?;
     }
 
     Ok(Some(root.join(EMBEDDED_SERVER_NAME)))
@@ -567,7 +620,11 @@ fn server_path<R: Runtime>(app: &AppHandle<R>) -> Option<PathBuf> {
         .find(|path| path.exists())
 }
 
-fn server_info_with_pid_and_log(port: u16, pid: u32, sidecar_log_path: Option<PathBuf>) -> OverlayServerInfo {
+fn server_info_with_pid_and_log(
+    port: u16,
+    pid: u32,
+    sidecar_log_path: Option<PathBuf>,
+) -> OverlayServerInfo {
     OverlayServerInfo {
         port,
         url: format!("http://{LOCAL_SERVER_HOST}:{port}"),
@@ -625,7 +682,9 @@ fn stop_server<R: Runtime>(app: &AppHandle<R>) {
     // Windows: drop the Job Object handle → KILL_ON_JOB_CLOSE terminates every
     // process in the job (direct child + all grandchildren).
     #[cfg(windows)]
-    { lock.job = None; }
+    {
+        lock.job = None;
+    }
 
     // Unix: SIGKILL the entire process group — reaches direct child and all
     // grandchildren that inherited the group (LSP servers, PTY shells, etc.).
@@ -633,7 +692,9 @@ fn stop_server<R: Runtime>(app: &AppHandle<R>) {
     if let Some(pgid) = lock.pgid.take() {
         if !exited_gracefully && pgid > 1 {
             // SAFETY: kill(2) is always safe to call; SIGKILL = 9.
-            unsafe { kill(-(pgid as i32), 9); }
+            unsafe {
+                kill(-(pgid as i32), 9);
+            }
         }
     }
 
@@ -662,11 +723,15 @@ fn server_shutdown_authorization() -> Option<String> {
         .map(|value| value.trim().to_string())
         .filter(|value| !value.is_empty())
         .unwrap_or_else(|| "opencorvus".to_string());
-    Some(format!("Basic {}", STANDARD.encode(format!("{username}:{password}"))))
+    Some(format!(
+        "Basic {}",
+        STANDARD.encode(format!("{username}:{password}"))
+    ))
 }
 
 fn request_server_shutdown(port: u16) -> Result<(), String> {
-    let mut stream = TcpStream::connect((LOCAL_SERVER_HOST, port)).map_err(|err| err.to_string())?;
+    let mut stream =
+        TcpStream::connect((LOCAL_SERVER_HOST, port)).map_err(|err| err.to_string())?;
     let _ = stream.set_read_timeout(Some(Duration::from_millis(750)));
     let _ = stream.set_write_timeout(Some(Duration::from_millis(750)));
 
@@ -680,7 +745,9 @@ fn request_server_shutdown(port: u16) -> Result<(), String> {
     }
     request.push_str("\r\n");
 
-    stream.write_all(request.as_bytes()).map_err(|err| err.to_string())?;
+    stream
+        .write_all(request.as_bytes())
+        .map_err(|err| err.to_string())?;
     let mut response = String::new();
     let _ = stream.read_to_string(&mut response);
     Ok(())
@@ -752,7 +819,11 @@ fn opencorvus_log_dir() -> PathBuf {
         }
         if let Ok(home) = std::env::var("HOME") {
             if !home.is_empty() {
-                return PathBuf::from(home).join(".local").join("share").join("opencorvus").join("log");
+                return PathBuf::from(home)
+                    .join(".local")
+                    .join("share")
+                    .join("opencorvus")
+                    .join("log");
             }
         }
     }
@@ -762,7 +833,10 @@ fn opencorvus_log_dir() -> PathBuf {
 fn append_overlay_startup_diagnostic(message: &str) -> Option<PathBuf> {
     let dir = opencorvus_log_dir();
     if let Err(err) = fs::create_dir_all(&dir) {
-        eprintln!("overlay: cannot create startup diagnostic log dir {:?}: {}", dir, err);
+        eprintln!(
+            "overlay: cannot create startup diagnostic log dir {:?}: {}",
+            dir, err
+        );
         return None;
     }
     let path = dir.join("overlay-startup.log");
@@ -774,13 +848,19 @@ fn append_overlay_startup_diagnostic(message: &str) -> Option<PathBuf> {
     match fs::OpenOptions::new().create(true).append(true).open(&path) {
         Ok(mut file) => {
             if let Err(err) = file.write_all(entry.as_bytes()) {
-                eprintln!("overlay: cannot write startup diagnostic log {:?}: {}", path, err);
+                eprintln!(
+                    "overlay: cannot write startup diagnostic log {:?}: {}",
+                    path, err
+                );
                 return None;
             }
             Some(path)
         }
         Err(err) => {
-            eprintln!("overlay: cannot open startup diagnostic log {:?}: {}", path, err);
+            eprintln!(
+                "overlay: cannot open startup diagnostic log {:?}: {}",
+                path, err
+            );
             None
         }
     }
@@ -792,7 +872,10 @@ fn startup_failure_diagnostic_message(error: &str, log_path: Option<&PathBuf>) -
         error.to_string(),
     ];
     if let Some(path) = log_path {
-        parts.push(format!("overlay diagnostic log: {}", path.to_string_lossy()));
+        parts.push(format!(
+            "overlay diagnostic log: {}",
+            path.to_string_lossy()
+        ));
     }
     parts.join("\n\n")
 }
@@ -951,9 +1034,13 @@ fn start_server<R: Runtime>(app: &AppHandle<R>) -> Result<OverlayServerInfo, Str
     lock.port = Some(port);
     lock.sidecar_log_path = sidecar_log_path;
     #[cfg(windows)]
-    { lock.job = job; }
+    {
+        lock.job = job;
+    }
     #[cfg(unix)]
-    { lock.pgid = Some(pgid); }
+    {
+        lock.pgid = Some(pgid);
+    }
     Ok(info)
 }
 
@@ -1115,10 +1202,7 @@ fn crop_tray_icon(rgba: image::RgbaImage) -> Option<image::RgbaImage> {
     let right = (right + pad).min(width - 1);
     let bottom = (bottom + pad).min(height - 1);
 
-    Some(
-        image::imageops::crop_imm(&rgba, left, top, right - left + 1, bottom - top + 1)
-            .to_image(),
-    )
+    Some(image::imageops::crop_imm(&rgba, left, top, right - left + 1, bottom - top + 1).to_image())
 }
 
 fn tray_icon_from_bundle() -> Option<tauri::image::Image<'static>> {
@@ -1210,7 +1294,11 @@ fn overlay_attention_set<R: Runtime>(app: AppHandle<R>, active: bool) -> Result<
 }
 
 fn badge_count_value(count: i64) -> Option<i64> {
-    if count > 0 { Some(count) } else { None }
+    if count > 0 {
+        Some(count)
+    } else {
+        None
+    }
 }
 
 #[tauri::command]
@@ -1222,7 +1310,9 @@ fn overlay_badge_set<R: Runtime>(app: AppHandle<R>, count: i64) -> Result<bool, 
         } else {
             None
         };
-        window.set_overlay_icon(icon).map_err(|err| err.to_string())?;
+        window
+            .set_overlay_icon(icon)
+            .map_err(|err| err.to_string())?;
         Ok(true)
     } else {
         Ok(false)
@@ -1233,7 +1323,9 @@ fn overlay_badge_set<R: Runtime>(app: AppHandle<R>, count: i64) -> Result<bool, 
 #[cfg(not(windows))]
 fn overlay_badge_set<R: Runtime>(app: AppHandle<R>, count: i64) -> Result<bool, String> {
     if let Some(window) = app.get_webview_window("main") {
-        window.set_badge_count(badge_count_value(count)).map_err(|err| err.to_string())?;
+        window
+            .set_badge_count(badge_count_value(count))
+            .map_err(|err| err.to_string())?;
         Ok(true)
     } else {
         Ok(false)
@@ -1266,44 +1358,43 @@ fn main() {
     let builder = tauri::Builder::default()
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_opener::init())
-        .plugin(tauri_plugin_notification::init())
-        ;
+        .plugin(tauri_plugin_notification::init());
 
     #[cfg(feature = "devtools")]
     let builder = builder.invoke_handler(tauri::generate_handler![
-            overlay_settings_load,
-            overlay_settings_save,
-            overlay_server_info,
-            overlay_server_restart,
-            overlay_open_path,
-            overlay_open_url,
-            overlay_open_project_editor,
-            overlay_create_dir,
-            overlay_write_file,
-            overlay_pick_dir,
-            overlay_pick_files,
-            overlay_attention_set,
-            overlay_badge_set,
-            overlay_toggle_devtools,
-            overlay_quit
+        overlay_settings_load,
+        overlay_settings_save,
+        overlay_server_info,
+        overlay_server_restart,
+        overlay_open_path,
+        overlay_open_url,
+        overlay_open_project_editor,
+        overlay_create_dir,
+        overlay_write_file,
+        overlay_pick_dir,
+        overlay_pick_files,
+        overlay_attention_set,
+        overlay_badge_set,
+        overlay_toggle_devtools,
+        overlay_quit
     ]);
 
     #[cfg(not(feature = "devtools"))]
     let builder = builder.invoke_handler(tauri::generate_handler![
-            overlay_settings_load,
-            overlay_settings_save,
-            overlay_server_info,
-            overlay_server_restart,
-            overlay_open_path,
-            overlay_open_url,
-            overlay_open_project_editor,
-            overlay_create_dir,
-            overlay_write_file,
-            overlay_pick_dir,
-            overlay_pick_files,
-            overlay_attention_set,
-            overlay_badge_set,
-            overlay_quit
+        overlay_settings_load,
+        overlay_settings_save,
+        overlay_server_info,
+        overlay_server_restart,
+        overlay_open_path,
+        overlay_open_url,
+        overlay_open_project_editor,
+        overlay_create_dir,
+        overlay_write_file,
+        overlay_pick_dir,
+        overlay_pick_files,
+        overlay_attention_set,
+        overlay_badge_set,
+        overlay_quit
     ]);
 
     builder
@@ -1470,7 +1561,11 @@ fn build_normal_tray_icon() -> CachedIcon {
     if let Some(icon) = tray_icon_from_bundle() {
         let width = icon.width();
         let height = icon.height();
-        return CachedIcon { rgba: icon.rgba().to_vec(), width, height };
+        return CachedIcon {
+            rgba: icon.rgba().to_vec(),
+            width,
+            height,
+        };
     }
 
     let size: u32 = 32;
@@ -1500,7 +1595,11 @@ fn build_normal_tray_icon() -> CachedIcon {
         }
     }
 
-    CachedIcon { rgba, width: size, height: size }
+    CachedIcon {
+        rgba,
+        width: size,
+        height: size,
+    }
 }
 
 fn build_attention_tray_icon() -> CachedIcon {
@@ -1535,7 +1634,11 @@ fn build_attention_tray_icon() -> CachedIcon {
         }
     }
 
-    CachedIcon { rgba, width, height }
+    CachedIcon {
+        rgba,
+        width,
+        height,
+    }
 }
 
 fn build_taskbar_badge_icon() -> CachedIcon {
@@ -1571,7 +1674,11 @@ fn build_taskbar_badge_icon() -> CachedIcon {
         }
     }
 
-    CachedIcon { rgba, width: size, height: size }
+    CachedIcon {
+        rgba,
+        width: size,
+        height: size,
+    }
 }
 
 fn create_tray_icon() -> tauri::image::Image<'static> {
@@ -1604,7 +1711,11 @@ mod tests {
     #[test]
     fn sidecar_cwd_dir_is_not_filesystem_root() {
         let dir = sidecar_cwd_dir();
-        assert_ne!(dir, Path::new("/"), "sidecar cwd should not be filesystem root");
+        assert_ne!(
+            dir,
+            Path::new("/"),
+            "sidecar cwd should not be filesystem root"
+        );
         // The chosen cwd must have at least one non-root path component
         // (e.g. `opencorvus`, `Application Support`, `AppData`, etc.) —
         // landing directly at `/` or `C:\` is the regression we're guarding
@@ -1614,7 +1725,11 @@ mod tests {
             .filter(|c| matches!(c, std::path::Component::Normal(_)))
             .next()
             .is_some();
-        assert!(has_meaningful_component, "sidecar cwd has no meaningful path components: {:?}", dir);
+        assert!(
+            has_meaningful_component,
+            "sidecar cwd has no meaningful path components: {:?}",
+            dir
+        );
     }
 
     /// `sidecar_cwd_dir()` must be deterministic for the same env so
@@ -1664,7 +1779,10 @@ mod tests {
 
         assert_eq!(info.port, 7878);
         assert_eq!(info.pid, Some(123));
-        assert_eq!(info.sidecar_log_path, Some(path.to_string_lossy().to_string()));
+        assert_eq!(
+            info.sidecar_log_path,
+            Some(path.to_string_lossy().to_string())
+        );
     }
 
     #[test]
@@ -1673,7 +1791,9 @@ mod tests {
             return;
         }
         assert!(
-            EMBEDDED_SERVER_FILES.iter().any(|file| file.path == EMBEDDED_SERVER_NAME),
+            EMBEDDED_SERVER_FILES
+                .iter()
+                .any(|file| file.path == EMBEDDED_SERVER_NAME),
             "embedded sidecar payload must include {}",
             EMBEDDED_SERVER_NAME
         );
@@ -1690,16 +1810,43 @@ mod tests {
             "browser-mcp-node/node"
         };
         assert!(
-            EMBEDDED_SERVER_FILES.iter().any(|file| file.path == "browser-mcp-node/stdio.mjs"),
+            EMBEDDED_SERVER_FILES
+                .iter()
+                .any(|file| file.path == "browser-mcp-node/stdio.mjs"),
             "embedded sidecar payload must include browser-mcp-node/stdio.mjs"
         );
         let node_entry = EMBEDDED_SERVER_FILES
             .iter()
             .find(|file| file.path == node)
             .unwrap_or_else(|| panic!("embedded sidecar payload must include {node}"));
-        assert!(!node_entry.bytes.is_empty(), "{node} must not be embedded as an empty file");
+        assert!(
+            node_entry.size > 0,
+            "{node} must not be embedded as an empty file"
+        );
         #[cfg(unix)]
-        assert!(node_entry.executable, "{node} must be executable after extraction");
+        assert!(
+            node_entry.executable,
+            "{node} must be executable after extraction"
+        );
+    }
+
+    #[test]
+    fn embedded_payload_archive_is_present_and_compressed_when_payload_is_large() {
+        if EMBEDDED_SERVER_FILES.is_empty() {
+            return;
+        }
+
+        let total_size: u64 = EMBEDDED_SERVER_FILES.iter().map(|file| file.size).sum();
+        assert!(
+            !EMBEDDED_SERVER_ARCHIVE_GZ.is_empty(),
+            "embedded sidecar payload must be stored in a compressed archive"
+        );
+        if total_size > 1024 * 1024 {
+            assert!(
+                (EMBEDDED_SERVER_ARCHIVE_GZ.len() as u64) < total_size,
+                "embedded archive should be smaller than raw payload bytes"
+            );
+        }
     }
 
     #[test]
@@ -1714,7 +1861,9 @@ mod tests {
             "browser-mcp-node/node_modules/playwright-core/package.json",
         ] {
             assert!(
-                EMBEDDED_SERVER_FILES.iter().any(|file| file.path == package_json),
+                EMBEDDED_SERVER_FILES
+                    .iter()
+                    .any(|file| file.path == package_json),
                 "embedded sidecar payload must include {package_json}"
             );
         }

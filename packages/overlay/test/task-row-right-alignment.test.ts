@@ -30,12 +30,12 @@ function selectorRuleBody(selector: string): string {
 describe("task row right column stays anchored to the row edge", () => {
   test(".task-row-mini gives the title the flexible track before the right column", () => {
     const body = soloRuleBody(".task-row-mini")
-    expect(body).toMatch(/--task-row-actions-width:\s*calc\(64px \* var\(--ui-scale\)\)\s*;/)
+    expect(body).toMatch(/--task-row-actions-width:\s*calc\(108px \* var\(--ui-scale\)\)\s*;/)
     expect(body).toMatch(/grid-template-columns:\s*calc\(20px \* var\(--ui-scale\)\)\s+0\s+minmax\(0,\s*1fr\)\s+max-content\s*;/)
   })
 
-  test(".task-row-main can shrink inside the flexible grid track", () => {
-    const body = soloRuleBody(".task-row-main")
+  test(".task-row-body can shrink inside the flexible grid track", () => {
+    const body = soloRuleBody(".task-row-body")
     expect(body).toMatch(/grid-column:\s*3\s*;/)
     expect(body).toMatch(/min-width:\s*0\s*;/)
   })
