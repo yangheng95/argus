@@ -198,6 +198,10 @@ function closeSession(session: HostSession, reason: string) {
   session.updatedAt = Date.now()
 }
 
+function hostExitReason(exitCode: number | null) {
+  return exitCode === null ? "TUI host exited" : `TUI host exited with code ${exitCode}`
+}
+
 function assertSize(cols: number, rows: number) {
   if (!Number.isInteger(cols) || cols < 1 || cols > 500) throw new Error("cols must be an integer from 1 to 500")
   if (!Number.isInteger(rows) || rows < 1 || rows > 200) throw new Error("rows must be an integer from 1 to 200")
@@ -391,7 +395,7 @@ async function spawnPrepared(input: { command: Tui.EmbeddedCommand; cols: number
     session.exitCode = event.exitCode
     session.updatedAt = Date.now()
     for (const connection of session.connections) {
-      connection.close(1000, "TUI host exited")
+      connection.close(4405, hostExitReason(event.exitCode))
     }
     session.connections.clear()
     for (const handler of session.exitHandlers) handler(event)
