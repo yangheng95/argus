@@ -2504,6 +2504,42 @@ OpenCode gap after the round:
 
 - This fixes the process-entry bug shown in the screenshot. It does not address the remaining MVP gaps from Round 48: link opening, terminal keybind integration, terminal palette 0-15 mapping, debounced size update, terminal tab/workspace store, full workspace management, external TUI plugin loader, Agent Team project control tools, and `SessionV2Debug`/`sync-v2`.
 
+### 2026-06-05 Round 50: packaged overlay-server must not spawn itself as TUI
+
+Implemented:
+
+- Diagnosed the repeated screenshot failure against the actual packaged artifact:
+  - `dist/opencorvus-overlay-server-windows-x64/opencorvus.exe --help` only exposes `opencorvus serve`;
+  - the right-sidebar PTY was using that overlay-server executable as if it were the full OpenCode-style TUI CLI;
+  - therefore the terminal rendered the overlay-server help text instead of the chat/modification TUI.
+- Removed the unsafe bare `opencorvus` PATH fallback from `Tui.resolveEmbeddedCommand()`.
+- Added packaged runtime resolution for a sibling full TUI binary:
+  - runtime now prefers `opencorvus-tui.exe` / `opencorvus-tui` next to the current executable;
+  - if the current executable's sibling `package.json` is an `overlay-server` package, `selfBin()` refuses to use it as the TUI binary.
+- Updated overlay-server artifact builds to include the sibling full CLI/TUI binary:
+  - `script/build.ts`;
+  - `script/build.local.ts`;
+  - shared artifact helper `artifactTuiSiblingExecutableName()`.
+- Kept overlay-server itself headless-only. The fix is not to bloat the server entrypoint with TUI commands; it is to package the correct sibling executable and point the PTY host at it.
+
+Verified in tests and build:
+
+- `bun test packages/opencorvus/test/tui/host.test.ts`
+- `bun test packages/opencorvus/test/script/build-artifact.test.ts -t "overlay-server"`
+- `bun run build --overlay-server --binary-only` from `packages/opencorvus`
+- Verified `dist/opencorvus-overlay-server-windows-x64/opencorvus-tui.exe --help` includes `opencorvus [project] start opencorvus tui [default]`.
+- Verified `dist/opencorvus-overlay-server-windows-x64/opencorvus.exe --help` still only exposes `serve`.
+- `bun run --cwd packages/opencorvus typecheck`
+
+OpenCode comparison after the round:
+
+- OpenCode's normal binary is a full TUI CLI. OpenCorvus' packaged overlay-server is intentionally a headless server binary, so the OpenCode-equivalent TUI entry must be shipped as a sibling full CLI binary.
+- The right-sidebar still uses the OpenCode default TUI invocation shape; it now resolves to the correct binary in packaged overlay-server deployments.
+
+OpenCode gap after the round:
+
+- This fixes the packaged binary selection bug that displayed CLI help in the right sidebar. Remaining MVP gaps are unchanged: link opening, terminal keybind integration, terminal palette 0-15 mapping, debounced size update, terminal tab/workspace store, full workspace management, external TUI plugin loader, Agent Team project control tools, and `SessionV2Debug`/`sync-v2`.
+
 ### 2026-06-05 Round 45: MVP websocket close reason diagnostics
 
 Implemented:
