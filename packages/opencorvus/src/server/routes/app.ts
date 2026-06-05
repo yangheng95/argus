@@ -26,6 +26,7 @@ import { FileRoutes } from "./file"
 import { McpRoutes } from "./mcp"
 import { SkillRoutes } from "./skill"
 import { TuiRoutes } from "./tui"
+import { PtyRoutes } from "./pty"
 import { ExportRoutes } from "./export"
 import { EngineRoutes } from "./orchestrator"
 import { PanelRoutes } from "./panel"
@@ -161,6 +162,7 @@ export function AppRoutes(root: Hono) {
     .route("/", FileRoutes())
     .route("/attachment", AttachmentRoutes())
     .route("/mcp", McpRoutes())
+    .route("/pty", PtyRoutes())
     .route("/tui", TuiRoutes())
     .post(
       "/instance/dispose",

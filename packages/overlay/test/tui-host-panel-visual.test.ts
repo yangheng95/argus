@@ -23,18 +23,14 @@ function send(value: unknown, init?: ResponseInit) {
 }
 
 function hostInfo() {
-  const now = Date.now()
   return {
     id: "pty_visual",
-    running: true,
+    title: "OpenCorvus TUI",
+    command: "opencorvus",
+    args: [],
+    cwd: "D:/overlay/workspace/app",
     status: "running",
-    cols: 100,
-    rows: 30,
-    url: null,
-    directory: "D:/overlay/workspace/app",
-    exitCode: null,
-    createdAt: now - 1_000,
-    updatedAt: now,
+    pid: 123,
   }
 }
 
@@ -49,6 +45,7 @@ test("right sidebar TUI host panel renders as a real browser surface", async () 
         ws.send("\x1b[38;5;75mOpenCorvus\x1b[0m coding assistant\r\n")
         ws.send("project: D:/overlay/workspace/app\r\n")
         ws.send("todo: inspect right sidebar TUI visual smoke\r\n")
+        ws.send(new Uint8Array([0, ...new TextEncoder().encode(JSON.stringify({ cursor: 99 }))]))
       },
       message(ws, message) {
         ws.send(typeof message === "string" ? message : new TextDecoder().decode(message))
@@ -57,7 +54,7 @@ test("right sidebar TUI host panel renders as a real browser surface", async () 
     async fetch(req, serverInstance) {
       const url = new URL(req.url)
       const path = route(url)
-      if (path === "/tui/host/connect") {
+      if (path === "/pty/pty_visual/connect") {
         const upgraded = serverInstance.upgrade(req)
         return upgraded ? undefined : new Response("WebSocket upgrade failed", { status: 400 })
       }
@@ -80,9 +77,14 @@ test("right sidebar TUI host panel renders as a real browser surface", async () 
       if (path === "/mcp") return send({})
       if (path === "/panel/knowledge/memory") return send([])
       if (path === "/panel/knowledge/preference") return send([])
-      if (path === "/tui/host/status" || path === "/tui/host/start" || path === "/tui/host/resize") return send(hostInfo())
-      if (path === "/tui/host/connect-token") return send({ ticket: "visual-ticket", expires_in: 30 })
-      if (path === "/tui/host/stop") return send(true)
+      if (path === "/pty") {
+        if (req.method === "GET") return send([hostInfo()])
+        if (req.method === "POST") return send(hostInfo())
+      }
+      if (path === "/pty/pty_visual") {
+        if (req.method === "PUT") return send(hostInfo())
+        if (req.method === "DELETE") return send(true)
+      }
       if (path === "/file") return send({ entries: [{ path: "src/main.tsx", name: "main.tsx", type: "file" }] })
       if (path === "/find/file") return send({ entries: [] })
       return send({})

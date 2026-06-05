@@ -13,7 +13,8 @@ import { requireRuntimePackage, runtimePackageRequire } from "@/runtime/package-
 import { Tui } from "@/tui"
 
 const MAX_BUFFER_BYTES = 1_000_000
-const CONNECT_TICKET_LIFETIME_MS = 60_000
+const BUFFER_CHUNK = 64 * 1024
+const encoder = new TextEncoder()
 const NODE_BRIDGE_SCRIPT = String.raw`
 const readline = require("node:readline")
 
@@ -53,11 +54,12 @@ type HostStatus = "idle" | "running" | "exited"
 type ExitHandler = (event: { exitCode: number | null }) => void
 
 interface HostConnection {
-  send(chunk: string): void
+  send(chunk: string | Uint8Array<ArrayBuffer>): void
   close(code?: number, reason?: string): void
 }
 
 interface HostProcess {
+  pid: number
   write(data: string): void
   resize(cols: number, rows: number): void
   kill(): void
@@ -67,6 +69,7 @@ interface HostProcess {
 
 interface HostSession {
   id: string
+  title: string
   command: Tui.EmbeddedCommand
   process: HostProcess | null
   status: HostStatus
@@ -81,23 +84,24 @@ interface HostSession {
   updatedAt: number
 }
 
-interface HostConnectTicket {
-  hostID: string
-  directory: string
-  expiresAt: number
-}
-
 const state = lazyInstanceState(
   () => ({
     session: null as HostSession | null,
-    tickets: new Map<string, HostConnectTicket>(),
   }),
   async (s) => {
     s.session?.process?.kill()
     s.session = null
-    s.tickets.clear()
   },
 )
+
+function meta(cursor: number) {
+  const json = JSON.stringify({ cursor })
+  const bytes = encoder.encode(json)
+  const out = new Uint8Array(bytes.length + 1)
+  out[0] = 0
+  out.set(bytes, 1)
+  return out
+}
 
 function appendBuffer(session: HostSession, chunk: string) {
   session.cursor += chunk.length
@@ -146,6 +150,10 @@ function info(session: HostSession | null) {
       rows: null,
       url: null,
       directory: Instance.current()?.directory ?? null,
+      title: null,
+      command: null,
+      args: null,
+      pid: null,
       exitCode: null,
       createdAt: null,
       updatedAt: null,
@@ -159,15 +167,13 @@ function info(session: HostSession | null) {
     rows: session.rows,
     url: session.command.url,
     directory: session.command.cwd,
+    title: session.title,
+    command: session.command.command,
+    args: session.command.args,
+    pid: session.process?.pid ?? 0,
     exitCode: session.exitCode,
     createdAt: session.createdAt,
     updatedAt: session.updatedAt,
-  }
-}
-
-function deleteExpiredTickets(tickets: Map<string, HostConnectTicket>, now = Date.now()) {
-  for (const [ticket, record] of tickets) {
-    if (record.expiresAt <= now) tickets.delete(ticket)
   }
 }
 
@@ -187,6 +193,7 @@ function directPtyProcess(input: { command: Tui.EmbeddedCommand; cols: number; r
     useConptyDll: false,
   })
   return {
+    pid: proc.pid,
     write: (data) => proc.write(data),
     resize: (cols, rows) => proc.resize(cols, rows),
     kill: () => proc.kill(),
@@ -300,6 +307,7 @@ async function nodeBridgePtyProcess(input: { command: Tui.EmbeddedCommand; cols:
   })
 
   return {
+    pid: child.pid ?? 0,
     write: (data) => bridgeMessage(child, { type: "input", data }),
     resize: (cols, rows) => bridgeMessage(child, { type: "resize", cols, rows }),
     kill: () => bridgeMessage(child, { type: "kill" }),
@@ -321,11 +329,12 @@ async function hostProcess(input: { command: Tui.EmbeddedCommand; cols: number; 
   return directPtyProcess(input)
 }
 
-async function spawnPrepared(input: { command: Tui.EmbeddedCommand; cols: number; rows: number }) {
+async function spawnPrepared(input: { command: Tui.EmbeddedCommand; cols: number; rows: number; title?: string }) {
   assertSize(input.cols, input.rows)
   const now = Date.now()
   const session: HostSession = {
     id: Identifier.ascending("pty"),
+    title: input.title ?? "OpenCorvus TUI",
     command: input.command,
     process: null,
     status: "running",
@@ -368,16 +377,10 @@ async function spawnPrepared(input: { command: Tui.EmbeddedCommand; cols: number
 }
 
 export namespace TuiHost {
-  export const CONNECT_TICKET_QUERY = "ticket"
-  export const CONNECT_TOKEN_HEADER = "x-opencode-ticket"
-  export const CONNECT_TOKEN_HEADER_VALUE = "1"
-
   export type Info = ReturnType<typeof info>
   export type Snapshot = Info & { buffer: string }
   export type Output = ReturnType<typeof readOutput>
-  export type ConnectToken = { ticket: string; expires_in: number }
   export type PreparedConnection = {
-    initialData: string
     attach(input: HostConnection): {
       onMessage(data: string): void
       onClose(): void
@@ -416,14 +419,14 @@ export namespace TuiHost {
     })
   }
 
-  export async function startPrepared(input: { command: Tui.EmbeddedCommand; cols?: number; rows?: number }) {
+  export async function startPrepared(input: { command: Tui.EmbeddedCommand; cols?: number; rows?: number; title?: string }) {
     await stop()
     const s = state()
-    s.tickets.clear()
     s.session = await spawnPrepared({
       command: input.command,
       cols: input.cols ?? 100,
       rows: input.rows ?? 30,
+      title: input.title,
     })
     return info(s.session)
   }
@@ -444,58 +447,29 @@ export namespace TuiHost {
     return readOutput(state().session, input?.cursor)
   }
 
-  export function issueConnectToken(): ConnectToken {
+  export function preparePtyConnect(input: { id: string; cursor?: number }): PreparedConnection {
     const s = state()
     const session = s.session
-    if (!session?.process || session.status !== "running") throw new Error("TUI host is not running")
-    deleteExpiredTickets(s.tickets)
-    const ticket = crypto.randomUUID()
-    s.tickets.set(ticket, {
-      hostID: session.id,
-      directory: session.command.cwd,
-      expiresAt: Date.now() + CONNECT_TICKET_LIFETIME_MS,
-    })
+    if (!session?.process || session.status !== "running" || session.id !== input.id) {
+      throw new Error("PTY session not found")
+    }
+    const retained = readOutput(session, input.cursor)
     return {
-      ticket,
-      expires_in: Math.max(1, Math.round(CONNECT_TICKET_LIFETIME_MS / 1_000)),
-    }
-  }
-
-  export function consumeConnectToken(input: { ticket: string; hostID: string; directory?: string }) {
-    const s = state()
-    const record = s.tickets.get(input.ticket)
-    if (!record) return false
-    const now = Date.now()
-    if (record.expiresAt <= now) {
-      s.tickets.delete(input.ticket)
-      return false
-    }
-    const directory = input.directory ?? Instance.directory
-    if (record.hostID !== input.hostID || record.directory !== directory) return false
-    s.tickets.delete(input.ticket)
-    return true
-  }
-
-  export function prepareConnect(input: { ticket: string; cursor?: number }): PreparedConnection {
-    const s = state()
-    const session = s.session
-    if (!session?.process || session.status !== "running") throw new Error("TUI host is not running")
-    if (!consumeConnectToken({ ticket: input.ticket, hostID: session.id, directory: session.command.cwd })) {
-      throw new Error("Invalid TUI host connect ticket")
-    }
-    const initialData = readOutput(session, input.cursor).data
-    return {
-      initialData,
       attach(connection) {
         if (!session.process || session.status !== "running") {
-          connection.close(4404, "TUI host is not running")
+          connection.close(4404, "PTY session is not running")
           return {
             onMessage() {},
             onClose() {},
           }
         }
         session.connections.add(connection)
-        if (initialData) connection.send(initialData)
+        if (retained.data) {
+          for (let i = 0; i < retained.data.length; i += BUFFER_CHUNK) {
+            connection.send(retained.data.slice(i, i + BUFFER_CHUNK))
+          }
+        }
+        connection.send(meta(retained.cursor))
         return {
           onMessage(data) {
             if (!session.process || session.status !== "running") return
@@ -529,10 +503,17 @@ export namespace TuiHost {
     return info(session)
   }
 
+  export function rename(input: { id: string; title: string }) {
+    const session = state().session
+    if (!session || session.id !== input.id) throw new Error("PTY session not found")
+    session.title = input.title
+    session.updatedAt = Date.now()
+    return info(session)
+  }
+
   export async function stop() {
     const s = state()
     const session = s.session
-    s.tickets.clear()
     if (!session) return true
     for (const connection of session.connections) {
       connection.close(1000, "TUI host stopped")

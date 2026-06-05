@@ -165,6 +165,17 @@ import type {
   ProviderRefreshResponses,
   ProviderTestErrors,
   ProviderTestResponses,
+  PtyConnectErrors,
+  PtyConnectResponses,
+  PtyCreateErrors,
+  PtyCreateResponses,
+  PtyGetErrors,
+  PtyGetResponses,
+  PtyListResponses,
+  PtyRemoveErrors,
+  PtyRemoveResponses,
+  PtyUpdateErrors,
+  PtyUpdateResponses,
   QuestionAnswer,
   QuestionListResponses,
   QuestionRejectErrors,
@@ -316,16 +327,6 @@ import type {
   TuiControlResponseResponses,
   TuiExecuteCommandErrors,
   TuiExecuteCommandResponses,
-  TuiHostConnectErrors,
-  TuiHostConnectResponses,
-  TuiHostConnectTokenErrors,
-  TuiHostConnectTokenResponses,
-  TuiHostResizeErrors,
-  TuiHostResizeResponses,
-  TuiHostStartErrors,
-  TuiHostStartResponses,
-  TuiHostStatusResponses,
-  TuiHostStopResponses,
   TuiOpenHelpResponses,
   TuiOpenModelsResponses,
   TuiOpenSessionsResponses,
@@ -7567,26 +7568,41 @@ export class Mcp extends HeyApiClient {
   }
 }
 
-export class Host extends HeyApiClient {
+export class Pty extends HeyApiClient {
   /**
-   * Start embedded TUI host
+   * List PTY sessions
    *
-   * Start the project-bound TUI process inside a Pseudo Terminal (PTY) for right-sidebar terminal rendering.
+   * Get active Pseudo Terminal (PTY) sessions managed by OpenCorvus.
    */
-  public start<ThrowOnError extends boolean = false>(
+  public list<ThrowOnError extends boolean = false>(
     parameters?: {
       directory?: string
-      sessionID?: string
-      model?: string
-      agent?: string
-      prompt?: string
-      continue?: boolean
-      fork?: boolean
-      port?: number
-      hostname?: string
-      bin?: string
-      cols?: number
-      rows?: number
+    },
+    options?: Options<never, ThrowOnError>,
+  ) {
+    const params = buildClientParams([parameters], [{ args: [{ in: "query", key: "directory" }] }])
+    return (options?.client ?? this.client).get<PtyListResponses, unknown, ThrowOnError>({
+      url: "/pty",
+      ...options,
+      ...params,
+    })
+  }
+
+  /**
+   * Create PTY session
+   *
+   * Create a project-bound Pseudo Terminal (PTY) session for the embedded TUI.
+   */
+  public create<ThrowOnError extends boolean = false>(
+    parameters?: {
+      directory?: string
+      command?: string
+      args?: Array<string>
+      cwd?: string
+      title?: string
+      env?: {
+        [key: string]: string
+      }
     },
     options?: Options<never, ThrowOnError>,
   ) {
@@ -7596,23 +7612,17 @@ export class Host extends HeyApiClient {
         {
           args: [
             { in: "query", key: "directory" },
-            { in: "body", key: "sessionID" },
-            { in: "body", key: "model" },
-            { in: "body", key: "agent" },
-            { in: "body", key: "prompt" },
-            { in: "body", key: "continue" },
-            { in: "body", key: "fork" },
-            { in: "body", key: "port" },
-            { in: "body", key: "hostname" },
-            { in: "body", key: "bin" },
-            { in: "body", key: "cols" },
-            { in: "body", key: "rows" },
+            { in: "body", key: "command" },
+            { in: "body", key: "args" },
+            { in: "body", key: "cwd" },
+            { in: "body", key: "title" },
+            { in: "body", key: "env" },
           ],
         },
       ],
     )
-    return (options?.client ?? this.client).post<TuiHostStartResponses, TuiHostStartErrors, ThrowOnError>({
-      url: "/tui/host/start",
+    return (options?.client ?? this.client).post<PtyCreateResponses, PtyCreateErrors, ThrowOnError>({
+      url: "/pty",
       ...options,
       ...params,
       headers: {
@@ -7624,32 +7634,13 @@ export class Host extends HeyApiClient {
   }
 
   /**
-   * Get embedded TUI host status
+   * Remove PTY session
    *
-   * Get the project-bound right-sidebar TUI host status.
+   * Remove and terminate a Pseudo Terminal (PTY) session.
    */
-  public status<ThrowOnError extends boolean = false>(
-    parameters?: {
-      directory?: string
-    },
-    options?: Options<never, ThrowOnError>,
-  ) {
-    const params = buildClientParams([parameters], [{ args: [{ in: "query", key: "directory" }] }])
-    return (options?.client ?? this.client).get<TuiHostStatusResponses, unknown, ThrowOnError>({
-      url: "/tui/host/status",
-      ...options,
-      ...params,
-    })
-  }
-
-  /**
-   * Issue embedded TUI host connect token
-   *
-   * Issue a one-use connect token scoped to the running project-bound Pseudo Terminal (PTY) host.
-   */
-  public connectToken<ThrowOnError extends boolean = false>(
+  public remove<ThrowOnError extends boolean = false>(
     parameters: {
-      "x-opencode-ticket": "1"
+      ptyID: string
       directory?: string
     },
     options?: Options<never, ThrowOnError>,
@@ -7659,31 +7650,100 @@ export class Host extends HeyApiClient {
       [
         {
           args: [
-            { in: "headers", key: "x-opencode-ticket" },
+            { in: "path", key: "ptyID" },
             { in: "query", key: "directory" },
           ],
         },
       ],
     )
-    return (options?.client ?? this.client).post<TuiHostConnectTokenResponses, TuiHostConnectTokenErrors, ThrowOnError>(
-      {
-        url: "/tui/host/connect-token",
-        ...options,
-        ...params,
-      },
-    )
+    return (options?.client ?? this.client).delete<PtyRemoveResponses, PtyRemoveErrors, ThrowOnError>({
+      url: "/pty/{ptyID}",
+      ...options,
+      ...params,
+    })
   }
 
   /**
-   * Connect to embedded TUI host
+   * Get PTY session
    *
-   * Upgrade to a WebSocket attached to the project-bound embedded Pseudo Terminal (PTY) host. The ticket is one-use and issued by /tui/host/connect-token.
+   * Retrieve a specific Pseudo Terminal (PTY) session.
+   */
+  public get<ThrowOnError extends boolean = false>(
+    parameters: {
+      ptyID: string
+      directory?: string
+    },
+    options?: Options<never, ThrowOnError>,
+  ) {
+    const params = buildClientParams(
+      [parameters],
+      [
+        {
+          args: [
+            { in: "path", key: "ptyID" },
+            { in: "query", key: "directory" },
+          ],
+        },
+      ],
+    )
+    return (options?.client ?? this.client).get<PtyGetResponses, PtyGetErrors, ThrowOnError>({
+      url: "/pty/{ptyID}",
+      ...options,
+      ...params,
+    })
+  }
+
+  /**
+   * Update PTY session
+   *
+   * Update title or size for a Pseudo Terminal (PTY) session.
+   */
+  public update<ThrowOnError extends boolean = false>(
+    parameters: {
+      ptyID: string
+      directory?: string
+      title?: string
+      size?: {
+        rows: number
+        cols: number
+      }
+    },
+    options?: Options<never, ThrowOnError>,
+  ) {
+    const params = buildClientParams(
+      [parameters],
+      [
+        {
+          args: [
+            { in: "path", key: "ptyID" },
+            { in: "query", key: "directory" },
+            { in: "body", key: "title" },
+            { in: "body", key: "size" },
+          ],
+        },
+      ],
+    )
+    return (options?.client ?? this.client).put<PtyUpdateResponses, PtyUpdateErrors, ThrowOnError>({
+      url: "/pty/{ptyID}",
+      ...options,
+      ...params,
+      headers: {
+        "Content-Type": "application/json",
+        ...options?.headers,
+        ...params.headers,
+      },
+    })
+  }
+
+  /**
+   * Connect to PTY session
+   *
+   * Establish a WebSocket connection to a Pseudo Terminal (PTY) session.
    */
   public connect<ThrowOnError extends boolean = false>(
     parameters: {
+      ptyID: string
       directory?: string
-      ticket: string
-      cursor?: number
     },
     options?: Options<never, ThrowOnError>,
   ) {
@@ -7692,71 +7752,14 @@ export class Host extends HeyApiClient {
       [
         {
           args: [
+            { in: "path", key: "ptyID" },
             { in: "query", key: "directory" },
-            { in: "query", key: "ticket" },
-            { in: "query", key: "cursor" },
           ],
         },
       ],
     )
-    return (options?.client ?? this.client).get<TuiHostConnectResponses, TuiHostConnectErrors, ThrowOnError>({
-      url: "/tui/host/connect",
-      ...options,
-      ...params,
-    })
-  }
-
-  /**
-   * Resize embedded TUI host
-   *
-   * Resize the Pseudo Terminal (PTY) used by the embedded right-sidebar TUI host.
-   */
-  public resize<ThrowOnError extends boolean = false>(
-    parameters?: {
-      directory?: string
-      cols?: number
-      rows?: number
-    },
-    options?: Options<never, ThrowOnError>,
-  ) {
-    const params = buildClientParams(
-      [parameters],
-      [
-        {
-          args: [
-            { in: "query", key: "directory" },
-            { in: "body", key: "cols" },
-            { in: "body", key: "rows" },
-          ],
-        },
-      ],
-    )
-    return (options?.client ?? this.client).post<TuiHostResizeResponses, TuiHostResizeErrors, ThrowOnError>({
-      url: "/tui/host/resize",
-      ...options,
-      ...params,
-      headers: {
-        "Content-Type": "application/json",
-        ...options?.headers,
-        ...params.headers,
-      },
-    })
-  }
-
-  /**
-   * Stop embedded TUI host
-   *
-   * Stop the project-bound embedded TUI host.
-   */
-  public stop<ThrowOnError extends boolean = false>(
-    parameters?: {
-      directory?: string
-    },
-    options?: Options<never, ThrowOnError>,
-  ) {
-    const params = buildClientParams([parameters], [{ args: [{ in: "query", key: "directory" }] }])
-    return (options?.client ?? this.client).post<TuiHostStopResponses, unknown, ThrowOnError>({
-      url: "/tui/host/stop",
+    return (options?.client ?? this.client).get<PtyConnectResponses, PtyConnectErrors, ThrowOnError>({
+      url: "/pty/{ptyID}/connect",
       ...options,
       ...params,
     })
@@ -8281,11 +8284,6 @@ export class Tui extends HeyApiClient {
         ...params.headers,
       },
     })
-  }
-
-  private _host?: Host
-  get host(): Host {
-    return (this._host ??= new Host({ client: this.client }))
   }
 
   private _runtime?: Runtime2
@@ -8886,6 +8884,11 @@ export class OpencodeClient extends HeyApiClient {
   private _mcp?: Mcp
   get mcp(): Mcp {
     return (this._mcp ??= new Mcp({ client: this.client }))
+  }
+
+  private _pty?: Pty
+  get pty(): Pty {
+    return (this._pty ??= new Pty({ client: this.client }))
   }
 
   private _tui?: Tui

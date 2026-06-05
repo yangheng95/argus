@@ -1,21 +1,26 @@
 import { apiJson, apiWebSocketUrl } from "./api"
 
 export interface TuiHostInfo {
+  id: string
+  title: string
+  command: string
+  args: string[]
+  cwd: string
+  status: "running" | "exited"
+  pid: number
+}
+
+export interface TuiHostPanelInfo {
   id: string | null
   running: boolean
-  status: "idle" | "running" | "exited"
+  status: "idle" | TuiHostInfo["status"]
   cols: number | null
   rows: number | null
-  url: string | null
+  url: null
   directory: string | null
   exitCode: number | null
   createdAt: number | null
   updatedAt: number | null
-}
-
-export interface TuiHostConnectToken {
-  ticket: string
-  expires_in: number
 }
 
 export interface StartTuiHostInput {
@@ -23,44 +28,69 @@ export interface StartTuiHostInput {
   rows: number
 }
 
-export async function startTuiHost(input: StartTuiHostInput): Promise<TuiHostInfo> {
-  return await apiJson("tui/host/start", {
+function toPanelInfo(info?: TuiHostInfo | null): TuiHostPanelInfo {
+  if (!info) {
+    return {
+      id: null,
+      running: false,
+      status: "idle",
+      cols: null,
+      rows: null,
+      url: null,
+      directory: null,
+      exitCode: null,
+      createdAt: null,
+      updatedAt: null,
+    }
+  }
+  return {
+    id: info.id,
+    running: info.status === "running",
+    status: info.status,
+    cols: null,
+    rows: null,
+    url: null,
+    directory: info.cwd,
+    exitCode: null,
+    createdAt: null,
+    updatedAt: null,
+  }
+}
+
+export async function startTuiHost(input: StartTuiHostInput): Promise<TuiHostPanelInfo> {
+  const created = (await apiJson("pty", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(input),
-  })
+    body: JSON.stringify({ title: "OpenCorvus TUI" }),
+  })) as TuiHostInfo
+  const resized = await resizeTuiHost({ id: created.id, cols: input.cols, rows: input.rows })
+  return { ...resized, cols: input.cols, rows: input.rows }
 }
 
-export async function loadTuiHostStatus(): Promise<TuiHostInfo> {
-  return await apiJson("tui/host/status")
+export async function loadTuiHostStatus(): Promise<TuiHostPanelInfo> {
+  const list = (await apiJson("pty")) as TuiHostInfo[]
+  return toPanelInfo(list[0])
 }
 
-export async function createTuiHostConnectToken(): Promise<TuiHostConnectToken> {
-  return await apiJson("tui/host/connect-token", {
-    method: "POST",
-    headers: { "x-opencode-ticket": "1" },
-  })
-}
-
-export function buildTuiHostConnectUrl(input: { ticket: string; cursor?: number }): string {
+export function buildTuiHostConnectUrl(input: { id: string; cursor?: number }): string {
   const params = new URLSearchParams()
-  params.set("ticket", input.ticket)
   if (typeof input.cursor === "number") params.set("cursor", String(input.cursor))
-  return apiWebSocketUrl(`tui/host/connect?${params.toString()}`)
+  const query = params.toString()
+  return apiWebSocketUrl(`pty/${encodeURIComponent(input.id)}/connect${query ? `?${query}` : ""}`)
 }
 
-export async function resizeTuiHost(input: { cols: number; rows: number }): Promise<TuiHostInfo> {
-  return await apiJson("tui/host/resize", {
-    method: "POST",
+export async function resizeTuiHost(input: { id: string; cols: number; rows: number }): Promise<TuiHostPanelInfo> {
+  const info = (await apiJson(`pty/${encodeURIComponent(input.id)}`, {
+    method: "PUT",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(input),
-  })
+    body: JSON.stringify({ size: { cols: input.cols, rows: input.rows } }),
+  })) as TuiHostInfo
+  return { ...toPanelInfo(info), cols: input.cols, rows: input.rows }
 }
 
-export async function stopTuiHost(): Promise<boolean> {
-  return await apiJson("tui/host/stop", {
-    method: "POST",
+export async function stopTuiHost(input: { id: string }): Promise<boolean> {
+  return await apiJson(`pty/${encodeURIComponent(input.id)}`, {
+    method: "DELETE",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({}),
   })
 }

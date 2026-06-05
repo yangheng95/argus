@@ -27468,133 +27468,55 @@
         ]
       }
     },
-    "/tui/host/start": {
-      "post": {
-        "operationId": "tui.host.start",
-        "summary": "Start embedded TUI host",
-        "description": "Start the project-bound TUI process inside a Pseudo Terminal (PTY) for right-sidebar terminal rendering.",
+    "/pty": {
+      "get": {
+        "operationId": "pty.list",
+        "summary": "List PTY sessions",
+        "description": "Get active Pseudo Terminal (PTY) sessions managed by OpenCorvus.",
         "responses": {
           "200": {
-            "description": "Embedded TUI host started",
+            "description": "List of sessions",
             "content": {
               "application/json": {
                 "schema": {
-                  "type": "object",
-                  "properties": {
-                    "id": {
-                      "anyOf": [
-                        {
-                          "type": "string"
-                        },
-                        {
-                          "type": "null"
-                        }
-                      ]
-                    },
-                    "running": {
-                      "type": "boolean"
-                    },
-                    "status": {
-                      "type": "string",
-                      "enum": [
-                        "idle",
-                        "running",
-                        "exited"
-                      ]
-                    },
-                    "cols": {
-                      "anyOf": [
-                        {
-                          "type": "integer",
-                          "minimum": -9007199254740991,
-                          "maximum": 9007199254740991
-                        },
-                        {
-                          "type": "null"
-                        }
-                      ]
-                    },
-                    "rows": {
-                      "anyOf": [
-                        {
-                          "type": "integer",
-                          "minimum": -9007199254740991,
-                          "maximum": 9007199254740991
-                        },
-                        {
-                          "type": "null"
-                        }
-                      ]
-                    },
-                    "url": {
-                      "anyOf": [
-                        {
-                          "type": "string"
-                        },
-                        {
-                          "type": "null"
-                        }
-                      ]
-                    },
-                    "directory": {
-                      "anyOf": [
-                        {
-                          "type": "string"
-                        },
-                        {
-                          "type": "null"
-                        }
-                      ]
-                    },
-                    "exitCode": {
-                      "anyOf": [
-                        {
-                          "type": "integer",
-                          "minimum": -9007199254740991,
-                          "maximum": 9007199254740991
-                        },
-                        {
-                          "type": "null"
-                        }
-                      ]
-                    },
-                    "createdAt": {
-                      "anyOf": [
-                        {
-                          "type": "integer",
-                          "minimum": -9007199254740991,
-                          "maximum": 9007199254740991
-                        },
-                        {
-                          "type": "null"
-                        }
-                      ]
-                    },
-                    "updatedAt": {
-                      "anyOf": [
-                        {
-                          "type": "integer",
-                          "minimum": -9007199254740991,
-                          "maximum": 9007199254740991
-                        },
-                        {
-                          "type": "null"
-                        }
-                      ]
-                    }
-                  },
-                  "required": [
-                    "id",
-                    "running",
-                    "status",
-                    "cols",
-                    "rows",
-                    "url",
-                    "directory",
-                    "exitCode",
-                    "createdAt",
-                    "updatedAt"
-                  ]
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/Pty"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "directory",
+            "in": "query",
+            "required": false,
+            "description": "Project directory for project-scoped routes. Equivalent to the x-opencorvus-directory request header.",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "x-codeSamples": [
+          {
+            "lang": "js",
+            "source": "import { createOpenCorvusClient } from \"@opencorvus-ai/sdk\"\n\nconst client = createOpenCorvusClient()\nawait client.pty.list({\n  ...\n})"
+          }
+        ]
+      },
+      "post": {
+        "operationId": "pty.create",
+        "summary": "Create PTY session",
+        "description": "Create a project-bound Pseudo Terminal (PTY) session for the embedded TUI.",
+        "responses": {
+          "200": {
+            "description": "Created session",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Pty"
                 }
               }
             }
@@ -27616,46 +27538,29 @@
               "schema": {
                 "type": "object",
                 "properties": {
-                  "sessionID": {
+                  "command": {
                     "type": "string"
                   },
-                  "model": {
+                  "args": {
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    }
+                  },
+                  "cwd": {
                     "type": "string"
                   },
-                  "agent": {
+                  "title": {
                     "type": "string"
                   },
-                  "prompt": {
-                    "type": "string"
-                  },
-                  "continue": {
-                    "type": "boolean"
-                  },
-                  "fork": {
-                    "type": "boolean"
-                  },
-                  "port": {
-                    "type": "integer",
-                    "minimum": -9007199254740991,
-                    "maximum": 9007199254740991
-                  },
-                  "hostname": {
-                    "type": "string"
-                  },
-                  "bin": {
-                    "type": "string"
-                  },
-                  "cols": {
-                    "default": 100,
-                    "type": "integer",
-                    "minimum": 1,
-                    "maximum": 500
-                  },
-                  "rows": {
-                    "default": 30,
-                    "type": "integer",
-                    "minimum": 1,
-                    "maximum": 200
+                  "env": {
+                    "type": "object",
+                    "propertyNames": {
+                      "type": "string"
+                    },
+                    "additionalProperties": {
+                      "type": "string"
+                    }
                   }
                 }
               }
@@ -27676,325 +27581,33 @@
         "x-codeSamples": [
           {
             "lang": "js",
-            "source": "import { createOpenCorvusClient } from \"@opencorvus-ai/sdk\"\n\nconst client = createOpenCorvusClient()\nawait client.tui.host.start({\n  ...\n})"
+            "source": "import { createOpenCorvusClient } from \"@opencorvus-ai/sdk\"\n\nconst client = createOpenCorvusClient()\nawait client.pty.create({\n  ...\n})"
           }
         ]
       }
     },
-    "/tui/host/status": {
+    "/pty/{ptyID}": {
       "get": {
-        "operationId": "tui.host.status",
-        "summary": "Get embedded TUI host status",
-        "description": "Get the project-bound right-sidebar TUI host status.",
+        "operationId": "pty.get",
+        "summary": "Get PTY session",
+        "description": "Retrieve a specific Pseudo Terminal (PTY) session.",
         "responses": {
           "200": {
-            "description": "Embedded TUI host status",
+            "description": "Session info",
             "content": {
               "application/json": {
                 "schema": {
-                  "type": "object",
-                  "properties": {
-                    "id": {
-                      "anyOf": [
-                        {
-                          "type": "string"
-                        },
-                        {
-                          "type": "null"
-                        }
-                      ]
-                    },
-                    "running": {
-                      "type": "boolean"
-                    },
-                    "status": {
-                      "type": "string",
-                      "enum": [
-                        "idle",
-                        "running",
-                        "exited"
-                      ]
-                    },
-                    "cols": {
-                      "anyOf": [
-                        {
-                          "type": "integer",
-                          "minimum": -9007199254740991,
-                          "maximum": 9007199254740991
-                        },
-                        {
-                          "type": "null"
-                        }
-                      ]
-                    },
-                    "rows": {
-                      "anyOf": [
-                        {
-                          "type": "integer",
-                          "minimum": -9007199254740991,
-                          "maximum": 9007199254740991
-                        },
-                        {
-                          "type": "null"
-                        }
-                      ]
-                    },
-                    "url": {
-                      "anyOf": [
-                        {
-                          "type": "string"
-                        },
-                        {
-                          "type": "null"
-                        }
-                      ]
-                    },
-                    "directory": {
-                      "anyOf": [
-                        {
-                          "type": "string"
-                        },
-                        {
-                          "type": "null"
-                        }
-                      ]
-                    },
-                    "exitCode": {
-                      "anyOf": [
-                        {
-                          "type": "integer",
-                          "minimum": -9007199254740991,
-                          "maximum": 9007199254740991
-                        },
-                        {
-                          "type": "null"
-                        }
-                      ]
-                    },
-                    "createdAt": {
-                      "anyOf": [
-                        {
-                          "type": "integer",
-                          "minimum": -9007199254740991,
-                          "maximum": 9007199254740991
-                        },
-                        {
-                          "type": "null"
-                        }
-                      ]
-                    },
-                    "updatedAt": {
-                      "anyOf": [
-                        {
-                          "type": "integer",
-                          "minimum": -9007199254740991,
-                          "maximum": 9007199254740991
-                        },
-                        {
-                          "type": "null"
-                        }
-                      ]
-                    }
-                  },
-                  "required": [
-                    "id",
-                    "running",
-                    "status",
-                    "cols",
-                    "rows",
-                    "url",
-                    "directory",
-                    "exitCode",
-                    "createdAt",
-                    "updatedAt"
-                  ]
-                }
-              }
-            }
-          }
-        },
-        "parameters": [
-          {
-            "name": "directory",
-            "in": "query",
-            "required": false,
-            "description": "Project directory for project-scoped routes. Equivalent to the x-opencorvus-directory request header.",
-            "schema": {
-              "type": "string"
-            }
-          }
-        ],
-        "x-codeSamples": [
-          {
-            "lang": "js",
-            "source": "import { createOpenCorvusClient } from \"@opencorvus-ai/sdk\"\n\nconst client = createOpenCorvusClient()\nawait client.tui.host.status({\n  ...\n})"
-          }
-        ]
-      }
-    },
-    "/tui/host/connect-token": {
-      "post": {
-        "operationId": "tui.host.connectToken",
-        "summary": "Issue embedded TUI host connect token",
-        "description": "Issue a one-use connect token scoped to the running project-bound Pseudo Terminal (PTY) host.",
-        "parameters": [
-          {
-            "name": "directory",
-            "in": "query",
-            "required": false,
-            "description": "Project directory for project-scoped routes. Equivalent to the x-opencorvus-directory request header.",
-            "schema": {
-              "type": "string"
-            }
-          },
-          {
-            "name": "x-opencode-ticket",
-            "in": "header",
-            "required": true,
-            "description": "Set to 1 to request an embedded TUI host connect token.",
-            "schema": {
-              "type": "string",
-              "enum": [
-                "1"
-              ]
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "Embedded TUI host connect token",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "object",
-                  "properties": {
-                    "ticket": {
-                      "type": "string",
-                      "minLength": 1
-                    },
-                    "expires_in": {
-                      "type": "integer",
-                      "exclusiveMinimum": 0,
-                      "maximum": 9007199254740991
-                    }
-                  },
-                  "required": [
-                    "ticket",
-                    "expires_in"
-                  ]
-                }
-              }
-            }
-          },
-          "403": {
-            "description": "Connect token request is missing the OpenCode ticket header or has an invalid origin",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "object",
-                  "properties": {
-                    "message": {
-                      "type": "string",
-                      "minLength": 1
-                    }
-                  },
-                  "required": [
-                    "message"
-                  ]
+                  "$ref": "#/components/schemas/Pty"
                 }
               }
             }
           },
           "404": {
-            "description": "Embedded TUI host is not running",
+            "description": "Not found",
             "content": {
               "application/json": {
                 "schema": {
-                  "type": "object",
-                  "properties": {
-                    "message": {
-                      "type": "string",
-                      "minLength": 1
-                    }
-                  },
-                  "required": [
-                    "message"
-                  ]
-                }
-              }
-            }
-          }
-        },
-        "x-codeSamples": [
-          {
-            "lang": "js",
-            "source": "import { createOpenCorvusClient } from \"@opencorvus-ai/sdk\"\n\nconst client = createOpenCorvusClient()\nawait client.tui.host.connectToken({\n  ...\n})"
-          }
-        ]
-      }
-    },
-    "/tui/host/connect": {
-      "get": {
-        "operationId": "tui.host.connect",
-        "summary": "Connect to embedded TUI host",
-        "description": "Upgrade to a WebSocket attached to the project-bound embedded Pseudo Terminal (PTY) host. The ticket is one-use and issued by /tui/host/connect-token.",
-        "responses": {
-          "200": {
-            "description": "WebSocket upgrade accepted"
-          },
-          "400": {
-            "description": "Invalid connect query",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "object",
-                  "properties": {
-                    "message": {
-                      "type": "string",
-                      "minLength": 1
-                    }
-                  },
-                  "required": [
-                    "message"
-                  ]
-                }
-              }
-            }
-          },
-          "403": {
-            "description": "Invalid origin, invalid connect ticket, or already consumed connect ticket",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "object",
-                  "properties": {
-                    "message": {
-                      "type": "string",
-                      "minLength": 1
-                    }
-                  },
-                  "required": [
-                    "message"
-                  ]
-                }
-              }
-            }
-          },
-          "404": {
-            "description": "Embedded TUI host is not running",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "object",
-                  "properties": {
-                    "message": {
-                      "type": "string",
-                      "minLength": 1
-                    }
-                  },
-                  "required": [
-                    "message"
-                  ]
+                  "$ref": "#/components/schemas/NotFoundError"
                 }
               }
             }
@@ -28011,159 +27624,32 @@
             }
           },
           {
-            "in": "query",
-            "name": "ticket",
+            "in": "path",
+            "name": "ptyID",
             "schema": {
-              "type": "string",
-              "minLength": 1
+              "type": "string"
             },
             "required": true
-          },
-          {
-            "in": "query",
-            "name": "cursor",
-            "schema": {
-              "type": "integer",
-              "minimum": -1,
-              "maximum": 9007199254740991
-            }
           }
         ],
         "x-codeSamples": [
           {
             "lang": "js",
-            "source": "import { createOpenCorvusClient } from \"@opencorvus-ai/sdk\"\n\nconst client = createOpenCorvusClient()\nawait client.tui.host.connect({\n  ...\n})"
+            "source": "import { createOpenCorvusClient } from \"@opencorvus-ai/sdk\"\n\nconst client = createOpenCorvusClient()\nawait client.pty.get({\n  ...\n})"
           }
         ]
-      }
-    },
-    "/tui/host/resize": {
-      "post": {
-        "operationId": "tui.host.resize",
-        "summary": "Resize embedded TUI host",
-        "description": "Resize the Pseudo Terminal (PTY) used by the embedded right-sidebar TUI host.",
+      },
+      "put": {
+        "operationId": "pty.update",
+        "summary": "Update PTY session",
+        "description": "Update title or size for a Pseudo Terminal (PTY) session.",
         "responses": {
           "200": {
-            "description": "Embedded TUI host resized",
+            "description": "Updated session",
             "content": {
               "application/json": {
                 "schema": {
-                  "type": "object",
-                  "properties": {
-                    "id": {
-                      "anyOf": [
-                        {
-                          "type": "string"
-                        },
-                        {
-                          "type": "null"
-                        }
-                      ]
-                    },
-                    "running": {
-                      "type": "boolean"
-                    },
-                    "status": {
-                      "type": "string",
-                      "enum": [
-                        "idle",
-                        "running",
-                        "exited"
-                      ]
-                    },
-                    "cols": {
-                      "anyOf": [
-                        {
-                          "type": "integer",
-                          "minimum": -9007199254740991,
-                          "maximum": 9007199254740991
-                        },
-                        {
-                          "type": "null"
-                        }
-                      ]
-                    },
-                    "rows": {
-                      "anyOf": [
-                        {
-                          "type": "integer",
-                          "minimum": -9007199254740991,
-                          "maximum": 9007199254740991
-                        },
-                        {
-                          "type": "null"
-                        }
-                      ]
-                    },
-                    "url": {
-                      "anyOf": [
-                        {
-                          "type": "string"
-                        },
-                        {
-                          "type": "null"
-                        }
-                      ]
-                    },
-                    "directory": {
-                      "anyOf": [
-                        {
-                          "type": "string"
-                        },
-                        {
-                          "type": "null"
-                        }
-                      ]
-                    },
-                    "exitCode": {
-                      "anyOf": [
-                        {
-                          "type": "integer",
-                          "minimum": -9007199254740991,
-                          "maximum": 9007199254740991
-                        },
-                        {
-                          "type": "null"
-                        }
-                      ]
-                    },
-                    "createdAt": {
-                      "anyOf": [
-                        {
-                          "type": "integer",
-                          "minimum": -9007199254740991,
-                          "maximum": 9007199254740991
-                        },
-                        {
-                          "type": "null"
-                        }
-                      ]
-                    },
-                    "updatedAt": {
-                      "anyOf": [
-                        {
-                          "type": "integer",
-                          "minimum": -9007199254740991,
-                          "maximum": 9007199254740991
-                        },
-                        {
-                          "type": "null"
-                        }
-                      ]
-                    }
-                  },
-                  "required": [
-                    "id",
-                    "running",
-                    "status",
-                    "cols",
-                    "rows",
-                    "url",
-                    "directory",
-                    "exitCode",
-                    "createdAt",
-                    "updatedAt"
-                  ]
+                  "$ref": "#/components/schemas/Pty"
                 }
               }
             }
@@ -28177,29 +27663,14 @@
                 }
               }
             }
-          }
-        },
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "type": "object",
-                "properties": {
-                  "cols": {
-                    "type": "integer",
-                    "minimum": 1,
-                    "maximum": 500
-                  },
-                  "rows": {
-                    "type": "integer",
-                    "minimum": 1,
-                    "maximum": 200
-                  }
-                },
-                "required": [
-                  "cols",
-                  "rows"
-                ]
+          },
+          "404": {
+            "description": "Not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/NotFoundError"
+                }
               }
             }
           }
@@ -28213,24 +27684,63 @@
             "schema": {
               "type": "string"
             }
+          },
+          {
+            "in": "path",
+            "name": "ptyID",
+            "schema": {
+              "type": "string"
+            },
+            "required": true
           }
         ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "title": {
+                    "type": "string"
+                  },
+                  "size": {
+                    "type": "object",
+                    "properties": {
+                      "rows": {
+                        "type": "integer",
+                        "minimum": 1,
+                        "maximum": 200
+                      },
+                      "cols": {
+                        "type": "integer",
+                        "minimum": 1,
+                        "maximum": 500
+                      }
+                    },
+                    "required": [
+                      "rows",
+                      "cols"
+                    ]
+                  }
+                }
+              }
+            }
+          }
+        },
         "x-codeSamples": [
           {
             "lang": "js",
-            "source": "import { createOpenCorvusClient } from \"@opencorvus-ai/sdk\"\n\nconst client = createOpenCorvusClient()\nawait client.tui.host.resize({\n  ...\n})"
+            "source": "import { createOpenCorvusClient } from \"@opencorvus-ai/sdk\"\n\nconst client = createOpenCorvusClient()\nawait client.pty.update({\n  ...\n})"
           }
         ]
-      }
-    },
-    "/tui/host/stop": {
-      "post": {
-        "operationId": "tui.host.stop",
-        "summary": "Stop embedded TUI host",
-        "description": "Stop the project-bound embedded TUI host.",
+      },
+      "delete": {
+        "operationId": "pty.remove",
+        "summary": "Remove PTY session",
+        "description": "Remove and terminate a Pseudo Terminal (PTY) session.",
         "responses": {
           "200": {
-            "description": "Embedded TUI host stopped",
+            "description": "Session removed",
             "content": {
               "application/json": {
                 "schema": {
@@ -28238,6 +27748,16 @@
                 }
               }
             }
+          },
+          "404": {
+            "description": "Not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/NotFoundError"
+                }
+              }
+            }
           }
         },
         "parameters": [
@@ -28249,12 +27769,74 @@
             "schema": {
               "type": "string"
             }
+          },
+          {
+            "in": "path",
+            "name": "ptyID",
+            "schema": {
+              "type": "string"
+            },
+            "required": true
           }
         ],
         "x-codeSamples": [
           {
             "lang": "js",
-            "source": "import { createOpenCorvusClient } from \"@opencorvus-ai/sdk\"\n\nconst client = createOpenCorvusClient()\nawait client.tui.host.stop({\n  ...\n})"
+            "source": "import { createOpenCorvusClient } from \"@opencorvus-ai/sdk\"\n\nconst client = createOpenCorvusClient()\nawait client.pty.remove({\n  ...\n})"
+          }
+        ]
+      }
+    },
+    "/pty/{ptyID}/connect": {
+      "get": {
+        "operationId": "pty.connect",
+        "summary": "Connect to PTY session",
+        "description": "Establish a WebSocket connection to a Pseudo Terminal (PTY) session.",
+        "responses": {
+          "200": {
+            "description": "Connected session",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "boolean"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/NotFoundError"
+                }
+              }
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "directory",
+            "in": "query",
+            "required": false,
+            "description": "Project directory for project-scoped routes. Equivalent to the x-opencorvus-directory request header.",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "ptyID",
+            "schema": {
+              "type": "string"
+            },
+            "required": true
+          }
+        ],
+        "x-codeSamples": [
+          {
+            "lang": "js",
+            "source": "import { createOpenCorvusClient } from \"@opencorvus-ai/sdk\"\n\nconst client = createOpenCorvusClient()\nawait client.pty.connect({\n  ...\n})"
           }
         ]
       }
@@ -36031,6 +35613,49 @@
           {
             "$ref": "#/components/schemas/MCPStatusNeedsClientRegistration"
           }
+        ]
+      },
+      "Pty": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "pattern": "^pty.*"
+          },
+          "title": {
+            "type": "string"
+          },
+          "command": {
+            "type": "string"
+          },
+          "args": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "cwd": {
+            "type": "string"
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "running",
+              "exited"
+            ]
+          },
+          "pid": {
+            "type": "number"
+          }
+        },
+        "required": [
+          "id",
+          "title",
+          "command",
+          "args",
+          "cwd",
+          "status",
+          "pid"
         ]
       },
       "Event.tui.prompt.append": {

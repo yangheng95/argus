@@ -287,7 +287,7 @@ Target files:
 - `packages/overlay/src/services/tui-terminal-writer.ts`
 - `packages/opencorvus/src/pty/*`
 - `packages/opencorvus/src/tui/host.ts`
-- `packages/opencorvus/src/server/routes/tui-host.ts`
+- `packages/opencorvus/src/server/routes/pty.ts`
 
 Rewrite points:
 
@@ -297,16 +297,16 @@ Rewrite points:
 - Existing `Tui.spawn()` external window behavior is either deleted or moved to a separate explicit "open external TUI" action. It must not be the right-sidebar implementation.
 - The overlay must use the generated/canonical client where possible. If streaming cannot use the generated client, the streaming service must still use canonical route definitions and typed event schemas.
 
-Proposed server routes:
+Current server route contract:
 
-- `POST /tui/host/session`: claim or create the project-bound TUI host for the current `Instance.project.id` and normalized `Instance.directory`.
-- `GET /tui/host/:sessionID/events`: stream terminal output, lifecycle events, and host errors.
-- `POST /tui/host/:sessionID/input`: write terminal input.
-- `POST /tui/host/:sessionID/resize`: resize PTY and persist dimensions.
-- `POST /tui/host/:sessionID/close`: explicit PTY close.
-- `GET /tui/host/:sessionID/snapshot`: read saved terminal snapshot.
+- `GET /pty`: list project-bound PTY sessions.
+- `POST /pty`: create or claim the right-sidebar embedded TUI PTY for the current `Instance.project.id` and normalized `Instance.directory`.
+- `GET /pty/:ptyID`: read PTY status.
+- `PUT /pty/:ptyID`: update PTY title and size.
+- `DELETE /pty/:ptyID`: explicit PTY close.
+- `GET /pty/:ptyID/connect`: WebSocket attach for terminal input/output and cursor metadata.
 
-The route key uses the assistant `sessionID` because the assistant session is the durable project-bound identity. There must not be a second durable host ID unless a later schema review proves one identity cannot encode the lifecycle.
+The external route contract is OpenCode-shaped `/pty`. `packages/opencorvus/src/tui/host.ts` is retained only as the internal single project-bound PTY process implementation until the full OpenCode multi-PTY service is copied. `POST /pty` accepts OpenCode's `cwd` field for contract shape, but it must resolve to `Instance.directory`; body `cwd` must not become a second project source. Do not reintroduce `/tui/host/*` as a public route surface.
 
 Tests:
 
@@ -363,7 +363,7 @@ This applies to:
 - `/session/:id/events`
 - `/session/:id/message`
 - `/session/:id/prompt_async`
-- every new `/tui/host/:sessionID/*` route
+- every project-bound `/pty/:ptyID/*` route
 
 The previous split where `/coding/session/:id` validates ownership but canonical `/session/:id/*` does not is not acceptable.
 
@@ -435,12 +435,12 @@ Rules:
 
 When the right sidebar opens:
 
-1. The overlay calls `POST /tui/host/session`.
-2. The server claims or creates the assistant session for current project/directory.
-3. The server asserts ownership and loads `tui_host_state`.
-4. If a live PTY exists for that session, attach.
+1. The overlay calls `POST /pty`.
+2. The server claims or creates the project-bound TUI PTY for current project/directory.
+3. The server asserts ownership and loads the current PTY host state.
+4. If a live PTY exists for that project, attach.
 5. If no live PTY exists, start the canonical OpenTUI app in a PTY.
-6. The overlay renders `ghostty-web` and subscribes to host events.
+6. The overlay renders `ghostty-web` and subscribes to `/pty/:ptyID/connect`.
 
 ### 5.2 Close and detach
 
@@ -577,7 +577,7 @@ Edits:
 - Keep assistant conversation in `session/message/part`.
 - Keep async prompt state in `a2a_task_queue`.
 - Keep task and agent-team state in engine/protocol stores.
-- Add `/tui/host/*` routes.
+- Add OpenCode-shaped `/pty` routes.
 - Start canonical OpenTUI app inside PTY for the right sidebar.
 - Remove right-sidebar dependence on `Tui.spawn()`.
 
@@ -626,7 +626,7 @@ Tests:
 Edits:
 
 - Delete `/tui/execute-command`, `/tui/show-toast`, `/tui/select-session`, and command alias routes if they duplicate copied command registry.
-- Keep only host/session routes and any explicit external TUI action that remains product-approved.
+- Keep only `/pty`, session routes, and any explicit external TUI action that remains product-approved.
 - Update OpenAPI/SDK/docs.
 
 Tests:
@@ -676,11 +676,12 @@ Visual acceptance:
 
 ### Server integration tests
 
-- `POST /tui/host/session` creates or claims a host.
-- `GET /tui/host/:sessionID/events` streams output and lifecycle events.
-- `POST /tui/host/:sessionID/input` writes to PTY.
-- `POST /tui/host/:sessionID/resize` resizes PTY and persists dimensions.
-- `POST /tui/host/:sessionID/close` kills PTY and marks state closed.
+- `POST /pty` creates or claims a project-bound host.
+- `GET /pty` lists the host.
+- `GET /pty/:ptyID` reads PTY status.
+- `PUT /pty/:ptyID` updates PTY size and title.
+- `GET /pty/:ptyID/connect` streams output, receives input, and emits cursor metadata.
+- `DELETE /pty/:ptyID` kills PTY and marks state closed.
 - `/session/:id/conversation` rejects wrong project/directory for right-sidebar sessions.
 - `/session/:id/events` rejects wrong project/directory for right-sidebar sessions.
 - `/session/:id/message` rejects wrong project/directory for right-sidebar sessions.
@@ -2044,7 +2045,7 @@ OpenCode gap after the round:
 
 Implemented:
 
-- Rechecked latest OpenCode dev before editing. Upstream remains `134f4136da372fdf8f0c3cec2cea3ff81010baf8`.
+- Rechecked latest OpenCode dev before editing and again before committing. Upstream advanced from `134f4136da372fdf8f0c3cec2cea3ff81010baf8` to `46e9863589746c3f84f148974582b6428bbbfdf8`, but the new commits only changed stats/homepage routes (`fix(stats): sort metric charts by top usage`, `feat(stats): refresh stats routes and homepage`). Watched TUI/PTY/app paths had no source changes in that delta.
 - Watched path delta from the prior TUI baseline still has no TUI/PTY/app changes after `ab5a12d916dd72eab0c84afb1f6de5a07c16a7e4`.
 - Copied OpenCode's `packages/opencode/src/cli/cmd/tui/util/terminal.ts` into OpenCorvus as `packages/opencorvus/src/cli/cmd/tui/util/terminal.ts`.
 - Replaced the hand-written inline terminal background probe in `app.tsx` with `Terminal.getTerminalBackgroundColor()`.
@@ -2076,5 +2077,63 @@ OpenCode gap after the round:
 
 - OpenCode's full workspace management remains missing: workspace list/create/unavailable dialogs, move-session prompt flow, workspace commands, and workspace status event sync are not implemented yet.
 - The current host is still a single project-bound embedded TUI process, not OpenCode's full multi-PTY `list/create/get/update/remove` service.
+- External TUI plugin loader/install remains missing; upstream depends on shared plugin loader modules that OpenCorvus does not yet expose in the copied TUI runtime.
+- `SessionV2Debug` and `context/sync-v2.tsx` remain missing until the real V2 session-message/event source exists.
+
+### 2026-06-05 Round 34: OpenCode PTY route contract
+
+Implemented:
+
+- Rechecked latest OpenCode dev before editing. Upstream remains `134f4136da372fdf8f0c3cec2cea3ff81010baf8`.
+- Copied the latest OpenCode `/pty` route contract shape:
+  - `GET /pty` (`pty.list`);
+  - `POST /pty` (`pty.create`);
+  - `GET /pty/{ptyID}` (`pty.get`);
+  - `PUT /pty/{ptyID}` (`pty.update`);
+  - `DELETE /pty/{ptyID}` (`pty.remove`);
+  - `GET /pty/{ptyID}/connect` (`pty.connect`).
+- Added `packages/opencorvus/src/pty/index.ts` as an OpenCode-shaped adapter over the existing project-bound `TuiHost` process implementation. This keeps one PTY process source while replacing the external route contract.
+- Removed the external `/tui/host/*` route block from `TuiRoutes`; `/tui` now keeps runtime/control/command routes only.
+- Mounted `/pty` in `AppRoutes`.
+- Updated the overlay TUI service and `TuiHostPanel` to:
+  - create/list/update/delete through `/pty`;
+  - connect directly to `/pty/{ptyID}/connect`;
+  - stop using `/tui/host/connect-token` and `x-opencode-ticket`;
+  - parse OpenCode-style binary meta frames (`0x00 + JSON`) for cursor sync instead of rendering them into the terminal.
+- Regenerated `packages/sdk/openapi.json`, `packages/sdk/js/src/gen/*`, and API docs so the tracked contract contains `/pty` and no longer contains `/tui/host/*`.
+- Constrained `POST /pty` so an optional OpenCode-shaped `cwd` body field must resolve to the current `Instance.directory`; this keeps the right-sidebar TUI project-bound instead of creating a second directory source.
+
+Checked but intentionally retained this round:
+
+- `packages/opencorvus/src/tui/host.ts` remains as the internal single project-bound PTY implementation. It is no longer an external route contract. Removing or renaming it in the same round would churn the native Windows bridge and tests without changing the external OpenCode-aligned surface.
+- OpenCode's full generic multi-PTY process service is not fully copied yet. The current adapter still manages one project-bound TUI PTY because the right-sidebar TUI must remain bound to the active project and must not break the existing agent workflow.
+
+Verified in tests:
+
+- Added `packages/opencorvus/test/server/pty-routes.test.ts` covering list/get/update/delete and real WebSocket input/output through `/pty/{ptyID}/connect`.
+- Added a `/pty` negative route test proving a mismatched body `cwd` returns 400 and does not start the host.
+- Updated `packages/opencorvus/test/tui/host.test.ts` from ticketed host connections to PTY connections.
+- Updated overlay service/static tests to assert `/pty` usage and forbid `/tui/host` usage.
+- Updated `packages/overlay/test/tui-host-panel-visual.test.ts` to exercise the browser right-sidebar through `/pty/{ptyID}/connect` and a cursor meta frame.
+- Regenerated and checked SDK/OpenAPI/docs.
+- `bun test packages/opencorvus/test/tui/host.test.ts packages/opencorvus/test/server/pty-routes.test.ts`
+- `bun test packages/overlay/test/tui-host-service.test.ts packages/overlay/test/tui-host-panel.test.ts packages/overlay/test/coding-assistant-panel.test.ts`
+- `bun test packages/overlay/test/tui-host-panel-visual.test.ts`
+- `bun run api:routes-check`
+- `bun run docs:check`
+- `bun run --cwd packages/overlay check:i18n`
+- `bun typecheck`
+
+OpenCode comparison after the round:
+
+- The right-sidebar terminal attach surface now follows latest OpenCode's `/pty` route contract instead of the older local `/tui/host/*` ticket contract.
+- The overlay now connects directly to a PTY websocket and handles OpenCode's cursor meta frame.
+- The tracked OpenAPI and generated SDK now expose `client.pty.*` routes and no longer expose `client.tui.host.*`.
+
+OpenCode gap after the round:
+
+- OpenCode's `Pty` service supports multiple concurrent PTY sessions with independent buffers and lifecycle. OpenCorvus currently exposes the same route shape over one project-bound embedded TUI PTY.
+- OpenCode's app terminal component includes richer terminal lifecycle behavior (`SerializeAddon`, restore/cursor persistence, focus/copy-paste details). OpenCorvus' right-sidebar ghostty host still implements the smaller subset needed for the embedded coding assistant.
+- OpenCode's full workspace management remains missing: workspace list/create/unavailable dialogs, move-session prompt flow, workspace commands, and workspace status event sync are not implemented yet.
 - External TUI plugin loader/install remains missing; upstream depends on shared plugin loader modules that OpenCorvus does not yet expose in the copied TUI runtime.
 - `SessionV2Debug` and `context/sync-v2.tsx` remain missing until the real V2 session-message/event source exists.

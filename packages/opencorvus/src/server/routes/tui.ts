@@ -1,19 +1,15 @@
 import { Hono, type Context } from "hono"
-import { HTTPException } from "hono/http-exception"
-import { upgradeWebSocket } from "hono/bun"
 import { describeRoute, validator, resolver } from "hono-openapi"
 import z from "zod"
 import { Bus } from "../../bus"
 import { Session, SessionStatus } from "../../session"
 import { TuiEvent } from "@/cli/cmd/tui/event"
 import { TuiCommand } from "@/tui/command"
-import { TuiHost } from "@/tui/host"
 import { TuiRuntime } from "@/tui/runtime"
 import { Flag } from "../../flag/flag"
 import { errors } from "../error"
 import { lazy } from "../../util/lazy"
 import { Instance } from "@/project/instance"
-import { isAllowedRequestOrigin } from "../cors"
 
 // ============================================================================
 // /control queue plumbing — shared state for control-plane proxy routes
@@ -35,75 +31,6 @@ const TuiControlResponse = z
   })
 
 type TuiControlRequest = z.infer<typeof TuiControlRequest>
-
-const TuiHostInfo = z.object({
-  id: z.string().nullable(),
-  running: z.boolean(),
-  status: z.enum(["idle", "running", "exited"]),
-  cols: z.number().int().nullable(),
-  rows: z.number().int().nullable(),
-  url: z.string().nullable(),
-  directory: z.string().nullable(),
-  exitCode: z.number().int().nullable(),
-  createdAt: z.number().int().nullable(),
-  updatedAt: z.number().int().nullable(),
-})
-
-const TuiHostConnectToken = z.object({
-  ticket: z.string().min(1),
-  expires_in: z.number().int().positive(),
-})
-
-const TuiHostConnectTokenError = z.object({
-  message: z.string().min(1),
-})
-
-const TuiHostConnectQuery = z.object({
-  ticket: z.string().min(1),
-  cursor: z.coerce.number().int().min(-1).optional(),
-})
-
-const TuiHostStart = z.object({
-  sessionID: z.string().optional(),
-  model: z.string().optional(),
-  agent: z.string().optional(),
-  prompt: z.string().optional(),
-  continue: z.boolean().optional(),
-  fork: z.boolean().optional(),
-  port: z.number().int().optional(),
-  hostname: z.string().optional(),
-  bin: z.string().optional(),
-  cols: z.number().int().min(1).max(500).default(100).optional(),
-  rows: z.number().int().min(1).max(200).default(30).optional(),
-})
-
-function mapTuiHostRouteError(error: unknown): never {
-  if (error instanceof Error && error.message === "TUI host is not running") {
-    throw new HTTPException(400, { message: error.message })
-  }
-  throw error
-}
-
-function mapTuiHostConnectRouteError(error: unknown): never {
-  if (error instanceof Error && error.message === "TUI host is not running") {
-    throw new HTTPException(404, { message: error.message })
-  }
-  if (error instanceof Error && error.message === "Invalid TUI host connect ticket") {
-    throw new HTTPException(403, { message: error.message })
-  }
-  throw error
-}
-
-function decodeHostConnectMessage(data: unknown) {
-  if (typeof data === "string") return data
-  if (data instanceof ArrayBuffer) return new TextDecoder().decode(data)
-  if (ArrayBuffer.isView(data)) return new TextDecoder().decode(data)
-  return undefined
-}
-
-function hasAllowedOrigin(c: Context) {
-  return isAllowedRequestOrigin(c.req.header("origin"), c.req.header("host"))
-}
 
 const requestQueue: TuiControlRequest[] = []
 const requestWaiters: Array<(item: TuiControlRequest) => void> = []
@@ -186,195 +113,6 @@ export async function callTui(ctx: Context) {
 
 export const TuiRoutes = lazy(() =>
   new Hono()
-    // === host: embedded right-sidebar terminal ===
-    .post(
-      "/host/start",
-      describeRoute({
-        summary: "Start embedded TUI host",
-        description:
-          "Start the project-bound TUI process inside a Pseudo Terminal (PTY) for right-sidebar terminal rendering.",
-        operationId: "tui.host.start",
-        responses: {
-          200: {
-            description: "Embedded TUI host started",
-            content: { "application/json": { schema: resolver(TuiHostInfo) } },
-          },
-          ...errors(400),
-        },
-      }),
-      validator("json", TuiHostStart),
-      async (c) => {
-        const body = c.req.valid("json")
-        return c.json(await TuiHost.start({ ...body, directory: Instance.directory }))
-      },
-    )
-    .get(
-      "/host/status",
-      describeRoute({
-        summary: "Get embedded TUI host status",
-        description: "Get the project-bound right-sidebar TUI host status.",
-        operationId: "tui.host.status",
-        responses: {
-          200: {
-            description: "Embedded TUI host status",
-            content: { "application/json": { schema: resolver(TuiHostInfo) } },
-          },
-        },
-      }),
-      async (c) => {
-        return c.json(TuiHost.status())
-      },
-    )
-    .post(
-      "/host/connect-token",
-      describeRoute({
-        summary: "Issue embedded TUI host connect token",
-        description:
-          "Issue a one-use connect token scoped to the running project-bound Pseudo Terminal (PTY) host.",
-        operationId: "tui.host.connectToken",
-        parameters: [
-          {
-            name: TuiHost.CONNECT_TOKEN_HEADER,
-            in: "header",
-            required: true,
-            description: "Set to 1 to request an embedded TUI host connect token.",
-            schema: { type: "string", enum: [TuiHost.CONNECT_TOKEN_HEADER_VALUE] },
-          },
-        ],
-        responses: {
-          200: {
-            description: "Embedded TUI host connect token",
-            content: { "application/json": { schema: resolver(TuiHostConnectToken) } },
-          },
-          403: {
-            description: "Connect token request is missing the OpenCode ticket header or has an invalid origin",
-            content: { "application/json": { schema: resolver(TuiHostConnectTokenError) } },
-          },
-          404: {
-            description: "Embedded TUI host is not running",
-            content: { "application/json": { schema: resolver(TuiHostConnectTokenError) } },
-          },
-        },
-      }),
-      async (c) => {
-        if (c.req.header(TuiHost.CONNECT_TOKEN_HEADER) !== TuiHost.CONNECT_TOKEN_HEADER_VALUE || !hasAllowedOrigin(c)) {
-          return c.json({ message: "Invalid embedded TUI host connect token request" }, 403)
-        }
-        try {
-          return c.json(TuiHost.issueConnectToken())
-        } catch (error) {
-          if (error instanceof Error && error.message === "TUI host is not running") {
-            return c.json({ message: error.message }, 404)
-          }
-          throw error
-        }
-      },
-    )
-    .get(
-      "/host/connect",
-      describeRoute({
-        summary: "Connect to embedded TUI host",
-        description:
-          "Upgrade to a WebSocket attached to the project-bound embedded Pseudo Terminal (PTY) host. The ticket is one-use and issued by /tui/host/connect-token.",
-        operationId: "tui.host.connect",
-        responses: {
-          200: {
-            description: "WebSocket upgrade accepted",
-          },
-          400: {
-            description: "Invalid connect query",
-            content: { "application/json": { schema: resolver(TuiHostConnectTokenError) } },
-          },
-          403: {
-            description: "Invalid origin, invalid connect ticket, or already consumed connect ticket",
-            content: { "application/json": { schema: resolver(TuiHostConnectTokenError) } },
-          },
-          404: {
-            description: "Embedded TUI host is not running",
-            content: { "application/json": { schema: resolver(TuiHostConnectTokenError) } },
-          },
-        },
-      }),
-      validator("query", TuiHostConnectQuery),
-      async (c) => {
-        const query = c.req.valid("query")
-        if (!hasAllowedOrigin(c)) {
-          throw new HTTPException(403, { message: "Invalid TUI host connect origin" })
-        }
-        const prepared = (() => {
-          try {
-            return TuiHost.prepareConnect(query)
-          } catch (error) {
-            mapTuiHostConnectRouteError(error)
-          }
-        })()
-        let connection: ReturnType<typeof prepared.attach> | undefined
-        return upgradeWebSocket(c, {
-          onOpen(_event, ws) {
-            connection = prepared.attach({
-              send: (chunk) => ws.send(chunk),
-              close: (code, reason) => ws.close(code, reason),
-            })
-          },
-          onMessage(event) {
-            const data = decodeHostConnectMessage(event.data)
-            if (data !== undefined) connection?.onMessage(data)
-          },
-          onClose() {
-            connection?.onClose()
-          },
-          onError() {
-            connection?.onClose()
-          },
-        })
-      },
-    )
-    .post(
-      "/host/resize",
-      describeRoute({
-        summary: "Resize embedded TUI host",
-        description: "Resize the Pseudo Terminal (PTY) used by the embedded right-sidebar TUI host.",
-        operationId: "tui.host.resize",
-        responses: {
-          200: {
-            description: "Embedded TUI host resized",
-            content: { "application/json": { schema: resolver(TuiHostInfo) } },
-          },
-          ...errors(400),
-        },
-      }),
-      validator(
-        "json",
-        z.object({
-          cols: z.number().int().min(1).max(500),
-          rows: z.number().int().min(1).max(200),
-        }),
-      ),
-      async (c) => {
-        try {
-          return c.json(TuiHost.resize(c.req.valid("json")))
-        } catch (error) {
-          mapTuiHostRouteError(error)
-        }
-      },
-    )
-    .post(
-      "/host/stop",
-      describeRoute({
-        summary: "Stop embedded TUI host",
-        description: "Stop the project-bound embedded TUI host.",
-        operationId: "tui.host.stop",
-        responses: {
-          200: {
-            description: "Embedded TUI host stopped",
-            content: { "application/json": { schema: resolver(z.boolean()) } },
-          },
-        },
-      }),
-      async (c) => {
-        return c.json(await TuiHost.stop())
-      },
-    )
     // === runtime: lifecycle ===
     .post(
       "/runtime/start",
