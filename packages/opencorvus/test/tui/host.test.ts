@@ -124,31 +124,7 @@ describe("tui.host", () => {
     })
   })
 
-  test("issues project-bound one-use connect tokens", async () => {
-    await using tmp = await tmpdir()
-    await Instance.provide({
-      directory: tmp.path,
-      fn: async () => {
-        await TuiHost.startPrepared({ command: inputEchoCommand(tmp.path), cols: 80, rows: 24 })
-        const status = TuiHost.status()
-        expect(status.id).toBeString()
-
-        const token = TuiHost.issueConnectToken()
-        expect(token.ticket).toBeString()
-        expect(token.expires_in).toBe(60)
-        expect(TuiHost.consumeConnectToken({ ticket: token.ticket, hostID: "pty_wrong", directory: tmp.path })).toBe(false)
-        expect(TuiHost.consumeConnectToken({ ticket: token.ticket, hostID: status.id!, directory: `${tmp.path}-other` })).toBe(false)
-        expect(TuiHost.consumeConnectToken({ ticket: token.ticket, hostID: status.id!, directory: tmp.path })).toBe(true)
-        expect(TuiHost.consumeConnectToken({ ticket: token.ticket, hostID: status.id!, directory: tmp.path })).toBe(false)
-
-        const second = TuiHost.issueConnectToken()
-        await TuiHost.stop()
-        expect(TuiHost.consumeConnectToken({ ticket: second.ticket, hostID: status.id!, directory: tmp.path })).toBe(false)
-      },
-    })
-  })
-
-  test("prepares ticketed host connections that stream retained and live output", async () => {
+  test("prepares PTY connections that stream retained and live output", async () => {
     await using tmp = await tmpdir()
     await Instance.provide({
       directory: tmp.path,
@@ -160,12 +136,13 @@ describe("tui.host", () => {
           "Pseudo Terminal host did not retain output before connect",
         )
 
-        const token = TuiHost.issueConnectToken()
-        const prepared = TuiHost.prepareConnect({ ticket: token.ticket, cursor: 0 })
-        expect(prepared.initialData).toContain("opencorvus-host-retained")
+        const status = TuiHost.status()
+        const prepared = TuiHost.preparePtyConnect({ id: status.id!, cursor: 0 })
         const chunks: string[] = []
         const connection = prepared.attach({
-          send: (chunk) => chunks.push(chunk),
+          send: (chunk) => {
+            if (typeof chunk === "string") chunks.push(chunk)
+          },
           close: () => undefined,
         })
         expect(chunks.join("")).toContain("opencorvus-host-retained")

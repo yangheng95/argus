@@ -4,7 +4,6 @@ import { __setHostTransportForTest } from "../src/services/host-transport"
 import type { HostTransport, TransportRequest, TransportResponse } from "../src/services/host-transport"
 import {
   buildTuiHostConnectUrl,
-  createTuiHostConnectToken,
   loadTuiHostStatus,
   resizeTuiHost,
   startTuiHost,
@@ -24,18 +23,12 @@ function fakeTransport(capture: (req: TransportRequest) => void): HostTransport 
           id: "pty_test",
           running: true,
           status: "running",
-          cols: 100,
-          rows: 30,
-          url: "http://127.0.0.1:1234",
-          directory: "D:/repo",
-          exitCode: null,
-          createdAt: 1,
-          updatedAt: 2,
-          buffer: "hello",
-          data: "hello",
-          cursor: 5,
-          from: 0,
-          truncated: false,
+          title: "OpenCorvus TUI",
+          command: "opencorvus",
+          args: [],
+          cwd: "D:/repo",
+          status: "running",
+          pid: 123,
         } as T,
       }
     },
@@ -57,41 +50,37 @@ afterEach(() => {
 })
 
 describe("tui host service", () => {
-  test("uses the embedded host routes instead of the old runtime status route", async () => {
+  test("uses the OpenCode-style PTY routes instead of the old TUI host routes", async () => {
     const requests: TransportRequest[] = []
     configure({ directory: "D:/repo" })
     __setHostTransportForTest(fakeTransport((req) => requests.push(req)))
 
     await startTuiHost({ cols: 120, rows: 40 })
     await loadTuiHostStatus()
-    await createTuiHostConnectToken()
-    await resizeTuiHost({ cols: 100, rows: 30 })
-    await stopTuiHost()
+    await resizeTuiHost({ id: "pty_test", cols: 100, rows: 30 })
+    await stopTuiHost({ id: "pty_test" })
 
     expect(requests.map((req) => `${req.method ?? "GET"} ${req.path}`)).toEqual([
-      "POST tui/host/start",
-      "GET tui/host/status",
-      "POST tui/host/connect-token",
-      "POST tui/host/resize",
-      "POST tui/host/stop",
+      "POST pty",
+      "PUT pty/pty_test",
+      "GET pty",
+      "PUT pty/pty_test",
+      "DELETE pty/pty_test",
     ])
     expect(requests.some((req) => req.path === "tui/runtime/status")).toBe(false)
-    expect(requests.some((req) => req.path === "tui/host/snapshot")).toBe(false)
-    expect(requests.some((req) => req.path === "tui/host/output")).toBe(false)
-    expect(requests.some((req) => req.path === "tui/host/input")).toBe(false)
+    expect(requests.some((req) => req.path.startsWith("tui/host"))).toBe(false)
     expect(requests.every((req) => req.query?.directory === "D:/repo")).toBe(true)
-    expect(requests[0]?.body).toEqual({ kind: "json", value: { cols: 120, rows: 40 } })
-    expect(requests[2]?.headers).toEqual({ "x-opencode-ticket": "1" })
-    expect(requests[3]?.body).toEqual({ kind: "json", value: { cols: 100, rows: 30 } })
+    expect(requests[0]?.body).toEqual({ kind: "json", value: { title: "OpenCorvus TUI" } })
+    expect(requests[1]?.body).toEqual({ kind: "json", value: { size: { cols: 120, rows: 40 } } })
+    expect(requests[3]?.body).toEqual({ kind: "json", value: { size: { cols: 100, rows: 30 } } })
   })
 
-  test("builds ticketed websocket URLs through the API directory context", () => {
+  test("builds PTY websocket URLs through the API directory context", () => {
     configure({ serverUrl: "http://127.0.0.1:4096", directory: "D:/repo" })
 
-    const url = new URL(buildTuiHostConnectUrl({ ticket: "ticket-1", cursor: 12 }))
+    const url = new URL(buildTuiHostConnectUrl({ id: "pty_1", cursor: 12 }))
     expect(url.protocol).toBe("ws:")
-    expect(url.pathname).toBe("/tui/host/connect")
-    expect(url.searchParams.get("ticket")).toBe("ticket-1")
+    expect(url.pathname).toBe("/pty/pty_1/connect")
     expect(url.searchParams.get("cursor")).toBe("12")
     expect(url.searchParams.get("directory")).toBe("D:/repo")
   })

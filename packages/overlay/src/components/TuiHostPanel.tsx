@@ -2,12 +2,11 @@ import { createEffect, createSignal, onCleanup, type Accessor } from "solid-js"
 import type { FitAddon, Ghostty, Terminal as GhosttyTerminal } from "ghostty-web"
 import {
   buildTuiHostConnectUrl,
-  createTuiHostConnectToken,
   loadTuiHostStatus,
   resizeTuiHost,
   startTuiHost,
   stopTuiHost,
-  type TuiHostInfo,
+  type TuiHostPanelInfo,
 } from "../services/tui-host"
 import { hasTuiHostTerminalSizeChanged } from "../services/tui-host-terminal"
 import { t } from "../utils/i18n"
@@ -48,7 +47,7 @@ export function TuiHostPanel(props: TuiHostPanelProps) {
   let hostCursor = 0
   let lastSize: { cols: number; rows: number } | undefined
 
-  const [hostInfo, setHostInfo] = createSignal<TuiHostInfo | null>(null)
+  const [hostInfo, setHostInfo] = createSignal<TuiHostPanelInfo | null>(null)
   const [loading, setLoading] = createSignal(false)
   const [error, setError] = createSignal("")
 
@@ -94,9 +93,10 @@ export function TuiHostPanel(props: TuiHostPanelProps) {
 
   async function connectHostSocket() {
     if (!props.active() || socket) return
-    const token = await createTuiHostConnectToken()
+    const id = hostInfo()?.id
+    if (!id) return
     if (disposed || !props.active()) return
-    const nextSocket = new WebSocket(buildTuiHostConnectUrl({ ticket: token.ticket, cursor: hostCursor }))
+    const nextSocket = new WebSocket(buildTuiHostConnectUrl({ id, cursor: hostCursor }))
     socket = nextSocket
     nextSocket.binaryType = "arraybuffer"
     nextSocket.onopen = () => {
@@ -109,7 +109,13 @@ export function TuiHostPanel(props: TuiHostPanelProps) {
         return
       }
       if (event.data instanceof ArrayBuffer) {
-        writeSocketOutput(new TextDecoder().decode(event.data))
+        const bytes = new Uint8Array(event.data)
+        if (bytes[0] === 0) {
+          const meta = JSON.parse(new TextDecoder().decode(bytes.slice(1))) as { cursor?: unknown }
+          if (typeof meta.cursor === "number" && Number.isSafeInteger(meta.cursor)) hostCursor = meta.cursor
+          return
+        }
+        writeSocketOutput(new TextDecoder().decode(bytes))
       }
     }
     nextSocket.onerror = () => {
@@ -149,7 +155,9 @@ export function TuiHostPanel(props: TuiHostPanelProps) {
     if (!hasTuiHostTerminalSizeChanged(lastSize, nextSize)) return
     lastSize = nextSize
     if (!hostStarted) return
-    void resizeTuiHost({ cols, rows }).catch((err) => {
+    const id = hostInfo()?.id
+    if (!id) return
+    void resizeTuiHost({ id, cols, rows }).catch((err) => {
       if (!disposed) setError(err instanceof Error ? err.message : String(err))
     })
   }
@@ -158,7 +166,8 @@ export function TuiHostPanel(props: TuiHostPanelProps) {
     setLoading(true)
     setError("")
     try {
-      await stopTuiHost()
+      const id = hostInfo()?.id
+      if (id) await stopTuiHost({ id })
       closeSocket()
       hostStarted = false
       hostCursor = 0

@@ -2220,6 +2220,16 @@ export type McpStatus =
   | McpStatusNeedsAuth
   | McpStatusNeedsClientRegistration
 
+export type Pty = {
+  id: string
+  title: string
+  command: string
+  args: Array<string>
+  cwd: string
+  status: "running" | "exited"
+  pid: number
+}
+
 export type EventTuiPromptAppend = {
   type: "tui.prompt.append"
   properties: {
@@ -12829,19 +12839,36 @@ export type McpDisconnectResponses = {
 
 export type McpDisconnectResponse = McpDisconnectResponses[keyof McpDisconnectResponses]
 
-export type TuiHostStartData = {
+export type PtyListData = {
+  body?: never
+  path?: never
+  query?: {
+    /**
+     * Project directory for project-scoped routes. Equivalent to the x-opencorvus-directory request header.
+     */
+    directory?: string
+  }
+  url: "/pty"
+}
+
+export type PtyListResponses = {
+  /**
+   * List of sessions
+   */
+  200: Array<Pty>
+}
+
+export type PtyListResponse = PtyListResponses[keyof PtyListResponses]
+
+export type PtyCreateData = {
   body?: {
-    sessionID?: string
-    model?: string
-    agent?: string
-    prompt?: string
-    continue?: boolean
-    fork?: boolean
-    port?: number
-    hostname?: string
-    bin?: string
-    cols?: number
-    rows?: number
+    command?: string
+    args?: Array<string>
+    cwd?: string
+    title?: string
+    env?: {
+      [key: string]: string
+    }
   }
   path?: never
   query?: {
@@ -12850,225 +12877,164 @@ export type TuiHostStartData = {
      */
     directory?: string
   }
-  url: "/tui/host/start"
+  url: "/pty"
 }
 
-export type TuiHostStartErrors = {
+export type PtyCreateErrors = {
   /**
    * Bad request
    */
   400: BadRequestError
 }
 
-export type TuiHostStartError = TuiHostStartErrors[keyof TuiHostStartErrors]
+export type PtyCreateError = PtyCreateErrors[keyof PtyCreateErrors]
 
-export type TuiHostStartResponses = {
+export type PtyCreateResponses = {
   /**
-   * Embedded TUI host started
+   * Created session
    */
-  200: {
-    id: string | null
-    running: boolean
-    status: "idle" | "running" | "exited"
-    cols: number | null
-    rows: number | null
-    url: string | null
-    directory: string | null
-    exitCode: number | null
-    createdAt: number | null
-    updatedAt: number | null
-  }
+  200: Pty
 }
 
-export type TuiHostStartResponse = TuiHostStartResponses[keyof TuiHostStartResponses]
+export type PtyCreateResponse = PtyCreateResponses[keyof PtyCreateResponses]
 
-export type TuiHostStatusData = {
+export type PtyRemoveData = {
   body?: never
-  path?: never
+  path: {
+    ptyID: string
+  }
   query?: {
     /**
      * Project directory for project-scoped routes. Equivalent to the x-opencorvus-directory request header.
      */
     directory?: string
   }
-  url: "/tui/host/status"
+  url: "/pty/{ptyID}"
 }
 
-export type TuiHostStatusResponses = {
+export type PtyRemoveErrors = {
   /**
-   * Embedded TUI host status
+   * Not found
    */
-  200: {
-    id: string | null
-    running: boolean
-    status: "idle" | "running" | "exited"
-    cols: number | null
-    rows: number | null
-    url: string | null
-    directory: string | null
-    exitCode: number | null
-    createdAt: number | null
-    updatedAt: number | null
-  }
+  404: NotFoundError
 }
 
-export type TuiHostStatusResponse = TuiHostStatusResponses[keyof TuiHostStatusResponses]
+export type PtyRemoveError = PtyRemoveErrors[keyof PtyRemoveErrors]
 
-export type TuiHostConnectTokenData = {
-  body?: never
-  headers: {
-    /**
-     * Set to 1 to request an embedded TUI host connect token.
-     */
-    "x-opencode-ticket": "1"
-  }
-  path?: never
-  query?: {
-    /**
-     * Project directory for project-scoped routes. Equivalent to the x-opencorvus-directory request header.
-     */
-    directory?: string
-  }
-  url: "/tui/host/connect-token"
-}
-
-export type TuiHostConnectTokenErrors = {
+export type PtyRemoveResponses = {
   /**
-   * Connect token request is missing the OpenCode ticket header or has an invalid origin
-   */
-  403: {
-    message: string
-  }
-  /**
-   * Embedded TUI host is not running
-   */
-  404: {
-    message: string
-  }
-}
-
-export type TuiHostConnectTokenError = TuiHostConnectTokenErrors[keyof TuiHostConnectTokenErrors]
-
-export type TuiHostConnectTokenResponses = {
-  /**
-   * Embedded TUI host connect token
-   */
-  200: {
-    ticket: string
-    expires_in: number
-  }
-}
-
-export type TuiHostConnectTokenResponse = TuiHostConnectTokenResponses[keyof TuiHostConnectTokenResponses]
-
-export type TuiHostConnectData = {
-  body?: never
-  path?: never
-  query: {
-    /**
-     * Project directory for project-scoped routes. Equivalent to the x-opencorvus-directory request header.
-     */
-    directory?: string
-    ticket: string
-    cursor?: number
-  }
-  url: "/tui/host/connect"
-}
-
-export type TuiHostConnectErrors = {
-  /**
-   * Invalid connect query
-   */
-  400: {
-    message: string
-  }
-  /**
-   * Invalid origin, invalid connect ticket, or already consumed connect ticket
-   */
-  403: {
-    message: string
-  }
-  /**
-   * Embedded TUI host is not running
-   */
-  404: {
-    message: string
-  }
-}
-
-export type TuiHostConnectError = TuiHostConnectErrors[keyof TuiHostConnectErrors]
-
-export type TuiHostConnectResponses = {
-  /**
-   * WebSocket upgrade accepted
-   */
-  200: unknown
-}
-
-export type TuiHostResizeData = {
-  body?: {
-    cols: number
-    rows: number
-  }
-  path?: never
-  query?: {
-    /**
-     * Project directory for project-scoped routes. Equivalent to the x-opencorvus-directory request header.
-     */
-    directory?: string
-  }
-  url: "/tui/host/resize"
-}
-
-export type TuiHostResizeErrors = {
-  /**
-   * Bad request
-   */
-  400: BadRequestError
-}
-
-export type TuiHostResizeError = TuiHostResizeErrors[keyof TuiHostResizeErrors]
-
-export type TuiHostResizeResponses = {
-  /**
-   * Embedded TUI host resized
-   */
-  200: {
-    id: string | null
-    running: boolean
-    status: "idle" | "running" | "exited"
-    cols: number | null
-    rows: number | null
-    url: string | null
-    directory: string | null
-    exitCode: number | null
-    createdAt: number | null
-    updatedAt: number | null
-  }
-}
-
-export type TuiHostResizeResponse = TuiHostResizeResponses[keyof TuiHostResizeResponses]
-
-export type TuiHostStopData = {
-  body?: never
-  path?: never
-  query?: {
-    /**
-     * Project directory for project-scoped routes. Equivalent to the x-opencorvus-directory request header.
-     */
-    directory?: string
-  }
-  url: "/tui/host/stop"
-}
-
-export type TuiHostStopResponses = {
-  /**
-   * Embedded TUI host stopped
+   * Session removed
    */
   200: boolean
 }
 
-export type TuiHostStopResponse = TuiHostStopResponses[keyof TuiHostStopResponses]
+export type PtyRemoveResponse = PtyRemoveResponses[keyof PtyRemoveResponses]
+
+export type PtyGetData = {
+  body?: never
+  path: {
+    ptyID: string
+  }
+  query?: {
+    /**
+     * Project directory for project-scoped routes. Equivalent to the x-opencorvus-directory request header.
+     */
+    directory?: string
+  }
+  url: "/pty/{ptyID}"
+}
+
+export type PtyGetErrors = {
+  /**
+   * Not found
+   */
+  404: NotFoundError
+}
+
+export type PtyGetError = PtyGetErrors[keyof PtyGetErrors]
+
+export type PtyGetResponses = {
+  /**
+   * Session info
+   */
+  200: Pty
+}
+
+export type PtyGetResponse = PtyGetResponses[keyof PtyGetResponses]
+
+export type PtyUpdateData = {
+  body?: {
+    title?: string
+    size?: {
+      rows: number
+      cols: number
+    }
+  }
+  path: {
+    ptyID: string
+  }
+  query?: {
+    /**
+     * Project directory for project-scoped routes. Equivalent to the x-opencorvus-directory request header.
+     */
+    directory?: string
+  }
+  url: "/pty/{ptyID}"
+}
+
+export type PtyUpdateErrors = {
+  /**
+   * Bad request
+   */
+  400: BadRequestError
+  /**
+   * Not found
+   */
+  404: NotFoundError
+}
+
+export type PtyUpdateError = PtyUpdateErrors[keyof PtyUpdateErrors]
+
+export type PtyUpdateResponses = {
+  /**
+   * Updated session
+   */
+  200: Pty
+}
+
+export type PtyUpdateResponse = PtyUpdateResponses[keyof PtyUpdateResponses]
+
+export type PtyConnectData = {
+  body?: never
+  path: {
+    ptyID: string
+  }
+  query?: {
+    /**
+     * Project directory for project-scoped routes. Equivalent to the x-opencorvus-directory request header.
+     */
+    directory?: string
+  }
+  url: "/pty/{ptyID}/connect"
+}
+
+export type PtyConnectErrors = {
+  /**
+   * Not found
+   */
+  404: NotFoundError
+}
+
+export type PtyConnectError = PtyConnectErrors[keyof PtyConnectErrors]
+
+export type PtyConnectResponses = {
+  /**
+   * Connected session
+   */
+  200: boolean
+}
+
+export type PtyConnectResponse = PtyConnectResponses[keyof PtyConnectResponses]
 
 export type TuiRuntimeStartData = {
   body?: {
