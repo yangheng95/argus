@@ -22,7 +22,6 @@ import * as TaskLoop from "../../src/orchestrator/loop"
 import { ProjectRuntimePaths } from "../../src/project/runtime-paths"
 import { SessionPrompt } from "../../src/session/prompt"
 import { goalStatusByID } from "../../src/engine/describe"
-import { openTaskForOperatorMessage } from "../../src/engine/task-message-open"
 import { Session } from "../../src/session"
 import { SessionTable } from "../../src/session/session.sql"
 import {
@@ -899,6 +898,64 @@ describe("orchestrator tools", () => {
         expect(run).toBeDefined()
         expect(run?.plan_version_id).toBeNull()
         expect(run?.status).toBe("running")
+      },
+    })
+  })
+
+  test("build rejects completed tasks without creating a new run", async () => {
+    await tmp?.[Symbol.asyncDispose]?.()
+    tmp = await tmpdir({ git: true })
+
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const now = Date.now()
+        const completedAt = now - 1_000
+        const taskID = `tsk_build_terminal_${now.toString(16)}`
+        const parent = await Session.create({ kind: "root", title: "completed build rejection" })
+        Database.use((db) =>
+          db.insert(EngineTaskTable)
+            .values({
+              id: taskID,
+              project_id: Instance.project.id,
+              session_id: parent.id,
+              source: "test",
+              title: "completed build rejection",
+              request: "must stay completed",
+              kind: "workflow",
+              priority: "normal",
+              time_created: now - 10_000,
+              time_updated: completedAt,
+              time_started: now - 10_000,
+              time_completed: completedAt,
+            } as any)
+            .run(),
+        )
+        const pipeline = WorkflowRegistry.resolveSync("pipeline")!
+
+        const { tools } = createOrchestratorTools({
+          taskID,
+          agentSessionID: parent.id,
+          signal: new AbortController().signal,
+          workflow: pipeline,
+          workflowState: createWorkflowState(pipeline),
+        })
+
+        const result = await tools.build.execute(
+          {
+            request: "Try to continue after completion.",
+            reason: "Regression test for terminal task wake.",
+            directBuildIntent: "modify_files",
+          },
+          buildToolOptions(),
+        )
+
+        expect(result).toContain("build: rejected because task")
+        expect(result).toContain("completed")
+        expect(findActiveRunForTask(taskID)).toBeUndefined()
+        const task = findTask(taskID)!
+        expect(deriveTaskStatus(task)).toBe("completed")
+        expect(task.time_completed).toBe(completedAt)
       },
     })
   })
@@ -2394,13 +2451,9 @@ describe("orchestrator tools", () => {
         )
         expect(deriveTaskStatus(taskAfterPublishAttempt!)).toBe("completed")
 
-        const reopened = await openTaskForOperatorMessage(
-          taskAfterPublishAttempt!,
-          "Operator continuation reopened task",
-        )
-        expect(reopened.session_id).toBe(parent.id)
-        expect(reopened.time_completed).toBeNull()
-        expect(deriveTaskStatus(reopened)).toBe("queued")
+        expect(taskAfterPublishAttempt?.session_id).toBe(parent.id)
+        expect(taskAfterPublishAttempt?.time_completed).toBeNumber()
+        expect(deriveTaskStatus(taskAfterPublishAttempt!)).toBe("completed")
         expect(findRun(run!.id)?.status).toBe("completed")
         expect(findAcceptanceByRun(run!.id)).toBeUndefined()
         expect(findEvaluationByRun(run!.id)).toBeUndefined()

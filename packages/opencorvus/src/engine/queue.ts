@@ -19,7 +19,6 @@ import { Database, and, desc, eq, sql } from "@/storage/db"
 import { Log } from "@/util/log"
 import { EngineProgressSnapshotTable, EngineTaskTable } from "./engine.sql"
 import { findTask, type TaskRow } from "./store"
-import { openTaskForOperatorMessage } from "./task-message-open"
 import { deriveTaskStatus, isTaskActive, isTaskQueued, isTaskTerminal } from "./task-status"
 import type { OrchestratorEvent } from "@/orchestrator/agent"
 import { Identifier } from "@/id/id"
@@ -458,11 +457,6 @@ export async function dispatchTaskLoop(input: {
     log.warn("dispatchTaskLoop: task has no cwd", { taskID: task.id, note: input.event?.note })
     return
   }
-  const operatorWake = Boolean(input.event?.operatorMessage)
-  if (operatorWake) {
-    task = await openTaskForOperatorMessage(task)
-  }
-
   if (isTaskTerminal(task)) {
     log.info("dispatchTaskLoop: terminal task ignored", {
       taskID: task.id,
@@ -471,7 +465,6 @@ export async function dispatchTaskLoop(input: {
     })
     return
   }
-
   if (isTaskQueued(task)) {
     if (input.event) queuedTaskEvents.set(task.id, input.event)
     await advanceQueue(cwd)

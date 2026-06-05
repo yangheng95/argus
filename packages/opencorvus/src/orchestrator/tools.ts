@@ -90,13 +90,14 @@ import {
   requireRun,
   requireTask,
   type ResearchBriefArtifactRow,
+  type RunRow,
   type TaskRow,
 } from "@/engine/store"
 import { describeTask, goalStatusByID, renderCollaborationClosure } from "@/engine/describe"
 import { isLiveGoalRunStatus } from "@/engine/catalog"
 import { GoalContractUpdateSchema } from "@/pipeline/goal-contract.schema"
 import { blockActiveRunForTask, updateRun, updateTask } from "@/engine/state"
-import { deriveTaskStatus, isTaskQueued } from "@/engine/task-status"
+import { deriveTaskStatus, isTaskQueued, isTaskTerminal } from "@/engine/task-status"
 import {
   assertNoLiveBuildOwnershipForGoal,
   completeOrchestratorToolOwnership,
@@ -1610,6 +1611,12 @@ export function createOrchestratorTools(input: {
     let task = requireTask(taskID)
     let createdRun = false
     let activatedRun = false
+    if (isTaskTerminal(task)) {
+      return {
+        error:
+          `Task ${task.id} is ${deriveTaskStatus(task)}. Terminal tasks cannot create build runs from a wake or tool-result continuation; use retry_task or restart_from_stage for an explicit restart.`,
+      } as const
+    }
 
     if (!findActiveRunForTask(task.id)) {
       const created = await createExecutionRunRecord()
@@ -1655,10 +1662,16 @@ export function createOrchestratorTools(input: {
     return { task, run, plan, createdRun, activatedRun } as const
   }
 
-  async function ensureTaskLevelBuildRun() {
+  async function ensureTaskLevelBuildRun(): Promise<{ readonly run: RunRow } | { readonly error: string }> {
     const task = requireTask(taskID)
+    if (isTaskTerminal(task)) {
+      return {
+        error:
+          `Task ${task.id} is ${deriveTaskStatus(task)}. Terminal tasks cannot create build runs from a wake or tool-result continuation; use retry_task or restart_from_stage for an explicit restart.`,
+      } as const
+    }
     const existing = findActiveRunForTask(task.id)
-    if (existing && isLiveRunStatus(existing.status)) return existing
+    if (existing && isLiveRunStatus(existing.status)) return { run: existing } as const
 
     const { createRun } = await import("@/engine/writer")
     const now = Date.now()
@@ -1680,7 +1693,7 @@ export function createOrchestratorTools(input: {
       },
       `direct_build_run: runID=${created.id}`,
     )
-    return created
+    return { run: created } as const
   }
 
   /** ensureGoalInWorkflow was the workflow_state.goalSteps pre-allocator. The
@@ -5510,6 +5523,13 @@ export function createOrchestratorTools(input: {
       ) => {
         const toolExecution = requireOrchestratorToolExecutionContext(options, "build")
         const task = requireTask(taskID)
+        if (isTaskTerminal(task)) {
+          return (
+            `build: rejected because task ${taskID} is ${deriveTaskStatus(task)}. ` +
+            `This is a wake/tool-result continuation, not an explicit restart request. ` +
+            `No build run was created; use retry_task or restart_from_stage only when the operator explicitly wants to reopen the task.`
+          )
+        }
         const requestText = request.trim()
         const declaredDirectBuildIntent = directBuildIntent as string | undefined
         log.info("build tool invoked", {
@@ -5634,7 +5654,11 @@ export function createOrchestratorTools(input: {
           coordinatorRunID = ensured.run.id
         } else {
           const ensured = await ensureTaskLevelBuildRun()
-          coordinatorRunID = ensured.id
+          if ("error" in ensured) {
+            if (isTaskLevelBuild) await trackStepComplete("build", undefined, true)
+            return `build: cannot ensure task-level run — ${ensured.error}`
+          }
+          coordinatorRunID = ensured.run.id
         }
 
         let activeOwnership: OrchestratorToolOwnershipPayload | undefined

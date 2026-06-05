@@ -149,7 +149,7 @@ describe("task message routes", () => {
     })
   })
 
-  test("POST /task/:taskID/message reopens a failed task without deleting task context", async () => {
+  test("POST /task/:taskID/message records on a failed task without reopening it", async () => {
     await using tmp = await tmpdir({ git: true, config: routeTestConfig })
 
     await Instance.provide({
@@ -197,16 +197,16 @@ describe("task message routes", () => {
         const body = await response.json() as { kind: string; should_resume: boolean }
         await new Promise((resolve) => setTimeout(resolve, 0))
         expect(body.kind).toBe("note")
-        expect(body.should_resume).toBe(true)
-        expect(dispatchTaskLoop).toHaveBeenCalledTimes(1)
+        expect(body.should_resume).toBe(false)
+        expect(dispatchTaskLoop).not.toHaveBeenCalled()
 
         const row = Database.use((db) =>
           db.select().from(EngineTaskTable).where(eq(EngineTaskTable.id, taskID)).get(),
         )
         expect(row).toBeDefined()
-        expect(row ? deriveTaskStatus(row) : undefined).toBe("queued")
-        expect(row?.time_completed).toBeNull()
-        expect(row?.error).toBeNull()
+        expect(row ? deriveTaskStatus(row) : undefined).toBe("failed")
+        expect(row?.time_completed).toBe(completedAt)
+        expect(row?.error).toBe("previous failure")
         expect((row?.metadata as { decision_log?: string[] } | null)?.decision_log).toEqual(["keep-me"])
       },
     })
@@ -258,20 +258,23 @@ describe("task message routes", () => {
         })
 
         expect(response.status).toBe(200)
+        const body = await response.json() as { kind: string; should_resume: boolean }
         await new Promise((resolve) => setTimeout(resolve, 0))
-        expect(dispatchTaskLoop).toHaveBeenCalledTimes(1)
+        expect(body.kind).toBe("note")
+        expect(body.should_resume).toBe(false)
+        expect(dispatchTaskLoop).not.toHaveBeenCalled()
 
         const row = Database.use((db) =>
           db.select().from(EngineTaskTable).where(eq(EngineTaskTable.id, taskID)).get(),
         )
-        expect(row ? deriveTaskStatus(row) : undefined).toBe("queued")
+        expect(row ? deriveTaskStatus(row) : undefined).toBe("cancelled")
         expect((row?.metadata as { decision_log?: string[] } | null)?.decision_log).toEqual(["keep-me"])
-        expect((row?.metadata as { cancelled?: boolean } | null)?.cancelled).toBeUndefined()
+        expect((row?.metadata as { cancelled?: boolean } | null)?.cancelled).toBe(true)
       },
     })
   })
 
-  test("POST /task/:taskID/message reopens a cancelled task without retry gate", async () => {
+  test("POST /task/:taskID/message records on a cancelled task without reopening it", async () => {
     await using tmp = await tmpdir({ git: true, config: routeTestConfig })
 
     await Instance.provide({
@@ -318,22 +321,22 @@ describe("task message routes", () => {
         const body = await response.json() as { kind: string; should_resume: boolean }
         await new Promise((resolve) => setTimeout(resolve, 0))
         expect(body.kind).toBe("note")
-        expect(body.should_resume).toBe(true)
-        expect(dispatchTaskLoop).toHaveBeenCalledTimes(1)
+        expect(body.should_resume).toBe(false)
+        expect(dispatchTaskLoop).not.toHaveBeenCalled()
 
         const row = Database.use((db) =>
           db.select().from(EngineTaskTable).where(eq(EngineTaskTable.id, taskID)).get(),
         )
-        expect(row ? deriveTaskStatus(row) : undefined).toBe("queued")
-        expect(row?.time_completed).toBeNull()
-        expect(row?.error).toBeNull()
-        expect((row?.metadata as { cancelled?: boolean; decision_log?: string[] } | null)?.cancelled).toBeUndefined()
+        expect(row ? deriveTaskStatus(row) : undefined).toBe("cancelled")
+        expect(row?.time_completed).not.toBeNull()
+        expect(row?.error).toBe("task cancelled")
+        expect((row?.metadata as { cancelled?: boolean; decision_log?: string[] } | null)?.cancelled).toBe(true)
         expect((row?.metadata as { decision_log?: string[] } | null)?.decision_log).toEqual(["keep-me"])
       },
     })
   })
 
-  test("POST /task/:taskID/message reopens a completed task without deleting task context", async () => {
+  test("POST /task/:taskID/message records on a completed task without reopening it", async () => {
     await using tmp = await tmpdir({ git: true, config: routeTestConfig })
 
     await Instance.provide({
@@ -376,14 +379,17 @@ describe("task message routes", () => {
         })
 
         expect(response.status).toBe(200)
+        const body = await response.json() as { kind: string; should_resume: boolean }
         await new Promise((resolve) => setTimeout(resolve, 0))
-        expect(dispatchTaskLoop).toHaveBeenCalledTimes(1)
+        expect(body.kind).toBe("note")
+        expect(body.should_resume).toBe(false)
+        expect(dispatchTaskLoop).not.toHaveBeenCalled()
 
         const row = Database.use((db) =>
           db.select().from(EngineTaskTable).where(eq(EngineTaskTable.id, taskID)).get(),
         )
-        expect(row ? deriveTaskStatus(row) : undefined).toBe("queued")
-        expect(row?.time_completed).toBeNull()
+        expect(row ? deriveTaskStatus(row) : undefined).toBe("completed")
+        expect(row?.time_completed).not.toBeNull()
         expect((row?.metadata as { decision_log?: string[] } | null)?.decision_log).toEqual(["keep-me"])
       },
     })
@@ -460,7 +466,7 @@ describe("task message routes", () => {
     })
   })
 
-  test("POST /task/:taskID/inject appends to terminal task even without active run", async () => {
+  test("POST /task/:taskID/inject appends to terminal task without waking orchestrator", async () => {
     await using tmp = await tmpdir({ git: true, config: routeTestConfig })
 
     await Instance.provide({
@@ -513,17 +519,17 @@ describe("task message routes", () => {
         await new Promise((resolve) => setTimeout(resolve, 0))
         expect(body).toEqual({
           appended: true,
-          orchestratorWoken: true,
+          orchestratorWoken: false,
           executorResumed: false,
           resumed: false,
-          status: "queued",
+          status: "failed",
         })
-        expect(dispatchTaskLoop).toHaveBeenCalledTimes(1)
+        expect(dispatchTaskLoop).not.toHaveBeenCalled()
 
         const row = Database.use((db) =>
           db.select().from(EngineTaskTable).where(eq(EngineTaskTable.id, taskID)).get(),
         )
-        expect(row ? deriveTaskStatus(row) : undefined).toBe("queued")
+        expect(row ? deriveTaskStatus(row) : undefined).toBe("failed")
         expect((row?.metadata as { decision_log?: string[] } | null)?.decision_log).toEqual(["keep-me"])
       },
     })
