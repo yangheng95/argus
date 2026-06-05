@@ -3,11 +3,9 @@
  *
  * Two assertions:
  *
- *   1. The Icon primitive registry is the single source of icon SVG.
- *      Every entry in REGISTERED_ICONS satisfies the unified shape:
- *      stroke="currentColor", fill defaults to "none", line-cap/join
- *      "round". (Tested by rendering each Icon and inspecting the
- *      attribute set.)
+ *   1. The Icon primitive is the single source of icon rendering.
+ *      Commodity icons are backed by lucide-solid, while product-specific
+ *      glyphs remain in the custom SVG registry.
  *
  *   2. No regression to character-icon callsites under
  *      `packages/overlay/src/components/**\/*.tsx`. The 4 close-X
@@ -29,6 +27,7 @@ import { join } from "node:path"
 // instead — same single-source guarantee, no JSX runtime needed.
 const COMPONENTS_ROOT = join(import.meta.dir, "..", "src", "components")
 const ICON_TSX = readFileSync(join(COMPONENTS_ROOT, "Icon.tsx"), "utf8")
+const ICON_HTML_TSX = readFileSync(join(import.meta.dir, "..", "src", "utils", "icon-html.tsx"), "utf8")
 
 function registeredIconsFromSource(): string[] {
   // Carve out the union body between `export type IconName =` and the
@@ -38,9 +37,7 @@ function registeredIconsFromSource(): string[] {
   // bogus IconName entries.
   const m = ICON_TSX.match(/export type IconName\s*=\s*([\s\S]*?);/)
   if (!m) throw new Error("IconName union not found in Icon.tsx")
-  const stripped = m[1]!
-    .replace(/\/\*[\s\S]*?\*\//g, "")
-    .replace(/\/\/[^\n]*/g, "")
+  const stripped = m[1]!.replace(/\/\*[\s\S]*?\*\//g, "").replace(/\/\/[^\n]*/g, "")
   return [...stripped.matchAll(/"([^"]+)"/g)].map((mm) => mm[1]!)
 }
 
@@ -64,27 +61,39 @@ describe("flat-redesign Icon primitive registry", () => {
     expect(registered).toContain("acceptance")
   })
 
-  test("every IconName declared in the union has an ICON_PATHS entry", () => {
+  test("every IconName declared in the union has one backing source", () => {
     const registered = registeredIconsFromSource()
     for (const name of registered) {
-      // Object literal keys: bare identifier (`close: {`) or quoted
-      // string (`"caret-down": {`). Hyphenated names require quotes.
       const escaped = name.replace(/-/g, "\\-")
       const re = new RegExp(`(?:["']${escaped}["']|\\b${escaped}\\b)\\s*:\\s*\\{`)
       if (!re.test(ICON_TSX)) {
-        throw new Error(`IconName "${name}" has no ICON_PATHS entry`)
+        throw new Error(`IconName "${name}" has no Lucide or custom icon entry`)
       }
     }
   })
 
-  test("the SVG attribute contract is single-source on the Icon component", () => {
-    // Pin the canonical attribute set so a stray copy-paste of inline
-    // SVG with different stroke-width / cap / join can't sneak in.
+  test("commodity icons are backed by lucide-solid", () => {
+    expect(ICON_TSX).toContain('from "lucide-solid"')
+    expect(ICON_TSX).toContain("const LUCIDE_ICON_MAP")
+    for (const name of ["close", "plus", "search", "refresh", "copy", "download", "status-completed"]) {
+      const escaped = name.replace(/-/g, "\\-")
+      expect(ICON_TSX).toMatch(new RegExp(`(?:["']${escaped}["']|\\b${escaped}\\b)\\s*:\\s*\\{\\s*component:`))
+    }
+  })
+
+  test("custom SVG fallback remains isolated inside Icon.tsx", () => {
+    expect(ICON_TSX).toContain("const CUSTOM_ICON_PATHS")
     expect(ICON_TSX).toContain('viewBox="0 0 16 16"')
     expect(ICON_TSX).toContain('stroke="currentColor"')
     expect(ICON_TSX).toContain('stroke-linecap="round"')
     expect(ICON_TSX).toContain('stroke-linejoin="round"')
     expect(ICON_TSX).toContain('fill="none"')
+  })
+
+  test("iconHtml uses browser-safe Solid rendering", () => {
+    expect(ICON_HTML_TSX).toContain('from "solid-js/web"')
+    expect(ICON_HTML_TSX).toContain("render(")
+    expect(ICON_HTML_TSX).not.toContain("renderToString")
   })
 })
 
@@ -147,29 +156,26 @@ describe("flat-redesign character-icon callsites are gone", () => {
     expect(board).not.toMatch(/innerHTML=\{[^}]*SECTION_ICONS/)
   })
 
-  test("no inline 16x16 svg literal across components/ (Icon.tsx is the single source)", () => {
-    // Step 8b (2026-05-04): every 16x16 icon must render through the
-    // Icon primitive, not as an inline JSX <svg>. Larger viewBoxes
-    // (illustrations like chat-empty 40x40 or agent-workflow-beam
-    // 28x104) are deliberately out of scope — they're not icons.
-    //
-    // Files exempt: Icon.tsx (the primitive itself).
+  test("no inline 16px or 24px icon svg literals outside Icon.tsx", () => {
     const EXEMPT = new Set([join(COMPONENTS_ROOT, "Icon.tsx")])
-    const files = listTsx(COMPONENTS_ROOT, EXEMPT)
+    const files = [
+      ...listTsx(COMPONENTS_ROOT, EXEMPT),
+      join(import.meta.dir, "..", "src", "main.tsx"),
+      join(import.meta.dir, "..", "src", "index.html"),
+      join(import.meta.dir, "..", "src", "utils", "dom-utils.ts"),
+      join(import.meta.dir, "..", "src", "utils", "markdown.ts"),
+    ]
     const violations: string[] = []
     for (const file of files) {
       const text = readFileSync(file, "utf8")
-      // Match an inline JSX <svg> opening tag with viewBox="0 0 16 16"
-      // (allow optional attributes between `<svg` and `viewBox`).
-      if (/<svg\b[^>]*viewBox="0 0 16 16"/.test(text)) {
+      if (/<svg\b[^>]*viewBox="0 0 (?:16 16|24 24)"/.test(text)) {
         violations.push(file)
       }
     }
     if (violations.length > 0) {
       throw new Error(
-        `inline 16x16 svg literal regressed in:\n  ${violations.join("\n  ")}\n` +
-          `Use <Icon name="..." /> from components/Icon.tsx — add a new IconName ` +
-          `to the registry if no existing icon fits.`,
+        `inline icon svg literal regressed in:\n  ${violations.join("\n  ")}\n` +
+          `Use <Icon name="..." /> from components/Icon.tsx or iconHtml() for string-template flows.`,
       )
     }
   })

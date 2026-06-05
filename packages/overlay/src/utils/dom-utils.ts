@@ -18,6 +18,7 @@ import { selectTask } from "../services/task";
 import { settingsStore } from "../store/settings";
 import { hasWorkspaceSelection } from "../services/workspace";
 import { t } from "./i18n";
+import { iconHtml } from "./icon-html";
 import { escapeHtml } from "./markdown";
 
 // ── Auto-scroll ──
@@ -360,23 +361,17 @@ export function pathItems(value: string): Array<{ label: string; path: string }>
 }
 
 /**
- * Return an inline SVG string for the given path-action button kind.
+ * Return the Icon primitive HTML for the given path-action button kind.
  * Supported kinds: "browse" | "new" | any (returns × close icon).
  */
 export function pathIcon(kind: string): string {
   if (kind === "browse") {
-    return `<svg width="13" height="13" viewBox="0 0 16 16" fill="none" aria-hidden="true">
-      <path d="M2.5 4.5h4l1.2 1.5h5.8v5.2a1.3 1.3 0 01-1.3 1.3H3.8a1.3 1.3 0 01-1.3-1.3V5.8a1.3 1.3 0 011.3-1.3z" stroke="currentColor" stroke-width="1.2" stroke-linejoin="round"/>
-    </svg>`;
+    return iconHtml("folder", 13);
   }
   if (kind === "new") {
-    return `<svg width="13" height="13" viewBox="0 0 16 16" fill="none" aria-hidden="true">
-      <path d="M8 3.2v9.6M3.2 8h9.6" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/>
-    </svg>`;
+    return iconHtml("plus", 13);
   }
-  return `<svg width="13" height="13" viewBox="0 0 16 16" fill="none" aria-hidden="true">
-    <path d="M4 4l8 8M12 4l-8 8" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/>
-  </svg>`;
+  return iconHtml("close", 13);
 }
 
 /**
