@@ -1746,7 +1746,7 @@ export class Session extends HeyApiClient {
         | "executor"
         | "build"
         | "explore"
-        | "research"
+        | "deep-research"
         | "frontend-research"
         | "evaluator"
         | "system"
@@ -7603,6 +7603,7 @@ export class Pty extends HeyApiClient {
       env?: {
         [key: string]: string
       }
+      agent?: string
     },
     options?: Options<never, ThrowOnError>,
   ) {
@@ -7617,6 +7618,7 @@ export class Pty extends HeyApiClient {
             { in: "body", key: "cwd" },
             { in: "body", key: "title" },
             { in: "body", key: "env" },
+            { in: "body", key: "agent" },
           ],
         },
       ],

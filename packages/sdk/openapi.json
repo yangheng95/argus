@@ -2799,7 +2799,7 @@
                       "executor",
                       "build",
                       "explore",
-                      "research",
+                      "deep-research",
                       "frontend-research",
                       "evaluator",
                       "system"
@@ -27561,6 +27561,9 @@
                     "additionalProperties": {
                       "type": "string"
                     }
+                  },
+                  "agent": {
+                    "type": "string"
                   }
                 }
               }
@@ -32705,7 +32708,7 @@
               "executor",
               "build",
               "explore",
-              "research",
+              "deep-research",
               "frontend-research",
               "evaluator",
               "system"
@@ -32851,7 +32854,7 @@
               "executor",
               "build",
               "explore",
-              "research",
+              "deep-research",
               "frontend-research",
               "evaluator",
               "system"

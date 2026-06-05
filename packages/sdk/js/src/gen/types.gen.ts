@@ -1354,7 +1354,7 @@ export type Session = {
     | "executor"
     | "build"
     | "explore"
-    | "research"
+    | "deep-research"
     | "frontend-research"
     | "evaluator"
     | "system"
@@ -1410,7 +1410,7 @@ export type GlobalSession = {
     | "executor"
     | "build"
     | "explore"
-    | "research"
+    | "deep-research"
     | "frontend-research"
     | "evaluator"
     | "system"
@@ -4682,7 +4682,7 @@ export type SessionCreateData = {
       | "executor"
       | "build"
       | "explore"
-      | "research"
+      | "deep-research"
       | "frontend-research"
       | "evaluator"
       | "system"
@@ -12902,6 +12902,7 @@ export type PtyCreateData = {
     env?: {
       [key: string]: string
     }
+    agent?: string
   }
   path?: never
   query?: {
