@@ -76,6 +76,63 @@ describe("scheduler.task-queue-service", () => {
     expect(prompt).toHaveBeenCalledTimes(1)
   })
 
+  test("direct queued prompt preserves agent-owned session identity", async () => {
+    await using tmp = await tmpdir({ git: true })
+
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const session = await Session.create({ kind: "mission" })
+        const id = TaskQueueService.enqueuePrompt({
+          sessionID: session.id,
+          prompt: {
+            parts: [
+              {
+                type: "text",
+                text: "mission queue",
+              },
+            ],
+          },
+          source: "test",
+        })
+        const row = Database.use((db) => db.select().from(TaskQueueTable).where(eq(TaskQueueTable.id, id)).get())
+        expect(row?.metadata.input).toMatchObject({
+          agent: "mission",
+          parts: [{ type: "text", text: "mission queue" }],
+        })
+      },
+    })
+  })
+
+  test("direct execute prompt preserves agent-owned session identity", async () => {
+    await using tmp = await tmpdir({ git: true })
+    const prompt = spyOn(SessionPrompt, "prompt").mockResolvedValue(result())
+
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const session = await Session.create({ kind: "explore" })
+        await TaskQueueService.executePrompt({
+          sessionID: session.id,
+          prompt: {
+            agent: "coding",
+            parts: [
+              {
+                type: "text",
+                text: "explore execute",
+              },
+            ],
+          },
+          source: "test",
+        })
+      },
+    })
+
+    expect(prompt).toHaveBeenCalledWith(expect.objectContaining({
+      agent: "explore",
+    }))
+  })
+
   test("retries on failure and marks failed after max retries", async () => {
     await using tmp = await tmpdir({ git: true })
     const prompt = spyOn(SessionPrompt, "prompt").mockRejectedValue(new Error("boom"))

@@ -8,6 +8,111 @@ import { Session } from "../../src/session"
 import { tmpdir } from "../fixture/fixture"
 
 describe("session prompt_async route", () => {
+  test("mission session prompt_async preserves mission agent identity", async () => {
+    await using tmp = await tmpdir({ git: true })
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const session = await Session.create({ kind: "mission" })
+        const app = Server.App()
+        const response = await app.request(`/session/${session.id}/prompt_async`, {
+          method: "POST",
+          headers: {
+            "content-type": "application/json",
+            "x-opencorvus-directory": tmp.path,
+          },
+          body: JSON.stringify({
+            parts: [
+              {
+                type: "text",
+                text: "continue mission",
+              },
+            ],
+          }),
+        })
+
+        expect(response.status).toBe(202)
+        const json = (await response.json()) as { taskID: string }
+        const row = Database.use((db) =>
+          db.select().from(TaskQueueTable).where(eq(TaskQueueTable.id, json.taskID)).get(),
+        )
+        expect(row?.metadata.input).toMatchObject({
+          agent: "mission",
+          parts: [{ type: "text", text: "continue mission" }],
+        })
+      },
+    })
+  })
+
+  test("agent-owned session prompt_async preserves session kind as agent identity", async () => {
+    await using tmp = await tmpdir({ git: true })
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const session = await Session.create({ kind: "explore" })
+        const app = Server.App()
+        const response = await app.request(`/session/${session.id}/prompt_async`, {
+          method: "POST",
+          headers: {
+            "content-type": "application/json",
+            "x-opencorvus-directory": tmp.path,
+          },
+          body: JSON.stringify({
+            parts: [
+              {
+                type: "text",
+                text: "continue investigation",
+              },
+            ],
+          }),
+        })
+
+        expect(response.status).toBe(202)
+        const json = (await response.json()) as { taskID: string }
+        const row = Database.use((db) =>
+          db.select().from(TaskQueueTable).where(eq(TaskQueueTable.id, json.taskID)).get(),
+        )
+        expect(row?.metadata.input).toMatchObject({
+          agent: "explore",
+          parts: [{ type: "text", text: "continue investigation" }],
+        })
+      },
+    })
+  })
+
+  test("mission session sync prompt preserves mission agent identity", async () => {
+    await using tmp = await tmpdir({ git: true })
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const session = await Session.create({ kind: "mission" })
+        const app = Server.App()
+        const response = await app.request(`/session/${session.id}/message`, {
+          method: "POST",
+          headers: {
+            "content-type": "application/json",
+            "x-opencorvus-directory": tmp.path,
+          },
+          body: JSON.stringify({
+            agent: "coding",
+            model: { providerID: "test", modelID: "test-model" },
+            noReply: true,
+            parts: [
+              {
+                type: "text",
+                text: "continue mission sync",
+              },
+            ],
+          }),
+        })
+
+        expect(response.status).toBe(200)
+        const body = (await response.json()) as { info: { agent?: string } }
+        expect(body.info.agent).toBe("mission")
+      },
+    })
+  })
+
   test("returns taskID and enqueues queued task", async () => {
     await using tmp = await tmpdir({ git: true })
     await Instance.provide({

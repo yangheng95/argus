@@ -12,6 +12,7 @@ import { Log } from "@/util/log"
 import { EngineConfig } from "@/engine/config"
 import { Scheduler } from "./index"
 import { TaskQueueTable } from "./task-queue.sql"
+import { SessionAgentIdentity } from "@/session/agent-identity"
 
 export const TaskQueueEvent = {
   Completed: BusEvent.define("task-queue.completed", z.object({
@@ -115,7 +116,7 @@ export namespace TaskQueueService {
         source: z.string().optional(),
       })
       .parse(raw)
-    const prompt = promptSchema().parse(input.prompt)
+    const prompt = applyStoredSessionPromptIdentity(input.sessionID, promptSchema().parse(input.prompt))
     return SessionPrompt.prompt({
       sessionID: input.sessionID,
       ...prompt,
@@ -124,7 +125,7 @@ export namespace TaskQueueService {
 
   export function enqueuePrompt(raw: z.input<typeof EnqueuePromptInput>) {
     const input = EnqueuePromptInput.parse(raw)
-    const prompt = promptSchema().parse(input.prompt)
+    const prompt = applyStoredSessionPromptIdentity(input.sessionID, promptSchema().parse(input.prompt))
     const now = Date.now()
     const id = Identifier.ascending("task")
     Database.use((db) =>
@@ -490,6 +491,14 @@ function promptSchema() {
   return SessionPrompt.PromptInput.omit({
     sessionID: true,
   })
+}
+
+function applyStoredSessionPromptIdentity<T extends z.infer<ReturnType<typeof promptSchema>>>(sessionID: string, prompt: T): T {
+  const row = Database.use((db) =>
+    db.select({ kind: SessionTable.kind }).from(SessionTable).where(eq(SessionTable.id, sessionID)).get(),
+  )
+  if (!row) return prompt
+  return SessionAgentIdentity.applyToPrompt(row.kind, prompt)
 }
 
 type PromptPart = z.infer<ReturnType<typeof promptSchema>>["parts"][number]

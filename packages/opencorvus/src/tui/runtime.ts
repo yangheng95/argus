@@ -8,6 +8,7 @@ import { Tui } from "@/tui"
 import { Bus } from "@/bus"
 import { Database, eq } from "@/storage/db"
 import { NamedError } from "@opencorvus-ai/util/error"
+import { SessionAgentIdentity } from "@/session/agent-identity"
 
 type Mode = "none" | "spawned" | "connected"
 
@@ -186,7 +187,8 @@ export namespace TuiRuntime {
     }
     s.sessionID = sessionID
 
-    const prompt = {
+    const session = await Session.get(sessionID)
+    const prompt = SessionAgentIdentity.applyToPrompt(session.kind, {
       agent: input.agent,
       parts: [
         {
@@ -194,7 +196,7 @@ export namespace TuiRuntime {
           text: input.text,
         },
       ],
-    }
+    })
     const run = () =>
       SessionPrompt.prompt({
         sessionID,

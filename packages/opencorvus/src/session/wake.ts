@@ -6,6 +6,7 @@ import { SessionPrompt } from "./prompt"
 import { Agent } from "@/agent/agent"
 import { SessionContext } from "./context"
 import { EffectiveConfig } from "@/config/effective"
+import { SessionAgentIdentity } from "./agent-identity"
 
 /**
  * Session wake mechanism.
@@ -52,7 +53,11 @@ export namespace SessionWake {
     }
 
     const config = await EffectiveConfig.effective({ sessionID })
-    const agent = input.agent ?? (await Agent.defaultAgent({ config }))
+    const agent =
+      SessionAgentIdentity.resolveForWake({
+        sessionKind: session.kind,
+        requestedAgent: input.agent,
+      }) ?? (await Agent.defaultAgent({ config }))
     if (
       SessionPrompt.agentKindRequiresRuntimeContract(agent) ||
       SessionPrompt.agentKindRequiresRuntimeContract(session.kind)

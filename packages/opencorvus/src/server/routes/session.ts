@@ -32,6 +32,7 @@ import {
   applyRightSidebarCodingAssistantPromptOverlay,
   isRightSidebarCodingAssistantSession,
 } from "@/coding-assistant/session"
+import { SessionAgentIdentity } from "@/session/agent-identity"
 
 const log = Log.create({ service: "server" })
 
@@ -40,8 +41,10 @@ async function applySessionPromptRouteOverlay(
   prompt: Omit<SessionPrompt.PromptInput, "sessionID">,
 ) {
   const session = await Session.get(sessionID)
-  if (!isRightSidebarCodingAssistantSession(session)) return prompt
-  return applyRightSidebarCodingAssistantPromptOverlay(prompt)
+  if (isRightSidebarCodingAssistantSession(session)) {
+    return applyRightSidebarCodingAssistantPromptOverlay(prompt)
+  }
+  return SessionAgentIdentity.applyToPrompt(session.kind, prompt)
 }
 
 function protocolSessionEvent(event: ReturnType<typeof ProtocolStore.listTaskEventsAfter>[number]) {
