@@ -211,3 +211,39 @@ test("orchestrator trace report writes under child session while mission session
     },
   })
 })
+
+test("task trace reader parses only the bounded tail of large trace files", async () => {
+  tempDir = fs.mkdtempSync(path.join(os.tmpdir(), "oc-trace-tail-"))
+  process.env.OPENCORVUS_AGENT_TRACE_DIR = tempDir
+  const { AgentTrace } = await import("../../src/trace")
+  const taskID = Identifier.create("task", false)
+
+  await Instance.provide({
+    directory: tempDir,
+    fn: async () => {
+      const file = ProjectRuntimePaths.taskAbsoluteFromRuntimeRoot(tempDir, taskID, "trace.jsonl")
+      fs.mkdirSync(path.dirname(file), { recursive: true })
+      fs.writeFileSync(
+        file,
+        JSON.stringify({
+          ts: 1,
+          kind: "llm_request",
+          taskID,
+          agentName: "old",
+          payload: { text: "x".repeat(2 * 1024 * 1024 + 1000) },
+        }) + "\n" +
+          JSON.stringify({
+            ts: 2,
+            kind: "agent_report",
+            taskID,
+            agentName: "tail",
+            payload: { ok: true },
+          }) + "\n",
+        "utf8",
+      )
+
+      const events = AgentTrace.readTaskEvents(taskID)
+      expect(events.map((event) => event.agentName)).toEqual(["tail"])
+    },
+  })
+})

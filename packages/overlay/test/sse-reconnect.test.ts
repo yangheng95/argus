@@ -1,28 +1,30 @@
 import { afterEach, describe, expect, test } from "bun:test"
+(globalThis as typeof globalThis & { __OPENCORVUS_OVERLAY_VERSION__?: string }).__OPENCORVUS_OVERLAY_VERSION__ = "test"
+
 import { createRoot } from "solid-js"
 import {
-  TASK_LIST_REFRESH_INTERVAL_MS,
+  type HostTransport,
+  type StreamHandlers,
+  type StreamOpenRequest,
+  type TransportRequest,
+} from "../src/services/host-transport"
+import type { BoardSource } from "../src/store/board"
+import type { SseReconnectDeps, SseStartOptions } from "../src/services/sse"
+
+const {
   SELECTED_TASK_STREAM_STALL_MS,
   performSseReconnect,
   startSSE,
   startTaskListSSE,
   stopSSE,
   stopTaskListSSE,
-  type SseReconnectDeps,
-  type SseStartOptions,
-} from "../src/services/sse"
-import {
-  __setHostTransportForTest,
-  type HostTransport,
-  type StreamHandlers,
-  type StreamOpenRequest,
-  type TransportRequest,
-} from "../src/services/host-transport"
-import { setBoardStore, type BoardSource } from "../src/store/board"
-import { messageStore } from "../src/store/messages"
-import { setSettingsStore } from "../src/store/settings"
-import { resetSelectedLiveCursor } from "../src/services/selected-stream-cursor"
-import { selectTask } from "../src/services/task"
+} = await import("../src/services/sse")
+const { __setHostTransportForTest } = await import("../src/services/host-transport")
+const { setBoardStore } = await import("../src/store/board")
+const { messageStore } = await import("../src/store/messages")
+const { setSettingsStore } = await import("../src/store/settings")
+const { resetSelectedLiveCursor } = await import("../src/services/selected-stream-cursor")
+const { selectTask } = await import("../src/services/task")
 
 /**
  * Reconnect policy regression tests.
@@ -497,7 +499,7 @@ describe("startSSE stream error handling", () => {
     ])
   })
 
-  test("task-list periodic refresh reloads the global list even without stream events", async () => {
+  test("task-list refresh is not started without a workspace directory", async () => {
     let tick: (() => void) | undefined
     let intervalMs = 0
     let clearCalls = 0
@@ -537,17 +539,15 @@ describe("startSSE stream error handling", () => {
 
       startTaskListSSE()
 
-      expect(intervalMs).toBe(TASK_LIST_REFRESH_INTERVAL_MS)
+      expect(intervalMs).toBe(0)
       expect(streamOpened).toBe(0)
-      expect(tick).toBeDefined()
-
-      tick!()
+      expect(tick).toBeUndefined()
       await new Promise((resolve) => setTimeout(resolve, 0))
 
-      expect(paths).toEqual(["global/tasks"])
+      expect(paths).toEqual([])
 
       stopTaskListSSE()
-      expect(clearCalls).toBe(1)
+      expect(clearCalls).toBe(0)
     } finally {
       stopTaskListSSE()
       __setHostTransportForTest(undefined)

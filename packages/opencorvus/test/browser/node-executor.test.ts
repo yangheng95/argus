@@ -1,4 +1,7 @@
-import { describe, expect, test } from "bun:test"
+import { afterEach, describe, expect, test } from "bun:test"
+import fs from "node:fs"
+import os from "node:os"
+import path from "node:path"
 
 import {
   runBrowserNodeSidecar,
@@ -11,6 +14,13 @@ const RUNTIME: BrowserNodeSidecarRuntime = {
   playwrightRequirePath: "playwright",
   packaged: false,
 }
+
+let tempDirs: string[] = []
+
+afterEach(() => {
+  for (const dir of tempDirs) fs.rmSync(dir, { recursive: true, force: true })
+  tempDirs = []
+})
 
 describe("browser Node sidecar executor", () => {
   test("returns parsed JSON with exit metadata", async () => {
@@ -47,6 +57,28 @@ describe("browser Node sidecar executor", () => {
     `, {}, { hardTimeoutMs: 25 })).rejects.toThrow("timed out after 25ms")
   })
 
+  test("kills child processes when a sidecar exceeds the hard timeout", async () => {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), "oc-node-sidecar-tree-"))
+    tempDirs.push(dir)
+    const childPidFile = path.join(dir, "child.pid")
+
+    await expect(execute(`
+      const { spawn } = require("node:child_process");
+      const fs = require("node:fs");
+      const input = JSON.parse(Buffer.from(process.env.TEST_PAYLOAD || "", "base64").toString("utf8"));
+      const child = spawn(process.execPath, ["-e", "setInterval(() => {}, 10_000)"], {
+        stdio: "ignore",
+        windowsHide: true,
+      });
+      fs.writeFileSync(input.childPidFile, String(child.pid));
+      setInterval(() => {}, 10_000);
+    `, { childPidFile }, { hardTimeoutMs: 100 })).rejects.toThrow("timed out after 100ms")
+
+    const childPid = Number(fs.readFileSync(childPidFile, "utf8"))
+    expect(Number.isFinite(childPid) && childPid > 0).toBe(true)
+    await expectProcessGone(childPid)
+  })
+
   test("kills a sidecar when the abort signal fires", async () => {
     const controller = new AbortController()
     setTimeout(() => controller.abort(new Error("executor aborted by test")), 25)
@@ -56,6 +88,23 @@ describe("browser Node sidecar executor", () => {
     `, {}, { signal: controller.signal, hardTimeoutMs: 5_000 })).rejects.toThrow("executor aborted by test")
   })
 })
+
+async function expectProcessGone(pid: number): Promise<void> {
+  for (let i = 0; i < 50; i += 1) {
+    if (!processExists(pid)) return
+    await new Promise((resolve) => setTimeout(resolve, 20))
+  }
+  throw new Error(`process ${pid} was still alive after sidecar timeout`)
+}
+
+function processExists(pid: number): boolean {
+  try {
+    process.kill(pid, 0)
+    return true
+  } catch {
+    return false
+  }
+}
 
 function execute<TResult>(
   script: string,

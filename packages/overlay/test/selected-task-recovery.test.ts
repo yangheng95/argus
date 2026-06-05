@@ -22,6 +22,11 @@ const {
   __setConversationRecoveryDiagnosticsSinkForTest,
 } = await import("../src/services/refresh-diagnostics");
 
+function selectTaskForTest(taskID: string): void {
+  setBoardStore("selectedTaskID", taskID);
+  setBoardStore("selectedSource", taskID ? { kind: "task", id: taskID } : null);
+}
+
 function fakeTransport(opts: {
   request: (req: TransportRequest) => Promise<TransportResponse<unknown>> | TransportResponse<unknown>;
   streams?: StreamOpenRequest[];
@@ -84,7 +89,7 @@ afterEach(() => {
   __resetConversationRecoveryDiagnosticsSinkForTest();
   resetWriter();
   resetSelectedLiveCursor();
-  setBoardStore("selectedTaskID", "");
+  selectTaskForTest("");
   setBoardStore("taskSequence", 0);
   setBoardStore("board", null);
 });
@@ -99,7 +104,7 @@ test("selected-task recovery resumes with the consumed live cursor", async () =>
       },
     }),
   );
-  setBoardStore("selectedTaskID", "tsk_live");
+  selectTaskForTest("tsk_live");
   setBoardStore("taskSequence", 12);
   setBoardStore("board", {
     snapshotVersion: "board:live",
@@ -142,6 +147,39 @@ test("selected-task recovery resumes with the consumed live cursor", async () =>
   ]);
 });
 
+test("selected-task recovery coalesces duplicate in-flight recovery for the same task", async () => {
+  const streams: StreamOpenRequest[] = [];
+  __setHostTransportForTest(
+    fakeTransport({
+      streams,
+      request(req) {
+        throw new Error(`selected-task recovery must not hydrate ${req.path}`);
+      },
+    }),
+  );
+  selectTaskForTest("tsk_coalesce");
+  setBoardStore("taskSequence", 17);
+  setBoardStore("board", {
+    snapshotVersion: "board:coalesce",
+    task: {
+      id: "tsk_coalesce",
+      sessionID: "ses_coalesce",
+      status: "active",
+      request: "coalesce",
+      time: { created: 1_776_000_100_000 },
+      attachments: [],
+    },
+  });
+
+  const first = recoverSelectedTaskConversation("duplicate recovery one", "tsk_coalesce");
+  const second = recoverSelectedTaskConversation("duplicate recovery two", "tsk_coalesce");
+
+  await expect(Promise.all([first, second])).resolves.toEqual([17, 17]);
+  expect(streams).toEqual([
+    { path: "task/tsk_coalesce/events", query: { after: "17", after_live: "0" } },
+  ]);
+});
+
 test("selected-task recovery advances the live cursor for non-message selected events", async () => {
   const streams: StreamOpenRequest[] = [];
   __setHostTransportForTest(
@@ -152,7 +190,7 @@ test("selected-task recovery advances the live cursor for non-message selected e
       },
     }),
   );
-  setBoardStore("selectedTaskID", "tsk_live_non_message");
+  selectTaskForTest("tsk_live_non_message");
   setBoardStore("taskSequence", 12);
 
   expect(routeSSEEvent({
@@ -184,7 +222,7 @@ test("selected-task recovery advances the live cursor for board-invalidating sel
       },
     }),
   );
-  setBoardStore("selectedTaskID", "tsk_live_board");
+  selectTaskForTest("tsk_live_board");
   setBoardStore("taskSequence", 12);
 
   const event = {
@@ -224,10 +262,10 @@ test("selected-task recovery restarts the stream from the current sequence witho
       },
     }),
   );
-  setBoardStore("selectedTaskID", "tsk_atomic");
+  selectTaskForTest("tsk_atomic");
   setBoardStore("taskSequence", 9);
 
-  startSSE("tsk_atomic", 3);
+  startSSE({ kind: "task", id: "tsk_atomic" }, 3);
   expect(streams).toEqual([
     { path: "task/tsk_atomic/events", query: { after: "3", after_live: "0" } },
   ]);
@@ -277,10 +315,10 @@ test("selected-task recovery refuses replay-expired full refresh and leaves the 
       },
     }),
   );
-  setBoardStore("selectedTaskID", "tsk_expired");
+  selectTaskForTest("tsk_expired");
   setBoardStore("taskSequence", 5);
 
-  startSSE("tsk_expired", 5);
+  startSSE({ kind: "task", id: "tsk_expired" }, 5);
   const treeEpoch = cardTreeStore.treeEpoch;
 
   await expect(recoverSelectedTaskConversation("task replay expired", "tsk_expired"))
@@ -321,7 +359,7 @@ test("selected-task recovery treats live replay expiry as persistent-sequence re
       },
     }),
   );
-  setBoardStore("selectedTaskID", "tsk_live_expired");
+  selectTaskForTest("tsk_live_expired");
   setBoardStore("taskSequence", 5);
   const treeEpoch = cardTreeStore.treeEpoch;
 
@@ -357,7 +395,7 @@ test("task.messages.changed triggers non-reset tail merge for DB-backed message 
       },
     }),
   );
-  setBoardStore("selectedTaskID", "tsk_db_tail");
+  selectTaskForTest("tsk_db_tail");
   const treeEpoch = cardTreeStore.treeEpoch;
 
   expect(routeSSEEvent({
@@ -421,13 +459,13 @@ test("selected task stream renders DB-backed task.messages.changed tail without 
       },
     }),
   );
-  setBoardStore("selectedTaskID", "tsk_db_tail_stream");
+  selectTaskForTest("tsk_db_tail_stream");
   setBoardStore("taskSequence", 12);
   markSelectedMessageWatermark(1_779_000_000_000);
   const treeEpoch = cardTreeStore.treeEpoch;
   const visibleVersion = cardTreeStore.visibleVersion;
 
-  startSSE("tsk_db_tail_stream", 12);
+  startSSE({ kind: "task", id: "tsk_db_tail_stream" }, 12);
   expect(streams).toEqual([
     {
       path: "task/tsk_db_tail_stream/events",
@@ -469,9 +507,9 @@ test("stale scheduled recovery does not stop the newly selected task stream", as
       },
     }),
   );
-  setBoardStore("selectedTaskID", "tsk_new");
+  selectTaskForTest("tsk_new");
 
-  startSSE("tsk_new", 11);
+  startSSE({ kind: "task", id: "tsk_new" }, 11);
   await expect(recoverSelectedTaskConversation("stale delayed recovery", "tsk_old"))
     .rejects.toMatchObject({ name: "AbortError" });
 

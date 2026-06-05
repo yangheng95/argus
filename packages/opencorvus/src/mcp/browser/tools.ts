@@ -844,8 +844,12 @@ export const registerTools = (server: McpServer) => {
           return okImage(buf.toString("base64"), width, height)
         }
         const cdp = await page.context().newCDPSession(page)
-        const { data } = (await cdp.send("Page.captureScreenshot", { format: "png" })) as { data: string }
-        await cdp.detach()
+        let data!: string
+        try {
+          ;({ data } = (await cdp.send("Page.captureScreenshot", { format: "png" })) as { data: string })
+        } finally {
+          await cdp.detach().catch(() => undefined)
+        }
         const cdpBuf = Buffer.from(data, "base64")
         const { width, height } = pngDimensions(cdpBuf)
         return okImage(data, width, height)
