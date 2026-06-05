@@ -25,20 +25,33 @@ Real visual verification after the explicit project-directory fix:
 
 Root conclusion: the right-sidebar surface cannot pretend that OpenTUI is a generic terminal byte stream. The current ghostty-web PTY route can transport bytes from the real project-bound process, but it is not an equivalent OpenTUI browser embed. The overlay integration must be owned by a coding-agent TUI plugin boundary. OpenCorvus core may expose a project-bound `/pty` target, but it must not own browser panel rendering/protocol details.
 
+Real visual verification after replacing the browser PTY terminal with an OpenTUI renderer sidecar:
+
+- `http://127.0.0.1:43251/tui/embed/start` was invoked with `x-opencorvus-directory=D:\myhexin-local\opencorvus`, `cols=100`, and `rows=32`.
+- `/tui/embed/status` returned `running=true` and a nonblank OpenTUI frame with the OpenCorvus logo, `Ask anything...`, provider/model status, and `tab agents  ctrl+p commands`.
+- The blank Home root cause was in `packages/opencorvus/src/cli/cmd/tui/plugin/slots.tsx`: `Slot` initially rendered `null`, while `TuiPluginRuntime.init()` installs the host slots on mount. Home rendered before runtime setup, so fallback children such as `Logo` and `Prompt` were swallowed and no reactive invalidation forced them to re-evaluate.
+- The renderer hang root cause was `BgPulse`: it is a live OpenTUI renderable, so `testRender.flush()` waits for visual idle that never arrives. The embedded worker now captures a current frame by advancing one render pass with `renderOnce()`.
+- Real overlay evidence: `http://127.0.0.1:43251/ui/index.html` selected the right TUI activity, `.tui-host-terminal` reached `data-state="running"`, and rendered the real OpenTUI frame from `/tui/embed/*`.
+- Screenshot evidence: `C:/Users/hengu/AppData/Local/Temp/opencorvus-real-overlay-tui-embed-43251.png`.
+- Screenshot pixel check: `1440x900`, whole-image sampled colors `300`, terminal-crop sampled colors `198`, terminal-crop average brightness `25.23`. This is not an empty/transparent surface.
+
 ## Call Points
 
 | Area | Call point | Decision |
 | --- | --- | --- |
 | Overlay main | `packages/overlay/src/main.tsx` | Import only `codingAgentTuiPlugin`; do not import panel internals. |
 | Overlay plugin | `packages/overlay/src/plugins/coding-agent-tui/index.tsx` | Own activity metadata, body/mount IDs, and panel component. |
-| Overlay plugin panel | `packages/overlay/src/plugins/coding-agent-tui/CodingAgentTuiPanel.tsx` | Own ghostty-web terminal surface, resize, snapshots, WebSocket lifecycle. |
-| Overlay plugin PTY target | `packages/overlay/src/plugins/coding-agent-tui/pty-target.ts` | Own `/pty` create/list/update/delete/connect client and coding-agent target metadata. |
+| Overlay plugin panel | `packages/overlay/src/plugins/coding-agent-tui/CodingAgentTuiPanel.tsx` | Render backend-captured OpenTUI spans and own focus, keyboard, paste, resize, polling, and restart controls. |
+| Overlay plugin embed target | `packages/overlay/src/plugins/coding-agent-tui/embedded-target.ts` | Own `/tui/embed/start`, `/status`, `/input`, `/resize`, and `/stop` client calls with explicit project directory. |
 | Overlay plugin terminal helper | `packages/overlay/src/plugins/coding-agent-tui/terminal-size.ts` | Own terminal resize dedupe helper. |
-| OpenCorvus backend | `packages/opencorvus/src/pty/index.ts` | Remain a generic OpenCode-shaped `/pty` target. |
-| OpenCorvus backend | `packages/opencorvus/src/tui/index.ts`, `packages/opencorvus/src/tui/host.ts` | Keep only process resolution/PTY host fixes needed by independent embedded TUI startup. |
+| OpenCorvus backend | `packages/opencorvus/src/server/routes/tui.ts` | Expose project-scoped embedded TUI routes as the single backend preview/evidence target for the overlay plugin. |
+| OpenCorvus backend | `packages/opencorvus/src/tui/embedded.ts` | Own the sidecar process lifecycle and JSON-lines protocol. |
+| OpenCorvus backend | `packages/opencorvus/src/tui/embedded-worker.tsx` | Run the mature OpenTUI/Solid test renderer with `TuiRoot`, serialize styled spans, and apply input/resize. |
+| TUI root | `packages/opencorvus/src/cli/cmd/tui/app.tsx` | Export `TuiRoot` so both the CLI and embedded worker use the same OpenTUI app tree. |
+| TUI slots | `packages/opencorvus/src/cli/cmd/tui/plugin/slots.tsx` | Render fallback children before runtime setup and notify Solid when host slot view/register state changes. |
 
 ## Implementation Decision
 
-The current round separates the overlay right activity into an explicit plugin module and removes the old direct component/service imports. It does not claim visual success until a real browser screenshot shows nonblank OpenTUI content and the Tank Battle prompt can be entered through the right-sidebar TUI.
+The current round separates the overlay right activity into an explicit plugin module and replaces the retired ghostty-web PTY terminal with a project-scoped OpenTUI renderer sidecar. The overlay does not parse, synthesize, or fork coding-agent messages. It renders the same captured OpenTUI frame that the backend returns as task-scoped evidence, and input flows back through `/tui/embed/input`.
 
-The next renderer fix must use a mature OpenTUI-compatible renderer path or an upstream-compatible OSC 66 adapter. It must not parse or synthesize coding-agent messages as a fake UI data stream.
+The remaining architectural constraint is that the embedded worker is a sidecar snapshot renderer, not a second TUI implementation. It imports `TuiRoot`; any future TUI feature must remain in the shared OpenTUI app tree or in TUI plugins, not in overlay-specific UI code.

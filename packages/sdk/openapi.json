@@ -11534,6 +11534,98 @@
                       },
                       "archived": {
                         "type": "number"
+                      },
+                      "tasks": {
+                        "type": "array",
+                        "items": {
+                          "type": "object",
+                          "properties": {
+                            "id": {
+                              "type": "string"
+                            },
+                            "title": {
+                              "type": "string"
+                            },
+                            "status": {
+                              "type": "string",
+                              "enum": [
+                                "queued",
+                                "active",
+                                "completed",
+                                "failed",
+                                "cancelled"
+                              ]
+                            },
+                            "priority": {
+                              "type": "string",
+                              "enum": [
+                                "critical",
+                                "high",
+                                "normal",
+                                "low"
+                              ]
+                            },
+                            "source": {
+                              "type": "string"
+                            },
+                            "directory": {
+                              "type": "string"
+                            },
+                            "created": {
+                              "type": "number"
+                            },
+                            "updated": {
+                              "type": "number"
+                            },
+                            "started": {
+                              "type": "number"
+                            },
+                            "completed": {
+                              "type": "number"
+                            }
+                          },
+                          "required": [
+                            "id",
+                            "title",
+                            "status",
+                            "priority",
+                            "source",
+                            "directory",
+                            "created",
+                            "updated"
+                          ]
+                        }
+                      },
+                      "taskStats": {
+                        "type": "object",
+                        "properties": {
+                          "total": {
+                            "type": "number"
+                          },
+                          "queued": {
+                            "type": "number"
+                          },
+                          "active": {
+                            "type": "number"
+                          },
+                          "completed": {
+                            "type": "number"
+                          },
+                          "failed": {
+                            "type": "number"
+                          },
+                          "cancelled": {
+                            "type": "number"
+                          }
+                        },
+                        "required": [
+                          "total",
+                          "queued",
+                          "active",
+                          "completed",
+                          "failed",
+                          "cancelled"
+                        ]
                       }
                     },
                     "required": [
@@ -11542,7 +11634,9 @@
                       "title",
                       "directory",
                       "created",
-                      "updated"
+                      "updated",
+                      "tasks",
+                      "taskStats"
                     ]
                   }
                 }
@@ -11640,6 +11734,98 @@
                     },
                     "archived": {
                       "type": "number"
+                    },
+                    "tasks": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "id": {
+                            "type": "string"
+                          },
+                          "title": {
+                            "type": "string"
+                          },
+                          "status": {
+                            "type": "string",
+                            "enum": [
+                              "queued",
+                              "active",
+                              "completed",
+                              "failed",
+                              "cancelled"
+                            ]
+                          },
+                          "priority": {
+                            "type": "string",
+                            "enum": [
+                              "critical",
+                              "high",
+                              "normal",
+                              "low"
+                            ]
+                          },
+                          "source": {
+                            "type": "string"
+                          },
+                          "directory": {
+                            "type": "string"
+                          },
+                          "created": {
+                            "type": "number"
+                          },
+                          "updated": {
+                            "type": "number"
+                          },
+                          "started": {
+                            "type": "number"
+                          },
+                          "completed": {
+                            "type": "number"
+                          }
+                        },
+                        "required": [
+                          "id",
+                          "title",
+                          "status",
+                          "priority",
+                          "source",
+                          "directory",
+                          "created",
+                          "updated"
+                        ]
+                      }
+                    },
+                    "taskStats": {
+                      "type": "object",
+                      "properties": {
+                        "total": {
+                          "type": "number"
+                        },
+                        "queued": {
+                          "type": "number"
+                        },
+                        "active": {
+                          "type": "number"
+                        },
+                        "completed": {
+                          "type": "number"
+                        },
+                        "failed": {
+                          "type": "number"
+                        },
+                        "cancelled": {
+                          "type": "number"
+                        }
+                      },
+                      "required": [
+                        "total",
+                        "queued",
+                        "active",
+                        "completed",
+                        "failed",
+                        "cancelled"
+                      ]
                     }
                   },
                   "required": [
@@ -11648,7 +11834,9 @@
                     "title",
                     "directory",
                     "created",
-                    "updated"
+                    "updated",
+                    "tasks",
+                    "taskStats"
                   ]
                 }
               }
@@ -28483,6 +28671,305 @@
           {
             "lang": "js",
             "source": "import { createOpenCorvusClient } from \"@opencorvus-ai/sdk\"\n\nconst client = createOpenCorvusClient()\nawait client.tui.runtime.taskStatus({\n  ...\n})"
+          }
+        ]
+      }
+    },
+    "/tui/embed/start": {
+      "post": {
+        "operationId": "tui.embed.start",
+        "summary": "Start embedded OpenTUI renderer",
+        "description": "Start the project-bound OpenTUI renderer used by the overlay coding-agent TUI plugin.",
+        "responses": {
+          "200": {
+            "description": "Embedded TUI renderer state",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "400": {
+            "description": "Bad request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BadRequestError"
+                }
+              }
+            }
+          }
+        },
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "cols": {
+                    "default": 100,
+                    "type": "integer",
+                    "minimum": 20,
+                    "maximum": 300
+                  },
+                  "rows": {
+                    "default": 30,
+                    "type": "integer",
+                    "minimum": 5,
+                    "maximum": 120
+                  },
+                  "agent": {
+                    "type": "string"
+                  },
+                  "model": {
+                    "type": "string"
+                  },
+                  "prompt": {
+                    "type": "string"
+                  },
+                  "sessionID": {
+                    "type": "string"
+                  },
+                  "continue": {
+                    "type": "boolean"
+                  },
+                  "fork": {
+                    "type": "boolean"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "directory",
+            "in": "query",
+            "required": false,
+            "description": "Project directory for project-scoped routes. Equivalent to the x-opencorvus-directory request header.",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "x-codeSamples": [
+          {
+            "lang": "js",
+            "source": "import { createOpenCorvusClient } from \"@opencorvus-ai/sdk\"\n\nconst client = createOpenCorvusClient()\nawait client.tui.embed.start({\n  ...\n})"
+          }
+        ]
+      }
+    },
+    "/tui/embed/status": {
+      "get": {
+        "operationId": "tui.embed.status",
+        "summary": "Get embedded OpenTUI renderer status",
+        "description": "Get the latest project-bound OpenTUI renderer frame for the overlay coding-agent TUI plugin.",
+        "responses": {
+          "200": {
+            "description": "Embedded TUI renderer state",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "directory",
+            "in": "query",
+            "required": false,
+            "description": "Project directory for project-scoped routes. Equivalent to the x-opencorvus-directory request header.",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "x-codeSamples": [
+          {
+            "lang": "js",
+            "source": "import { createOpenCorvusClient } from \"@opencorvus-ai/sdk\"\n\nconst client = createOpenCorvusClient()\nawait client.tui.embed.status({\n  ...\n})"
+          }
+        ]
+      }
+    },
+    "/tui/embed/input": {
+      "post": {
+        "operationId": "tui.embed.input",
+        "summary": "Send input to embedded OpenTUI renderer",
+        "description": "Send keyboard text or key input to the project-bound embedded OpenTUI renderer.",
+        "responses": {
+          "200": {
+            "description": "Embedded TUI renderer state",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "400": {
+            "description": "Bad request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BadRequestError"
+                }
+              }
+            }
+          }
+        },
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "text": {
+                    "type": "string"
+                  },
+                  "key": {
+                    "type": "string",
+                    "enum": [
+                      "enter",
+                      "escape",
+                      "tab",
+                      "backspace",
+                      "delete",
+                      "arrow-up",
+                      "arrow-down",
+                      "arrow-left",
+                      "arrow-right"
+                    ]
+                  },
+                  "ctrl": {
+                    "type": "boolean"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "directory",
+            "in": "query",
+            "required": false,
+            "description": "Project directory for project-scoped routes. Equivalent to the x-opencorvus-directory request header.",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "x-codeSamples": [
+          {
+            "lang": "js",
+            "source": "import { createOpenCorvusClient } from \"@opencorvus-ai/sdk\"\n\nconst client = createOpenCorvusClient()\nawait client.tui.embed.input({\n  ...\n})"
+          }
+        ]
+      }
+    },
+    "/tui/embed/resize": {
+      "post": {
+        "operationId": "tui.embed.resize",
+        "summary": "Resize embedded OpenTUI renderer",
+        "description": "Resize the project-bound embedded OpenTUI renderer.",
+        "responses": {
+          "200": {
+            "description": "Embedded TUI renderer state",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "400": {
+            "description": "Bad request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BadRequestError"
+                }
+              }
+            }
+          }
+        },
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "cols": {
+                    "type": "integer",
+                    "minimum": 20,
+                    "maximum": 300
+                  },
+                  "rows": {
+                    "type": "integer",
+                    "minimum": 5,
+                    "maximum": 120
+                  }
+                },
+                "required": [
+                  "cols",
+                  "rows"
+                ]
+              }
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "directory",
+            "in": "query",
+            "required": false,
+            "description": "Project directory for project-scoped routes. Equivalent to the x-opencorvus-directory request header.",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "x-codeSamples": [
+          {
+            "lang": "js",
+            "source": "import { createOpenCorvusClient } from \"@opencorvus-ai/sdk\"\n\nconst client = createOpenCorvusClient()\nawait client.tui.embed.resize({\n  ...\n})"
+          }
+        ]
+      }
+    },
+    "/tui/embed/stop": {
+      "post": {
+        "operationId": "tui.embed.stop",
+        "summary": "Stop embedded OpenTUI renderer",
+        "description": "Stop the project-bound embedded OpenTUI renderer.",
+        "responses": {
+          "200": {
+            "description": "Embedded TUI renderer stopped",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "boolean"
+                }
+              }
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "directory",
+            "in": "query",
+            "required": false,
+            "description": "Project directory for project-scoped routes. Equivalent to the x-opencorvus-directory request header.",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "x-codeSamples": [
+          {
+            "lang": "js",
+            "source": "import { createOpenCorvusClient } from \"@opencorvus-ai/sdk\"\n\nconst client = createOpenCorvusClient()\nawait client.tui.embed.stop({\n  ...\n})"
           }
         ]
       }

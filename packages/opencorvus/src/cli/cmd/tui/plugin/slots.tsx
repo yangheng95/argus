@@ -1,6 +1,7 @@
 // Copied from OpenCode's TUI slot host and adapted to OpenCorvus package names.
 import type { TuiPluginApi, TuiSlotContext, TuiSlotMap, TuiSlotProps } from "@opencorvus-ai/plugin/tui"
 import { createSlot, createSolidSlotRegistry, type JSX, type SolidPlugin } from "@opentui/solid"
+import { createRoot, createSignal } from "solid-js"
 
 type RuntimeSlotMap = TuiSlotMap<Record<string, object>>
 
@@ -15,13 +16,21 @@ export type HostSlots = {
   }
 }
 
-function empty<Name extends string>(_props: TuiSlotProps<Name>) {
-  return null
+function fallback<Name extends string>(props: TuiSlotProps<Name>) {
+  return props.children ?? null
 }
 
-let view: Slot = empty
+const [slotRevision, notifySlotRevision] = createRoot(() => {
+  const [revision, setRevision] = createSignal(0)
+  return [revision, () => setRevision((value) => value + 1)] as const
+})
 
-export const Slot: Slot = (props) => view(props)
+let view: Slot = fallback
+
+export const Slot: Slot = (props) => {
+  slotRevision()
+  return view(props)
+}
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value)
@@ -55,10 +64,16 @@ export function setupSlots(api: HostPluginApi): HostSlots {
 
   const slot = createSlot<RuntimeSlotMap, TuiSlotContext>(reg)
   view = (props) => slot(props)
+  notifySlotRevision()
   return {
     register(plugin: HostSlotPlugin) {
       if (!isHostSlotPlugin(plugin)) return () => {}
-      return reg.register(plugin)
+      const unregister = reg.register(plugin)
+      notifySlotRevision()
+      return () => {
+        unregister()
+        notifySlotRevision()
+      }
     },
   }
 }

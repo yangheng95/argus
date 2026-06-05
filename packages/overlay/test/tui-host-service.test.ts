@@ -3,14 +3,14 @@ import { configure } from "../src/services/api"
 import { __setHostTransportForTest } from "../src/services/host-transport"
 import type { HostTransport, TransportRequest, TransportResponse } from "../src/services/host-transport"
 import {
-  buildTuiHostConnectUrl,
-  formatTuiHostError,
-  loadTuiHostStatus,
-  resizeTuiHost,
-  startTuiHost,
-  stopTuiHost,
+  formatTuiEmbedError,
+  loadTuiEmbedStatus,
+  resizeTuiEmbed,
+  sendTuiEmbedInput,
+  startTuiEmbed,
+  stopTuiEmbed,
   TUI_CODING_AGENT,
-} from "../src/plugins/coding-agent-tui/pty-target"
+} from "../src/plugins/coding-agent-tui/embedded-target"
 import { ApiError } from "../src/services/api"
 
 function fakeTransport(capture: (req: TransportRequest) => void): HostTransport {
@@ -23,23 +23,27 @@ function fakeTransport(capture: (req: TransportRequest) => void): HostTransport 
         ok: true,
         headers: {},
         body: {
-          id: "pty_test",
           running: true,
-          status: "running",
-          title: "OpenCorvus TUI",
-          command: "opencorvus",
-          args: [],
-          cwd: "D:/repo",
-          status: "running",
-          pid: 123,
+          cols: 120,
+          rows: 40,
+          directory: "D:/repo",
+          frame: {
+            cols: 120,
+            rows: 40,
+            cursor: [0, 0],
+            lines: [{ spans: [{ text: "OpenTUI", fg: "rgb(255, 255, 255)", bg: "rgb(0, 0, 0)", attributes: 0, width: 7 }] }],
+          },
+          text: "OpenTUI",
+          createdAt: 1,
+          updatedAt: 2,
         } as T,
       }
     },
     openStream() {
-      throw new Error("openStream not used in tui host service tests")
+      throw new Error("openStream not used in tui embed service tests")
     },
     async native() {
-      throw new Error("native not used in tui host service tests")
+      throw new Error("native not used in tui embed service tests")
     },
     subscribeUiCommand() {
       return { unsubscribe() {} }
@@ -52,67 +56,55 @@ afterEach(() => {
   configure({ directory: "" })
 })
 
-describe("tui host service", () => {
-  test("uses the OpenCode-style PTY routes instead of the old TUI host routes", async () => {
+describe("tui embed service", () => {
+  test("uses OpenTUI embed routes instead of PTY websocket routes", async () => {
     const requests: TransportRequest[] = []
     __setHostTransportForTest(fakeTransport((req) => requests.push(req)))
 
-    await startTuiHost({ cols: 120, rows: 40, directory: "D:/repo" })
-    await loadTuiHostStatus({ directory: "D:/repo" })
-    await resizeTuiHost({ id: "pty_test", cols: 100, rows: 30, directory: "D:/repo" })
-    await stopTuiHost({ id: "pty_test", directory: "D:/repo" })
+    await startTuiEmbed({ cols: 120, rows: 40, directory: "D:/repo" })
+    await loadTuiEmbedStatus({ directory: "D:/repo" })
+    await sendTuiEmbedInput({ directory: "D:/repo", text: "坦克大战" })
+    await resizeTuiEmbed({ cols: 100, rows: 30, directory: "D:/repo" })
+    await stopTuiEmbed({ directory: "D:/repo" })
 
     expect(requests.map((req) => `${req.method ?? "GET"} ${req.path}`)).toEqual([
-      "POST pty",
-      "PUT pty/pty_test",
-      "GET pty",
-      "PUT pty/pty_test",
-      "DELETE pty/pty_test",
+      "POST tui/embed/start",
+      "GET tui/embed/status",
+      "POST tui/embed/input",
+      "POST tui/embed/resize",
+      "POST tui/embed/stop",
     ])
-    expect(requests.some((req) => req.path === "tui/runtime/status")).toBe(false)
-    expect(requests.some((req) => req.path.startsWith("tui/host"))).toBe(false)
     expect(requests.every((req) => req.query?.directory === "D:/repo")).toBe(true)
+    expect(requests.some((req) => req.path === "pty")).toBe(false)
+    expect(requests.some((req) => req.path.includes("/connect"))).toBe(false)
     expect(requests[0]?.body).toEqual({
       kind: "json",
       value: {
-        title: "OpenCorvus TUI",
+        cols: 120,
+        rows: 40,
         agent: TUI_CODING_AGENT,
-        env: { OPENCORVUS_OVERLAY_TUI_PLUGIN: "coding-agent-tui" },
       },
     })
-    expect(requests[1]?.body).toEqual({ kind: "json", value: { size: { cols: 120, rows: 40 } } })
-    expect(requests[3]?.body).toEqual({ kind: "json", value: { size: { cols: 100, rows: 30 } } })
+    expect(requests[2]?.body).toEqual({ kind: "json", value: { text: "坦克大战" } })
+    expect(requests[3]?.body).toEqual({ kind: "json", value: { cols: 100, rows: 30 } })
   })
 
-  test("builds PTY websocket URLs through the plugin-owned directory", () => {
-    configure({ serverUrl: "http://127.0.0.1:4096", directory: "" })
-
-    const url = new URL(buildTuiHostConnectUrl({ id: "pty_1", cursor: 12, directory: "D:/repo" }))
-    expect(url.protocol).toBe("ws:")
-    expect(url.pathname).toBe("/pty/pty_1/connect")
-    expect(url.searchParams.get("cursor")).toBe("12")
-    expect(url.searchParams.get("directory")).toBe("D:/repo")
-  })
-
-  test("rejects PTY calls without an explicit plugin workspace directory", async () => {
-    await expect(startTuiHost({ cols: 120, rows: 40, directory: "" })).rejects.toThrow(
+  test("rejects embed calls without an explicit plugin workspace directory", async () => {
+    await expect(startTuiEmbed({ cols: 120, rows: 40, directory: "" })).rejects.toThrow(
       "Coding agent TUI requires an active workspace directory.",
     )
   })
 
-  test("formats named PTY creation failures for the visible TUI panel", () => {
-    const error = new ApiError(400, "pty", {
-      name: "PtyCreateFailedError",
+  test("formats named embed failures for the visible TUI panel", () => {
+    const error = new ApiError(400, "tui/embed/start", {
+      name: "EmbeddedTuiError",
       data: {
-        message: "spawn opencorvus ENOENT",
-        cwd: "D:/repo",
-        command: "opencorvus",
-        args: ["D:/repo", "--agent", TUI_CODING_AGENT],
+        message: "renderer failed",
         env: { SHOULD_NOT_RENDER: "secret" },
       },
     })
 
-    expect(formatTuiHostError(error)).toBe("TUI host failed to start (opencorvus): spawn opencorvus ENOENT")
-    expect(formatTuiHostError(error)).not.toContain("secret")
+    expect(formatTuiEmbedError(error)).toBe("EmbeddedTuiError: renderer failed")
+    expect(formatTuiEmbedError(error)).not.toContain("secret")
   })
 })

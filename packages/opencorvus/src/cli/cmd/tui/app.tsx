@@ -119,16 +119,71 @@ function TuiKeymapRoot(props: { children: JSX.Element }) {
   return <OpencorvusKeymapProvider keymap={keymap}>{props.children}</OpencorvusKeymapProvider>
 }
 
-export function tui(input: {
+export interface TuiRootInput {
   url: string
   args: Args
   config: TuiConfig.Resolved
   directory?: string
+  dimensions?: { width: number; height: number }
   fetch?: typeof fetch
   headers?: RequestInit["headers"]
   events?: EventSource
   onExit?: () => Promise<void>
-}) {
+  mode?: "dark" | "light"
+}
+
+export function TuiRoot(input: TuiRootInput) {
+  const mode = input.mode ?? "dark"
+  const onExit = async () => {
+    await input.onExit?.()
+  }
+
+  return (
+    <ErrorBoundary fallback={(error, reset) => <ErrorComponent error={error} reset={reset} onExit={onExit} mode={mode} />}>
+      <ArgsProvider {...input.args}>
+        <ExitProvider onExit={onExit}>
+          <KVProvider>
+            <ToastProvider>
+              <RouteProvider>
+                <TuiConfigProvider config={input.config}>
+                  <TuiKeymapRoot>
+                    <SDKProvider
+                      url={input.url}
+                      directory={input.directory}
+                      fetch={input.fetch}
+                      headers={input.headers}
+                      events={input.events}
+                    >
+                      <SyncProvider>
+                        <ThemeProvider mode={mode}>
+                          <LocalProvider>
+                            <PromptStashProvider>
+                              <DialogProvider>
+                                <FrecencyProvider>
+                                  <PromptHistoryProvider>
+                                    <PromptRefProvider>
+                                      <App dimensions={input.dimensions} />
+                                    </PromptRefProvider>
+                                  </PromptHistoryProvider>
+                                </FrecencyProvider>
+                              </DialogProvider>
+                            </PromptStashProvider>
+                          </LocalProvider>
+                        </ThemeProvider>
+                      </SyncProvider>
+                    </SDKProvider>
+                  </TuiKeymapRoot>
+                </TuiConfigProvider>
+              </RouteProvider>
+            </ToastProvider>
+          </KVProvider>
+        </ExitProvider>
+      </ArgsProvider>
+    </ErrorBoundary>
+  )
+}
+
+export function tui(input: TuiRootInput) {
   // promise to prevent immediate exit
   return new Promise<void>(async (resolve) => {
     const unguard = win32InstallCtrlCGuard()
@@ -148,51 +203,7 @@ export function tui(input: {
 
     render(
       () => {
-        return (
-          <ErrorBoundary
-            fallback={(error, reset) => <ErrorComponent error={error} reset={reset} onExit={onExit} mode={mode} />}
-          >
-            <ArgsProvider {...input.args}>
-              <ExitProvider onExit={onExit}>
-                <KVProvider>
-                  <ToastProvider>
-                    <RouteProvider>
-                      <TuiConfigProvider config={input.config}>
-                        <TuiKeymapRoot>
-                          <SDKProvider
-                            url={input.url}
-                            directory={input.directory}
-                            fetch={input.fetch}
-                            headers={input.headers}
-                            events={input.events}
-                          >
-                            <SyncProvider>
-                              <ThemeProvider mode={mode}>
-                                <LocalProvider>
-                                  <PromptStashProvider>
-                                    <DialogProvider>
-                                      <FrecencyProvider>
-                                        <PromptHistoryProvider>
-                                          <PromptRefProvider>
-                                            <App />
-                                          </PromptRefProvider>
-                                        </PromptHistoryProvider>
-                                      </FrecencyProvider>
-                                    </DialogProvider>
-                                  </PromptStashProvider>
-                                </LocalProvider>
-                              </ThemeProvider>
-                            </SyncProvider>
-                          </SDKProvider>
-                        </TuiKeymapRoot>
-                      </TuiConfigProvider>
-                    </RouteProvider>
-                  </ToastProvider>
-                </KVProvider>
-              </ExitProvider>
-            </ArgsProvider>
-          </ErrorBoundary>
-        )
+        return <TuiRoot {...input} mode={mode} onExit={onExit} />
       },
       {
         targetFps: 60,
@@ -214,10 +225,11 @@ export function tui(input: {
   })
 }
 
-function App() {
+function App(props: { dimensions?: { width: number; height: number } }) {
   const tuiConfig = useTuiConfig()
   const route = useRoute()
   const dimensions = useTerminalDimensions()
+  const rootDimensions = createMemo(() => props.dimensions ?? dimensions())
   const renderer = useRenderer()
   const dialog = useDialog()
   const local = useLocal()
@@ -824,8 +836,9 @@ function App() {
 
   return (
     <box
-      width={dimensions().width}
-      height={dimensions().height}
+      width={rootDimensions().width}
+      height={rootDimensions().height}
+      flexDirection="column"
       backgroundColor={theme.background}
       onMouseDown={(evt) => {
         if (!Flag.OPENCORVUS_EXPERIMENTAL_DISABLE_COPY_ON_SELECT) return

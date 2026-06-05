@@ -73,9 +73,8 @@ export function Home() {
 
   return (
     <>
-      <box flexGrow={1} alignItems="center" paddingLeft={2} paddingRight={2}>
-        <box flexGrow={1} minHeight={0} />
-        <box height={4} minHeight={0} flexShrink={1} />
+      <box width="100%" flexGrow={1} flexDirection="column" alignItems="center" paddingLeft={2} paddingRight={2}>
+        <box height={2} minHeight={0} flexShrink={0} />
         <box flexShrink={0} position="relative" width="100%" height={9} alignItems="center" justifyContent="center">
           <TuiPluginRuntime.Slot name="home_logo" mode="replace">
             <box position="absolute" top={0} left={0} right={0} bottom={0} zIndex={0}>
@@ -93,7 +92,7 @@ export function Home() {
           </TuiPluginRuntime.Slot>
         </box>
         <TuiPluginRuntime.Slot name="home_bottom" />
-        <box flexGrow={1} minHeight={0} />
+        <box height={1} minHeight={0} flexShrink={0} />
         <Toast />
       </box>
       <box width="100%" flexShrink={0}>

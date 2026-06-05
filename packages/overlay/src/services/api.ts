@@ -156,18 +156,6 @@ export function apiUrl(path: string): string {
   return url.toString();
 }
 
-export function apiWebSocketUrl(path: string): string {
-  const url = new URL(apiUrl(path));
-  if (url.protocol === "https:") url.protocol = "wss:";
-  else if (url.protocol === "http:") url.protocol = "ws:";
-  else throw new Error(`Cannot build WebSocket URL from protocol ${url.protocol}`);
-  if (authCredentials.password) {
-    url.username = authCredentials.username;
-    url.password = authCredentials.password;
-  }
-  return url.toString();
-}
-
 export function apiHeaders(): Record<string, string> {
   const h: Record<string, string> = { Accept: "application/json" };
   if (authCredentials.password) {

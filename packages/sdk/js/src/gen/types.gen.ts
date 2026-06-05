@@ -8036,6 +8036,26 @@ export type MissionListResponses = {
     created: number
     updated: number
     archived?: number
+    tasks: Array<{
+      id: string
+      title: string
+      status: "queued" | "active" | "completed" | "failed" | "cancelled"
+      priority: "critical" | "high" | "normal" | "low"
+      source: string
+      directory: string
+      created: number
+      updated: number
+      started?: number
+      completed?: number
+    }>
+    taskStats: {
+      total: number
+      queued: number
+      active: number
+      completed: number
+      failed: number
+      cancelled: number
+    }
   }>
 }
 
@@ -8069,6 +8089,26 @@ export type MissionRenameResponses = {
     created: number
     updated: number
     archived?: number
+    tasks: Array<{
+      id: string
+      title: string
+      status: "queued" | "active" | "completed" | "failed" | "cancelled"
+      priority: "critical" | "high" | "normal" | "low"
+      source: string
+      directory: string
+      created: number
+      updated: number
+      started?: number
+      completed?: number
+    }>
+    taskStats: {
+      total: number
+      queued: number
+      active: number
+      completed: number
+      failed: number
+      cancelled: number
+    }
   }
 }
 
@@ -13310,6 +13350,146 @@ export type TuiRuntimeTaskStatusResponses = {
 }
 
 export type TuiRuntimeTaskStatusResponse = TuiRuntimeTaskStatusResponses[keyof TuiRuntimeTaskStatusResponses]
+
+export type TuiEmbedStartData = {
+  body?: {
+    cols?: number
+    rows?: number
+    agent?: string
+    model?: string
+    prompt?: string
+    sessionID?: string
+    continue?: boolean
+    fork?: boolean
+  }
+  path?: never
+  query?: {
+    /**
+     * Project directory for project-scoped routes. Equivalent to the x-opencorvus-directory request header.
+     */
+    directory?: string
+  }
+  url: "/tui/embed/start"
+}
+
+export type TuiEmbedStartErrors = {
+  /**
+   * Bad request
+   */
+  400: BadRequestError
+}
+
+export type TuiEmbedStartError = TuiEmbedStartErrors[keyof TuiEmbedStartErrors]
+
+export type TuiEmbedStartResponses = {
+  /**
+   * Embedded TUI renderer state
+   */
+  200: unknown
+}
+
+export type TuiEmbedStatusData = {
+  body?: never
+  path?: never
+  query?: {
+    /**
+     * Project directory for project-scoped routes. Equivalent to the x-opencorvus-directory request header.
+     */
+    directory?: string
+  }
+  url: "/tui/embed/status"
+}
+
+export type TuiEmbedStatusResponses = {
+  /**
+   * Embedded TUI renderer state
+   */
+  200: unknown
+}
+
+export type TuiEmbedInputData = {
+  body?: {
+    text?: string
+    key?: "enter" | "escape" | "tab" | "backspace" | "delete" | "arrow-up" | "arrow-down" | "arrow-left" | "arrow-right"
+    ctrl?: boolean
+  }
+  path?: never
+  query?: {
+    /**
+     * Project directory for project-scoped routes. Equivalent to the x-opencorvus-directory request header.
+     */
+    directory?: string
+  }
+  url: "/tui/embed/input"
+}
+
+export type TuiEmbedInputErrors = {
+  /**
+   * Bad request
+   */
+  400: BadRequestError
+}
+
+export type TuiEmbedInputError = TuiEmbedInputErrors[keyof TuiEmbedInputErrors]
+
+export type TuiEmbedInputResponses = {
+  /**
+   * Embedded TUI renderer state
+   */
+  200: unknown
+}
+
+export type TuiEmbedResizeData = {
+  body?: {
+    cols: number
+    rows: number
+  }
+  path?: never
+  query?: {
+    /**
+     * Project directory for project-scoped routes. Equivalent to the x-opencorvus-directory request header.
+     */
+    directory?: string
+  }
+  url: "/tui/embed/resize"
+}
+
+export type TuiEmbedResizeErrors = {
+  /**
+   * Bad request
+   */
+  400: BadRequestError
+}
+
+export type TuiEmbedResizeError = TuiEmbedResizeErrors[keyof TuiEmbedResizeErrors]
+
+export type TuiEmbedResizeResponses = {
+  /**
+   * Embedded TUI renderer state
+   */
+  200: unknown
+}
+
+export type TuiEmbedStopData = {
+  body?: never
+  path?: never
+  query?: {
+    /**
+     * Project directory for project-scoped routes. Equivalent to the x-opencorvus-directory request header.
+     */
+    directory?: string
+  }
+  url: "/tui/embed/stop"
+}
+
+export type TuiEmbedStopResponses = {
+  /**
+   * Embedded TUI renderer stopped
+   */
+  200: boolean
+}
+
+export type TuiEmbedStopResponse = TuiEmbedStopResponses[keyof TuiEmbedStopResponses]
 
 export type TuiOpenHelpData = {
   body?: never
