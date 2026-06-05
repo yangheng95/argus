@@ -277,6 +277,48 @@ test(
         return performance.now() - start
       })
 
+      await page.evaluate(async () => {
+        const rows = Array.from(document.querySelectorAll<HTMLButtonElement>(".task-row-main[data-task-id]"))
+        const firstID = rows.at(0)?.dataset.taskId
+        const lastID = rows.at(-1)?.dataset.taskId
+        if (!firstID || !lastID || firstID === lastID) throw new Error("missing task rows for scoped composer draft test")
+        const composer = () => document.querySelector<HTMLTextAreaElement>("#solidChatComposer textarea")
+        const row = (id: string) => document.querySelector<HTMLButtonElement>(`.task-row-main[data-task-id="${id}"]`)
+        const waitCurrent = async (id: string) => {
+          const start = performance.now()
+          while (row(id)?.getAttribute("aria-current") !== "page") {
+            if (performance.now() - start > 10_000) throw new Error(`task ${id} was not selected`)
+            await new Promise((resolve) => setTimeout(resolve, 16))
+          }
+        }
+        const setDraft = (value: string) => {
+          const input = composer()
+          if (!input) throw new Error("missing panel composer input")
+          input.value = value
+          input.dispatchEvent(new InputEvent("input", { bubbles: true, inputType: "insertText", data: value }))
+        }
+        const expectDraft = async (value: string) => {
+          const start = performance.now()
+          while (composer()?.value !== value) {
+            if (performance.now() - start > 10_000) {
+              throw new Error(`panel composer draft mismatch; expected=${value}; actual=${composer()?.value}`)
+            }
+            await new Promise((resolve) => setTimeout(resolve, 16))
+          }
+        }
+
+        setDraft("draft bound to last task")
+        row(firstID)?.click()
+        await waitCurrent(firstID)
+        setDraft("draft bound to first task")
+        row(lastID)?.click()
+        await waitCurrent(lastID)
+        await expectDraft("draft bound to last task")
+        row(firstID)?.click()
+        await waitCurrent(firstID)
+        await expectDraft("draft bound to first task")
+      })
+
       const missionRowsMs = await page.evaluate(async (count) => {
         const mission = document.querySelector<HTMLButtonElement>("#btnMission")
         if (!mission) throw new Error("missing Mission button")
@@ -297,6 +339,60 @@ test(
       }, TASK_COUNT)
 
       await page.evaluate(async () => {
+        const waitForMissionConversationInput = async () => {
+          const start = performance.now()
+          while (!document.querySelector<HTMLTextAreaElement>("#missionConversationChatTextarea")) {
+            if (performance.now() - start > 10_000) throw new Error("Mission session composer did not open")
+            await new Promise((resolve) => setTimeout(resolve, 16))
+          }
+          return document.querySelector<HTMLTextAreaElement>("#missionConversationChatTextarea")!
+        }
+        const missionRows = Array.from(document.querySelectorAll<HTMLElement>('.mission-ledger [data-ui="mission-row"]'))
+        const firstSessionID = missionRows.at(0)?.dataset.sessionId
+        const secondSessionID = missionRows.at(1)?.dataset.sessionId
+        if (!firstSessionID || !secondSessionID) throw new Error("missing Mission rows for scoped composer draft test")
+        const missionRow = (sessionID: string) =>
+          document.querySelector<HTMLElement>(`.mission-ledger [data-ui="mission-row"][data-session-id="${sessionID}"]`)
+        const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms))
+        const waitMissionSelected = async (sessionID: string) => {
+          const start = performance.now()
+          while (missionRow(sessionID)?.dataset.active !== "true") {
+            if (performance.now() - start > 10_000) throw new Error(`Mission session ${sessionID} was not selected`)
+            await sleep(16)
+          }
+        }
+        const clickMissionAndWait = async (sessionID: string) => {
+          const start = performance.now()
+          while (missionRow(sessionID)?.dataset.active !== "true") {
+            missionRow(sessionID)?.click()
+            if (performance.now() - start > 10_000) throw new Error(`Mission session ${sessionID} did not accept selection`)
+            await sleep(100)
+          }
+        }
+        const setMissionDraft = async (value: string) => {
+          const input = await waitForMissionConversationInput()
+          input.value = value
+          input.dispatchEvent(new InputEvent("input", { bubbles: true, inputType: "insertText", data: value }))
+        }
+        const expectMissionDraft = async (value: string) => {
+          const start = performance.now()
+          while (document.querySelector<HTMLTextAreaElement>("#missionConversationChatTextarea")?.value !== value) {
+            if (performance.now() - start > 10_000) {
+              const actual = document.querySelector<HTMLTextAreaElement>("#missionConversationChatTextarea")?.value
+              throw new Error(`Mission session composer draft mismatch; expected=${value}; actual=${actual}`)
+            }
+            await new Promise((resolve) => setTimeout(resolve, 16))
+          }
+        }
+
+        await waitForMissionConversationInput()
+        await waitMissionSelected(firstSessionID)
+        await setMissionDraft("draft bound to first mission session")
+        await clickMissionAndWait(secondSessionID)
+        await setMissionDraft("draft bound to second mission session")
+        await clickMissionAndWait(firstSessionID)
+        await expectMissionDraft("draft bound to first mission session")
+
         const selectStart = performance.now()
         while (!document.querySelector('[data-ui="mission-new"]')) {
           if (performance.now() - selectStart > 10_000) throw new Error("Mission selection did not expose new requirement button")

@@ -70,6 +70,8 @@ import { ConversationAgentRail } from "./ConversationAgentRail"
 import { ChatComposer } from "./ChatComposer"
 import { MissionList } from "./MissionList"
 import { WorkspacePanel } from "./WorkspacePanel"
+import { activeDirectory as activeProjectDirectory } from "../services/workspace"
+import { clearComposerDraft, composerDraftKey } from "../services/composer-draft"
 
 // ── Status taxonomies ──
 //
@@ -381,6 +383,11 @@ export function Mission(props: {
     setMissionRefreshToken((value) => value + 1)
   }
 
+  const missionLauncherDraftKey = () => {
+    const directory = activeProjectDirectory()
+    return directory ? composerDraftKey("mission", "new", directory) : composerDraftKey("mission", "new")
+  }
+
   function handleCloseMission(): void {
     if (boardStore.selectedSource?.kind !== "session") return
     stopSSE()
@@ -469,6 +476,7 @@ export function Mission(props: {
             workspaceOpen={props.workspaceOpen}
             closeWorkspace={props.closeWorkspace}
             selectedMission={selectedMissionRecord()}
+            missionLauncherDraftKey={missionLauncherDraftKey()}
             onMissionAwake={(result) => void handleMissionAwake(result)}
             onMissionMessageSubmitted={handleMissionMessageSubmitted}
           />
@@ -529,6 +537,7 @@ function MissionWorkbench(props: {
   workspaceOpen: () => boolean
   closeWorkspace: () => void
   selectedMission?: MissionRecord
+  missionLauncherDraftKey: string
   onMissionAwake: (result: { missionID: string; sessionID: string; created: boolean }) => void
   onMissionMessageSubmitted: () => void
 }) {
@@ -540,20 +549,21 @@ function MissionWorkbench(props: {
           <Show when={props.active}>
             <Show
               when={props.selectedSource?.kind === "session"}
-              fallback={<MissionComposer onClose={props.onCloseComposer} onAwake={props.onMissionAwake} />}
+              fallback={<MissionComposer onClose={props.onCloseComposer} onAwake={props.onMissionAwake} draftKey={props.missionLauncherDraftKey} />}
             >
               <MissionConversation
                 workspaceTarget={props.workspaceTarget}
                 workspaceOpen={props.workspaceOpen}
                 closeWorkspace={props.closeWorkspace}
                 mission={props.selectedMission}
+                sessionID={props.selectedSource?.kind === "session" ? props.selectedSource.id : ""}
                 onSubmitted={props.onMissionMessageSubmitted}
               />
             </Show>
           </Show>
         }
       >
-        <MissionComposer onClose={props.onCloseComposer} onAwake={props.onMissionAwake} dismissible={true} />
+        <MissionComposer onClose={props.onCloseComposer} onAwake={props.onMissionAwake} dismissible={true} draftKey={props.missionLauncherDraftKey} />
       </Show>
     </section>
   )
@@ -564,6 +574,7 @@ function MissionConversation(props: {
   workspaceOpen: () => boolean
   closeWorkspace: () => void
   mission?: MissionRecord
+  sessionID: string
   onSubmitted: () => void
 }) {
   let conversationContainer!: HTMLDivElement
@@ -614,6 +625,7 @@ function MissionConversation(props: {
           formID="missionConversationChatForm"
           textareaID="missionConversationChatTextarea"
           sendID="missionConversationChatSend"
+          draftKey={props.sessionID ? composerDraftKey("mission", "session", props.sessionID) : undefined}
           onSubmit={async (text, attachments, webSearch) => {
             await submitMessage(text, attachments, {
               metadata: {
@@ -633,6 +645,7 @@ function MissionComposer(props: {
   onClose: () => void
   onAwake: (result: { missionID: string; sessionID: string; created: boolean }) => void
   dismissible?: boolean
+  draftKey: string
 }) {
   const [submitting, setSubmitting] = createSignal(false)
   const [error, setError] = createSignal("")
@@ -671,6 +684,7 @@ function MissionComposer(props: {
       if (controller.signal.aborted) return
       setError(humanizeApiError(err))
       setLastResult(null)
+      throw err
     } finally {
       if (activeController === controller) activeController = null
       setSubmitting(false)
@@ -681,6 +695,7 @@ function MissionComposer(props: {
     cancelActive()
     setError("")
     setLastResult(null)
+    clearComposerDraft(props.draftKey)
     props.onClose()
   }
 
@@ -715,6 +730,7 @@ function MissionComposer(props: {
           sendID="missionLauncherChatSend"
           textareaDataUI="mission-composer-input"
           sendDataUI="mission-composer-submit"
+          draftKey={props.draftKey}
           onSubmit={handleSubmit}
         />
       </div>

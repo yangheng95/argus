@@ -15,6 +15,12 @@ import {
 import { fileToDataUrl } from "../services/file-to-data-url";
 import { Icon } from "./Icon";
 import { AutoGrowTextarea } from "./primitives/AutoGrowTextarea";
+import {
+  clearComposerDraft,
+  composerDraftText,
+  normalizeComposerDraftKey,
+  setComposerDraft,
+} from "../services/composer-draft";
 
 // ── Types ──
 
@@ -59,6 +65,8 @@ export interface ChatComposerProps {
   stopID?: string;
   textareaDataUI?: string;
   sendDataUI?: string;
+  /** Stable task/mission scoped key used to save and restore draft text. */
+  draftKey?: string;
 }
 
 // ── Constants ──
@@ -117,6 +125,7 @@ export function ChatComposer(props: ChatComposerProps) {
   let formRef!: HTMLFormElement;
 
   const [text, setText] = createSignal("");
+  let loadedDraftKey: string | null = null;
   // audit-2026-04-29 W2-V12 — single source of truth for staged
   // chat attachments lives in `messageStore.chatAttachments`. The
   // composer used to keep its own local signal, which meant
@@ -145,6 +154,24 @@ export function ChatComposer(props: ChatComposerProps) {
   const hasText = createMemo(() => text().trim().length > 0);
   const showLargeRequestWarning = createMemo(() => utf8ByteLength(text()) > REQUEST_PERFORMANCE_WARNING_BYTES);
   const stopping = () => props.stopping === true;
+
+  function writeText(next: string): void {
+    setText(next);
+    if (textareaRef && textareaRef.value !== next) textareaRef.value = next;
+  }
+
+  function writeDraftText(next: string): void {
+    writeText(next);
+    const key = normalizeComposerDraftKey(props.draftKey);
+    if (key) setComposerDraft(key, next);
+  }
+
+  createEffect(() => {
+    const key = normalizeComposerDraftKey(props.draftKey);
+    if (loadedDraftKey === key) return;
+    loadedDraftKey = key;
+    writeText(key ? composerDraftText(key) : "");
+  });
 
   // ── Rotating placeholder ──
   // Cycles through a shuffled list of project-level examples while the
@@ -235,8 +262,7 @@ export function ChatComposer(props: ChatComposerProps) {
     if (!pending) return;
     if (!props.enabled || props.busy) return;
     if (text().length === 0) {
-      setText(pending);
-      if (textareaRef) textareaRef.value = pending;
+      writeDraftText(pending);
     }
     props.onSuggestionConsumed?.();
   });
@@ -343,6 +369,7 @@ export function ChatComposer(props: ChatComposerProps) {
     try {
       await props.onSubmit(trimmed, sentAttachments, false);
       setText("");
+      clearComposerDraft(props.draftKey);
       setAttachments([]);
       if (textareaRef) {
         textareaRef.value = "";
@@ -538,7 +565,7 @@ export function ChatComposer(props: ChatComposerProps) {
             value={text()}
             data-ui={props.textareaDataUI}
             onInput={(e) => {
-              setText(e.currentTarget.value);
+              writeDraftText(e.currentTarget.value);
             }}
             onFocus={() => setFocused(true)}
             onBlur={() => setFocused(false)}

@@ -80,6 +80,7 @@ import {
 } from "./services/workspace"
 import { openConfigDialog, openGoalDialog, renderAboutVersion, setupDialogBackdropClose } from "./services/dialog"
 import { cardTreeStore } from "./store/card-tree"
+import { composerDraftKey } from "./services/composer-draft"
 
 // ── Module teardown ──
 // Centralised cleanup for top-level document/window listeners and Solid roots.
@@ -853,6 +854,13 @@ const [pendingSuggestion, setPendingSuggestion] = createSignal("")
 let lastTaskBusy = false
 let lastSuggestionTaskID: string | null = null
 
+const panelComposerDraftKey = () => {
+  const taskID = activeTaskID()
+  if (taskID) return composerDraftKey("task", taskID)
+  const directory = activeDirectory()
+  return directory ? composerDraftKey("task", "new", directory) : composerDraftKey("task", "new")
+}
+
 const composerEl = document.getElementById("solidChatComposer")
 if (composerEl) {
   render(
@@ -866,6 +874,7 @@ if (composerEl) {
         // row's CancelButton, not in the composer.
         busy={!!messageStore.chatRequest}
         stopping={!!(messageStore.chatRequest as any)?.stopping}
+        draftKey={panelComposerDraftKey()}
         pendingSuggestion={pendingSuggestion()}
         onSuggestionConsumed={() => setPendingSuggestion("")}
         onSubmit={(text, attachments, webSearch) =>
