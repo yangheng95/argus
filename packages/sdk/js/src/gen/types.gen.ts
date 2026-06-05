@@ -3304,6 +3304,35 @@ export type EventWorkspaceFailed = {
   }
 }
 
+export type EventPtyCreated = {
+  type: "pty.created"
+  properties: {
+    info: Pty
+  }
+}
+
+export type EventPtyUpdated = {
+  type: "pty.updated"
+  properties: {
+    info: Pty
+  }
+}
+
+export type EventPtyExited = {
+  type: "pty.exited"
+  properties: {
+    id: string
+    exitCode: number | null
+  }
+}
+
+export type EventPtyDeleted = {
+  type: "pty.deleted"
+  properties: {
+    id: string
+  }
+}
+
 export type Event =
   | EventServerConnected
   | EventGlobalDisposed
@@ -3389,6 +3418,10 @@ export type Event =
   | EventConfigChanged
   | EventWorkspaceReady
   | EventWorkspaceFailed
+  | EventPtyCreated
+  | EventPtyUpdated
+  | EventPtyExited
+  | EventPtyDeleted
 
 export type GlobalEvent = {
   directory: string
