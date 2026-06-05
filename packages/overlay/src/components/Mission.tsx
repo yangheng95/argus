@@ -65,6 +65,7 @@ import { Button } from "./ui/Button"
 import { Conversation } from "./Conversation"
 import { ChatComposer } from "./ChatComposer"
 import { MissionList } from "./MissionList"
+import { ProjectDirectoryBar } from "./TaskDirBar"
 
 // ── Status taxonomies ──
 //
@@ -395,6 +396,10 @@ export function Mission() {
 
   return (
     <div class="mission" data-ui="mission-page">
+      <section class="task-bar mission-task-bar" data-ui="mission-project-directory-bar">
+        <ProjectDirectoryBar />
+      </section>
+
       <Show when={isMissionPage() && actionError()}>
         <div class="mission-action-error" role="alert" data-ui="mission-global-action-error">
           <span>
@@ -588,7 +593,6 @@ function MissionComposer(props: {
   onAwake: (result: { missionID: string; sessionID: string; created: boolean }) => void
   dismissible?: boolean
 }) {
-  const [missionID, setMissionID] = createSignal("")
   const [submitting, setSubmitting] = createSignal(false)
   const [error, setError] = createSignal("")
   const [lastResult, setLastResult] = createSignal<{ missionID: string; sessionID: string; created: boolean } | null>(null)
@@ -617,7 +621,6 @@ function MissionComposer(props: {
     try {
       const result = await wakeMission({
         text,
-        missionID: missionID().trim() || undefined,
         signal: controller.signal,
       })
       if (controller.signal.aborted) return
@@ -635,7 +638,6 @@ function MissionComposer(props: {
 
   function handleDiscard() {
     cancelActive()
-    setMissionID("")
     setError("")
     setLastResult(null)
     props.onClose()
@@ -643,10 +645,10 @@ function MissionComposer(props: {
 
   return (
     <div class="mission-composer" data-ui="mission-composer">
-      <header class="mission-composer-header">
+      <header class="mission-composer-header oc-surface-header">
         <div class="mission-composer-title-block">
           <span class="mission-composer-kicker">{t("mission.title")}</span>
-          <h2 class="mission-composer-title">{t("mission.launcher.title")}</h2>
+          <h2 class="mission-composer-title oc-surface-header__title">{t("mission.launcher.title")}</h2>
         </div>
         <Show when={props.dismissible}>
           <Button
@@ -664,20 +666,6 @@ function MissionComposer(props: {
         </Show>
       </header>
       <div class="mission-composer-shell">
-        <div class="mission-composer-controls">
-          <label class="mission-composer-mission-id">
-            <span>{t("mission.launcher.mission_id_label")}</span>
-            <input
-              type="text"
-              class="mission-composer-mission-id-input"
-              placeholder={t("mission.launcher.mission_id_placeholder")}
-              value={missionID()}
-              disabled={submitting()}
-              onInput={(e) => setMissionID(e.currentTarget.value)}
-              data-ui="mission-composer-mission-id"
-            />
-          </label>
-        </div>
         <ChatComposer
           enabled={!submitting()}
           busy={false}

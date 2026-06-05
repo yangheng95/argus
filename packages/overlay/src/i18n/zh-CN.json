@@ -1,7 +1,7 @@
 {
   "_meta": {
     "language": "zh-CN",
-    "panel_revision": "8e3436fc477063f4"
+    "panel_revision": "236b0d6eb7500231"
   },
   "about.author_name": "杨恒",
   "about.go_version": "Go 版本",
@@ -875,8 +875,8 @@
   "mission.back": "Panel",
   "mission.back_title": "回到默认 Panel",
   "mission.refresh_title": "刷新通道信息",
-  "mission.new_requirement": "启动 Mission",
-  "mission.new_requirement_title": "把一段长跨度的目标交给 Mission 持续推进",
+  "mission.new": "新建 Mission",
+  "mission.new_title": "启动新的 Mission",
   "mission.runtime.disabled": "未启用",
   "mission.runtime.unavailable": "不可用",
   "mission.runtime.starting": "启动中",
@@ -925,9 +925,7 @@
   "mission.error.class.HTTPException": "Mission 接口报错。请稍后重试，或在「日志」面板查看详细错误。",
   "mission.error.class.AbortError": "请求已被取消。",
   "mission.error.class.TypeError": "Mission 数据格式异常。请刷新；若问题持续，请在「日志」面板查看详细错误。",
-  "mission.launcher.title": "启动 Mission",
-  "mission.launcher.mission_id_label": "Mission ID",
-  "mission.launcher.mission_id_placeholder": "留空 = 新建；填入则恢复同 mission",
+  "mission.launcher.title": "新建 Mission",
   "mission.launcher.error": "Mission 唤醒失败：{{error}}",
   "mission.launcher.discard": "关闭",
   "mission.launcher.discard_title": "关闭启动器",

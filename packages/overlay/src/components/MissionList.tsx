@@ -292,14 +292,15 @@ export function MissionList(props: MissionListProps) {
           <Button
             type="button"
             variant="ghost"
-            size="icon"
+            size="md"
             tone="accent"
-            data-ui="mission-new-requirement"
-            title={t("mission.new_requirement_title")}
-            aria-label={t("mission.new_requirement")}
+            data-ui="mission-new"
+            title={t("mission.new_title")}
+            aria-label={t("mission.new")}
             onClick={props.onCreateMission}
           >
             <Icon name="plus" size={13} />
+            <span>{t("mission.new")}</span>
           </Button>
         </div>
       </header>

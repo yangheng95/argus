@@ -80,10 +80,14 @@ describe("task-cwd cluster lays out left/right (dropdown left, workspace info ri
     expect(body).toMatch(/min-width:\s*0/)
   })
 
-  test("branch badge mounts beside the cwd dropdown instead of inside it", () => {
-    expect(INDEX_HTML).toMatch(/<span id="solidTaskDirMount"><\/span>/)
-    expect(INDEX_HTML).toMatch(/<span id="solidTaskVcsMount"><\/span>/)
+  test("project directory bar owns cwd dropdown and branch badge from one Solid mount", () => {
+    expect(INDEX_HTML).toMatch(/<div id="solidProjectDirectoryBarMount"><\/div>/)
+    expect(TASK_DIR_BAR).toMatch(/export function ProjectDirectoryBar\(\)/)
+    expect(TASK_DIR_BAR).toMatch(/<TaskDirContent \/>/)
+    expect(TASK_DIR_BAR).toMatch(/<VcsBadge \/>/)
     expect(TASK_DIR_BAR).toMatch(/export function VcsBadge\(\)/)
+    expect(INDEX_HTML).not.toMatch(/solidTaskDirMount/)
+    expect(INDEX_HTML).not.toMatch(/solidTaskVcsMount/)
   })
 
   test("path breadcrumb markup does not nest a second task-dir shell", () => {

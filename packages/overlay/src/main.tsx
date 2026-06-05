@@ -11,12 +11,9 @@ import { Board } from "./components/Board"
 import { Mission } from "./components/Mission"
 import { pageMode, setPageMode } from "./store/page-mode"
 import { TaskStatusHeader } from "./components/TaskStatusHeader"
-import { TaskDirContent, VcsBadge } from "./components/TaskDirBar"
+import { ProjectDirectoryBar } from "./components/TaskDirBar"
 import { ChatComposer } from "./components/ChatComposer"
 import { WindowControls } from "./components/WindowControls"
-import { WorkspaceEditorLaunchers } from "./components/WorkspaceEditorLaunchers"
-import { WorkspaceCodingCliLaunchers } from "./components/WorkspaceCodingCliLaunchers"
-import { WorkspaceLayoutControls } from "./components/WorkspaceLayoutControls"
 import {
   LeftPanelHeaderCollapseControl,
   RightPanelHeaderCollapseControl,
@@ -46,7 +43,7 @@ import { isTaskInterruptable } from "./store/board"
 import { setLocale } from "./utils/i18n"
 import { apiJson, apiRequest, configure as configureApi, getServerUrl } from "./services/api"
 import { t } from "./utils/i18n"
-import { renderMarkdown, escapeHtml } from "./utils/markdown"
+import { renderMarkdown } from "./utils/markdown"
 import { aggregateUsageAcrossSessions, formatUsageStrip } from "./utils/format-usage"
 import {
   applyTheme,
@@ -72,21 +69,13 @@ import { WorkspaceOnboardingDialog } from "./components/WorkspaceOnboardingDialo
 import { waitForLogDrain, AppLog } from "./utils/log"
 import { teardownApp } from "./services/init"
 import { stopTimers } from "./services/sync"
-import { nativeOpen, nativePrompt } from "./utils/native"
-import { eventClosest } from "./utils/dom-utils"
-import { hydrateIconPlaceholders, iconHtml } from "./utils/icon-html"
+import { nativeOpen } from "./utils/native"
+import { hydrateIconPlaceholders } from "./utils/icon-html"
 import { installNativeContextMenuSuppression } from "./utils/context-menu"
-import { shortPath } from "./utils/tool"
 import { notifyError, notifyWarning, formatErrorDetails, recomputeBadgeFromTasks } from "./services/notify"
 import {
   applyDirectory,
-  browseDirectory,
-  createDirectory,
-  openDirectory,
-  setDirectory,
   activeDirectory,
-  loadRecentDirectories,
-  removeRecentDirectory,
   openPathInSelectedEditor,
 } from "./services/workspace"
 import { openConfigDialog, openGoalDialog, renderAboutVersion, setupDialogBackdropClose } from "./services/dialog"
@@ -916,19 +905,9 @@ if (titlebarMenuEl) {
   render(() => <TitlebarMenubar onOpenLog={() => setLogOpen(true)} />, titlebarMenuEl)
 }
 
-const workspaceLayoutControlsEl = document.getElementById("solidWorkspaceLayoutControls")
-if (workspaceLayoutControlsEl) {
-  render(() => <WorkspaceLayoutControls />, workspaceLayoutControlsEl)
-}
-
-const workspaceCodingCliLaunchersEl = document.getElementById("solidWorkspaceCodingCliLaunchers")
-if (workspaceCodingCliLaunchersEl) {
-  render(() => <WorkspaceCodingCliLaunchers />, workspaceCodingCliLaunchersEl)
-}
-
-const workspaceEditorLaunchersEl = document.getElementById("solidWorkspaceEditorLaunchers")
-if (workspaceEditorLaunchersEl) {
-  render(() => <WorkspaceEditorLaunchers />, workspaceEditorLaunchersEl)
+const projectDirectoryBarEl = document.getElementById("solidProjectDirectoryBarMount")
+if (projectDirectoryBarEl) {
+  render(() => <ProjectDirectoryBar />, projectDirectoryBarEl)
 }
 
 const leftActivityToolbarEl = document.getElementById("solidLeftActivityToolbar")
@@ -975,21 +954,6 @@ if (browserPreviewEl) {
 const connBadgeEl = document.getElementById("solidConnBadge")
 if (connBadgeEl) {
   render(() => <ConnectionBadge />, connBadgeEl)
-}
-
-// ── Mount: TaskDirContent / VcsBadge ──
-// Reactive replacement for services/meta.ts renderMeta(). The cwd dropdown
-// owns breadcrumb selection; the VCS badge is mounted beside it as a
-// sibling project-surface indicator.
-
-const taskDirMountEl = document.getElementById("solidTaskDirMount")
-if (taskDirMountEl) {
-  render(() => <TaskDirContent />, taskDirMountEl)
-}
-
-const taskVcsMountEl = document.getElementById("solidTaskVcsMount")
-if (taskVcsMountEl) {
-  render(() => <VcsBadge />, taskVcsMountEl)
 }
 
 // ── Mount: TaskStatusHeader ──
@@ -1431,181 +1395,6 @@ if (import.meta.env.DEV) {
   }
   ;(window as any).__OC_DEV__ = { openConfigDialog, ensureConfigHost, openGoalDialog, ensureGoalHost }
 }
-
-// ── Directory action buttons (#taskDir, #recentDirPanel) ──
-
-function renderRecentDirPanel(): void {
-  const panel = document.getElementById("recentDirPanel")
-  if (!panel) return
-  const dirs = loadRecentDirectories()
-  const current = activeDirectory()
-  const head = [
-    `<div class="recent-dir-panel-head">`,
-    `<div class="recent-dir-panel-title">${escapeHtml(t("cwd.recent"))}</div>`,
-    current
-      ? `<div class="recent-dir-panel-meta" title="${escapeHtml(current)}">${escapeHtml(shortPath(current))}</div>`
-      : "",
-    `</div>`,
-  ].join("")
-  if (!dirs.length) {
-    panel.innerHTML = [
-      `<div class="recent-dir-panel-shell">`,
-      head,
-      `<div class="recent-dir-empty">${escapeHtml(t("cwd.recent_empty"))}</div>`,
-      `</div>`,
-    ].join("")
-    return
-  }
-  panel.innerHTML = [
-    `<div class="recent-dir-panel-shell">`,
-    head,
-    `<div class="recent-dir-list">`,
-    dirs
-      .map((dir) => {
-        const isActive = !!current && dir.toLowerCase() === current.toLowerCase()
-        return [
-          `<div class="recent-dir-row" data-active="${isActive}">`,
-          `<button type="button" class="recent-dir-item" data-recent-dir="${escapeHtml(dir)}" title="${escapeHtml(dir)}">`,
-          `<span class="recent-dir-copy">`,
-          `<span class="recent-dir-label">${escapeHtml(shortPath(dir))}</span>`,
-          `<span class="recent-dir-path">${escapeHtml(dir)}</span>`,
-          `</span>`,
-          isActive ? `<span class="recent-dir-state" aria-hidden="true">•</span>` : "",
-          `</button>`,
-          `<button type="button" class="recent-dir-remove" data-recent-remove="${escapeHtml(dir)}" title="${escapeHtml(t("common.delete"))}" aria-label="${escapeHtml(t("common.delete"))}">${iconHtml("close")}</button>`,
-          `</div>`,
-        ].join("")
-      })
-      .join(""),
-    `</div>`,
-    `</div>`,
-  ].join("")
-}
-
-function openRecentDirPanel(): void {
-  const panel = document.getElementById("recentDirPanel")
-  if (!panel) return
-  if (!panel.hidden) {
-    closeRecentDirPanel()
-    return
-  }
-  renderRecentDirPanel()
-  const wrap = document.getElementById("taskCwdDropdown")
-  if (wrap) {
-    const rect = wrap.getBoundingClientRect()
-    panel.style.top = Math.round(rect.bottom + 6) + "px"
-    panel.style.left = Math.round(Math.max(4, rect.left)) + "px"
-    panel.style.width = Math.round(rect.width) + "px"
-    wrap.dataset.open = "true"
-    wrap.setAttribute("aria-expanded", "true")
-  }
-  panel.hidden = false
-}
-
-function closeRecentDirPanel(): void {
-  const panel = document.getElementById("recentDirPanel")
-  if (panel) panel.hidden = true
-  const wrap = document.getElementById("taskCwdDropdown")
-  if (wrap) {
-    wrap.dataset.open = "false"
-    wrap.setAttribute("aria-expanded", "false")
-  }
-}
-
-document.getElementById("taskCwdDropdown")?.addEventListener("click", (event) => {
-  const target = event.target as HTMLElement | null
-  if (!target) return
-  if (target.closest("[data-path-action],[data-path-open],[data-path-set]")) return
-  event.stopPropagation()
-  openRecentDirPanel()
-})
-document.getElementById("taskCwdDropdown")?.addEventListener("keydown", (event) => {
-  const e = event as KeyboardEvent
-  if (e.key !== "Enter" && e.key !== " ") return
-  const target = event.target as HTMLElement | null
-  if (target && target.closest("[data-path-action],[data-path-open],[data-path-set]")) return
-  e.preventDefault()
-  openRecentDirPanel()
-})
-
-document.getElementById("taskDir")?.addEventListener("click", async (event) => {
-  const button = eventClosest(event, "[data-path-action],[data-path-open],[data-path-set]")
-  if (!button || (button as HTMLButtonElement).disabled) return
-  const el = button as HTMLElement
-  const action = el.dataset.pathAction || ""
-  if (action === "browse") {
-    await browseDirectory()
-    return
-  }
-  if (action === "create") {
-    await createDirectory()
-    return
-  }
-  if (el.dataset.pathOpen) {
-    await openDirectory(el.dataset.pathOpen)
-    return
-  }
-  const target = el.dataset.pathSet || ""
-  if (!target) return
-  try {
-    await setDirectory(target)
-  } catch (e) {
-    AppLog.error("ui", "Failed to set working directory", { error: String(e) })
-  }
-})
-
-document.getElementById("recentDirPanel")?.addEventListener("click", async (event) => {
-  const removeBtn = eventClosest(event, "[data-recent-remove]")
-  if (removeBtn) {
-    const dir = (removeBtn as HTMLElement).dataset.recentRemove
-    if (dir) {
-      removeRecentDirectory(dir)
-      renderRecentDirPanel()
-      // Close panel when list becomes empty
-      if (!loadRecentDirectories().length) closeRecentDirPanel()
-    }
-    return
-  }
-  const item = eventClosest(event, "[data-recent-dir]")
-  if (!item) return
-  const dir = (item as HTMLElement).dataset.recentDir
-  if (!dir) return
-  closeRecentDirPanel()
-  try {
-    await setDirectory(dir)
-  } catch (e) {
-    AppLog.error("ui", "Failed to switch to recent directory", { dir, error: String(e) })
-  }
-})
-
-document.addEventListener(
-  "click",
-  (e) => {
-    const target = e.target as HTMLElement | null
-    if (target?.closest?.("#taskCwdDropdown") || target?.closest?.(".recent-dir-panel")) return
-    closeRecentDirPanel()
-  },
-  listenerOpts,
-)
-
-// Global Esc: close any non-HTML5-dialog popovers the operator might
-// have opened. HTML5 <dialog>.showModal() already handles Esc natively
-// via the platform's `cancel` event; we only patch the in-DOM
-// custom popovers (recent-directory dropdown today; future panels can
-// hook the same channel by listening for the bubbling key event and
-// preventDefault'ing if they handle it).
-document.addEventListener(
-  "keydown",
-  (ev) => {
-    if (ev.key !== "Escape") return
-    const dirPanel = document.getElementById("recentDirPanel")
-    if (dirPanel && !dirPanel.hidden) {
-      ev.preventDefault()
-      closeRecentDirPanel()
-    }
-  },
-  listenerOpts,
-)
 
 // ── Init ──
 

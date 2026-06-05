@@ -480,7 +480,7 @@ async function captureStates(page: OverlayPage): Promise<StateResult[]> {
   })
 
   await step("04-composer-open", async () => {
-    const composeBtn = await page.$('[data-ui="mission-new-requirement"]')
+    const composeBtn = await page.$('[data-ui="mission-new"]')
     if (composeBtn) await composeBtn.click()
     await new Promise((r) => setTimeout(r, 350))
   })
@@ -517,7 +517,7 @@ async function captureStates(page: OverlayPage): Promise<StateResult[]> {
   await step("07-ledger-header-actions", async () => {
     await page.evaluate(() => {
       const panel = document.querySelector('[data-ui="mission-back-panel"]')
-      const create = document.querySelector('[data-ui="mission-new-requirement"]')
+      const create = document.querySelector('[data-ui="mission-new"]')
       const refresh = document.querySelector('[data-ui="mission-refresh"]')
       if (!panel) throw new Error("missing Mission Panel button")
       if (!create) throw new Error("missing Mission create button")

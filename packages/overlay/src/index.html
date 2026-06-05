@@ -108,26 +108,7 @@
 
     <!-- Task Selector Bar -->
     <section class="task-bar">
-      <div class="task-meta">
-        <div class="task-cwd">
-          <div class="task-project-cluster">
-            <div class="task-dir-shell task-cwd-dropdown" id="taskCwdDropdown" data-open="false" role="button" tabindex="0" aria-haspopup="listbox" aria-expanded="false" data-i18n-aria-label="cwd.recent" data-i18n-title="cwd.recent">
-              <span id="solidTaskDirMount"></span>
-              <div class="task-dir-actions">
-                <span class="task-cwd-caret" id="taskCwdCaret" aria-hidden="true">▾</span>
-              </div>
-            </div>
-            <span id="solidTaskVcsMount"></span>
-          </div>
-          <div class="workspace-command-dock" data-no-drag="true">
-            <div id="solidWorkspaceEditorLaunchers"></div>
-            <div class="workspace-command-divider" aria-hidden="true"></div>
-            <div id="solidWorkspaceCodingCliLaunchers"></div>
-            <div class="workspace-command-divider" aria-hidden="true"></div>
-            <div id="solidWorkspaceLayoutControls"></div>
-          </div>
-        </div>
-      </div>
+      <div id="solidProjectDirectoryBarMount"></div>
     </section>
 
     <!-- Horizontal body: chat left, sections right -->
@@ -287,10 +268,6 @@
        conversation panel and titlebar stay in the DOM, just hidden,
        so returning to Panel does not lose state (PRD §6.3). -->
   <div id="solidMissionMount" class="mission-mount"></div>
-
-  <!-- Recent directory dropdown — must live outside .task-bar / .panel to
-       escape their stacking context (backdrop-filter) and overflow clip. -->
-  <div class="recent-dir-panel" id="recentDirPanel" hidden></div>
 
   <script type="module" src="/main.tsx"></script>
 </body>
