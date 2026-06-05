@@ -2039,3 +2039,42 @@ OpenCode gap after the round:
 - The current host is still a single project-bound embedded TUI process, not OpenCode's full multi-PTY `list/create/get/update/remove` service.
 - External TUI plugin loader/install remains missing; upstream depends on shared plugin loader modules that OpenCorvus does not yet expose in the copied TUI runtime.
 - `SessionV2Debug` and `context/sync-v2.tsx` remain missing until the real V2 session-message/event source exists.
+
+### 2026-06-05 Round 33: OpenCode terminal color utility
+
+Implemented:
+
+- Rechecked latest OpenCode dev before editing. Upstream remains `134f4136da372fdf8f0c3cec2cea3ff81010baf8`.
+- Watched path delta from the prior TUI baseline still has no TUI/PTY/app changes after `ab5a12d916dd72eab0c84afb1f6de5a07c16a7e4`.
+- Copied OpenCode's `packages/opencode/src/cli/cmd/tui/util/terminal.ts` into OpenCorvus as `packages/opencorvus/src/cli/cmd/tui/util/terminal.ts`.
+- Replaced the hand-written inline terminal background probe in `app.tsx` with `Terminal.getTerminalBackgroundColor()`.
+- This removes a duplicated local OSC parser from the TUI startup path and uses the OpenCode-derived utility as the single source for terminal color probing.
+- Kept plugin runtime, sidebar slots, prompt, message rendering, permissions, task/agent team sidebar actions, and session navigation unchanged.
+
+Checked but intentionally not copied this round:
+
+- Latest OpenCode no longer has the local `feature-plugins/*` tree that OpenCorvus uses for right-sidebar slots and project-bound agent-team actions. Replacing the local sidebar with upstream `routes/session/sidebar.tsx` would remove those slots and violate the project-bound TUI requirement.
+- OpenCode `routes/session/header.tsx` includes subagent navigation buttons, but OpenCorvus already has this behavior in `routes/session/subagent-footer.tsx` with runtime-guard tests preventing a second header command source.
+- OpenCode `util/transcript.ts` reads `part.state.error`; OpenCorvus must keep `renderToolFailureCause(part.state.failure)` to match the local canonical failure schema.
+- OpenCode `component/dialog-tag.tsx` and `routes/session/dialog-subagent.tsx` are not wired by upstream call sites in the current dev snapshot, so copying them now would add dead code.
+- Independent review suggested a `DialogVariant` copy, but latest OpenCode dev has no `component/dialog-variant.tsx` and no `variant.list` command, only `variant.cycle`. Implementing a variant list dialog now would be local hand-written UI, so it remains intentionally unimplemented.
+- Independent review also identified the next major implementation gap: OpenCorvus still exposes a project-bound single `/tui/host/*` terminal contract, while latest OpenCode uses a generic `/pty` service with `list/create/get/update/remove/connect` and richer app terminal lifecycle. That is the next high-impact copy target, but it is larger than this terminal utility round and needs its own route/SDK/overlay tests.
+
+Verified in tests:
+
+- Added `packages/opencorvus/test/tui/terminal-util.test.ts` to guard the copied utility, app wiring, OSC query coverage, and non-TTY behavior.
+- Extended `plugin-runtime-guard.test.ts` so `app.tsx` cannot reintroduce the inline `getTerminalBackgroundColor()` implementation.
+- `bun test packages/opencorvus/test/tui/terminal-util.test.ts packages/opencorvus/test/tui/plugin-runtime-guard.test.ts`
+- `bun run --cwd packages/opencorvus typecheck`
+
+OpenCode comparison after the round:
+
+- The TUI startup path now uses the OpenCode terminal utility instead of a local hand-written parser.
+- The copied utility queries background, foreground, and palette colors, while the removed inline function only queried background.
+
+OpenCode gap after the round:
+
+- OpenCode's full workspace management remains missing: workspace list/create/unavailable dialogs, move-session prompt flow, workspace commands, and workspace status event sync are not implemented yet.
+- The current host is still a single project-bound embedded TUI process, not OpenCode's full multi-PTY `list/create/get/update/remove` service.
+- External TUI plugin loader/install remains missing; upstream depends on shared plugin loader modules that OpenCorvus does not yet expose in the copied TUI runtime.
+- `SessionV2Debug` and `context/sync-v2.tsx` remain missing until the real V2 session-message/event source exists.
