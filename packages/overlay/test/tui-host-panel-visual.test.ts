@@ -189,8 +189,11 @@ test("right sidebar TUI host panel renders as a real browser surface", async () 
         state: terminal.dataset.state,
         panelWidth: Math.round(panelRect.width),
         panelHeight: Math.round(panelRect.height),
+        terminalLeft: Math.round(terminalRect.left),
+        terminalTop: Math.round(terminalRect.top),
         terminalWidth: Math.round(terminalRect.width),
         terminalHeight: Math.round(terminalRect.height),
+        terminalBackground: getComputedStyle(terminal).backgroundColor,
         errorText: document.querySelector<HTMLElement>(".tui-host-error")?.textContent ?? "",
         snapshotBuffer: snapshot?.buffer ?? "",
         snapshotCursor: snapshot?.cursor,
@@ -219,6 +222,8 @@ test("right sidebar TUI host panel renders as a real browser surface", async () 
     expect(layout.panelHeight).toBeGreaterThan(500)
     expect(layout.terminalWidth).toBeGreaterThan(220)
     expect(layout.terminalHeight).toBeGreaterThan(400)
+    expect(layout.terminalBackground).not.toBe("rgb(11, 11, 11)")
+    expect(layout.terminalBackground).not.toBe("rgba(0, 0, 0, 0)")
 
     await page.click('[data-ui="tui-host-refresh"]')
     for (let attempt = 0; attempt < 60 && connectCursors.length < 2; attempt += 1) {
@@ -239,6 +244,22 @@ test("right sidebar TUI host panel renders as a real browser surface", async () 
       colors.add(`${data[i]},${data[i + 1]},${data[i + 2]}`)
     }
     expect(colors.size).toBeGreaterThan(12)
+
+    const crop = await image
+      .extract({
+        left: Math.max(0, layout.terminalLeft),
+        top: Math.max(0, layout.terminalTop),
+        width: Math.max(1, Math.min(layout.terminalWidth, metadata.width! - layout.terminalLeft)),
+        height: Math.max(1, Math.min(layout.terminalHeight, metadata.height! - layout.terminalTop)),
+      })
+      .raw()
+      .toBuffer({ resolveWithObject: true })
+    let total = 0
+    for (let index = 0; index < crop.data.length; index += crop.info.channels * 32) {
+      total += crop.data[index] + crop.data[index + 1] + crop.data[index + 2]
+    }
+    const samples = Math.ceil(crop.data.length / (crop.info.channels * 32))
+    expect(total / samples / 3).toBeGreaterThan(80)
   } finally {
     await browser.close()
     server.stop(true)

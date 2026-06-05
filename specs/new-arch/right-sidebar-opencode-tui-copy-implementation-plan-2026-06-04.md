@@ -2362,6 +2362,46 @@ OpenCode gap after the round:
 
 - Same intentional MVP gaps remain: link opening, terminal keybind integration, theme/font synchronization, debounced size update, terminal tab/workspace store, full workspace management, external TUI plugin loader, and `SessionV2Debug`/`sync-v2`.
 
+### 2026-06-05 Round 44: MVP overlay theme token sync
+
+Implemented:
+
+- Rechecked latest OpenCode dev before editing. Upstream remains `9211ef7e95b7cd55f08b27b066d635cc42cbb362`; no new PTY/TUI core changes were present.
+- Closed the user-reported theme mismatch for the right-sidebar embedded terminal:
+  - removed the hard-coded ghostty theme colors (`#0b0b0b`, `#d4d4d4`);
+  - removed the hard-coded `.tui-host-terminal { background: #0b0b0b; }`;
+  - added `overlayTerminalTheme(host)` that resolves the existing overlay CSS tokens at the TUI host DOM node:
+    - `--surface-inset` -> terminal background;
+    - `--text-strong` -> terminal foreground;
+    - `--accent` -> cursor;
+    - `--accent-dim` -> selection background.
+- Added a `MutationObserver` on `documentElement` and `body` `data-theme` attributes so changing overlay theme reapplies the ghostty terminal theme without adding a second theme source.
+- Kept the CSS container background on `var(--surface-inset)` so the canvas backing and host chrome follow the same overlay token source.
+
+Verified in tests:
+
+- Extended `packages/overlay/test/tui-host-panel.test.ts` to guard:
+  - `overlayTerminalTheme(host)`;
+  - all four overlay token mappings;
+  - mutation-based reapplication;
+  - absence of the retired hard-coded terminal colors in TS and CSS.
+- Extended `packages/overlay/test/tui-host-panel-visual.test.ts` to verify in a real browser:
+  - terminal container background is not the old `rgb(11, 11, 11)`;
+  - terminal screenshot crop is no longer a black canvas in the default light overlay theme.
+- `bun test packages/overlay/test/tui-host-panel.test.ts`
+- `bun test packages/overlay/test/tui-host-panel-visual.test.ts`
+- `bun run --cwd packages/overlay typecheck`
+
+OpenCode comparison after the round:
+
+- OpenCode's native TUI still uses its own `useTheme()` token context, not overlay CSS variables. For the embedded browser-hosted TUI, the correct single source is the overlay's existing theme token cascade; this mirrors OpenCode's principle of deriving terminal colors from the active UI theme instead of hard-coding a parallel palette.
+
+OpenCode gap after the round:
+
+- The embedded terminal now follows overlay theme tokens, but it still does not expose OpenCode's full theme picker, theme JSON registry, syntax palette, or terminal palette 0-15 mapping.
+- Real connection failures from `Pty.create -> Tui.resolveEmbeddedCommand -> TuiHost.startPrepared -> TuiHost.preparePtyConnect` still need root-cause evidence beyond the browser-side disconnected-input visibility.
+- Same intentional MVP gaps remain: link opening, terminal keybind integration, debounced size update, terminal tab/workspace store, full workspace management, external TUI plugin loader, and `SessionV2Debug`/`sync-v2`.
+
 ### 2026-06-05 Round 43: MVP disconnected input visibility
 
 Implemented:
