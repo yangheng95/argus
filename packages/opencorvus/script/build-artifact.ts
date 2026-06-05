@@ -9,6 +9,10 @@ export function artifactPackageBaseName(pkgName: string, flavor: BuildFlavor): s
   return pkgName
 }
 
+export function artifactTuiSiblingExecutableName(os = process.platform): string {
+  return os === "win32" ? "opencorvus-tui.exe" : "opencorvus-tui"
+}
+
 export function artifactEntrypoints(flavor: BuildFlavor, parserWorker: string, workerPath: string): string[] {
   if (flavor === "overlay-server") return ["./src/overlay-launcher.ts"]
   return ["./src/launcher.ts", parserWorker, workerPath]

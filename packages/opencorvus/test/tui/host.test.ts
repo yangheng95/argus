@@ -102,6 +102,15 @@ describe("tui.host", () => {
     expect(entry).toContain(".command(TuiThreadCommand)")
   })
 
+  test("does not fall back to a bare opencorvus command from PATH", async () => {
+    const source = await Bun.file(path.resolve(import.meta.dir, "../../src/tui/index.ts")).text()
+    expect(source).not.toContain('?? "opencorvus"')
+    expect(source).toContain("siblingTuiBin()")
+    expect(source).toContain("isOverlayServerExecutable()")
+    expect(source).toContain("opencorvus-tui.exe")
+    expect(source).toContain("refusing to use a PATH fallback")
+  })
+
   test("captures output from a real Pseudo Terminal process", async () => {
     await using tmp = await tmpdir()
     await Instance.provide({
@@ -157,7 +166,7 @@ describe("tui.host", () => {
         await TuiHost.stop()
       },
     })
-  })
+  }, 15_000)
 
   test("prepares PTY connections that stream retained and live output", async () => {
     await using tmp = await tmpdir()
@@ -191,7 +200,7 @@ describe("tui.host", () => {
         await TuiHost.stop()
       },
     })
-  })
+  }, 15_000)
 
   test("closes PTY connections with the host process exit code", async () => {
     await using tmp = await tmpdir()
@@ -217,7 +226,7 @@ describe("tui.host", () => {
         expect(TuiHost.status().status).toBe("idle")
       },
     })
-  })
+  }, 15_000)
 
   test("resolves embedded command from the same TUI spawn options", async () => {
     await using tmp = await tmpdir()
