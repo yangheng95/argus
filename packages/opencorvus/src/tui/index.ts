@@ -37,6 +37,7 @@ export namespace Tui {
     command: string
     args: string[]
     cwd: string
+    directory: string
     url: string
     port: number
     hostname: string
@@ -254,6 +255,12 @@ export namespace Tui {
     return undefined
   }
 
+  function devBunBin(): string {
+    const name = path.basename(process.execPath).toLowerCase()
+    if (name === "bun" || name === "bun.exe") return process.execPath
+    return process.platform === "win32" ? "bun.exe" : "bun"
+  }
+
   function siblingTuiBin(): string | undefined {
     const file = process.platform === "win32" ? "opencorvus-tui.exe" : "opencorvus-tui"
     const candidate = path.join(path.dirname(process.execPath), file)
@@ -303,9 +310,10 @@ export namespace Tui {
       const pkgRoot = packageRoot()
       const entryScript = path.join(pkgRoot, "src", "index.ts")
       return {
-        command: "bun",
+        command: devBunBin(),
         args: ["--preload", "@opentui/solid/preload", "--conditions=browser", entryScript, ...resolved.args],
         cwd: pkgRoot,
+        directory: resolved.cwd,
         url: resolved.url,
         port: resolved.port,
         hostname: resolved.hostname,
@@ -315,6 +323,7 @@ export namespace Tui {
       command: resolved.bin,
       args: resolved.args,
       cwd: resolved.cwd,
+      directory: resolved.cwd,
       url: resolved.url,
       port: resolved.port,
       hostname: resolved.hostname,

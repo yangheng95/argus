@@ -28,7 +28,7 @@ import { FileEditorPane } from "./components/FileEditorPane"
 import { FileChangesPanel } from "./components/FileChangesPanel"
 import { BrowserPreviewPanel } from "./components/BrowserPreviewPanel"
 import { SideActivityToolbar, type SideActivity } from "./components/SideActivityToolbar"
-import { TuiHostPanel } from "./components/TuiHostPanel"
+import { codingAgentTuiPlugin } from "./plugins/coding-agent-tui"
 import { fileWorkbenchOpen } from "./services/file-workbench"
 import type { DiffTarget } from "./services/diff"
 import { initApp } from "./services/init"
@@ -168,7 +168,7 @@ const [workspaceOpen, setWorkspaceOpen] = createSignal(false)
 const [workspaceTarget, setWorkspaceTarget] = createSignal<DiffTarget>({ filePath: "" })
 
 type LeftActivity = "tasks" | "explorer" | "changes"
-type RightActivity = "tui" | "browser" | "inspector"
+type RightActivity = typeof codingAgentTuiPlugin.id | "browser" | "inspector"
 
 const DEFAULT_LEFT_ACTIVITY: LeftActivity = "tasks"
 const DEFAULT_RIGHT_ACTIVITY: RightActivity = "inspector"
@@ -180,7 +180,7 @@ const LEFT_ACTIVITIES: readonly SideActivity<LeftActivity>[] = [
 ]
 
 const RIGHT_ACTIVITIES: readonly SideActivity<RightActivity>[] = [
-  { id: "tui", icon: "terminal", labelKey: "tui.title" },
+  codingAgentTuiPlugin.activity,
   { id: "browser", icon: "inspect", labelKey: "browser_preview.title" },
   { id: "inspector", icon: "panel-right", labelKey: "sections.title" },
 ]
@@ -192,7 +192,7 @@ const LEFT_ACTIVITY_LABEL_KEYS: Record<LeftActivity, string> = {
 }
 
 const RIGHT_ACTIVITY_LABEL_KEYS: Record<RightActivity, string> = {
-  tui: "tui.title",
+  [codingAgentTuiPlugin.id]: codingAgentTuiPlugin.labelKey,
   browser: "browser_preview.title",
   inspector: "sections.title",
 }
@@ -738,7 +738,16 @@ if (fileExplorerMountEl) {
 const tuiHostMountEl = document.getElementById("solidTuiHostMount")
 if (tuiHostMountEl) {
   tuiHostMountEl.innerHTML = ""
-  render(() => <TuiHostPanel active={() => rightActivity() === "tui"} />, tuiHostMountEl)
+  const CodingAgentTuiPanel = codingAgentTuiPlugin.Panel
+  render(
+    () => (
+      <CodingAgentTuiPanel
+        active={() => rightActivity() === codingAgentTuiPlugin.id}
+        directory={activeDirectory}
+      />
+    ),
+    tuiHostMountEl,
+  )
 }
 
 // ── Sidebar title backdoor: double-click resets DB ──
@@ -1264,7 +1273,7 @@ disposers.push(
       const sections = document.getElementById("sections")
       const title = document.getElementById("rightPanelTitle")
       const bodies: Record<RightActivity, HTMLElement | null> = {
-        tui: document.getElementById("rightPanelTui"),
+        [codingAgentTuiPlugin.id]: document.getElementById(codingAgentTuiPlugin.bodyId),
         browser: document.getElementById("rightPanelBrowser"),
         inspector: document.getElementById("rightPanelInspector"),
       }

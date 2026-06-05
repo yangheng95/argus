@@ -7,14 +7,14 @@ import {
   resizeTuiHost,
   startTuiHost,
   stopTuiHost,
-  type TuiHostPanelInfo,
-} from "../services/tui-host"
-import { hasTuiHostTerminalSizeChanged } from "../services/tui-host-terminal"
-import { SerializeAddon } from "../addons/serialize"
-import { terminalWriter } from "../utils/terminal-writer"
-import { t } from "../utils/i18n"
-import { Icon } from "./Icon"
-import { Button } from "./ui/Button"
+  type CodingAgentTuiPanelInfo,
+} from "./pty-target"
+import { hasTuiHostTerminalSizeChanged } from "./terminal-size"
+import { SerializeAddon } from "../../addons/serialize"
+import { terminalWriter } from "../../utils/terminal-writer"
+import { t } from "../../utils/i18n"
+import { Icon } from "../../components/Icon"
+import { Button } from "../../components/ui/Button"
 
 const DEFAULT_COLS = 100
 const DEFAULT_ROWS = 30
@@ -131,11 +131,12 @@ function useTerminalUiBindings(input: {
   input.cleanups.push(() => input.term.textarea?.removeEventListener("blur", handleTextareaBlur))
 }
 
-export interface TuiHostPanelProps {
+export interface CodingAgentTuiPanelProps {
   active: Accessor<boolean>
+  directory: Accessor<string>
 }
 
-export function TuiHostPanel(props: TuiHostPanelProps) {
+export function CodingAgentTuiPanel(props: CodingAgentTuiPanelProps) {
   let container!: HTMLDivElement
   let term: GhosttyTerminal | undefined
   let fitAddon: FitAddon | undefined
@@ -152,9 +153,21 @@ export function TuiHostPanel(props: TuiHostPanelProps) {
   let lastSize: { cols: number; rows: number } | undefined
   const cleanups: VoidFunction[] = []
 
-  const [hostInfo, setHostInfo] = createSignal<TuiHostPanelInfo | null>(null)
+  const [hostInfo, setHostInfo] = createSignal<CodingAgentTuiPanelInfo | null>(null)
   const [loading, setLoading] = createSignal(false)
   const [error, setError] = createSignal("")
+
+  const activeDirectory = () => props.directory().trim()
+
+  function requireActiveDirectory() {
+    const directory = activeDirectory()
+    if (!directory) throw new Error("Coding agent TUI requires an active workspace directory.")
+    return directory
+  }
+
+  function hostDirectory() {
+    return hostInfo()?.directory?.trim() || requireActiveDirectory()
+  }
 
   const hostState = () => {
     if (error()) return "error"
@@ -168,7 +181,7 @@ export function TuiHostPanel(props: TuiHostPanelProps) {
     return hostInfo()?.running ? t("tui.host_running") : t("tui.host_stopped")
   }
 
-  function snapshotKey(info: TuiHostPanelInfo | null | undefined) {
+  function snapshotKey(info: CodingAgentTuiPanelInfo | null | undefined) {
     if (!info?.id || !info.directory) return
     return `opencorvus:tui-host:${SNAPSHOT_VERSION}:${info.directory}:${info.id}`
   }
@@ -210,7 +223,7 @@ export function TuiHostPanel(props: TuiHostPanelProps) {
     })
   }
 
-  function restoreTerminalSnapshot(info: TuiHostPanelInfo | null | undefined) {
+  function restoreTerminalSnapshot(info: CodingAgentTuiPanelInfo | null | undefined) {
     const key = snapshotKey(info)
     const current = term
     if (!key || !current) return
@@ -301,7 +314,8 @@ export function TuiHostPanel(props: TuiHostPanelProps) {
 
   async function ensureHostStarted() {
     if (hostStarted) return hostInfo()
-    const current = await loadTuiHostStatus()
+    const directory = requireActiveDirectory()
+    const current = await loadTuiHostStatus({ directory })
     if (disposed) return
     setHostInfo(current)
     hostStarted = current.running
@@ -311,7 +325,7 @@ export function TuiHostPanel(props: TuiHostPanelProps) {
     }
     const cols = term?.cols && term.cols > 0 ? term.cols : DEFAULT_COLS
     const rows = term?.rows && term.rows > 0 ? term.rows : DEFAULT_ROWS
-    const started = await startTuiHost({ cols, rows })
+    const started = await startTuiHost({ cols, rows, directory })
     setHostInfo(started)
     hostStarted = true
     restoreTerminalSnapshot(started)
@@ -323,7 +337,7 @@ export function TuiHostPanel(props: TuiHostPanelProps) {
     const id = hostInfo()?.id
     if (!id) return
     if (disposed || !props.active()) return
-    const nextSocket = new WebSocket(buildTuiHostConnectUrl({ id, cursor: hostCursor }))
+    const nextSocket = new WebSocket(buildTuiHostConnectUrl({ id, cursor: hostCursor, directory: hostDirectory() }))
     socket = nextSocket
     nextSocket.binaryType = "arraybuffer"
     nextSocket.onopen = () => {
@@ -403,7 +417,7 @@ export function TuiHostPanel(props: TuiHostPanelProps) {
     if (!hostStarted) return
     const id = hostInfo()?.id
     if (!id) return
-    void resizeTuiHost({ id, cols, rows }).catch((err) => {
+    void resizeTuiHost({ id, cols, rows, directory: hostDirectory() }).catch((err) => {
       if (!disposed) setError(formatTuiHostError(err))
     })
   }
@@ -413,7 +427,8 @@ export function TuiHostPanel(props: TuiHostPanelProps) {
     setError("")
     try {
       const id = hostInfo()?.id
-      if (id) await stopTuiHost({ id })
+      const directory = hostDirectory()
+      if (id) await stopTuiHost({ id, directory })
       closeSocket()
       await new Promise<void>((resolve) => flushTerminalOutput(resolve))
       if (snapshotSaveFrame !== undefined) cancelAnimationFrame(snapshotSaveFrame)

@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test"
-import { hasTuiHostTerminalSizeChanged } from "../src/services/tui-host-terminal"
+import { hasTuiHostTerminalSizeChanged } from "../src/plugins/coding-agent-tui/terminal-size"
 
 describe("tui host terminal helpers", () => {
   test("detects real terminal size changes and ignores duplicate resize events", () => {

@@ -9,7 +9,7 @@ export const { use: useKV, provider: KVProvider } = createSimpleContext({
   name: "KV",
   init: () => {
     const [ready, setReady] = createSignal(false)
-    const [store, setStore] = createStore<Record<string, any>>()
+    const [store, setStore] = createStore<Record<string, any>>({})
     const filePath = path.join(Global.Path.state, "kv.json")
 
     Filesystem.readJson(filePath)

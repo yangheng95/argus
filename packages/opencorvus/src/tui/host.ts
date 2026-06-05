@@ -171,7 +171,7 @@ function info(session: HostSession | null) {
     cols: session.cols,
     rows: session.rows,
     url: session.command.url,
-    directory: session.command.cwd,
+    directory: session.command.directory,
     title: session.title,
     command: session.command.command,
     args: session.command.args,
