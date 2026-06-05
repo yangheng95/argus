@@ -164,7 +164,9 @@ describe("tool.bash", () => {
         const restore = ProcessSupervisor.setFactoryForTest(async () => {
           const stdout = new PassThrough()
           let resolveExit!: (code: number) => void
-          const exited = new Promise<number>((resolve) => { resolveExit = resolve })
+          const exited = new Promise<number>((resolve) => {
+            resolveExit = resolve
+          })
           queueMicrotask(() => {
             stdout.write("shell-cleanup\n")
             stdout.end()
@@ -177,13 +179,15 @@ describe("tool.bash", () => {
             stderr: new PassThrough(),
             exited,
             terminate: async () => {},
-            dispose: async () => { disposeCalls++ },
+            dispose: async () => {
+              disposeCalls++
+            },
             unref: () => {},
           }
         })
         try {
           const bash = await BashTool.init()
-          await bash.execute(
+          const result = await bash.execute(
             {
               command: "echo shell-cleanup",
               description: "Echo cleanup marker",
@@ -191,6 +195,9 @@ describe("tool.bash", () => {
             ctx,
           )
           expect(disposeCalls).toBe(1)
+          expect(result.output).toContain("foreground command lifecycle")
+          expect(result.output).toContain("OpenCorvus disposed its process tree")
+          expect(result.output).toContain("background: true instead of shell '&'")
         } finally {
           restore()
         }
@@ -210,7 +217,9 @@ describe("tool.bash", () => {
           stderr: new PassThrough(),
           exited: Promise.resolve(0),
           terminate: async () => {},
-          dispose: async () => { disposeCalls++ },
+          dispose: async () => {
+            disposeCalls++
+          },
           unref: () => {},
         }))
         try {
@@ -681,7 +690,8 @@ describe("tool.bash truncation", () => {
         )
         expect((result.metadata as any).truncated).toBe(false)
         // MSYS/Git Bash on Windows outputs LF, not CRLF
-        expect(result.output.trim()).toBe("hello")
+        expect(result.output).toContain("hello")
+        expect(result.output).toContain("foreground command lifecycle")
       },
     })
   })
