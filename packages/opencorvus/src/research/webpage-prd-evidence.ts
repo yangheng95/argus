@@ -13,6 +13,7 @@ import {
 import { ProjectRuntimePaths } from "@/project/runtime-paths"
 
 const EXCERPT_MAX_CHARS = 2_400
+export const WEBPAGE_REFERENCE_IMAGE_EVIDENCE_ID = "ev_webpage_reference_image"
 const RAW_WEBPAGE_EVIDENCE_LINE_PATTERNS = [
   /\bsinglefile\.html\b/i,
   /\bcapture\.html\b/i,
@@ -73,6 +74,7 @@ export interface WebpagePrdEvidence {
   webpageEvidenceRelative: string
   sourcePackageRelative: string
   referenceImageRelative: string
+  referenceImageEvidenceID: string
   artifacts: string[]
   excerpts: WebpagePrdEvidenceExcerpt[]
 }
@@ -131,6 +133,7 @@ export async function readPreparedWebpagePrdEvidence(input: {
     webpageEvidenceRelative: paths.webpageEvidenceRelative,
     sourcePackageRelative: paths.sourcePackageRelative,
     referenceImageRelative: path.posix.join(paths.sourcePackageRelative, "reference.png"),
+    referenceImageEvidenceID: WEBPAGE_REFERENCE_IMAGE_EVIDENCE_ID,
     artifacts: input.artifacts ?? [
       ...primaryWebpageEvidenceArtifacts(input.taskID),
       ...primaryWebpageSourcePackageArtifacts(input.taskID),
@@ -173,8 +176,12 @@ export function renderWebpagePrdEvidencePromptSection(evidence: WebpagePrdEviden
     `Webpage evidence root: ${evidence.webpageEvidenceRelative}`,
     `Source package root: ${evidence.sourcePackageRelative}`,
     `Visual reference image: ${evidence.referenceImageRelative}`,
+    `Required reference image evidence id: ${evidence.referenceImageEvidenceID}`,
     "",
     "Use this rendered webpage evidence as the primary source for page layout, visible content, responsive behavior, style tokens, interactions, maps, charts, cards, tables, and footer/header investigation scope.",
+    `Register the captured reference screenshot as research evidence with id \`${evidence.referenceImageEvidenceID}\`, pointer \`${evidence.referenceImageRelative}\`, kind \`web\`, and reliability \`primary\`.`,
+    `Use \`${evidence.referenceImageEvidenceID}\` in \`webpage_contract.reference_image_evidence_ids\` and cite it from visual layout, style, fidelity acceptance, bundle sections, evidence notes, and citation entries that depend on the screenshot.`,
+    `In the rendered research-bundle report, include a downstream implementation point stating that build must inspect and reference \`${evidence.referenceImageRelative}\` while writing code, using the screenshot as visual truth instead of reconstructing layout from prose alone.`,
     "`source-ir/interaction-state-snapshots.json` is factual runtime evidence captured from browser scroll/click states. Use it to assign sticky/floating bars, active tabs, viewport-persistent elements, expanded/selected states, and interaction-state questions to downstream investigation packets; do not treat it as prewritten PRD prose.",
     "Do not re-fetch this same URL to replace prepared visual layout or content extraction. In frontend-research, missing metadata, source text, or linked-source confirmation becomes an investigation-packet risk or open question rather than a reason to fetch.",
     "Return `document_outline` as the visible-flow investigation module list for downstream agent splitting. Order modules by visible page flow and include evidence ids for each module.",
