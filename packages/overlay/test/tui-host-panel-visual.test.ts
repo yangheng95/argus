@@ -8,7 +8,16 @@ import { ensureOverlayDist, overlayStaticResponse } from "./overlay-dist"
 
 await ensureOverlayDist()
 
-const PASTE_INPUT = "pasted-from-browser-test\r"
+const TANK_BATTLE_TUI_CASE = [
+  "Build a playable Tank Battle game for this workspace.",
+  "Requirements:",
+  "- show a tile battlefield with brick walls, steel walls, a player tank, and enemy tanks",
+  "- support keyboard movement and shooting from the overlay TUI request flow",
+  "- include score, lives, wave status, win state, and game over state",
+  "- verify the result with a browser visual test and a focused rule test",
+  "Use a mature game/rendering library where appropriate; do not hand-roll engine primitives.",
+  "Chinese acceptance marker: 坦克大战 overlay TUI usability case.",
+].join("\n") + "\r"
 
 function route(url: URL) {
   return url.pathname.replace(/\/+$/, "") || "/"
@@ -36,7 +45,7 @@ function hostInfo() {
   }
 }
 
-test("right sidebar TUI host panel renders as a real browser surface", async () => {
+test("right sidebar TUI host panel accepts the Tank Battle build case through PTY", async () => {
   const screenshotDir = mkdtempSync(join(tmpdir(), "opencorvus-tui-visual-"))
   const screenshotPath = join(screenshotDir, "right-tui.png")
   const connectCursors: string[] = []
@@ -48,7 +57,7 @@ test("right sidebar TUI host panel renders as a real browser surface", async () 
       open(ws) {
         ws.send("\x1b[38;5;75mOpenCorvus\x1b[0m coding assistant\r\n")
         ws.send("project: D:/overlay/workspace/app\r\n")
-        ws.send("todo: inspect right sidebar TUI visual smoke\r\n")
+        ws.send("todo: accept a Tank Battle build request through overlay TUI\r\n")
         ws.send(new Uint8Array([0, ...new TextEncoder().encode(JSON.stringify({ cursor: 99 }))]))
       },
       message(ws, message) {
@@ -152,7 +161,7 @@ test("right sidebar TUI host panel renders as a real browser surface", async () 
         activeTag: document.activeElement?.tagName,
         activeLabel: document.activeElement?.getAttribute("aria-label"),
       }
-    }, PASTE_INPUT)
+    }, TANK_BATTLE_TUI_CASE)
     expect(focusResult).toMatchObject({ activeTag: "TEXTAREA", activeLabel: "Terminal input" })
     await page.waitForFunction(() => {
       let key: string | null | undefined
@@ -165,7 +174,7 @@ test("right sidebar TUI host panel renders as a real browser surface", async () 
       }
       if (!key) return false
       const snapshot = JSON.parse(localStorage.getItem(key) ?? "{}") as { buffer?: string }
-      return typeof snapshot.buffer === "string" && snapshot.buffer.includes("pasted-from-browser-test")
+      return typeof snapshot.buffer === "string" && snapshot.buffer.includes("Tank Battle") && snapshot.buffer.includes("browser visual test")
     }, { timeout: 30_000 })
 
     const layout = await page.evaluate(() => {
@@ -211,9 +220,14 @@ test("right sidebar TUI host panel renders as a real browser surface", async () 
     })
     expect(layout.snapshotBuffer).toContain("OpenCorvus")
     expect(layout.snapshotBuffer).toContain("Restored OpenCode snapshot")
-    expect(layout.snapshotBuffer).toContain("pasted-from-browser-test")
-    expect(receivedInput.join("")).toContain("pasted-from-browser-test")
-    expect(layout.snapshotCursor).toBe(99 + PASTE_INPUT.length)
+    expect(layout.snapshotBuffer).toContain("Build a playable Tank Battle game")
+    expect(layout.snapshotBuffer).toContain("tile battlefield")
+    expect(layout.snapshotBuffer).toContain("overlay TUI")
+    expect(layout.snapshotBuffer).toContain("坦克大战")
+    expect(receivedInput.join("")).toContain("Build a playable Tank Battle game")
+    expect(receivedInput.join("")).toContain("browser visual test")
+    expect(receivedInput.join("")).toContain("坦克大战")
+    expect(layout.snapshotCursor).toBe(99 + TANK_BATTLE_TUI_CASE.length)
     expect(layout.snapshotRows).toBeGreaterThan(0)
     expect(layout.snapshotCols).toBeGreaterThan(0)
     expect(layout.snapshotScrollY).toBeGreaterThanOrEqual(0)
