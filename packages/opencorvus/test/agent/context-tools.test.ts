@@ -26,7 +26,7 @@ describe("agent context tools", () => {
   //   requirements / architect  → keep  (durable greenfield tech decisions)
   //   frontend-design            → drop  (owns webpage evidence extraction; redundant)
   //   intent-analysis           → drop  (first cheap classifier; must not research)
-  //   research                  → drop  (starts from source URLs with webfetch; search costs are avoided)
+  //   deep-research             → drop  (starts from source URLs with webfetch; search costs are avoided)
   //   frontend-research         → drop  (host prepares rendered URL evidence before the session; no ad-hoc search)
   for (const agentName of ["requirements", "architect"] as const) {
     test(`${agentName} resolves websearch through its include whitelist`, async () => {
@@ -41,8 +41,8 @@ describe("agent context tools", () => {
     }, { timeout: INSTANCE_STARTUP_TIMEOUT_MS })
   }
 
-  for (const agentName of ["frontend-design", "intent-analysis", "research", "frontend-research"] as const) {
-    test(`${agentName} does NOT resolve websearch (research is not its job)`, async () => {
+  for (const agentName of ["frontend-design", "intent-analysis", "deep-research", "frontend-research"] as const) {
+    test(`${agentName} does NOT resolve websearch (deep research is not its job)`, async () => {
       await Instance.provide({
         directory: process.cwd(),
         fn: async () => {
@@ -53,7 +53,7 @@ describe("agent context tools", () => {
     }, { timeout: INSTANCE_STARTUP_TIMEOUT_MS })
   }
 
-  for (const agentName of ["fact-check", "research"] as const) {
+  for (const agentName of ["fact-check", "deep-research"] as const) {
     test(`${agentName} resolves webfetch through the read-only retrieval surface`, async () => {
       await Instance.provide({
         directory: process.cwd(),

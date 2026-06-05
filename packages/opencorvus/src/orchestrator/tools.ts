@@ -4190,9 +4190,9 @@ export function createOrchestratorTools(input: {
       },
     }),
 
-    research: tool({
+    deep_research: tool({
       description:
-        "OPTIONAL advisory evidence side-tool agent. Use when the task depends on external facts, current documentation, competitor/industry/API research, source maps, or PRD/SPEC/report source material that should become a durable citation bundle. For supplied webpage URLs that need functional/visual frontend analysis, `frontend_research` is a separate candidate; for implementation-template/source handoff, `frontend_design` is a separate candidate. The result is a compact research_brief artifact plus bundle paths and may include subpage_research_tasks for independent follow-up research. It is NOT a workflow step, NOT a route selector, NOT requirements, NOT architect, NOT build, and NOT a acceptance path.",
+        "OPTIONAL deep evidence side-tool agent. Use when the task depends on multi-source external facts, current documentation, competitor/industry/API research, source maps, or PRD/SPEC/report source material that should become a durable citation bundle. For supplied webpage URLs that need functional/visual frontend analysis, `frontend_research` is a separate candidate; for implementation-template/source handoff, `frontend_design` is a separate candidate. The result is a compact research_brief artifact plus bundle paths and may include subpage_research_tasks for independent follow-up deep research. It is NOT a workflow step, NOT a route selector, NOT requirements, NOT architect, NOT build, and NOT a acceptance path.",
       inputSchema: z.object({
         reason: z.string().min(1).describe("Why evidence research is needed for this task."),
         target_deliverable: z
@@ -4209,8 +4209,8 @@ export function createOrchestratorTools(input: {
         const task = requireTask(taskID)
         let runnerSessionID: string | undefined
         try {
-          const { ResearchAgent } = await import("@/research")
-          const result = await ResearchAgent.run({
+          const { DeepResearchAgent } = await import("@/research")
+          const result = await DeepResearchAgent.run({
             title: task.title,
             request: task.request,
             targetDeliverable: target_deliverable,
@@ -4232,7 +4232,7 @@ export function createOrchestratorTools(input: {
           const blocking = result.brief.open_questions.filter((item) => item.blocking)
           const subpageTasks = result.brief.subpage_research_tasks
           return SubAgentProtocol.yieldResult({
-            headline: "Research brief persisted as advisory evidence.",
+            headline: "Deep research brief persisted as advisory evidence.",
             summary: result.brief.summary,
             fields: [
               ["session", result.sessionID],
@@ -4255,7 +4255,7 @@ export function createOrchestratorTools(input: {
           if (runnerSessionID) {
             SessionStatus.set(runnerSessionID, { type: "terminal", reason: "error", error: msg })
           }
-          log.error("research tool failed", { taskID, error: msg })
+          log.error("deep_research tool failed", { taskID, error: msg })
           throw err
         }
       },
@@ -4721,7 +4721,7 @@ export function createOrchestratorTools(input: {
         if (scope === "all") {
           await appendResearchBriefContext(
             sections,
-            "Research Brief",
+            "Deep Research Brief",
             findLatestResearchBriefArtifact(taskID),
             task.request,
           )

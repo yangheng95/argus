@@ -1,4 +1,4 @@
-export { ResearchAgent } from "./agent"
+export { DeepResearchAgent } from "./agent"
 export {
   ResearchBriefSchema,
   ResearchBundleInputSchema,

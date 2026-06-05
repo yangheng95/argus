@@ -44,9 +44,10 @@ describe("orchestrator tool descriptions for integrity stuck loops", () => {
     expect(tools.frontend_design.description).not.toContain("Call this BEFORE every other downstream agent")
     expect(tools.frontend_design.description).not.toContain("route those URLs through `frontend_research` with `source_urls`")
 
-    expect(tools.research.description).toContain("PRD/SPEC/report source material")
-    expect(tools.research.description).toContain("`frontend_research` is a separate candidate")
-    expect(tools.research.description).not.toContain("use `frontend_research` instead")
+    expect(tools.research).toBeUndefined()
+    expect(tools.deep_research.description).toContain("PRD/SPEC/report source material")
+    expect(tools.deep_research.description).toContain("`frontend_research` is a separate candidate")
+    expect(tools.deep_research.description).not.toContain("use `frontend_research` instead")
     expect(tools.frontend_research.description).toContain("webpage/UI investigation publisher")
     expect(tools.frontend_research.description).toContain("host prepares rendered webpage evidence")
     expect(tools.frontend_research.description).toContain("partitions that evidence into source-backed work packets")

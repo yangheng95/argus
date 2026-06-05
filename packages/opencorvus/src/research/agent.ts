@@ -27,22 +27,22 @@ import {
 import { RESEARCH_VOLATILE_STALE_AFTER_MS, researchRequestHash, type ResearchBrief, type ResearchBundle } from "./schema"
 import { researchRequestHashInput } from "./staleness"
 
-import RESEARCH_CORE from "@/prompt/core/research-core.txt"
+import DEEP_RESEARCH_CORE from "@/prompt/core/deep-research-core.txt"
 
-const log = Log.create({ service: "research-agent" })
-export type ResearchLikeAgentKind = "research" | "frontend-research"
+const log = Log.create({ service: "deep-research-agent" })
+export type ResearchLikeAgentKind = "deep-research" | "frontend-research"
 
 export interface ResearchSessionConfig {
   kind: ResearchLikeAgentKind
   core: string
   sessionTitlePrefix: string
   prepareWebpageEvidence: "none" | "prd-only" | "always-for-source-url" | "read-existing-for-source-url"
-  bundlePathKind: "research" | "frontend-research"
+  bundlePathKind: "deep-research" | "frontend-research"
   retrievalTools: "readonly" | "none"
   delegation: string
 }
 
-export namespace ResearchAgent {
+export namespace DeepResearchAgent {
   export interface RunInput {
     title: string
     request: string
@@ -67,24 +67,24 @@ export namespace ResearchAgent {
 
   export async function run(input: RunInput): Promise<RunResult> {
     return runResearchSession(input, {
-      kind: "research",
-      core: RESEARCH_CORE,
-      sessionTitlePrefix: "Research",
+      kind: "deep-research",
+      core: DEEP_RESEARCH_CORE,
+      sessionTitlePrefix: "Deep Research",
       prepareWebpageEvidence: "prd-only",
-      bundlePathKind: "research",
+      bundlePathKind: "deep-research",
       retrievalTools: "readonly",
       delegation:
-        "Orchestrator is asking research to gather evidence and prepare PRD/SPEC input material. " +
-        "Return evidence, problem statements, user needs, constraints, document outline, and open questions only. " +
+        "Orchestrator is asking deep-research to gather durable multi-source evidence and prepare PRD/SPEC/report input material. " +
+        "Return source-backed evidence, problem statements, user needs, constraints, document outline, and open questions only. " +
         "Do not produce final REQ-N, acceptance specs, goal graph, implementation plan, or next-tool routing instructions.",
     })
   }
 }
 
 export async function runResearchSession(
-  input: ResearchAgent.RunInput,
+  input: DeepResearchAgent.RunInput,
   config: ResearchSessionConfig,
-): Promise<ResearchAgent.RunResult> {
+): Promise<DeepResearchAgent.RunResult> {
   const sessionTitle = `${config.sessionTitlePrefix}: ${input.title}`
   const session = await Session.createNext({
     kind: config.kind,
@@ -187,7 +187,7 @@ export async function runResearchSession(
 }
 
 async function prepareInputWebpagePrdEvidence(
-  input: ResearchAgent.RunInput,
+  input: DeepResearchAgent.RunInput,
   mode: ResearchSessionConfig["prepareWebpageEvidence"],
 ): Promise<WebpagePrdEvidence | undefined> {
   const sourceUrls = input.sourceUrls ?? []
@@ -223,7 +223,7 @@ async function prepareInputWebpagePrdEvidence(
 }
 
 function buildUserPrompt(
-  input: ResearchAgent.RunInput,
+  input: DeepResearchAgent.RunInput,
   webpagePrdEvidence: WebpagePrdEvidence | undefined,
   config: ResearchSessionConfig,
 ): string {
@@ -262,7 +262,7 @@ async function writeResearchBundle(input: {
   }
   const paths = input.kind === "frontend-research"
     ? ProjectRuntimePaths.frontendResearchPaths(Instance.directory, input.taskID, input.sessionID)
-    : ProjectRuntimePaths.researchPaths(Instance.directory, input.taskID, input.sessionID)
+    : ProjectRuntimePaths.deepResearchPaths(Instance.directory, input.taskID, input.sessionID)
   await fs.mkdir(paths.absoluteDir, { recursive: true })
   await Promise.all([
     fs.writeFile(paths.fullMarkdownAbsolute, input.bundle.full_markdown, "utf8"),

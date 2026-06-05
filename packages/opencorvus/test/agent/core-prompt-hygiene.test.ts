@@ -17,7 +17,7 @@ const promptFiles = {
   goalWorkloadAnalyst: "goal-workload-analyst-core.txt",
   orchestrator: "orchestrator-core.txt",
   requirements: "requirements-core.txt",
-  research: "research-core.txt",
+  deepResearch: "deep-research-core.txt",
   visualQa: "visual-qa-core.txt",
 }
 
@@ -80,14 +80,16 @@ describe("core prompt hygiene", () => {
       // Raised 525 -> 530 for source-URL research dispatch guidance.
       // Raised 530 -> 565 on 2026-06-03 after splitting webpage
       // functional/visual evidence from generic research into frontend_research.
-      orchestrator: 565,
+      // Raised 565 -> 580 on 2026-06-05 after renaming generic research to
+      // deep_research and documenting req/architect/build retrieval boundaries.
+      orchestrator: 580,
       // Raised from 180 -> 190 on 2026-05-29 to make Requirements record
       // explicit workflow/visual/data/verification complexity calibration
       // without turning it into goal decomposition.
       // Raised 190 -> 195 on 2026-05-31 for research evidence ID handling.
       requirements: relaxedAgentPromptLineBudget,
       // Raised 35 -> 40 for source-URL subpage research workflow.
-      research: relaxedAgentPromptLineBudget,
+      deepResearch: relaxedAgentPromptLineBudget,
       visualQa: relaxedAgentPromptLineBudget,
     }
 

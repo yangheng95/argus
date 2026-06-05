@@ -39,7 +39,8 @@ test("returns default native agents when no config", async () => {
       expect(names).toContain("visual-qa")
       expect(names).toContain("general")
       expect(names).toContain("explore")
-      expect(names).toContain("research")
+      expect(names).toContain("deep-research")
+      expect(names).not.toContain("research")
       expect(names).toContain("compaction")
       expect(names).toContain("title")
       expect(names).toContain("summary")
@@ -427,9 +428,9 @@ test("native stage agent registry tool surfaces match role boundaries", async ()
       expect(design?.tools?.include).not.toContain("websearch")
       expect(design?.tools?.include).not.toContain("task")
 
-      const research = await Agent.get("research")
-      expect(research).toBeDefined()
-      expect(research?.tools?.include?.sort()).toEqual(
+      const deepResearch = await Agent.get("deep-research")
+      expect(deepResearch).toBeDefined()
+      expect(deepResearch?.tools?.include?.sort()).toEqual(
         [
           "external_code_search",
           "find_files",
@@ -443,7 +444,7 @@ test("native stage agent registry tool surfaces match role boundaries", async ()
           "webfetch",
         ].sort(),
       )
-      expect(research?.tools?.include).not.toContain("websearch")
+      expect(deepResearch?.tools?.include).not.toContain("websearch")
       for (const tool of [
         "bash",
         "edit",
@@ -456,7 +457,7 @@ test("native stage agent registry tool surfaces match role boundaries", async ()
         "propose_task",
         "skill",
       ]) {
-        expect(research?.tools?.include).not.toContain(tool)
+        expect(deepResearch?.tools?.include).not.toContain(tool)
       }
 
       const frontendResearch = await Agent.get("frontend-research")
@@ -477,11 +478,11 @@ test("native stage agent registry tool surfaces match role boundaries", async ()
   })
 })
 
-test("research agent tool config cannot reopen executor surfaces", async () => {
+test("deep-research agent tool config cannot reopen executor surfaces", async () => {
   await using tmp = await tmpdir({
     config: {
       agent: {
-        research: {
+        "deep-research": {
           tools: { include: ["bash"] },
         },
       },
@@ -490,23 +491,23 @@ test("research agent tool config cannot reopen executor surfaces", async () => {
   await Instance.provide({
     directory: tmp.path,
     fn: async () => {
-      await expect(Agent.get("research")).rejects.toThrow("config.agent.research.tools is not supported")
+      await expect(Agent.get("deep-research")).rejects.toThrow("config.agent.deep-research.tools is not supported")
     },
   })
 })
 
 test("fixed evidence agents cannot be disabled or tool-overridden", async () => {
-  await using researchTmp = await tmpdir({
+  await using deepResearchTmp = await tmpdir({
     config: {
       agent: {
-        research: { disable: true },
+        "deep-research": { disable: true },
       },
     },
   })
   await Instance.provide({
-    directory: researchTmp.path,
+    directory: deepResearchTmp.path,
     fn: async () => {
-      await expect(Agent.get("research")).rejects.toThrow("config.agent.research.disable is not supported")
+      await expect(Agent.get("deep-research")).rejects.toThrow("config.agent.deep-research.disable is not supported")
     },
   })
 
@@ -561,7 +562,8 @@ test("orchestrator registry exposes lifecycle tools it teaches in prompt", async
         expect(include).toContain(tool)
       }
       expect(include).toContain("integrity")
-      expect(include).toContain("research")
+      expect(include).toContain("deep_research")
+      expect(include).not.toContain("research")
       expect(include).toContain("frontend_research")
       expect(include).not.toContain("deliver")
       expect(include).not.toContain("publish_acceptance")

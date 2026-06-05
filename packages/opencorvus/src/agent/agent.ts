@@ -19,7 +19,7 @@ import INTEGRITY_CORE from "@/prompt/core/integrity-core.txt"
 import ACCEPTANCE_REVIEW_CORE from "@/prompt/core/acceptance-review-core.txt"
 import INTENT_ANALYSIS_CORE from "@/prompt/core/intent-analysis-core.txt"
 import FACT_CHECK_CORE from "@/prompt/core/fact-check-core.txt"
-import RESEARCH_CORE from "@/prompt/core/research-core.txt"
+import DEEP_RESEARCH_CORE from "@/prompt/core/deep-research-core.txt"
 import FRONTEND_RESEARCH_CORE from "@/prompt/core/frontend-research-core.txt"
 import GOAL_WORKLOAD_ANALYST_CORE from "@/prompt/core/goal-workload-analyst-core.txt"
 import { FRONTEND_DESIGN_STATIC_TOOL_IDS } from "@/frontend-design/static-tools"
@@ -414,7 +414,7 @@ export namespace Agent {
             // dispatch
             "build",
             "requirements",
-            "research",
+            "deep_research",
             "frontend_research",
             "frontend_design",
             "architect",
@@ -580,10 +580,10 @@ export namespace Agent {
         native: true,
         hidden: true,
       },
-      research: {
-        name: "research",
-        description: AgentRoleContract.description("research"),
-        prompt: RESEARCH_CORE,
+      "deep-research": {
+        name: "deep-research",
+        description: AgentRoleContract.description("deep-research"),
+        prompt: DEEP_RESEARCH_CORE,
         tools: {
           include: [
             "read_file",
@@ -645,7 +645,7 @@ export namespace Agent {
       },
     }
 
-    const fixedReadonlyAgents = new Set(["fact-check", "research", "frontend-research"])
+    const fixedReadonlyAgents = new Set(["fact-check", "deep-research", "frontend-research"])
     const fixedToolSurfaceAgents = new Set(["frontend-design"])
     for (const [key, value] of entries((cfg.agent ?? {}) as NonNullable<Config.Info["agent"]>)) {
       if (fixedReadonlyAgents.has(key) && value.disable) {
@@ -750,7 +750,7 @@ export namespace Agent {
     "intent-analysis": INTENT_ANALYSIS_CORE,
     integrity: INTEGRITY_RUNTIME_PROMPT,
     "fact-check": FACT_CHECK_CORE,
-    research: RESEARCH_CORE,
+    "deep-research": DEEP_RESEARCH_CORE,
     "frontend-research": FRONTEND_RESEARCH_CORE,
     "goal-workload-analyst": GOAL_WORKLOAD_ANALYST_CORE,
     mission: MISSION_CORE,

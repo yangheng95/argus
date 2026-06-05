@@ -260,7 +260,7 @@ export namespace SessionLoop {
     "integrity",
     "intent-analysis",
     "orchestrator",
-    "research",
+    "deep-research",
     "frontend-research",
     "requirements",
   ])
@@ -2748,7 +2748,7 @@ export namespace SessionLoop {
       "goal-workload-analyst",
       "intent-analysis",
       "requirements",
-      "research",
+      "deep-research",
     ])
     return exactStageAgents.has(agentName) && contract.identity.agentKind === agentName
   }

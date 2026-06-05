@@ -24,7 +24,7 @@ import type { ResearchBrief } from "../../src/research/schema"
 const request = "research request"
 const INSTANCE_STARTUP_TIMEOUT_MS = 60_000
 
-function validResearchBriefForTask(taskID: string, overrides: Partial<ResearchBrief> = {}, stage = "research") {
+function validResearchBriefForTask(taskID: string, overrides: Partial<ResearchBrief> = {}, stage = "deep-research") {
   return validResearchBrief(request, {
     bundle: {
       full_markdown_path: `.opencorvus/runtime/tasks/${taskID}/${stage}/s/research-bundle.md`,
@@ -160,7 +160,7 @@ describe("research brief persistence and describe projection", () => {
         expect(desc.research?.blocking_open_question_count).toBe(1)
 
         const rendered = renderTaskDescription(desc)
-        expect(rendered).toContain("## Research Brief")
+        expect(rendered).toContain("## Deep Research Brief")
         expect(rendered).toContain("Research is advisory evidence only")
         expect(rendered).toContain("blocking_open_questions=1")
         expect(renderResearchBriefPromptSection({ taskID, request })).toContain("```json")
@@ -289,9 +289,9 @@ describe("research brief persistence and describe projection", () => {
     const shortTaskPath = Identifier.shortPath(taskID)
     const brief = validResearchBrief(request, {
       bundle: {
-        full_markdown_path: `.opencorvus/runtime/tasks/${shortTaskPath}/research/ses_test/research-bundle.md`,
-        evidence_json_path: `.opencorvus/runtime/tasks/${shortTaskPath}/research/ses_test/evidence.json`,
-        citation_map_path: `.opencorvus/runtime/tasks/${shortTaskPath}/research/ses_test/citation-map.json`,
+        full_markdown_path: `.opencorvus/runtime/tasks/${shortTaskPath}/deep-research/ses_test/research-bundle.md`,
+        evidence_json_path: `.opencorvus/runtime/tasks/${shortTaskPath}/deep-research/ses_test/evidence.json`,
+        citation_map_path: `.opencorvus/runtime/tasks/${shortTaskPath}/deep-research/ses_test/citation-map.json`,
       },
     })
 

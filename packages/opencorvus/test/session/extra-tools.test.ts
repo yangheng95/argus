@@ -407,7 +407,7 @@ describe("extras execute-return normalisation (integration via resolveTools)", (
     })
 
     expect(SessionLoop.usesExactRuntimeContractTools("frontend-research", contract)).toBe(true)
-    expect(SessionLoop.usesExactRuntimeContractTools("research", contract)).toBe(false)
+    expect(SessionLoop.usesExactRuntimeContractTools("deep-research", contract)).toBe(false)
     expect(SessionLoop.usesExactRuntimeContractTools("frontend-research", undefined)).toBe(false)
   })
 

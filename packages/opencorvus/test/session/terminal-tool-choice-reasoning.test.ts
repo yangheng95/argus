@@ -96,6 +96,8 @@ test("isSatisfied=true short-circuits regardless of reasoning", () => {
 test("planner stage agents use exact runtime tools to avoid registry and browser tool bloat", () => {
   for (const agentName of [
     "architect",
+    "deep-research",
+    "fact-check",
     "frontend-design",
     "goal-workload-analyst",
     "intent-analysis",
@@ -109,7 +111,7 @@ test("planner stage agents use exact runtime tools to avoid registry and browser
     } as any)).toBe(true)
   }
 
-  for (const agentName of ["build", "research", "fact-check"]) {
+  for (const agentName of ["build"]) {
     expect(SessionLoop.usesExactRuntimeContractTools(agentName, {
       identity: {
         agentKind: agentName,
