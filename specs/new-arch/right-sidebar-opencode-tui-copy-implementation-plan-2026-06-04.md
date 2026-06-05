@@ -1959,3 +1959,42 @@ OpenCode gap after the round:
 - The current host is still a single project-bound embedded TUI process, not OpenCode's full multi-PTY `list/create/get/update/remove` service.
 - External TUI plugin loader/install remains missing; upstream depends on shared plugin loader modules that OpenCorvus does not yet expose in the copied TUI runtime.
 - `SessionV2Debug` and `context/sync-v2.tsx` remain missing until the real V2 session-message/event source is copied/adapted.
+
+### 2026-06-05 Round 31: OpenCode thinking mode helper
+
+Implemented:
+
+- Rechecked latest OpenCode dev before editing. Upstream remained at `ab5a12d916dd72eab0c84afb1f6de5a07c16a7e4`.
+- Copied OpenCode's `packages/opencode/src/cli/cmd/tui/context/thinking.ts` into OpenCorvus as `packages/opencorvus/src/cli/cmd/tui/context/thinking.ts`.
+- Replaced the current session route's direct `thinking_visibility` boolean source with OpenCode's `useThinkingMode()` helper:
+  - new users default to `hide`;
+  - existing legacy `thinking_visibility` values migrate to `thinking_mode`;
+  - stale `minimal` mode normalizes to `hide`.
+- Kept the existing boolean `showThinking` derived from `thinkingMode() === "show"` for transcript/export compatibility.
+- Reworked `ReasoningPart` to follow OpenCode's thinking UI:
+  - title/body split via `reasoningSummary`;
+  - collapsed `Thought` header in hide mode;
+  - expandable body on click;
+  - spinner while reasoning is still streaming;
+  - duration shown when reasoning completes.
+- Updated `routes/session/dialog-message.tsx` to use the same `useThinkingMode()` source for copy formatting, removing the old direct `thinking_visibility` read from that path.
+- Kept message storage, tool execution, permissions, prompt submission, sidebar, footer, and agent workflow unchanged.
+
+Verified in tests:
+
+- Added `packages/opencorvus/test/tui/thinking.test.ts` to guard the copied helper contract and session/dialog wiring without importing the TS/TSX runtime chain.
+- Extended `plugin-runtime-guard.test.ts` to assert `context/thinking.ts` exists, remains OpenCode-derived, session route uses `thinkingMode`/`ReasoningHeader`, and no session surface directly reads `thinking_visibility`.
+- `bun test packages/opencorvus/test/tui/thinking.test.ts packages/opencorvus/test/tui/plugin-runtime-guard.test.ts`
+- `bun run --cwd packages/opencorvus typecheck`
+
+OpenCode comparison after the round:
+
+- The current session route now shares OpenCode's thinking mode helper and reasoning summary/header behavior instead of rendering raw `_Thinking:_` blocks.
+- This closes another direct prerequisite for copying `SessionV2Debug`, which imports `reasoningSummary` and `useThinkingMode`.
+
+OpenCode gap after the round:
+
+- OpenCode's full workspace management remains missing: workspace list/create/unavailable dialogs, move-session prompt flow, workspace commands, and workspace status event sync are not implemented yet.
+- The current host is still a single project-bound embedded TUI process, not OpenCode's full multi-PTY `list/create/get/update/remove` service.
+- External TUI plugin loader/install remains missing; upstream depends on shared plugin loader modules that OpenCorvus does not yet expose in the copied TUI runtime.
+- `SessionV2Debug` and `context/sync-v2.tsx` remain missing until the real V2 session-message/event source is copied/adapted.

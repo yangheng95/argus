@@ -6,6 +6,7 @@ import { useRoute } from "@tui/context/route"
 import { Clipboard } from "@tui/util/clipboard"
 import type { PromptInfo } from "@tui/component/prompt/history"
 import { useKV } from "../../context/kv.tsx"
+import { useThinkingMode } from "../../context/thinking"
 import { useToast } from "../../ui/toast"
 import { formatMessage } from "../../util/transcript"
 
@@ -20,7 +21,8 @@ export function DialogMessage(props: {
   const route = useRoute()
   const kv = useKV()
   const toast = useToast()
-  const [showThinking] = kv.signal("thinking_visibility", true)
+  const thinking = useThinkingMode()
+  const showThinking = createMemo(() => thinking.mode() === "show")
   const [showDetails] = kv.signal("tool_details_visibility", true)
   const [showAssistantMetadata] = kv.signal("assistant_metadata_visibility", true)
 
