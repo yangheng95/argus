@@ -178,7 +178,7 @@ type LeftActivity = "tasks" | "explorer" | "changes"
 type RightActivity = "tui" | "browser" | "inspector"
 
 const DEFAULT_LEFT_ACTIVITY: LeftActivity = "tasks"
-const DEFAULT_RIGHT_ACTIVITY: RightActivity = "tui"
+const DEFAULT_RIGHT_ACTIVITY: RightActivity = "inspector"
 
 const LEFT_ACTIVITIES: readonly SideActivity<LeftActivity>[] = [
   { id: "tasks", icon: "goals", labelKey: "sidebar.title" },

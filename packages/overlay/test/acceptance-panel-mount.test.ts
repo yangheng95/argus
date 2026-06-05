@@ -42,7 +42,7 @@ function readAllSurfaceCss(): string {
 // acceptance card at all. This suite locks both the structural wiring and the
 // redesigned panel's verdict-driven behavior in place.
 
-test("index.html declares side activity bodies and the default right TUI activity", async () => {
+test("index.html declares side activity bodies and the default right Inspector activity", async () => {
   const html = await readSrc("src/index.html")
   expect(html).toContain('id="solidConversationAgentRailMount"')
   expect(html).toContain('id="chatContentFrame"')
@@ -59,13 +59,13 @@ test("index.html declares side activity bodies and the default right TUI activit
   expect(html).toContain('id="solidFileExplorerMount"')
   expect(html).toContain('id="solidFileChangesMount"')
   expect(html).toContain('id="rightPanelTui"')
-  expect(html).toContain('data-side-activity="tui" data-active="true"')
+  expect(html).toContain('data-side-activity="tui" data-active="false"')
   expect(html).toContain('id="solidTuiHostMount"')
   expect(html).toContain('id="rightPanelBrowser"')
   expect(html).toContain('data-side-activity="browser" data-active="false"')
   expect(html).toContain('id="solidBrowserPreviewMount"')
   expect(html).toContain('id="rightPanelInspector"')
-  expect(html).toContain('data-side-activity="inspector" data-active="false"')
+  expect(html).toContain('data-side-activity="inspector" data-active="true"')
   expect(html).toContain('id="solidBoardMount"')
   expect(html).not.toContain('id="solidRightPanelTabs"')
   expect(html).not.toContain('id="solidRightFilesMount"')
