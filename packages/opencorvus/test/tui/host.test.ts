@@ -7,8 +7,8 @@ import { tmpdir } from "../fixture/fixture"
 function echoCommand(cwd: string, text: string): Tui.EmbeddedCommand {
   if (process.platform === "win32") {
     return {
-      command: "powershell.exe",
-      args: ["-NoLogo", "-NoProfile", "-ExecutionPolicy", "Bypass", "-Command", `Write-Output ${JSON.stringify(text)}; Start-Sleep -Seconds 30`],
+      command: "cmd.exe",
+      args: ["/d", "/s", "/c", `echo ${text} & ping -n 31 127.0.0.1 >nul`],
       cwd,
       url: "http://127.0.0.1:1",
       port: 1,
@@ -49,6 +49,34 @@ function inputEchoCommand(cwd: string): Tui.EmbeddedCommand {
     cwd,
     url: "http://127.0.0.1:2",
     port: 2,
+    hostname: "127.0.0.1",
+  }
+}
+
+function delayedExitCommand(cwd: string, exitCode: number): Tui.EmbeddedCommand {
+  if (process.platform === "win32") {
+    return {
+      command: "powershell.exe",
+      args: [
+        "-NoLogo",
+        "-NoProfile",
+        "-ExecutionPolicy",
+        "Bypass",
+        "-Command",
+        `Write-Output "opencorvus-host-exiting"; Start-Sleep -Milliseconds 250; exit ${exitCode}`,
+      ],
+      cwd,
+      url: "http://127.0.0.1:3",
+      port: 3,
+      hostname: "127.0.0.1",
+    }
+  }
+  return {
+    command: "sh",
+    args: ["-lc", `printf '%s\\n' opencorvus-host-exiting; sleep 0.25; exit ${exitCode}`],
+    cwd,
+    url: "http://127.0.0.1:3",
+    port: 3,
     hostname: "127.0.0.1",
   }
 }
@@ -154,6 +182,32 @@ describe("tui.host", () => {
         )
         connection.onClose()
         await TuiHost.stop()
+      },
+    })
+  })
+
+  test("closes PTY connections with the host process exit code", async () => {
+    await using tmp = await tmpdir()
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        await TuiHost.startPrepared({ command: delayedExitCommand(tmp.path, 7), cols: 80, rows: 24 })
+        const status = TuiHost.status()
+        const prepared = TuiHost.preparePtyConnect({ id: status.id!, cursor: 0 })
+        const closed: Array<{ code: number; reason: string }> = []
+        prepared.attach({
+          send: () => undefined,
+          close: (code, reason) => {
+            closed.push({ code, reason })
+          },
+        })
+
+        await waitFor(
+          () => closed.some((event) => event.code === 4405 && event.reason === "TUI host exited with code 7"),
+          "Pseudo Terminal host did not close connections with the process exit code",
+        )
+        expect(closed.at(-1)).toEqual({ code: 4405, reason: "TUI host exited with code 7" })
+        expect(TuiHost.status().status).toBe("idle")
       },
     })
   })

@@ -2362,6 +2362,37 @@ OpenCode gap after the round:
 
 - Same intentional MVP gaps remain: link opening, terminal keybind integration, theme/font synchronization, debounced size update, terminal tab/workspace store, full workspace management, external TUI plugin loader, and `SessionV2Debug`/`sync-v2`.
 
+### 2026-06-05 Round 46: MVP PTY process exit diagnostics
+
+Implemented:
+
+- Rechecked latest OpenCode dev before editing. Upstream remains `9211ef7e95b7cd55f08b27b066d635cc42cbb362`; no new PTY/TUI core changes were present.
+- Compared the current OpenCode PTY process exit path again:
+  - OpenCode marks the session `exited`, closes subscribers, publishes `pty.exited`, clears subscribers, and removes the session from state.
+  - OpenCode's native terminal-first surface does not need a browser-side abnormal close reason because its terminal and PTY lifecycle live in the same app shell.
+- Fixed the embedded right-sidebar host's natural process exit path:
+  - explicit stop/remove still closes PTY connections with normal code `1000`;
+  - a host process that exits by itself now closes attached PTY connections with code `4405`;
+  - the close reason is the single backend source `TUI host exited with code {exitCode}` or `TUI host exited` when the platform does not report a code.
+- This makes the browser wrapper's Round 45 close-reason UI actionable for real host-process exits instead of showing only a generic disconnection.
+- Stabilized the Windows PTY output fixture in `packages/opencorvus/test/tui/host.test.ts` by using `cmd.exe` for the simple output-capture case. The old PowerShell fixture could exceed Bun's 5 second test timeout before producing the first line, which obscured PTY regressions.
+
+Verified in tests:
+
+- Added `packages/opencorvus/test/tui/host.test.ts` coverage for a real PTY process that exits with code `7` while a prepared PTY connection is attached.
+- The test asserts the attached connection receives `4405` and `TUI host exited with code 7`, then the host returns to `idle`.
+- `bun test packages/opencorvus/test/tui/host.test.ts`
+
+OpenCode comparison after the round:
+
+- The implementation keeps the copied OpenCode lifecycle shape of removing exited sessions from PTY state.
+- The additional close reason is specific to OpenCorvus' browser-embedded right-sidebar transport: it preserves OpenCode's PTY lifecycle while exposing the backend reason across the WebSocket boundary.
+
+OpenCode gap after the round:
+
+- This improves diagnosis for host processes that start and then exit, but it does not yet identify why `Pty.create -> Tui.resolveEmbeddedCommand -> TuiHost.startPrepared` might fail before a PTY connection exists.
+- Same intentional MVP gaps remain: link opening, terminal keybind integration, debounced size update, terminal tab/workspace store, full workspace management, external TUI plugin loader, and `SessionV2Debug`/`sync-v2`.
+
 ### 2026-06-05 Round 45: MVP websocket close reason diagnostics
 
 Implemented:
