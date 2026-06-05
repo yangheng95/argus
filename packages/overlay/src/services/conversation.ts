@@ -46,7 +46,6 @@ let historyEpoch = 0;
 let historyAbort: AbortController | null = null;
 let tailMergeEpoch = 0;
 let tailMergeAbort: AbortController | null = null;
-let tailMergeInFlight: { taskID: string; tailLimit: number; promise: Promise<void> } | null = null;
 let historyTaskID = "";
 let scheduledTailMergeTaskID = "";
 let scheduledTailMergeRunning = false;
@@ -69,7 +68,6 @@ export function cancelConversationReplay(): void {
   replayAbort = null;
   historyAbort = null;
   tailMergeAbort = null;
-  tailMergeInFlight = null;
   scheduledTailMergeTaskID = "";
   scheduledTailMergeRunning = false;
   scheduledTailMergeAgain = false;
@@ -378,38 +376,18 @@ export async function mergeLatestConversationTail(
 ): Promise<void> {
   const selectedTaskID = String(taskID || "");
   if (!selectedTaskID) throw new Error("conversation tail merge requires a taskID");
-  const tailLimit = Math.max(1, Math.floor(Number(options.tailLimit ?? INITIAL_CONVERSATION_TAIL_LIMIT) || INITIAL_CONVERSATION_TAIL_LIMIT));
-  if (!options.signal && tailMergeInFlight?.taskID === selectedTaskID && tailMergeInFlight.tailLimit === tailLimit) {
-    return tailMergeInFlight.promise;
-  }
-  const promise = mergeLatestConversationTailOnce(selectedTaskID, tailLimit, options.signal);
-  if (!options.signal) {
-    tailMergeInFlight = { taskID: selectedTaskID, tailLimit, promise };
-    void promise.then(() => {
-      if (tailMergeInFlight?.promise === promise) tailMergeInFlight = null;
-    }, () => {
-      if (tailMergeInFlight?.promise === promise) tailMergeInFlight = null;
-    });
-  }
-  return promise;
-}
-
-async function mergeLatestConversationTailOnce(
-  selectedTaskID: string,
-  tailLimit: number,
-  signal?: AbortSignal,
-): Promise<void> {
   tailMergeAbort?.abort(new DOMException("Conversation tail merge superseded", "AbortError"));
-  const controller = linkedReplayController(signal);
+  const controller = linkedReplayController(options.signal);
   tailMergeAbort = controller;
   const epoch = ++tailMergeEpoch;
-  const activeSignal = controller.signal;
+  const signal = controller.signal;
   try {
+    const tailLimit = Math.max(1, Math.floor(Number(options.tailLimit ?? INITIAL_CONVERSATION_TAIL_LIMIT) || INITIAL_CONVERSATION_TAIL_LIMIT));
     const data = await apiJson(
       `task/${encodeURIComponent(selectedTaskID)}/conversation?tail_limit=${encodeURIComponent(String(tailLimit))}`,
-      { signal: activeSignal },
+      { signal },
     );
-    assertActiveTailMerge(selectedTaskID, epoch, activeSignal);
+    assertActiveTailMerge(selectedTaskID, epoch, signal);
     const board = requireObject(data?.board, "board");
     const transcript = requireArray(data?.transcript, "transcript");
     const timeline = requireArray(data?.timeline, "timeline");
@@ -417,10 +395,9 @@ async function mergeLatestConversationTailOnce(
     const view = requireObject(data?.view, "view");
     const agentView = requireObject(data?.agentView ?? data?.view, "agentView");
     const messageWatermark = parseMessageWatermark(data?.messageWatermark);
-    const lastSequence = requireNonnegativeInteger(data?.lastSequence, "lastSequence");
+    requireNonnegativeInteger(data?.lastSequence, "lastSequence");
 
     setBoardData(board);
-    if (lastSequence > (Number(boardStore.taskSequence) || 0)) setTaskSequence(lastSequence);
     setBoardUpdatedAt(Date.now());
     hydrateConversationView(view, mergeLoadedConversationMessages(timeline, transcript));
     hydrateConversationAgentView(selectedTaskID, agentView);

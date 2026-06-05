@@ -5,7 +5,6 @@ import type { HostTransport, TransportRequest, TransportResponse } from "../src/
 
 const { routeSSEEvent, handleEventStreamEvent, handleTaskListNotification } = await import("../src/services/events");
 const { boardStore, loadTasks, setBoardStore } = await import("../src/store/board");
-const { setSettingsStore } = await import("../src/store/settings");
 const { appStore, setAppStore } = await import("../src/store/app");
 const { resetWriter } = await import("../src/services/tree-writer");
 const { cardTreeStore } = await import("../src/store/card-tree");
@@ -92,7 +91,6 @@ function selectTaskForTest(taskID: string): void {
 afterEach(() => {
   __setHostTransportForTest(undefined);
   resetSelectedLiveCursor();
-  setSettingsStore("directory", "");
   selectTaskForTest("");
   setBoardStore("board", null);
   setBoardStore("boardSyncPending", false);
@@ -769,7 +767,7 @@ test("task-list notification does not advance visible cursor before per-task pay
   expect(boardStore.taskSequence).toBe(5);
 });
 
-test("task-list selected sequence gap does not trigger selected-task recovery", async () => {
+test("task-list selected sequence gap triggers selected-task recovery", async () => {
   resetWriter();
   const streams: Array<{ path: string; query?: Record<string, string> }> = [];
   __setHostTransportForTest(fakeRecoveryTransport(streams, 10));
@@ -783,13 +781,14 @@ test("task-list selected sequence gap does not trigger selected-task recovery", 
   });
 
   expect(boardStore.taskSequence).toBe(5);
-  await new Promise((resolve) => setTimeout(resolve, 20));
-  expect(streams).toEqual([]);
+  await waitForStreamCount(streams, 1);
+  expect(streams).toEqual([
+    { path: "task/tsk_refresh/events", query: { after: "5", after_live: "0" } },
+  ]);
   expect(boardStore.taskSequence).toBe(5);
 });
 
-test("task-list message delta notifications reload tasks once per coalesced burst", async () => {
-  await new Promise((resolve) => setTimeout(resolve, 650));
+test("task-list notifications reload tasks for message deltas", async () => {
   const originalFetch = globalThis.fetch;
   const originalLocalStorage = globalThis.localStorage;
   const originalWindow = (globalThis as any).window;
@@ -808,59 +807,10 @@ test("task-list message delta notifications reload tasks once per coalesced burs
     length: 0,
   } as Storage;
   (globalThis as any).window = {};
-  setSettingsStore("directory", "D:/events-refresh/workspace");
 
   try {
     handleTaskListNotification({
       type: "message.part.delta",
-      taskID: "tsk_sidebar_refresh",
-      sequence: 7,
-    });
-    handleTaskListNotification({
-      type: "message.part.delta",
-      taskID: "tsk_sidebar_refresh",
-      sequence: 8,
-    });
-    handleTaskListNotification({
-      type: "message.updated",
-      taskID: "tsk_sidebar_refresh",
-      sequence: 9,
-    });
-
-    await new Promise((resolve) => setTimeout(resolve, 650));
-    const taskReloads = fetchMock.mock.calls.filter(([url]) => String(url).includes("/global/tasks"));
-    expect(taskReloads).toHaveLength(1);
-  } finally {
-    globalThis.fetch = originalFetch;
-    globalThis.localStorage = originalLocalStorage;
-    (globalThis as any).window = originalWindow;
-  }
-});
-
-test("task-list lifecycle notifications reload tasks", async () => {
-  const originalFetch = globalThis.fetch;
-  const originalLocalStorage = globalThis.localStorage;
-  const originalWindow = (globalThis as any).window;
-  const fetchMock = mock(async () =>
-    new Response(JSON.stringify({ tasks: [] }), {
-      status: 200,
-      headers: { "content-type": "application/json" },
-    }));
-  globalThis.fetch = fetchMock as typeof fetch;
-  globalThis.localStorage = {
-    getItem: () => null,
-    setItem: () => {},
-    removeItem: () => {},
-    clear: () => {},
-    key: () => null,
-    length: 0,
-  } as Storage;
-  (globalThis as any).window = {};
-  setSettingsStore("directory", "D:/events-refresh/workspace");
-
-  try {
-    handleTaskListNotification({
-      type: "task.updated",
       taskID: "tsk_sidebar_refresh",
       sequence: 7,
     });
@@ -881,11 +831,11 @@ test("task-list reloads are single-flight across refresh triggers", async () => 
   const pending = new Promise<void>((resolve) => {
     release = resolve;
   });
-  const requests: Array<{ path: string; query?: Record<string, string | number | boolean> }> = [];
+  const paths: string[] = [];
   const transport = {
     kind: "tauri",
     async request<T>(req: TransportRequest): Promise<TransportResponse<T>> {
-      requests.push({ path: req.path, query: req.query });
+      paths.push(req.path);
       await pending;
       return { status: 200, ok: true, headers: {}, body: { tasks: [] } as T };
     },
@@ -900,50 +850,15 @@ test("task-list reloads are single-flight across refresh triggers", async () => 
     },
   } satisfies HostTransport;
   __setHostTransportForTest(transport);
-  setSettingsStore("directory", "D:/events-refresh/workspace");
 
   const first = loadTasks();
   const second = loadTasks();
   await new Promise((resolve) => setTimeout(resolve, 0));
 
-  expect(requests).toEqual([
-    { path: "global/tasks", query: { directory: "D:/events-refresh/workspace" } },
-  ]);
+  expect(paths).toEqual(["global/tasks"]);
 
   release();
   await Promise.all([first, second]);
-});
-
-test("task-list reload skips global task request without workspace directory", async () => {
-  const paths: string[] = [];
-  const transport = {
-    kind: "tauri",
-    async request<T>(req: TransportRequest): Promise<TransportResponse<T>> {
-      paths.push(req.path);
-      return { status: 200, ok: true, headers: {}, body: { tasks: [] } as T };
-    },
-    openStream() {
-      throw new Error("openStream not used");
-    },
-    async native() {
-      throw new Error("native not used");
-    },
-    subscribeUiCommand() {
-      return { unsubscribe() {} };
-    },
-  } satisfies HostTransport;
-  __setHostTransportForTest(transport);
-  setSettingsStore("directory", "");
-  setBoardStore("tasks", []);
-  setBoardStore("pendingTasks", []);
-  setBoardStore("tasksLoaded", false);
-
-  await loadTasks();
-
-  expect(paths).toEqual([]);
-  expect(boardStore.tasks).toEqual([]);
-  expect(boardStore.tasksLoaded).toBe(true);
-  expect(boardStore.tasksError).toBe("");
 });
 
 test("config.changed SSE burst coalesces into one config refresh", async () => {

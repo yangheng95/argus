@@ -6,7 +6,6 @@ import { createStore } from "solid-js/store";
 import { batch } from "solid-js";
 import { apiJson, apiRequest } from "../services/api";
 import { t } from "../utils/i18n";
-import { settingsStore } from "./settings";
 
 // ── Store ──
 
@@ -452,12 +451,7 @@ async function loadTasksOnce(): Promise<void> {
   // UI surfaces the failure explicitly. The previous silent catch left the UI
   // stuck on an empty list with no indication that the backend was unreachable.
   try {
-    const directory = settingsStore.directory.trim();
-    if (!directory) {
-      clearTasksForMissingDirectory();
-      return;
-    }
-    const data = await apiJson(`global/tasks?directory=${encodeURIComponent(directory)}`);
+    const data = await apiJson("global/tasks");
     const tasks = sortedTasks(data);
     const seen = new Set(
       tasks
