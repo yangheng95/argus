@@ -3,14 +3,21 @@ import {
   EngineArtifactTable,
   EngineInteractionRequestTable,
   EngineTaskTable,
+  type EngineArtifactKind,
 } from "../../src/engine/engine.sql"
 import { EngineRuntime } from "../../src/engine/runtime"
 import { hooks } from "../../src/engine/state"
 import { findRun, findTask } from "../../src/engine/store"
 import { deriveTaskStatus } from "../../src/engine/task-status"
+import { dispatchTaskLoop } from "../../src/engine/queue"
+import {
+  completeOrchestratorToolOwnership,
+  createOrchestratorToolOwnershipPayload,
+  insertOrchestratorToolOwnershipArtifact,
+} from "../../src/engine/tool-ownership"
 import { Instance } from "../../src/project/instance"
 import * as TaskLoop from "../../src/orchestrator/loop"
-import { Database } from "../../src/storage/db"
+import { Database, and, eq } from "../../src/storage/db"
 import { Log } from "../../src/util/log"
 import { resetDatabase } from "../fixture/db"
 import { tmpdir } from "../fixture/fixture"
@@ -116,6 +123,106 @@ describe("EngineRuntime goal-run convergence", () => {
     })
   })
 
+  test("same logical terminal goal batch append does not wake again", async () => {
+    await using tmp = await tmpdir({ git: true })
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const runTaskLoop = spyOn(TaskLoop, "runTaskLoop").mockResolvedValue(undefined)
+        const taskID = `task_goal_same_batch_${Date.now()}`
+        const runID = `run_goal_same_batch_${Date.now()}`
+        const now = Date.now()
+        seedTaskRun(taskID, runID, now, {
+          status: "running",
+          blocking_reason: null,
+          error: null,
+        })
+        seedGoalRun(taskID, runID, "grun_one", "completed", now + 1)
+        seedGoalRun(taskID, runID, "grun_two", "completed", now + 2)
+
+        await EngineRuntime.syncRun(runID, hooks())
+        await new Promise((resolve) => setTimeout(resolve, 0))
+        expect(runTaskLoop).toHaveBeenCalledTimes(1)
+
+        seedGoalRun(taskID, runID, "grun_one", "completed", now + 10)
+        seedGoalRun(taskID, runID, "grun_two", "completed", now + 11)
+
+        await EngineRuntime.syncRun(runID, hooks())
+        await new Promise((resolve) => setTimeout(resolve, 0))
+
+        expect(runTaskLoop).toHaveBeenCalledTimes(1)
+        expect(goalBatchNotificationsForTask(taskID)).toHaveLength(1)
+      },
+    })
+  })
+
+  test("terminal batch notification is recorded only after a wake starts", async () => {
+    await using tmp = await tmpdir({ git: true })
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        let release: (() => void) | undefined
+        const holdLoop = new Promise<void>((resolve) => {
+          release = resolve
+        })
+        const runTaskLoop = spyOn(TaskLoop, "runTaskLoop").mockImplementation(async () => {
+          await holdLoop
+        })
+        const taskID = `task_goal_live_owner_${Date.now()}`
+        const runID = `run_goal_live_owner_${Date.now()}`
+        const now = Date.now()
+        seedTaskRun(taskID, runID, now, {
+          status: "running",
+          blocking_reason: null,
+          error: null,
+        })
+        seedGoalRun(taskID, runID, "grun_one", "completed", now + 1)
+        seedGoalRun(taskID, runID, "grun_two", "completed", now + 2)
+
+        await dispatchTaskLoop({ taskID })
+        await new Promise((resolve) => setTimeout(resolve, 0))
+        expect(runTaskLoop).toHaveBeenCalledTimes(1)
+
+        const ownershipPayload = createOrchestratorToolOwnershipPayload({
+          taskID,
+          orchestratorSessionID: `ses_orchestrator_${now}`,
+          orchestratorMessageID: `msg_orchestrator_${now}`,
+          toolCallID: `cal_integrity_${now}`,
+          toolPartID: `prt_integrity_${now}`,
+          childSessionID: `ses_integrity_${now}`,
+          toolName: "integrity",
+          scope: "task",
+          now,
+        })
+        insertOrchestratorToolOwnershipArtifact({
+          taskID,
+          label: "tool-ownership-start",
+          payload: ownershipPayload,
+          now,
+        })
+
+        await EngineRuntime.syncRun(runID, hooks())
+        await new Promise((resolve) => setTimeout(resolve, 0))
+        expect(runTaskLoop).toHaveBeenCalledTimes(1)
+        expect(goalBatchNotificationsForTask(taskID)).toHaveLength(0)
+
+        completeOrchestratorToolOwnership({
+          taskID,
+          ownershipID: ownershipPayload.ownership_id,
+          outcome: "completed",
+          now: now + 3,
+        })
+        release!()
+        await holdLoop
+        await EngineRuntime.syncRun(runID, hooks())
+        await new Promise((resolve) => setTimeout(resolve, 0))
+
+        expect(runTaskLoop).toHaveBeenCalledTimes(2)
+        expect(goalBatchNotificationsForTask(taskID)).toHaveLength(1)
+      },
+    })
+  })
+
   test("pending interactions preserve the parent run blocker", async () => {
     await using tmp = await tmpdir({ git: true })
     await Instance.provide({
@@ -208,6 +315,21 @@ function seedTaskRun(
       })
       .run()
   })
+}
+
+function goalBatchNotificationsForTask(taskID: string) {
+  return Database.use((db) =>
+    db
+      .select()
+      .from(EngineArtifactTable)
+      .where(
+        and(
+          eq(EngineArtifactTable.task_id, taskID),
+          eq(EngineArtifactTable.kind, "goal_batch_notification" as EngineArtifactKind),
+        ),
+      )
+      .all(),
+  )
 }
 
 function seedGoalRun(taskID: string, runID: string, goalRunID: string, status: string, now: number) {

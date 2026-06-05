@@ -1751,7 +1751,7 @@ export function createOrchestratorTools(input: {
     throw new Error(`Unknown integrity outcome: ${(outcome as { status?: string }).status ?? "unknown"}`)
   }
 
-  async function runIntegrityReview(): Promise<IntegrityReviewOutcome> {
+  async function runIntegrityReview(toolExecution: OrchestratorToolExecutionContext): Promise<IntegrityReviewOutcome> {
     const task = requireTask(taskID)
     const activeSpec = findActiveSpecForTask(task.id)
     if (!activeSpec) {
@@ -1774,7 +1774,7 @@ export function createOrchestratorTools(input: {
     const inflight = integrityReviewSingleflight.get(singleflightKey)
     if (inflight) return inflight
 
-    const reviewPromise = runIntegrityReviewOnce({ task, activeSpec, dbGoals })
+    const reviewPromise = runIntegrityReviewOnce({ task, activeSpec, dbGoals, toolExecution })
     integrityReviewSingleflight.set(singleflightKey, reviewPromise)
     try {
       return await reviewPromise
@@ -1789,8 +1789,9 @@ export function createOrchestratorTools(input: {
     task: TaskRow
     activeSpec: NonNullable<ReturnType<typeof findActiveSpecForTask>>
     dbGoals: ReturnType<typeof listGoals>
+    toolExecution: OrchestratorToolExecutionContext
   }): Promise<IntegrityReviewOutcome> {
-    const { task, activeSpec, dbGoals } = ctx
+    const { task, activeSpec, dbGoals, toolExecution } = ctx
 
     const { findDeliveriesForTask, findRequirements, listGoalRunsForTask } = await import("@/engine/store")
     const reqRows = findRequirements(activeSpec.id)
@@ -1909,26 +1910,68 @@ export function createOrchestratorTools(input: {
       .readByPhase("frontend_design")
       .map((entry) => `## ${entry.key}\nreason: ${entry.reason}\n\n${entry.value}`)
       .join("\n\n")
-    const verdict = await reviewIntegrity({
-      userRequest: task.request,
-      taskTitle: task.title,
-      goals: goalsForReview,
-      requirements,
-      requirementDecisions,
-      requirementStatus,
-      attachments: Array.isArray(task.attachments) ? (task.attachments as any) : undefined,
-      acceptance: {
-        summary: acceptanceSummary,
-        changedFiles: acceptanceChangedFiles,
-        diffs: acceptanceDiffs,
-      },
-      frontendDesign: frontendDesignContract,
-      replayContext,
-      signal: input.signal,
-      taskID,
-      task,
-      parentSessionID: input.agentSessionID,
-    })
+
+    let activeOwnership: OrchestratorToolOwnershipPayload | undefined
+    let ownershipClosed = false
+    const closeIntegrityOwnership = (outcome: "completed" | "failed" | "cancelled", error?: string) => {
+      if (!activeOwnership || ownershipClosed) return
+      ownershipClosed = true
+      completeOrchestratorToolOwnership({
+        taskID,
+        ownershipID: activeOwnership.ownership_id,
+        outcome,
+        error,
+      })
+    }
+
+    let verdict: Awaited<ReturnType<typeof reviewIntegrity>>
+    try {
+      verdict = await reviewIntegrity({
+        userRequest: task.request,
+        taskTitle: task.title,
+        goals: goalsForReview,
+        requirements,
+        requirementDecisions,
+        requirementStatus,
+        attachments: Array.isArray(task.attachments) ? (task.attachments as any) : undefined,
+        acceptance: {
+          summary: acceptanceSummary,
+          changedFiles: acceptanceChangedFiles,
+          diffs: acceptanceDiffs,
+        },
+        frontendDesign: frontendDesignContract,
+        replayContext,
+        signal: input.signal,
+        taskID,
+        task,
+        parentSessionID: input.agentSessionID,
+        onSessionCreated: (sessionID) => {
+          if (activeOwnership) return
+          const ownershipPayload = createOrchestratorToolOwnershipPayload({
+            taskID,
+            orchestratorSessionID: toolExecution.orchestratorSessionID,
+            orchestratorMessageID: toolExecution.orchestratorMessageID,
+            toolCallID: toolExecution.toolCallID,
+            toolPartID: toolExecution.toolPartID,
+            childSessionID: sessionID,
+            toolName: "integrity",
+            scope: "task",
+          })
+          insertOrchestratorToolOwnershipArtifact({
+            taskID,
+            runID: findActiveRunForTask(taskID)?.id ?? null,
+            goalRunID: null,
+            label: "tool-ownership-start",
+            payload: ownershipPayload,
+          })
+          activeOwnership = ownershipPayload
+        },
+      })
+      closeIntegrityOwnership("completed")
+    } catch (err) {
+      closeIntegrityOwnership("failed", err instanceof Error ? err.message : String(err))
+      throw err
+    }
 
     const { recordIntegrityAttempt } = await import("@/engine/persist")
 
@@ -3711,8 +3754,9 @@ export function createOrchestratorTools(input: {
       inputSchema: z.object({
         reason: z.string().optional().describe("Why you decided to run integrity review"),
       }),
-      execute: async () => {
-        const outcome = await runIntegrityReview()
+      execute: async (_input, options) => {
+        const toolExecution = requireOrchestratorToolExecutionContext(options, "integrity")
+        const outcome = await runIntegrityReview(toolExecution)
         if (outcome.status === "reviewed" && outcome.artifactMissing && outcome.phase === "post_build") {
           await blockActiveRunForTask(taskID, {
             blockingReason: "integrity artifact_missing",

@@ -4,6 +4,7 @@ import { EngineArtifactTable, EngineTaskTable } from "../../src/engine/engine.sq
 import { findTask } from "../../src/engine/store"
 import { deriveTaskStatus } from "../../src/engine/task-status"
 import {
+  completeOrchestratorToolOwnership,
   createOrchestratorToolOwnershipPayload,
   insertOrchestratorToolOwnershipArtifact,
 } from "../../src/engine/tool-ownership"
@@ -304,7 +305,7 @@ describe("engine queue", () => {
     })
   })
 
-  test("interrupting a live-owned active task starts a replacement orchestrator wake", async () => {
+  test("interrupting a live-owned active task queues the wake until ownership closes", async () => {
     await using tmp = await tmpdir({ git: true })
 
     await Instance.provide({
@@ -346,8 +347,9 @@ describe("engine queue", () => {
           orchestratorSessionID: `ses_orchestrator_${now}`,
           orchestratorMessageID: `msg_orchestrator_${now}`,
           toolCallID: `cal_build_${now}`,
-          toolPartID: `prt_build_${now}`,
-          childSessionID: `ses_build_${now}`,
+          toolPartID: `prt_integrity_${now}`,
+          childSessionID: `ses_integrity_${now}`,
+          toolName: "integrity",
           scope: "task",
           now,
         })
@@ -365,15 +367,27 @@ describe("engine queue", () => {
         })
         await new Promise((resolve) => setTimeout(resolve, 0))
 
-        expect(interruptTaskLoop).toHaveBeenCalledWith(taskID, "task loop dispatch interrupt")
+        expect(interruptTaskLoop).not.toHaveBeenCalled()
+        expect(runTaskLoop).toHaveBeenCalledTimes(1)
+
+        completeOrchestratorToolOwnership({
+          taskID,
+          ownershipID: ownershipPayload.ownership_id,
+          outcome: "completed",
+          now: now + 1,
+        })
+
+        release!()
+        await holdLoop
+        for (let i = 0; i < 10; i++) {
+          await new Promise((resolve) => setTimeout(resolve, 0))
+          if (runTaskLoop.mock.calls.length >= 2) break
+        }
         expect(runTaskLoop).toHaveBeenCalledTimes(2)
         expect(runTaskLoop.mock.calls[1]?.[0]).toMatchObject({
           taskID,
           event: { note: "stop the running agent and reconsider" },
         })
-
-        release!()
-        await holdLoop
       },
     })
   })

@@ -2,11 +2,13 @@ import { ExecutorRegistry } from "@/executor/registry"
 import { Config } from "@/config/config"
 
 import { Instance } from "@/project/instance"
-import { Database, eq } from "@/storage/db"
+import { Database, and, eq, sql } from "@/storage/db"
 import { Log } from "@/util/log"
 import {
+  EngineArtifactTable,
   EngineInteractionRequestTable,
   EngineTaskTable,
+  type EngineArtifactKind,
 } from "./engine.sql"
 import { Event } from "./model"
 import { EngineProtocol } from "./protocol"
@@ -42,7 +44,6 @@ const SYNC_RUN_TIMEOUT_MS = parseInt(process.env.OPENCORVUS_SYNC_RUN_TIMEOUT_MS 
 const EXECUTOR_STATUS_TIMEOUT_MS = 30_000 // 30s for executor.status()
 
 const eventBridgeAborts = new Map<string, AbortController>() // goalRunID or runID → AbortController
-const goalBatchNotifications = new Map<string, string>()
 
 const INTERACTION_STALE_MS = parseInt(process.env.OPENCORVUS_INTERACTION_TIMEOUT_MS || "300000", 10) // auto-reject stale interactions (5min default)
 
@@ -117,8 +118,7 @@ export namespace EngineRuntime {
     }
 
     const fingerprint = terminalGoalBatchFingerprint(goalRuns)
-    if (goalBatchNotifications.get(run.id) === fingerprint) return
-    goalBatchNotifications.set(run.id, fingerprint)
+    if (hasGoalBatchNotification({ taskID: run.task_id, runID: run.id, fingerprint })) return
 
     const task = findTask(run.task_id)
     if (task && isTaskCancelled(task)) {
@@ -129,13 +129,11 @@ export namespace EngineRuntime {
       return
     }
     const { dispatchTaskLoop } = await import("@/engine/queue")
-    try {
-      await dispatchTaskLoop({
-        taskID: run.task_id,
-      })
-    } catch (error) {
-      goalBatchNotifications.delete(run.id)
-      throw error
+    const dispatchResult = await dispatchTaskLoop({
+      taskID: run.task_id,
+    })
+    if (dispatchResult === "started") {
+      recordGoalBatchNotification({ taskID: run.task_id, runID: run.id, fingerprint, goalRuns })
     }
   }
 
@@ -331,19 +329,67 @@ function terminalGoalBatchFingerprint(
   goalRuns: Array<{
     id: string
     status: string
-    time_completed: number | null
-    time_updated: number | null
   }>,
 ) {
   return goalRuns
     .map((goalRun) => [
       goalRun.id,
       goalRun.status,
-      goalRun.time_completed ?? "",
-      goalRun.time_updated ?? "",
     ].join(":"))
     .sort()
     .join("|")
+}
+
+function hasGoalBatchNotification(input: { taskID: string; runID: string; fingerprint: string }) {
+  return Boolean(
+    Database.use((db) =>
+      db
+        .select({ id: EngineArtifactTable.id })
+        .from(EngineArtifactTable)
+        .where(
+          and(
+            eq(EngineArtifactTable.task_id, input.taskID),
+            eq(EngineArtifactTable.run_id, input.runID),
+            eq(EngineArtifactTable.kind, "goal_batch_notification" as EngineArtifactKind),
+            sql`json_extract(${EngineArtifactTable.payload}, '$.fingerprint') = ${input.fingerprint}`,
+          ),
+        )
+        .limit(1)
+        .get(),
+    ),
+  )
+}
+
+function recordGoalBatchNotification(input: {
+  taskID: string
+  runID: string
+  fingerprint: string
+  goalRuns: Array<{ id: string; status: string }>
+}) {
+  const now = Date.now()
+  Database.use((db) =>
+    db.insert(EngineArtifactTable)
+      .values({
+        id: Identifier.ascending("artifact"),
+        task_id: input.taskID,
+        run_id: input.runID,
+        goal_run_id: null,
+        kind: "goal_batch_notification" as EngineArtifactKind,
+        label: "goal-batch-wake-dispatched",
+        payload: {
+          task_id: input.taskID,
+          run_id: input.runID,
+          fingerprint: input.fingerprint,
+          goal_runs: input.goalRuns
+            .map((goalRun) => ({ id: goalRun.id, status: goalRun.status }))
+            .sort((a, b) => a.id.localeCompare(b.id)),
+          time_dispatched: now,
+        },
+        time_created: now,
+        time_updated: now,
+      })
+      .run(),
+  )
 }
 
 

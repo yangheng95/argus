@@ -2,18 +2,21 @@ import { desc, eq, and, sql } from "@/storage/db"
 import { Database } from "@/storage/db"
 import { EngineArtifactTable, type EngineArtifactKind, type EngineMetadata } from "@/engine/engine.sql"
 import { Identifier } from "@/id/id"
+import { processOwner } from "./lease"
 
 export type OrchestratorToolOwnershipScope = "task" | "goal"
 export type OrchestratorToolOwnershipOutcome = "completed" | "failed" | "cancelled"
+export type OrchestratorToolOwnershipToolName = "build" | "integrity"
 
 export interface OrchestratorToolOwnershipPayload extends EngineMetadata {
   ownership_id: string
+  owner?: string | null
   task_id: string
   orchestrator_session_id: string
   orchestrator_message_id: string
   tool_part_id: string
   tool_call_id: string
-  tool_name: "build"
+  tool_name: OrchestratorToolOwnershipToolName
   child_session_id: string
   scope: OrchestratorToolOwnershipScope
   goal_id?: string
@@ -49,6 +52,7 @@ export function createOrchestratorToolOwnershipPayload(input: {
   toolPartID: string
   toolCallID: string
   childSessionID: string
+  toolName?: OrchestratorToolOwnershipToolName
   scope: OrchestratorToolOwnershipScope
   goalID?: string
   goalRunID?: string
@@ -57,12 +61,13 @@ export function createOrchestratorToolOwnershipPayload(input: {
   const now = input.now ?? Date.now()
   return {
     ownership_id: Identifier.ascending("artifact"),
+    owner: processOwner(),
     task_id: input.taskID,
     orchestrator_session_id: input.orchestratorSessionID,
     orchestrator_message_id: input.orchestratorMessageID,
     tool_part_id: input.toolPartID,
     tool_call_id: input.toolCallID,
-    tool_name: "build",
+    tool_name: input.toolName ?? "build",
     child_session_id: input.childSessionID,
     scope: input.scope,
     ...(input.goalID ? { goal_id: input.goalID } : {}),
@@ -147,7 +152,10 @@ export function listLatestOrchestratorToolOwnership(taskID: string): Orchestrato
 }
 
 export function listLiveOrchestratorToolOwnership(taskID: string): OrchestratorToolOwnershipRow[] {
-  return listLatestOrchestratorToolOwnership(taskID).filter((row) => !row.payload.time_completed)
+  const owner = processOwner()
+  return listLatestOrchestratorToolOwnership(taskID).filter(
+    (row) => !row.payload.time_completed && (!row.payload.owner || row.payload.owner === owner),
+  )
 }
 
 export function findLiveBuildOwnershipByGoal(input: {
@@ -224,7 +232,7 @@ function normalizeOwnershipPayload(payload: unknown): OrchestratorToolOwnershipP
   const value = payload as Record<string, unknown>
   if (typeof value.ownership_id !== "string" || value.ownership_id.length === 0) return undefined
   if (typeof value.task_id !== "string" || value.task_id.length === 0) return undefined
-  if (value.tool_name !== "build") return undefined
+  if (value.tool_name !== "build" && value.tool_name !== "integrity") return undefined
   if (typeof value.child_session_id !== "string" || value.child_session_id.length === 0) return undefined
   if (typeof value.orchestrator_session_id !== "string" || value.orchestrator_session_id.length === 0) return undefined
   if (typeof value.orchestrator_message_id !== "string" || value.orchestrator_message_id.length === 0) return undefined
