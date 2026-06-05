@@ -1998,3 +1998,44 @@ OpenCode gap after the round:
 - The current host is still a single project-bound embedded TUI process, not OpenCode's full multi-PTY `list/create/get/update/remove` service.
 - External TUI plugin loader/install remains missing; upstream depends on shared plugin loader modules that OpenCorvus does not yet expose in the copied TUI runtime.
 - `SessionV2Debug` and `context/sync-v2.tsx` remain missing until the real V2 session-message/event source is copied/adapted.
+
+### 2026-06-05 Round 32: OpenCode inline tool row
+
+Implemented:
+
+- Rechecked latest OpenCode dev before editing. Upstream advanced to `134f4136da372fdf8f0c3cec2cea3ff81010baf8`, but the delta only touched LLM protocol files:
+  - `packages/llm/src/protocols/openai-chat.ts`;
+  - `packages/llm/src/protocols/openai-responses.ts`;
+  - `packages/llm/src/protocols/shared.ts`;
+  - `packages/llm/test/provider/openai-responses.test.ts`.
+- No upstream TUI/PTY/session UI files changed since the previous TUI baseline.
+- Ported OpenCode's inline tool row structure into the current session route:
+  - introduced `INLINE_TOOL_ICON_WIDTH = 2`;
+  - extracted `InlineToolRow`;
+  - fixed icon/body split with flex row layout;
+  - preserved permission-warning color;
+  - added failed-tool red foreground;
+  - added click-to-expand failed-tool error details;
+  - kept denied/user-cancelled errors as strikethrough rows;
+  - adopted OpenCode's `tool-inline-*`, `tool-inline-subagent-*`, text/tool-block spacing rules.
+- Adapted error detection to OpenCorvus' existing `renderToolFailureCause(props.part.state.failure)` so the UI uses the canonical local tool-failure source instead of faking OpenCode's v2 tool state.
+- Kept tool execution, message storage, prompt, sidebar/footer, permissions, and agent workflow unchanged.
+
+Verified in tests:
+
+- Added `packages/opencorvus/test/tui/inline-tool-row.test.ts` to guard the OpenCode row structure, fixed icon width, failed/denied display, and expandable error behavior.
+- Extended `plugin-runtime-guard.test.ts` to assert `InlineToolRow`, `INLINE_TOOL_ICON_WIDTH`, and failed error expansion stay wired into the session route.
+- `bun test packages/opencorvus/test/tui/inline-tool-row.test.ts packages/opencorvus/test/tui/plugin-runtime-guard.test.ts`
+- `bun run --cwd packages/opencorvus typecheck`
+
+OpenCode comparison after the round:
+
+- The current session route now uses OpenCode's inline tool row layout and error-interaction pattern instead of a single hand-written `<text>` row with always-visible non-denied errors.
+- This improves parity for the main screenshot target: tool calls now have stable icon alignment, cleaner spacing, and expandable failure details like OpenCode.
+
+OpenCode gap after the round:
+
+- OpenCode's full workspace management remains missing: workspace list/create/unavailable dialogs, move-session prompt flow, workspace commands, and workspace status event sync are not implemented yet.
+- The current host is still a single project-bound embedded TUI process, not OpenCode's full multi-PTY `list/create/get/update/remove` service.
+- External TUI plugin loader/install remains missing; upstream depends on shared plugin loader modules that OpenCorvus does not yet expose in the copied TUI runtime.
+- `SessionV2Debug` and `context/sync-v2.tsx` remain missing until the real V2 session-message/event source exists.
