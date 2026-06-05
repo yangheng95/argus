@@ -25,7 +25,7 @@ export namespace Tui {
     port?: number
     /** Hostname for the TUI HTTP server (defaults to 127.0.0.1) */
     hostname?: string
-    /** opencorvus executable path (defaults to "opencorvus") */
+    /** opencorvus executable path */
     bin?: string
   }
 
@@ -249,16 +249,40 @@ export namespace Tui {
 
   function selfBin(): string | undefined {
     const name = path.basename(process.execPath).toLowerCase()
+    if (isOverlayServerExecutable()) return undefined
     if (name === "opencorvus" || name === "opencorvus.exe") return process.execPath
     return undefined
+  }
+
+  function siblingTuiBin(): string | undefined {
+    const file = process.platform === "win32" ? "opencorvus-tui.exe" : "opencorvus-tui"
+    const candidate = path.join(path.dirname(process.execPath), file)
+    return fs.existsSync(candidate) ? candidate : undefined
+  }
+
+  function isOverlayServerExecutable(): boolean {
+    try {
+      const packagePath = path.join(path.dirname(process.execPath), "package.json")
+      const parsed = JSON.parse(fs.readFileSync(packagePath, "utf8")) as { name?: unknown }
+      return typeof parsed.name === "string" && parsed.name.includes("overlay-server")
+    } catch {
+      return false
+    }
   }
 
   async function resolveSpawn(opts: SpawnOptions = {}) {
     const port = opts.port ?? (await allocatePort())
     const hostname = opts.hostname ?? "127.0.0.1"
-    const bin = opts.bin ?? process.env.OPENCORVUS_BIN_PATH ?? selfBin() ?? "opencorvus"
+    const explicitBin = opts.bin ?? process.env.OPENCORVUS_BIN_PATH
     const cwd = opts.directory ?? process.cwd()
-    const devMode = isDevMode() && !opts.bin && !process.env.OPENCORVUS_BIN_PATH
+    const devMode = isDevMode() && !explicitBin
+    const resolvedBin = explicitBin ?? siblingTuiBin() ?? selfBin()
+    if (!devMode && !resolvedBin) {
+      throw new Error(
+        "Embedded TUI cannot resolve the current opencorvus executable. Start OpenCorvus from the source dev command or set OPENCORVUS_BIN_PATH; refusing to use a PATH fallback.",
+      )
+    }
+    const bin = resolvedBin ?? ""
 
     // Pass directory as positional arg to trigger TUI mode (not headless serve)
     const args: string[] = [cwd, "--port", String(port), "--hostname", hostname]

@@ -24,6 +24,7 @@ import {
   artifactHostCanProvideNodeRuntime,
   artifactPackageBaseName,
   artifactSourcemap,
+  artifactTuiSiblingExecutableName,
   parseBuildFlavor,
 } from "./build-artifact"
 import { detectArtifactNodeRuntimeHost } from "./build-host-runtime"
@@ -332,6 +333,28 @@ for (const item of targets) {
       OPENCORVUS_EMBEDDED_ENV: embeddedEnvDefine,
     },
   })
+  if (buildFlavor === "overlay-server") {
+    await Bun.build({
+      conditions: ["browser"],
+      tsconfig: "./tsconfig.json",
+      plugins: [solidPlugin],
+      sourcemap: artifactSourcemap(),
+      external: artifactExternalModules(),
+      compile: {
+        ...compile,
+        outfile: `dist/${name}/${artifactTuiSiblingExecutableName(item.os).replace(/\.exe$/, "")}`,
+      } as any,
+      entrypoints: artifactEntrypoints("cli", parserWorker, workerPath),
+      define: {
+        OPENCORVUS_VERSION: `'${Script.version}'`,
+        OTUI_TREE_SITTER_WORKER_PATH: bunfsRoot + workerRelativePath,
+        OPENCORVUS_WORKER_PATH: workerPath,
+        OPENCORVUS_CHANNEL: `'${Script.channel}'`,
+        OPENCORVUS_LIBC: item.os === "linux" ? `'${item.abi ?? "glibc"}'` : "",
+        OPENCORVUS_EMBEDDED_ENV: embeddedEnvDefine,
+      },
+    })
+  }
   const browserMcpRuntimeDir = path.join(dir, "dist", name, "browser-mcp-node")
   await buildBrowserMcpNodeBundle(browserMcpRuntimeDir)
   await copyRuntimeNodeModules(item, path.join(dir, "dist", name), dir)

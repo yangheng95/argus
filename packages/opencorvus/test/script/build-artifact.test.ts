@@ -14,6 +14,7 @@ import {
   artifactRuntimeNodeModules,
   artifactRuntimeNodeModuleNames,
   artifactSourcemap,
+  artifactTuiSiblingExecutableName,
   parseBuildFlavor,
 } from "../../script/build-artifact"
 import { copyRuntimeNodeModules } from "../../script/build-runtime-node-modules"
@@ -27,6 +28,21 @@ describe("build-artifact", () => {
   test("overlay-server flavor gets a distinct artifact name", () => {
     expect(parseBuildFlavor(["bun", "run", "build", "--overlay-server"])).toBe("overlay-server")
     expect(artifactPackageBaseName("opencorvus", "overlay-server")).toBe("opencorvus-overlay-server")
+  })
+
+  test("overlay-server flavor names the bundled full TUI sibling binary", () => {
+    expect(artifactTuiSiblingExecutableName("win32")).toBe("opencorvus-tui.exe")
+    expect(artifactTuiSiblingExecutableName("linux")).toBe("opencorvus-tui")
+  })
+
+  test("overlay-server build scripts compile the full TUI sibling binary", () => {
+    const buildSource = readFileSync(resolve(import.meta.dir, "../../script/build.ts"), "utf8")
+    const localBuildSource = readFileSync(resolve(import.meta.dir, "../../script/build.local.ts"), "utf8")
+    for (const source of [buildSource, localBuildSource]) {
+      expect(source).toContain('if (buildFlavor === "overlay-server")')
+      expect(source).toContain('artifactTuiSiblingExecutableName(item.os).replace(/\\.exe$/, "")')
+      expect(source).toContain('entrypoints: artifactEntrypoints("cli", parserWorker, workerPath)')
+    }
   })
 
   test("overlay-server flavor compiles only the launcher entrypoint", () => {
