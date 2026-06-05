@@ -114,6 +114,41 @@ test("wake resolves the session agent model through the single resolver", async 
   })
 })
 
+test("wake preserves agent-owned mission session identity", async () => {
+  await using tmp = await tmpdir({
+    config: {
+      model: "base/default",
+      agent: {
+        mission: { model: "base/mission" },
+      },
+    },
+  })
+  await Instance.provide({
+    directory: tmp.path,
+    fn: async () => {
+      const loop = spyOn(SessionPrompt, "loop").mockResolvedValue(undefined as never)
+      const session = await Session.create({ kind: "mission", title: "mission wake" })
+
+      await SessionWake.wake({
+        sessionID: session.id,
+        agent: "coding",
+        prompt: "resume mission",
+      })
+
+      expect(loop).toHaveBeenCalled()
+      const msgs = await Session.messages({ sessionID: session.id })
+      const last = msgs.at(-1)
+      expect(last?.info.role).toBe("user")
+      if (last?.info.role !== "user") throw new Error("expected user message")
+      expect(last.info.agent).toBe("mission")
+      expect(last.info.model).toEqual({
+        providerID: "base",
+        modelID: "mission",
+      })
+    },
+  })
+})
+
 test("wake rejects runtime-required agents before writing an unresumable message", async () => {
   await using tmp = await tmpdir({
     config: {

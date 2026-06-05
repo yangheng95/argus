@@ -25,6 +25,7 @@ import { Session } from "@/session"
 import { SessionContext } from "@/session/context"
 import { Message } from "@/session/message"
 import { SessionPrompt } from "@/session/prompt"
+import { SessionAgentIdentity } from "@/session/agent-identity"
 import { Database, NotFoundError, and, eq, inArray } from "@/storage/db"
 import { Log } from "@/util/log"
 import { compileBoard, boardTag } from "@/workbench/board"
@@ -269,6 +270,7 @@ async function appendDirectAgentSessionReply(input: {
   const text = input.message.trim()
   if (!text) throw new Error("message is required")
   const target = await resolveDirectReplyTarget(input.taskID, input.sessionID)
+  const targetPrompt = SessionAgentIdentity.applyToPrompt(target.session.kind, target.prompt)
   // Both halves of the build check are load-bearing:
   //
   //   - session.kind === "build" catches the obvious case where the
@@ -307,15 +309,15 @@ async function appendDirectAgentSessionReply(input: {
   SessionPrompt.validateSessionRuntimeContractForContinuation({
     sessionID: target.session.id,
     sessionKind: target.session.kind,
-    expectedAgentKind: target.prompt.agent,
+    expectedAgentKind: targetPrompt.agent,
     expectedGoalID: target.session.goalID,
     requireWorkerTurnDescriptor:
-      (SessionPrompt.agentKindRequiresRuntimeContract(target.prompt.agent) ||
+      (SessionPrompt.agentKindRequiresRuntimeContract(targetPrompt.agent) ||
         SessionPrompt.agentKindRequiresRuntimeContract(target.session.kind)) &&
-      target.prompt.agent !== "orchestrator" &&
+      targetPrompt.agent !== "orchestrator" &&
       target.session.kind !== "orchestrator",
     requireRuntimeContract:
-      SessionPrompt.agentKindRequiresRuntimeContract(target.prompt.agent) ||
+      SessionPrompt.agentKindRequiresRuntimeContract(targetPrompt.agent) ||
       SessionPrompt.agentKindRequiresRuntimeContract(target.session.kind),
   })
   const messageID = Identifier.ascending("message")
@@ -325,20 +327,20 @@ async function appendDirectAgentSessionReply(input: {
   // The historical `variant` (model-selection family, §14.2) is dropped for
   // the same single-source reason; the effective variant comes from the
   // session overlay at stream time, not from a pinned history value.
-  const resolvedModel = await resolveAgentModelRef(target.prompt.agent, { taskID: input.taskID })
+  const resolvedModel = await resolveAgentModelRef(targetPrompt.agent, { taskID: input.taskID })
   const message: Message.User = {
     id: messageID,
     sessionID: target.session.id,
     role: "user",
     time: { created: Date.now() },
-    agent: target.prompt.agent,
+    agent: targetPrompt.agent,
     model: { providerID: resolvedModel.providerID, modelID: resolvedModel.modelID },
-    ...(target.prompt.system ? { system: target.prompt.system } : {}),
-    ...(target.prompt.systemMode ? { systemMode: target.prompt.systemMode } : {}),
-    ...(target.prompt.tools ? { tools: target.prompt.tools } : {}),
-    ...(target.prompt.format ? { format: target.prompt.format } : {}),
+    ...(targetPrompt.system ? { system: targetPrompt.system } : {}),
+    ...(targetPrompt.systemMode ? { systemMode: targetPrompt.systemMode } : {}),
+    ...(targetPrompt.tools ? { tools: targetPrompt.tools } : {}),
+    ...(targetPrompt.format ? { format: targetPrompt.format } : {}),
     extra: {
-      ...(target.prompt.extra ?? {}),
+      ...(targetPrompt.extra ?? {}),
       overlay_direct_reply: true,
       source: "overlay_direct_reply",
       taskID: input.taskID,
@@ -543,8 +545,12 @@ async function appendTaskSessionMessage(
  * project-setup error that must surface, not be papered over.
  */
 async function messageContext(sessionID: string, taskID: string) {
+  const session = await Session.get(sessionID)
   const config = await EffectiveConfig.effective({ taskID, sessionID })
-  const name = (await latestSessionAgent(sessionID)) ?? (await Agent.defaultAgent({ config }).catch(() => undefined))
+  const name =
+    SessionAgentIdentity.ownedAgentForSessionKind(session.kind) ??
+    (await latestSessionAgent(sessionID)) ??
+    (await Agent.defaultAgent({ config }).catch(() => undefined))
   const agent = name ? await Agent.get(name, { config }).catch(() => undefined) : undefined
   const model = name
     ? await resolveAgentModelRef(name, { taskID })
