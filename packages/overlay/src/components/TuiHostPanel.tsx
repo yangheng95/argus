@@ -26,6 +26,12 @@ type TerminalSnapshot = {
   cols?: unknown
   scrollY?: unknown
 }
+type TerminalTheme = {
+  background: string
+  foreground: string
+  cursor: string
+  selectionBackground: string
+}
 
 let sharedGhostty: Promise<{ mod: GhosttyModule; ghostty: Ghostty }> | undefined
 const SNAPSHOT_VERSION = "v1"
@@ -39,6 +45,31 @@ function loadGhostty() {
       throw error
     })
   return sharedGhostty
+}
+
+function resolveCssColor(host: HTMLElement, token: string, property: "backgroundColor" | "color"): string {
+  const raw = getComputedStyle(host).getPropertyValue(token).trim()
+  if (!raw) throw new Error(`Missing overlay theme token ${token}`)
+  const probe = document.createElement("span")
+  probe.style.position = "absolute"
+  probe.style.pointerEvents = "none"
+  probe.style.opacity = "0"
+  if (property === "backgroundColor") probe.style.backgroundColor = raw
+  else probe.style.color = raw
+  host.append(probe)
+  const resolved = getComputedStyle(probe)[property].trim()
+  probe.remove()
+  if (!resolved || resolved === "rgba(0, 0, 0, 0)") throw new Error(`Invalid overlay theme token ${token}: ${raw}`)
+  return resolved
+}
+
+function overlayTerminalTheme(host: HTMLElement): TerminalTheme {
+  return {
+    background: resolveCssColor(host, "--surface-inset", "backgroundColor"),
+    foreground: resolveCssColor(host, "--text-strong", "color"),
+    cursor: resolveCssColor(host, "--accent", "color"),
+    selectionBackground: resolveCssColor(host, "--accent-dim", "backgroundColor"),
+  }
 }
 
 function useTerminalUiBindings(input: {
@@ -113,6 +144,7 @@ export function TuiHostPanel(props: TuiHostPanelProps) {
   let resizeFrame: number | undefined
   let snapshotSaveFrame: number | undefined
   let resizeObserver: ResizeObserver | undefined
+  let themeObserver: MutationObserver | undefined
   let disposed = false
   let hostStarted = false
   let hostCursor = 0
@@ -249,6 +281,12 @@ export function TuiHostPanel(props: TuiHostPanelProps) {
       return
     }
     socket.send(data)
+  }
+
+  function applyTerminalTheme() {
+    const current = term
+    if (!current) return
+    current.options.theme = overlayTerminalTheme(container)
   }
 
   async function ensureHostStarted() {
@@ -408,12 +446,7 @@ export function TuiHostPanel(props: TuiHostPanelProps) {
         allowTransparency: false,
         convertEol: false,
         scrollback: 10_000,
-        theme: {
-          background: "#0b0b0b",
-          foreground: "#d4d4d4",
-          cursor: "#d4d4d4",
-          selectionBackground: "rgba(212, 212, 212, 0.25)",
-        },
+        theme: overlayTerminalTheme(container),
         ghostty,
       })
       term = next
@@ -433,6 +466,9 @@ export function TuiHostPanel(props: TuiHostPanelProps) {
       useTerminalUiBindings({ container, term: next, cleanups, focusTerminal })
       resizeObserver = new ResizeObserver(() => scheduleFit())
       resizeObserver.observe(container)
+      themeObserver = new MutationObserver(() => applyTerminalTheme())
+      themeObserver.observe(document.documentElement, { attributes: true, attributeFilter: ["data-theme"] })
+      themeObserver.observe(document.body, { attributes: true, attributeFilter: ["data-theme"] })
       next.onData((data) => {
         sendTerminalInput(data)
       })
@@ -451,6 +487,7 @@ export function TuiHostPanel(props: TuiHostPanelProps) {
     if (resizeFrame !== undefined) cancelAnimationFrame(resizeFrame)
     if (snapshotSaveFrame !== undefined) cancelAnimationFrame(snapshotSaveFrame)
     resizeObserver?.disconnect()
+    themeObserver?.disconnect()
 
     const finalize = () => {
       saveTerminalSnapshot()
