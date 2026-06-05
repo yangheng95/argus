@@ -1286,6 +1286,8 @@ const PART_MAPPING = {
   reasoning: ReasoningPart,
 }
 
+const INLINE_TOOL_ICON_WIDTH = 2
+
 function ReasoningPart(props: { last: boolean; part: ReasoningPart; message: AssistantMessage }) {
   const { theme, subtleSyntax } = useTheme()
   const ctx = use()
@@ -1552,26 +1554,26 @@ function GenericTool(props: ToolProps<any>) {
 function InlineTool(props: {
   icon: string
   iconColor?: RGBA
+  color?: RGBA
   complete: any
   pending: string
+  spinner?: boolean
+  subagent?: boolean
   children: JSX.Element
   part: ToolPart
+  onClick?: () => void
 }) {
-  const [margin, setMargin] = createSignal(0)
   const { theme } = useTheme()
   const ctx = use()
   const sync = useSync()
+  const renderer = useRenderer()
+  const [hover, setHover] = createSignal(false)
+  const [errorExpanded, setErrorExpanded] = createSignal(false)
 
   const permission = createMemo(() => {
     const callID = sync.data.permission[ctx.sessionID]?.at(0)?.tool?.callID
     if (!callID) return false
     return callID === props.part.callID
-  })
-
-  const fg = createMemo(() => {
-    if (permission()) return theme.warning
-    if (props.complete) return theme.textMuted
-    return theme.text
   })
 
   const error = createMemo(() =>
@@ -1580,45 +1582,147 @@ function InlineTool(props: {
 
   const denied = createMemo(
     () =>
+      error()?.includes("QuestionRejectedError") ||
       error()?.includes("rejected permission") ||
       error()?.includes("specified a rule") ||
       error()?.includes("user dismissed"),
   )
 
+  const failed = createMemo(() => Boolean(error() && !denied()))
+  const clickable = createMemo(() => Boolean(props.onClick || failed()))
+
+  const fg = createMemo(() => {
+    if (props.color) return props.color
+    if (permission()) return theme.warning
+    if (failed()) return theme.error
+    if (hover() && props.onClick) return theme.text
+    if (props.complete) return theme.textMuted
+    return theme.text
+  })
+
+  return (
+    <InlineToolRow
+      id={`tool-inline-${props.subagent ? "subagent-" : ""}${props.part.id}`}
+      icon={props.icon}
+      iconColor={props.iconColor}
+      color={fg()}
+      errorColor={theme.error}
+      failed={failed()}
+      denied={Boolean(denied())}
+      error={error()}
+      errorExpanded={errorExpanded()}
+      complete={props.complete}
+      pending={props.pending}
+      spinner={props.spinner}
+      subagent={props.subagent}
+      separateAfter={(id) =>
+        sync.data.message[ctx.sessionID]?.some((message) => message.role === "user" && message.id === id) ?? false
+      }
+      onMouseOver={() => clickable() && setHover(true)}
+      onMouseOut={() => setHover(false)}
+      onMouseUp={() => {
+        if (renderer.getSelection()?.getSelectedText()) return
+        if (failed()) {
+          setErrorExpanded((value) => !value)
+          return
+        }
+        props.onClick?.()
+      }}
+    >
+      {props.children}
+    </InlineToolRow>
+  )
+}
+
+export function InlineToolRow(props: {
+  id?: string
+  icon: string
+  iconColor?: RGBA
+  color?: RGBA
+  errorColor?: RGBA
+  failed?: boolean
+  denied?: boolean
+  error?: string
+  errorExpanded?: boolean
+  complete: any
+  pending: string
+  spinner?: boolean
+  subagent?: boolean
+  children: JSX.Element
+  separateAfter?: (id: string | undefined) => boolean
+  onMouseOver?: () => void
+  onMouseOut?: () => void
+  onMouseUp?: () => void
+}) {
+  const [margin, setMargin] = createSignal(0)
+
   return (
     <box
+      id={props.id}
       marginTop={margin()}
       paddingLeft={3}
+      onMouseOver={props.onMouseOver}
+      onMouseOut={props.onMouseOut}
+      onMouseUp={props.onMouseUp}
       renderBefore={function () {
         const el = this as BoxRenderable
         const parent = el.parent
-        if (!parent) {
-          return
-        }
-        if (el.height > 1) {
-          setMargin(1)
-          return
-        }
+        if (!parent) return
         const children = parent.getChildren()
         const index = children.indexOf(el)
         const previous = children[index - 1]
-        if (!previous) {
-          setMargin(0)
-          return
-        }
-        if (previous.height > 1 || previous.id.startsWith("text-")) {
-          setMargin(1)
-          return
-        }
+        const previousInline = previous?.id.startsWith("tool-inline-") ?? false
+        const previousSubagent = previous?.id.startsWith("tool-inline-subagent-") ?? false
+        setMargin(
+          previous?.id.startsWith("text-") ||
+            previous?.id.startsWith("tool-block-") ||
+            (previousInline && previousSubagent !== Boolean(props.subagent)) ||
+            props.separateAfter?.(previous?.id)
+            ? 1
+            : 0,
+        )
       }}
     >
-      <text paddingLeft={3} fg={fg()} attributes={denied() ? TextAttributes.STRIKETHROUGH : undefined}>
-        <Show fallback={<>~ {props.pending}</>} when={props.complete}>
-          <span style={{ fg: props.iconColor }}>{props.icon}</span> {props.children}
-        </Show>
-      </text>
-      <Show when={error() && !denied()}>
-        <text fg={theme.error}>{error()}</text>
+      <Switch>
+        <Match when={props.spinner}>
+          <Spinner color={props.color}>{props.children}</Spinner>
+        </Match>
+        <Match when={true}>
+          <Show
+            fallback={
+              <text
+                paddingLeft={3}
+                fg={props.color}
+                attributes={props.denied ? TextAttributes.STRIKETHROUGH : undefined}
+              >
+                ~ {props.pending}
+              </text>
+            }
+            when={props.complete}
+          >
+            <box flexDirection="row">
+              <text
+                width={INLINE_TOOL_ICON_WIDTH}
+                fg={props.failed ? props.errorColor : (props.iconColor ?? props.color)}
+                attributes={props.denied ? TextAttributes.STRIKETHROUGH : undefined}
+              >
+                {props.icon}
+              </text>
+              <text
+                flexGrow={1}
+                fg={props.failed ? props.errorColor : props.color}
+                attributes={props.denied ? TextAttributes.STRIKETHROUGH : undefined}
+              >
+                {props.children}
+              </text>
+            </box>
+          </Show>
+        </Match>
+      </Switch>
+      <Show when={props.failed && props.errorExpanded}>
+        <box paddingLeft={INLINE_TOOL_ICON_WIDTH}>
+          <text fg={props.errorColor}>{props.error}</text>
+        </box>
       </Show>
     </box>
   )
