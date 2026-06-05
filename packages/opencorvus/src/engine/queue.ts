@@ -445,17 +445,19 @@ export async function advanceQueue(cwd: string): Promise<void> {
   await startLoopForTask(claimed, event, cwd)
 }
 
+export type DispatchTaskLoopResult = "started" | "queued" | "ignored"
+
 export async function dispatchTaskLoop(input: {
   taskID: string
   event?: OrchestratorEvent
   interrupt?: boolean
-}): Promise<void> {
+}): Promise<DispatchTaskLoopResult> {
   let task = findTask(input.taskID)
-  if (!task) return
+  if (!task) return "ignored"
   const cwd = taskCwd(task.id)
   if (!cwd) {
     log.warn("dispatchTaskLoop: task has no cwd", { taskID: task.id, note: input.event?.note })
-    return
+    return "ignored"
   }
   if (isTaskTerminal(task)) {
     log.info("dispatchTaskLoop: terminal task ignored", {
@@ -463,31 +465,23 @@ export async function dispatchTaskLoop(input: {
       status: deriveTaskStatus(task),
       note: input.event?.note,
     })
-    return
+    return "ignored"
   }
   if (isTaskQueued(task)) {
     if (input.event) queuedTaskEvents.set(task.id, input.event)
     await advanceQueue(cwd)
-    return
+    return "started"
   }
 
   const liveOwners = listLiveOrchestratorToolOwnership(task.id)
   if (liveOwners.length > 0 && loopInFlightFor(task.id)) {
-    if (input.interrupt === true) {
-      log.info("dispatchTaskLoop: interrupting live orchestrator tool ownership for operator wake", {
-        taskID: task.id,
-        liveOwners: liveOwners.map((owner) => owner.ownershipID),
-      })
-      attachLoopCompletion(task.id, cwd, launchTaskLoop(task.id, input.event, true))
-      return
-    }
     if (input.event) queuedTaskEvents.set(task.id, input.event)
     log.info("dispatchTaskLoop: queued wake behind live orchestrator tool ownership", {
       taskID: task.id,
       liveOwners: liveOwners.map((owner) => owner.ownershipID),
       interrupt: Boolean(input.interrupt),
     })
-    return
+    return "queued"
   }
 
   // Task is already active — inject a new wake event into the existing loop
@@ -496,6 +490,7 @@ export async function dispatchTaskLoop(input: {
   // completion must also advance the cwd queue. Fire-and-forget: callers
   // don't want to block on task completion.
   attachLoopCompletion(task.id, cwd, launchTaskLoop(task.id, input.event, input.interrupt === true))
+  return "started"
 }
 
 /**
