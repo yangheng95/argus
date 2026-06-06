@@ -10,6 +10,8 @@ import {
   normalize,
   type JudgeRunner,
 } from "../../src/metrics/executor"
+import { Shell } from "../../src/shell/shell"
+import { DEFAULT_BASH_TIMEOUT_MS } from "../../src/shell/timeout"
 import {
   readResultsForIteration,
   registerBaselineSpec,
@@ -101,6 +103,48 @@ describe("normalize", () => {
 })
 
 describe("executeMetrics — shell evaluator", () => {
+  test("uses the shared five minute command timeout when timeout_ms is omitted", async () => {
+    const originalRun = Shell.run
+    const calls: Array<{ command: string; timeoutMs?: number }> = []
+    Shell.run = async (command, opts = {}) => {
+      calls.push({ command, timeoutMs: opts.timeoutMs })
+      return {
+        exitCode: 0,
+        stdout: "",
+        stderr: "",
+        timedOut: false,
+        idleTimedOut: false,
+        aborted: false,
+        pid: 12345,
+      }
+    }
+    try {
+      registerBaselineSpec({
+        task_id: taskID,
+        scope: "global",
+        goal_id: null,
+        name: "m_default_timeout",
+        description: "default shell timeout",
+        unit: "ratio",
+        direction: "higher_better",
+        target: 1,
+        floor: 0.5,
+        weight: 1,
+        gate_class: "blocking",
+        evaluator_kind: "shell",
+        evaluator_config: { cmd: "printf ok" },
+        source_requirement_ids: [],
+      })
+
+      await executeMetrics({ task_id: taskID, iteration: 0 }, { workDir: os.tmpdir() })
+    } finally {
+      Shell.run = originalRun
+    }
+
+    expect(calls).toEqual([{ command: "printf ok", timeoutMs: DEFAULT_BASH_TIMEOUT_MS }])
+    expect(DEFAULT_BASH_TIMEOUT_MS).toBe(300_000)
+  })
+
   test("exit_code parse: exit 0 → 1, exit != 0 → 0", async () => {
     registerBaselineSpec({
       task_id: taskID,

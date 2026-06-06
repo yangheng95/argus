@@ -75,7 +75,7 @@ export function createIntegrityAcceptanceTools(input?: IntegrityEvidenceToolCont
           .number()
           .int()
           .positive()
-          .max(120_000)
+          .max(DEFAULT_BASH_TIMEOUT_MS)
           .default(DEFAULT_BASH_TIMEOUT_MS)
           .describe("Max execution time ms; for background=true this is the process lease"),
         background: z

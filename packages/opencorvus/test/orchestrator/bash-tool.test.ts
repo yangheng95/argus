@@ -117,8 +117,8 @@ describe("validateOrchestratorBashCommand — single git invocation only", () =>
 })
 
 describe("createOrchestratorTools — bash wiring", () => {
-  test("uses a two minute default timeout with an explicit override ceiling", () => {
-    expect(ORCHESTRATOR_BASH_DEFAULT_TIMEOUT_MS).toBe(120_000)
+  test("uses a five minute default timeout with an explicit override ceiling", () => {
+    expect(ORCHESTRATOR_BASH_DEFAULT_TIMEOUT_MS).toBe(300_000)
     expect(ORCHESTRATOR_BASH_MAX_TIMEOUT_MS).toBe(600_000)
   })
 
