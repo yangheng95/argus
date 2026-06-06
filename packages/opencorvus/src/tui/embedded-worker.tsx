@@ -213,6 +213,17 @@ async function handle(request: WorkerRequest) {
   }
 }
 
+let queue = Promise.resolve()
+
+function enqueue(request: WorkerRequest) {
+  queue = queue
+    .then(() => handle(request))
+    .then(
+      (body) => respond(request.id, body),
+      (error) => fail(request.id, error),
+    )
+}
+
 let buffer = ""
 const decoder = new TextDecoder()
 const reader = Bun.stdin.stream().getReader()
@@ -228,9 +239,7 @@ try {
       buffer = buffer.slice(index + 1)
       if (!line) continue
       const request = JSON.parse(line) as WorkerRequest
-      handle(request)
-        .then((body) => respond(request.id, body))
-        .catch((error) => fail(request.id, error))
+      enqueue(request)
     }
   }
 } finally {

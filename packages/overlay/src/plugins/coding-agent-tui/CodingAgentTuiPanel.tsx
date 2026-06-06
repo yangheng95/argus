@@ -15,6 +15,7 @@ import { Icon } from "../../components/Icon"
 import { Button } from "../../components/ui/Button"
 
 const DEFAULT_COLS = 100
+const MIN_READABLE_COLS = 80
 const DEFAULT_ROWS = 30
 const ATTR_BOLD = 1 << 0
 const ATTR_DIM = 1 << 1
@@ -109,7 +110,7 @@ export function CodingAgentTuiPanel(props: CodingAgentTuiPanelProps) {
     const charWidth = rect?.width && rect.width > 0 ? rect.width : 8
     const lineHeight = rect?.height && rect.height > 0 ? rect.height : 16
     return {
-      cols: Math.max(20, Math.floor(width / charWidth) || DEFAULT_COLS),
+      cols: Math.max(MIN_READABLE_COLS, Math.floor(width / charWidth) || DEFAULT_COLS),
       rows: Math.max(5, Math.floor(height / lineHeight) || DEFAULT_ROWS),
     }
   }
