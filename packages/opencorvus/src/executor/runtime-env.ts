@@ -38,9 +38,16 @@ export function setModelOverride(id: ExecutorID, model: string | null): boolean 
 }
 
 export function assertExecutorModel(id: ExecutorID, model: string, key = envKeyFor(id)) {
-  if (id !== "claude-code") return
+  if (id !== "claude-code" && id !== "codex") return
   if (!model.includes("/")) return
   const source = key ? `${key}=${model}` : model
+  if (id === "codex") {
+    throw new Error(
+      `Invalid codex executor model: ${source}. ` +
+        "Codex expects the native Codex CLI --model value here, not an OpenCorvus provider/model reference. " +
+        "Keep the OpenCorvus task model in opencorvus.json and set the Codex executor model separately.",
+    )
+  }
   throw new Error(
     `Invalid claude-code executor model: ${source}. ` +
       "Claude Code expects the native Claude CLI --model value here, not an OpenCorvus provider/model reference. " +
