@@ -6,6 +6,7 @@ import {
 import type { AgentWorkflowRecord } from "../src/utils/agent-workflow"
 import {
   conversationAgentStore,
+  conversationAgentRecordsForSource,
   hydrateConversationAgentView,
   resetConversationAgentView,
 } from "../src/store/conversation-agents"
@@ -137,4 +138,44 @@ test("hydrated lifecycle-only agent records target the message-less session card
 
   expect(conversationAgentStore.records[0]?.renderedCardID).toBe("frontend-research:session:ses_frontend_research_failed")
   expect(conversationAgentStore.records[0]?.targetMessageID).toBe("")
+})
+
+test("hydrated agent records are scoped to the selected task or session source", () => {
+  resetConversationAgentView()
+  hydrateConversationAgentView("task:task_a", {
+    sessions: [
+      {
+        sessionID: "ses_build_a",
+        stage: "build",
+        messageIDs: ["msg_a"],
+        firstMessageTime: 100,
+        lastMessageTime: 120,
+        placement: "top_level",
+      },
+    ],
+  })
+
+  expect(conversationAgentRecordsForSource({ kind: "task", id: "task_b" })).toEqual([])
+  expect(conversationAgentRecordsForSource({ kind: "session", id: "task_a" })).toEqual([])
+  expect(conversationAgentRecordsForSource({ kind: "task", id: "task_a" }).map((record) => record.sessionID)).toEqual([
+    "ses_build_a",
+  ])
+
+  hydrateConversationAgentView("session:ses_coding", {
+    sessions: [
+      {
+        sessionID: "ses_coding_child",
+        stage: "assistant",
+        messageIDs: ["msg_coding"],
+        firstMessageTime: 200,
+        lastMessageTime: 220,
+        placement: "top_level",
+      },
+    ],
+  })
+
+  expect(conversationAgentRecordsForSource({ kind: "task", id: "task_a" })).toEqual([])
+  expect(conversationAgentRecordsForSource({ kind: "session", id: "ses_coding" }).map((record) => record.sessionID)).toEqual([
+    "ses_coding_child",
+  ])
 })

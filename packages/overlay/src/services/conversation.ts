@@ -404,7 +404,7 @@ export async function mergeLatestConversationTail(
     setBoardData(board);
     setBoardUpdatedAt(Date.now());
     hydrateConversationView(view, mergeLoadedConversationMessages(timeline, transcript));
-    hydrateConversationAgentView(selectedTaskID, agentView);
+    hydrateConversationAgentView(sourceKey({ kind: "task", id: selectedTaskID }), agentView);
     markSelectedMessageWatermark(messageWatermark);
     for (const event of events) {
       replayTaskEventToTree(event);

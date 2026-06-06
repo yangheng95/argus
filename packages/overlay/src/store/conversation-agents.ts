@@ -1,6 +1,7 @@
 import { createStore } from "solid-js/store";
 import type { AgentWorkflowRecord } from "../utils/agent-workflow";
 import { normalizeAgentRole } from "../utils/message";
+import type { BoardSource } from "./board";
 
 export interface ConversationAgentSessionView {
   sessionID: string;
@@ -31,6 +32,15 @@ export const [conversationAgentStore, setConversationAgentStore] = createStore<C
   taskID: "",
   records: [],
 });
+
+export function conversationAgentSourceKey(source: BoardSource | null): string {
+  return source ? `${source.kind}:${source.id}` : "";
+}
+
+export function conversationAgentRecordsForSource(source: BoardSource | null): AgentWorkflowRecord[] {
+  const key = conversationAgentSourceKey(source);
+  return key && conversationAgentStore.taskID === key ? conversationAgentStore.records : [];
+}
 
 function fallbackLastMessageID(session: ConversationAgentSessionView): string {
   if (!Array.isArray(session?.messageIDs)) return "";
