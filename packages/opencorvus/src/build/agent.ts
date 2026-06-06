@@ -559,7 +559,7 @@ export namespace BuildAgent {
 
       const buildPromptText = () =>
         input.existingSessionID
-          ? buildRetryFeedbackPrompt(input.target, input.context)
+          ? buildRetryFeedbackPrompt(input.target, input.context, input.task.id)
           : buildUserPrompt(input.target, input.context, input.task.id)
       const requiredIntegrityFingerprints = integrityBlockingFingerprintsFromFeedback(input.context?.integrityFeedback)
       // Forward the same authoritative references named in the
@@ -2565,7 +2565,7 @@ export function buildUserPrompt(target: BuildTarget, context?: BuildAgent.BuildC
       lines.push("")
     }
 
-    const overlays = renderBuildPromptOverlays(context ? { ...context, acceptanceFeedback: undefined } : undefined)
+    const overlays = renderBuildPromptOverlays(context ? { ...context, acceptanceFeedback: undefined, taskID } : undefined)
     if (overlays.sections.length > 0) {
       lines.push("## Task-Specific Build Overlays")
       lines.push("")
@@ -2641,7 +2641,7 @@ export function buildUserPrompt(target: BuildTarget, context?: BuildAgent.BuildC
       lines.push(context.retryFeedback)
       lines.push("")
     }
-    const acceptanceOverlay = renderBuildPromptOverlays({ acceptanceFeedback: context?.acceptanceFeedback })
+    const acceptanceOverlay = renderBuildPromptOverlays({ acceptanceFeedback: context?.acceptanceFeedback, taskID })
     if (acceptanceOverlay.sections.length > 0) {
       lines.push(acceptanceOverlay.sections.join("\n\n"))
       lines.push("")
@@ -2686,7 +2686,7 @@ export function buildUserPrompt(target: BuildTarget, context?: BuildAgent.BuildC
   if (reqs.length > 0) {
     contextLines.push(renderBuildRequirementsSection(reqs, { directRequest: true }))
   }
-  const overlays = renderBuildPromptOverlays(context ? { ...context, acceptanceFeedback: undefined } : undefined)
+  const overlays = renderBuildPromptOverlays(context ? { ...context, acceptanceFeedback: undefined, taskID } : undefined)
   if (overlays.sections.length > 0) {
     contextLines.push("## Task-Specific Build Overlays")
     contextLines.push("")
@@ -2707,7 +2707,7 @@ export function buildUserPrompt(target: BuildTarget, context?: BuildAgent.BuildC
     contextLines.push(context.retryFeedback.trim())
     contextLines.push("")
   }
-  const acceptanceOverlay = renderBuildPromptOverlays({ acceptanceFeedback: context?.acceptanceFeedback })
+  const acceptanceOverlay = renderBuildPromptOverlays({ acceptanceFeedback: context?.acceptanceFeedback, taskID })
   if (acceptanceOverlay.sections.length > 0) {
     contextLines.push(acceptanceOverlay.sections.join("\n\n"))
     contextLines.push("")
@@ -2743,7 +2743,7 @@ export function buildUserPrompt(target: BuildTarget, context?: BuildAgent.BuildC
   ].join("\n")
 }
 
-export function buildRetryFeedbackPrompt(target: BuildTarget, context?: BuildAgent.BuildContext): string {
+export function buildRetryFeedbackPrompt(target: BuildTarget, context?: BuildAgent.BuildContext, taskID?: string): string {
   const lines: string[] = [
     "# Build Retry Feedback",
     "",
@@ -2756,7 +2756,7 @@ export function buildRetryFeedbackPrompt(target: BuildTarget, context?: BuildAge
     lines.push("Target: direct build request")
   }
   lines.push("")
-  const overlays = renderBuildPromptOverlays(context ? { ...context, acceptanceFeedback: undefined } : undefined)
+  const overlays = renderBuildPromptOverlays(context ? { ...context, acceptanceFeedback: undefined, taskID } : undefined)
   if (overlays.sections.length > 0) {
     lines.push("## Task-Specific Build Overlays")
     lines.push("")
@@ -2777,7 +2777,7 @@ export function buildRetryFeedbackPrompt(target: BuildTarget, context?: BuildAge
     lines.push(context.retryFeedback.trim())
     lines.push("")
   }
-  const acceptanceOverlay = renderBuildPromptOverlays({ acceptanceFeedback: context?.acceptanceFeedback })
+  const acceptanceOverlay = renderBuildPromptOverlays({ acceptanceFeedback: context?.acceptanceFeedback, taskID })
   if (acceptanceOverlay.sections.length > 0) {
     lines.push(acceptanceOverlay.sections.join("\n\n"))
     lines.push("")
