@@ -68,8 +68,15 @@ describe("ExecutorSelector dual chip bar", () => {
 
   test("external picker lists all configured providers for the executor without provider-auth status badges", () => {
     expect(SRC).toMatch(/EXECUTOR_PROVIDER_MAP\[executorID\]/)
+    expect(SRC).toMatch(/buildProviderGroups\(\(id\) => wantedSet\.has\(id\), false, "native"\)/)
     expect(SRC).not.toMatch(/data-available=\{props\.group\.available \? "true" : "false"\}/)
     expect(SRC).not.toMatch(/showAvailability/)
+  })
+
+  test("external picker writes native executor model IDs, not provider/model refs", () => {
+    expect(SRC).toMatch(/modelIDFormat: "qualified" \| "native" = "qualified"/)
+    expect(SRC).toMatch(/modelIDFormat === "qualified" \? modelIDs\.map\(\(modelID\) => `\$\{id\}\/\$\{modelID\}`\) : modelIDs/)
+    expect(SRC).toMatch(/await setExecutorModel\(executorID, model\)/)
   })
 
   test("mirror selection writes task root session config before project config", () => {

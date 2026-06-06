@@ -39,10 +39,17 @@ describe("executor runtime model env", () => {
     ).toThrow("Claude Code expects the native Claude CLI --model value")
   })
 
-  test("does not apply Claude CLI syntax rules to codex", () => {
-    setModelOverride("codex", "openai/gpt-5.3-codex")
+  test("keeps codex model separate from OpenCorvus provider/model refs", () => {
+    expect(() => setModelOverride("codex", "openai/gpt-5.3-codex")).toThrow(
+      "Codex expects the native Codex CLI --model value",
+    )
+  })
 
-    expect(getModelOverride("codex")).toBe("openai/gpt-5.3-codex")
+  test("accepts the native Codex CLI model string for codex", () => {
+    setModelOverride("codex", " gpt-5.5 ")
+
+    expect(process.env[CODEX_KEY]).toBe("gpt-5.5")
+    expect(getModelOverride("codex")).toBe("gpt-5.5")
   })
 
   test("normalizes Anthropic base URL for Claude Agent SDK requests", () => {

@@ -7,10 +7,9 @@
 //     server reports as connected (auth'd). In task context it writes the
 //     task root session overlay; outside task context it writes the project
 //     default.
-//   - External picker lists every model from the provider IDs mapped to
-//     that executor (EXECUTOR_PROVIDER_MAP). These provider buckets are
-//     only a model taxonomy for the picker; they must not be treated as
-//     the auth source of truth for Codex / Claude Code themselves.
+//   - External picker lists native CLI model IDs from the provider IDs mapped
+//     to that executor. Provider buckets are only a taxonomy for the picker;
+//     they must not be written into Codex / Claude Code model values.
 //
 // State sources (rule 8 single source):
 //   - active external executor → settingsStore.executor
@@ -91,6 +90,7 @@ function connectedProviderIDs(): Set<string> {
 function buildProviderGroups(
   filter?: (id: string) => boolean,
   prioritizeAvailable = true,
+  modelIDFormat: "qualified" | "native" = "qualified",
 ): ProviderGroup[] {
   const catalog = appStore.providerCatalog as { all?: unknown } | null | undefined;
   const all = Array.isArray(catalog?.all) ? (catalog!.all as Array<Record<string, unknown>>) : [];
@@ -115,7 +115,7 @@ function buildProviderGroups(
       providerID: id,
       providerName: typeof provider.name === "string" && provider.name ? provider.name : id,
       available: connected.has(id),
-      models: modelIDs.map((modelID) => `${id}/${modelID}`),
+      models: modelIDFormat === "qualified" ? modelIDs.map((modelID) => `${id}/${modelID}`) : modelIDs,
     });
   }
   groups.sort((a, b) => {
@@ -139,7 +139,7 @@ function externalProviderGroups(executorID: string): ProviderGroup[] {
   const wanted = EXECUTOR_PROVIDER_MAP[executorID];
   if (!wanted || wanted.length === 0) return [];
   const wantedSet = new Set(wanted);
-  return buildProviderGroups((id) => wantedSet.has(id), false);
+  return buildProviderGroups((id) => wantedSet.has(id), false, "native");
 }
 
 function ChevronCaret(props: { open: boolean }) {
