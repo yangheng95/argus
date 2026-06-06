@@ -1290,6 +1290,11 @@ test("mission is hidden primary with the coordinator prompt", async () => {
       expect(mission?.prompt).toContain("TASK GRANULARITY")
       expect(mission?.prompt).toContain("Default: ONE task per wake")
       expect(mission?.prompt).toContain("double-decomposition")
+      // Mission-created tasks must carry the user's real request forward,
+      // not only Mission's compressed interpretation.
+      expect(mission?.prompt).toContain("Every `create_task.request` MUST include an `Original user input` section")
+      expect(mission?.prompt).toContain("Quote the task-relevant part(s) of the user's original message(s) verbatim")
+      expect(mission?.prompt).toContain("downstream agents audit the real request instead of your summary")
     },
   })
 })
