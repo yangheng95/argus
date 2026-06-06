@@ -8005,6 +8005,7 @@ export class Embed extends HeyApiClient {
       directory?: string
       cols?: number
       rows?: number
+      mode?: "dark" | "light"
       agent?: string
       model?: string
       prompt?: string
@@ -8022,6 +8023,7 @@ export class Embed extends HeyApiClient {
             { in: "query", key: "directory" },
             { in: "body", key: "cols" },
             { in: "body", key: "rows" },
+            { in: "body", key: "mode" },
             { in: "body", key: "agent" },
             { in: "body", key: "model" },
             { in: "body", key: "prompt" },
