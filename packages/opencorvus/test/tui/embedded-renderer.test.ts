@@ -78,6 +78,8 @@ describe("embedded OpenTUI renderer", () => {
     expect(worker).toContain("await current.setup.renderOnce()")
     expect(worker).not.toContain("current.setup.flush")
     expect(worker).toContain("captureSpans()")
+    expect(worker).toContain("let queue = Promise.resolve()")
+    expect(worker).toContain("enqueue(request)")
     expect(worker).toContain("mockInput.typeText")
     expect(routes).toContain('"/embed/start"')
     expect(routes).toContain('"/embed/input"')

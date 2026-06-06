@@ -35,6 +35,15 @@ Real visual verification after replacing the browser PTY terminal with an OpenTU
 - Screenshot evidence: `C:/Users/hengu/AppData/Local/Temp/opencorvus-real-overlay-tui-embed-43251.png`.
 - Screenshot pixel check: `1440x900`, whole-image sampled colors `300`, terminal-crop sampled colors `198`, terminal-crop average brightness `25.23`. This is not an empty/transparent surface.
 
+Readability verification after the right-pane presentation fix:
+
+- The initial overlay screenshot showed the real OpenTUI frame but the right pane was only about `263px` wide. The logo was clipped into a block cluster, the prompt was truncated, and the result was not usable even though the backend frame was real.
+- TUI activity now uses a terminal-specific right-pane width and starts/resizes the embedded renderer with at least `80` columns.
+- The DOM frame now uses explicit cell dimensions, `width: calc(var(--tui-cols) * var(--tui-cell-width))`, fixed line height, preserved whitespace, and terminal overflow containment instead of ordinary inline flow.
+- The embedded worker serializes requests so polling, resize, and input cannot concurrently call OpenTUI `renderOnce()`.
+- Real overlay evidence after the fix: `C:/Users/hengu/AppData/Local/Temp/opencorvus-real-overlay-tui-readable-43251.png`.
+- Measured real layout: `frameCols=80`, right sections width `749px`, terminal width `695px`, terminal `scrollWidth=693`, `clientWidth=693`, visible logo/prompt/footer lines all readable, and no `.tui-host-error`.
+
 ## Call Points
 
 | Area | Call point | Decision |

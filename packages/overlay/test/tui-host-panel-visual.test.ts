@@ -215,10 +215,11 @@ test("right sidebar TUI host panel accepts the Tank Battle build case through Op
     expect(receivedInput.join("")).toContain("browser visual test")
     expect(receivedInput.join("")).toContain("坦克大战")
     expect(startBodies[0]).toMatchObject({ agent: "tui-coding" })
+    expect((startBodies[0] as { cols?: number }).cols).toBeGreaterThanOrEqual(80)
     expect(resizeBodies.length).toBeGreaterThanOrEqual(0)
-    expect(layout.panelWidth).toBeGreaterThan(240)
+    expect(layout.panelWidth).toBeGreaterThan(650)
     expect(layout.panelHeight).toBeGreaterThan(500)
-    expect(layout.terminalWidth).toBeGreaterThan(220)
+    expect(layout.terminalWidth).toBeGreaterThan(620)
     expect(layout.terminalHeight).toBeGreaterThan(400)
     expect(layout.terminalBackground).not.toBe("rgba(0, 0, 0, 0)")
 
