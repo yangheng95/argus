@@ -2,6 +2,7 @@ import { afterEach, describe, expect, test } from "bun:test"
 import fs from "node:fs/promises"
 import path from "node:path"
 import { EngineTaskTable } from "../../src/engine/engine.sql"
+import { extractBrowserPreviewUrlFromText } from "../../src/browser-preview/extract"
 import { persistBrowserPreviewTarget } from "../../src/browser-preview/persist"
 import { normalizeBrowserPreviewUrl, resolveBrowserPreviewTarget } from "../../src/browser-preview/target"
 import { Instance } from "../../src/project/instance"
@@ -104,10 +105,28 @@ describe("browser preview target resolver", () => {
     expect(target.diagnostics.join("\n")).toContain("No browser preview target saved for this task")
   })
 
-  test("normalizes only explicit http(s) URLs before saving task targets", () => {
+  test("normalizes explicit http(s) URLs and loopback host-port text before saving task targets", () => {
     expect(normalizeBrowserPreviewUrl(" http://127.0.0.1:5173/dashboard ")).toBe("http://127.0.0.1:5173/dashboard")
+    expect(normalizeBrowserPreviewUrl("localhost:5173")).toBe("http://localhost:5173/")
+    expect(normalizeBrowserPreviewUrl("127.0.0.1:5173/dashboard")).toBe("http://127.0.0.1:5173/dashboard")
+    expect(normalizeBrowserPreviewUrl("[::1]:5173")).toBe("http://[::1]:5173/")
     expect(normalizeBrowserPreviewUrl("https://example.test/")).toBe("https://example.test/")
     expect(normalizeBrowserPreviewUrl("file:///tmp/index.html")).toBeUndefined()
+    expect(normalizeBrowserPreviewUrl("example.test:5173")).toBeUndefined()
     expect(normalizeBrowserPreviewUrl("")).toBeUndefined()
+  })
+
+  test("extracts a loopback preview URL from process output", () => {
+    const output = [
+      "  VITE v6.0.0 ready in 120 ms",
+      "  ➜  Local:   http://localhost:5173/",
+      "  docs: https://vite.dev/",
+    ].join("\n")
+
+    expect(extractBrowserPreviewUrlFromText(output)).toBe("http://localhost:5173/")
+  })
+
+  test("extracts an IPv6 loopback preview URL from process output", () => {
+    expect(extractBrowserPreviewUrlFromText("Local: http://[::1]:5173/")).toBe("http://[::1]:5173/")
   })
 })

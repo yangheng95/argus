@@ -92,7 +92,9 @@ export function failedBrowserPreviewTarget(input: {
 
 export function normalizeBrowserPreviewUrl(value: unknown): string | undefined {
   if (typeof value !== "string") return undefined
-  const text = value.trim()
+  const raw = value.trim()
+  if (!raw) return undefined
+  const text = normalizeSchemeLessLoopbackUrl(raw) ?? raw
   if (!text) return undefined
   try {
     const url = new URL(text)
@@ -101,4 +103,12 @@ export function normalizeBrowserPreviewUrl(value: unknown): string | undefined {
   } catch {
     return undefined
   }
+}
+
+function normalizeSchemeLessLoopbackUrl(text: string): string | undefined {
+  const match = /^(localhost|127\.0\.0\.1|0\.0\.0\.0|\[::1\]):(\d{1,5})(\/[^\s]*)?$/i.exec(text)
+  if (!match) return undefined
+  const port = Number(match[2])
+  if (!Number.isInteger(port) || port < 1 || port > 65535) return undefined
+  return `http://${match[1]}:${port}${match[3] ?? "/"}`
 }

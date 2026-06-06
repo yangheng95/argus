@@ -108,6 +108,27 @@ describe("browser preview routes", () => {
     expect(body.diagnostics?.join("\n")).toContain("No browser preview target saved for this task")
   })
 
+  test("PUT /task/:taskID/browser-preview/target accepts loopback host-port input", async () => {
+    await using tmp = await tmpdir()
+    const taskID = await seedTask(tmp.path)
+    const app = Server.App()
+
+    const response = await app.request(`/task/${taskID}/browser-preview/target`, {
+      method: "PUT",
+      headers: {
+        "content-type": "application/json",
+        "x-opencorvus-directory": tmp.path,
+      },
+      body: JSON.stringify({ url: "localhost:5173" }),
+    })
+
+    expect(response.status).toBe(200)
+    const body = await response.json() as { status: string; url?: string; source: string }
+    expect(body.status).toBe("ready")
+    expect(body.url).toBe("http://localhost:5173/")
+    expect(body.source).toBe("task-artifact")
+  })
+
   test("old project-scoped browser preview target route is removed", async () => {
     await using tmp = await tmpdir()
     await seedTask(tmp.path)

@@ -25,6 +25,7 @@ import { Plugin } from "@/plugin"
 import { PidGuard } from "@/shell/pid-guard"
 import { gitCeilingEnvForWorktree } from "@/worktree/git-ceiling"
 import { assertBuildWriteDirectory } from "./external-directory"
+import { persistBrowserPreviewTargetFromProcessOutput } from "@/browser-preview/extract"
 
 const MAX_METADATA_LENGTH = 30_000
 export const DEFAULT_TIMEOUT = Flag.OPENCORVUS_EXPERIMENTAL_BASH_DEFAULT_TIMEOUT_MS || DEFAULT_BASH_TIMEOUT_MS
@@ -387,6 +388,10 @@ export const BashTool = Tool.define("bash", async () => {
         if (timedOut) resultMetadata.push(`background process exceeded lease before readiness window`)
         if (exited) resultMetadata.push(`background process exited before readiness window (exit=${exitCode})`)
         output += "\n\n<bash_metadata>\n" + resultMetadata.join("\n") + "\n</bash_metadata>"
+        persistBrowserPreviewTargetFromProcessOutput({
+          taskID: typeof ctx.extra?.taskID === "string" ? ctx.extra.taskID : undefined,
+          output,
+        })
         return {
           title: params.description,
           metadata: {
