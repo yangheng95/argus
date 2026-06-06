@@ -170,8 +170,8 @@ test("chat TUI tab accepts the Tank Battle build case through OpenTUI embed fram
     }, server.port)
 
     await page.goto(`http://127.0.0.1:${server.port}/ui/index.html`, { waitUntil: "domcontentloaded" })
-    await page.waitForSelector('[data-ui="chat-view-tab"][data-chat-view-tab="tui"]')
-    await page.click('[data-ui="chat-view-tab"][data-chat-view-tab="tui"]')
+    await page.waitForSelector('[data-ui="side-activity-button"][data-side="right"][data-activity="tui"]')
+    await page.click('[data-ui="side-activity-button"][data-side="right"][data-activity="tui"]')
     await page.waitForSelector(".tui-host-panel")
     await page.waitForFunction(() => {
       const error = document.querySelector(".tui-host-error")
@@ -215,7 +215,8 @@ test("chat TUI tab accepts the Tank Battle build case through OpenTUI embed fram
         conversationActive: document.querySelector<HTMLElement>("#chatMessagePane")?.dataset.active,
         tuiActive: document.querySelector<HTMLElement>("#chatTuiPane")?.dataset.active,
         previewActive: document.querySelector<HTMLElement>("#chatBrowserPreviewPane")?.dataset.active,
-        activeTab: document.querySelector<HTMLElement>('[data-ui="chat-view-tab"][data-chat-view-tab="tui"]')?.dataset.active,
+        activeButton: document.querySelector<HTMLElement>('[data-ui="side-activity-button"][data-side="right"][data-activity="tui"]')?.dataset.active,
+        chatTitle: document.querySelector<HTMLElement>("#chatViewTitle")?.textContent,
         state: terminal.dataset.state,
         panelWidth: Math.round(panelRect.width),
         panelHeight: Math.round(panelRect.height),
@@ -238,7 +239,8 @@ test("chat TUI tab accepts the Tank Battle build case through OpenTUI embed fram
       conversationActive: "false",
       tuiActive: "true",
       previewActive: "false",
-      activeTab: "true",
+      activeButton: "true",
+      chatTitle: "TUI",
       state: "running",
       errorText: "",
     })
@@ -332,8 +334,8 @@ test("chat TUI tab shows embedded renderer input failure details", async () => {
     }, server.port)
 
     await page.goto(`http://127.0.0.1:${server.port}/ui/index.html`, { waitUntil: "domcontentloaded" })
-    await page.waitForSelector('[data-ui="chat-view-tab"][data-chat-view-tab="tui"]')
-    await page.click('[data-ui="chat-view-tab"][data-chat-view-tab="tui"]')
+    await page.waitForSelector('[data-ui="side-activity-button"][data-side="right"][data-activity="tui"]')
+    await page.click('[data-ui="side-activity-button"][data-side="right"][data-activity="tui"]')
     await page.waitForFunction(() => document.querySelector<HTMLElement>('[data-testid="tui-host-terminal"]')?.dataset.state === "running")
     await page.evaluate(() => {
       const terminal = document.querySelector<HTMLElement>('[data-testid="tui-host-terminal"]')
@@ -389,8 +391,8 @@ test("chat TUI tab shows embedded renderer start failure details", async () => {
     }, server.port)
 
     await page.goto(`http://127.0.0.1:${server.port}/ui/index.html`, { waitUntil: "domcontentloaded" })
-    await page.waitForSelector('[data-ui="chat-view-tab"][data-chat-view-tab="tui"]')
-    await page.click('[data-ui="chat-view-tab"][data-chat-view-tab="tui"]')
+    await page.waitForSelector('[data-ui="side-activity-button"][data-side="right"][data-activity="tui"]')
+    await page.click('[data-ui="side-activity-button"][data-side="right"][data-activity="tui"]')
     await page.waitForFunction(() => {
       const text = document.querySelector<HTMLElement>(".tui-host-error")?.textContent ?? ""
       return text.includes("EmbeddedTuiStartError: renderer failed") && !text.includes("secret")

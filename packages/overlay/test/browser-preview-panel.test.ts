@@ -16,7 +16,7 @@ test("browser preview panel uses mature primitives and HostTransport-backed serv
   const css = readText("src/styles/surfaces/inspector.css")
   const activityCss = readText("src/styles/surfaces/activity.css")
 
-  expect(html).toContain('id="solidChatViewTabs"')
+  expect(html).toContain('id="chatViewTitle"')
   expect(html).toContain('id="chatBrowserPreviewPane"')
   expect(html).toContain('id="solidBrowserPreviewMount"')
   expect(html).not.toContain('id="rightPanelBrowser"')
@@ -24,6 +24,7 @@ test("browser preview panel uses mature primitives and HostTransport-backed serv
   expect(main).toContain("<BrowserPreviewPanel")
   expect(main).toContain('active={() => chatView() === "browser"}')
   expect(main).toContain('browser: document.getElementById("chatBrowserPreviewPane")')
+  expect(main).toContain('onSelect={selectRightActivity}')
 
   expect(component).toContain('from "./ui/Tabs"')
   expect(component).toContain('from "./ui/Button"')
