@@ -216,14 +216,15 @@
           <div class="chat-browser-preview-pane chat-view-panel" id="chatBrowserPreviewPane" data-chat-view="browser" data-active="false">
             <div id="solidBrowserPreviewMount" class="chat-browser-preview-activity"></div>
           </div>
+          <div class="chat-file-editor-pane chat-view-panel" id="chatFileEditorPane" data-chat-view="file" data-active="false">
+            <div id="solidFileEditorMount" class="chat-file-editor-activity file-editor-mount"></div>
+          </div>
+          <div class="chat-diff-pane chat-view-panel" id="chatDiffPane" data-chat-view="diff" data-active="false">
+            <div id="solidWorkspaceMount" class="chat-diff-activity workspace-mount"></div>
+          </div>
         </div>
-        <!-- Workspace resizer (row-resize, between chat-scroll and workspace) -->
-        <div class="pane-resizer pane-resizer-workspace" id="workspaceResizer" role="separator" aria-orientation="horizontal" aria-label="Resize workspace panel" hidden></div>
-        <!-- Workspace panel (Build + Diff) — stacked above composer, not a right column -->
-        <div id="solidWorkspaceMount" class="workspace-mount" hidden></div>
         <div id="solidChatComposer"></div>
       </section>
-      <div id="solidFileEditorMount" class="file-editor-mount" hidden></div>
       <div class="pane-resizer pane-resizer-right" id="rightPaneResizer" role="separator" aria-orientation="vertical" aria-label="Resize control panel"></div>
 
       <!-- Collapsible Sections (right) -->

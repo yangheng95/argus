@@ -161,7 +161,6 @@ describe("executor settings", () => {
       directory: "D:/dirty-unsaved",
       savedDirectory: "D:/persisted-native",
       sidebarCollapsed: true,
-      workspacePanelHeight: 420,
       desktopNotifications: false,
       preferredProjectEditor: "cursor",
     });
@@ -174,7 +173,6 @@ describe("executor settings", () => {
       theme: "dark",
       directory: "D:/persisted-native",
       sidebarCollapsed: true,
-      workspacePanelHeight: 420,
       desktopNotifications: false,
       preferredProjectEditor: "cursor",
     });

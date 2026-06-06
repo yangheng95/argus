@@ -15,26 +15,7 @@
   height: clamp(calc(200px * var(--ui-scale)), 40vh, calc(560px * var(--ui-scale)));
   background: var(--surface-inset);
 }
-.workspace-mount[hidden] {
-  display: none;
-}
 
-/* ── Row-resize pane handle (workspace variant) ──
- * Double-class (.pane-resizer.pane-resizer-workspace) bumps specificity
- * above the generic .pane-resizer col-resize rule. The handle remains
- * interactive but no longer paints a divider line. */
-.pane-resizer.pane-resizer-workspace {
-  flex: 0 0 var(--ui-resizer-width);
-  align-self: stretch;
-  width: 100%;
-  min-width: 0;
-  cursor: row-resize;
-  background: transparent;
-  position: relative;
-}
-.pane-resizer.pane-resizer-workspace[hidden] {
-  display: none;
-}
 /* ── Workspace Panel ──
  * Flat-redesign Step 2 (2026-05-04): the panel-self border + drop-shadow +
  * border-radius were retired. Visual edge with the panel-body sibling is
@@ -284,25 +265,31 @@ code .file-link:hover {
 .chat-view-panel[data-active="true"],
 .chat-tui-pane,
 .chat-browser-preview-pane,
+.chat-file-editor-pane,
+.chat-diff-pane,
 .chat-tui-activity,
-.chat-browser-preview-activity {
+.chat-browser-preview-activity,
+.chat-file-editor-activity,
+.chat-diff-activity {
   display: flex;
   flex-direction: column;
   overflow: hidden;
 }
 
-.file-editor-mount {
-  flex: 0 0 clamp(calc(420px * var(--ui-scale)), 46%, calc(780px * var(--ui-scale)));
-  min-width: min(calc(360px * var(--ui-scale)), 100%);
-  max-width: 58%;
+.chat-diff-activity.workspace-mount {
+  flex: 1 1 0;
+  height: auto;
   min-height: 0;
-  display: flex;
-  border-left: var(--oc-border-width) solid color-mix(in srgb, var(--border) 78%, transparent);
-  background: var(--surface);
 }
 
-.file-editor-mount[hidden] {
-  display: none;
+.file-editor-mount {
+  flex: 1 1 0;
+  min-width: 0;
+  max-width: none;
+  min-height: 0;
+  display: flex;
+  border-left: 0;
+  background: var(--surface);
 }
 
 .file-editor-pane {
