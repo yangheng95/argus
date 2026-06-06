@@ -15,24 +15,30 @@ import {
 } from "./store"
 import { isLiveGoalRunStatus } from "./catalog"
 import { processOwner } from "./lease"
+import { Ownership } from "./ownership"
 
 /**
  * Owner-stamp orphan probe: a goal_run is **physically orphaned** when it is
- * in a live status but was driven live by a *different* process (its `owner`
- * stamp ≠ the current process owner). Under the single-owner-per-project
- * invariant a foreign owner on a live row means that process restarted and
- * the in-flight, mid-stream goal turn is unrecoverable (a half-streamed LLM
- * turn has no resume checkpoint — see spec §0). The status column still reads
- * `running`/`planning`/`blocked` because the dead process never got to write a
- * terminal row; this derivation is what makes the row read as dead without
- * mutating it (rule 13 — derived, not an FSM write).
+ * in a live status but was driven live by a *different* process whose PID
+ * (process identifier) is no longer alive. A foreign owner stamp alone is not
+ * enough evidence: multiple OpenCorvus processes can coexist, and a still-live
+ * foreign owner may continue streaming tool results. The status column still
+ * reads `running`/`planning`/`blocked` because the dead process never got to
+ * write a terminal row; this derivation is what makes the row read as dead
+ * without mutating it.
  *
  * Never-dispatched / queued rows carry no owner and are not orphaned.
  *
  * Spec: specs/new-arch/2026-05-29-goal-run-owner-orphan-liveness.md
  */
-export function isGoalRunOrphaned(row: GoalRunRow, owner: string = processOwner()): boolean {
-  return isLiveGoalRunStatus(row.status) && !!row.owner && row.owner !== owner
+export function isGoalRunOrphaned(
+  row: GoalRunRow,
+  owner: string = processOwner(),
+  isPidAlive: (pid: number) => boolean = Ownership.isPidAlive,
+): boolean {
+  if (!isLiveGoalRunStatus(row.status) || !row.owner || row.owner === owner) return false
+  const ownerPid = Number(row.owner.split(":", 1)[0])
+  return !isPidAlive(ownerPid)
 }
 
 /**

@@ -250,6 +250,29 @@ describe("beginBuildAttempt — supersede_of population", () => {
     expect(goalStatusByID(goalID)).toBe("running")
   })
 
+  test("foreign live owner with live PID → beginBuildAttempt refuses duplicate instead of retiring it", () => {
+    const liveRunID = `grun_live_foreign_${Date.now()}`
+    insertGoalRun({ id: liveRunID, status: "running", owner: `${process.pid}:other:alive0` })
+    expect(goalStatusByID(goalID)).toBe("running")
+
+    expect(() =>
+      beginBuildAttempt({
+        taskID,
+        goalID,
+        runID,
+        sessionID: "ses_bba_live_foreign_refuse",
+      }),
+    ).toThrow(/already has live goal_run/)
+
+    const rows = listGoalRunsByGoal(goalID)
+    expect(rows).toHaveLength(1)
+    expect(rows[0]?.id).toBe(liveRunID)
+    expect(findGoalRun(liveRunID)?.status).toBe("running")
+    expect(findGoalRun(liveRunID)?.error).toBeNull()
+    expect(findGoalRun(liveRunID)?.supersede_of).toBeNull()
+    expect(goalStatusByID(goalID)).toBe("running")
+  })
+
   test("owner-orphaned live tip → beginBuildAttempt retires the orphan and re-dispatches instead of throwing", () => {
     // A prior process drove this attempt live, then the process restarted.
     // The tip status is still `running` but its owner is a foreign (dead)
