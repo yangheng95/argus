@@ -9,6 +9,7 @@ import z from "zod"
 import path from "path"
 import fs from "fs"
 import { Instance } from "@/project/instance"
+import { FileTime } from "@/file/time"
 
 const READ_FILE_MAX_LINE_CHARS = 1200
 const INLINE_BASE64_DATA_URI_RE = /data:([a-zA-Z0-9.+-]+\/[a-zA-Z0-9.+-]+);base64,([A-Za-z0-9+/=_-]+)/g
@@ -126,6 +127,14 @@ function detectBinaryKind(buf: Buffer, filePath: string): string | null {
 export function createCodebaseTools(projectDir?: string) {
   const dir = projectDir ?? Instance.directory
 
+  function sessionIDFromOptions(options: unknown): string | undefined {
+    if (!options || typeof options !== "object") return undefined
+    const opencorvus = (options as { opencorvus?: unknown }).opencorvus
+    if (!opencorvus || typeof opencorvus !== "object") return undefined
+    const sessionID = (opencorvus as { sessionID?: unknown }).sessionID
+    return typeof sessionID === "string" && sessionID.length > 0 ? sessionID : undefined
+  }
+
   function safePath(relPath: string): string | null {
     const root = path.resolve(dir)
     const normalized = path.resolve(root, relPath)
@@ -155,7 +164,7 @@ export function createCodebaseTools(projectDir?: string) {
           .optional()
           .describe("Maximum lines to read (default 300). Use for large files."),
       }),
-      execute: async ({ path: filePath, start_line, max_lines }) => {
+      execute: async ({ path: filePath, start_line, max_lines }, options) => {
         const abs = safePath(filePath)
         if (!abs) return "Error: path is outside the project boundary."
         const rawWebpageEvidenceArtifact = rawWebpageEvidenceArtifactReason(filePath)
@@ -177,6 +186,8 @@ export function createCodebaseTools(projectDir?: string) {
             return `Error: ${filePath} is ${kind}. read_file returns text only; use a vision/multimodal channel or a dedicated binary tool.`
           }
           const content = buf.toString("utf-8")
+          const sessionID = sessionIDFromOptions(options)
+          if (sessionID) FileTime.read(sessionID, abs)
           const lines = content.split("\n")
           const limit = max_lines ?? 300
           const startIndex = Math.max(0, (start_line ?? 1) - 1)
