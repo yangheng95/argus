@@ -81,6 +81,56 @@ describe("compaction evidence contract", () => {
     expect(result.success).toBe(true)
   })
 
+  test("accepts equivalent Windows instruction paths with forward slashes", () => {
+    const requiredInstruction = "D:\\myhexin-local\\demos\\economy\\AGENTS.md"
+    const reportedInstruction = "D:/myhexin-local/demos/economy/AGENTS.md"
+    const result = CompactionHandoff.validateMinimumEvidence(
+      {
+        ...handoffFixture(),
+        durableInstructionSources: [{ path: reportedInstruction, role: "project rules" }],
+      },
+      {
+        sourceUserMessageID: "msg-source",
+        instructionPaths: [requiredInstruction],
+        patchFiles: ["server/db/schema.ts"],
+        errorNames: ["StructuredOutputPayloadError", "StructuredOutput tool error"],
+        userMessages: true,
+        fileEvidence: true,
+        errorsAndBlockers: true,
+        acceptanceCriteria: true,
+        todos: [],
+      },
+    )
+
+    expect(result.success).toBe(true)
+  })
+
+  test("reports the exact missing instruction path when an instruction source is omitted", () => {
+    const result = CompactionHandoff.validateMinimumEvidence(
+      {
+        ...handoffFixture(),
+        durableInstructionSources: [{ path: "AGENTS.md", role: "relative path is not the absolute source" }],
+      },
+      {
+        sourceUserMessageID: "msg-source",
+        instructionPaths: ["D:\\myhexin-local\\demos\\economy\\AGENTS.md"],
+        patchFiles: ["server/db/schema.ts"],
+        errorNames: ["StructuredOutputPayloadError", "StructuredOutput tool error"],
+        userMessages: true,
+        fileEvidence: true,
+        errorsAndBlockers: true,
+        acceptanceCriteria: true,
+        todos: [],
+      },
+    )
+
+    expect(result.success).toBe(false)
+    if (!result.success) {
+      expect(result.error).toContain("durableInstructionSources")
+      expect(result.error).toContain("D:\\myhexin-local\\demos\\economy\\AGENTS.md")
+    }
+  })
+
   test("rejects a handoff with no error blocker entries when runtime errors exist", () => {
     const result = CompactionHandoff.validateMinimumEvidence(
       {
