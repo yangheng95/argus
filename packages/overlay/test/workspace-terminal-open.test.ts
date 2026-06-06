@@ -122,11 +122,11 @@ test("workspace terminal command opens the selected system terminal profile", as
     expect(selectedBody.profileID).toBe("cmd");
 
     const panelState = await page.evaluate(() => ({
-      mountHidden: document.querySelector<HTMLElement>("#solidWorkspaceMount")?.hidden ?? true,
+      diffViewActive: document.querySelector<HTMLElement>("#chatDiffPane")?.dataset.active ?? "missing",
       terminalPresent: !!document.querySelector(".workspace-terminal"),
     }));
 
-    expect(panelState.mountHidden).toBe(true);
+    expect(panelState.diffViewActive).toBe("false");
     expect(panelState.terminalPresent).toBe(false);
     expect(profileRequestDirectories.length).toBeGreaterThan(0);
     expect(profileRequestDirectories.every((directory) => directory === "D:/overlay/workspace/app")).toBe(true);

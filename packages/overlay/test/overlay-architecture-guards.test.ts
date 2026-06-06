@@ -900,7 +900,7 @@ describe("overlay architecture guards", () => {
     expect(workspaceSurface).not.toContain("file-view")
 
     expect(styles).not.toMatch(/(^|\n)\.pane-resizer\.pane-resizer-workspace\s*\{/)
-    expect(workspaceSurface).toMatch(/\.pane-resizer\.pane-resizer-workspace\s*\{/)
+    expect(workspaceSurface).not.toMatch(/\.pane-resizer\.pane-resizer-workspace\s*\{/)
     expect(styles).not.toMatch(/(^|\n)code \.file-link\s*\{/)
     expect(workspaceSurface).toMatch(/code \.file-link\s*\{/)
 
@@ -915,7 +915,7 @@ describe("overlay architecture guards", () => {
 
     expect(html).not.toContain("btnWorkspaceToggle")
     expect(workspaceSurface).not.toContain(".workspace-toggle")
-    expect(workspaceSurface).toMatch(/\.workspace-mount\[hidden\]\s*\{/)
+    expect(workspaceSurface).not.toMatch(/\.workspace-mount\[hidden\]\s*\{/)
     expect(workspaceSurface).not.toMatch(/\.pane-resizer\.pane-resizer-workspace::before\s*\{/)
     expect(workspaceSurface).not.toMatch(/\.pane-resizer\.pane-resizer-workspace:hover::before/)
     expect(workspaceSurface).not.toMatch(/\.pane-resizer:hover::before/)

@@ -4,7 +4,7 @@
 // Self-sufficient — no external script dependencies.
 
 import { render } from "solid-js/web"
-import { createEffect, createRoot, createSignal } from "solid-js"
+import { createEffect, createRoot, createSignal, untrack } from "solid-js"
 import { Conversation } from "./components/Conversation"
 import { TaskList } from "./components/TaskList"
 import { Board } from "./components/Board"
@@ -29,7 +29,7 @@ import { FileChangesPanel } from "./components/FileChangesPanel"
 import { BrowserPreviewPanel } from "./components/BrowserPreviewPanel"
 import { SideActivityToolbar, type SideActivity } from "./components/SideActivityToolbar"
 import { codingAgentTuiPlugin } from "./plugins/coding-agent-tui"
-import { fileWorkbenchOpen } from "./services/file-workbench"
+import { closeFileEditor, fileWorkbenchOpen } from "./services/file-workbench"
 import type { DiffTarget } from "./services/diff"
 import { initApp } from "./services/init"
 import { loadTasks, boardStore, loadBoard,
@@ -55,7 +55,7 @@ import {
   toggleDevtools,
 } from "./services/theme"
 import { settingsStore, setSettingsStore, saveSettings } from "./store/settings"
-import { initPaneResizers, cancelPaneResize, currentUIScale, renderPaneLayout, PANEL_PANE_CONFIG } from "./services/pane"
+import { initPaneResizers, cancelPaneResize, renderPaneLayout, PANEL_PANE_CONFIG } from "./services/pane"
 import { panelMessage } from "./services/chat"
 import { ConnectionBanner } from "./components/ConnectionBanner"
 import { CommandPalette } from "./components/CommandPalette"
@@ -169,7 +169,7 @@ const [workspaceTarget, setWorkspaceTarget] = createSignal<DiffTarget>({ filePat
 
 type LeftActivity = "tasks" | "explorer" | "changes"
 type RightActivity = typeof codingAgentTuiPlugin.id | "browser" | "inspector"
-type ChatView = "conversation" | typeof codingAgentTuiPlugin.id | "browser"
+type ChatView = "conversation" | typeof codingAgentTuiPlugin.id | "browser" | "file" | "diff"
 
 const DEFAULT_LEFT_ACTIVITY: LeftActivity = "tasks"
 const DEFAULT_RIGHT_ACTIVITY: RightActivity = "inspector"
@@ -197,6 +197,8 @@ const CHAT_VIEW_LABEL_KEYS: Record<ChatView, string> = {
   conversation: "chat.title",
   [codingAgentTuiPlugin.id]: codingAgentTuiPlugin.labelKey,
   browser: "browser_preview.title",
+  file: "file_editor.title",
+  diff: "workspace.diff",
 }
 
 const [leftActivity, setLeftActivity] = createSignal<LeftActivity>(DEFAULT_LEFT_ACTIVITY)
@@ -508,16 +510,19 @@ function buildTaskDebugBlob(board: any): string {
 /** Open the workspace panel. */
 function openWorkspace(): void {
   setWorkspaceOpen(true)
+  setChatView("diff")
 }
 
 /** Close the workspace panel. */
 function closeWorkspace(): void {
   setWorkspaceOpen(false)
+  if (untrack(chatView) === "diff") setChatView("conversation")
 }
 
 /** Open (or switch to) a diff file in the workspace. */
 function openWorkspaceDiff(target: DiffTarget): void {
   setWorkspaceTarget(target)
+  closeFileEditor()
   setLeftActivity("changes")
   openWorkspace()
 }
@@ -1064,67 +1069,6 @@ if (logViewerEl) {
 }
 
 document.addEventListener("DOMContentLoaded", () => {
-  // ── Workspace panel resizer ──
-  // Drag the horizontal divider above the workspace to adjust its height.
-  // Height is persisted to settings.workspacePanelHeight and applied as an
-  // inline style on #solidWorkspaceMount. The workspace is stacked inside
-  // #chatSection between #chatScroll and #solidChatComposer.
-  {
-    const resizer = document.getElementById("workspaceResizer")
-    const mount = document.getElementById("solidWorkspaceMount")
-    const applyHeight = (px: number) => {
-      if (!mount) return
-      mount.style.height = px + "px"
-      mount.style.minHeight = px + "px"
-      mount.style.maxHeight = px + "px"
-    }
-    // Restore persisted height on startup.
-    if (settingsStore.workspacePanelHeight != null) {
-      applyHeight(settingsStore.workspacePanelHeight)
-    }
-    resizer?.addEventListener("pointerdown", (e) => {
-      if (e.button !== 0 || !mount) return
-      resizer.dataset.active = "true"
-      // "row" — use row-resize cursor globally during the drag, distinct
-      // from column resizers which set data-resizing="true".
-      document.body.dataset.resizing = "row"
-      e.preventDefault()
-      const chatSection = document.getElementById("chatSection")
-      const composer = document.getElementById("solidChatComposer")
-      function onMove(ev: PointerEvent) {
-        if (!chatSection) return
-        const rect = chatSection.getBoundingClientRect()
-        const scale = currentUIScale()
-        // Leave room for chat-scroll (minimum) and the composer above/below.
-        const composerH = composer?.getBoundingClientRect().height ?? 0
-        const chatScrollMin = 160 * scale
-        const min = 160 * scale
-        const max = Math.max(min + 40, rect.height - chatScrollMin - composerH)
-        // Workspace is directly above the composer — its height is measured
-        // from the top edge of the composer upward to the pointer.
-        const composerTop = composer ? composer.getBoundingClientRect().top : rect.bottom
-        const next = Math.round(Math.min(max, Math.max(min, composerTop - ev.clientY)))
-        applyHeight(next)
-      }
-      function onUp() {
-        delete resizer!.dataset.active
-        delete document.body.dataset.resizing
-        window.removeEventListener("pointermove", onMove)
-        window.removeEventListener("pointerup", onUp)
-        window.removeEventListener("pointercancel", onUp)
-        // Persist the final height.
-        const height = mount && mount.style.height ? parseInt(mount.style.height, 10) : null
-        if (Number.isFinite(height) && height! > 0) {
-          setSettingsStore("workspacePanelHeight", height)
-          saveSettings()
-        }
-      }
-      window.addEventListener("pointermove", onMove)
-      window.addEventListener("pointerup", onUp)
-      window.addEventListener("pointercancel", onUp)
-    })
-  }
-
   // ── Sidebar buttons ──
   document.getElementById("btnCreateTask")?.addEventListener("click", () => {
     // Deselect current task and focus the composer — the user types their
@@ -1249,15 +1193,6 @@ disposers.push(
       bar.setAttribute("aria-busy", active ? "true" : "false")
     })
 
-    // ── Workspace visibility ──
-    // Drives the show/hide of the workspace mount + resizer.
-    createEffect(() => {
-      const mount = document.getElementById("solidWorkspaceMount")
-      const resizer = document.getElementById("workspaceResizer")
-      if (mount) (mount as HTMLElement).hidden = true
-      if (resizer) (resizer as HTMLElement).hidden = true
-    })
-
     createEffect(() => {
       const active = leftActivity()
       const sidebar = document.getElementById("sidebar")
@@ -1283,6 +1218,8 @@ disposers.push(
         conversation: document.getElementById("chatMessagePane"),
         [codingAgentTuiPlugin.id]: document.getElementById("chatTuiPane"),
         browser: document.getElementById("chatBrowserPreviewPane"),
+        file: document.getElementById("chatFileEditorPane"),
+        diff: document.getElementById("chatDiffPane"),
       }
       if (title) title.textContent = t(CHAT_VIEW_LABEL_KEYS[active])
       for (const [view, body] of Object.entries(bodies)) {
@@ -1301,7 +1238,22 @@ disposers.push(
     })
 
     createEffect(() => {
-      if (fileEditorMountEl) (fileEditorMountEl as HTMLElement).hidden = !fileWorkbenchOpen()
+      const open = fileWorkbenchOpen()
+      if (open) {
+        setWorkspaceOpen(false)
+        setChatView("file")
+      } else if (untrack(chatView) === "file") {
+        setChatView("conversation")
+      }
+    })
+
+    createEffect(() => {
+      const open = workspaceOpen()
+      if (open) {
+        setChatView("diff")
+      } else if (untrack(chatView) === "diff") {
+        setChatView("conversation")
+      }
     })
 
     createEffect(() => {

@@ -1,5 +1,5 @@
 // ── DiffPreviewPanel ──
-// Right-hand workspace view that shows the full diff for a single file.
+// Main workspace view that shows the full diff for a single file.
 // Given a file path, it resolves the FileChange from the shared diff service
 // (which lazy-loads from the acceptance API when necessary) and renders it
 // through the shared DiffView component.

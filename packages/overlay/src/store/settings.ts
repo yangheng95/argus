@@ -40,7 +40,6 @@ export interface OverlaySettings {
    *  inspector, so their ideal widths differ too). */
   missionLedgerWidth: number | null;
   missionChannelsWidth: number | null;
-  workspacePanelHeight: number | null;
   opacity: number;
   zoom: number;
   theme: string;
@@ -157,7 +156,6 @@ export const DEFAULT_SETTINGS: OverlaySettings = {
   sectionsWidth: null,
   missionLedgerWidth: null,
   missionChannelsWidth: null,
-  workspacePanelHeight: null,
   opacity: 0.99,
   zoom: 1,
   theme: DEFAULT_THEME,
@@ -231,7 +229,6 @@ export function applySettings(input: Partial<OverlaySettings>): void {
     sectionsWidth: sanitizePaneWidth(input?.sectionsWidth),
     missionLedgerWidth: sanitizePaneWidth(input?.missionLedgerWidth),
     missionChannelsWidth: sanitizePaneWidth(input?.missionChannelsWidth),
-    workspacePanelHeight: sanitizePaneWidth(input?.workspacePanelHeight),
     opacity: sanitizeOpacity(input?.opacity),
     zoom: sanitizeZoom(input?.zoom),
     theme: settingsTheme(input ?? {}),
@@ -313,7 +310,6 @@ export function bootstrapOverlaySettings(
   sectionsWidth?: number;
   missionLedgerWidth?: number;
   missionChannelsWidth?: number;
-  workspacePanelHeight?: number;
   preferredProjectEditor?: ProjectEditorID;
   workspaceTaskID?: string;
   workspaceTaskId?: string;
@@ -334,7 +330,6 @@ export function bootstrapOverlaySettings(
     sectionsWidth: input.sectionsWidth || undefined,
     missionLedgerWidth: input.missionLedgerWidth || undefined,
     missionChannelsWidth: input.missionChannelsWidth || undefined,
-    workspacePanelHeight: input.workspacePanelHeight || undefined,
     opacity: input.opacity ?? DEFAULT_SETTINGS.opacity,
     zoom: input.zoom ?? DEFAULT_SETTINGS.zoom,
     theme: input.theme ?? DEFAULT_SETTINGS.theme,

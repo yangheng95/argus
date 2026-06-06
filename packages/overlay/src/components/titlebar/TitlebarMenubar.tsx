@@ -270,7 +270,6 @@ export function TitlebarMenubar(props: TitlebarMenubarProps) {
     setSettingsStore({
       sidebarWidth: null,
       sectionsWidth: null,
-      workspacePanelHeight: null,
       sidebarCollapsed: false,
       rightPanelCollapsed: false,
     });
