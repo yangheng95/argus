@@ -364,7 +364,10 @@
 }
 
 .tui-host-frame-line > span {
-  display: inline;
+  display: inline-block;
+  height: var(--tui-cell-height);
+  line-height: var(--tui-cell-height);
+  vertical-align: top;
   white-space: pre;
 }
 

@@ -26,6 +26,7 @@ function fakeTransport(capture: (req: TransportRequest) => void): HostTransport 
           running: true,
           cols: 120,
           rows: 40,
+          mode: "light",
           directory: "D:/repo",
           frame: {
             cols: 120,
@@ -61,7 +62,7 @@ describe("tui embed service", () => {
     const requests: TransportRequest[] = []
     __setHostTransportForTest(fakeTransport((req) => requests.push(req)))
 
-    await startTuiEmbed({ cols: 120, rows: 40, directory: "D:/repo" })
+    await startTuiEmbed({ cols: 120, rows: 40, mode: "light", directory: "D:/repo" })
     await loadTuiEmbedStatus({ directory: "D:/repo" })
     await sendTuiEmbedInput({ directory: "D:/repo", text: "坦克大战" })
     await resizeTuiEmbed({ cols: 100, rows: 30, directory: "D:/repo" })
@@ -82,15 +83,17 @@ describe("tui embed service", () => {
       value: {
         cols: 120,
         rows: 40,
+        mode: "light",
         agent: TUI_CODING_AGENT,
       },
     })
+    expect(requests[0]?.signal).toBeInstanceOf(AbortSignal)
     expect(requests[2]?.body).toEqual({ kind: "json", value: { text: "坦克大战" } })
     expect(requests[3]?.body).toEqual({ kind: "json", value: { cols: 100, rows: 30 } })
   })
 
   test("rejects embed calls without an explicit plugin workspace directory", async () => {
-    await expect(startTuiEmbed({ cols: 120, rows: 40, directory: "" })).rejects.toThrow(
+    await expect(startTuiEmbed({ cols: 120, rows: 40, mode: "dark", directory: "" })).rejects.toThrow(
       "Coding agent TUI requires an active workspace directory.",
     )
   })

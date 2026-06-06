@@ -58,6 +58,7 @@ function embedInfo(text: string, input = "") {
     running: true,
     cols: 100,
     rows: 30,
+    mode: "light",
     directory: "D:/overlay/workspace/app",
     frame: {
       cols: 100,
@@ -115,7 +116,7 @@ test("right sidebar TUI host panel accepts the Tank Battle build case through Op
       const common = commonProjectResponse(path)
       if (common === "redirect") return Response.redirect(`${url.origin}/ui/index.html`, 302)
       if (common) return common
-      if (path === "/tui/embed/status") return send(started ? embedInfo("OpenCorvus coding assistant", inputText) : { running: false, cols: null, rows: null, directory: "", frame: null, text: "", createdAt: null, updatedAt: null })
+      if (path === "/tui/embed/status") return send(started ? embedInfo("OpenCorvus coding assistant", inputText) : { running: false, cols: null, rows: null, mode: null, directory: "", frame: null, text: "", createdAt: null, updatedAt: null })
       if (path === "/tui/embed/start") {
         started = true
         startBodies.push(await req.json())
@@ -214,7 +215,7 @@ test("right sidebar TUI host panel accepts the Tank Battle build case through Op
     expect(receivedInput.join("")).toContain("Build a playable Tank Battle game")
     expect(receivedInput.join("")).toContain("browser visual test")
     expect(receivedInput.join("")).toContain("坦克大战")
-    expect(startBodies[0]).toMatchObject({ agent: "tui-coding" })
+    expect(startBodies[0]).toMatchObject({ agent: "tui-coding", mode: "light" })
     expect((startBodies[0] as { cols?: number }).cols).toBeGreaterThanOrEqual(80)
     expect(resizeBodies.length).toBeGreaterThanOrEqual(0)
     expect(layout.panelWidth).toBeGreaterThan(650)
@@ -272,7 +273,7 @@ test("right sidebar TUI host panel shows embedded renderer input failure details
       const common = commonProjectResponse(path)
       if (common === "redirect") return Response.redirect(`${url.origin}/ui/index.html`, 302)
       if (common) return common
-      if (path === "/tui/embed/status") return send({ running: false, cols: null, rows: null, directory: "", frame: null, text: "", createdAt: null, updatedAt: null })
+      if (path === "/tui/embed/status") return send({ running: false, cols: null, rows: null, mode: null, directory: "", frame: null, text: "", createdAt: null, updatedAt: null })
       if (path === "/tui/embed/start") return send(embedInfo("OpenCorvus input failure smoke"))
       if (path === "/tui/embed/input") {
         return send({ name: "EmbeddedTuiInputError", data: { message: "renderer input rejected", secret: "do-not-render" } }, { status: 400 })
@@ -323,7 +324,7 @@ test("right sidebar TUI host panel shows embedded renderer start failure details
       const common = commonProjectResponse(path)
       if (common === "redirect") return Response.redirect(`${url.origin}/ui/index.html`, 302)
       if (common) return common
-      if (path === "/tui/embed/status") return send({ running: false, cols: null, rows: null, directory: "", frame: null, text: "", createdAt: null, updatedAt: null })
+      if (path === "/tui/embed/status") return send({ running: false, cols: null, rows: null, mode: null, directory: "", frame: null, text: "", createdAt: null, updatedAt: null })
       if (path === "/tui/embed/start") {
         return send({
           name: "EmbeddedTuiStartError",

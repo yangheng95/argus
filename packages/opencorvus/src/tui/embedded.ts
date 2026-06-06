@@ -5,10 +5,12 @@ import { Env } from "@/runtime/env"
 
 const DEFAULT_COLS = 100
 const DEFAULT_ROWS = 30
+const EmbeddedTuiThemeMode = z.enum(["dark", "light"])
 
 export const EmbeddedTuiStartInput = z.object({
   cols: z.number().int().min(20).max(300).default(DEFAULT_COLS),
   rows: z.number().int().min(5).max(120).default(DEFAULT_ROWS),
+  mode: EmbeddedTuiThemeMode.default("dark"),
   agent: z.string().optional(),
   model: z.string().optional(),
   prompt: z.string().optional(),
@@ -61,6 +63,7 @@ export interface EmbeddedTuiInfo {
   running: boolean
   cols: number | null
   rows: number | null
+  mode: "dark" | "light" | null
   directory: string
   frame: EmbeddedTuiFrame | null
   text: string

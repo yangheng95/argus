@@ -17,6 +17,7 @@ interface EmbeddedTuiSession {
   setup: TestRendererSetup
   cols: number
   rows: number
+  mode: "dark" | "light"
   directory: string
   createdAt: number
   updatedAt: number
@@ -76,6 +77,7 @@ async function info(current = session): Promise<EmbeddedTuiInfo> {
       running: false,
       cols: null,
       rows: null,
+      mode: null,
       directory: "",
       frame: null,
       text: "",
@@ -89,6 +91,7 @@ async function info(current = session): Promise<EmbeddedTuiInfo> {
     running: true,
     cols: current.cols,
     rows: current.rows,
+    mode: current.mode,
     directory: current.directory,
     frame,
     text: frameText(frame),
@@ -155,7 +158,7 @@ async function start(input: EmbeddedTuiStartInput & { url: string; directory: st
         config={config}
         args={args(input)}
         dimensions={{ width: input.cols, height: input.rows }}
-        mode="dark"
+        mode={input.mode}
         onExit={async (): Promise<void> => {
           await stop()
         }}
@@ -170,6 +173,7 @@ async function start(input: EmbeddedTuiStartInput & { url: string; directory: st
     setup,
     cols: input.cols,
     rows: input.rows,
+    mode: input.mode,
     directory: input.directory,
     createdAt: Date.now(),
     updatedAt: Date.now(),
