@@ -58,6 +58,7 @@ test("side activity toolbar switches bound panels and survives collapse", async 
     await page.evaluateOnNewDocument((portValue) => {
       localStorage.setItem("oc_directory", "D:/overlay/workspace/app")
       localStorage.setItem("oc_server_url", `http://127.0.0.1:${portValue}`)
+      localStorage.setItem("oc_right_panel_collapsed", "false")
     }, server.port)
 
     await page.goto(`http://127.0.0.1:${server.port}/ui/index.html`, { waitUntil: "domcontentloaded" })
@@ -88,12 +89,12 @@ test("side activity toolbar switches bound panels and survives collapse", async 
       leftTasks: "true",
       leftExplorer: "false",
       leftChanges: "false",
-      rightTui: "true",
+      rightTui: "false",
       rightBrowser: "false",
-      rightInspector: "false",
+      rightInspector: "true",
       leftToolbarDisplay: "flex",
       rightToolbarDisplay: "flex",
-      rightTitle: "TUI",
+      rightTitle: "Inspector",
     })
     await clickButton('[data-ui="side-activity-button"][data-side="left"][data-activity="explorer"]')
     expect(await activeState()).toMatchObject({ leftTasks: "false", leftExplorer: "true", leftChanges: "false" })

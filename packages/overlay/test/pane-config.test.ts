@@ -64,7 +64,17 @@ test("right pane drag measures from the whole pane body, not the center column e
   const pane = readSrc("services/pane.ts")
   expect(pane).toContain('const panelBody = document.getElementById(config.bodyId);')
   expect(pane).toContain("clampNumber(rect.right - clientX, railMin, max)")
+  expect(pane).toContain("export function defaultSectionsWidth")
+  expect(pane).toContain("state.sectionsWidth ?? defaultSectionsWidth(config)")
   expect(pane).not.toContain("document.getElementById(config.centerId)")
+})
+
+test("default settings collapse the right panel without collapsing Mission", () => {
+  const settings = readSrc("store/settings.ts")
+  const storage = readSrc("services/overlay-settings-storage.ts")
+  expect(settings).toContain("rightPanelCollapsed: true")
+  expect(settings).toContain('typeof input?.rightPanelCollapsed === "boolean"')
+  expect(storage).toContain('rightPanelCollapsedRaw === null ? undefined : rightPanelCollapsedRaw === "true"')
 })
 
 test("Mission conversation scroll container opts into the visible chat scrollbar", () => {

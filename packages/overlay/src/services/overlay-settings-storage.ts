@@ -35,6 +35,7 @@ function writeOptional(key: string, value: unknown): void {
 export function loadBrowserOverlaySettings(): BrowserOverlaySettings {
   const serverUrl = read("oc_server_url") || DEFAULT_SERVER;
   const autoServerRaw = read("oc_auto_server");
+  const rightPanelCollapsedRaw = read("oc_right_panel_collapsed");
   return {
     serverUrl,
     autoServer: autoServerRaw === null ? !serverUrl || serverUrl === DEFAULT_SERVER : autoServerRaw !== "false",
@@ -44,7 +45,7 @@ export function loadBrowserOverlaySettings(): BrowserOverlaySettings {
     projectEditor: read("oc_project_editor") || undefined,
     initGit: true,
     sidebarCollapsed: read("oc_sidebar_collapsed") === "true",
-    rightPanelCollapsed: read("oc_right_panel_collapsed") === "true",
+    rightPanelCollapsed: rightPanelCollapsedRaw === null ? undefined : rightPanelCollapsedRaw === "true",
     sidebarWidth: read("oc_sidebar_width") || undefined,
     sectionsWidth: read("oc_sections_width") || undefined,
     workspacePanelHeight: read("oc_workspace_height") || undefined,

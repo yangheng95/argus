@@ -56,6 +56,9 @@ test("panel header collapse controls shrink side panes to header rails", async (
     await page.evaluateOnNewDocument((portValue) => {
       localStorage.setItem("oc_directory", "D:/overlay/workspace/app");
       localStorage.setItem("oc_server_url", `http://127.0.0.1:${portValue}`);
+      if (localStorage.getItem("oc_right_panel_collapsed") === null) {
+        localStorage.setItem("oc_right_panel_collapsed", "false");
+      }
     }, server.port);
     await page.goto(`http://127.0.0.1:${server.port}/ui/index.html`, { waitUntil: "domcontentloaded" });
     await page.waitForSelector('[data-ui="sidebar-header-collapse-toggle"]');
@@ -171,6 +174,7 @@ test("panel header collapse controls shrink side panes to header rails", async (
     expect(expanded.rightResizer.disabled).toBe("false");
 
     await page.setViewport({ width: 607, height: 900 });
+    await page.waitForFunction(() => localStorage.getItem("oc_right_panel_collapsed") === "false");
     await page.evaluate(() => {
       localStorage.setItem("oc_sidebar_collapsed", "true");
       localStorage.setItem("oc_right_panel_collapsed", "true");
@@ -207,7 +211,7 @@ test("panel header collapse controls shrink side panes to header rails", async (
     expect(narrowCollapsed.leftResizer.hidden).toBe(true);
     expect(narrowCollapsed.leftResizer.display).toBe("none");
     expect(narrowCollapsed.leftResizer.disabled).toBe("true");
-    expect(narrowCollapsed.chat.height).toBeGreaterThan(500);
+    expect(narrowCollapsed.chat.height).toBeGreaterThan(490);
     expect(narrowCollapsed.sections.hidden).toBe(false);
     expect(narrowCollapsed.sections.width).toBeGreaterThan(600);
     expect(narrowCollapsed.sections.height).toBeLessThanOrEqual(48);

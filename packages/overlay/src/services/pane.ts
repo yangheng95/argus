@@ -136,6 +136,15 @@ export function defaultRailWidth(config: PaneConfig): number {
 }
 
 /**
+ * Compute the default width for the right-side sections pane.
+ */
+export function defaultSectionsWidth(config: PaneConfig): number {
+  const scale = currentUIScale();
+  const panelWidth = paneBodyWidth(config);
+  return clampNumber(panelWidth * 0.3, 380 * scale, 560 * scale);
+}
+
+/**
  * Read the --ui-scale CSS custom property (
  */
 export function currentUIScale(): number {
@@ -188,7 +197,7 @@ export function resolvedPaneWidths(
     railMax,
   );
   let sections = clampNumber(
-    state.sectionsWidth ?? defaultRailWidth(config),
+    state.sectionsWidth ?? defaultSectionsWidth(config),
     railMin,
     railMax,
   );

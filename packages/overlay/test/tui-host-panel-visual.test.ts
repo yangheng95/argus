@@ -150,6 +150,7 @@ test("right sidebar TUI host panel accepts the Tank Battle build case through Op
     await page.evaluateOnNewDocument((portValue) => {
       localStorage.setItem("oc_directory", "D:/overlay/workspace/app")
       localStorage.setItem("oc_server_url", `http://127.0.0.1:${portValue}`)
+      localStorage.setItem("oc_right_panel_collapsed", "false")
     }, server.port)
 
     await page.goto(`http://127.0.0.1:${server.port}/ui/index.html`, { waitUntil: "domcontentloaded" })
@@ -289,6 +290,7 @@ test("right sidebar TUI host panel shows embedded renderer input failure details
     await page.evaluateOnNewDocument((portValue) => {
       localStorage.setItem("oc_directory", "D:/overlay/workspace/app")
       localStorage.setItem("oc_server_url", `http://127.0.0.1:${portValue}`)
+      localStorage.setItem("oc_right_panel_collapsed", "false")
     }, server.port)
 
     await page.goto(`http://127.0.0.1:${server.port}/ui/index.html`, { waitUntil: "domcontentloaded" })
@@ -345,6 +347,7 @@ test("right sidebar TUI host panel shows embedded renderer start failure details
     await page.evaluateOnNewDocument((portValue) => {
       localStorage.setItem("oc_directory", "D:/overlay/workspace/app")
       localStorage.setItem("oc_server_url", `http://127.0.0.1:${portValue}`)
+      localStorage.setItem("oc_right_panel_collapsed", "false")
     }, server.port)
 
     await page.goto(`http://127.0.0.1:${server.port}/ui/index.html`, { waitUntil: "domcontentloaded" })
