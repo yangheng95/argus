@@ -6,6 +6,7 @@ test("ConversationAgentRail reads workflow through the projection and renders a 
   const source = readFileSync(join(import.meta.dir, "../src/components/ConversationAgentRail.tsx"), "utf8")
   expect(source).toContain("buildAgentWorkflow(")
   expect(source).toContain("mergeAgentRecords")
+  expect(source).toContain("conversationAgentRecordsForSource(boardStore.selectedSource)")
   expect(source).toContain("Index")
   expect(source).not.toContain("compactAgentWorkflowLanesForNarrowRail")
   expect(source).not.toContain("LaneAvatarStack")

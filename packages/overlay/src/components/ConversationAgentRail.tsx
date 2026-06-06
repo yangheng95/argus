@@ -1,6 +1,7 @@
 import { Index, Show, createMemo, onCleanup, type Accessor } from "solid-js"
 import { cardTreeStore } from "../store/card-tree"
-import { conversationAgentStore } from "../store/conversation-agents"
+import { boardStore } from "../store/board"
+import { conversationAgentRecordsForSource } from "../store/conversation-agents"
 import { setCardExpanded } from "../store/conversation-ui"
 import { conversationCardContainsMessage, loadConversationHistoryUntilCard } from "../services/conversation"
 import { requestConversationCardScroll } from "../services/conversation-scroll"
@@ -199,7 +200,7 @@ export function ConversationAgentRail() {
     })
     return {
       ...liveProjection,
-      records: mergeAgentRecords(conversationAgentStore.records, liveProjection.records),
+      records: mergeAgentRecords(conversationAgentRecordsForSource(boardStore.selectedSource), liveProjection.records),
     }
   })
   const records = createMemo(() => projection().records)
