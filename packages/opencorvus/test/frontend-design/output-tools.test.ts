@@ -307,6 +307,7 @@ test("submit_frontend_template renders compact structured fields into markdown h
   expect(report).not.toContain("## Component Inventory")
   expect(report).toContain("- acceptance_root: .")
   expect(report).toContain("frontend-design-skeleton is source_baseline_input evidence only")
+  expect(report).toContain("maintainable_status: incomplete_source_baseline")
   expect(report).toContain("unfinished frontend_design work")
 })
 
