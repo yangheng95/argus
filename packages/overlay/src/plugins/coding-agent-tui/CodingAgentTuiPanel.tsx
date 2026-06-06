@@ -47,16 +47,20 @@ function tuiBackground(color: string) {
   return isDefaultTuiBackground(color) ? TUI_DEFAULT_BACKGROUND : color
 }
 
-function spanBackground(span: EmbeddedTuiSpan) {
-  return span.text.trim() ? span.bg : tuiBackground(span.bg)
-}
-
 function lineHasContent(line: EmbeddedTuiLine) {
   return line.spans.some((span) => span.text.trim())
 }
 
-function spanStyle(span: EmbeddedTuiSpan) {
-  const styles = [`color: ${span.fg}`, `background-color: ${spanBackground(span)}`]
+function spanBackground(span: EmbeddedTuiSpan, line: EmbeddedTuiLine) {
+  return lineHasContent(line) ? span.bg : tuiBackground(span.bg)
+}
+
+function spanStyle(span: EmbeddedTuiSpan, line: EmbeddedTuiLine) {
+  const styles = [
+    `color: ${span.fg}`,
+    `background-color: ${spanBackground(span, line)}`,
+    `width: calc(${span.width} * var(--tui-cell-width))`,
+  ]
   if (span.attributes & ATTR_BOLD) styles.push("font-weight: 700")
   if (span.attributes & ATTR_DIM) styles.push("opacity: 0.72")
   if (span.attributes & ATTR_ITALIC) styles.push("font-style: italic")
@@ -368,7 +372,7 @@ export function CodingAgentTuiPanel(props: CodingAgentTuiPanelProps) {
               <For each={frame().lines}>
                 {(line) => (
                   <div class="tui-host-frame-line" style={lineStyle(line)}>
-                    <For each={line.spans}>{(span) => <span style={spanStyle(span)}>{span.text}</span>}</For>
+                    <For each={line.spans}>{(span) => <span style={spanStyle(span, line)}>{span.text}</span>}</For>
                   </div>
                 )}
               </For>

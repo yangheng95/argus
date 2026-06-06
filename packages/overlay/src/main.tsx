@@ -28,6 +28,7 @@ import { FileEditorPane } from "./components/FileEditorPane"
 import { FileChangesPanel } from "./components/FileChangesPanel"
 import { BrowserPreviewPanel } from "./components/BrowserPreviewPanel"
 import { SideActivityToolbar, type SideActivity } from "./components/SideActivityToolbar"
+import { Tab, Tabs } from "./components/ui/Tabs"
 import { codingAgentTuiPlugin } from "./plugins/coding-agent-tui"
 import { fileWorkbenchOpen } from "./services/file-workbench"
 import type { DiffTarget } from "./services/diff"
@@ -168,10 +169,12 @@ const [workspaceOpen, setWorkspaceOpen] = createSignal(false)
 const [workspaceTarget, setWorkspaceTarget] = createSignal<DiffTarget>({ filePath: "" })
 
 type LeftActivity = "tasks" | "explorer" | "changes"
-type RightActivity = typeof codingAgentTuiPlugin.id | "browser" | "inspector"
+type RightActivity = "inspector"
+type ChatView = "conversation" | typeof codingAgentTuiPlugin.id | "browser"
 
 const DEFAULT_LEFT_ACTIVITY: LeftActivity = "tasks"
 const DEFAULT_RIGHT_ACTIVITY: RightActivity = "inspector"
+const DEFAULT_CHAT_VIEW: ChatView = "conversation"
 
 const LEFT_ACTIVITIES: readonly SideActivity<LeftActivity>[] = [
   { id: "tasks", icon: "goals", labelKey: "sidebar.title" },
@@ -179,10 +182,12 @@ const LEFT_ACTIVITIES: readonly SideActivity<LeftActivity>[] = [
   { id: "changes", icon: "file-document", labelKey: "section.files" },
 ]
 
-const RIGHT_ACTIVITIES: readonly SideActivity<RightActivity>[] = [
-  codingAgentTuiPlugin.activity,
-  { id: "browser", icon: "inspect", labelKey: "browser_preview.title" },
-  { id: "inspector", icon: "panel-right", labelKey: "sections.title" },
+const RIGHT_ACTIVITIES: readonly SideActivity<RightActivity>[] = []
+
+const CHAT_VIEWS: ReadonlyArray<{ id: ChatView; labelKey: string }> = [
+  { id: "conversation", labelKey: "chat.title" },
+  { id: codingAgentTuiPlugin.id, labelKey: codingAgentTuiPlugin.labelKey },
+  { id: "browser", labelKey: "browser_preview.title" },
 ]
 
 const LEFT_ACTIVITY_LABEL_KEYS: Record<LeftActivity, string> = {
@@ -191,14 +196,9 @@ const LEFT_ACTIVITY_LABEL_KEYS: Record<LeftActivity, string> = {
   changes: "section.files",
 }
 
-const RIGHT_ACTIVITY_LABEL_KEYS: Record<RightActivity, string> = {
-  [codingAgentTuiPlugin.id]: codingAgentTuiPlugin.labelKey,
-  browser: "browser_preview.title",
-  inspector: "sections.title",
-}
-
 const [leftActivity, setLeftActivity] = createSignal<LeftActivity>(DEFAULT_LEFT_ACTIVITY)
 const [rightActivity, setRightActivity] = createSignal<RightActivity>(DEFAULT_RIGHT_ACTIVITY)
+const [chatView, setChatView] = createSignal<ChatView>(DEFAULT_CHAT_VIEW)
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return !!value && typeof value === "object" && !Array.isArray(value)
@@ -692,6 +692,31 @@ disposers.push(
 
 // ── Mount: Conversation ──
 
+const chatViewTabsMount = document.getElementById("solidChatViewTabs")
+if (chatViewTabsMount) {
+  chatViewTabsMount.innerHTML = ""
+  render(
+    () => (
+      <Tabs size="md" tone="neutral" value={chatView()} onValueChange={(value) => setChatView(value as ChatView)} aria-label={t("chat.title")} data-ui="chat-view-tabs">
+        {CHAT_VIEWS.map((view) => (
+          <Tab
+            value={view.id}
+            active={chatView() === view.id}
+            size="md"
+            tone="neutral"
+            data-ui="chat-view-tab"
+            data-chat-view-tab={view.id}
+            onClick={() => setChatView(view.id)}
+          >
+            {t(view.labelKey)}
+          </Tab>
+        ))}
+      </Tabs>
+    ),
+    chatViewTabsMount,
+  )
+}
+
 const chatScroll = document.getElementById("chatScroll")
 if (chatScroll) {
   chatScroll.innerHTML = ""
@@ -742,7 +767,7 @@ if (tuiHostMountEl) {
   render(
     () => (
       <CodingAgentTuiPanel
-        active={() => rightActivity() === codingAgentTuiPlugin.id}
+        active={() => chatView() === codingAgentTuiPlugin.id}
         directory={activeDirectory}
       />
     ),
@@ -974,7 +999,7 @@ if (rightActivityToolbarEl) {
 
 const browserPreviewEl = document.getElementById("solidBrowserPreviewMount")
 if (browserPreviewEl) {
-  render(() => <BrowserPreviewPanel active={() => rightActivity() === "browser"} directory={activeDirectory} taskID={() => activeTaskID() || undefined} />, browserPreviewEl)
+  render(() => <BrowserPreviewPanel active={() => chatView() === "browser"} directory={activeDirectory} taskID={() => activeTaskID() || undefined} />, browserPreviewEl)
 }
 
 // ── Mount: ConnectionBadge ──
@@ -1194,11 +1219,11 @@ disposers.push(
     // SQL queries keyed on the task id. Reads `boardStore.board` — the live
     // projection for the currently selected task — so no extra fetch.
     //
-    // Triggered by a double-click on `.chat-title` (the "任务" label). Single
+    // Triggered by a double-click on the Conversation tab. Single
     // click remains free for future use. The same button flashes a "已复制"
     // hint via a transient `data-copied` attribute.
     {
-      const title = document.querySelector(".chat-title") as HTMLElement | null
+      const title = document.querySelector('[data-chat-view-tab="conversation"]') as HTMLElement | null
       if (title) {
         title.style.cursor = "copy"
         title.title = "双击复制调试信息 (task id / directory / session / run / worktrees + SQL)"
@@ -1222,7 +1247,7 @@ disposers.push(
             await navigator.clipboard.writeText(blob)
             flash("已复制")
           } catch (err) {
-            console.error("[chat-title dblclick] clipboard write failed", err)
+            console.error("[chat-view-tab dblclick] clipboard write failed", err)
             flash("复制失败")
           }
         })
@@ -1269,19 +1294,25 @@ disposers.push(
     })
 
     createEffect(() => {
+      const active = chatView()
+      const bodies: Record<ChatView, HTMLElement | null> = {
+        conversation: document.getElementById("chatMessagePane"),
+        [codingAgentTuiPlugin.id]: document.getElementById("chatTuiPane"),
+        browser: document.getElementById("chatBrowserPreviewPane"),
+      }
+      for (const [view, body] of Object.entries(bodies)) {
+        if (body) body.dataset.active = String(view === active)
+      }
+    })
+
+    createEffect(() => {
       const active = rightActivity()
       const sections = document.getElementById("sections")
       const title = document.getElementById("rightPanelTitle")
-      const bodies: Record<RightActivity, HTMLElement | null> = {
-        [codingAgentTuiPlugin.id]: document.getElementById(codingAgentTuiPlugin.bodyId),
-        browser: document.getElementById("rightPanelBrowser"),
-        inspector: document.getElementById("rightPanelInspector"),
-      }
+      const inspector = document.getElementById("rightPanelInspector")
       if (sections) sections.dataset.rightActivity = active
-      if (title) title.textContent = t(RIGHT_ACTIVITY_LABEL_KEYS[active])
-      for (const [activity, body] of Object.entries(bodies)) {
-        if (body) body.dataset.active = String(activity === active)
-      }
+      if (title) title.textContent = t("sections.title")
+      if (inspector) inspector.dataset.active = "true"
     })
 
     createEffect(() => {

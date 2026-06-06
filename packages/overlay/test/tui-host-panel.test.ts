@@ -3,12 +3,13 @@ import { readFileSync } from "node:fs"
 import { resolve } from "node:path"
 
 describe("tui host panel wiring", () => {
-  test("right activity mounts the OpenTUI renderer-backed embedded panel", () => {
+  test("chat view tab mounts the OpenTUI renderer-backed embedded panel", () => {
     const main = readFileSync(resolve(import.meta.dir, "../src/main.tsx"), "utf8")
     const plugin = readFileSync(resolve(import.meta.dir, "../src/plugins/coding-agent-tui/index.tsx"), "utf8")
     expect(main).toContain('import { codingAgentTuiPlugin } from "./plugins/coding-agent-tui"')
     expect(main).toContain("const CodingAgentTuiPanel = codingAgentTuiPlugin.Panel")
-    expect(main).toContain("rightActivity() === codingAgentTuiPlugin.id")
+    expect(main).toContain("chatView() === codingAgentTuiPlugin.id")
+    expect(main).toContain('data-ui="chat-view-tab"')
     expect(main).toContain("directory={activeDirectory}")
     expect(main).not.toContain('import { TuiHostPanel } from "./components/TuiHostPanel"')
     expect(plugin).toContain("Panel: CodingAgentTuiPanel")
@@ -28,10 +29,11 @@ describe("tui host panel wiring", () => {
     expect(panel).toContain("resizeTuiEmbed({ ...nextSize, directory: hostDirectory() })")
     expect(panel).toContain("sendTuiEmbedInput({ ...payload, directory: hostDirectory() })")
     expect(panel).toContain("stopTuiEmbed({ directory: hostDirectory() })")
-    expect(panel).toContain("spanStyle(span)")
+    expect(panel).toContain("spanStyle(span, line)")
     expect(panel).toContain("isDefaultTuiBackground")
-    expect(panel).toContain("spanBackground(span)")
-    expect(panel).toContain("span.text.trim() ? span.bg : tuiBackground(span.bg)")
+    expect(panel).toContain("spanBackground(span, line)")
+    expect(panel).toContain("lineHasContent(line) ? span.bg : tuiBackground(span.bg)")
+    expect(panel).toContain("width: calc(${span.width} * var(--tui-cell-width))")
     expect(panel).toContain("lineHasContent(line)")
     expect(panel).toContain("lineHasContent(line) ? bg : tuiBackground(bg)")
     expect(panel).toContain("lineStyle(line)")

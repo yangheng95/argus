@@ -56,5 +56,6 @@ test("browser settings leave missing right panel collapse value to DEFAULT_SETTI
 test("right panel default width tokens are wider than the left rail", () => {
   const css = readFileSync(join(import.meta.dir, "../src/styles/tokens/design-language.css"), "utf8")
   expect(css).toContain("--ui-sections-width: clamp(calc(380px * var(--ui-scale)), 30vw, calc(560px * var(--ui-scale)))")
-  expect(css).toContain("--ui-tui-sections-width: clamp(calc(760px * var(--ui-scale)), 58vw, calc(980px * var(--ui-scale)))")
+  expect(css).not.toContain("--ui-tui-sections-width")
+  expect(css).not.toContain("--ui-tui-chat-min-width")
 })

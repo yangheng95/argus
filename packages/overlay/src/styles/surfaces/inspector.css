@@ -31,13 +31,6 @@
   width: auto;
 }
 
-.sections[data-right-activity="tui"]:not([data-collapsed="true"]) {
-  width: min(var(--ui-tui-sections-width), calc(100vw - var(--ui-sidebar-width) - var(--ui-tui-chat-min-width) - calc(4px * var(--ui-scale))));
-  min-width: min(100%, calc(520px * var(--ui-scale)));
-  max-width: min(var(--ui-tui-sections-width), calc(100vw - var(--ui-sidebar-width) - var(--ui-tui-chat-min-width) - calc(4px * var(--ui-scale))));
-  flex: 0 0 min(var(--ui-tui-sections-width), calc(100vw - var(--ui-sidebar-width) - var(--ui-tui-chat-min-width) - calc(4px * var(--ui-scale))));
-}
-
 .sections-content {
   background: var(--inspector-surface);
 }

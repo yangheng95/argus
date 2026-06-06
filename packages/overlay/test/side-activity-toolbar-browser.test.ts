@@ -63,7 +63,8 @@ test("side activity toolbar switches bound panels and survives collapse", async 
 
     await page.goto(`http://127.0.0.1:${server.port}/ui/index.html`, { waitUntil: "domcontentloaded" })
     await page.waitForSelector('[data-ui="side-activity-button"][data-side="left"][data-activity="tasks"]')
-    await page.waitForSelector('[data-ui="side-activity-button"][data-side="right"][data-activity="tui"]')
+    await page.waitForSelector('#solidRightActivityToolbar')
+    await page.waitForSelector('[data-ui="chat-view-tab"][data-chat-view-tab="browser"]')
 
     const clickButton = async (selector: string) => {
       await page.$eval(selector, (node) => (node as HTMLButtonElement).click())
@@ -76,11 +77,12 @@ test("side activity toolbar switches bound panels and survives collapse", async 
         leftTasks: active("#leftPanelTasks"),
         leftExplorer: active("#leftPanelExplorer"),
         leftChanges: active("#leftPanelChanges"),
-        rightTui: active("#rightPanelTui"),
-        rightBrowser: active("#rightPanelBrowser"),
         rightInspector: active("#rightPanelInspector"),
+        chatConversation: active("#chatMessagePane"),
+        chatPreview: active("#chatBrowserPreviewPane"),
         leftToolbarDisplay: display("#solidLeftActivityToolbar"),
         rightToolbarDisplay: display("#solidRightActivityToolbar"),
+        rightActivityButtons: document.querySelectorAll('[data-ui="side-activity-button"][data-side="right"]').length,
         rightTitle: document.querySelector<HTMLElement>("#rightPanelTitle")?.textContent ?? "",
       }
     })
@@ -89,11 +91,12 @@ test("side activity toolbar switches bound panels and survives collapse", async 
       leftTasks: "true",
       leftExplorer: "false",
       leftChanges: "false",
-      rightTui: "false",
-      rightBrowser: "false",
       rightInspector: "true",
+      chatConversation: "true",
+      chatPreview: "false",
       leftToolbarDisplay: "flex",
       rightToolbarDisplay: "flex",
+      rightActivityButtons: 0,
       rightTitle: "Inspector",
     })
     await clickButton('[data-ui="side-activity-button"][data-side="left"][data-activity="explorer"]')
@@ -106,14 +109,8 @@ test("side activity toolbar switches bound panels and survives collapse", async 
     await page.evaluate(() => window.dispatchEvent(new CustomEvent("acceptance:focus-changes")))
     expect(await activeState()).toMatchObject({ leftTasks: "false", leftExplorer: "false", leftChanges: "true" })
 
-    await clickButton('[data-ui="side-activity-button"][data-side="right"][data-activity="browser"]')
-    expect(await activeState()).toMatchObject({ rightTui: "false", rightBrowser: "true", rightInspector: "false", rightTitle: "Preview" })
-
-    await clickButton('[data-ui="side-activity-button"][data-side="right"][data-activity="inspector"]')
-    expect(await activeState()).toMatchObject({ rightTui: "false", rightBrowser: "false", rightInspector: "true", rightTitle: "Inspector" })
-
-    await clickButton('[data-ui="side-activity-button"][data-side="right"][data-activity="tui"]')
-    expect(await activeState()).toMatchObject({ rightTui: "true", rightBrowser: "false", rightInspector: "false", rightTitle: "TUI" })
+    await clickButton('[data-ui="chat-view-tab"][data-chat-view-tab="browser"]')
+    expect(await activeState()).toMatchObject({ chatConversation: "false", chatPreview: "true", rightInspector: "true", rightTitle: "Inspector" })
 
     await clickButton('[data-ui="sidebar-header-collapse-toggle"]')
     await clickButton('[data-ui="right-panel-header-collapse-toggle"]')
