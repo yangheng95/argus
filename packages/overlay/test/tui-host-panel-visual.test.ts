@@ -47,9 +47,24 @@ function line(text: string, fg = "rgb(229, 231, 235)", bg = "rgb(10, 10, 10)", a
   }
 }
 
+function shortcutLine() {
+  return {
+    spans: [
+      { text: "tab", fg: "rgb(255, 255, 255)", bg: "rgb(10, 10, 10)", attributes: 1, width: 3 },
+      { text: " ", fg: "rgb(229, 231, 235)", bg: "rgb(10, 10, 10)", attributes: 0, width: 1 },
+      { text: "agents", fg: "rgb(229, 231, 235)", bg: "rgb(10, 10, 10)", attributes: 0, width: 6 },
+      { text: "  ", fg: "rgb(229, 231, 235)", bg: "rgb(10, 10, 10)", attributes: 0, width: 2 },
+      { text: "ctrl+p", fg: "rgb(255, 255, 255)", bg: "rgb(10, 10, 10)", attributes: 1, width: 6 },
+      { text: " ", fg: "rgb(229, 231, 235)", bg: "rgb(10, 10, 10)", attributes: 0, width: 1 },
+      { text: "commands", fg: "rgb(229, 231, 235)", bg: "rgb(10, 10, 10)", attributes: 0, width: 8 },
+    ],
+  }
+}
+
 function embedInfo(text: string, input = "") {
   const lines = [
     line("OpenCorvus coding assistant", "rgb(125, 211, 252)", "rgb(10, 10, 10)", 1),
+    shortcutLine(),
     line(" ".repeat(100), "rgb(229, 231, 235)", "rgb(10, 10, 10)"),
     line("project: D:/overlay/workspace/app", "rgb(209, 213, 219)"),
     line("todo: accept a Tank Battle build request through overlay TUI", "rgb(253, 224, 71)"),
@@ -96,7 +111,7 @@ function commonProjectResponse(path: string) {
   return undefined
 }
 
-test("right sidebar TUI host panel accepts the Tank Battle build case through OpenTUI embed frames", async () => {
+test("chat TUI tab accepts the Tank Battle build case through OpenTUI embed frames", async () => {
   const screenshotDir = mkdtempSync(join(tmpdir(), "opencorvus-tui-visual-"))
   const screenshotPath = join(screenshotDir, "right-tui.png")
   const receivedInput: string[] = []
@@ -155,8 +170,8 @@ test("right sidebar TUI host panel accepts the Tank Battle build case through Op
     }, server.port)
 
     await page.goto(`http://127.0.0.1:${server.port}/ui/index.html`, { waitUntil: "domcontentloaded" })
-    await page.waitForSelector('[data-ui="side-activity-button"][data-side="right"][data-activity="tui"]')
-    await page.click('[data-ui="side-activity-button"][data-side="right"][data-activity="tui"]')
+    await page.waitForSelector('[data-ui="chat-view-tab"][data-chat-view-tab="tui"]')
+    await page.click('[data-ui="chat-view-tab"][data-chat-view-tab="tui"]')
     await page.waitForSelector(".tui-host-panel")
     await page.waitForFunction(() => {
       const error = document.querySelector(".tui-host-error")
@@ -192,9 +207,15 @@ test("right sidebar TUI host panel accepts the Tank Battle build case through Op
       const firstLine = document.querySelector<HTMLElement>(".tui-host-frame-line")
       const firstSpan = document.querySelector<HTMLElement>(".tui-host-frame-line > span")
       const emptyLine = Array.from(document.querySelectorAll<HTMLElement>(".tui-host-frame-line")).find((line) => !line.textContent?.trim())
+      const shortcutBlankSpan = Array.from(document.querySelectorAll<HTMLElement>(".tui-host-frame-line > span")).find((span) => {
+        const parentText = span.parentElement?.textContent ?? ""
+        return parentText.includes("tab agents") && parentText.includes("ctrl+p commands") && !span.textContent?.trim()
+      })
       return {
-        rightActive: document.querySelector<HTMLElement>("#rightPanelTui")?.dataset.active,
-        title: document.querySelector<HTMLElement>("#rightPanelTitle")?.textContent,
+        conversationActive: document.querySelector<HTMLElement>("#chatMessagePane")?.dataset.active,
+        tuiActive: document.querySelector<HTMLElement>("#chatTuiPane")?.dataset.active,
+        previewActive: document.querySelector<HTMLElement>("#chatBrowserPreviewPane")?.dataset.active,
+        activeTab: document.querySelector<HTMLElement>('[data-ui="chat-view-tab"][data-chat-view-tab="tui"]')?.dataset.active,
         state: terminal.dataset.state,
         panelWidth: Math.round(panelRect.width),
         panelHeight: Math.round(panelRect.height),
@@ -207,14 +228,17 @@ test("right sidebar TUI host panel accepts the Tank Battle build case through Op
         firstLineBackground: firstLine ? getComputedStyle(firstLine).backgroundColor : "",
         firstSpanBackground: firstSpan ? getComputedStyle(firstSpan).backgroundColor : "",
         emptyLineBackground: emptyLine ? getComputedStyle(emptyLine).backgroundColor : "",
+        shortcutBlankSpanBackground: shortcutBlankSpan ? getComputedStyle(shortcutBlankSpan).backgroundColor : "",
         terminalText: terminal.textContent ?? "",
         errorText: document.querySelector<HTMLElement>(".tui-host-error")?.textContent ?? "",
       }
     })
 
     expect(layout).toMatchObject({
-      rightActive: "true",
-      title: "TUI",
+      conversationActive: "false",
+      tuiActive: "true",
+      previewActive: "false",
+      activeTab: "true",
       state: "running",
       errorText: "",
     })
@@ -236,6 +260,7 @@ test("right sidebar TUI host panel accepts the Tank Battle build case through Op
     expect(layout.frameBackground).not.toBe("rgb(10, 10, 10)")
     expect(layout.firstLineBackground).toBe("rgb(10, 10, 10)")
     expect(layout.firstSpanBackground).toBe("rgb(10, 10, 10)")
+    expect(layout.shortcutBlankSpanBackground).toBe("rgb(10, 10, 10)")
     expect(layout.emptyLineBackground).not.toBe("rgb(10, 10, 10)")
 
     await page.screenshot({ path: screenshotPath, fullPage: false })
@@ -274,7 +299,7 @@ test("right sidebar TUI host panel accepts the Tank Battle build case through Op
   }
 }, { timeout: 90_000 })
 
-test("right sidebar TUI host panel shows embedded renderer input failure details", async () => {
+test("chat TUI tab shows embedded renderer input failure details", async () => {
   const server = Bun.serve({
     idleTimeout: 255,
     port: 0,
@@ -307,8 +332,8 @@ test("right sidebar TUI host panel shows embedded renderer input failure details
     }, server.port)
 
     await page.goto(`http://127.0.0.1:${server.port}/ui/index.html`, { waitUntil: "domcontentloaded" })
-    await page.waitForSelector('[data-ui="side-activity-button"][data-side="right"][data-activity="tui"]')
-    await page.click('[data-ui="side-activity-button"][data-side="right"][data-activity="tui"]')
+    await page.waitForSelector('[data-ui="chat-view-tab"][data-chat-view-tab="tui"]')
+    await page.click('[data-ui="chat-view-tab"][data-chat-view-tab="tui"]')
     await page.waitForFunction(() => document.querySelector<HTMLElement>('[data-testid="tui-host-terminal"]')?.dataset.state === "running")
     await page.evaluate(() => {
       const terminal = document.querySelector<HTMLElement>('[data-testid="tui-host-terminal"]')
@@ -326,7 +351,7 @@ test("right sidebar TUI host panel shows embedded renderer input failure details
   }
 }, { timeout: 90_000 })
 
-test("right sidebar TUI host panel shows embedded renderer start failure details", async () => {
+test("chat TUI tab shows embedded renderer start failure details", async () => {
   const server = Bun.serve({
     idleTimeout: 255,
     port: 0,
@@ -364,8 +389,8 @@ test("right sidebar TUI host panel shows embedded renderer start failure details
     }, server.port)
 
     await page.goto(`http://127.0.0.1:${server.port}/ui/index.html`, { waitUntil: "domcontentloaded" })
-    await page.waitForSelector('[data-ui="side-activity-button"][data-side="right"][data-activity="tui"]')
-    await page.click('[data-ui="side-activity-button"][data-side="right"][data-activity="tui"]')
+    await page.waitForSelector('[data-ui="chat-view-tab"][data-chat-view-tab="tui"]')
+    await page.click('[data-ui="chat-view-tab"][data-chat-view-tab="tui"]')
     await page.waitForFunction(() => {
       const text = document.querySelector<HTMLElement>(".tui-host-error")?.textContent ?? ""
       return text.includes("EmbeddedTuiStartError: renderer failed") && !text.includes("secret")

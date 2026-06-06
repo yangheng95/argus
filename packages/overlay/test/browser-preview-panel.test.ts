@@ -16,13 +16,14 @@ test("browser preview panel uses mature primitives and HostTransport-backed serv
   const css = readText("src/styles/surfaces/inspector.css")
   const activityCss = readText("src/styles/surfaces/activity.css")
 
-  expect(html).toContain('id="solidRightActivityToolbar"')
-  expect(html).toContain('id="rightPanelBrowser"')
+  expect(html).toContain('id="solidChatViewTabs"')
+  expect(html).toContain('id="chatBrowserPreviewPane"')
   expect(html).toContain('id="solidBrowserPreviewMount"')
+  expect(html).not.toContain('id="rightPanelBrowser"')
   expect(html).not.toContain('id="solidRightPanelTabs"')
   expect(main).toContain("<BrowserPreviewPanel")
-  expect(main).toContain('active={() => rightActivity() === "browser"}')
-  expect(main).toContain('browser: document.getElementById("rightPanelBrowser")')
+  expect(main).toContain('active={() => chatView() === "browser"}')
+  expect(main).toContain('browser: document.getElementById("chatBrowserPreviewPane")')
 
   expect(component).toContain('from "./ui/Tabs"')
   expect(component).toContain('from "./ui/Button"')
@@ -47,7 +48,7 @@ test("browser preview panel uses mature primitives and HostTransport-backed serv
   expect(service).not.toContain("fetch(")
   expect(service).not.toContain("BROWSER_PREVIEW_VIEWPORTS")
 
-  expect(activityCss).toContain(".sections-browser-activity")
+  expect(activityCss).toContain(".chat-browser-preview-activity")
   expect(css).toContain(".browser-preview-panel")
   expect(css).toContain(".browser-preview-frame")
   expect(css).toContain(".browser-preview-evidence")

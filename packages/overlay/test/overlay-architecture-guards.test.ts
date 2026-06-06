@@ -1777,7 +1777,7 @@ describe("overlay architecture guards", () => {
     for (const className of [
       "task-switch-progress",
       "chat-header-main",
-      "chat-title",
+      "chat-view-tabs-mount",
       "chat-header-status",
       "chat-task-status",
     ]) {

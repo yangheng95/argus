@@ -188,7 +188,7 @@
         ></div>
         <header class="chat-header oc-surface-header">
           <div class="chat-header-main oc-surface-header__main">
-            <span class="chat-title oc-surface-header__title" data-i18n="chat.title">Conversation</span>
+            <div id="solidChatViewTabs" class="chat-view-tabs-mount"></div>
           </div>
           <div class="chat-header-status" id="solidTaskStatusMount"></div>
           <div class="chat-header-meta oc-surface-header__actions">
@@ -201,7 +201,7 @@
           </div>
         </header>
         <div class="chat-content-frame" id="chatContentFrame">
-          <div class="chat-message-pane" id="chatMessagePane">
+          <div class="chat-message-pane chat-view-panel" id="chatMessagePane" data-chat-view="conversation" data-active="true">
             <div class="conversation-body" id="conversationBody">
               <div class="conversation-scroll-shell">
                 <div class="chat-goals-strip" id="chatGoalsStrip"></div>
@@ -209,6 +209,12 @@
               </div>
             </div>
             <div id="solidConversationAgentRailMount" class="conversation-agent-rail-host"></div>
+          </div>
+          <div class="chat-tui-pane chat-view-panel" id="chatTuiPane" data-chat-view="tui" data-active="false">
+            <div id="solidTuiHostMount" class="chat-tui-activity"></div>
+          </div>
+          <div class="chat-browser-preview-pane chat-view-panel" id="chatBrowserPreviewPane" data-chat-view="browser" data-active="false">
+            <div id="solidBrowserPreviewMount" class="chat-browser-preview-activity"></div>
           </div>
         </div>
         <!-- Workspace resizer (row-resize, between chat-scroll and workspace) -->
@@ -226,12 +232,6 @@
           <header class="sections-header oc-surface-header">
             <div class="sections-title oc-surface-header__title" id="rightPanelTitle" data-i18n="sections.title">Inspector</div>
           </header>
-          <div class="sections-tab-body" id="rightPanelTui" data-side-activity="tui" data-active="false">
-            <div id="solidTuiHostMount" class="sections-tui-activity"></div>
-          </div>
-          <div class="sections-tab-body" id="rightPanelBrowser" data-side-activity="browser" data-active="false">
-            <div id="solidBrowserPreviewMount" class="sections-browser-activity"></div>
-          </div>
           <div class="sections-tab-body" id="rightPanelInspector" data-side-activity="inspector" data-active="true">
             <div class="sections-stack">
 

@@ -271,6 +271,26 @@ code .file-link:hover {
   flex-direction: column;
 }
 
+.chat-view-panel {
+  flex: 1 1 0;
+  min-width: 0;
+  min-height: 0;
+}
+
+.chat-view-panel[data-active="false"] {
+  display: none;
+}
+
+.chat-view-panel[data-active="true"],
+.chat-tui-pane,
+.chat-browser-preview-pane,
+.chat-tui-activity,
+.chat-browser-preview-activity {
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
 .file-editor-mount {
   flex: 0 0 clamp(calc(420px * var(--ui-scale)), 46%, calc(780px * var(--ui-scale)));
   min-width: min(calc(360px * var(--ui-scale)), 100%);

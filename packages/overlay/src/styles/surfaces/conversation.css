@@ -266,10 +266,17 @@
    each region claims one track via `justify-self`. */
 .chat-header-main {
   justify-self: start;
+  width: 100%;
 }
 
-.chat-title {
-  flex: none;
+.chat-view-tabs-mount {
+  min-width: 0;
+  display: flex;
+  align-items: center;
+}
+
+.chat-view-tabs-mount .oc-tabs {
+  width: auto;
 }
 
 .chat-header-status {
