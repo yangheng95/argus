@@ -38,7 +38,7 @@ describe("browser preview verification", () => {
   test("captures the resolved URL with the shared viewport preset", async () => {
     await using tmp = await tmpdir()
     const taskID = await seedTask(tmp.path)
-    persistBrowserPreviewTarget({ taskID, url: "http://127.0.0.1:5173/" })
+    await persistBrowserPreviewTarget({ taskID, url: "http://127.0.0.1:5173/" })
     const target = await resolveBrowserPreviewTarget({ projectRoot: tmp.path, taskID })
     let capturedInput: RuntimeCaptureInput | undefined
 
@@ -103,7 +103,7 @@ describe("browser preview verification", () => {
   test("persists task-scoped browser preview evidence from capture result", async () => {
     await using tmp = await tmpdir()
     const taskID = await seedTask(tmp.path)
-    const persisted = persistBrowserPreviewTarget({ taskID, url: "http://127.0.0.1:5173/" })
+    const persisted = await persistBrowserPreviewTarget({ taskID, url: "http://127.0.0.1:5173/" })
     const target = await resolveBrowserPreviewTarget({ projectRoot: tmp.path, taskID })
 
     const result = await verifyBrowserPreview({

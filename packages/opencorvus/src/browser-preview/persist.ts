@@ -1,6 +1,10 @@
 import { and, desc, eq } from "drizzle-orm"
 import z from "zod"
 import { EngineArtifactTable } from "@/engine/engine.sql"
+import { Event } from "@/engine/model"
+import { EngineProtocol } from "@/engine/protocol"
+import { requireTask } from "@/engine/store"
+import { deriveTaskStatus } from "@/engine/task-status"
 import { Identifier } from "@/id/id"
 import { Database } from "@/storage/db"
 
@@ -26,7 +30,7 @@ export function persistBrowserPreviewTarget(input: {
   taskID: string
   url: string
   now?: number
-}): PersistedBrowserPreviewTarget {
+}): Promise<PersistedBrowserPreviewTarget> {
   const now = input.now ?? Date.now()
   const id = Identifier.ascending("artifact")
   const payload = {
@@ -50,7 +54,7 @@ export function persistBrowserPreviewTarget(input: {
       })
       .run(),
   )
-  return {
+  const persisted: PersistedBrowserPreviewTarget = {
     id,
     taskID: input.taskID,
     url: input.url,
@@ -58,6 +62,15 @@ export function persistBrowserPreviewTarget(input: {
     timeCreated: now,
     timeUpdated: now,
   }
+  return EngineProtocol.emit(
+    Event.TaskUpdated,
+    {
+      taskID: input.taskID,
+      status: deriveTaskStatus(requireTask(input.taskID)),
+      summary: "Browser preview target updated",
+    },
+    { source: "browser-preview.target" },
+  ).then(() => persisted)
 }
 
 export function findLatestBrowserPreviewTarget(taskID: string): PersistedBrowserPreviewTarget | undefined {

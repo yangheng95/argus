@@ -77,7 +77,7 @@ export const BrowserPreviewRoutes = lazy(() =>
             diagnostics: [`Invalid preview URL: ${rawUrl}`],
           }), 400)
         }
-        const persisted = persistBrowserPreviewTarget({ taskID, url })
+        const persisted = await persistBrowserPreviewTarget({ taskID, url })
         return c.json(taskBrowserPreviewTarget({
           id: persisted.id,
           taskID,

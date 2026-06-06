@@ -388,7 +388,7 @@ export const BashTool = Tool.define("bash", async () => {
         if (timedOut) resultMetadata.push(`background process exceeded lease before readiness window`)
         if (exited) resultMetadata.push(`background process exited before readiness window (exit=${exitCode})`)
         output += "\n\n<bash_metadata>\n" + resultMetadata.join("\n") + "\n</bash_metadata>"
-        persistBrowserPreviewTargetFromProcessOutput({
+        await persistBrowserPreviewTargetFromProcessOutput({
           taskID: typeof ctx.extra?.taskID === "string" ? ctx.extra.taskID : undefined,
           output,
         })
