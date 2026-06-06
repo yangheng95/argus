@@ -12,7 +12,8 @@ import { tmpdir } from "../fixture/fixture"
 
 Log.init({ print: false })
 
-const FOREIGN_OWNER = "12345:zzzz:dead00" // a stamp from a different (dead) process
+const FOREIGN_OWNER = "12345:zzzz:dead00" // owner stamp from a different process
+const DEAD_OWNER = "999999:zzzz:dead00" // owner stamp whose PID (process identifier) is not alive
 
 function baseGoalRun(overrides: Partial<GoalRunRow>): GoalRunRow {
   return {
@@ -45,10 +46,23 @@ function baseGoalRun(overrides: Partial<GoalRunRow>): GoalRunRow {
 }
 
 describe("isGoalRunOrphaned — owner-stamp orphan predicate", () => {
-  test("live status + foreign owner ⇒ orphaned", () => {
-    expect(isGoalRunOrphaned(baseGoalRun({ status: "running", owner: FOREIGN_OWNER }))).toBe(true)
-    expect(isGoalRunOrphaned(baseGoalRun({ status: "planning", owner: FOREIGN_OWNER }))).toBe(true)
-    expect(isGoalRunOrphaned(baseGoalRun({ status: "blocked", owner: FOREIGN_OWNER }))).toBe(true)
+  test("live status + foreign owner with dead PID ⇒ orphaned", () => {
+    expect(isGoalRunOrphaned(baseGoalRun({ status: "running", owner: FOREIGN_OWNER }), processOwner(), () => false)).toBe(
+      true,
+    )
+    expect(isGoalRunOrphaned(baseGoalRun({ status: "planning", owner: FOREIGN_OWNER }), processOwner(), () => false)).toBe(
+      true,
+    )
+    expect(isGoalRunOrphaned(baseGoalRun({ status: "blocked", owner: FOREIGN_OWNER }), processOwner(), () => false)).toBe(
+      true,
+    )
+  })
+
+  test("live status + foreign owner with live PID ⇒ NOT orphaned", () => {
+    const liveForeignOwner = `${process.pid}:other:alive0`
+    expect(isGoalRunOrphaned(baseGoalRun({ status: "running", owner: liveForeignOwner }))).toBe(false)
+    expect(isGoalRunOrphaned(baseGoalRun({ status: "planning", owner: liveForeignOwner }))).toBe(false)
+    expect(isGoalRunOrphaned(baseGoalRun({ status: "blocked", owner: liveForeignOwner }))).toBe(false)
   })
 
   test("live status + current process owner ⇒ NOT orphaned (long-running same-process goal)", () => {
@@ -56,9 +70,9 @@ describe("isGoalRunOrphaned — owner-stamp orphan predicate", () => {
   })
 
   test("foreign owner but TERMINAL status ⇒ NOT orphaned (only live rows are flagged)", () => {
-    expect(isGoalRunOrphaned(baseGoalRun({ status: "completed", owner: FOREIGN_OWNER }))).toBe(false)
-    expect(isGoalRunOrphaned(baseGoalRun({ status: "failed", owner: FOREIGN_OWNER }))).toBe(false)
-    expect(isGoalRunOrphaned(baseGoalRun({ status: "aborted", owner: FOREIGN_OWNER }))).toBe(false)
+    expect(isGoalRunOrphaned(baseGoalRun({ status: "completed", owner: DEAD_OWNER }))).toBe(false)
+    expect(isGoalRunOrphaned(baseGoalRun({ status: "failed", owner: DEAD_OWNER }))).toBe(false)
+    expect(isGoalRunOrphaned(baseGoalRun({ status: "aborted", owner: DEAD_OWNER }))).toBe(false)
   })
 
   test("never-dispatched / owner-less live row ⇒ NOT orphaned", () => {
@@ -174,7 +188,7 @@ describe("owner-orphan derivation across describe / orphan (restart scenario)", 
         const taskID = `tsk_orphan_${now}`
         const runID = `run_orphan_${now}`
         seedTaskRun(taskID, runID, now)
-        seedGoalRun(taskID, runID, "grun_orphan", "gol_orphan", FOREIGN_OWNER, now + 1)
+        seedGoalRun(taskID, runID, "grun_orphan", "gol_orphan", DEAD_OWNER, now + 1)
 
         // describeGoal: running status but foreign owner → not running, orphaned.
         const desc = describeGoal(fakeGoal("gol_orphan"))
@@ -221,6 +235,28 @@ describe("owner-orphan derivation across describe / orphan (restart scenario)", 
         expect(desc.is_running).toBe(true)
         expect(desc.is_orphaned).toBe(false)
         expect(goalStatusByID("gol_live")).toBe("running")
+
+        expect(isRunOrphan(Instance.project.id, runID)).toBe(false)
+        expect(observeOrphanRuns(Instance.project.id).map((r) => r.id)).not.toContain(runID)
+      },
+    })
+  })
+
+  test("a live goal_run stamped by another live owner remains running", async () => {
+    await using tmp = await tmpdir({ git: true })
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const now = Date.now()
+        const taskID = `tsk_live_foreign_${now}`
+        const runID = `run_live_foreign_${now}`
+        seedTaskRun(taskID, runID, now)
+        seedGoalRun(taskID, runID, "grun_live_foreign", "gol_live_foreign", `${process.pid}:other:alive0`, now + 1)
+
+        const desc = describeGoal(fakeGoal("gol_live_foreign"))
+        expect(desc.is_running).toBe(true)
+        expect(desc.is_orphaned).toBe(false)
+        expect(goalStatusByID("gol_live_foreign")).toBe("running")
 
         expect(isRunOrphan(Instance.project.id, runID)).toBe(false)
         expect(observeOrphanRuns(Instance.project.id).map((r) => r.id)).not.toContain(runID)
