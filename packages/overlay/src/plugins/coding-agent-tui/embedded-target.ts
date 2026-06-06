@@ -1,6 +1,7 @@
 import { ApiError, apiJson } from "../../services/api"
 
 export const TUI_CODING_AGENT = "tui-coding"
+export const TUI_EMBED_START_TIMEOUT_MILLISECONDS = 60_000
 
 export interface EmbeddedTuiSpan {
   text: string
@@ -26,6 +27,7 @@ export interface CodingAgentTuiPanelInfo {
   status: "idle" | "running"
   cols: number | null
   rows: number | null
+  mode: "dark" | "light" | null
   directory: string | null
   frame: EmbeddedTuiFrame | null
   text: string
@@ -36,6 +38,7 @@ export interface CodingAgentTuiPanelInfo {
 export interface StartTuiEmbedInput {
   cols: number
   rows: number
+  mode: "dark" | "light"
   directory: string
 }
 
@@ -86,7 +89,8 @@ export async function startTuiEmbed(input: StartTuiEmbedInput): Promise<CodingAg
   const info = (await apiJson(tuiPath("tui/embed/start", input.directory), {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ cols: input.cols, rows: input.rows, agent: TUI_CODING_AGENT }),
+    signal: AbortSignal.timeout(TUI_EMBED_START_TIMEOUT_MILLISECONDS),
+    body: JSON.stringify({ cols: input.cols, rows: input.rows, mode: input.mode, agent: TUI_CODING_AGENT }),
   })) as Omit<CodingAgentTuiPanelInfo, "status">
   return toPanelInfo(info)
 }

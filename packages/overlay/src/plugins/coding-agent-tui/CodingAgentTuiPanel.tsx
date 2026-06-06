@@ -7,9 +7,12 @@ import {
   startTuiEmbed,
   stopTuiEmbed,
   type CodingAgentTuiPanelInfo,
+  type EmbeddedTuiFrame,
+  type EmbeddedTuiLine,
   type EmbeddedTuiSpan,
 } from "./embedded-target"
 import { hasTuiHostTerminalSizeChanged } from "./terminal-size"
+import { resolvedTheme } from "../../services/theme"
 import { t } from "../../utils/i18n"
 import { Icon } from "../../components/Icon"
 import { Button } from "../../components/ui/Button"
@@ -21,6 +24,7 @@ const ATTR_BOLD = 1 << 0
 const ATTR_DIM = 1 << 1
 const ATTR_ITALIC = 1 << 2
 const ATTR_UNDERLINE = 1 << 3
+type TuiThemeMode = "dark" | "light"
 type TuiInputPayload = Omit<Parameters<typeof sendTuiEmbedInput>[0], "directory">
 
 export interface CodingAgentTuiPanelProps {
@@ -35,6 +39,31 @@ function spanStyle(span: EmbeddedTuiSpan) {
   if (span.attributes & ATTR_ITALIC) styles.push("font-style: italic")
   if (span.attributes & ATTR_UNDERLINE) styles.push("text-decoration: underline")
   return styles.join("; ")
+}
+
+function lineBackground(line: EmbeddedTuiLine) {
+  return line.spans.find((span) => span.bg)?.bg
+}
+
+function lineStyle(line: EmbeddedTuiLine) {
+  const bg = lineBackground(line)
+  return bg ? `background-color: ${bg}` : ""
+}
+
+function frameBackground(frame: EmbeddedTuiFrame) {
+  for (const line of frame.lines) {
+    const bg = lineBackground(line)
+    if (bg) return bg
+  }
+  return "transparent"
+}
+
+function frameStyle(frame: EmbeddedTuiFrame) {
+  return `--tui-cols: ${frame.cols}; --tui-rows: ${frame.rows}; background-color: ${frameBackground(frame)}`
+}
+
+function tuiThemeMode(): TuiThemeMode {
+  return resolvedTheme() === "light" ? "light" : "dark"
 }
 
 function keyPayload(event: KeyboardEvent): TuiInputPayload | undefined {
@@ -128,15 +157,17 @@ export function CodingAgentTuiPanel(props: CodingAgentTuiPanelProps) {
     if (startTask) return startTask
     const directory = requireActiveDirectory()
     startTask = (async () => {
+      const mode = tuiThemeMode()
       const current = await loadTuiEmbedStatus({ directory })
       if (disposed) return
-      if (current.running) {
+      if (current.running && current.mode === mode) {
         setInfo(current)
         started = true
+        lastSize = current.cols && current.rows ? { cols: current.cols, rows: current.rows } : undefined
         return current
       }
       const size = measuredSize()
-      const next = await startTuiEmbed({ ...size, directory })
+      const next = await startTuiEmbed({ ...size, mode, directory })
       if (disposed) return
       setInfo(next)
       started = true
@@ -227,6 +258,7 @@ export function CodingAgentTuiPanel(props: CodingAgentTuiPanelProps) {
       return
     }
     activeDirectory()
+    tuiThemeMode()
     schedulePolling()
     started = false
     startTask = undefined
@@ -315,10 +347,10 @@ export function CodingAgentTuiPanel(props: CodingAgentTuiPanelProps) {
         </span>
         <Show when={info()?.frame}>
           {(frame) => (
-            <div class="tui-host-frame-lines" style={{ "--tui-cols": String(frame().cols), "--tui-rows": String(frame().rows) }}>
+            <div class="tui-host-frame-lines" style={frameStyle(frame())}>
               <For each={frame().lines}>
                 {(line) => (
-                  <div class="tui-host-frame-line">
+                  <div class="tui-host-frame-line" style={lineStyle(line)}>
                     <For each={line.spans}>{(span) => <span style={spanStyle(span)}>{span.text}</span>}</For>
                   </div>
                 )}
