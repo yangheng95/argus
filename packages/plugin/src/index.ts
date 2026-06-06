@@ -11,6 +11,7 @@ import type {
   Auth,
   Config,
 } from "@opencorvus-ai/sdk"
+import type { Hono } from "hono"
 
 import type { BunShell } from "./shell"
 import { type ToolDefinition } from "./tool"
@@ -33,6 +34,11 @@ export type PluginInput = {
 }
 
 export type Plugin = (input: PluginInput) => Promise<Hooks>
+
+export type PluginServiceRegistration = {
+  id: string
+  app: Hono
+}
 
 export type AuthHook = {
   provider: string
@@ -147,6 +153,7 @@ export type AuthOuathResult = { url: string; instructions: string } & (
 
 export interface Hooks {
   event?: (input: { event: Event }) => Promise<void>
+  service?: () => Promise<PluginServiceRegistration | PluginServiceRegistration[] | void>
   config?: (input: Config) => Promise<void>
   tool?: {
     [key: string]: ToolDefinition

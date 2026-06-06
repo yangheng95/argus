@@ -1,4 +1,4 @@
-import type { Hooks, PluginInput, Plugin as PluginInstance } from "@opencorvus-ai/plugin"
+import type { Hooks, PluginInput, PluginServiceRegistration, Plugin as PluginInstance } from "@opencorvus-ai/plugin"
 import { Config } from "../config/config"
 import { Bus } from "../bus"
 import { Log } from "../util/log"
@@ -10,9 +10,48 @@ import { NamedError } from "@opencorvus-ai/util/error"
 import { gitlabAuthPlugin as GitlabAuthPlugin } from "@gitlab/opencode-gitlab-auth"
 import { IN_PROCESS_BASE_URL, createInProcessFetch } from "@/server/in-process-client"
 import { runHookIsolated } from "./isolate"
+import z from "zod"
 
 export namespace Plugin {
   const log = Log.create({ service: "plugin" })
+
+  export const PluginServiceNotFoundError = NamedError.create(
+    "PluginServiceNotFoundError",
+    z.object({
+      message: z.string(),
+      serviceID: z.string(),
+    }),
+  )
+
+  export const PluginServiceRegistrationError = NamedError.create(
+    "PluginServiceRegistrationError",
+    z.object({
+      message: z.string(),
+      serviceID: z.string().optional(),
+      specifier: z.string().optional(),
+    }),
+  )
+
+  // ID = identifier. Duplicate plugin service identifiers would make route
+  // ownership ambiguous, so startup keeps this as a hard registration error.
+  export const PluginServiceDuplicateIDError = NamedError.create(
+    "PluginServiceDuplicateIDError",
+    z.object({
+      message: z.string(),
+      serviceID: z.string(),
+      firstSpecifier: z.string(),
+      secondSpecifier: z.string(),
+    }),
+  )
+
+  export type PluginServiceInfo = PluginServiceRegistration & {
+    specifier: string
+  }
+
+  type PluginLoadDiagnostic = {
+    specifier: string
+    message: string
+  }
 
   // Built-in plugins that are directly imported (not installed from npm)
   // GitlabAuthPlugin is compiled against an older @opencode-ai/plugin version whose
@@ -26,7 +65,8 @@ export namespace Plugin {
       fetch: createInProcessFetch(),
     })
     const config = await Config.get()
-    const hooks: Hooks[] = []
+    const hooks: Array<{ specifier: string; hook: Hooks }> = []
+    const diagnostics: PluginLoadDiagnostic[] = []
     const input: PluginInput = {
       client,
       project: Instance.project,
@@ -38,10 +78,13 @@ export namespace Plugin {
 
     for (const plugin of INTERNAL_PLUGINS) {
       log.info("loading internal plugin", { name: plugin.name })
+      const specifier = `internal:${plugin.name || "anonymous"}`
       const init = await plugin(input).catch((err) => {
+        const message = err instanceof Error ? err.message : String(err)
+        diagnostics.push({ specifier, message })
         log.error("failed to load internal plugin", { name: plugin.name, error: err })
       })
-      if (init) hooks.push(init)
+      if (init) hooks.push({ specifier, hook: init })
     }
 
     let plugins = config.plugin ?? []
@@ -57,6 +100,10 @@ export namespace Plugin {
           const cause = err instanceof Error ? err.cause : err
           const detail = cause instanceof Error ? cause.message : String(cause ?? err)
           log.error("failed to install plugin", { pkg, version, error: detail })
+          diagnostics.push({
+            specifier: plugin,
+            message: `Failed to install plugin ${pkg}@${version}: ${detail}`,
+          })
           Bus.publish(Session.Event.Error, {
             error: new NamedError.Unknown({
               message: `Failed to install plugin ${pkg}@${version}: ${detail}`,
@@ -75,11 +122,12 @@ export namespace Plugin {
           for (const [_name, fn] of Object.entries<PluginInstance>(mod)) {
             if (seen.has(fn)) continue
             seen.add(fn)
-            hooks.push(await fn(input))
+            hooks.push({ specifier: plugin, hook: await fn(input) })
           }
         })
         .catch((err) => {
           const message = err instanceof Error ? err.message : String(err)
+          diagnostics.push({ specifier: plugin, message })
           log.error("failed to load plugin", { path: plugin, error: message })
           Bus.publish(Session.Event.Error, {
             error: new NamedError.Unknown({
@@ -92,17 +140,62 @@ export namespace Plugin {
     return {
       hooks,
       input,
+      diagnostics,
+      services: undefined as Promise<{
+        services: Map<string, PluginServiceInfo>
+        diagnostics: PluginLoadDiagnostic[]
+      }> | undefined,
     }
   })
 
+  function registrationList(result: PluginServiceRegistration | PluginServiceRegistration[] | void) {
+    if (!result) return []
+    return Array.isArray(result) ? result : [result]
+  }
+
+  export async function services() {
+    const current = await state()
+    current.services ??= (async () => {
+      const services = new Map<string, PluginServiceInfo>()
+      const diagnostics = [...current.diagnostics]
+      for (const entry of current.hooks) {
+        if (!entry.hook.service) continue
+        let registrations: PluginServiceRegistration[]
+        try {
+          registrations = registrationList(await entry.hook.service())
+        } catch (err) {
+          const message = err instanceof Error ? err.message : String(err)
+          diagnostics.push({ specifier: entry.specifier, message })
+          continue
+        }
+        for (const registration of registrations) {
+          const existing = services.get(registration.id)
+          if (existing) {
+            const error = new PluginServiceDuplicateIDError({
+              message: `Plugin service ${registration.id} is registered by both ${existing.specifier} and ${entry.specifier}`,
+              serviceID: registration.id,
+              firstSpecifier: existing.specifier,
+              secondSpecifier: entry.specifier,
+            })
+            diagnostics.push({ specifier: entry.specifier, message: error.message })
+            throw error
+          }
+          services.set(registration.id, { ...registration, specifier: entry.specifier })
+        }
+      }
+      return { services, diagnostics }
+    })()
+    return current.services
+  }
+
   export async function trigger<
-    Name extends Exclude<keyof Required<Hooks>, "auth" | "event" | "tool">,
+    Name extends Exclude<keyof Required<Hooks>, "auth" | "event" | "tool" | "service">,
     Input = Parameters<Required<Hooks>[Name]>[0],
     Output = Parameters<Required<Hooks>[Name]>[1],
   >(name: Name, input: Input, output: Output): Promise<Output> {
     if (!name) return output
-    for (const hook of await state().then((x) => x.hooks)) {
-      const fn = hook[name]
+    for (const entry of await state().then((x) => x.hooks)) {
+      const fn = entry.hook[name]
       if (!fn) continue
       // audit-2026-04-29 W2-V19 — runHookIsolated catches throws
       // and rejecting promises so a 3rd-party plugin can't kill
@@ -116,25 +209,25 @@ export namespace Plugin {
   }
 
   export async function list() {
-    return state().then((x) => x.hooks)
+    return state().then((x) => x.hooks.map((entry) => entry.hook))
   }
 
   export async function init() {
     const hooks = await state().then((x) => x.hooks)
     const config = await Config.get()
-    for (const hook of hooks) {
+    for (const entry of hooks) {
       // audit-2026-04-29 W2-V19 — pre-fix a plugin's `config` hook
       // throwing here aborted Plugin.init, which is awaited from
       // session bootstrap; the entire session became unreachable.
-      await runHookIsolated("config", hook.config, [config])
+      await runHookIsolated("config", entry.hook.config, [config])
     }
     Bus.subscribeAll(async (input) => {
       const hooks = await state().then((x) => x.hooks)
-      for (const hook of hooks) {
+      for (const entry of hooks) {
         // audit-2026-04-29 W2-V19 — pre-fix the optional-chained
         // call could surface as an UNHANDLED PROMISE REJECTION when
         // the plugin's event handler was async and rejected.
-        await runHookIsolated("event", hook["event"], [{ event: input }])
+        await runHookIsolated("event", entry.hook["event"], [{ event: input }])
       }
     })
   }

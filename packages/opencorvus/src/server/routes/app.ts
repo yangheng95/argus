@@ -37,6 +37,7 @@ import { AttachmentRoutes } from "./attachment"
 import { GatewayRoutes } from "./gateway"
 import { MissionRoutes } from "./mission"
 import { BrowserPreviewRoutes } from "./browser-preview"
+import { PluginRoutes } from "./plugin"
 import { hasServerShutdownHandler, requestServerShutdown } from "../shutdown"
 import { Env } from "@/runtime/env"
 import { AppDocumentation } from "./documentation"
@@ -163,6 +164,7 @@ export function AppRoutes(root: Hono) {
     .route("/attachment", AttachmentRoutes())
     .route("/mcp", McpRoutes())
     .route("/pty", PtyRoutes())
+    .route("/plugin", PluginRoutes())
     .route("/tui", TuiRoutes())
     .post(
       "/instance/dispose",

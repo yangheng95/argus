@@ -36,6 +36,9 @@ export function namedErrorStatus(err: { name: string }): ContentfulStatusCode {
   if (err.name === "SessionRuntimeContractMissingError") return 410
   if (err.name === "MissingModelConfigError") return 400
   if (err.name === "PtyCreateFailedError") return 400
+  if (err.name === "PluginServiceNotFoundError") return 404
+  if (err.name === "PluginServiceRegistrationError") return 500
+  if (err.name === "PluginServiceDuplicateIDError") return 500
   return 500
 }
 
