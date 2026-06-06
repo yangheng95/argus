@@ -148,6 +148,11 @@ export namespace CompactionHandoff {
     }
   }
 
+  function instructionPathKey(value: string) {
+    const normalized = value.trim().replace(/\\/g, "/").replace(/\/+$/g, "")
+    return normalized.replace(/^([A-Za-z]):/, (_, drive: string) => `${drive.toLowerCase()}:`)
+  }
+
   export const MODEL_OUTPUT_INSTRUCTIONS = [
     "Call the StructuredOutput tool exactly once with one object that matches the CompactionHandoff schema.",
     "Do not write Markdown, prose, or a raw JSON text response; the handoff object must be the StructuredOutput tool input.",
@@ -260,10 +265,12 @@ export namespace CompactionHandoff {
       missing.push("currentState.sourceUserMessage.id")
     }
     if (requirements.userMessages && handoff.userMessages.length === 0) missing.push("userMessages")
-    const reportedInstructionPaths = new Set(handoff.durableInstructionSources.map((item) => item.path))
-    const omittedInstructionPaths = requirements.instructionPaths.filter((item) => !reportedInstructionPaths.has(item))
+    const reportedInstructionPaths = new Set(handoff.durableInstructionSources.map((item) => instructionPathKey(item.path)))
+    const omittedInstructionPaths = requirements.instructionPaths.filter(
+      (item) => !reportedInstructionPaths.has(instructionPathKey(item)),
+    )
     if (omittedInstructionPaths.length > 0) {
-      missing.push("durableInstructionSources")
+      missing.push(`durableInstructionSources (missing: ${omittedInstructionPaths.join(", ")})`)
     }
     const reportedFileEvidence = new Set([
       ...handoff.files.map((item) => item.path),
