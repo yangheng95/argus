@@ -94,6 +94,18 @@ function contractRef(id: string = "contract_order", consumerGoalIDs: string[] = 
   }
 }
 
+function componentContractRef(component: unknown, id: string = "contract_widget_component") {
+  return {
+    id,
+    kind: "component" as const,
+    name: "WidgetPanel",
+    producer_goal_id: "goal_model",
+    consumer_goal_ids: ["goal_ui"],
+    summary: "Shared component surface for UI rendering.",
+    component_json: JSON.stringify(component),
+  }
+}
+
 function graphGoals(uiAcceptanceSpecs: Array<{ scorers: Array<{ type: string; spec?: unknown }>; severity?: string }>) {
   return [
     { id: "goal_model", depends_on: [], acceptance_specs: [] },
@@ -184,6 +196,38 @@ test("architect registers graph contracts and finalizes without goal imports or 
   expect(kit.getCollector().fact_check_items).toEqual([])
   expect(kit.getCollector().goals[0]).not.toHaveProperty("exports")
   expect(kit.getCollector().goals[0]).not.toHaveProperty("imports")
+})
+
+test("register_contract component_json accepts comma-separated props string", async () => {
+  const kit = await registerTwoGoalGraph()
+
+  const out = await kit.tools.register_contract.execute!(
+    componentContractRef({
+      props: "title, items, onSelect",
+      events: ["select"],
+      slots: ["header"],
+    }) as any,
+    {} as any,
+  )
+
+  expect(out).toContain("OK")
+  expect(kit.getCollector().contract_graph.contracts[0]?.component).toEqual({
+    props: "title, items, onSelect",
+    events: ["select"],
+    slots: ["header"],
+  })
+})
+
+test("register_contract component_json rejects props arrays", async () => {
+  const kit = await registerTwoGoalGraph()
+
+  await expect(
+    kit.tools.register_contract.execute!(
+      componentContractRef({ props: ["title", "items"], events: [], slots: [] }, "contract_bad_component") as any,
+      {} as any,
+    ),
+  ).rejects.toThrow()
+  expect(kit.getCollector().contract_graph.contracts).toEqual([])
 })
 
 test("remove_goal cascades depends_on references from remaining goals", async () => {

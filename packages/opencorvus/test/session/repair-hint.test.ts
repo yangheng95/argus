@@ -107,6 +107,8 @@ describe("schema describe is visible to the model (defense-in-depth, rule 6.1)",
     expect(schema.properties).toHaveProperty("ir_json")
     expect(schema.properties).toHaveProperty("route_json")
     expect(schema.properties).toHaveProperty("component_json")
+    expect(schema.properties.component_json.description).toContain("props?: string")
+    expect(schema.properties.component_json.description).toContain("not an array")
     expect(schema.properties).not.toHaveProperty("ir")
     expect(schema.properties).not.toHaveProperty("route")
     expect(schema.properties).not.toHaveProperty("component")

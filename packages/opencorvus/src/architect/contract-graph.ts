@@ -22,9 +22,15 @@ export const RouteContractSchema = z.object({
 export type RouteContract = z.infer<typeof RouteContractSchema>
 
 export const ComponentContractSchema = z.object({
-  props: z.string().min(1).optional(),
-  events: z.array(z.string().min(1)).default([]),
-  slots: z.array(z.string().min(1)).default([]),
+  props: z.string().min(1)
+    .describe("Comma-separated public prop names or prop signatures, for example: title, items, onSelect.")
+    .optional(),
+  events: z.array(z.string().min(1))
+    .describe("Event names emitted by the component.")
+    .default([]),
+  slots: z.array(z.string().min(1))
+    .describe("Named content slots exposed by the component.")
+    .default([]),
 })
 export type ComponentContract = z.infer<typeof ComponentContractSchema>
 

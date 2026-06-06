@@ -90,7 +90,7 @@ register_contract({
 Use `evidence_refs` for research evidence IDs that materially support this
 contract. Do not hide source IDs only in `summary`.
 
-Typed contracts (`type`, `function`, `enum`) require `ir_json`, a JSON string containing the ContractIR object. Route contracts may carry `route_json`, a JSON string containing `{method,path,request?,response?}`. Component contracts may carry `component_json`, a JSON string containing `{props?,events?,slots?}`. Do not pass nested `ir`, `route`, or `component` objects directly to the tool; use the JSON string fields.
+Typed contracts (`type`, `function`, `enum`) require `ir_json`, a JSON string containing the ContractIR object. Route contracts may carry `route_json`, a JSON string containing `{method,path,request?,response?}`. Component contracts may carry `component_json`, a JSON string containing `{props?: string, events?: string[], slots?: string[]}`. For `component_json`, `props` is one comma-separated string such as `"title, items, onSelect"`; do not pass props as an array. Do not pass nested `ir`, `route`, or `component` objects directly to the tool; use the JSON string fields.
 
 Inside `ir_json`, `kind` must equal contract `kind`: `"type"` has fields[], `"function"` has params[] and returns, `"enum"` has variants[].
 
