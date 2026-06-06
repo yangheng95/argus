@@ -4,7 +4,6 @@ import { runAgentSession } from "@/agent/runner"
 import { withFactCheckRegistration } from "@/prompt/fragments/fact-check-registration"
 import { limitSummary, markdownList } from "@/agent/report"
 import type { AcceptanceSpec } from "@/acceptance/types"
-import { AgentSemaphore } from "@/engine/agent-semaphore"
 import { Event as EngineEvent } from "@/engine/model"
 import { EngineProtocol } from "@/engine/protocol"
 import type { TaskRow } from "@/engine/store"
@@ -34,8 +33,6 @@ import type { RequirementStatusRow } from "./requirement-status"
 import {
   IntegrityReviewCompletedPayloadSchema,
   IntegrityCoverageStatusValues,
-  IntegrityReviewerPlanSchema,
-  IntegrityReviewerReportSchema,
   IntegrityTeamReportSchema,
   type IntegrityFinding,
   type IntegrityRequiredRepair,
@@ -167,8 +164,6 @@ export type ReviewPromptInput = {
   taskID?: string
 }
 
-type PlanCollector = { plan?: IntegrityReviewerPlan }
-type ReviewerCollector = { report?: IntegrityReviewerReport }
 type ConsensusCollector = { report?: IntegrityTeamReport }
 
 const INTEGRITY_EVIDENCE_PROMPT_MAX_CHARS = 12_000
@@ -238,27 +233,49 @@ export async function reviewIntegrity(input: {
   const startedAt = Date.now()
   let activeReviewID: string | undefined
 
-  const planCollector: PlanCollector = {}
-  const planOut = await runAgentSession<PlanCollector>({
+  const collector: ConsensusCollector = {}
+  const out = await runAgentSession<ConsensusCollector>({
     kind: "integrity",
-    core: TEAM_CORE,
-    sessionTitle: `Integrity Supervisor: ${input.taskTitle}`,
+    core: withFactCheckRegistration(TEAM_CORE),
+    sessionTitle: `Integrity Review: ${input.taskTitle}`,
     parentSessionID: input.parentSessionID,
     taskID: input.taskID,
     signal: input.signal,
-    toolKit: createPlanToolKit(planCollector),
-    buildUserPrompt: () => buildSupervisorPlanPrompt(promptInput),
+    toolKit: createSingleSessionIntegrityToolKit({
+      collector,
+      taskID: input.taskID,
+      goals: input.goals,
+      acceptance: input.acceptance,
+      frontendDesign: input.frontendDesign,
+      attachments: input.attachments,
+      signal: input.signal,
+    }),
+    buildUserPrompt: () => buildSingleSessionIntegrityPrompt(promptInput),
+    buildUserParts:
+      input.attachments && input.attachments.length > 0
+        ? async () => {
+            const text = buildSingleSessionIntegrityPrompt(promptInput)
+            const inline = await AttachmentStore.inlineFileParts(input.attachments!)
+            return [
+              {
+                type: "text" as const,
+                text: text + AttachmentStore.renderAttachmentInventory(input.attachments!),
+              },
+              ...inline,
+            ]
+          }
+        : undefined,
     terminalTool: {
-      toolName: "submit_integrity_review_plan",
-      isSatisfied: (collector) => Boolean(collector.plan),
-      shouldExposeOnlyTerminalTool: () => true,
+      toolName: "submit_integrity_consensus",
+      isSatisfied: (collector) => Boolean(collector.report),
+      shouldExposeOnlyTerminalTool: () => false,
     },
     stream: createReviewReasoningForwarder({
       taskID: input.taskID,
       reviewID: () => activeReviewID,
       phase: "integrity",
       attempt: () => attemptNumber,
-      source: "architect.integrity.supervisor",
+      source: "architect.integrity",
     }),
     onSessionCreated: (session) => {
       input.onSessionCreated?.(session.id)
@@ -278,7 +295,7 @@ export async function reviewIntegrity(input: {
               phase: "integrity",
               attempt: attemptNumber,
               elapsedMs: Date.now() - startedAt,
-              summary: "integrity supervisor coordinating reviewer team",
+              summary: "integrity review running",
               source: "architect.integrity",
             })
           }, 20_000)
@@ -291,50 +308,8 @@ export async function reviewIntegrity(input: {
     },
   })
 
-  const plan = planOut.collector.plan
-  if (!plan) throw new Error("integrity supervisor did not submit a reviewer plan.")
-  assertUniqueReviewerIDs(plan)
-
-  const reviewerReports = await Promise.all(
-    plan.reviewers.map((scope) =>
-      runReviewerSessionWithSlot({
-        input: promptInput,
-        scope,
-        parentSessionID: planOut.session.id,
-        task: input.task,
-      }),
-    ),
-  )
-
-  const consensusCollector: ConsensusCollector = {}
-  const consensusOut = await runAgentSession<ConsensusCollector>({
-    kind: "integrity",
-    // Consensus phase ONLY (specs/fact-check-agent-2026-05-25.md §5.2):
-    // plan (:197) and reviewer (:404) phases use different terminal
-    // schemas and intentionally do not register fact_check_items.
-    core: withFactCheckRegistration(TEAM_CORE),
-    sessionTitle: `Integrity Consensus: ${input.taskTitle}`,
-    parentSessionID: input.parentSessionID,
-    taskID: input.taskID,
-    signal: input.signal,
-    toolKit: createConsensusToolKit(consensusCollector, reviewerReports),
-    buildUserPrompt: () => buildSupervisorConsensusPrompt(promptInput, plan, reviewerReports),
-    terminalTool: {
-      toolName: "submit_integrity_consensus",
-      isSatisfied: (collector) => Boolean(collector.report),
-      shouldExposeOnlyTerminalTool: () => true,
-    },
-    stream: createReviewReasoningForwarder({
-      taskID: input.taskID,
-      reviewID: () => activeReviewID,
-      phase: "integrity",
-      attempt: () => attemptNumber,
-      source: "architect.integrity.supervisor",
-    }),
-  })
-
-  const result = consensusOut.collector.report
-  if (!result) throw new Error("integrity supervisor did not submit consensus report.")
+  const result = out.collector.report
+  if (!result) throw new Error("integrity review did not submit consensus report.")
   const normalized = normalizeTeamReport(result, input.replayContext)
   log.info("integrity team review completed", {
     verdict: normalized.verdict,
@@ -342,38 +317,12 @@ export async function reviewIntegrity(input: {
     findings: normalized.findings.length,
     requiredRepairs: normalized.requiredRepairs.length,
   })
-  emitIntegrityEvent(input.taskID, consensusOut.session.id, normalized, attemptNumber)
-  return { ...normalized, sessionID: consensusOut.session.id }
+  emitIntegrityEvent(input.taskID, out.session.id, normalized, attemptNumber)
+  return { ...normalized, sessionID: out.session.id }
 }
 
-function createPlanToolKit(collector: PlanCollector) {
-  return {
-    tools: {
-      submit_integrity_review_plan: tool({
-        description:
-          "Submit a dynamic adversarial reviewer plan with 2-6 independent reviewers. Use the task scale and replay context: broad first reviews may need more reviewers, narrow re-reviews may need fewer targeted reviewers. Do not default to five reviewers and do not use fixed dimensions.",
-        inputSchema: IntegrityReviewerPlanSchema,
-        execute: async (raw) => {
-          const parsed = IntegrityReviewerPlanSchema.safeParse(raw)
-          if (!parsed.success) return `Error: reviewer plan failed schema validation: ${parsed.error.message}`
-          collector.plan = parsed.data
-          return `PASS: reviewer plan accepted (${parsed.data.reviewers.map((r) => r.reviewerID).join(", ")}).`
-        },
-      }),
-    },
-    getCollector: () => collector,
-    buildReport: () => ({
-      summary: collector.plan
-        ? `Reviewer plan with ${collector.plan.reviewers.length} reviewer(s)`
-        : "Reviewer plan missing",
-      detail: collector.plan ? renderReviewerPlanMarkdown(collector.plan) : "No reviewer plan submitted.",
-    }),
-  }
-}
-
-function createReviewerToolKit(input: {
-  collector: ReviewerCollector
-  scope: IntegrityReviewerScope
+function createSingleSessionIntegrityToolKit(input: {
+  collector: ConsensusCollector
   taskID?: string
   goals: GoalContractFields[]
   acceptance?: IntegrityAcceptanceContext
@@ -394,142 +343,24 @@ function createReviewerToolKit(input: {
   return {
     tools: {
       ...evidenceTools,
-      submit_reviewer_report: tool({
+      submit_integrity_consensus: tool({
         description:
-          "Submit this independent reviewer's evidence-backed report. Do not emit code changes. coverage[] rows must use singular anchor fields requirementID/specID/userRequestQuote; drilldowns[] rows must use kind/target/purpose/result only.",
-        inputSchema: IntegrityReviewerReportSchema,
+          `Submit the final integrity review. Produce multiple independent reviewer reports inside reviewers[] without spawning reviewer sessions. coverageAudit[].status must be exactly one of ${IntegrityCoverageStatusValues.join(", ")}; do not use verdict values such as concerns there.`,
+        inputSchema: IntegrityTeamReportSchema,
         execute: async (raw) => {
-          const parsed = IntegrityReviewerReportSchema.safeParse(raw)
-          if (!parsed.success) return `Error: reviewer report failed schema validation: ${parsed.error.message}`
-          if (parsed.data.reviewerID !== input.scope.reviewerID)
-            return `Error: reviewerID must be ${input.scope.reviewerID}.`
+          const parsed = IntegrityTeamReportSchema.safeParse(raw)
+          if (!parsed.success) return `Error: integrity review failed schema validation: ${parsed.error.message}`
           input.collector.report = parsed.data
-          return `PASS: reviewer report accepted with ${parsed.data.findings.length} finding(s).`
+          return `PASS: integrity review accepted with verdict=${parsed.data.verdict}.`
         },
       }),
     },
     getCollector: () => input.collector,
     buildReport: () => ({
-      summary: input.collector.report?.summary ?? `${input.scope.reviewerID} report missing`,
-      detail: input.collector.report ? renderReviewerReportMarkdown(input.collector.report) : "No report submitted.",
+      summary: input.collector.report?.summary ?? "Integrity review missing",
+      detail: input.collector.report?.teamReportMarkdown ?? "No integrity review submitted.",
     }),
   }
-}
-
-function createConsensusToolKit(collector: ConsensusCollector, reviewerReports: IntegrityReviewerReport[]) {
-  const reviewerIDs = new Set(reviewerReports.map((report) => report.reviewerID))
-  return {
-    tools: {
-      submit_integrity_consensus: tool({
-        description:
-          `Submit the final integrity team consensus. Fold runtime/acceptance evidence into findings; do not emit dimensions or acceptance objects. coverageAudit[].status must be exactly one of ${IntegrityCoverageStatusValues.join(", ")}; do not use verdict values such as concerns there.`,
-        inputSchema: IntegrityTeamReportSchema,
-        execute: async (raw) => {
-          const parsed = IntegrityTeamReportSchema.safeParse(raw)
-          if (!parsed.success) return `Error: integrity consensus failed schema validation: ${parsed.error.message}`
-          const missing = [...reviewerIDs].filter(
-            (id) => !parsed.data.reviewers.some((report) => report.reviewerID === id),
-          )
-          if (missing.length > 0) return `Error: consensus omitted reviewer report(s): ${missing.join(", ")}.`
-          collector.report = parsed.data
-          return `PASS: integrity consensus accepted with verdict=${parsed.data.verdict}.`
-        },
-      }),
-    },
-    getCollector: () => collector,
-    buildReport: () => ({
-      summary: collector.report?.summary ?? "Integrity consensus missing",
-      detail: collector.report?.teamReportMarkdown ?? "No consensus report submitted.",
-    }),
-  }
-}
-
-async function runReviewerSession(input: {
-  input: ReviewPromptInput
-  scope: IntegrityReviewerScope
-  parentSessionID: string
-}): Promise<IntegrityReviewerReport> {
-  const collector: ReviewerCollector = {}
-  // Each reviewer streams reasoning under its OWN reviewID derived from its
-  // own child session id. Sharing the supervisor's reviewID would collapse
-  // N reviewers' reasoning into a single overlay partID and produce the
-  // 168KB-cross-contaminated-text render-thrash described in
-  // specs/new-arch/2026-05-26-integrity-reviewer-stream-reviewid.md.
-  let reviewerReviewID: string | undefined
-  const reviewerSource = `architect.integrity.reviewer.${input.scope.reviewerID}`
-  const out = await runAgentSession<ReviewerCollector>({
-    kind: "integrity",
-    core: TEAM_CORE,
-    sessionTitle: `Integrity Reviewer: ${input.scope.title}`,
-    parentSessionID: input.parentSessionID,
-    taskID: input.input.taskID,
-    signal: input.input.signal,
-    toolKit: createReviewerToolKit({
-      collector,
-      scope: input.scope,
-      taskID: input.input.taskID,
-      goals: input.input.goals,
-      acceptance: input.input.acceptance,
-      frontendDesign: input.input.frontendDesign,
-      attachments: input.input.attachments,
-      signal: input.input.signal,
-    }),
-    buildUserPrompt: () => buildReviewerPrompt(input.input, input.scope),
-    buildUserParts:
-      input.input.attachments && input.input.attachments.length > 0
-        ? async () => {
-            const text = buildReviewerPrompt(input.input, input.scope)
-            const inline = await AttachmentStore.inlineFileParts(input.input.attachments!)
-            return [
-              {
-                type: "text" as const,
-                text: text + AttachmentStore.renderAttachmentInventory(input.input.attachments!),
-              },
-              ...inline,
-            ]
-          }
-        : undefined,
-    terminalTool: {
-      toolName: "submit_reviewer_report",
-      isSatisfied: (collector) => Boolean(collector.report),
-      shouldExposeOnlyTerminalTool: () => false,
-    },
-    stream: createReviewReasoningForwarder({
-      taskID: input.input.taskID,
-      reviewID: () => reviewerReviewID,
-      phase: "integrity",
-      attempt: () => input.input.replayContext.attemptNumber,
-      source: reviewerSource,
-    }),
-    onSessionCreated: (session) => {
-      reviewerReviewID = reviewIDForIntegrity(session.id)
-      emitReviewStreamStarted({
-        taskID: input.input.taskID,
-        reviewID: reviewerReviewID,
-        phase: "integrity",
-        sessionID: session.id,
-        source: reviewerSource,
-      })
-    },
-  })
-  if (!out.collector.report) throw new Error(`integrity reviewer ${input.scope.reviewerID} did not submit a report.`)
-  return out.collector.report
-}
-
-async function runReviewerSessionWithSlot(input: {
-  input: ReviewPromptInput
-  scope: IntegrityReviewerScope
-  parentSessionID: string
-  task?: TaskRow
-}): Promise<IntegrityReviewerReport> {
-  const run = () =>
-    runReviewerSession({
-      input: input.input,
-      scope: input.scope,
-      parentSessionID: input.parentSessionID,
-    })
-  if (!input.task) return await run()
-  return await AgentSemaphore.withSlot(input.task, run)
 }
 
 export function buildSupervisorPlanPrompt(input: ReviewPromptInput): string {
@@ -550,6 +381,32 @@ export function buildSupervisorPlanPrompt(input: ReviewPromptInput): string {
     ].join("\n\n"),
     buildIntegrityEvidencePrompt(input),
     "Call submit_integrity_review_plan exactly once.",
+  ].join("\n\n")
+}
+
+export function buildSingleSessionIntegrityPrompt(input: ReviewPromptInput): string {
+  return [
+    "# Integrity Review",
+    renderIntegrityReplayContextPrompt(input.replayContext),
+    renderSeverityNewEvidenceSection(input),
+    renderSeverityReconciliationPass(),
+    [
+      "Perform the integrity review in this single streaming session. Do not spawn reviewer sessions and do not ask for a separate planning phase.",
+      "Internally choose 2-4 task-specific reviewer perspectives from the actual request, REQ rows, goals, acceptance specs, changed directories, runtime evidence, prior attempts, and risk surface.",
+      "Represent those perspectives as `reviewers[]` in the final `submit_integrity_consensus` payload. Each reviewer report must be evidence-backed and scoped; do not duplicate the same finding under several reviewer names.",
+      "Use 2 reviewer reports for narrow re-reviews. Use 3-4 reviewer reports for broad first reviews or broad changed surfaces. Do not default to five reviewers and do not use fixed dimensions.",
+      "Before final verdict, compare the reviewer reports adversarially. If a blocking finding or unresolved blocking disagreement remains, do not pass.",
+      "Compare current evidence against prior attempts. A repeated blocker should stay persistent/regressed when evidence supports that; do not suppress a prior blocker merely because the current reviewer label differs.",
+    ].join("\n\n"),
+    CONSENSUS_TRACEABILITY_PROMPT,
+    FINDING_MANIFEST_PROMPT,
+    COVERAGE_AUDIT_STATUS_CONTRACT_PROMPT,
+    REVIEWER_COVERAGE_ROW_CONTRACT_PROMPT,
+    REVIEWER_DRILLDOWN_ROW_CONTRACT_PROMPT,
+    buildIntegrityEvidencePrompt(input),
+    "Use scoped evidence tools when needed. Do not request full upstream context, full contract graph, raw decision log, or broad full-diff dumps unless a specific finding requires it.",
+    "Perform a coverage audit before final verdict: every critical request promise should be `covered`, `missing`, or explicitly `inconclusive`. Include `coverageAudit`; include `uninspectedRisks` for high-risk surfaces you could not inspect.",
+    "Call submit_integrity_consensus exactly once.",
   ].join("\n\n")
 }
 
@@ -1233,12 +1090,6 @@ function emitIntegrityEvent(
   })
 }
 
-function assertUniqueReviewerIDs(plan: IntegrityReviewerPlan): void {
-  const ids = plan.reviewers.map((reviewer) => reviewer.reviewerID)
-  if (new Set(ids).size !== ids.length)
-    throw new Error(`integrity reviewer plan produced duplicate reviewerID values: ${ids.join(", ")}`)
-}
-
 function renderReviewerPlanMarkdown(plan: IntegrityReviewerPlan): string {
   const lines = [`## Reviewer Plan`, `Rationale: ${plan.rationale}`]
   if (plan.taskProfile) {
@@ -1379,61 +1230,6 @@ function markdownListWithOmissions(
 
 function boundedPromptList(items: readonly string[], visibleCount: number, itemChars: number): string[] {
   return items.slice(0, visibleCount).map((item) => sanitizePromptBlock(item, itemChars).replace(/\s+/g, " ").trim())
-}
-
-function renderReviewerReportMarkdown(report: IntegrityReviewerReport): string {
-  const lines = [
-    `## Reviewer ${report.reviewerID}: ${report.verdict}`,
-    `Scope: ${report.scope}`,
-    `Summary: ${report.summary}`,
-  ]
-  if (report.investigationPlan) {
-    lines.push(
-      [
-        "Investigation plan:",
-        `- request promise: ${report.investigationPlan.requestPromise}`,
-        `- hypothesis: ${report.investigationPlan.hypothesis}`,
-        `- evidence plan: ${report.investigationPlan.evidencePlan.join(" | ")}`,
-        `- pass criteria: ${report.investigationPlan.passCriteria.join(" | ")}`,
-      ].join("\n"),
-    )
-  }
-  if ((report.drilldowns ?? []).length > 0) {
-    lines.push(
-      "Drilldowns:",
-      markdownList(
-        report.drilldowns.map(
-          (drilldown) => `${drilldown.kind}:${drilldown.target} - ${drilldown.purpose} => ${drilldown.result}`,
-        ),
-      ),
-    )
-  }
-  if ((report.coverage ?? []).length > 0) {
-    lines.push(
-      "Coverage:",
-      markdownList(
-        report.coverage.map((row) => {
-          const target = row.requirementID ?? row.specID ?? row.userRequestQuote ?? "(unanchored)"
-          return `${target}: ${row.status} - ${row.evidence}`
-        }),
-      ),
-    )
-  }
-  if ((report.evidence ?? []).length) lines.push("Evidence:", markdownList(report.evidence))
-  if ((report.findings ?? []).length) {
-    lines.push("Findings:")
-    for (const finding of report.findings) {
-      const quotes =
-        finding.userRequestQuotes && finding.userRequestQuotes.length > 0
-          ? `\n  user request quotes: ${finding.userRequestQuotes.join(" | ")}`
-          : ""
-      lines.push(
-        `- [${finding.severity}] ${finding.id}: ${finding.title} - ${finding.description}\n  repair: ${finding.repair}${quotes}\n  evidence: ${finding.evidence.join(" | ")}`,
-      )
-    }
-  }
-  if ((report.openQuestions ?? []).length) lines.push("Open questions:", markdownList(report.openQuestions))
-  return lines.join("\n")
 }
 
 function goalToIntegrityEvidenceGoalInfo(goal: GoalContractFields): IntegrityEvidenceGoalInfo {

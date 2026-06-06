@@ -182,7 +182,7 @@ describe("integrity consensus traceability discipline", () => {
       replayContext: replayContext(),
     })
 
-    expect(capturedConsensusPrompt).toContain("Bundle size regression")
+    expect(capturedConsensusPrompt).toContain("Perform the integrity review in this single streaming session")
     expect(capturedConsensusPrompt).toContain("must be removed from the final report")
     expect(result.reviewers[0]?.findings[0]).toMatchObject(untracedReviewerFinding)
     expect(result.findings).toEqual([])

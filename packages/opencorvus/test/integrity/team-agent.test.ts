@@ -294,45 +294,13 @@ describe("integrity team-agent replay attempts", () => {
       },
     })
 
-    expect(forwarders.map((item) => item.attempt())).toEqual([2, 2, 2, 2])
-    // Supervisor (plan + consensus) shares the supervisor reviewID;
-    // each reviewer must carry its OWN reviewID derived from its
-    // child session id. Sharing the supervisor reviewID would collapse
-    // every reviewer's reasoning into a single overlay partID and
-    // produce ~195KB of cross-contaminated render-thrashing text
-    // (specs/new-arch/2026-05-26-integrity-reviewer-stream-reviewid.md).
-    expect(forwarders.map((item) => item.reviewID())).toEqual([
-      "review_ses_integrity_plan",
-      "review_ses_reviewer_2",
-      "review_ses_reviewer_3",
-      "review_ses_integrity_plan",
-    ])
-    expect(forwarders.map((item) => item.source)).toEqual([
-      "architect.integrity.supervisor",
-      "architect.integrity.reviewer.rev_a",
-      "architect.integrity.reviewer.rev_b",
-      "architect.integrity.supervisor",
-    ])
-    // Each reviewer must emit its own review.stream.started so the
-    // overlay tree-writer's runningReviews map has a per-reviewer
-    // entry; otherwise reviewer chunks would either hit the
-    // "arrived before started" throw or alias onto supervisor's card.
-    expect(startedEvents).toHaveLength(3)
-    expect(startedEvents.map((e) => e.reviewID)).toEqual([
-      "review_ses_integrity_plan",
-      "review_ses_reviewer_2",
-      "review_ses_reviewer_3",
-    ])
-    expect(startedEvents.map((e) => e.sessionID)).toEqual([
-      "ses_integrity_plan",
-      "ses_reviewer_2",
-      "ses_reviewer_3",
-    ])
-    expect(startedEvents.map((e) => e.source)).toEqual([
-      "architect.integrity",
-      "architect.integrity.reviewer.rev_a",
-      "architect.integrity.reviewer.rev_b",
-    ])
+    expect(forwarders.map((item) => item.attempt())).toEqual([2])
+    expect(forwarders.map((item) => item.reviewID())).toEqual(["review_ses_integrity_consensus"])
+    expect(forwarders.map((item) => item.source)).toEqual(["architect.integrity"])
+    expect(startedEvents).toHaveLength(1)
+    expect(startedEvents.map((e) => e.reviewID)).toEqual(["review_ses_integrity_consensus"])
+    expect(startedEvents.map((e) => e.sessionID)).toEqual(["ses_integrity_consensus"])
+    expect(startedEvents.map((e) => e.source)).toEqual(["architect.integrity"])
     expect(progressEvents).toHaveLength(1)
     expect(progressEvents[0].attempt).toBe(2)
     expect(completedEvents).toHaveLength(1)
@@ -341,7 +309,9 @@ describe("integrity team-agent replay attempts", () => {
     const consensusCall = runnerCalls.find((call) => call.terminalTool.toolName === "submit_integrity_consensus")
     expect(consensusCall.existingSessionID).toBeUndefined()
     expect(consensusCall.parentSessionID).toBe("ses_parent")
-    expect(userPrompts).toHaveLength(4)
+    expect(runnerCalls.filter((call) => call.terminalTool.toolName === "submit_reviewer_report")).toHaveLength(0)
+    expect(completedEvents[0].payload.reviewers).toHaveLength(2)
+    expect(userPrompts).toHaveLength(1)
     for (const prompt of userPrompts) {
       expect(prompt).toContain("# Integrity Replay Context")
       expect(prompt).toContain("Current integrity attempt: #2")
@@ -355,10 +325,9 @@ describe("integrity team-agent replay attempts", () => {
       expect(prompt).not.toContain("\u001B")
       expect(prompt).toContain("- prior_blocking_findings=1")
     }
-    expect(userPrompts[0]).toContain("Prior reviewer focuses are the list of surfaces that were inspected")
+    expect(userPrompts[0]).toContain("Perform the integrity review in this single streaming session")
     expect(userPrompts[0]).toContain("Do not default to five reviewers")
-    expect(userPrompts[1]).toContain("you are reviewing the current attempt, not starting from zero")
-    expect(userPrompts[3]).toContain("Compare the current reviewer reports against prior attempts")
+    expect(userPrompts[0]).toContain("Compare current evidence against prior attempts")
   }, 20_000)
 
   test("uses replayContext attempt number for no-goals soft completed event", async () => {
@@ -383,7 +352,7 @@ describe("integrity team-agent replay attempts", () => {
     expect(completedEvents[0].payload.attempts).toBe(4)
   }, 20_000)
 
-  test("limits integrity reviewer agents with the task parallel-agent ceiling", async () => {
+  test("does not spawn reviewer agents while preserving reviewer report entries", async () => {
     await using tmp = await tmpdir({ git: true })
     slowReviewerReports = true
     const { reviewIntegrity } = await import("../../src/integrity/team-agent")
@@ -417,8 +386,11 @@ describe("integrity team-agent replay attempts", () => {
       },
     })
 
-    expect(runnerCalls.filter((call) => call.terminalTool.toolName === "submit_reviewer_report")).toHaveLength(2)
-    expect(maxActiveReviewerAgents).toBe(1)
+    expect(runnerCalls).toHaveLength(1)
+    expect(runnerCalls[0].terminalTool.toolName).toBe("submit_integrity_consensus")
+    expect(runnerCalls.filter((call) => call.terminalTool.toolName === "submit_reviewer_report")).toHaveLength(0)
+    expect(maxActiveReviewerAgents).toBe(0)
+    expect(completedEvents[0].payload.reviewers).toHaveLength(2)
   }, 20_000)
 
   test("consensus prompt separates coverage audit status from verdict enums", async () => {
