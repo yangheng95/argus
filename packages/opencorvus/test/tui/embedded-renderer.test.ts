@@ -20,7 +20,11 @@ describe("embedded OpenTUI renderer", () => {
         stderr: "pipe",
       },
     )
-    const [stdout, stderr, code] = await Promise.all([new Response(proc.stdout).text(), new Response(proc.stderr).text(), proc.exited])
+    const [stdout, stderr, code] = await Promise.all([
+      new Response(proc.stdout).text(),
+      new Response(proc.stderr).text(),
+      proc.exited,
+    ])
     expect(stderr).toBe("")
     expect(code).toBe(0)
     const result = JSON.parse(stdout) as { title: string; titleFg: string; titleBg: string; frame: string }
@@ -44,7 +48,11 @@ describe("embedded OpenTUI renderer", () => {
         stderr: "pipe",
       },
     )
-    const [stdout, stderr, code] = await Promise.all([new Response(proc.stdout).text(), new Response(proc.stderr).text(), proc.exited])
+    const [stdout, stderr, code] = await Promise.all([
+      new Response(proc.stdout).text(),
+      new Response(proc.stderr).text(),
+      proc.exited,
+    ])
     expect(stderr).toBe("")
     expect(code).toBe(0)
     const result = JSON.parse(stdout) as { frame: string }
@@ -93,5 +101,28 @@ describe("embedded OpenTUI renderer", () => {
     expect(embedded).not.toContain("TuiHost")
     expect(embedded).not.toContain("Pty")
     expect(embedded).not.toContain("WebSocket")
+  })
+
+  test("home route owns compact density for embedded TUI readability", () => {
+    const home = readFileSync(path.join(ROOT, "src/cli/cmd/tui/routes/home.tsx"), "utf8")
+    const logo = readFileSync(path.join(ROOT, "src/cli/cmd/tui/component/logo.tsx"), "utf8")
+    const prompt = readFileSync(path.join(ROOT, "src/cli/cmd/tui/component/prompt/index.tsx"), "utf8")
+    const panel = readFileSync(
+      path.join(ROOT, "../overlay/src/plugins/coding-agent-tui/CodingAgentTuiPanel.tsx"),
+      "utf8",
+    )
+
+    expect(home).toContain("const compactDensity = createMemo")
+    expect(home).toContain("dimensions().height < 34 || dimensions().width < 112")
+    expect(home).toContain("<CompactLogo />")
+    expect(home).toContain('density={compactDensity() ? "compact" : "default"}')
+    expect(home).toContain("<BgPulse />")
+    expect(home).toContain('name="home_logo"')
+    expect(logo).toContain("export function CompactLogo")
+    expect(prompt).toContain('density?: "default" | "compact"')
+    expect(prompt).toContain('props.density === "compact"')
+    expect(panel).toContain("frame().lines")
+    expect(panel).not.toContain("CompactLogo")
+    expect(panel).not.toContain("compactDensity")
   })
 })

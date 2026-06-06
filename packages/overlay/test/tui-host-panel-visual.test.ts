@@ -63,11 +63,12 @@ function shortcutLine() {
 
 function embedInfo(text: string, input = "") {
   const lines = [
-    line("OpenCorvus coding assistant", "rgb(125, 211, 252)", "rgb(10, 10, 10)", 1),
-    shortcutLine(),
+    line(">_ OpenCorvus", "rgb(125, 211, 252)", "rgb(10, 10, 10)", 1),
     line(" ".repeat(100), "rgb(229, 231, 235)", "rgb(10, 10, 10)"),
+    line('Ask anything... "Fix broken tests"', "rgb(156, 163, 175)", "rgb(10, 10, 10)"),
+    line("Tui-Coding  Kimi K2.6  Kimi K2.6 (CZ Gateway)", "rgb(229, 231, 235)", "rgb(10, 10, 10)"),
+    shortcutLine(),
     line("project: D:/overlay/workspace/app", "rgb(209, 213, 219)"),
-    line("todo: accept a Tank Battle build request through overlay TUI", "rgb(253, 224, 71)"),
     ...input.split("\n").map((item) => line(item, "rgb(244, 244, 245)")),
   ]
   return {
@@ -207,6 +208,7 @@ test("chat TUI tab accepts the Tank Battle build case through OpenTUI embed fram
       const firstLine = document.querySelector<HTMLElement>(".tui-host-frame-line")
       const firstSpan = document.querySelector<HTMLElement>(".tui-host-frame-line > span")
       const emptyLine = Array.from(document.querySelectorAll<HTMLElement>(".tui-host-frame-line")).find((line) => !line.textContent?.trim())
+      const lineTexts = Array.from(document.querySelectorAll<HTMLElement>(".tui-host-frame-line")).map((line) => line.textContent ?? "")
       const shortcutBlankSpan = Array.from(document.querySelectorAll<HTMLElement>(".tui-host-frame-line > span")).find((span) => {
         const parentText = span.parentElement?.textContent ?? ""
         return parentText.includes("tab agents") && parentText.includes("ctrl+p commands") && !span.textContent?.trim()
@@ -230,6 +232,7 @@ test("chat TUI tab accepts the Tank Battle build case through OpenTUI embed fram
         firstSpanBackground: firstSpan ? getComputedStyle(firstSpan).backgroundColor : "",
         emptyLineBackground: emptyLine ? getComputedStyle(emptyLine).backgroundColor : "",
         shortcutBlankSpanBackground: shortcutBlankSpan ? getComputedStyle(shortcutBlankSpan).backgroundColor : "",
+        lineTexts,
         terminalText: terminal.textContent ?? "",
         errorText: document.querySelector<HTMLElement>(".tui-host-error")?.textContent ?? "",
       }
@@ -244,6 +247,9 @@ test("chat TUI tab accepts the Tank Battle build case through OpenTUI embed fram
       state: "running",
       errorText: "",
     })
+    expect(layout.terminalText).toContain(">_ OpenCorvus")
+    expect(layout.terminalText).toContain('Ask anything... "Fix broken tests"')
+    expect(layout.terminalText).not.toContain("█▀▀")
     expect(layout.terminalText).toContain("Build a playable Tank Battle game")
     expect(layout.terminalText).toContain("tile battlefield")
     expect(layout.terminalText).toContain("overlay TUI")
@@ -259,6 +265,12 @@ test("chat TUI tab accepts the Tank Battle build case through OpenTUI embed fram
     expect(layout.terminalWidth).toBeGreaterThan(620)
     expect(layout.terminalHeight).toBeGreaterThan(400)
     expect(layout.terminalBackground).not.toBe("rgba(0, 0, 0, 0)")
+    const promptLineIndex = layout.lineTexts.findIndex((line: string) => line.includes("Ask anything"))
+    const shortcutLineIndex = layout.lineTexts.findIndex((line: string) => line.includes("tab agents"))
+    const requestLineIndex = layout.lineTexts.findIndex((line: string) => line.includes("Build a playable Tank Battle game"))
+    expect(promptLineIndex).toBeGreaterThan(0)
+    expect(shortcutLineIndex).toBeGreaterThan(promptLineIndex)
+    expect(requestLineIndex).toBeGreaterThan(shortcutLineIndex)
     expect(layout.frameBackground).not.toBe("rgb(10, 10, 10)")
     expect(layout.firstLineBackground).toBe("rgb(10, 10, 10)")
     expect(layout.firstSpanBackground).toBe("rgb(10, 10, 10)")

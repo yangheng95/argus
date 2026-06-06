@@ -83,3 +83,18 @@ export function Logo() {
     </box>
   )
 }
+
+export function CompactLogo() {
+  const { theme } = useTheme()
+
+  return (
+    <box flexDirection="row" gap={1}>
+      <text fg={theme.textMuted} selectable={false}>
+        &gt;_
+      </text>
+      <text fg={theme.text} attributes={TextAttributes.BOLD} selectable={false}>
+        OpenCorvus
+      </text>
+    </box>
+  )
+}
