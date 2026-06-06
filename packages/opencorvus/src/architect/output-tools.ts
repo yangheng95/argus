@@ -58,7 +58,9 @@ const RegisterContractToolInputSchema = ArchitectContractRefSchema.omit({
     .describe("For kind=route only: JSON.stringify of {method,path,request?,response?}.")
     .optional(),
   component_json: z.string().min(2)
-    .describe("For kind=component only: JSON.stringify of {props?,events?,slots?}.")
+    .describe(
+      "For kind=component only: JSON.stringify of {props?: string, events?: string[], slots?: string[]}. props is a comma-separated string, not an array.",
+    )
     .optional(),
 })
 
