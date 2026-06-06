@@ -5,6 +5,8 @@ import { SearchCodeTool } from "../../src/tool/grep"
 import { Instance } from "../../src/project/instance"
 import { tmpdir } from "../fixture/fixture"
 import { createCodebaseTools } from "../../src/engine/codebase-tools"
+import { FileTime } from "../../src/file/time"
+import { WriteTool } from "../../src/tool/write"
 
 const ctx = {
   sessionID: "test",
@@ -51,6 +53,39 @@ describe("tool.search_code", () => {
     )
 
     expect(result).toBe("Error: path is outside the project boundary.")
+  })
+
+  test("workflow read_file permits same-session overwrite through write tool", async () => {
+    await using tmp = await tmpdir()
+    const filePath = path.join(tmp.path, "src", "component.tsx")
+    await fs.mkdir(path.dirname(filePath), { recursive: true })
+    await Bun.write(filePath, "export function Component() {\n  return null\n}\n")
+
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const sessionID = "frontend-design-read-file-session"
+        const readFile = createCodebaseTools(tmp.path).read_file
+        const result = await readFile.execute!(
+          { path: "src/component.tsx" },
+          { opencorvus: { sessionID } } as any,
+        )
+
+        expect(String(result)).toContain("export function Component")
+        expect(FileTime.get(sessionID, filePath)).toBeInstanceOf(Date)
+
+        const write = await WriteTool.init()
+        await expect(
+          write.execute(
+            {
+              filePath,
+              content: "export function Component() {\n  return 'updated'\n}\n",
+            },
+            { ...ctx, sessionID },
+          ),
+        ).resolves.toMatchObject({ output: expect.stringContaining("Wrote file successfully.") })
+      },
+    })
   })
 
   test("workflow search_code max_results limits total matches, not matches per file", async () => {
