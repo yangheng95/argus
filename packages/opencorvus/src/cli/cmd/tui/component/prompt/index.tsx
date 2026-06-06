@@ -1,4 +1,12 @@
-import { BoxRenderable, TextareaRenderable, MouseEvent, PasteEvent, decodePasteBytes, type KeyEvent, type Renderable } from "@opentui/core"
+import {
+  BoxRenderable,
+  TextareaRenderable,
+  MouseEvent,
+  PasteEvent,
+  decodePasteBytes,
+  type KeyEvent,
+  type Renderable,
+} from "@opentui/core"
 import type { CommandContext } from "@opentui/keymap"
 import { createEffect, createMemo, type JSX, onMount, createSignal, onCleanup, on, Show, Switch, Match } from "solid-js"
 import "opentui-spinner/solid"
@@ -50,6 +58,7 @@ export type PromptProps = {
   hint?: JSX.Element
   right?: JSX.Element
   showPlaceholder?: boolean
+  density?: "default" | "compact"
   placeholders?: {
     normal?: string[]
     shell?: string[]
@@ -98,6 +107,7 @@ export function Prompt(props: PromptProps) {
   const list = createMemo(() => props.placeholders?.normal ?? [])
   const shell = createMemo(() => props.placeholders?.shell ?? [])
   const hasRightContent = createMemo(() => Boolean(props.right))
+  const compact = createMemo(() => props.density === "compact")
 
   function promptModelWarning() {
     toast.show({
@@ -566,7 +576,13 @@ export function Prompt(props: PromptProps) {
     bindings: [
       ...tuiConfig.keybinds.get("prompt.paste"),
       ...tuiConfig.keybinds.get("session.interrupt"),
-      ...tuiConfig.keybinds.gather("prompt", ["prompt.editor", "prompt.skills", "prompt.stash", "prompt.stash.pop", "prompt.stash.list"]),
+      ...tuiConfig.keybinds.gather("prompt", [
+        "prompt.editor",
+        "prompt.skills",
+        "prompt.stash",
+        "prompt.stash.pop",
+        "prompt.stash.list",
+      ]),
     ],
   }))
 
@@ -622,7 +638,10 @@ export function Prompt(props: PromptProps) {
         run() {
           cursorVersion()
           if (input.cursorOffset !== input.plainText.length) {
-            if (input.scrollY + input.visualCursor.visualRow === Math.max(0, input.editorView.getTotalVirtualLineCount() - 1))
+            if (
+              input.scrollY + input.visualCursor.visualRow ===
+              Math.max(0, input.editorView.getTotalVirtualLineCount() - 1)
+            )
               input.cursorOffset = input.plainText.length
             return false
           }
@@ -1197,20 +1216,33 @@ export function Prompt(props: PromptProps) {
             </box>
           </Show>
           <Show when={status().type !== "retry"}>
-            <box gap={2} flexDirection="row">
+            <box gap={compact() ? 1 : 2} flexDirection="row">
               <Switch>
                 <Match when={store.mode === "normal"}>
-                  <Show when={local.model.variant.list().length > 0}>
+                  <Show
+                    when={compact()}
+                    fallback={
+                      <>
+                        <Show when={local.model.variant.list().length > 0}>
+                          <text fg={theme.text}>
+                            {variantShortcut()} <span style={{ fg: theme.textMuted }}>variants</span>
+                          </text>
+                        </Show>
+                        <text fg={theme.text}>
+                          {agentShortcut()} <span style={{ fg: theme.textMuted }}>agents</span>
+                        </text>
+                        <text fg={theme.text}>
+                          {commandShortcut()} <span style={{ fg: theme.textMuted }}>commands</span>
+                        </text>
+                      </>
+                    }
+                  >
                     <text fg={theme.text}>
-                      {variantShortcut()} <span style={{ fg: theme.textMuted }}>variants</span>
+                      {agentShortcut()} <span style={{ fg: theme.textMuted }}>agents</span>{" "}
+                      <span style={{ fg: theme.textMuted }}>·</span> {commandShortcut()}{" "}
+                      <span style={{ fg: theme.textMuted }}>commands</span>
                     </text>
                   </Show>
-                  <text fg={theme.text}>
-                    {agentShortcut()} <span style={{ fg: theme.textMuted }}>agents</span>
-                  </text>
-                  <text fg={theme.text}>
-                    {commandShortcut()} <span style={{ fg: theme.textMuted }}>commands</span>
-                  </text>
                 </Match>
                 <Match when={store.mode === "shell"}>
                   <text fg={theme.text}>
