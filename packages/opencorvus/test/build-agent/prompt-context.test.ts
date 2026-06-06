@@ -587,4 +587,31 @@ describe("build agent prompt context", () => {
     expect(prompt).toContain("CSS repair must be source-backed")
     expect(prompt).toContain("Maintainable replacement should already be completed by frontend_design")
   })
+
+  test("request-path build resolves web-clone source references through task runtime root", () => {
+    const prompt = buildUserPrompt(
+      {
+        kind: "request",
+        text: "Clone the AMD page.",
+      },
+      {
+        frontendDesign:
+          "# Frontend Design Public Report\n\n" +
+          "- key=frontend_project value=status: created\nrole: source_baseline_input\nproject_root: frontend-design-skeleton\n" +
+          "- key=fillable_modules value=Use web-clone-source/reference.png and frontend-design-skeleton/src/App.tsx.",
+      },
+      "tsk_reference_path_contract",
+    )
+
+    expect(prompt).toContain(
+      "web-clone-source/reference.png` means `.opencorvus/runtime/tasks/tsk_reference_path_contract/frontend-design/web-clone-source/reference.png`",
+    )
+    expect(prompt).toContain(
+      "Resolve `web-clone-source/...` refs under `.opencorvus/runtime/tasks/tsk_reference_path_contract/frontend-design/web-clone-source/...`",
+    )
+    expect(prompt).toContain(
+      "`frontend-design-skeleton/...` refs under `.opencorvus/runtime/tasks/tsk_reference_path_contract/frontend-design/frontend-design-skeleton/...`",
+    )
+    expect(prompt).toContain("not `./web-clone-source/reference.png` in the acceptance root")
+  })
 })

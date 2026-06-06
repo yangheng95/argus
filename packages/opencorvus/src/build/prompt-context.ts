@@ -4,6 +4,7 @@ export interface BuildPromptOverlayContext {
   integrityFeedback?: string
   acceptanceFeedback?: string
   designSpecs?: readonly unknown[]
+  taskID?: string
 }
 
 export interface BuildPromptOverlayResult {
@@ -44,15 +45,28 @@ function renderFrontendResearchOverlay(frontendResearch: string): string {
   return sections.join("\n")
 }
 
-function renderWebCloneSourceOverlay(): string {
+function webCloneRuntimeRef(taskID: string | undefined, child: string): string {
+  const root = taskID?.trim()
+    ? `.opencorvus/runtime/tasks/${taskID.trim()}/frontend-design`
+    : ".opencorvus/runtime/tasks/<taskID>/frontend-design"
+  return `${root}/${child}`
+}
+
+function renderWebCloneSourceOverlay(taskID: string | undefined): string {
+  const runtimeDir = webCloneRuntimeRef(taskID, "")
+  const sourcePackage = webCloneRuntimeRef(taskID, "web-clone-source")
+  const sourceReference = webCloneRuntimeRef(taskID, "web-clone-source/reference.png")
+  const skeletonProject = webCloneRuntimeRef(taskID, "frontend-design-skeleton")
   return [
     "## Webpage Clone Source-Baseline Overlay",
     "",
     "This overlay applies because the frontend_design handoff names a webpage-clone source package or source baseline. Use the named handoff fields and artifact paths as the source of truth.",
     "",
+    `- Task runtime frontend-design root: \`${runtimeDir.replace(/\/$/, "")}\`. Resolve package-local refs under that root; for example \`web-clone-source/reference.png\` means \`${sourceReference}\`, not \`./web-clone-source/reference.png\` in the acceptance root.`,
+    `- Resolve \`web-clone-source/...\` refs under \`${sourcePackage}/...\` and \`frontend-design-skeleton/...\` refs under \`${skeletonProject}/...\`. Bare package refs in frontend_design/frontend_research reports are source-package-relative names, not cwd-relative deliverables.`,
     "- Build starts from the frontend-design source project named by `frontend_project` when that field is present. If `role=implementation_target`, adopt/copy/adapt that refined project into the acceptance root and perform only integration, precision visual repair, and acceptance fixes. If `role=source_baseline_input`, treat the named source debt as unfinished frontend_design work and do not hide it by starting a freehand rebuild.",
     "- `web-clone-source/` is evidence and implementation input. Read the compact package paths named by the handoff before editing; do not search sibling worktrees, primary project directories, absolute paths, or raw `webpage-evidence/` to repair missing source evidence.",
-    "- Treat `.opencorvus/runtime/tasks/<taskID>/frontend-design/` as read-only input. Do not delete, move, rewrite, or clean runtime evidence directories; copy only the acceptance app files/assets you need into the root implementation.",
+    `- Treat \`${runtimeDir.replace(/\/$/, "")}/\` as read-only input. Do not delete, move, rewrite, or clean runtime evidence directories; copy only the acceptance app files/assets you need into the root implementation.`,
     "- Do not copy `web-clone-source/`, `frontend-design-skeleton/`, `webpage-evidence/`, `references/`, or top-level `reference.png` into the acceptance root as deliverables. Reference images and source packages are verification/evidence inputs, not app-owned source.",
     "- If required source package files named by the handoff are missing, empty, corrupt, or unreadable, fail through `report_build_result` with a concrete blocker naming the missing files instead of inventing behavior.",
     "- For clone replicas, work from the frontend_design refined source first. Measure it against the reference/overlay and use the mismatch report for source-backed precision repair; do not restart the rawproject-to-maintainable conversion unless the handoff explicitly names remaining source debt.",
@@ -114,7 +128,7 @@ export function renderBuildPromptOverlays(context: BuildPromptOverlayContext | u
 
   if (hasWebCloneSourceHandoff(frontendDesign)) {
     ids.push("webpage-clone-source-baseline")
-    sections.push(renderWebCloneSourceOverlay())
+    sections.push(renderWebCloneSourceOverlay(context?.taskID))
   }
 
   if ((context?.designSpecs?.length ?? 0) > 0 || hasText(frontendDesign)) {
