@@ -169,8 +169,8 @@
 
   --ui-rail-width: clamp(calc(270px * var(--ui-scale)), 22vw, calc(360px * var(--ui-scale)));
   --ui-rail-min-width: calc(210px * var(--ui-scale));
-  --ui-sections-width: clamp(calc(310px * var(--ui-scale)), 25vw, calc(430px * var(--ui-scale)));
-  --ui-tui-sections-width: clamp(calc(700px * var(--ui-scale)), 52vw, calc(860px * var(--ui-scale)));
+  --ui-sections-width: clamp(calc(380px * var(--ui-scale)), 30vw, calc(560px * var(--ui-scale)));
+  --ui-tui-sections-width: clamp(calc(760px * var(--ui-scale)), 58vw, calc(980px * var(--ui-scale)));
   --ui-tui-chat-min-width: calc(260px * var(--ui-scale));
   --ui-sidebar-width: var(--ui-rail-width);
   --ui-chat-priority-width: calc(640px * var(--ui-scale));

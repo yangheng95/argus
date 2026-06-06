@@ -88,6 +88,7 @@ test("panel header controls collapse side panes to message-adjacent rails", asyn
         "C:/Users/chuan/myhexin-local/Hithink.PrefabLibrary",
       ]));
       localStorage.setItem("oc_server_url", `http://127.0.0.1:${portValue}`);
+      localStorage.setItem("oc_right_panel_collapsed", "false");
     }, server.port);
     await page.goto(`http://127.0.0.1:${server.port}/ui/index.html`, { waitUntil: "domcontentloaded" });
     await page.waitForSelector('[data-ui="sidebar-header-collapse-toggle"]');

@@ -782,6 +782,7 @@ test(
                   locale: "en-US",
                   theme: "dark",
                   directory: "D:/overlay/workspace/app",
+                  rightPanelCollapsed: false,
                 }
               }
               if (command === "overlay_settings_save") return true

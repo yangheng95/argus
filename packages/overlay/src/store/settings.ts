@@ -152,7 +152,7 @@ export const DEFAULT_SETTINGS: OverlaySettings = {
   projectEditor: "vscode",
   initGit: true,
   sidebarCollapsed: false,
-  rightPanelCollapsed: false,
+  rightPanelCollapsed: true,
   sidebarWidth: null,
   sectionsWidth: null,
   missionLedgerWidth: null,
@@ -223,7 +223,10 @@ export function applySettings(input: Partial<OverlaySettings>): void {
       sanitizeProjectEditor(input?.projectEditor),
     initGit: true,
     sidebarCollapsed: input?.sidebarCollapsed === true,
-    rightPanelCollapsed: input?.rightPanelCollapsed === true,
+    rightPanelCollapsed:
+      typeof input?.rightPanelCollapsed === "boolean"
+        ? input.rightPanelCollapsed
+        : DEFAULT_SETTINGS.rightPanelCollapsed,
     sidebarWidth: sanitizePaneWidth(input?.sidebarWidth),
     sectionsWidth: sanitizePaneWidth(input?.sectionsWidth),
     missionLedgerWidth: sanitizePaneWidth(input?.missionLedgerWidth),
