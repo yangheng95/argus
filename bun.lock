@@ -257,6 +257,24 @@
         "typescript": "catalog:",
       },
     },
+    "packages/tui-app": {
+      "name": "@opencorvus-ai/tui-app",
+      "version": "0.0.1-alpha",
+      "dependencies": {
+        "@opencorvus-ai/plugin": "workspace:*",
+        "@opencorvus-ai/sdk": "workspace:*",
+        "@opencorvus-ai/util": "workspace:*",
+        "@opentui/core": "catalog:",
+        "@opentui/keymap": "catalog:",
+        "@opentui/solid": "catalog:",
+        "solid-js": "catalog:",
+      },
+      "devDependencies": {
+        "@tsconfig/bun": "catalog:",
+        "@types/bun": "catalog:",
+        "typescript": "catalog:",
+      },
+    },
     "packages/util": {
       "name": "@opencorvus-ai/util",
       "version": "0.0.1-alpha",
@@ -947,6 +965,8 @@
     "@opencorvus-ai/sdk": ["@opencorvus-ai/sdk@workspace:packages/sdk/js"],
 
     "@opencorvus-ai/transport-protocol": ["@opencorvus-ai/transport-protocol@workspace:packages/transport-protocol"],
+
+    "@opencorvus-ai/tui-app": ["@opencorvus-ai/tui-app@workspace:packages/tui-app"],
 
     "@opencorvus-ai/util": ["@opencorvus-ai/util@workspace:packages/util"],
 
