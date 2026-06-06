@@ -255,7 +255,7 @@ export function buildFrontendTemplateReport(collector: FrontendTemplateOutputCol
       `## Source Region Evolution Plan\n${renderBaselineReplacementPlan(collector.final.baseline_replacement_plan)}`,
       `## Quality Project Contract\n${collector.final.quality_project_contract}`,
       `## Material Inventory\n${collector.final.material_inventory}`,
-      `## Frontend Project\n${renderFrontendProjectReport(collector.final.frontend_project)}`,
+      `## Frontend Project\n${renderFrontendProjectReport(collector.final.frontend_project, collector.final.final_acceptance_mode)}`,
       `## Visual Consistency Contract\n${collector.final.visual_consistency_contract}`,
       `## UI Data Contract\n${collector.final.ui_data_contract}`,
       `## Template Iteration Notes\n${markdownList(collector.final.template_iteration_notes)}`,
@@ -609,9 +609,14 @@ function assertFrontendTemplateFinal(final: FrontendTemplateFinal): void {
   }
 }
 
-function renderFrontendProjectReport(project: FrontendTemplateFinal["frontend_project"]): string {
+function renderFrontendProjectReport(
+  project: FrontendTemplateFinal["frontend_project"],
+  finalAcceptanceMode: FrontendTemplateFinal["final_acceptance_mode"],
+): string {
   const normalizedRoot = normalizeProjectRootForReport(project.project_root)
   const isFrontendDesignSkeleton = isFrontendDesignSkeletonRoot(normalizedRoot)
+  const maintainableSourceBaseline =
+    finalAcceptanceMode === "maintainable_replacement_required" && project.role === "source_baseline_input"
   const lines = [
     `- status: ${project.status}`,
     `- role: ${project.role}`,
@@ -620,6 +625,9 @@ function renderFrontendProjectReport(project: FrontendTemplateFinal["frontend_pr
     `- source_package: ${project.source_package || "(not specified)"}`,
     `- generation_tool: ${project.generation_tool || "(not specified)"}`,
   ]
+  if (maintainableSourceBaseline) {
+    lines.push("- maintainable_status: incomplete_source_baseline. This is explicit unfinished frontend_design source debt, not a final maintainable implementation target.")
+  }
   if (isFrontendDesignSkeleton) {
     lines.push("- adoption_rule: frontend-design-skeleton is source_baseline_input evidence only. frontend_design must extract from it into the target acceptance project; if this remains the named project in maintainable mode, the named source debt is unfinished frontend_design work.")
   }

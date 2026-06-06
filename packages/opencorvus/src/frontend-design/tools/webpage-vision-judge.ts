@@ -56,7 +56,41 @@ const VISION_JUDGE_IDLE_MS = 180_000
 
 const log = Log.create({ service: "webpage-evidence.tool.webpage_vision_judge" })
 
-const VerdictSchema = z.object({
+function normalizeSeverity(value: unknown): unknown {
+  if (typeof value !== "string") return value
+  const normalized = value.trim().toLowerCase()
+  if (normalized === "critical") return "critical"
+  if (normalized === "major" || normalized === "high" || normalized === "medium") return "major"
+  if (normalized === "minor" || normalized === "low") return "minor"
+  return value
+}
+
+function normalizeDifferenceShape(value: unknown): unknown {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return value
+  const record = { ...(value as Record<string, unknown>) }
+  record.severity = normalizeSeverity(record.severity)
+  record.observed ??= record.what_you_see ?? record.whatYouSee
+  record.expected ??= record.what_you_should_see ?? record.whatYouShouldSee
+  record.fix_hint ??= record.fix ?? record.fixHint
+  return record
+}
+
+function normalizeVerdictShape(value: unknown): unknown {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return value
+  const record = { ...(value as Record<string, unknown>) }
+  if (Array.isArray(record.differences)) {
+    record.differences = record.differences.map(normalizeDifferenceShape)
+  }
+  if (typeof record.overall_impression !== "string" || !record.overall_impression.trim()) {
+    const differences = Array.isArray(record.differences) ? record.differences : []
+    record.overall_impression = record.accepted === true && differences.length === 0
+      ? "Rendered screenshot appears visually faithful to the reference."
+      : `Rendered screenshot has ${differences.length} visible difference(s) that require review.`
+  }
+  return record
+}
+
+const VerdictSchema = z.preprocess(normalizeVerdictShape, z.object({
   accepted: z
     .boolean()
     .describe(
@@ -70,7 +104,7 @@ const VerdictSchema = z.object({
     .describe("One-sentence summary of how the rendered output compares to the reference."),
   differences: z
     .array(
-      z.object({
+      z.preprocess(normalizeDifferenceShape, z.object({
         severity: z
           .enum(["critical", "major", "minor"])
           .describe(
@@ -98,13 +132,17 @@ const VerdictSchema = z.object({
               "'change second mic icon to paperclip', 'shrink hot-search row " +
               "vertical padding to match reference').",
           ),
-      }),
+      })),
     )
     .describe(
       "Ranked list of visual differences, most severe first. " +
         "Empty array allowed only when accepted=true.",
     ),
-})
+}))
+
+export function normalizeVisionJudgeVerdictForTest(value: unknown): z.infer<typeof VerdictSchema> {
+  return VerdictSchema.parse(value)
+}
 
 export const WebpageVisionJudgeTool = Tool.define("webpage_vision_judge", {
   description: `Vision-only side-by-side comparison of a reference screenshot and a rendered screenshot. Calls a vision-capable LLM with NO system prompt, NO tool list, NO scores — just the two images and a request to enumerate visible differences.
@@ -253,13 +291,24 @@ Pure transformation, no network besides the LLM call. Deterministic per (model, 
         causeMessage,
         errStack,
       })
+      const failurePath = path.join(outputDir, "vision-judge-failure.json")
+      await fs.writeFile(failurePath, JSON.stringify({
+        generatedAt: new Date().toISOString(),
+        model: `${parsed.providerID}/${parsed.modelID}`,
+        referencePath,
+        renderedPath,
+        errName,
+        errMessage,
+        causeMessage,
+      }, null, 2), "utf8").catch(() => undefined)
       throw new Error(
         `webpage_vision_judge: ${errName} — ${errMessage}` +
           (causeMessage ? ` (cause: ${causeMessage})` : "") +
           `. Common causes: (1) the model returned narrative text instead of JSON matching the schema; ` +
           `(2) the model timed out streaming (idle > ${VISION_JUDGE_IDLE_MS}ms — provider stalled); ` +
           `(3) the model rejected the image payload. ` +
-          `No verdict was written; downstream gates must treat ${judgePath} as missing until a real verdict is produced.`,
+          `No verdict was written; downstream gates must treat ${judgePath} as missing until a real verdict is produced. ` +
+          `Failure diagnostics were written to ${failurePath} when the filesystem was available.`,
         { cause: original instanceof Error ? original : undefined },
       )
     }
