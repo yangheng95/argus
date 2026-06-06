@@ -100,15 +100,15 @@ describe("tool.bash", () => {
     })
   })
 
-  test("defaults foreground commands to two minutes and background leases to one hour", async () => {
+  test("defaults foreground commands to five minutes and background leases to one hour", async () => {
     await Instance.provide({
       directory: projectRoot,
       fn: async () => {
         const bash = await BashTool.init()
-        expect(DEFAULT_BASH_TIMEOUT_MS).toBe(120_000)
+        expect(DEFAULT_BASH_TIMEOUT_MS).toBe(300_000)
         expect(DEFAULT_BASH_BACKGROUND_LEASE_MS).toBe(3_600_000)
         expect(DEFAULT_TIMEOUT).toBe(DEFAULT_BASH_TIMEOUT_MS)
-        expect(bash.description).toContain("120000ms (2 minutes)")
+        expect(bash.description).toContain("300000ms (5 minutes)")
         expect(bash.description).toContain("background process lease defaults to 3600000ms (1 hour)")
         expect(bash.description).toContain("`timeout` only controls the tool/readiness wait")
       },

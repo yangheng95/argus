@@ -25,6 +25,7 @@ import { sql as rawSQL } from "drizzle-orm"
 import { Database } from "@/storage/db"
 import { Instance } from "@/project/instance"
 import { Shell } from "@/shell/shell"
+import { DEFAULT_BASH_TIMEOUT_MS } from "@/shell/timeout"
 import { Filesystem } from "@/util/filesystem"
 import { Log } from "@/util/log"
 import {
@@ -254,7 +255,7 @@ async function runShell(
   }
   const projectDir = ctx.workDir ?? Filesystem.resolve(Instance.directory)
   const cwd = cfg.cwd ? Filesystem.resolve(cfg.cwd) : projectDir
-  const timeoutMs = typeof cfg.timeout_ms === "number" ? cfg.timeout_ms : 120_000
+  const timeoutMs = typeof cfg.timeout_ms === "number" ? cfg.timeout_ms : DEFAULT_BASH_TIMEOUT_MS
   const result = await Shell.run(cfg.cmd, {
     cwd,
     env: process.env,

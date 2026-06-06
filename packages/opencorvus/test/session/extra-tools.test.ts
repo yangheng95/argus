@@ -590,7 +590,7 @@ describe("extra tool provider schema preparation", () => {
         description: "run command",
         inputSchema: z.object({
           command: z.string(),
-          timeout_ms: z.number().int().positive().default(120_000),
+          timeout_ms: z.number().int().positive().default(300_000),
           background: z.boolean().default(false),
         }),
         async execute(args) {
@@ -604,7 +604,7 @@ describe("extra tool provider schema preparation", () => {
 
     expect(seenArgs).toEqual({
       command: "printf ok",
-      timeout_ms: 120_000,
+      timeout_ms: 300_000,
       background: false,
     })
   })

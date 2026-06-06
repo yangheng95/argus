@@ -30,7 +30,7 @@ Before executing the command, please follow these steps:
 
 Usage notes:
   - The command argument is required.
-  - You can specify an optional timeout in milliseconds. If not specified, foreground commands will time out after ${defaultTimeout}ms (2 minutes). For `background: true`, `timeout` only controls the tool/readiness wait; the background process lease defaults to ${defaultBackgroundLease}ms (1 hour). Set `leaseTimeout` only when you intentionally need a different background lease. The process tree is automatically terminated when the lease expires unless you stop it first.
+  - You can specify an optional timeout in milliseconds. If not specified, foreground commands will time out after ${defaultTimeout}ms (5 minutes). For `background: true`, `timeout` only controls the tool/readiness wait; the background process lease defaults to ${defaultBackgroundLease}ms (1 hour). Set `leaseTimeout` only when you intentionally need a different background lease. The process tree is automatically terminated when the lease expires unless you stop it first.
   - It is very helpful if you write a clear, concise description of what this command does in 5-10 words.
   - If the output exceeds ${maxLines} lines or ${maxBytes} bytes, it will be truncated and the full output will be written to a file. You can use Read with offset/limit to read specific sections or `search_code` to search the full content. Because of this, you do NOT need to use `head`, `tail`, or other truncation commands to limit output - run the command directly or use the test runner's own concise reporter.
   - For test runners, prefer the default or concise reporter first. Use verbose/full output only when the concise failure does not identify the failing test or stack.
