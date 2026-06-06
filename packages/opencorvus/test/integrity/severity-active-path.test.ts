@@ -233,7 +233,7 @@ test("reviewIntegrity active path emits severity discipline, lineage replay, and
     },
   })
 
-  expect(capturedPrompts).toHaveLength(4)
+  expect(capturedPrompts).toHaveLength(1)
   for (const prompt of capturedPrompts) {
     expect(prompt).toContain("## Severity Discipline")
     expect(prompt).toContain("code lines on the same defect surface changed after the prior attempt")
@@ -248,6 +248,6 @@ test("reviewIntegrity active path emits severity discipline, lineage replay, and
     expect(prompt).toContain("Requirement decision-log entries are not part of the initial integrity context.")
     expect(prompt).not.toContain("maturity_scope_pending")
   }
-  expect(capturedPrompts[3]).toContain("# Severity Reconciliation Pass")
-  expect(capturedPrompts[3]).toContain("keep it advisory")
+  expect(capturedPrompts[0]).toContain("# Severity Reconciliation Pass")
+  expect(capturedPrompts[0]).toContain("keep it advisory")
 })
