@@ -1,5 +1,5 @@
 import { createEffect, createMemo, createResource, createSignal, For, Match, Switch } from "solid-js"
-import { captureTaskBrowserPreviewEvidence, loadTaskBrowserPreviewTarget, saveTaskBrowserPreviewTarget, type BrowserPreviewViewportID } from "../services/browser-preview"
+import { captureTaskBrowserPreviewEvidence, loadTaskBrowserPreviewTarget, saveTaskBrowserPreviewTarget, type BrowserPreviewTarget, type BrowserPreviewViewportID } from "../services/browser-preview"
 import { t } from "../utils/i18n"
 import { Icon } from "./Icon"
 import { Button } from "./ui/Button"
@@ -8,7 +8,9 @@ import { Tab, Tabs } from "./ui/Tabs"
 export interface BrowserPreviewPanelProps {
   active: () => boolean
   directory: () => string
+  refreshKey: () => unknown
   taskID: () => string | undefined
+  onReady?: (target: BrowserPreviewTarget) => void
 }
 
 export function BrowserPreviewPanel(props: BrowserPreviewPanelProps) {
@@ -17,13 +19,14 @@ export function BrowserPreviewPanel(props: BrowserPreviewPanelProps) {
   const [viewportID, setViewportID] = createSignal<BrowserPreviewViewportID>("desktop")
   const [refreshToken, setRefreshToken] = createSignal(0)
   const [frameToken, setFrameToken] = createSignal(0)
+  const [lastAutoFocusedPreviewKey, setLastAutoFocusedPreviewKey] = createSignal("")
   const [verificationRequest, setVerificationRequest] = createSignal<{ taskID: string; targetID?: string; viewportID: BrowserPreviewViewportID; token: number }>()
   const [target] = createResource(
     () => {
       const taskID = props.taskID()
       const directory = props.directory()
-      if (!props.active() || !taskID || !directory) return undefined
-      return { taskID, directory, refreshToken: refreshToken() }
+      if (!taskID || !directory) return undefined
+      return { taskID, directory, refreshKey: props.refreshKey(), refreshToken: refreshToken() }
     },
     (scope) => loadTaskBrowserPreviewTarget(scope.taskID),
   )
@@ -32,8 +35,9 @@ export function BrowserPreviewPanel(props: BrowserPreviewPanelProps) {
     (request) => captureTaskBrowserPreviewEvidence({ taskID: request.taskID, targetID: request.targetID, viewportID: request.viewportID }),
   )
 
-  const currentTarget = createMemo(() => (props.active() && props.taskID() && props.directory() ? target() : undefined))
-  const currentTargetError = createMemo(() => (props.active() && props.taskID() && props.directory() ? target.error : undefined))
+  const panelActive = createMemo(() => props.active())
+  const currentTarget = createMemo(() => (props.taskID() && props.directory() ? target() : undefined))
+  const currentTargetError = createMemo(() => (props.taskID() && props.directory() ? target.error : undefined))
   const viewports = createMemo(() => currentTarget()?.viewports ?? [])
   const viewport = createMemo(() => viewports().find((item) => item.id === viewportID()) ?? viewports()[0])
   const frameUrl = createMemo(() => currentTarget()?.url)
@@ -42,6 +46,16 @@ export function BrowserPreviewPanel(props: BrowserPreviewPanelProps) {
     const resolved = currentTarget()
     if (resolved?.source === "task-artifact" && resolved.url) setDraftUrl(resolved.url)
     if (!props.taskID()) setDraftUrl("")
+  })
+
+  createEffect(() => {
+    const resolved = currentTarget()
+    const taskID = props.taskID()
+    if (!taskID || resolved?.status !== "ready" || !resolved.url) return
+    const previewKey = `${taskID}:${resolved.id ?? resolved.url}`
+    if (lastAutoFocusedPreviewKey() === previewKey) return
+    setLastAutoFocusedPreviewKey(previewKey)
+    props.onReady?.(resolved)
   })
 
   const submitUrl = (event: Event) => {
@@ -68,7 +82,7 @@ export function BrowserPreviewPanel(props: BrowserPreviewPanelProps) {
   }
 
   return (
-    <section class="browser-preview-panel" aria-label={t("browser_preview.title")}>
+    <section class="browser-preview-panel" aria-label={t("browser_preview.title")} data-active={String(panelActive())}>
       <form class="browser-preview-toolbar" onSubmit={submitUrl}>
         <label class="browser-preview-url-field">
           <Icon name="external-link" size={13} />

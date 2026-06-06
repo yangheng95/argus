@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, mock, test } from "bun:test"
-import { eq } from "drizzle-orm"
+import { and, eq } from "drizzle-orm"
 import fs from "node:fs/promises"
 import path from "node:path"
 import { EngineArtifactTable, EngineTaskTable } from "../../src/engine/engine.sql"
@@ -75,7 +75,7 @@ describe("browser preview routes", () => {
 
     const artifact = Database.use((db) =>
       db.select().from(EngineArtifactTable)
-        .where(eq(EngineArtifactTable.kind, "browser_preview_target"))
+        .where(and(eq(EngineArtifactTable.kind, "browser_preview_target"), eq(EngineArtifactTable.task_id, taskID)))
         .limit(1)
         .get(),
     )

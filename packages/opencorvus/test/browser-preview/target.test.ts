@@ -6,6 +6,7 @@ import { extractBrowserPreviewUrlFromText } from "../../src/browser-preview/extr
 import { persistBrowserPreviewTarget } from "../../src/browser-preview/persist"
 import { normalizeBrowserPreviewUrl, resolveBrowserPreviewTarget } from "../../src/browser-preview/target"
 import { Instance } from "../../src/project/instance"
+import { ProtocolStore } from "../../src/protocol/store"
 import { Database } from "../../src/storage/db"
 import { resetDatabase } from "../fixture/db"
 import { tmpdir } from "../fixture/fixture"
@@ -51,7 +52,7 @@ describe("browser preview target resolver", () => {
       },
     })
     const taskID = await seedTask(tmp.path)
-    const persisted = persistBrowserPreviewTarget({
+    const persisted = await persistBrowserPreviewTarget({
       taskID,
       url: "http://127.0.0.1:5173/task",
     })
@@ -67,6 +68,21 @@ describe("browser preview target resolver", () => {
     expect(target.source).toBe("task-artifact")
     expect(target.url).toBe("http://127.0.0.1:5173/task")
     expect(target.viewports.map((viewport) => viewport.id)).toEqual(["desktop", "tablet", "mobile"])
+  })
+
+  test("persisting a preview target emits a task update event for overlay refresh", async () => {
+    await using tmp = await tmpdir()
+    const taskID = await seedTask(tmp.path)
+
+    await persistBrowserPreviewTarget({
+      taskID,
+      url: "http://127.0.0.1:5173/task",
+    })
+
+    const events = ProtocolStore.listTaskEvents(taskID)
+    const event = events.find((item) => item.type === "task.updated" && item.source === "browser-preview.target")
+    expect(event?.payload?.summary).toBe("Browser preview target updated")
+    expect(event?.payload?.taskID).toBe(taskID)
   })
 
   test("does not resolve package metadata when the task has no saved target", async () => {

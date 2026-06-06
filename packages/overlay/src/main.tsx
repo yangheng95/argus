@@ -991,7 +991,18 @@ if (rightActivityToolbarEl) {
 
 const browserPreviewEl = document.getElementById("solidBrowserPreviewMount")
 if (browserPreviewEl) {
-  render(() => <BrowserPreviewPanel active={() => chatView() === "browser"} directory={activeDirectory} taskID={() => activeTaskID() || undefined} />, browserPreviewEl)
+  render(
+    () => (
+      <BrowserPreviewPanel
+        active={() => chatView() === "browser"}
+        directory={activeDirectory}
+        refreshKey={() => boardStore.boardUpdatedAt}
+        taskID={() => activeTaskID() || undefined}
+        onReady={() => selectRightActivity("browser")}
+      />
+    ),
+    browserPreviewEl,
+  )
 }
 
 // ── Mount: ConnectionBadge ──

@@ -20,17 +20,15 @@ export function extractBrowserPreviewUrlFromText(text: string): string | undefin
 export function persistBrowserPreviewTargetFromProcessOutput(input: {
   taskID?: string
   output: string
-}): PersistedBrowserPreviewTarget | undefined {
+}): Promise<PersistedBrowserPreviewTarget | undefined> {
   const taskID = input.taskID?.trim()
-  if (!taskID) return undefined
+  if (!taskID) return Promise.resolve(undefined)
   const url = extractBrowserPreviewUrlFromText(input.output)
-  if (!url) return undefined
-  try {
-    return persistBrowserPreviewTarget({ taskID, url })
-  } catch (error) {
+  if (!url) return Promise.resolve(undefined)
+  return persistBrowserPreviewTarget({ taskID, url }).catch((error) => {
     log.warn("failed to persist browser preview target from process output", { taskID, url, error })
     return undefined
-  }
+  })
 }
 
 function trimUrlToken(token: string): string {
