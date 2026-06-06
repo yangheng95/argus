@@ -12,6 +12,10 @@ import type { PermissionNext } from "../../src/permission/next"
 import { Truncate } from "../../src/tool/truncation"
 import { Agent } from "../../src/agent/agent"
 import { ProcessSupervisor } from "../../src/shell/process-supervisor"
+import { Database } from "../../src/storage/db"
+import { EngineTaskTable } from "../../src/engine/engine.sql"
+import { findLatestBrowserPreviewTarget } from "../../src/browser-preview/persist"
+import { resetDatabase } from "../fixture/db"
 
 const ctx = {
   sessionID: "ses_test",
@@ -240,6 +244,67 @@ describe("tool.bash", () => {
         }
       },
     })
+  })
+
+  test("background process output persists task browser preview target", async () => {
+    await resetDatabase()
+    try {
+      await using tmp = await tmpdir({ git: true })
+      const taskID = `tsk_bashpreview${Date.now()}`
+      await Instance.provide({
+        directory: tmp.path,
+        fn: async () => {
+          Database.use((db) =>
+            db.insert(EngineTaskTable).values({
+              id: taskID,
+              project_id: Instance.project.id,
+              title: "Preview task",
+              request: "Preview task",
+              source: "api",
+              time_created: Date.now(),
+              time_updated: Date.now(),
+            }).run(),
+          )
+
+          const restore = ProcessSupervisor.setFactoryForTest(async () => {
+            const stdout = new PassThrough()
+            queueMicrotask(() => {
+              stdout.write("  VITE v6.0.0 ready\n  ➜  Local:   http://localhost:5173/\n")
+            })
+            return {
+              pid: 9010,
+              stdin: null,
+              stdout,
+              stderr: new PassThrough(),
+              exited: new Promise<number>(() => {}),
+              terminate: async () => {},
+              dispose: async () => {},
+              unref: () => {},
+            }
+          })
+          try {
+            const bash = await BashTool.init()
+            await bash.execute(
+              {
+                command: "npm run dev",
+                description: "Start frontend dev server",
+                background: true,
+                timeout: 20,
+                leaseTimeout: 200,
+              },
+              { ...ctx, extra: { taskID } },
+            )
+
+            const persisted = findLatestBrowserPreviewTarget(taskID)
+            expect(persisted?.url).toBe("http://localhost:5173/")
+          } finally {
+            restore()
+          }
+        },
+      })
+    } finally {
+      await resetDatabase()
+    }
   })
 
   test("resolves relative workdir against project before spawning", async () => {
