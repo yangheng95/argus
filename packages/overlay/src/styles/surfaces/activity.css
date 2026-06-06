@@ -336,6 +336,8 @@
   position: relative;
   --tui-cell-width: calc(8px * var(--ui-scale));
   --tui-cell-height: calc(16px * var(--ui-scale));
+  --tui-default-background: color-mix(in srgb, var(--surface-inset) 78%, var(--surface-strong) 22%);
+  background: var(--tui-default-background);
   padding: calc(4px * var(--ui-scale));
   font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
   font-size: calc(13px * var(--ui-scale));

@@ -24,6 +24,7 @@ const ATTR_BOLD = 1 << 0
 const ATTR_DIM = 1 << 1
 const ATTR_ITALIC = 1 << 2
 const ATTR_UNDERLINE = 1 << 3
+const TUI_DEFAULT_BACKGROUND = "var(--tui-default-background)"
 type TuiThemeMode = "dark" | "light"
 type TuiInputPayload = Omit<Parameters<typeof sendTuiEmbedInput>[0], "directory">
 
@@ -32,8 +33,22 @@ export interface CodingAgentTuiPanelProps {
   directory: Accessor<string>
 }
 
+function isDefaultTuiBackground(color: string) {
+  const text = color.trim().toLowerCase()
+  if (text === "transparent") return true
+  const match = text.match(/^rgba?\((\d+),\s*(\d+),\s*(\d+)(?:,\s*([0-9.]+))?\)$/)
+  if (!match) return false
+  const [, red, green, blue, alpha] = match
+  if (alpha !== undefined && Number(alpha) <= 0) return true
+  return Number(red) <= 12 && Number(green) <= 12 && Number(blue) <= 12
+}
+
+function tuiBackground(color: string) {
+  return isDefaultTuiBackground(color) ? TUI_DEFAULT_BACKGROUND : color
+}
+
 function spanStyle(span: EmbeddedTuiSpan) {
-  const styles = [`color: ${span.fg}`, `background-color: ${span.bg}`]
+  const styles = [`color: ${span.fg}`, `background-color: ${tuiBackground(span.bg)}`]
   if (span.attributes & ATTR_BOLD) styles.push("font-weight: 700")
   if (span.attributes & ATTR_DIM) styles.push("opacity: 0.72")
   if (span.attributes & ATTR_ITALIC) styles.push("font-style: italic")
@@ -42,7 +57,8 @@ function spanStyle(span: EmbeddedTuiSpan) {
 }
 
 function lineBackground(line: EmbeddedTuiLine) {
-  return line.spans.find((span) => span.bg)?.bg
+  const bg = line.spans.find((span) => span.bg)?.bg
+  return bg ? tuiBackground(bg) : undefined
 }
 
 function lineStyle(line: EmbeddedTuiLine) {
