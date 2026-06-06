@@ -13355,6 +13355,7 @@ export type TuiEmbedStartData = {
   body?: {
     cols?: number
     rows?: number
+    mode?: "dark" | "light"
     agent?: string
     model?: string
     prompt?: string

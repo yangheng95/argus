@@ -28718,6 +28718,14 @@
                     "minimum": 5,
                     "maximum": 120
                   },
+                  "mode": {
+                    "default": "dark",
+                    "type": "string",
+                    "enum": [
+                      "dark",
+                      "light"
+                    ]
+                  },
                   "agent": {
                     "type": "string"
                   },

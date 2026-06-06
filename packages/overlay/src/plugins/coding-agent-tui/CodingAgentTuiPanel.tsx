@@ -47,8 +47,16 @@ function tuiBackground(color: string) {
   return isDefaultTuiBackground(color) ? TUI_DEFAULT_BACKGROUND : color
 }
 
+function spanBackground(span: EmbeddedTuiSpan) {
+  return span.text.trim() ? span.bg : tuiBackground(span.bg)
+}
+
+function lineHasContent(line: EmbeddedTuiLine) {
+  return line.spans.some((span) => span.text.trim())
+}
+
 function spanStyle(span: EmbeddedTuiSpan) {
-  const styles = [`color: ${span.fg}`, `background-color: ${tuiBackground(span.bg)}`]
+  const styles = [`color: ${span.fg}`, `background-color: ${spanBackground(span)}`]
   if (span.attributes & ATTR_BOLD) styles.push("font-weight: 700")
   if (span.attributes & ATTR_DIM) styles.push("opacity: 0.72")
   if (span.attributes & ATTR_ITALIC) styles.push("font-style: italic")
@@ -58,7 +66,8 @@ function spanStyle(span: EmbeddedTuiSpan) {
 
 function lineBackground(line: EmbeddedTuiLine) {
   const bg = line.spans.find((span) => span.bg)?.bg
-  return bg ? tuiBackground(bg) : undefined
+  if (!bg) return undefined
+  return lineHasContent(line) ? bg : tuiBackground(bg)
 }
 
 function lineStyle(line: EmbeddedTuiLine) {
@@ -66,16 +75,8 @@ function lineStyle(line: EmbeddedTuiLine) {
   return bg ? `background-color: ${bg}` : ""
 }
 
-function frameBackground(frame: EmbeddedTuiFrame) {
-  for (const line of frame.lines) {
-    const bg = lineBackground(line)
-    if (bg) return bg
-  }
-  return "transparent"
-}
-
 function frameStyle(frame: EmbeddedTuiFrame) {
-  return `--tui-cols: ${frame.cols}; --tui-rows: ${frame.rows}; background-color: ${frameBackground(frame)}`
+  return `--tui-cols: ${frame.cols}; --tui-rows: ${frame.rows}; background-color: ${TUI_DEFAULT_BACKGROUND}`
 }
 
 function tuiThemeMode(): TuiThemeMode {

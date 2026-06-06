@@ -50,6 +50,7 @@ function line(text: string, fg = "rgb(229, 231, 235)", bg = "rgb(10, 10, 10)", a
 function embedInfo(text: string, input = "") {
   const lines = [
     line("OpenCorvus coding assistant", "rgb(125, 211, 252)", "rgb(10, 10, 10)", 1),
+    line(" ".repeat(100), "rgb(229, 231, 235)", "rgb(10, 10, 10)"),
     line("project: D:/overlay/workspace/app", "rgb(209, 213, 219)"),
     line("todo: accept a Tank Battle build request through overlay TUI", "rgb(253, 224, 71)"),
     ...input.split("\n").map((item) => line(item, "rgb(244, 244, 245)")),
@@ -190,6 +191,7 @@ test("right sidebar TUI host panel accepts the Tank Battle build case through Op
       const frameLines = document.querySelector<HTMLElement>(".tui-host-frame-lines")
       const firstLine = document.querySelector<HTMLElement>(".tui-host-frame-line")
       const firstSpan = document.querySelector<HTMLElement>(".tui-host-frame-line > span")
+      const emptyLine = Array.from(document.querySelectorAll<HTMLElement>(".tui-host-frame-line")).find((line) => !line.textContent?.trim())
       return {
         rightActive: document.querySelector<HTMLElement>("#rightPanelTui")?.dataset.active,
         title: document.querySelector<HTMLElement>("#rightPanelTitle")?.textContent,
@@ -204,6 +206,7 @@ test("right sidebar TUI host panel accepts the Tank Battle build case through Op
         frameBackground: frameLines ? getComputedStyle(frameLines).backgroundColor : "",
         firstLineBackground: firstLine ? getComputedStyle(firstLine).backgroundColor : "",
         firstSpanBackground: firstSpan ? getComputedStyle(firstSpan).backgroundColor : "",
+        emptyLineBackground: emptyLine ? getComputedStyle(emptyLine).backgroundColor : "",
         terminalText: terminal.textContent ?? "",
         errorText: document.querySelector<HTMLElement>(".tui-host-error")?.textContent ?? "",
       }
@@ -231,8 +234,9 @@ test("right sidebar TUI host panel accepts the Tank Battle build case through Op
     expect(layout.terminalHeight).toBeGreaterThan(400)
     expect(layout.terminalBackground).not.toBe("rgba(0, 0, 0, 0)")
     expect(layout.frameBackground).not.toBe("rgb(10, 10, 10)")
-    expect(layout.firstLineBackground).not.toBe("rgb(10, 10, 10)")
-    expect(layout.firstSpanBackground).not.toBe("rgb(10, 10, 10)")
+    expect(layout.firstLineBackground).toBe("rgb(10, 10, 10)")
+    expect(layout.firstSpanBackground).toBe("rgb(10, 10, 10)")
+    expect(layout.emptyLineBackground).not.toBe("rgb(10, 10, 10)")
 
     await page.screenshot({ path: screenshotPath, fullPage: false })
     const png = readFileSync(screenshotPath)
