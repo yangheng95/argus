@@ -206,6 +206,10 @@ const [rightActivity, setRightActivity] = createSignal<RightActivity>(DEFAULT_RI
 const [chatView, setChatView] = createSignal<ChatView>(DEFAULT_CHAT_VIEW)
 
 function selectRightActivity(activity: RightActivity) {
+  if (settingsStore.rightPanelCollapsed) {
+    setSettingsStore("rightPanelCollapsed", false)
+    saveSettings()
+  }
   setRightActivity(activity)
   setChatView(activity === "inspector" ? "conversation" : activity)
 }

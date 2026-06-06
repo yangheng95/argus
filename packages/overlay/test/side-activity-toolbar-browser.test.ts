@@ -173,6 +173,31 @@ test("side activity toolbar switches bound panels and survives collapse", async 
     expect(collapsed.rightToolbar.height).toBeGreaterThan(300)
     expect(collapsed.leftContent.display).toBe("none")
     expect(collapsed.rightContent.display).toBe("none")
+
+    await clickButton('[data-ui="side-activity-button"][data-side="right"][data-activity="inspector"]')
+    await page.waitForFunction(() => localStorage.getItem("oc_right_panel_collapsed") === "false")
+    const reopened = await page.evaluate(() => {
+      const sections = document.querySelector<HTMLElement>("#sections")
+      const content = document.querySelector<HTMLElement>("#sections .side-panel-content")
+      const inspectorButton = document.querySelector<HTMLElement>(
+        '[data-ui="side-activity-button"][data-side="right"][data-activity="inspector"]',
+      )
+      if (!sections || !content || !inspectorButton) throw new Error("Missing right panel activity nodes")
+      return {
+        collapsed: sections.dataset.collapsed || "",
+        contentDisplay: getComputedStyle(content).display,
+        sectionsWidth: Math.round(sections.getBoundingClientRect().width),
+        inspectorButtonActive: inspectorButton.dataset.active || "",
+        persisted: localStorage.getItem("oc_right_panel_collapsed") || "",
+      }
+    })
+    expect(reopened).toMatchObject({
+      collapsed: "false",
+      contentDisplay: "flex",
+      inspectorButtonActive: "true",
+      persisted: "false",
+    })
+    expect(reopened.sectionsWidth).toBeGreaterThan(300)
   } finally {
     await browser.close()
     server.stop(true)
