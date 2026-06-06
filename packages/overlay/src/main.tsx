@@ -28,7 +28,6 @@ import { FileEditorPane } from "./components/FileEditorPane"
 import { FileChangesPanel } from "./components/FileChangesPanel"
 import { BrowserPreviewPanel } from "./components/BrowserPreviewPanel"
 import { SideActivityToolbar, type SideActivity } from "./components/SideActivityToolbar"
-import { Tab, Tabs } from "./components/ui/Tabs"
 import { codingAgentTuiPlugin } from "./plugins/coding-agent-tui"
 import { fileWorkbenchOpen } from "./services/file-workbench"
 import type { DiffTarget } from "./services/diff"
@@ -169,7 +168,7 @@ const [workspaceOpen, setWorkspaceOpen] = createSignal(false)
 const [workspaceTarget, setWorkspaceTarget] = createSignal<DiffTarget>({ filePath: "" })
 
 type LeftActivity = "tasks" | "explorer" | "changes"
-type RightActivity = "inspector"
+type RightActivity = typeof codingAgentTuiPlugin.id | "browser" | "inspector"
 type ChatView = "conversation" | typeof codingAgentTuiPlugin.id | "browser"
 
 const DEFAULT_LEFT_ACTIVITY: LeftActivity = "tasks"
@@ -182,12 +181,10 @@ const LEFT_ACTIVITIES: readonly SideActivity<LeftActivity>[] = [
   { id: "changes", icon: "file-document", labelKey: "section.files" },
 ]
 
-const RIGHT_ACTIVITIES: readonly SideActivity<RightActivity>[] = []
-
-const CHAT_VIEWS: ReadonlyArray<{ id: ChatView; labelKey: string }> = [
-  { id: "conversation", labelKey: "chat.title" },
-  { id: codingAgentTuiPlugin.id, labelKey: codingAgentTuiPlugin.labelKey },
-  { id: "browser", labelKey: "browser_preview.title" },
+const RIGHT_ACTIVITIES: readonly SideActivity<RightActivity>[] = [
+  codingAgentTuiPlugin.activity,
+  { id: "browser", icon: "inspect", labelKey: "browser_preview.title" },
+  { id: "inspector", icon: "panel-right", labelKey: "sections.title" },
 ]
 
 const LEFT_ACTIVITY_LABEL_KEYS: Record<LeftActivity, string> = {
@@ -196,9 +193,20 @@ const LEFT_ACTIVITY_LABEL_KEYS: Record<LeftActivity, string> = {
   changes: "section.files",
 }
 
+const CHAT_VIEW_LABEL_KEYS: Record<ChatView, string> = {
+  conversation: "chat.title",
+  [codingAgentTuiPlugin.id]: codingAgentTuiPlugin.labelKey,
+  browser: "browser_preview.title",
+}
+
 const [leftActivity, setLeftActivity] = createSignal<LeftActivity>(DEFAULT_LEFT_ACTIVITY)
 const [rightActivity, setRightActivity] = createSignal<RightActivity>(DEFAULT_RIGHT_ACTIVITY)
 const [chatView, setChatView] = createSignal<ChatView>(DEFAULT_CHAT_VIEW)
+
+function selectRightActivity(activity: RightActivity) {
+  setRightActivity(activity)
+  setChatView(activity === "inspector" ? "conversation" : activity)
+}
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return !!value && typeof value === "object" && !Array.isArray(value)
@@ -692,31 +700,6 @@ disposers.push(
 
 // ── Mount: Conversation ──
 
-const chatViewTabsMount = document.getElementById("solidChatViewTabs")
-if (chatViewTabsMount) {
-  chatViewTabsMount.innerHTML = ""
-  render(
-    () => (
-      <Tabs size="md" tone="neutral" value={chatView()} onValueChange={(value) => setChatView(value as ChatView)} aria-label={t("chat.title")} data-ui="chat-view-tabs">
-        {CHAT_VIEWS.map((view) => (
-          <Tab
-            value={view.id}
-            active={chatView() === view.id}
-            size="md"
-            tone="neutral"
-            data-ui="chat-view-tab"
-            data-chat-view-tab={view.id}
-            onClick={() => setChatView(view.id)}
-          >
-            {t(view.labelKey)}
-          </Tab>
-        ))}
-      </Tabs>
-    ),
-    chatViewTabsMount,
-  )
-}
-
 const chatScroll = document.getElementById("chatScroll")
 if (chatScroll) {
   chatScroll.innerHTML = ""
@@ -989,7 +972,7 @@ if (rightActivityToolbarEl) {
         activities={RIGHT_ACTIVITIES}
         active={rightActivity}
         ariaLabelKey="activity.right"
-        onSelect={setRightActivity}
+        onSelect={selectRightActivity}
         trailing={<RightPanelHeaderCollapseControl />}
       />
     ),
@@ -1223,7 +1206,7 @@ disposers.push(
     // click remains free for future use. The same button flashes a "已复制"
     // hint via a transient `data-copied` attribute.
     {
-      const title = document.querySelector('[data-chat-view-tab="conversation"]') as HTMLElement | null
+      const title = document.querySelector("#chatViewTitle") as HTMLElement | null
       if (title) {
         title.style.cursor = "copy"
         title.title = "双击复制调试信息 (task id / directory / session / run / worktrees + SQL)"
@@ -1247,7 +1230,7 @@ disposers.push(
             await navigator.clipboard.writeText(blob)
             flash("已复制")
           } catch (err) {
-            console.error("[chat-view-tab dblclick] clipboard write failed", err)
+            console.error("[chat-view-title dblclick] clipboard write failed", err)
             flash("复制失败")
           }
         })
@@ -1295,11 +1278,13 @@ disposers.push(
 
     createEffect(() => {
       const active = chatView()
+      const title = document.getElementById("chatViewTitle")
       const bodies: Record<ChatView, HTMLElement | null> = {
         conversation: document.getElementById("chatMessagePane"),
         [codingAgentTuiPlugin.id]: document.getElementById("chatTuiPane"),
         browser: document.getElementById("chatBrowserPreviewPane"),
       }
+      if (title) title.textContent = t(CHAT_VIEW_LABEL_KEYS[active])
       for (const [view, body] of Object.entries(bodies)) {
         if (body) body.dataset.active = String(view === active)
       }

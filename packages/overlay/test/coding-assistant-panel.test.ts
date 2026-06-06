@@ -16,7 +16,7 @@ test("chat view TUI tab is the project-bound OpenTUI runtime activity", () => {
   const main = readText("src/main.tsx")
   const css = readText("src/styles/surfaces/activity.css")
 
-  expect(html).toContain('id="solidChatViewTabs"')
+  expect(html).toContain('id="chatViewTitle"')
   expect(html).toContain('id="chatTuiPane"')
   expect(html).toContain('id="solidTuiHostMount"')
   expect(html).toContain('data-right-activity="inspector"')
@@ -29,7 +29,8 @@ test("chat view TUI tab is the project-bound OpenTUI runtime activity", () => {
   expect(main).toContain('const DEFAULT_CHAT_VIEW: ChatView = "conversation"')
   expect(main).toContain('const DEFAULT_RIGHT_ACTIVITY: RightActivity = "inspector"')
   expect(main).toContain('import { codingAgentTuiPlugin } from "./plugins/coding-agent-tui"')
-  expect(main).toContain("CHAT_VIEWS")
+  expect(main).toContain("codingAgentTuiPlugin.activity")
+  expect(main).toContain("selectRightActivity")
   expect(main).toContain("const CodingAgentTuiPanel = codingAgentTuiPlugin.Panel")
   expect(main).toContain("chatView() === codingAgentTuiPlugin.id")
   expect(main).toContain("directory={activeDirectory}")
@@ -37,7 +38,7 @@ test("chat view TUI tab is the project-bound OpenTUI runtime activity", () => {
   expect(plugin).toContain('id: CODING_AGENT_TUI_ACTIVITY_ID')
   expect(plugin).toContain('bodyId: "chatTuiPane"')
   expect(plugin).toContain('mountId: "solidTuiHostMount"')
-  expect(main).toContain('document.getElementById("solidChatViewTabs")')
+  expect(main).toContain('document.getElementById("chatViewTitle")')
   expect(main).toContain('document.getElementById("chatTuiPane")')
   expect(main).not.toContain("<CodingAssistantPanel")
   expect(main).not.toContain("rightPanelTab")
@@ -79,6 +80,8 @@ test("chat view TUI tab is the project-bound OpenTUI runtime activity", () => {
   expect(css).toContain(".chat-tui-activity")
   expect(css).toContain(".tui-host-panel")
   expect(css).toContain(".tui-host-terminal")
+  expect(main).toContain('{ id: "browser", icon: "inspect", labelKey: "browser_preview.title" }')
+  expect(main).toContain('{ id: "inspector", icon: "panel-right", labelKey: "sections.title" }')
 })
 
 test("retired browser-side coding assistant service does not remain as a right-sidebar TUI double source", () => {
