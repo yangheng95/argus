@@ -187,6 +187,9 @@ test("right sidebar TUI host panel accepts the Tank Battle build case through Op
       if (!panel || !terminal) throw new Error("Missing TUI host panel")
       const panelRect = panel.getBoundingClientRect()
       const terminalRect = terminal.getBoundingClientRect()
+      const frameLines = document.querySelector<HTMLElement>(".tui-host-frame-lines")
+      const firstLine = document.querySelector<HTMLElement>(".tui-host-frame-line")
+      const firstSpan = document.querySelector<HTMLElement>(".tui-host-frame-line > span")
       return {
         rightActive: document.querySelector<HTMLElement>("#rightPanelTui")?.dataset.active,
         title: document.querySelector<HTMLElement>("#rightPanelTitle")?.textContent,
@@ -198,6 +201,9 @@ test("right sidebar TUI host panel accepts the Tank Battle build case through Op
         terminalWidth: Math.round(terminalRect.width),
         terminalHeight: Math.round(terminalRect.height),
         terminalBackground: getComputedStyle(terminal).backgroundColor,
+        frameBackground: frameLines ? getComputedStyle(frameLines).backgroundColor : "",
+        firstLineBackground: firstLine ? getComputedStyle(firstLine).backgroundColor : "",
+        firstSpanBackground: firstSpan ? getComputedStyle(firstSpan).backgroundColor : "",
         terminalText: terminal.textContent ?? "",
         errorText: document.querySelector<HTMLElement>(".tui-host-error")?.textContent ?? "",
       }
@@ -224,6 +230,9 @@ test("right sidebar TUI host panel accepts the Tank Battle build case through Op
     expect(layout.terminalWidth).toBeGreaterThan(620)
     expect(layout.terminalHeight).toBeGreaterThan(400)
     expect(layout.terminalBackground).not.toBe("rgba(0, 0, 0, 0)")
+    expect(layout.frameBackground).not.toBe("rgb(10, 10, 10)")
+    expect(layout.firstLineBackground).not.toBe("rgb(10, 10, 10)")
+    expect(layout.firstSpanBackground).not.toBe("rgb(10, 10, 10)")
 
     await page.screenshot({ path: screenshotPath, fullPage: false })
     const png = readFileSync(screenshotPath)
