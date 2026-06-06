@@ -74,6 +74,13 @@ Consumers:
 
 This is a hard precondition, not a later cleanup. The Coding Agent TUI package must not import from `packages/opencorvus/src`.
 
+The extracted package must also be independent internally. `packages/tui-app/src` must not import `@/` or `packages/opencorvus/src`. Existing core-dependent calls from the current TUI tree must be split in one of two ways:
+
+1. Move genuinely reusable types/utilities/config readers into public packages consumed by both `opencorvus` and `tui-app`.
+2. Convert host-owned capabilities into explicit injected adapters passed through `TuiRootInput`.
+
+Examples of injected adapters include config loading, instance directory/worktree data, event source, SDK client creation, local filesystem helpers, command execution hooks, and platform terminal helpers. The `tui-app` package may depend on `@opencorvus-ai/sdk`, `@opencorvus-ai/plugin/tui`, `@opencorvus-ai/util`, and OpenTUI packages, but not on private `opencorvus` source aliases.
+
 ### Coding Agent TUI Package
 
 Create a workspace package:
@@ -132,6 +139,15 @@ packages/overlay/src/plugins/
 ```
 
 `packages/overlay/src/main.tsx` imports only the generic registry. It must not import `@opencorvus-ai/coding-agent-tui/overlay` or any plugin-specific module directly.
+
+The overlay shell must also remove static plugin DOM. `packages/overlay/src/index.html` must not contain `chatTuiPane`, `solidTuiHostMount`, or any coding-agent-tui-specific pane/mount ID. The shell owns generic outlets only, for example:
+
+```text
+rightActivityOutlet
+chatPluginOutlet
+```
+
+Each overlay plugin contribution declares its own activity ID, label key, mount behavior, CSS bundle, i18n keys, and render function through the registry. The registry mounts plugin bodies into generic outlets at runtime. Shell CSS and i18n files must not contain coding-agent-tui-specific selectors or strings unless they are generated from the plugin manifest.
 
 Product packaging owns the default plugin list. A generated registry file may import `@opencorvus-ai/coding-agent-tui/overlay`, but that generated file is packaging output, not feature logic. The generated registry must be the single source for default overlay plugins.
 
@@ -208,6 +224,8 @@ In `packages/opencorvus/src/server/routes/plugin.ts`:
 5. Return `PluginServiceRegistrationError` when the service ID is known but failed to load or register.
 6. Do not implement any feature-specific behavior in this router.
 
+Dispatch must clone the incoming request URL so the plugin app sees `/embed/status?x=1`, not `/plugin/coding-agent-tui/embed/status?x=1`. It must preserve method, headers, query string, body, and abort signal. Tests must cover path rewrite and body/header preservation.
+
 In `packages/opencorvus/src/server/routes/app.ts`:
 
 ```ts
@@ -224,7 +242,7 @@ In `packages/opencorvus/src/server/error-handler.ts`, add explicit status mappin
 | `PluginServiceRegistrationError` | `500` |
 | `PluginServiceDuplicateIDError` | `500` |
 
-The route inventory checker must understand that `/plugin/:id/*` is a dynamic raw dispatch entry. Plugin internals do not enter `Server.routeInventoryApp()`, OpenAPI, or the generated SDK. If `api:routes-check` reports the wildcard, add only the wildcard route to `RAW_RUNTIME_ROUTES_WITHOUT_OPENAPI`; do not add feature-specific plugin paths.
+The route inventory checker must understand that `/plugin/:id/*` is a dynamic raw dispatch entry. Plugin internals do not enter `Server.routeInventoryApp()`, OpenAPI, or the generated SDK. Because `Server.routeInventoryApp()` filters `ALL` routes and `api:routes-check` skips paths containing `*`, the implementation should add explicit tests that the wildcard route exists and that OpenAPI/SDK do not contain plugin internals. Do not add feature-specific plugin paths to OpenAPI/SDK.
 
 ## Coding Agent TUI Backend Plugin
 
@@ -273,19 +291,42 @@ export type CodingAgentTuiTarget = {
 }
 ```
 
-Start/status/input/resize/stop requests are keyed by `{ directory, target }`. Responses include the same `target` and evidence metadata:
+Targets and evidence are persisted through the existing task artifact model, following `packages/opencorvus/src/browser-preview/persist.ts`.
+
+Required artifact kinds:
+
+```ts
+export const CODING_AGENT_TUI_TARGET_KIND = "coding_agent_tui_target"
+export const CODING_AGENT_TUI_FRAME_EVIDENCE_KIND = "coding_agent_tui_frame_evidence"
+```
+
+The backend service creates or resolves `CODING_AGENT_TUI_TARGET_KIND` before starting a renderer. `targetID` must be a persisted `EngineArtifactTable.id` for the same `taskID`; caller-supplied target IDs are validated by lookup, not trusted. The renderer session key is the persisted `{ taskID, targetID }`.
+
+Each captured frame writes `CODING_AGENT_TUI_FRAME_EVIDENCE_KIND` with:
+
+| Field | Source |
+| --- | --- |
+| `task_id` | Request target task ID. |
+| `payload.target_id` | Persisted target artifact ID. |
+| `payload.frame_hash` | Hash of serialized frame text/spans. |
+| `payload.capture` | Serialized frame or reference to stored frame payload. |
+| `payload.diagnostics` | Worker diagnostics visible to the UI. |
+| `payload.time_completed` | Capture timestamp. |
+
+Start/status/input/resize/stop requests are keyed by `{ directory, target }`. Responses include the same persisted `target`, the latest persisted evidence ID, and evidence metadata:
 
 ```ts
 export type CodingAgentTuiEvidence = {
   kind: "opentui-frame"
   taskID: string
   targetID: string
+  evidenceID: string
   capturedAt: number
   frameHash: string
 }
 ```
 
-The overlay renders only the frame returned for the requested target. It must not use local signal/query overrides or a project-wide singleton frame to impersonate task-scoped evidence.
+The overlay renders only the frame returned for the requested persisted target and evidence. It must not create local target IDs, use local signal/query overrides, or use a project-wide singleton frame to impersonate task-scoped evidence.
 
 The worker lifecycle moves from `packages/opencorvus/src/tui/embedded.ts` to `packages/coding-agent-tui/src/backend/server/embedded.ts`.
 
@@ -293,17 +334,36 @@ The worker moves from `packages/opencorvus/src/tui/embedded-worker.tsx` to `pack
 
 ## Default Availability
 
-Default availability must not be implemented by a hardcoded core import.
+Default availability must not be implemented by a hardcoded core import or by separate backend/overlay enablement lists.
+
+Use one plugin manifest as the single source for backend service, overlay contribution, resources, diagnostics, and packaging.
+
+```ts
+export type OpenCorvusPluginManifest = {
+  packageSpecifier: string
+  serviceID: string
+  backendExport: string
+  overlayExport: string
+  resources: Array<{
+    kind: "worker" | "asset" | "runtime"
+    path: string
+  }>
+}
+```
+
+`ID` means identifier. Code adding `serviceID` or `PluginServiceDuplicateIDError` must include this abbreviation comment near the public type or error definition.
+
+The backend config loader, overlay generated registry, service diagnostics, and packaging resource collector all read the same manifest. A package must not be enabled in overlay without the matching backend manifest entry, and the backend must not expose a plugin service whose overlay contribution is missing from the same packaged profile.
 
 Acceptable options:
 
 | Option | Decision |
 | --- | --- |
-| Project/global config includes `@opencorvus-ai/coding-agent-tui`. | Preferred for a real plugin. |
-| Overlay packaging installs/enables the plugin in its managed profile. | Acceptable product packaging layer. |
+| Project/global config references the plugin manifest package. | Preferred for a real plugin. |
+| Overlay packaging installs/enables the manifest in its managed profile. | Acceptable product packaging layer. |
 | `Plugin.INTERNAL_PLUGINS` imports the plugin directly. | Not acceptable for the final target because core would know the concrete plugin. |
 
-For local development, use config-based enablement with the workspace package specifier or a file URL generated by the package manager. Tests may use a fixture plugin path.
+For local development, use config-based enablement with the workspace package manifest specifier or a file URL generated by the package manager. Tests may use a fixture manifest path.
 
 ## Packaging And Sidecar Resolution
 
@@ -317,8 +377,12 @@ Required package changes:
 | `packages/opencorvus/package.json` | Depend on `@opencorvus-ai/tui-app`; do not depend on `@opencorvus-ai/coding-agent-tui`. |
 | `packages/overlay/package.json` | Depend on the overlay plugin registry input or `@opencorvus-ai/coding-agent-tui` only through packaging-generated plugin manifest wiring. |
 | `packages/plugin/package.json` | Add direct `hono` dependency if `Hono` remains the public service app type. |
-| `script/package-local.ts` and overlay packaging scripts | Package the plugin backend, overlay contribution, worker entry, and runtime dependencies. |
-| `packages/overlay/src-tauri` resource config | Include the plugin resources needed by the managed overlay profile. |
+| `script/package-local.ts` | Include plugin packages and manifests in local package output. |
+| `packages/overlay/script/build.ts` | Stage plugin manifest/resources alongside the embedded opencorvus server dist before Tauri build. |
+| `packages/overlay/script/build-docker.ts` | Mirror the local build resource staging for release builds. |
+| `packages/overlay/src-tauri/build.rs` | Archive the plugin manifest, backend entry, overlay contribution, worker entry, shared TUI app runtime, and required node_modules files into the embedded sidecar payload. |
+| `packages/overlay/src-tauri/src/main.rs` | Verify extracted embedded payload completeness before spawning the sidecar. |
+| `packages/overlay/src-tauri/tauri.conf.json` | Keep the resource pattern aligned with the staged embedded payload. |
 | Worker resolution | Resolve the worker entry from the plugin package location, not from `packages/opencorvus/src/tui`. |
 
 Verification must include inspecting the packaged artifact or generated resource list for:
@@ -327,6 +391,23 @@ Verification must include inspecting the packaged artifact or generated resource
 2. `@opencorvus-ai/coding-agent-tui/overlay` contribution entry.
 3. The OpenTUI worker entry.
 4. The shared `@opencorvus-ai/tui-app` runtime.
+5. The plugin manifest.
+6. Required runtime dependencies under deterministic relative paths.
+
+Expected embedded archive relative paths include:
+
+```text
+plugins/coding-agent-tui/plugin.json
+plugins/coding-agent-tui/backend/plugin.js
+plugins/coding-agent-tui/overlay/index.js
+plugins/coding-agent-tui/backend/server/embedded-worker.js
+plugins/tui-app/app.js
+node_modules/@opentui/core/
+node_modules/@opentui/solid/
+node_modules/@opentui/keymap/
+```
+
+Exact file extensions may differ after bundling, but the manifest must list the concrete paths and Rust completeness checks must validate every listed required resource. Missing resources must produce a visible startup error before attempting to spawn a sidecar process.
 
 The packaged overlay must fail visibly when the plugin package is absent. It must not silently fall back to `/tui/embed/*` or a built-in core renderer.
 
@@ -347,6 +428,7 @@ Remove these imports/routes:
 | `packages/opencorvus/src/server/routes/tui.ts` | Remove `EmbeddedTui` import and all `/embed/*` routes. |
 | `packages/opencorvus/src/server/routes/app.ts` | Add generic `/plugin` route. |
 | `packages/overlay/src/main.tsx` | Remove direct `codingAgentTuiPlugin` import; load generic overlay plugin registry. |
+| `packages/overlay/src/index.html` | Remove static `chatTuiPane`, `solidTuiHostMount`, and coding-agent-tui-specific pane markup. |
 | `packages/overlay/test/coding-assistant-panel.test.ts` | Stop asserting a direct coding-agent-tui import from overlay main. |
 | `packages/sdk/openapi.json` | Remove `/tui/embed/*` entries after route regeneration. |
 | `packages/sdk/js/src/gen/sdk.gen.ts` | Remove generated `/tui/embed/*` calls after SDK regeneration. |
@@ -364,12 +446,14 @@ Add tests under `packages/opencorvus/test/plugin` or `packages/opencorvus/test/s
 | Test | Assertion |
 | --- | --- |
 | Registers plugin service route | A fixture plugin with `service.id = "fixture"` handles `/plugin/fixture/ping`. |
+| Wildcard dispatch rewrite | `/plugin/fixture/ping?x=1` reaches plugin app as `/ping?x=1` with method, body, headers, and abort signal preserved. |
 | Unknown plugin service is visible error | `/plugin/missing/ping` returns a named error, not 404 from a hidden fallthrough. |
 | Unknown plugin status mapping | `PluginServiceNotFoundError` maps to 404. |
 | Registration failure status mapping | `PluginServiceRegistrationError` maps to 500 with the stored diagnostic message. |
 | Duplicate service ID fails | Two plugins registering the same `id` fail initialization visibly. |
 | Project directory required | `/plugin/fixture/ping` requires `?directory=` or `x-opencorvus-directory`. |
 | Core route inventory stays clean | Only the undocumented wildcard dispatch is exempted; plugin internals do not leak into generated SDK as static core routes. |
+| OpenAPI and SDK stay clean | Generated OpenAPI/SDK contain no plugin internals even when fixture plugin service exists. |
 
 ### Coding Agent TUI Plugin Tests
 
@@ -402,6 +486,7 @@ Required assertions:
 | Service calls | All requests use the canonical contract path builder for `plugin/coding-agent-tui/embed/*`. |
 | No core embed route | Tests must not contain `tui/embed`. |
 | No direct overlay import | Overlay main imports only the generic plugin registry, not `codingAgentTuiPlugin`. |
+| No static plugin DOM | Overlay HTML/source contains no `chatTuiPane`, `solidTuiHostMount`, or coding-agent-tui-specific body ID. |
 | Overlay contribution package | The coding-agent-tui overlay contribution is exported from `@opencorvus-ai/coding-agent-tui/overlay`. |
 | Visible failure | Named plugin service errors render in the panel without leaking secret fields. |
 | Visual panel | Mock server uses plugin route namespace, task target, and evidence metadata while rendering a real captured frame. |
@@ -415,10 +500,24 @@ Add guards:
 | Core must not import plugin implementation | `packages/opencorvus/src` contains no `coding-agent-tui` import. |
 | Core must not contain embed renderer | `packages/opencorvus/src/tui` contains no `embedded.ts` or `embedded-worker.tsx`. |
 | Plugin must not import OpenCorvus source internals | `packages/coding-agent-tui/src` contains no import from `packages/opencorvus/src` or `@/`. |
+| TUI app package must not import OpenCorvus source internals | `packages/tui-app/src` contains no import from `packages/opencorvus/src` or `@/`. |
 | Overlay main must not import concrete plugin | `packages/overlay/src/main.tsx` contains no `codingAgentTuiPlugin` or `coding-agent-tui` import. |
+| Overlay static shell must not contain plugin DOM | `packages/overlay/src/index.html` contains no `chatTuiPane`, `solidTuiHostMount`, or coding-agent-tui-specific body ID. |
 | SDK must not expose `/tui/embed/*` | Generated SDK and OpenAPI contain no `/tui/embed`. |
 | Overlay must not call `/tui/embed/*` | Overlay source contains no `tui/embed`. |
 | Contract path source is single | Overlay/backend use `codingAgentTuiPath`; no duplicate string builder exists. |
+| Manifest source is single | Backend config, overlay registry generation, diagnostics, and packaging read the same plugin manifest. |
+| Evidence source is persisted | Coding-agent-tui targets and frame evidence are stored in task artifacts, not overlay-local state. |
+
+### Packaging Tests
+
+Add tests or scripts that can run without a full Tauri bundle:
+
+| Test | Assertion |
+| --- | --- |
+| Resource manifest inspection | Staged embedded payload contains manifest, backend entry, overlay entry, worker entry, `tui-app`, and required OpenTUI runtime dependencies. |
+| Rust completeness source guard | `build.rs` emits required plugin resource entries and `main.rs` verifies them before sidecar spawn. |
+| Missing plugin package | Packaged overlay profile surfaces plugin-service diagnostic error instead of spawning a missing executable or falling back to core embed. |
 
 ## Verification Commands
 
@@ -436,6 +535,7 @@ bun run typecheck
 bun run api:routes-check
 bun run docs:check
 bun run check:dead-code
+bun test packages/overlay/test/embedded-plugin-resources.test.ts
 ```
 
 Full pre-push verification remains the existing hook path.
@@ -446,8 +546,10 @@ Full pre-push verification remains the existing hook path.
 
 1. Create `packages/tui-app`.
 2. Move the reusable TUI app tree behind the public `@opencorvus-ai/tui-app` package boundary.
-3. Update OpenCorvus CLI to import the TUI app package.
-4. Add static guard that plugin packages cannot import from `packages/opencorvus/src`.
+3. Replace private `@/` imports with public package imports or injected adapters.
+4. Define the host adapter interface for config, SDK, event source, project paths, local filesystem helpers, command hooks, and terminal/platform helpers.
+5. Update OpenCorvus CLI to import the TUI app package and provide the host adapters.
+6. Add static guards that `packages/tui-app/src` and plugin packages cannot import from `packages/opencorvus/src`.
 
 Exit criteria: OpenCorvus CLI still renders TUI through `@opencorvus-ai/tui-app`, and no consumer needs a private `packages/opencorvus/src/cli/cmd/tui/app.tsx` import.
 
@@ -476,19 +578,24 @@ Exit criteria: `rg "EmbeddedTui|tui/embed|embedded-worker" packages/opencorvus/s
 
 1. Move the overlay adapter from `packages/overlay/src/plugins/coding-agent-tui` into `packages/coding-agent-tui/src/overlay`.
 2. Add generic overlay plugin registry loading in `packages/overlay`.
-3. Overlay main imports only the registry.
-4. Overlay service imports route constants and types from `@opencorvus-ai/coding-agent-tui/contract`.
-5. Overlay tests assert the plugin namespace, task target, evidence fields, and no direct plugin import.
-6. Visual tests use plugin route mocks.
+3. Replace static plugin panes in `index.html` with generic plugin outlets.
+4. Move coding-agent-tui-specific CSS and i18n ownership into the plugin contribution or generated manifest output.
+5. Overlay main imports only the registry.
+6. Overlay service imports route constants and types from `@opencorvus-ai/coding-agent-tui/contract`.
+7. Overlay tests assert the plugin namespace, task target, evidence fields, no direct plugin import, and no static plugin DOM.
+8. Visual tests use plugin route mocks.
 
 Exit criteria: overlay has no hardcoded `/tui/embed/*` and no direct coding-agent-tui import from feature code.
 
 ### Phase 5: Packaging And Default Enablement
 
-1. Wire the default plugin through config or packaging manifest, not core import.
-2. Update local packaging scripts and Tauri resource configuration.
-3. Verify packaged resources include backend plugin, overlay contribution, worker entry, and `@opencorvus-ai/tui-app`.
-4. Verify missing plugin package produces visible plugin-service error.
+1. Wire the default plugin through the single manifest, not core import or separate backend/overlay lists.
+2. Update `script/package-local.ts`, `packages/overlay/script/build.ts`, `packages/overlay/script/build-docker.ts`, and Tauri resource configuration.
+3. Update `packages/overlay/src-tauri/build.rs` to archive manifest-listed resources.
+4. Update `packages/overlay/src-tauri/src/main.rs` to verify manifest-listed resources before sidecar spawn.
+5. Add resource manifest inspection tests.
+6. Verify packaged resources include backend plugin, overlay contribution, worker entry, and `@opencorvus-ai/tui-app`.
+7. Verify missing plugin package produces visible plugin-service error.
 
 Exit criteria: packaged overlay can load the plugin without a core import and without missing sidecar/resource paths.
 
@@ -508,16 +615,20 @@ The refactor is complete only when all are true:
 1. No `/tui/embed/*` route exists.
 2. No `EmbeddedTui` implementation exists in `packages/opencorvus/src`.
 3. OpenCorvus core does not import `coding-agent-tui`.
-4. `packages/coding-agent-tui/src` does not import `packages/opencorvus/src` or `@/`.
-5. `packages/overlay/src/main.tsx` does not import a concrete coding-agent-tui module.
-6. The overlay calls `/plugin/coding-agent-tui/embed/*` through the canonical contract path builder.
-7. The backend route is registered by the plugin service API.
-8. The backend route is keyed by task-scoped target and returns evidence metadata.
-9. The generated SDK and OpenAPI do not expose `/tui/embed/*` or plugin internals.
-10. Visual overlay verification still shows a nonblank, readable OpenTUI frame from task-scoped backend evidence.
-11. Missing/broken plugin service produces a visible diagnostic error, not a fallback route.
-12. Packaged overlay artifacts include the backend plugin, overlay contribution, worker entry, and shared TUI app package.
-13. Tests cover the new plugin route, old route deletion, overlay route migration, overlay registry loading, error status mapping, packaging resources, and evidence metadata.
+4. `packages/tui-app/src` does not import `packages/opencorvus/src` or `@/`.
+5. `packages/coding-agent-tui/src` does not import `packages/opencorvus/src` or `@/`.
+6. `packages/overlay/src/main.tsx` does not import a concrete coding-agent-tui module.
+7. `packages/overlay/src/index.html` does not contain static coding-agent-tui pane/mount IDs.
+8. A single plugin manifest drives backend loading, overlay contribution, diagnostics, and packaging.
+9. The overlay calls `/plugin/coding-agent-tui/embed/*` through the canonical contract path builder.
+10. The backend route is registered by the plugin service API.
+11. The backend route is keyed by persisted task-scoped target and returns persisted evidence metadata.
+12. The generated SDK and OpenAPI do not expose `/tui/embed/*` or plugin internals.
+13. Visual overlay verification still shows a nonblank, readable OpenTUI frame from persisted task-scoped backend evidence.
+14. Missing/broken plugin service produces a visible diagnostic error, not a fallback route.
+15. Packaged overlay artifacts include the manifest, backend plugin, overlay contribution, worker entry, shared TUI app package, and required runtime dependencies.
+16. Tauri extraction verifies manifest-listed resources before sidecar spawn.
+17. Tests cover the new plugin route, old route deletion, overlay route migration, overlay registry loading, static DOM deletion, error status mapping, packaging resources, and persisted evidence metadata.
 
 ## Independent Review Feedback
 
@@ -535,6 +646,18 @@ Codex independent review on 2026-06-06 found the first draft was still incomplet
 | `PluginServiceInput` duplicated `PluginInput`. | Service hook now captures `PluginInput`; no duplicate input type. |
 | Public `Hono` type lacked package dependency. | `packages/plugin/package.json` must add `hono` if Hono remains public API. |
 | Route constants could drift. | Contract now exports one canonical path builder. |
+
+Second independent review on 2026-06-06 found additional implementation blockers. This revision also incorporates that feedback:
+
+| Review finding | Revision |
+| --- | --- |
+| `packages/tui-app` could still indirectly import core internals through existing `@/` dependencies. | `tui-app` now forbids `@/` and private opencorvus imports; Phase 1 requires public adapters or injected host capabilities. |
+| Overlay shell still had static plugin DOM IDs. | Spec now requires generic plugin outlets and guards against `chatTuiPane`, `solidTuiHostMount`, and coding-agent-tui-specific shell DOM. |
+| Backend config and overlay registry could become separate default-enable sources. | Spec now requires one plugin manifest driving backend service, overlay contribution, diagnostics, and packaging. |
+| Task evidence was response-only rather than persisted source of truth. | Spec now requires persisted task artifacts for coding-agent-tui targets and frame evidence, following browser-preview persistence. |
+| Packaging did not name the scripts/Rust checks that caused the original missing sidecar failure. | Spec now names `build.ts`, `build-docker.ts`, `build.rs`, `main.rs`, `tauri.conf.json`, expected archive paths, and resource inspection tests. |
+| Hono dispatch path rewriting was underspecified. | Spec now requires cloned request URL rewrite with method/body/header/query preservation tests. |
+| Route inventory wildcard behavior was misdescribed. | Spec now requires explicit tests for wildcard existence and SDK/OpenAPI cleanliness instead of relying on route inventory reporting. |
 
 ## Superseded Spec
 
