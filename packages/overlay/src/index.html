@@ -177,9 +177,8 @@
 
       <div class="center-workbench-resizer" id="centerWorkbenchResizer" role="separator" aria-orientation="vertical" aria-label="Resize center workbench" hidden></div>
       <section class="center-workbench" id="centerWorkbench" data-open="false">
-        <header class="center-workbench-header" id="solidCenterWorkbenchTabs"></header>
         <div class="center-workbench-body">
-          <div class="center-workbench-view" id="centerWorkbenchWorkflow" data-workbench-view="workflow" data-active="true">
+          <div class="center-workbench-view" id="centerWorkbenchWorkflow" data-workbench-view="workflow" data-open="true" data-active="true">
             <div class="center-workbench-activity chat-workflow-activity">
               <section class="chat" id="chatSection">
                 <div
@@ -218,16 +217,16 @@
               </section>
             </div>
           </div>
-          <div class="center-workbench-view" id="centerWorkbenchExplorer" data-workbench-view="explorer" data-active="false">
+          <div class="center-workbench-view" id="centerWorkbenchExplorer" data-workbench-view="explorer" data-open="false" data-active="false">
             <div id="solidFileExplorerMount" class="center-workbench-activity sidebar-explorer-panel"></div>
           </div>
-          <div class="center-workbench-view" id="centerWorkbenchDiff" data-workbench-view="diff" data-active="false">
+          <div class="center-workbench-view" id="centerWorkbenchDiff" data-workbench-view="diff" data-open="false" data-active="false">
             <div id="solidFileChangesMount" class="center-workbench-activity sidebar-file-changes-panel"></div>
           </div>
-          <div class="center-workbench-view" id="centerWorkbenchBrowser" data-workbench-view="browser" data-active="false">
+          <div class="center-workbench-view" id="centerWorkbenchBrowser" data-workbench-view="browser" data-open="false" data-active="false">
             <div id="solidBrowserPreviewMount" class="center-workbench-activity chat-browser-preview-activity"></div>
           </div>
-          <div class="center-workbench-view" id="centerWorkbenchInspector" data-workbench-view="inspector" data-active="false">
+          <div class="center-workbench-view" id="centerWorkbenchInspector" data-workbench-view="inspector" data-open="false" data-active="false">
             <div class="center-workbench-activity sections" id="sections" data-right-activity="inspector">
               <div class="side-panel-content sections-content">
                 <header class="sections-header oc-surface-header">
@@ -245,7 +244,7 @@
               </div>
             </div>
           </div>
-          <div class="center-workbench-view" id="centerWorkbenchNotifications" data-workbench-view="notifications" data-active="false">
+          <div class="center-workbench-view" id="centerWorkbenchNotifications" data-workbench-view="notifications" data-open="false" data-active="false">
             <div class="center-workbench-activity sections" id="notificationSections" data-right-activity="notifications">
               <div class="side-panel-content sections-content">
                 <header class="sections-header oc-surface-header">
@@ -257,7 +256,7 @@
               </div>
             </div>
           </div>
-          <div class="center-workbench-view" id="centerWorkbenchFile" data-workbench-view="file" data-active="false">
+          <div class="center-workbench-view" id="centerWorkbenchFile" data-workbench-view="file" data-open="false" data-active="false">
             <div id="solidFileEditorMount" class="center-workbench-activity chat-file-editor-activity file-editor-mount"></div>
           </div>
         </div>
@@ -270,7 +269,7 @@
   </main>
 
   <!-- Goal / Session / App / Config dialogs are mounted by Solid host components. -->
-  <!-- Explorer, diff, preview, and file editor live in the center workbench tabs. -->
+  <!-- Explorer, diff, preview, and file editor live in the center workbench panels. -->
 
   <!-- Skill/MCP/Goal/Channel dialogs removed — Phase 4.
        All functionality moved to Solid components:

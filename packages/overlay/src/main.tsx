@@ -4,7 +4,7 @@
 // Self-sufficient — no external script dependencies.
 
 import { render } from "solid-js/web"
-import { createEffect, createRoot, createSignal, For, untrack } from "solid-js"
+import { createEffect, createRoot, createSignal, untrack } from "solid-js"
 import { Conversation } from "./components/Conversation"
 import { TaskList } from "./components/TaskList"
 import { Board } from "./components/Board"
@@ -26,7 +26,6 @@ import { FileEditorPane } from "./components/FileEditorPane"
 import { FileChangesPanel } from "./components/FileChangesPanel"
 import { BrowserPreviewPanel } from "./components/BrowserPreviewPanel"
 import { SideActivityToolbar, type SideActivity } from "./components/SideActivityToolbar"
-import { Icon, type IconName } from "./components/Icon"
 import { closeFileEditor, fileWorkbenchOpen } from "./services/file-workbench"
 import type { DiffTarget } from "./services/diff"
 import { initApp } from "./services/init"
@@ -167,57 +166,40 @@ const [logOpen, setLogOpen] = createSignal(false)
 const [workspaceOpen, setWorkspaceOpen] = createSignal(false)
 const [workspaceTarget, setWorkspaceTarget] = createSignal<DiffTarget>({ filePath: "" })
 
-type CenterWorkbenchTab = "workflow" | "inspector" | "notifications" | "explorer" | "diff" | "browser" | "file"
-type RightActivity = Exclude<CenterWorkbenchTab, "file"> | "assistant"
+type CenterWorkbenchPanel = "workflow" | "inspector" | "notifications" | "explorer" | "diff" | "browser" | "file"
+type RightActivity = Exclude<CenterWorkbenchPanel, "file"> | "assistant"
 
 const DEFAULT_CENTER_WORKBENCH_WIDTH = 420
 
 const RIGHT_ACTIVITIES: readonly SideActivity<RightActivity>[] = [
-  { id: "workflow", icon: "goals", labelKey: "chat.title" },
+  { id: "workflow", icon: "plan", labelKey: "chat.title" },
   { id: "inspector", icon: "panel-right", labelKey: "sections.title" },
   { id: "notifications", icon: "log-lines", labelKey: "notify.center_label" },
   { id: "explorer", icon: "folder", labelKey: "explorer.title" },
-  { id: "diff", icon: "file-document", labelKey: "workspace.diff" },
-  { id: "browser", icon: "inspect", labelKey: "browser_preview.title" },
+  { id: "diff", icon: "files", labelKey: "workspace.diff" },
+  { id: "browser", icon: "web-search", labelKey: "browser_preview.title" },
   { id: "assistant", icon: "message", labelKey: "coding_assistant.title" },
 ]
 
-const CENTER_WORKBENCH_LABEL_KEYS: Record<CenterWorkbenchTab, string> = {
-  workflow: "chat.title",
-  inspector: "sections.title",
-  notifications: "notify.center_label",
-  explorer: "explorer.title",
-  diff: "workspace.diff",
-  browser: "browser_preview.title",
-  file: "file_editor.title",
-}
-
-const CENTER_WORKBENCH_ICONS: Record<CenterWorkbenchTab, IconName> = {
-  workflow: "goals",
-  inspector: "panel-right",
-  notifications: "log-lines",
-  explorer: "folder",
-  diff: "file-document",
-  browser: "inspect",
-  file: "file-document",
-}
-
-const [centerWorkbenchTabs, setCenterWorkbenchTabs] = createSignal<CenterWorkbenchTab[]>(["workflow"])
-const [activeCenterWorkbenchTab, setActiveCenterWorkbenchTab] = createSignal<CenterWorkbenchTab | null>("workflow")
+const [centerWorkbenchPanels, setCenterWorkbenchPanels] = createSignal<CenterWorkbenchPanel[]>(["workflow"])
 const [selectedRightActivity, setSelectedRightActivity] = createSignal<RightActivity | null>("workflow")
 const activeRightActivity = () => selectedRightActivity()
 
 function activateCodingAssistantSession(): void {
-  openCenterWorkbenchTab("workflow")
+  openCenterWorkbenchPanel("workflow")
   setSelectedRightActivity("assistant")
   void selectCodingAssistantSession().catch((error) => {
     reportOverlayRuntimeError("coding-assistant.select", error)
   })
 }
 
-function activateCenterWorkbenchTab(tab: CenterWorkbenchTab): void {
-  setActiveCenterWorkbenchTab(tab)
-  if (tab !== "file") setSelectedRightActivity(tab)
+function isCenterWorkbenchPanelOpen(panel: CenterWorkbenchPanel): boolean {
+  return centerWorkbenchPanels().includes(panel)
+}
+
+function isRightActivityOpen(activity: RightActivity): boolean {
+  if (activity === "assistant") return selectedRightActivity() === "assistant" && isCenterWorkbenchPanelOpen("workflow")
+  return isCenterWorkbenchPanelOpen(activity)
 }
 
 function selectRightActivity(activity: RightActivity): void {
@@ -225,39 +207,25 @@ function selectRightActivity(activity: RightActivity): void {
     activateCodingAssistantSession()
     return
   }
-  openCenterWorkbenchTab(activity)
-}
-
-function openCenterWorkbenchTab(tab: CenterWorkbenchTab): void {
-  setCenterWorkbenchTabs((current) => current.includes(tab) ? current : [...current, tab])
-  activateCenterWorkbenchTab(tab)
-}
-
-function toolbarActivityForTab(tab: CenterWorkbenchTab | null): RightActivity | null {
-  return tab && tab !== "file" ? tab : null
-}
-
-function removeCenterWorkbenchTab(tab: CenterWorkbenchTab): CenterWorkbenchTab | null {
-  const current = untrack(centerWorkbenchTabs)
-  const index = current.indexOf(tab)
-  if (index < 0) return untrack(activeCenterWorkbenchTab)
-  const next = current.filter((item) => item !== tab)
-  let nextActive = untrack(activeCenterWorkbenchTab)
-  setCenterWorkbenchTabs(next)
-  if (untrack(activeCenterWorkbenchTab) === tab) {
-    nextActive = next[index] ?? next[index - 1] ?? null
-    setActiveCenterWorkbenchTab(nextActive)
+  if (untrack(centerWorkbenchPanels).includes(activity)) {
+    closeCenterWorkbenchPanel(activity)
+  } else {
+    openCenterWorkbenchPanel(activity)
   }
-  return nextActive
 }
 
-function closeCenterWorkbenchTab(tab: CenterWorkbenchTab): void {
-  if (tab === "diff") setWorkspaceOpen(false)
-  if (tab === "file") closeFileEditor()
+function openCenterWorkbenchPanel(panel: CenterWorkbenchPanel): void {
+  setCenterWorkbenchPanels((current) => current.includes(panel) ? current : [...current, panel])
+  if (panel !== "file") setSelectedRightActivity(panel)
+}
+
+function closeCenterWorkbenchPanel(panel: CenterWorkbenchPanel): void {
+  if (panel === "diff") setWorkspaceOpen(false)
+  if (panel === "file") closeFileEditor()
+  setCenterWorkbenchPanels((current) => current.filter((item) => item !== panel))
   const selected = untrack(selectedRightActivity)
-  const nextActive = removeCenterWorkbenchTab(tab)
-  if (selected === tab || (tab === "workflow" && selected === "assistant")) {
-    setSelectedRightActivity(toolbarActivityForTab(nextActive))
+  if (selected === panel || (panel === "workflow" && selected === "assistant")) {
+    setSelectedRightActivity(null)
   }
 }
 
@@ -579,13 +547,13 @@ function buildTaskDebugBlob(board: any): string {
 /** Open the workspace panel. */
 function openWorkspace(): void {
   setWorkspaceOpen(true)
-  openCenterWorkbenchTab("diff")
+  openCenterWorkbenchPanel("diff")
 }
 
 /** Close the workspace panel. */
 function closeWorkspace(): void {
   setWorkspaceOpen(false)
-  removeCenterWorkbenchTab("diff")
+  closeCenterWorkbenchPanel("diff")
 }
 
 /** Open (or switch to) a diff file in the workspace. */
@@ -682,7 +650,7 @@ document.addEventListener(
 
 window.addEventListener(
   "acceptance:focus-changes",
-  () => openCenterWorkbenchTab("diff"),
+  () => openCenterWorkbenchPanel("diff"),
   listenerOpts,
 )
 
@@ -802,62 +770,7 @@ if (fileChangesMountEl) {
 const fileExplorerMountEl = document.getElementById("solidFileExplorerMount")
 if (fileExplorerMountEl) {
   fileExplorerMountEl.innerHTML = ""
-  render(() => <FileExplorerPanel active={() => activeCenterWorkbenchTab() === "explorer"} directory={activeDirectory} />, fileExplorerMountEl)
-}
-
-const centerWorkbenchTabsEl = document.getElementById("solidCenterWorkbenchTabs")
-if (centerWorkbenchTabsEl) {
-  centerWorkbenchTabsEl.innerHTML = ""
-  render(
-    () => (
-      <>
-        <div class="center-workbench-tabs" role="tablist" aria-label={t("workspace.tabs")}>
-          <For each={centerWorkbenchTabs()}>
-            {(tab) => (
-              <div class="center-workbench-tab-shell" data-active={activeCenterWorkbenchTab() === tab ? "true" : "false"}>
-                <button
-                  type="button"
-                  class="center-workbench-tab"
-                  role="tab"
-                  data-active={activeCenterWorkbenchTab() === tab ? "true" : "false"}
-                  aria-selected={activeCenterWorkbenchTab() === tab}
-                  onClick={() => activateCenterWorkbenchTab(tab)}
-                >
-                  <Icon name={CENTER_WORKBENCH_ICONS[tab]} size={13} />
-                  <span>{t(CENTER_WORKBENCH_LABEL_KEYS[tab])}</span>
-                </button>
-                <button
-                  type="button"
-                  class="center-workbench-tab-close"
-                  title={t("workspace.close")}
-                  aria-label={t("workspace.close")}
-                  onClick={(event) => {
-                    event.stopPropagation()
-                    closeCenterWorkbenchTab(tab)
-                  }}
-                >
-                  <Icon name="close" size={12} />
-                </button>
-              </div>
-            )}
-          </For>
-        </div>
-        <button
-          type="button"
-          class="center-workbench-close"
-          title={t("workspace.close")}
-          aria-label={t("workspace.close")}
-          onClick={() => {
-            const active = activeCenterWorkbenchTab()
-            if (active) closeCenterWorkbenchTab(active)
-          }}
-        >
-          <Icon name="close" size={13} />
-        </button>
-      </>
-    ),
-    centerWorkbenchTabsEl,
-  )
+  render(() => <FileExplorerPanel active={() => isCenterWorkbenchPanelOpen("explorer")} directory={activeDirectory} />, fileExplorerMountEl)
 }
 
 // ── Sidebar title backdoor: double-click resets DB ──
@@ -1058,6 +971,7 @@ if (rightActivityToolbarEl) {
         side="right"
         activities={RIGHT_ACTIVITIES}
         active={activeRightActivity}
+        isActive={isRightActivityOpen}
         ariaLabelKey="activity.right"
         onSelect={selectRightActivity}
       />
@@ -1081,7 +995,7 @@ if (browserPreviewEl) {
   render(
     () => (
       <BrowserPreviewPanel
-        active={() => activeCenterWorkbenchTab() === "browser"}
+        active={() => isCenterWorkbenchPanelOpen("browser")}
         directory={activeDirectory}
         refreshKey={() => boardStore.boardUpdatedAt}
         taskID={() => activeTaskID() || undefined}
@@ -1308,11 +1222,10 @@ disposers.push(
     })
 
     createEffect(() => {
-      const tabs = centerWorkbenchTabs()
-      const active = activeCenterWorkbenchTab()
+      const panels = centerWorkbenchPanels()
       const workbench = document.getElementById("centerWorkbench")
       const resizer = document.getElementById("centerWorkbenchResizer")
-      const views: Record<CenterWorkbenchTab, HTMLElement | null> = {
+      const views: Record<CenterWorkbenchPanel, HTMLElement | null> = {
         workflow: document.getElementById("centerWorkbenchWorkflow"),
         explorer: document.getElementById("centerWorkbenchExplorer"),
         diff: document.getElementById("centerWorkbenchDiff"),
@@ -1322,26 +1235,30 @@ disposers.push(
         file: document.getElementById("centerWorkbenchFile"),
       }
       if (workbench) {
-        workbench.dataset.open = String(tabs.length > 0)
-        workbench.hidden = tabs.length === 0
+        workbench.dataset.open = String(panels.length > 0)
+        workbench.hidden = panels.length === 0
       }
       if (resizer) {
         resizer.hidden = true
         resizer.dataset.disabled = "true"
       }
-      for (const [tab, body] of Object.entries(views)) {
-        if (body) body.dataset.active = String(tab === active)
+      for (const [panel, body] of Object.entries(views)) {
+        const open = panels.includes(panel as CenterWorkbenchPanel)
+        if (body) {
+          body.dataset.open = String(open)
+          body.dataset.active = String(open)
+        }
       }
     })
 
     createEffect(() => {
       settingsStore.centerWorkbenchWidth
-      centerWorkbenchTabs().length
+      centerWorkbenchPanels().length
       renderCenterWorkbenchWidth()
     })
 
     createEffect(() => {
-      const active = activeCenterWorkbenchTab()
+      const panels = centerWorkbenchPanels()
       const sections = document.getElementById("sections")
       const inspectorBody = document.getElementById("rightPanelInspector")
       const notificationsBody = document.getElementById("rightPanelNotifications")
@@ -1350,26 +1267,26 @@ disposers.push(
       if (sections) sections.dataset.rightActivity = "inspector"
       if (inspectorTitle) inspectorTitle.textContent = t("sections.title")
       if (notificationsTitle) notificationsTitle.textContent = t("notify.center_label")
-      if (inspectorBody) inspectorBody.dataset.active = String(active === "inspector")
-      if (notificationsBody) notificationsBody.dataset.active = String(active === "notifications")
+      if (inspectorBody) inspectorBody.dataset.active = String(panels.includes("inspector"))
+      if (notificationsBody) notificationsBody.dataset.active = String(panels.includes("notifications"))
     })
 
     createEffect(() => {
       const open = fileWorkbenchOpen()
       if (open) {
         setWorkspaceOpen(false)
-        openCenterWorkbenchTab("file")
+        openCenterWorkbenchPanel("file")
       } else {
-        removeCenterWorkbenchTab("file")
+        closeCenterWorkbenchPanel("file")
       }
     })
 
     createEffect(() => {
       const open = workspaceOpen()
       if (open) {
-        openCenterWorkbenchTab("diff")
+        openCenterWorkbenchPanel("diff")
       } else {
-        removeCenterWorkbenchTab("diff")
+        closeCenterWorkbenchPanel("diff")
       }
     })
 

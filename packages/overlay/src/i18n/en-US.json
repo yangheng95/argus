@@ -1,7 +1,7 @@
 {
   "_meta": {
     "language": "en-US",
-    "panel_revision": "28c85db7029bb3da"
+    "panel_revision": "a1870fc45366bc0c"
   },
   "about.author_name": "Yang, Heng",
   "about.go_version": "Go Version",
@@ -833,7 +833,6 @@
   "file_editor.unsaved": "Unsaved changes",
   "workspace.close": "Close workspace",
   "workspace.diff": "Diff",
-  "workspace.tabs": "Workspace tabs",
   "workspace.editor_launchers": "IDE launchers",
   "workspace.editor_launchers_menu": "Choose IDE",
   "coding_cli.open": "Open coding CLI",

@@ -37,7 +37,7 @@ function conversationPayload(sessionID: string) {
   }
 }
 
-test("right activity toolbar opens center workbench tabs while side panels stay mounted", async () => {
+test("right activity toolbar opens equal-width workbench panels while workflow keeps its header", async () => {
   const requestLog: Array<{ method: string; path: string }> = []
   const server = Bun.serve({
     idleTimeout: 255,
@@ -174,6 +174,8 @@ test("right activity toolbar opens center workbench tabs while side panels stay 
         rightNotificationsButton: document.querySelector<HTMLElement>('[data-ui="side-activity-button"][data-side="right"][data-activity="notifications"]')?.dataset.active ?? "",
         rightNotifications: active("#rightPanelNotifications"),
         notificationPanelExists: !!document.querySelector("#solidNotificationCenterMount"),
+        taskStatusInWorkflowHeader: !!document.querySelector("#chatSection .chat-header #solidTaskStatusMount"),
+        centerWorkbenchHeaderExists: !!document.querySelector("#solidCenterWorkbenchTabs"),
         chatTitle: document.querySelector<HTMLElement>("#chatViewTitle")?.textContent ?? "",
         rightTitle: document.querySelector<HTMLElement>("#rightPanelTitle")?.textContent ?? "",
         notificationTitle: document.querySelector<HTMLElement>("#notificationPanelTitle")?.textContent ?? "",
@@ -182,7 +184,9 @@ test("right activity toolbar opens center workbench tabs while side panels stay 
           const workbench = document.querySelector<HTMLElement>("#centerWorkbench")?.getBoundingClientRect()
           return !!workspace && !!workbench && Math.abs(workbench.left - workspace.left) <= 1
         })(),
-        tabs: Array.from(document.querySelectorAll<HTMLElement>(".center-workbench-tab")).map((node) => node.textContent?.trim() ?? ""),
+        tabCount: document.querySelectorAll<HTMLElement>(".center-workbench-tab").length,
+        openPanels: Array.from(document.querySelectorAll<HTMLElement>(".center-workbench-view[data-open='true']")).map((node) => node.dataset.workbenchView || ""),
+        openPanelWidths: Array.from(document.querySelectorAll<HTMLElement>(".center-workbench-view[data-open='true']")).map((node) => Math.round(node.getBoundingClientRect().width)),
       }
     })
 
@@ -210,13 +214,15 @@ test("right activity toolbar opens center workbench tabs while side panels stay 
       rightNotificationsButton: "false",
       rightNotifications: "false",
       notificationPanelExists: true,
+      taskStatusInWorkflowHeader: true,
+      centerWorkbenchHeaderExists: false,
       chatTitle: "Workflow",
       rightTitle: "Inspector",
       notificationTitle: "Notifications",
       workbenchStartsAtWorkspace: true,
     })
 
-    await clickButton(".center-workbench-tab-close")
+    await clickButton('[data-ui="side-activity-button"][data-side="right"][data-activity="workflow"]')
     expect(await activeState()).toMatchObject({
       centerOpen: "false",
       centerWorkflow: "false",
@@ -233,21 +239,21 @@ test("right activity toolbar opens center workbench tabs while side panels stay 
     })
 
     await page.evaluate(() => window.dispatchEvent(new CustomEvent("acceptance:focus-changes")))
-    expect(await activeState()).toMatchObject({ centerOpen: "true", centerDiff: "true", centerWorkflow: "false", rightDiffButton: "true" })
+    expect(await activeState()).toMatchObject({ centerOpen: "true", centerDiff: "true", centerWorkflow: "true", rightDiffButton: "true" })
 
     await clickButton('[data-ui="side-activity-button"][data-side="right"][data-activity="explorer"]')
     expect(await activeState()).toMatchObject({
       centerOpen: "true",
       centerExplorer: "true",
-      centerDiff: "false",
+      centerDiff: "true",
       rightExplorerButton: "true",
-      rightDiffButton: "false",
+      rightDiffButton: "true",
     })
 
     await clickButton('[data-ui="side-activity-button"][data-side="right"][data-activity="browser"]')
     expect(await activeState()).toMatchObject({
       centerPreview: "true",
-      centerExplorer: "false",
+      centerExplorer: "true",
       rightPreviewButton: "true",
       rightInspector: "false",
       chatTitle: "Workflow",
@@ -256,36 +262,40 @@ test("right activity toolbar opens center workbench tabs while side panels stay 
     await clickButton('[data-ui="side-activity-button"][data-side="right"][data-activity="notifications"]')
     expect(await activeState()).toMatchObject({
       centerNotifications: "true",
-      centerPreview: "false",
+      centerPreview: "true",
       rightNotificationsButton: "true",
-      rightPreviewButton: "false",
+      rightPreviewButton: "true",
       rightInspector: "false",
       rightNotifications: "true",
       notificationTitle: "Notifications",
     })
 
     await clickButton('[data-ui="side-activity-button"][data-side="right"][data-activity="inspector"]')
-    expect(await activeState()).toMatchObject({
+    const inspectorOpenState = await activeState()
+    expect(inspectorOpenState).toMatchObject({
       centerInspector: "true",
-      centerNotifications: "false",
+      centerNotifications: "true",
       rightInspectorButton: "true",
-      rightNotificationsButton: "false",
+      rightNotificationsButton: "true",
       rightInspector: "true",
-      rightNotifications: "false",
+      rightNotifications: "true",
       rightTitle: "Inspector",
     })
+    expect(inspectorOpenState.tabCount).toBe(0)
+    expect(inspectorOpenState.openPanels).toEqual(["workflow", "explorer", "diff", "browser", "inspector", "notifications"])
+    expect(Math.max(...inspectorOpenState.openPanelWidths) - Math.min(...inspectorOpenState.openPanelWidths)).toBeLessThanOrEqual(2)
 
     await clickButton('[data-ui="side-activity-button"][data-side="right"][data-activity="assistant"]')
     await page.waitForFunction(() => document.querySelector<HTMLElement>('[data-ui="side-activity-button"][data-side="right"][data-activity="assistant"]')?.dataset.active === "true")
     expect(await activeState()).toMatchObject({
-      centerPreview: "false",
+      centerPreview: "true",
       centerWorkflow: "true",
       rightAssistantButton: "true",
-      rightPreviewButton: "false",
+      rightPreviewButton: "true",
       chatTitle: "Assistant",
     })
 
-    expect((await activeState()).tabs).toEqual(expect.arrayContaining(["Workflow", "Diff", "Explorer", "Preview", "Notifications", "Inspector"]))
+    expect((await activeState()).tabCount).toBe(0)
 
     await page.$eval("#chatTextarea", (node) => {
       const textarea = node as HTMLTextAreaElement
@@ -312,7 +322,7 @@ test("right activity toolbar opens center workbench tabs while side panels stay 
     expect(await page.$("#rightPaneResizer")).toBeNull()
 
     await clickButton('[data-ui="side-activity-button"][data-side="right"][data-activity="browser"]')
-    expect(await activeState()).toMatchObject({ centerOpen: "true", centerPreview: "true" })
+    expect(await activeState()).toMatchObject({ centerOpen: "true", centerPreview: "false", rightPreviewButton: "false" })
   } finally {
     await browser.close()
     server.stop(true)

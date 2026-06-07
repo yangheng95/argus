@@ -35,10 +35,10 @@ test("coding assistant activity selects an independent session in the shared mes
   expect(html).not.toContain('id="chatTuiPane"')
   expect(html).not.toContain('id="solidTuiHostMount"')
 
-  expect(main).toContain('type CenterWorkbenchTab = "workflow" | "inspector" | "notifications" | "explorer" | "diff" | "browser" | "file"')
-  expect(main).toContain('type RightActivity = Exclude<CenterWorkbenchTab, "file"> | "assistant"')
+  expect(main).toContain('type CenterWorkbenchPanel = "workflow" | "inspector" | "notifications" | "explorer" | "diff" | "browser" | "file"')
+  expect(main).toContain('type RightActivity = Exclude<CenterWorkbenchPanel, "file"> | "assistant"')
   expect(main).toContain('{ id: "assistant", icon: "message", labelKey: "coding_assistant.title" }')
-  expect(main).toContain('openCenterWorkbenchTab("workflow")')
+  expect(main).toContain('openCenterWorkbenchPanel("workflow")')
   expect(main).toContain('isCodingAssistantSource() ? t("chat.assistant_title") : t("chat.title")')
   expect(main).toContain('selectCodingAssistantSession()')
   expect(main).not.toContain('document.getElementById("solidCodingAssistantMount")')

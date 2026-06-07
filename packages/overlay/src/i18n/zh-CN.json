@@ -1,7 +1,7 @@
 {
   "_meta": {
     "language": "zh-CN",
-    "panel_revision": "28c85db7029bb3da"
+    "panel_revision": "a1870fc45366bc0c"
   },
   "about.author_name": "杨恒",
   "about.go_version": "Go 版本",
@@ -833,7 +833,6 @@
   "file_editor.unsaved": "未保存的更改",
   "workspace.close": "关闭工作区",
   "workspace.diff": "差异",
-  "workspace.tabs": "工作区标签",
   "workspace.editor_launchers": "IDE 快捷入口",
   "workspace.editor_launchers_menu": "选择 IDE",
   "coding_cli.open": "打开 Coding CLI",
