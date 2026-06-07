@@ -165,30 +165,31 @@ test("coding agent owns direct assistant prompt", async () => {
   })
 })
 
-test("TUI coding agent is a hidden full-function OpenCode build-style primary agent", async () => {
+test("right sidebar coding assistant is a hidden full-function primary agent", async () => {
   await using tmp = await tmpdir()
   await Instance.provide({
     directory: tmp.path,
     fn: async () => {
-      const agent = await Agent.get("tui-coding")
+      const agent = await Agent.get("coding-assistant")
       expect(agent).toBeDefined()
       expect(agent?.mode).toBe("primary")
       expect(agent?.native).toBe(true)
       expect(agent?.hidden).toBe(true)
-      expect(agent?.prompt).toBeUndefined()
-      expect(await Agent.nativeDefaultPrompt("tui-coding")).toBe("")
+      expect(agent?.prompt).toBe(PROMPT_CODING)
+      expect(await Agent.nativeDefaultPrompt("coding-assistant")).toBe(PROMPT_CODING)
       expect(evalPerm(agent, "edit")).toBe("allow")
       expect(evalPerm(agent, "bash")).toBe("allow")
       expect(evalPerm(agent, "skill")).toBe("allow")
       expect(evalPerm(agent, "todoread")).toBe("allow")
       expect(evalPerm(agent, "todowrite")).toBe("allow")
-      expect(agent?.tools).toBeUndefined()
+      expect(agent?.tools?.exclude).not.toContain("panel")
 
       const tools = await ToolRegistry.tools({ providerID: "", modelID: "" }, agent!)
       const ids = new Set(tools.map((tool) => tool.id))
       expect(ids.has("edit")).toBe(true)
       expect(ids.has("bash")).toBe(true)
       expect(ids.has("skill")).toBe(true)
+      expect(ids.has("panel")).toBe(true)
     },
   })
 }, 30_000)

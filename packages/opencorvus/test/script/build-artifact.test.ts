@@ -14,7 +14,6 @@ import {
   artifactRuntimeNodeModules,
   artifactRuntimeNodeModuleNames,
   artifactSourcemap,
-  artifactTuiSiblingExecutableName,
   parseBuildFlavor,
 } from "../../script/build-artifact"
 import { copyRuntimeNodeModules } from "../../script/build-runtime-node-modules"
@@ -30,19 +29,41 @@ describe("build-artifact", () => {
     expect(artifactPackageBaseName("opencorvus", "overlay-server")).toBe("opencorvus-overlay-server")
   })
 
-  test("overlay-server flavor names the bundled full TUI sibling binary", () => {
-    expect(artifactTuiSiblingExecutableName("win32")).toBe("opencorvus-tui.exe")
-    expect(artifactTuiSiblingExecutableName("linux")).toBe("opencorvus-tui")
-  })
-
-  test("overlay-server build scripts compile the full TUI sibling binary", () => {
+  test("overlay-server build scripts do not compile a bundled TUI sibling binary", () => {
     const buildSource = readFileSync(resolve(import.meta.dir, "../../script/build.ts"), "utf8")
     const localBuildSource = readFileSync(resolve(import.meta.dir, "../../script/build.local.ts"), "utf8")
     for (const source of [buildSource, localBuildSource]) {
-      expect(source).toContain('if (buildFlavor === "overlay-server")')
-      expect(source).toContain('artifactTuiSiblingExecutableName(item.os).replace(/\\.exe$/, "")')
-      expect(source).toContain('entrypoints: artifactEntrypoints("cli", parserWorker, workerPath)')
+      expect(source).not.toContain("artifactTuiSiblingExecutableName")
+      expect(source).not.toContain("opencorvus-tui.exe")
+      expect(source).toContain("entrypoints: artifactEntrypoints(buildFlavor, parserWorker, workerPath)")
     }
+  })
+
+  test("overlay-server build scripts do not package the removed coding agent TUI plugin", () => {
+    const buildSource = readFileSync(resolve(import.meta.dir, "../../script/build.ts"), "utf8")
+    const localBuildSource = readFileSync(resolve(import.meta.dir, "../../script/build.local.ts"), "utf8")
+    const tauriBuildSource = readFileSync(resolve(import.meta.dir, "../../../overlay/src-tauri/build.rs"), "utf8")
+
+    for (const source of [buildSource, localBuildSource]) {
+      expect(source).not.toContain("buildCodingAgentTuiWorker")
+      expect(source).not.toContain("requiredPluginResourcePath")
+      expect(source).not.toContain("embedded-worker")
+      expect(source).not.toContain("opencorvus-tui-runtime")
+      expect(source).not.toContain("coding-agent-tui-worker")
+      expect(source).not.toContain("@opencorvus-ai/coding-agent-tui")
+      expect(source).not.toContain("@opencorvus-ai/tui-app")
+      expect(source).not.toContain('src/cli/cmd/tui/embedded-worker.tsx')
+    }
+
+    expect(tauriBuildSource).toContain("collect_plugin_resource_files")
+    expect(tauriBuildSource).toContain("plugin_manifest_resource_path")
+    expect(tauriBuildSource).toContain("EMBEDDED_PLUGIN_RESOURCE_FILES")
+  })
+
+  test("package-local builds overlay-server sidecars before Docker overlay packaging", () => {
+    const source = readFileSync(resolve(import.meta.dir, "../../../../script/package-local.ts"), "utf8")
+    expect(source).toContain("bun run build --overlay-server --all")
+    expect(source).not.toContain("bun run build --all")
   })
 
   test("overlay-server flavor compiles only the launcher entrypoint", () => {

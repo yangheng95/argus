@@ -1870,6 +1870,37 @@ mod tests {
     }
 
     #[test]
+    fn embedded_payload_contains_manifest_listed_plugin_resources_when_present() {
+        for path in EMBEDDED_PLUGIN_RESOURCE_FILES {
+            assert!(
+                EMBEDDED_SERVER_FILES.iter().any(|file| file.path == *path),
+                "embedded sidecar payload must include manifest-listed plugin resource {path}"
+            );
+        }
+    }
+
+    #[test]
+    fn embedded_payload_marks_manifest_worker_resource_executable_when_present() {
+        let Some(worker) =
+            EMBEDDED_PLUGIN_RESOURCE_FILES
+                .iter()
+                .find(|path| path.contains("worker"))
+        else {
+            return;
+        };
+        let entry = EMBEDDED_SERVER_FILES
+            .iter()
+            .find(|file| file.path == *worker)
+            .unwrap_or_else(|| {
+                panic!("embedded sidecar payload must include plugin worker resource {worker}")
+            });
+        assert!(
+            entry.executable,
+            "embedded plugin worker resource {worker} must be executable after extraction"
+        );
+    }
+
+    #[test]
     fn embedded_payload_contains_parcel_watcher_runtime_when_present() {
         if EMBEDDED_SERVER_FILES.is_empty() {
             return;

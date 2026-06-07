@@ -62,6 +62,8 @@ async function locateRecord(record: AgentWorkflowRecord): Promise<void> {
       sessionID: record.sessionID,
     })
   }
+  const target = cardTreeStore.cards[record.renderedCardID]
+  setCardExpanded(record.renderedCardID, true, target?.status)
   for (const parentID of parentIDsForCard(record.renderedCardID)) {
     const parent = cardTreeStore.cards[parentID]
     setCardExpanded(parentID, true, parent?.status)

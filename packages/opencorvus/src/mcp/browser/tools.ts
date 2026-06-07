@@ -25,6 +25,7 @@ import {
   setViewport,
   snapshotPerf,
   updateToolCall,
+  withSessionOperationLock,
 } from "./sessions.js"
 import { formatPerfText } from "./perf.js"
 import { clickGuardProfile, doubleClickGuardProfile, runPointGuard, type GuardResult } from "./guard.js"
@@ -92,7 +93,7 @@ const traced =
   ) =>
   async (args: T) => {
     const start = Date.now()
-    const snap = args.sessionId ? snapshotPerf(args.sessionId) : null
+    let snap: ReturnType<typeof snapshotPerf> = null
     if (args.sessionId) {
       recordToolCall(args.sessionId, {
         tool,
@@ -103,7 +104,11 @@ const traced =
       })
     }
     try {
-      const result = await fn(args)
+      const run = () => {
+        snap = args.sessionId ? snapshotPerf(args.sessionId) : null
+        return fn(args)
+      }
+      const result = args.sessionId ? await withSessionOperationLock(args.sessionId, run) : await run()
       if (args.sessionId) {
         updateToolCall(args.sessionId, start, {
           ms: Date.now() - start,

@@ -1,7 +1,7 @@
 {
   "_meta": {
     "language": "zh-CN",
-    "panel_revision": "48cdb6b79a9ebdd9"
+    "panel_revision": "3db9cae7299f3ba7"
   },
   "about.author_name": "杨恒",
   "about.go_version": "Go 版本",
@@ -30,7 +30,6 @@
   "about.shortcut_zoom_reset": "重置缩放",
   "about.shortcuts": "快捷键",
   "about.title": "关于",
-  "activity.left": "左侧活动",
   "activity.right": "右侧活动",
   "brand.guide_kicker": "快速指南",
   "brand.guide_positioning_body": "该工作区用于对话和交付证据：左侧选择最近对话，中间推进执行，右侧集中展示文档、方案、评估和文件变更。",
@@ -330,6 +329,7 @@
   "chat.thinking": "思考中…",
   "chat.tip": "支持拖拽文件 · 拖动上边缘调整输入框大小",
   "chat.title": "会话",
+  "coding_assistant.title": "Coding Assistant",
   "checks.pending": "等待中",
   "common.active": "活跃",
   "common.cancel": "取消",
@@ -812,11 +812,6 @@
   "titlebar.zoom_hint": "调整浮层界面缩放比例。",
   "trace.copy_json": "复制 trace JSON",
   "trace.copy_failed": "复制失败（剪贴板被阻止）",
-  "tui.host_error": "终端错误",
-  "tui.host_restart": "重启 TUI",
-  "tui.host_running": "已连接",
-  "tui.host_stopped": "已停止",
-  "tui.title": "TUI",
   "card.context_tokens_tooltip": "本轮约 {value} 个提示词 token（服务商上报，实际计费可能略有偏差）",
   "card.duration_tooltip": "会话耗时 {{value}}（从首条消息到终态）",
   "card.context_tokens_tooltip_estimated": "本轮约 {value} 个提示词 token（本地按字符数估算，服务商尚未返回精确值）",
@@ -836,6 +831,7 @@
   "file_editor.unsaved": "未保存的更改",
   "workspace.close": "关闭工作区",
   "workspace.diff": "差异",
+  "workspace.tabs": "工作区标签",
   "workspace.editor_launchers": "IDE 快捷入口",
   "workspace.editor_launchers_menu": "选择 IDE",
   "coding_cli.open": "打开 Coding CLI",

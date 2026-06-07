@@ -39,7 +39,7 @@ import {
 import { projectGoalSteps, projectTaskSteps, type MiniWorkflowStep } from "@/engine/workflow"
 import { Instance } from "@/project/instance"
 import { ProtocolEventTable } from "@/protocol/protocol.sql"
-import { Database, and, desc, eq, sql } from "@/storage/db"
+import { Database, and, desc, eq, inArray, sql } from "@/storage/db"
 import { WorkbenchTaskNoteTable } from "./workbench.sql"
 import { compileBrief } from "./brief"
 import { findLatestAcceptanceEvidenceManifest } from "@/acceptance/manifest"
@@ -50,6 +50,9 @@ const BOARD_SUMMARY_LIMIT = 4000
 const BOARD_ARTIFACT_STRING_LIMIT = 1200
 const BOARD_ARTIFACT_ARRAY_LIMIT = 8
 const BOARD_ARTIFACT_OBJECT_DEPTH_LIMIT = 3
+const BOARD_VISIBLE_PROTOCOL_EVENT_TYPES = [
+  "workflow.step.updated",
+] as const
 
 const boardCache = new Map<string, { tag: string; board: ReturnType<typeof buildBoard> }>()
 
@@ -57,9 +60,10 @@ export function compileBoard(input: { taskID: string }) {
   const task = Database.use((db) => db.select().from(EngineTaskTable).where(eq(EngineTaskTable.id, input.taskID)).get())
   if (!task) throw new Error(`Task not found: ${input.taskID}`)
   const tag = boardTagForTask(task)
+  const lastSequence = latestTaskProtocolSequence(task.id)
   const cached = boardCache.get(task.id)
-  if (cached?.tag === tag) return cached.board
-  const board = buildBoard(task, tag)
+  if (cached?.tag === tag) return { ...cached.board, lastSequence }
+  const board = buildBoard(task, tag, lastSequence)
   boardCache.set(task.id, { tag, board })
   return board
 }
@@ -70,7 +74,11 @@ export function boardTag(input: { taskID: string }) {
   return boardTagForTask(task)
 }
 
-function buildBoard(task: typeof EngineTaskTable.$inferSelect, snapshotVersion: string) {
+function buildBoard(
+  task: typeof EngineTaskTable.$inferSelect,
+  snapshotVersion: string,
+  lastSequence = latestTaskProtocolSequence(task.id),
+) {
   const run = findActiveRunForTask(task.id)
   const plan = findActivePlanForTask(task.id)
   // Query goals by plan if available, otherwise fall back to task_id so that
@@ -193,13 +201,6 @@ function buildBoard(task: typeof EngineTaskTable.$inferSelect, snapshotVersion: 
   // (auto-incrementing integer), NOT timestamps. The panel's monotonic guard
   // compares this against SSE event.sequence — mismatched number spaces
   // would cause ALL SSE events to be silently discarded.
-  const lastSequence = Database.use((db) =>
-    db.select({ seq: sql<number>`coalesce(max(seq), 0)` })
-      .from(ProtocolEventTable)
-      .where(eq(ProtocolEventTable.task_id, task.id))
-      .get()?.seq ?? 0
-  )
-
   // Workflow-structured fields (workflow, goalWorkflows, requirements, architect).
   // Step status is projected fresh from DB rows each render (no FSM cache).
   const workflowFields = buildWorkflowFields(task, goals)
@@ -350,6 +351,15 @@ function buildBoard(task: typeof EngineTaskTable.$inferSelect, snapshotVersion: 
   }
 }
 
+function latestTaskProtocolSequence(taskID: string) {
+  return Database.use((db) =>
+    db.select({ seq: sql<number>`coalesce(max(seq), 0)` })
+      .from(ProtocolEventTable)
+      .where(eq(ProtocolEventTable.task_id, taskID))
+      .get()?.seq ?? 0
+  )
+}
+
 function boardTagForTask(task: typeof EngineTaskTable.$inferSelect) {
   const run = findActiveRunForTask(task.id)
   const plan = findActivePlanForTask(task.id)
@@ -454,7 +464,10 @@ function boardTagForTask(task: typeof EngineTaskTable.$inferSelect) {
         updated: sql<number>`coalesce(max(${ProtocolEventTable.emitted_at}), 0)`,
       })
       .from(ProtocolEventTable)
-      .where(eq(ProtocolEventTable.task_id, task.id))
+      .where(and(
+        eq(ProtocolEventTable.task_id, task.id),
+        inArray(ProtocolEventTable.type, BOARD_VISIBLE_PROTOCOL_EVENT_TYPES),
+      ))
       .get(),
   )
   const noteStats = Database.use((db) =>

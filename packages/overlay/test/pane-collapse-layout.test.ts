@@ -71,7 +71,6 @@ test("panel header controls collapse side panes to message-adjacent rails", asyn
       }
       if (path === "/panel/knowledge/memory") return send([]);
       if (path === "/panel/knowledge/preference") return send([]);
-      if (path === "/tui/runtime/status") return send({ running: false, mode: "none", url: null, sessionID: null });
       return send({});
     },
   });
@@ -91,7 +90,7 @@ test("panel header controls collapse side panes to message-adjacent rails", asyn
       localStorage.setItem("oc_right_panel_collapsed", "false");
     }, server.port);
     await page.goto(`http://127.0.0.1:${server.port}/ui/index.html`, { waitUntil: "domcontentloaded" });
-    await page.waitForSelector('[data-ui="sidebar-header-collapse-toggle"]');
+    await page.waitForSelector('[data-ui="right-panel-header-collapse-toggle"]');
     expect(await page.$("#titlebar .workspace-layout-controls")).toBeNull();
     expect(await page.$(".workspace-command-dock .workspace-layout-controls")).not.toBeNull();
     expect(await page.$('.workspace-command-dock [data-ui="workspace-terminal-open"]')).not.toBeNull();
@@ -107,7 +106,9 @@ test("panel header controls collapse side panes to message-adjacent rails", asyn
     expect(await page.$('.workspace-command-dock [data-ui="workspace-right-panel-toggle"]')).toBeNull();
     expect(await page.$('.pane-edge-controls [data-ui="workspace-left-panel-toggle"]')).toBeNull();
     expect(await page.$('.pane-edge-controls [data-ui="workspace-right-panel-toggle"]')).toBeNull();
-    expect(await page.$('#solidLeftActivityToolbar [data-ui="sidebar-header-collapse-toggle"]')).not.toBeNull();
+    expect(await page.$('[data-ui="sidebar-header-collapse-toggle"]')).not.toBeNull();
+    expect(await page.$("#solidLeftActivityToolbar")).toBeNull();
+    expect(await page.$("#solidLeftActivityToolbar")).toBeNull();
     expect(await page.$('#solidRightActivityToolbar [data-ui="right-panel-header-collapse-toggle"]')).not.toBeNull();
     expect(await page.$(".workspace-command-dock .workspace-editor-launchers")).not.toBeNull();
     expect(await page.$('.workspace-command-dock [data-ui="workspace-editor-open-default"]')).not.toBeNull();
@@ -273,24 +274,16 @@ test("panel header controls collapse side panes to message-adjacent rails", asyn
     await page.keyboard.press("Escape");
 
     const toolbarPlacement = await page.evaluate(() => {
-      const leftButton = document.querySelector<HTMLElement>('[data-ui="sidebar-header-collapse-toggle"]')!;
       const rightButton = document.querySelector<HTMLElement>('[data-ui="right-panel-header-collapse-toggle"]')!;
-      const left = leftButton.getBoundingClientRect();
       const right = rightButton.getBoundingClientRect();
       return {
-        leftInsideActivityToolbar: Boolean(leftButton.closest("#solidLeftActivityToolbar")),
         rightInsideActivityToolbar: Boolean(rightButton.closest("#solidRightActivityToolbar")),
-        leftHeight: Math.round(left.height),
         rightHeight: Math.round(right.height),
-        leftWidth: Math.round(left.width),
         rightWidth: Math.round(right.width),
       };
     });
-    expect(toolbarPlacement.leftInsideActivityToolbar).toBe(true);
     expect(toolbarPlacement.rightInsideActivityToolbar).toBe(true);
-    expect(toolbarPlacement.leftWidth).toBeLessThanOrEqual(40);
     expect(toolbarPlacement.rightWidth).toBeLessThanOrEqual(40);
-    expect(toolbarPlacement.leftHeight).toBeLessThanOrEqual(40);
     expect(toolbarPlacement.rightHeight).toBeLessThanOrEqual(40);
 
     const beforeCollapse = await page.evaluate(() => {
@@ -316,7 +309,6 @@ test("panel header controls collapse side panes to message-adjacent rails", asyn
       };
     });
 
-    await page.click('[data-ui="sidebar-header-collapse-toggle"]');
     await page.click('[data-ui="right-panel-header-collapse-toggle"]');
 
     const collapsed = await page.evaluate(() => {
@@ -340,7 +332,6 @@ test("panel header controls collapse side panes to message-adjacent rails", asyn
         chat: measure("#chatSection"),
         sections: measure("#sections"),
         rightResizer: measure("#rightPaneResizer"),
-        leftToggle: measure('[data-ui="sidebar-header-collapse-toggle"]'),
         rightToggle: measure('[data-ui="right-panel-header-collapse-toggle"]'),
         sidebarContentVisible: getComputedStyle(document.querySelector<HTMLElement>("#sidebar .side-panel-content")!).display !== "none",
         sectionsContentVisible: getComputedStyle(document.querySelector<HTMLElement>("#sections .side-panel-content")!).display !== "none",
@@ -351,14 +342,11 @@ test("panel header controls collapse side panes to message-adjacent rails", asyn
 
     expect(collapsed.sidebar.hidden).toBe(false);
     expect(collapsed.sidebar.display).toBe("flex");
-    expect(collapsed.sidebar.width).toBeLessThanOrEqual(48);
-    expect(collapsed.sidebar.width).toBeLessThan(beforeCollapse.sidebar.width / 2);
+    expect(Math.abs(collapsed.sidebar.width - beforeCollapse.sidebar.width)).toBeLessThanOrEqual(1);
     expect(Math.abs(collapsed.sidebar.height - beforeCollapse.sidebar.height)).toBeLessThanOrEqual(1);
-    expect(collapsed.leftResizer.hidden).toBe(true);
-    expect(collapsed.leftResizer.display).toBe("none");
-    expect(collapsed.leftResizer.disabled).toBe("true");
-    expect(collapsed.leftResizer.width).toBe(0);
-    expect(collapsed.chat.width).toBeGreaterThan(beforeCollapse.chat.width + 200);
+    expect(collapsed.leftResizer.hidden).toBe(false);
+    expect(collapsed.leftResizer.disabled).toBe("false");
+    expect(collapsed.chat.width).toBeGreaterThan(beforeCollapse.chat.width);
     expect(Math.abs(collapsed.chat.height - beforeCollapse.chat.height)).toBeLessThanOrEqual(1);
     expect(collapsed.sections.hidden).toBe(false);
     expect(collapsed.sections.display).toBe("flex");
@@ -369,16 +357,13 @@ test("panel header controls collapse side panes to message-adjacent rails", asyn
     expect(collapsed.rightResizer.display).toBe("none");
     expect(collapsed.rightResizer.disabled).toBe("true");
     expect(collapsed.rightResizer.width).toBe(0);
-    expect(collapsed.leftToggle.hidden).toBe(false);
-    expect(collapsed.leftToggle.display).not.toBe("none");
     expect(collapsed.rightToggle.hidden).toBe(false);
     expect(collapsed.rightToggle.display).not.toBe("none");
-    expect(collapsed.sidebarContentVisible).toBe(false);
+    expect(collapsed.sidebarContentVisible).toBe(true);
     expect(collapsed.sectionsContentVisible).toBe(false);
     expect(collapsed.dockLeftControlExists).toBe(false);
     expect(collapsed.dockRightControlExists).toBe(false);
 
-    await page.click('[data-ui="sidebar-header-collapse-toggle"]');
     await page.click('[data-ui="right-panel-header-collapse-toggle"]');
 
     const expanded = await page.evaluate(() => {

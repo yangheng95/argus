@@ -325,14 +325,6 @@ import type {
   ToolListResponses,
   TuiControlNextResponses,
   TuiControlResponseResponses,
-  TuiEmbedInputErrors,
-  TuiEmbedInputResponses,
-  TuiEmbedResizeErrors,
-  TuiEmbedResizeResponses,
-  TuiEmbedStartErrors,
-  TuiEmbedStartResponses,
-  TuiEmbedStatusResponses,
-  TuiEmbedStopResponses,
   TuiExecuteCommandErrors,
   TuiExecuteCommandResponses,
   TuiOpenHelpResponses,
@@ -5109,7 +5101,7 @@ export class List extends HeyApiClient {
   /**
    * Subscribe to global task-list change notifications
    *
-   * Pure change-notification SSE for the task list sidebar. Emits `{type, taskID, sequence}` whenever any task aggregate event is persisted (created/updated/completed/failed/cancelled/...). Notify-worthy events also carry `notificationDetails` for copyable diagnostics. No replay — clients call /task separately to fetch the refreshed list.
+   * Pure change-notification SSE for the task list sidebar. Emits `{type, taskID, sequence}` when a persisted task aggregate event changes the task-list projection. Conversation stream/status chunks belong to /task/:taskID/events and are intentionally not sent here. Notify-worthy events also carry `notificationDetails` for copyable diagnostics. No replay — clients call /task separately to fetch the refreshed list.
    */
   public events<ThrowOnError extends boolean = false>(
     parameters?: {
@@ -7994,182 +7986,6 @@ export class Runtime2 extends HeyApiClient {
   }
 }
 
-export class Embed extends HeyApiClient {
-  /**
-   * Start embedded OpenTUI renderer
-   *
-   * Start the project-bound OpenTUI renderer used by the overlay coding-agent TUI plugin.
-   */
-  public start<ThrowOnError extends boolean = false>(
-    parameters?: {
-      directory?: string
-      cols?: number
-      rows?: number
-      mode?: "dark" | "light"
-      agent?: string
-      model?: string
-      prompt?: string
-      sessionID?: string
-      continue?: boolean
-      fork?: boolean
-    },
-    options?: Options<never, ThrowOnError>,
-  ) {
-    const params = buildClientParams(
-      [parameters],
-      [
-        {
-          args: [
-            { in: "query", key: "directory" },
-            { in: "body", key: "cols" },
-            { in: "body", key: "rows" },
-            { in: "body", key: "mode" },
-            { in: "body", key: "agent" },
-            { in: "body", key: "model" },
-            { in: "body", key: "prompt" },
-            { in: "body", key: "sessionID" },
-            { in: "body", key: "continue" },
-            { in: "body", key: "fork" },
-          ],
-        },
-      ],
-    )
-    return (options?.client ?? this.client).post<TuiEmbedStartResponses, TuiEmbedStartErrors, ThrowOnError>({
-      url: "/tui/embed/start",
-      ...options,
-      ...params,
-      headers: {
-        "Content-Type": "application/json",
-        ...options?.headers,
-        ...params.headers,
-      },
-    })
-  }
-
-  /**
-   * Get embedded OpenTUI renderer status
-   *
-   * Get the latest project-bound OpenTUI renderer frame for the overlay coding-agent TUI plugin.
-   */
-  public status<ThrowOnError extends boolean = false>(
-    parameters?: {
-      directory?: string
-    },
-    options?: Options<never, ThrowOnError>,
-  ) {
-    const params = buildClientParams([parameters], [{ args: [{ in: "query", key: "directory" }] }])
-    return (options?.client ?? this.client).get<TuiEmbedStatusResponses, unknown, ThrowOnError>({
-      url: "/tui/embed/status",
-      ...options,
-      ...params,
-    })
-  }
-
-  /**
-   * Send input to embedded OpenTUI renderer
-   *
-   * Send keyboard text or key input to the project-bound embedded OpenTUI renderer.
-   */
-  public input<ThrowOnError extends boolean = false>(
-    parameters?: {
-      directory?: string
-      text?: string
-      key?:
-        | "enter"
-        | "escape"
-        | "tab"
-        | "backspace"
-        | "delete"
-        | "arrow-up"
-        | "arrow-down"
-        | "arrow-left"
-        | "arrow-right"
-      ctrl?: boolean
-    },
-    options?: Options<never, ThrowOnError>,
-  ) {
-    const params = buildClientParams(
-      [parameters],
-      [
-        {
-          args: [
-            { in: "query", key: "directory" },
-            { in: "body", key: "text" },
-            { in: "body", key: "key" },
-            { in: "body", key: "ctrl" },
-          ],
-        },
-      ],
-    )
-    return (options?.client ?? this.client).post<TuiEmbedInputResponses, TuiEmbedInputErrors, ThrowOnError>({
-      url: "/tui/embed/input",
-      ...options,
-      ...params,
-      headers: {
-        "Content-Type": "application/json",
-        ...options?.headers,
-        ...params.headers,
-      },
-    })
-  }
-
-  /**
-   * Resize embedded OpenTUI renderer
-   *
-   * Resize the project-bound embedded OpenTUI renderer.
-   */
-  public resize<ThrowOnError extends boolean = false>(
-    parameters?: {
-      directory?: string
-      cols?: number
-      rows?: number
-    },
-    options?: Options<never, ThrowOnError>,
-  ) {
-    const params = buildClientParams(
-      [parameters],
-      [
-        {
-          args: [
-            { in: "query", key: "directory" },
-            { in: "body", key: "cols" },
-            { in: "body", key: "rows" },
-          ],
-        },
-      ],
-    )
-    return (options?.client ?? this.client).post<TuiEmbedResizeResponses, TuiEmbedResizeErrors, ThrowOnError>({
-      url: "/tui/embed/resize",
-      ...options,
-      ...params,
-      headers: {
-        "Content-Type": "application/json",
-        ...options?.headers,
-        ...params.headers,
-      },
-    })
-  }
-
-  /**
-   * Stop embedded OpenTUI renderer
-   *
-   * Stop the project-bound embedded OpenTUI renderer.
-   */
-  public stop<ThrowOnError extends boolean = false>(
-    parameters?: {
-      directory?: string
-    },
-    options?: Options<never, ThrowOnError>,
-  ) {
-    const params = buildClientParams([parameters], [{ args: [{ in: "query", key: "directory" }] }])
-    return (options?.client ?? this.client).post<TuiEmbedStopResponses, unknown, ThrowOnError>({
-      url: "/tui/embed/stop",
-      ...options,
-      ...params,
-    })
-  }
-}
-
 export class Control3 extends HeyApiClient {
   /**
    * Get next TUI request
@@ -8475,11 +8291,6 @@ export class Tui extends HeyApiClient {
   private _runtime?: Runtime2
   get runtime(): Runtime2 {
     return (this._runtime ??= new Runtime2({ client: this.client }))
-  }
-
-  private _embed?: Embed
-  get embed(): Embed {
-    return (this._embed ??= new Embed({ client: this.client }))
   }
 
   private _control?: Control3

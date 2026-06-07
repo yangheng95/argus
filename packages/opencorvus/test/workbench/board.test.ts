@@ -7,6 +7,8 @@ import { EngineTaskTable } from "../../src/engine/engine.sql"
 import { Event } from "../../src/engine/model"
 import { EngineProtocol } from "../../src/engine/protocol"
 import { Instance } from "../../src/project/instance"
+import { ProtocolEventTable } from "../../src/protocol/protocol.sql"
+import { Identifier } from "../../src/id/id"
 import { resetDatabase } from "../fixture/db"
 import { tmpdir } from "../fixture/fixture"
 
@@ -120,6 +122,81 @@ test("compileBoard cache and task-scope status include workflow step protocol ev
       expect(after.snapshotVersion).toBe(afterTag)
       expect(after.snapshotVersion).not.toBe(before.snapshotVersion)
       expect(after.workflow?.steps.find((step) => step.id === "architect")?.status).toBe("running")
+    },
+  })
+})
+
+test("board snapshot tag ignores stream noise while lastSequence stays current", async () => {
+  await resetDatabase()
+  await using tmp = await tmpdir()
+  const now = Date.now()
+  const projectID = `project_board_noise_${now}`
+  const taskID = `tsk_${now.toString(16)}BoardNoise`
+
+  Database.use((db) => {
+    db.insert(ProjectTable).values({
+      id: projectID,
+      worktree: tmp.path,
+      name: "Board protocol noise",
+      sandboxes: "[]",
+      time_created: now,
+      time_updated: now,
+    }).run()
+    db.insert(EngineTaskTable).values({
+      id: taskID,
+      project_id: projectID,
+      source: "test",
+      title: "Board protocol noise",
+      request: "Ignore stream noise in board tag",
+      priority: "normal",
+      time_created: now,
+      time_updated: now,
+    }).run()
+  })
+
+  await Instance.provide({
+    directory: tmp.path,
+    fn: async () => {
+      const before = compileBoard({ taskID })
+      const beforeTag = boardTag({ taskID })
+      expect(before.lastSequence).toBe(0)
+
+      Database.use((db) => {
+        for (const [index, type] of ["session.status", "review.stream.chunk"].entries()) {
+          const seq = index + 1
+          db.insert(ProtocolEventTable).values({
+            id: Identifier.ascending("protocol_event"),
+            kind: "event",
+            type,
+            aggregate_type: "task",
+            aggregate_id: taskID,
+            task_id: taskID,
+            source: "test.board-noise",
+            seq,
+            emitted_at: now + seq,
+            payload: { taskID, status: { type: "streaming" }, delta: "noise" },
+            time_created: now + seq,
+            time_updated: now + seq,
+          }).run()
+        }
+      })
+
+      const afterNoise = compileBoard({ taskID })
+      expect(boardTag({ taskID })).toBe(beforeTag)
+      expect(afterNoise.snapshotVersion).toBe(before.snapshotVersion)
+      expect(afterNoise.lastSequence).toBe(2)
+
+      await EngineProtocol.emit(Event.WorkflowStepUpdated, {
+        taskID,
+        stepID: "architect",
+        status: "running",
+        summary: "Step \"Architect\" started",
+      }, { source: "test.board-visible" })
+
+      const afterVisible = compileBoard({ taskID })
+      expect(afterVisible.lastSequence).toBe(3)
+      expect(afterVisible.snapshotVersion).not.toBe(before.snapshotVersion)
+      expect(afterVisible.workflow?.steps.find((step) => step.id === "architect")?.status).toBe("running")
     },
   })
 })

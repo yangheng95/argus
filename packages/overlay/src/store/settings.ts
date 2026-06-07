@@ -34,6 +34,7 @@ export interface OverlaySettings {
   rightPanelCollapsed: boolean;
   sidebarWidth: number | null;
   sectionsWidth: number | null;
+  centerWorkbenchWidth: number | null;
   /** Mission page column widths — persisted independently of the Panel's
    *  sidebarWidth/sectionsWidth so resizing one mode never moves the other
    *  (the ledger/channels content differs from the Panel's chat list /
@@ -151,9 +152,10 @@ export const DEFAULT_SETTINGS: OverlaySettings = {
   projectEditor: "vscode",
   initGit: true,
   sidebarCollapsed: false,
-  rightPanelCollapsed: true,
+  rightPanelCollapsed: false,
   sidebarWidth: null,
   sectionsWidth: null,
+  centerWorkbenchWidth: null,
   missionLedgerWidth: null,
   missionChannelsWidth: null,
   opacity: 0.99,
@@ -220,13 +222,17 @@ export function applySettings(input: Partial<OverlaySettings>): void {
     projectEditor:
       sanitizeProjectEditor(input?.projectEditor),
     initGit: true,
-    sidebarCollapsed: input?.sidebarCollapsed === true,
+    sidebarCollapsed:
+      typeof input?.sidebarCollapsed === "boolean"
+        ? input.sidebarCollapsed
+        : DEFAULT_SETTINGS.sidebarCollapsed,
     rightPanelCollapsed:
       typeof input?.rightPanelCollapsed === "boolean"
         ? input.rightPanelCollapsed
         : DEFAULT_SETTINGS.rightPanelCollapsed,
     sidebarWidth: sanitizePaneWidth(input?.sidebarWidth),
     sectionsWidth: sanitizePaneWidth(input?.sectionsWidth),
+    centerWorkbenchWidth: sanitizePaneWidth(input?.centerWorkbenchWidth),
     missionLedgerWidth: sanitizePaneWidth(input?.missionLedgerWidth),
     missionChannelsWidth: sanitizePaneWidth(input?.missionChannelsWidth),
     opacity: sanitizeOpacity(input?.opacity),
@@ -308,6 +314,7 @@ export function bootstrapOverlaySettings(
   directory?: string;
   sidebarWidth?: number;
   sectionsWidth?: number;
+  centerWorkbenchWidth?: number;
   missionLedgerWidth?: number;
   missionChannelsWidth?: number;
   preferredProjectEditor?: ProjectEditorID;
@@ -328,6 +335,7 @@ export function bootstrapOverlaySettings(
     rightPanelCollapsed: input.rightPanelCollapsed ?? DEFAULT_SETTINGS.rightPanelCollapsed,
     sidebarWidth: input.sidebarWidth || undefined,
     sectionsWidth: input.sectionsWidth || undefined,
+    centerWorkbenchWidth: input.centerWorkbenchWidth || undefined,
     missionLedgerWidth: input.missionLedgerWidth || undefined,
     missionChannelsWidth: input.missionChannelsWidth || undefined,
     opacity: input.opacity ?? DEFAULT_SETTINGS.opacity,

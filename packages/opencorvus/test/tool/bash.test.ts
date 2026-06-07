@@ -2,6 +2,7 @@ import { afterEach, describe, expect, mock, test } from "bun:test"
 import fs from "fs/promises"
 import os from "os"
 import path from "path"
+import { createServer, type Server } from "node:http"
 import { PassThrough } from "stream"
 import { BashTool, DEFAULT_TIMEOUT, disposeSyntaxTree } from "../../src/tool/bash"
 import { DEFAULT_BASH_BACKGROUND_LEASE_MS, DEFAULT_BASH_TIMEOUT_MS } from "../../src/shell/timeout"
@@ -36,6 +37,25 @@ const projectRoot = path.join(__dirname, "../..")
 afterEach(() => {
   mock.restore()
 })
+
+async function startReachablePreviewServer(): Promise<{ url: string; close: () => Promise<void> }> {
+  let server: Server | undefined
+  server = createServer((_, res) => {
+    res.writeHead(200, { "content-type": "text/html; charset=utf-8" })
+    res.end("<!doctype html><title>preview</title>")
+  })
+  await new Promise<void>((resolve) => server!.listen(0, "127.0.0.1", resolve))
+  const address = server.address()
+  if (!address || typeof address === "string") throw new Error("preview test server did not bind a TCP address")
+  return {
+    url: `http://127.0.0.1:${address.port}/`,
+    close: () =>
+      new Promise<void>((resolve) => {
+        server?.close(() => resolve())
+        server = undefined
+      }),
+  }
+}
 
 function isPidAlive(pid: number) {
   try {
@@ -248,6 +268,7 @@ describe("tool.bash", () => {
 
   test("background process output persists task browser preview target", async () => {
     await resetDatabase()
+    const preview = await startReachablePreviewServer()
     try {
       await using tmp = await tmpdir({ git: true })
       const taskID = `tsk_bashpreview${Date.now()}`
@@ -269,7 +290,7 @@ describe("tool.bash", () => {
           const restore = ProcessSupervisor.setFactoryForTest(async () => {
             const stdout = new PassThrough()
             queueMicrotask(() => {
-              stdout.write("  VITE v6.0.0 ready\n  ➜  Local:   http://localhost:5173/\n")
+              stdout.write(`  VITE v6.0.0 ready\n  ➜  Local:   ${preview.url}\n`)
             })
             return {
               pid: 9010,
@@ -296,7 +317,68 @@ describe("tool.bash", () => {
             )
 
             const persisted = findLatestBrowserPreviewTarget(taskID)
-            expect(persisted?.url).toBe("http://localhost:5173/")
+            expect(persisted?.url).toBe(preview.url)
+          } finally {
+            restore()
+          }
+        },
+      })
+    } finally {
+      await preview.close()
+      await resetDatabase()
+    }
+  })
+
+  test("background process output does not persist unreachable browser preview target", async () => {
+    await resetDatabase()
+    try {
+      await using tmp = await tmpdir({ git: true })
+      const taskID = `tsk_bashpreviewdead${Date.now()}`
+      await Instance.provide({
+        directory: tmp.path,
+        fn: async () => {
+          Database.use((db) =>
+            db.insert(EngineTaskTable).values({
+              id: taskID,
+              project_id: Instance.project.id,
+              title: "Preview task",
+              request: "Preview task",
+              source: "api",
+              time_created: Date.now(),
+              time_updated: Date.now(),
+            }).run(),
+          )
+
+          const restore = ProcessSupervisor.setFactoryForTest(async () => {
+            const stdout = new PassThrough()
+            queueMicrotask(() => {
+              stdout.write("  VITE v6.0.0 ready\n  ➜  Local:   http://127.0.0.1:9/\n")
+            })
+            return {
+              pid: 9011,
+              stdin: null,
+              stdout,
+              stderr: new PassThrough(),
+              exited: new Promise<number>(() => {}),
+              terminate: async () => {},
+              dispose: async () => {},
+              unref: () => {},
+            }
+          })
+          try {
+            const bash = await BashTool.init()
+            await bash.execute(
+              {
+                command: "npm run dev",
+                description: "Start frontend dev server",
+                background: true,
+                timeout: 20,
+                leaseTimeout: 200,
+              },
+              { ...ctx, extra: { taskID } },
+            )
+
+            expect(findLatestBrowserPreviewTarget(taskID)).toBeUndefined()
           } finally {
             restore()
           }
@@ -305,7 +387,7 @@ describe("tool.bash", () => {
     } finally {
       await resetDatabase()
     }
-  })
+  }, 10_000)
 
   test("resolves relative workdir against project before spawning", async () => {
     await using tmp = await tmpdir({ git: true })

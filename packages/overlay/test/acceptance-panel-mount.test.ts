@@ -47,27 +47,35 @@ test("index.html declares side activity bodies and the default right Inspector a
   expect(html).toContain('id="solidConversationAgentRailMount"')
   expect(html).toContain('id="chatContentFrame"')
   expect(html).toContain('id="chatMessagePane"')
-  expect(html).toContain('id="chatFileEditorPane"')
-  expect(html).toContain('data-chat-view="file" data-active="false"')
-  expect(html).toContain('id="chatDiffPane"')
-  expect(html).toContain('data-chat-view="diff" data-active="false"')
+  expect(html).toContain('id="centerWorkbench"')
+  expect(html).toContain('id="solidCenterWorkbenchTabs"')
+  expect(html).toContain('id="centerWorkbenchResizer"')
+  expect(html).toContain('id="centerWorkbenchExplorer"')
+  expect(html).toContain('id="centerWorkbenchDiff"')
+  expect(html).toContain('id="centerWorkbenchBrowser"')
+  expect(html).not.toContain('id="centerWorkbenchAssistant"')
+  expect(html).not.toContain('id="solidCodingAssistantMount"')
+  expect(html).toContain('id="centerWorkbenchFile"')
   expect(html).toContain('id="solidFileEditorMount"')
   expect(html).not.toContain('id="solidFileEditorToggleMount"')
   expect(html).not.toContain('id="rightPanelWorkflow"')
   expect(html).not.toContain('id="solidAgentWorkflowMount"')
-  expect(html).toContain('id="solidLeftActivityToolbar"')
+  expect(html).not.toContain('id="solidLeftActivityToolbar"')
+  expect(html).toContain('id="solidLeftPanelCollapseControl"')
+  expect(html).toContain('id="solidLeftCollapsedRailControl"')
   expect(html).toContain('id="solidRightActivityToolbar"')
   expect(html).toContain('id="chatViewTitle"')
   expect(html).toContain('id="leftPanelTasks"')
-  expect(html).toContain('id="leftPanelExplorer"')
-  expect(html).toContain('id="leftPanelChanges"')
+  expect(html).not.toContain('id="leftPanelExplorer"')
+  expect(html).not.toContain('id="leftPanelChanges"')
   expect(html).toContain('id="solidFileExplorerMount"')
   expect(html).toContain('id="solidFileChangesMount"')
-  expect(html).toContain('id="chatTuiPane"')
-  expect(html).toContain('data-chat-view="tui" data-active="false"')
-  expect(html).toContain('id="solidTuiHostMount"')
-  expect(html).toContain('id="chatBrowserPreviewPane"')
-  expect(html).toContain('data-chat-view="browser" data-active="false"')
+  expect(html).not.toContain('id="chatPluginPane"')
+  expect(html).not.toContain('data-chat-view="plugin"')
+  expect(html).not.toContain('id="chatPluginOutlet"')
+  expect(html).not.toContain('id="chatTuiPane"')
+  expect(html).not.toContain('id="solidTuiHostMount"')
+  expect(html).not.toContain('id="chatBrowserPreviewPane"')
   expect(html).toContain('id="solidBrowserPreviewMount"')
   expect(html).not.toContain('id="rightPanelTui"')
   expect(html).not.toContain('id="rightPanelBrowser"')
@@ -105,14 +113,14 @@ test("Inspector workflow sections render as one contiguous stack", async () => {
 test("main.tsx mounts the top-level side activity toolbars and bodies", async () => {
   const main = await readSrc("src/main.tsx")
   expect(main).toContain('document.getElementById("solidConversationAgentRailMount")')
-  expect(main).toContain('document.getElementById("chatViewTitle")')
+  expect(main).toContain('document.querySelector("#chatViewTitle")')
   expect(main).toContain('document.getElementById("solidFileExplorerMount")')
   expect(main).toContain('document.getElementById("solidFileEditorMount")')
-  expect(main).toContain('document.getElementById("chatFileEditorPane")')
-  expect(main).toContain('document.getElementById("chatDiffPane")')
+  expect(main).toContain('document.getElementById("centerWorkbenchFile")')
+  expect(main).toContain('document.getElementById("centerWorkbenchDiff")')
   expect(main).toContain('document.getElementById("solidFileChangesMount")')
-  expect(main).toContain('document.getElementById("solidTuiHostMount")')
-  expect(main).toContain('document.getElementById("solidLeftActivityToolbar")')
+  expect(main).not.toContain('document.getElementById("chatPluginOutlet")')
+  expect(main).not.toContain('document.getElementById("solidLeftActivityToolbar")')
   expect(main).toContain('document.getElementById("solidRightActivityToolbar")')
   expect(main).toContain('document.getElementById("solidBrowserPreviewMount")')
   expect(main).not.toContain('document.getElementById("solidFileEditorToggleMount")')
@@ -125,14 +133,20 @@ test("main.tsx mounts the top-level side activity toolbars and bodies", async ()
   expect(main).not.toContain("<FrontendPreviewPanel")
   expect(main).toContain("<SideActivityToolbar")
   expect(main).toContain("selectRightActivity")
-  expect(main).toContain("const CodingAgentTuiPanel = codingAgentTuiPlugin.Panel")
-  expect(main).toContain("directory={activeDirectory}")
+  expect(main).toContain('type RightActivity = "explorer" | "diff" | "browser" | "assistant"')
+  expect(main).toContain('id: "explorer", icon: "folder", labelKey: "explorer.title"')
+  expect(main).toContain('id: "diff", icon: "file-document", labelKey: "workspace.diff"')
+  expect(main).toContain('{ id: "assistant", icon: "message", labelKey: "coding_assistant.title" }')
+  expect(main).toContain("selectCodingAssistantSession()")
+  expect(main).not.toContain("overlayRightActivityPlugins")
+  expect(main).not.toContain("const PluginPanel = plugin.Panel")
   expect(main).not.toContain("<TuiHostPanel")
   expect(main).not.toContain("<TuiRuntimePanel")
   expect(main).toContain("<BrowserPreviewPanel")
   expect(main).toContain("<FileExplorerPanel")
   expect(main).toContain("<FileChangesPanel")
   expect(main).toContain("<FileEditorPane")
+  expect(main).toContain("<WorkspaceCodingCliLaunchers")
   expect(main).not.toContain("<RightPanelTabs")
   expect(main).not.toContain("<RightFilesPanel")
   expect(main).not.toContain("<FileEditorToggle")
@@ -251,7 +265,7 @@ test("`acceptance:focus-changes` event contract — AcceptancePanel dispatches, 
   expect(filesPanel).toContain('setActiveView("changes")')
   expect(filesPanel).not.toContain("showWorkbenchPane")
   expect(main).toContain('"acceptance:focus-changes"')
-  expect(main).toContain('setLeftActivity("changes")')
+  expect(main).toContain('openCenterWorkbenchTab("diff")')
   expect(changes).toContain('"acceptance:focus-changes"')
   expect(changes).toContain('focusEvent="acceptance:focus-changes"')
   expect(fileChangesView).toContain("addEventListener")
@@ -277,11 +291,7 @@ test("redesign-required i18n keys exist in both locales; the legacy lifecycle ke
     "browser_preview.capture",
     "browser_preview.capture_loading",
     "browser_preview.viewport.desktop",
-    "tui.title",
-    "tui.host_error",
-    "tui.host_restart",
-    "tui.host_running",
-    "tui.host_stopped",
+    "coding_assistant.title",
   ]
   // i18n keys are flat strings with literal dots, not nested paths — use
   // `key in obj` instead of toHaveProperty (which would mis-traverse).
@@ -302,7 +312,6 @@ test("redesign-required i18n keys exist in both locales; the legacy lifecycle ke
     "right_panel.inspector",
     "right_panel.preview",
     "frontend_preview.title",
-    "coding_assistant.title",
     "coding_assistant.input_placeholder",
     "coding_assistant.send",
     "coding_assistant.loading",

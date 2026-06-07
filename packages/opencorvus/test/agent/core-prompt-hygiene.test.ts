@@ -1017,6 +1017,23 @@ describe("core prompt hygiene", () => {
     expect(normalized).toContain("Never call generic `task` or control-plane `panel`")
   })
 
+  test("orchestrator prompt forbids plain-text claims when pending goals need dispatch", async () => {
+    const text = await readPrompt("orchestrator")
+    const normalized = text.replace(/\s+/g, " ")
+
+    expect(normalized).toContain("Process facts must be artifact-backed")
+    expect(normalized).toContain(
+      "Never claim that a task, follow-up task, run, goal attempt, tool result, file change, checkpoint, push, review, or session exists unless the current task record or a just-returned tool result proves it",
+    )
+    expect(normalized).toContain("If the next action is to create follow-up work, call `propose_task`")
+    expect(normalized).toContain("do not say it was created in plain text")
+    expect(normalized).toContain(
+      "If the current workflow task has pending goals, no active build/run, no terminal integrity verdict, and no external blocker, a status-only response is wrong",
+    )
+    expect(normalized).toContain("dispatch `build({ goalID })` for the first eligible pending goal")
+    expect(normalized).toContain("Do not ask the operator whether to start work that the task contract already requires")
+  })
+
   test("orchestrator prompt makes post-build integrity pass the terminal lifecycle path", async () => {
     const text = await readPrompt("orchestrator")
     const normalized = text.replace(/\s+/g, " ")

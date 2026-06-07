@@ -286,6 +286,7 @@ All service calls include a task-scoped preview target. The service must not kee
 ```ts
 export type CodingAgentTuiTarget = {
   kind: "task-preview"
+  directory: string
   taskID: string
   targetID: string
 }
@@ -300,7 +301,7 @@ export const CODING_AGENT_TUI_TARGET_KIND = "coding_agent_tui_target"
 export const CODING_AGENT_TUI_FRAME_EVIDENCE_KIND = "coding_agent_tui_frame_evidence"
 ```
 
-The backend service creates or resolves `CODING_AGENT_TUI_TARGET_KIND` before starting a renderer. `targetID` must be a persisted `EngineArtifactTable.id` for the same `taskID`; caller-supplied target IDs are validated by lookup, not trusted. The renderer session key is the persisted `{ taskID, targetID }`.
+The backend service creates or resolves `CODING_AGENT_TUI_TARGET_KIND` before starting a renderer. `targetID` must be a persisted `EngineArtifactTable.id` for the same `taskID` and `directory`; caller-supplied target IDs are validated by lookup, not trusted. The renderer session key is the persisted `{ directory, taskID, targetID }`.
 
 Each captured frame writes `CODING_AGENT_TUI_FRAME_EVIDENCE_KIND` with:
 
@@ -318,6 +319,7 @@ Start/status/input/resize/stop requests are keyed by `{ directory, target }`. Re
 ```ts
 export type CodingAgentTuiEvidence = {
   kind: "opentui-frame"
+  directory: string
   taskID: string
   targetID: string
   evidenceID: string
@@ -389,7 +391,7 @@ Verification must include inspecting the packaged artifact or generated resource
 
 1. `@opencorvus-ai/coding-agent-tui` backend plugin entry.
 2. `@opencorvus-ai/coding-agent-tui/overlay` contribution entry.
-3. The OpenTUI worker entry.
+3. The OpenTUI worker executable.
 4. The shared `@opencorvus-ai/tui-app` runtime.
 5. The plugin manifest.
 6. Required runtime dependencies under deterministic relative paths.
@@ -398,16 +400,20 @@ Expected embedded archive relative paths include:
 
 ```text
 plugins/coding-agent-tui/plugin.json
-plugins/coding-agent-tui/backend/plugin.js
-plugins/coding-agent-tui/overlay/index.js
-plugins/coding-agent-tui/backend/server/embedded-worker.js
-plugins/tui-app/app.js
+coding-agent-tui-worker.exe              # Windows
+coding-agent-tui-worker                  # Linux/macOS
+node_modules/@opencorvus-ai/coding-agent-tui/src/backend/server/embedded.ts
+node_modules/@opencorvus-ai/coding-agent-tui/src/overlay/index.tsx
+node_modules/@opencorvus-ai/coding-agent-tui/node_modules/@opencorvus-ai/tui-app/src/embedded.tsx
+node_modules/@opencorvus-ai/coding-agent-tui/node_modules/@opencorvus-ai/tui-app/src/app.tsx
 node_modules/@opentui/core/
 node_modules/@opentui/solid/
 node_modules/@opentui/keymap/
 ```
 
-Exact file extensions may differ after bundling, but the manifest must list the concrete paths and Rust completeness checks must validate every listed required resource. Missing resources must produce a visible startup error before attempting to spawn a sidecar process.
+The current manifest-resource checkpoint uses source package files copied into the sidecar payload by `copyRuntimeNodeModules()` for backend, overlay, and shared TUI runtime files. The worker is no longer a source `src/backend/server/embedded-worker.tsx` runtime resource: `build.ts` and `build.local.ts` compile that source entry into `coding-agent-tui-worker(.exe)`, and the plugin backend resolves the manifest `embedded-worker` resource from `PluginInput.resources` before spawning it.
+
+Exact file extensions may differ after final bundling, but the manifest must list the concrete paths and Rust completeness checks must validate every listed required resource. Missing resources must produce a visible startup error before attempting to spawn a sidecar process.
 
 The packaged overlay must fail visibly when the plugin package is absent. It must not silently fall back to `/tui/embed/*` or a built-in core renderer.
 
@@ -553,6 +559,13 @@ Full pre-push verification remains the existing hook path.
 
 Exit criteria: OpenCorvus CLI still renders TUI through `@opencorvus-ai/tui-app`, and no consumer needs a private `packages/opencorvus/src/cli/cmd/tui/app.tsx` import.
 
+2026-06-06 boundary correction status:
+
+- OpenCorvus CLI TUI entrypoints must import `tui()` from `@opencorvus-ai/tui-app`; tests must reject any return to `./app`.
+- `packages/tui-app` must expose a real OpenTUI render root that consumes the public `TuiRootInput` contract, host adapters, event source, args, directory, and terminal dimensions. A static title-only placeholder is not acceptable.
+- The historical core TUI subtree is not yet fully migrated. The remaining work is to split the 134-file tree into public reusable TUI code plus injected host adapters for the private `@/` dependencies found under `packages/opencorvus/src/cli/cmd/tui/**`.
+- Until that split is complete, review must treat Phase 1 as boundary-corrected but not extraction-complete. Tests must not assert that the core private `app.tsx` is the canonical embedded renderer.
+
 ### Phase 2: Generic Plugin Service Mount
 
 1. Extend `@opencorvus-ai/plugin` types with `Hooks.service`.
@@ -630,6 +643,22 @@ The refactor is complete only when all are true:
 16. Tauri extraction verifies manifest-listed resources before sidecar spawn.
 17. Tests cover the new plugin route, old route deletion, overlay route migration, overlay registry loading, static DOM deletion, error status mapping, packaging resources, and persisted evidence metadata.
 
+## Implementation Audit - 2026-06-06
+
+Independent review after implementation found that the work is partially complete, not finished. Current status:
+
+| Area | Status | Evidence / remaining work |
+| --- | --- | --- |
+| Generic plugin service routing | Implemented | `/plugin/:id/*` dispatch, diagnostics, duplicate-ID handling, and old `/tui/embed/*` deletion are covered by `packages/opencorvus/test/server/plugin-service-routes.test.ts`. |
+| Coding Agent TUI backend package | Implemented | Backend routes live in `packages/coding-agent-tui`; task target/evidence is persisted through plugin `taskArtifacts`; renderer worker resolution now comes from manifest-backed `PluginInput.resources` and spawns the compiled `coding-agent-tui-worker(.exe)` resource. |
+| Task-scoped target/evidence | Implemented | Requests require `{ directory, target }`; target artifacts are directory-scoped; frame evidence artifacts include `directory`, `targetID`, `evidenceID`, `capturedAt`, and `frameHash`. |
+| Overlay route migration | Mostly implemented | Overlay calls `plugin/coding-agent-tui/embed/*` through the contract path builder and visual tests render plugin evidence; remaining issue is CSS/i18n ownership still lives in shell files unless generated from manifest. |
+| Default manifest / resource verification | Implemented for worker/backend payload | `packages/coding-agent-tui/plugin.json` lists OS-specific worker executable paths plus runtime resources; `packages/opencorvus/script/build.ts` and `build.local.ts` compile `coding-agent-tui-worker(.exe)` and validate manifest resources; real Windows `overlay-server --single` packaging produced the worker; `packages/overlay/src-tauri/build.rs` emits manifest-listed resources and fixture-backed `main.rs` tests verify resource inclusion and worker executable mode. |
+| Shared `tui-app` extraction | Not complete | CLI entrypoints import `@opencorvus-ai/tui-app`, and the package has no private `@/` imports, but the real 134-file TUI tree remains under `packages/opencorvus/src/cli/cmd/tui`. The current `packages/tui-app/src/app.tsx` is a minimal render root and must not be accepted as final extraction. |
+| Overlay manifest as single source | Partially implemented | `packages/overlay/script/generate-overlay-plugins.ts` generates `src/generated/overlay-plugins.ts` from `packages/coding-agent-tui/plugin.json` before overlay typecheck/build; remaining issue is CSS/i18n ownership still lives in shell files unless generated from manifest. |
+
+The next implementation pass must prioritize the remaining P0 item: true shared TUI extraction. A review that treats the current minimal `tui-app` as complete is invalid.
+
 ## Independent Review Feedback
 
 Codex independent review on 2026-06-06 found the first draft was still incomplete. This revision incorporates the review feedback:
@@ -664,3 +693,15 @@ Second independent review on 2026-06-06 found additional implementation blockers
 This supersedes the backend ownership conclusion in `specs/coding-agent-tui-overlay-plugin-decoupling-2026-06-06.md`.
 
 That earlier spec correctly identified that a generic browser PTY terminal was not a valid OpenTUI embed, but it incorrectly accepted OpenCorvus core ownership of `/tui/embed/*`. This spec replaces that with a plugin-owned service route.
+
+## Runtime Re-alignment Audit - 2026-06-06
+
+The packaged coding-agent-tui worker must not render the minimal `packages/tui-app` root. That package remains a boundary probe and is not the acceptance target for the overlay TUI tab.
+
+The active packaged chain is:
+
+```text
+overlay plugin -> /plugin/coding-agent-tui/embed/start -> manifest resource embedded-worker -> packages/opencorvus/src/cli/cmd/tui/embedded-worker.tsx -> packages/opencorvus/src/cli/cmd/tui/app.tsx TuiRoot -> OpenTUI captured frame
+```
+
+Packaging must compile `coding-agent-tui-worker(.exe)` from the opencorvus-owned embedded worker entrypoint, and the plugin manifest must also list `opencorvus-tui(.exe)` so the overlay-server payload validates the real TUI sibling artifact. A missing `embedded-worker` resource is a startup error with a visible diagnostic; it must not fall back to source TSX or `process.execPath`.

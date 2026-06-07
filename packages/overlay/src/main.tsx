@@ -4,7 +4,7 @@
 // Self-sufficient — no external script dependencies.
 
 import { render } from "solid-js/web"
-import { createEffect, createRoot, createSignal, untrack } from "solid-js"
+import { createEffect, createRoot, createSignal, For, untrack } from "solid-js"
 import { Conversation } from "./components/Conversation"
 import { TaskList } from "./components/TaskList"
 import { Board } from "./components/Board"
@@ -22,18 +22,18 @@ import { TitlebarMenubar } from "./components/titlebar/TitlebarMenubar"
 import { ConnectionBadge } from "./components/ConnectionBadge"
 import { ConversationAgentRail } from "./components/ConversationAgentRail"
 import { LogViewer } from "./components/LogViewer"
-import { WorkspacePanel } from "./components/WorkspacePanel"
 import { FileExplorerPanel } from "./components/FileExplorerPanel"
 import { FileEditorPane } from "./components/FileEditorPane"
 import { FileChangesPanel } from "./components/FileChangesPanel"
 import { BrowserPreviewPanel } from "./components/BrowserPreviewPanel"
 import { SideActivityToolbar, type SideActivity } from "./components/SideActivityToolbar"
-import { codingAgentTuiPlugin } from "./plugins/coding-agent-tui"
+import { Icon, type IconName } from "./components/Icon"
 import { closeFileEditor, fileWorkbenchOpen } from "./services/file-workbench"
 import type { DiffTarget } from "./services/diff"
 import { initApp } from "./services/init"
 import { loadTasks, boardStore, loadBoard,
   activeTaskID,
+  activeSessionID,
 } from "./store/board"
 import { messageStore } from "./store/messages"
 import { appStore } from "./store/app"
@@ -55,7 +55,7 @@ import {
   toggleDevtools,
 } from "./services/theme"
 import { settingsStore, setSettingsStore, saveSettings } from "./store/settings"
-import { initPaneResizers, cancelPaneResize, renderPaneLayout, PANEL_PANE_CONFIG } from "./services/pane"
+import { initPaneResizers, cancelPaneResize, currentUIScale, renderPaneLayout, PANEL_PANE_CONFIG } from "./services/pane"
 import { panelMessage } from "./services/chat"
 import { ConnectionBanner } from "./components/ConnectionBanner"
 import { CommandPalette } from "./components/CommandPalette"
@@ -81,6 +81,7 @@ import {
 import { openConfigDialog, openGoalDialog, renderAboutVersion, setupDialogBackdropClose } from "./services/dialog"
 import { cardTreeStore } from "./store/card-tree"
 import { composerDraftKey } from "./services/composer-draft"
+import { isCodingAssistantSource, selectCodingAssistantSession } from "./services/coding-assistant"
 
 // ── Module teardown ──
 // Centralised cleanup for top-level document/window listeners and Solid roots.
@@ -167,51 +168,97 @@ const [logOpen, setLogOpen] = createSignal(false)
 const [workspaceOpen, setWorkspaceOpen] = createSignal(false)
 const [workspaceTarget, setWorkspaceTarget] = createSignal<DiffTarget>({ filePath: "" })
 
-type LeftActivity = "tasks" | "explorer" | "changes"
-type RightActivity = typeof codingAgentTuiPlugin.id | "browser" | "inspector"
-type ChatView = "conversation" | typeof codingAgentTuiPlugin.id | "browser" | "file" | "diff"
+type RightActivity = "explorer" | "diff" | "browser" | "assistant"
+type CenterWorkbenchTab = "explorer" | "diff" | "browser" | "file"
 
-const DEFAULT_LEFT_ACTIVITY: LeftActivity = "tasks"
-const DEFAULT_RIGHT_ACTIVITY: RightActivity = "inspector"
-const DEFAULT_CHAT_VIEW: ChatView = "conversation"
-
-const LEFT_ACTIVITIES: readonly SideActivity<LeftActivity>[] = [
-  { id: "tasks", icon: "goals", labelKey: "sidebar.title" },
-  { id: "explorer", icon: "folder", labelKey: "explorer.title" },
-  { id: "changes", icon: "file-document", labelKey: "section.files" },
-]
+const DEFAULT_CENTER_WORKBENCH_WIDTH = 420
 
 const RIGHT_ACTIVITIES: readonly SideActivity<RightActivity>[] = [
-  codingAgentTuiPlugin.activity,
+  { id: "explorer", icon: "folder", labelKey: "explorer.title" },
+  { id: "diff", icon: "file-document", labelKey: "workspace.diff" },
   { id: "browser", icon: "inspect", labelKey: "browser_preview.title" },
-  { id: "inspector", icon: "panel-right", labelKey: "sections.title" },
+  { id: "assistant", icon: "message", labelKey: "coding_assistant.title" },
 ]
 
-const LEFT_ACTIVITY_LABEL_KEYS: Record<LeftActivity, string> = {
-  tasks: "sidebar.title",
+const CENTER_WORKBENCH_LABEL_KEYS: Record<CenterWorkbenchTab, string> = {
   explorer: "explorer.title",
-  changes: "section.files",
-}
-
-const CHAT_VIEW_LABEL_KEYS: Record<ChatView, string> = {
-  conversation: "chat.title",
-  [codingAgentTuiPlugin.id]: codingAgentTuiPlugin.labelKey,
+  diff: "workspace.diff",
   browser: "browser_preview.title",
   file: "file_editor.title",
-  diff: "workspace.diff",
 }
 
-const [leftActivity, setLeftActivity] = createSignal<LeftActivity>(DEFAULT_LEFT_ACTIVITY)
-const [rightActivity, setRightActivity] = createSignal<RightActivity>(DEFAULT_RIGHT_ACTIVITY)
-const [chatView, setChatView] = createSignal<ChatView>(DEFAULT_CHAT_VIEW)
+const CENTER_WORKBENCH_ICONS: Record<CenterWorkbenchTab, IconName> = {
+  explorer: "folder",
+  diff: "file-document",
+  browser: "inspect",
+  file: "file-document",
+}
 
-function selectRightActivity(activity: RightActivity) {
-  if (settingsStore.rightPanelCollapsed) {
-    setSettingsStore("rightPanelCollapsed", false)
-    saveSettings()
+const [centerWorkbenchTabs, setCenterWorkbenchTabs] = createSignal<CenterWorkbenchTab[]>([])
+const [activeCenterWorkbenchTab, setActiveCenterWorkbenchTab] = createSignal<CenterWorkbenchTab | null>(null)
+const activeRightActivity = () => {
+  if (isCodingAssistantSource()) return "assistant"
+  const active = activeCenterWorkbenchTab()
+  if (active === "explorer" || active === "diff" || active === "browser") return active
+  return undefined
+}
+
+function activateCodingAssistantSession(): void {
+  void selectCodingAssistantSession().catch((error) => {
+    reportOverlayRuntimeError("coding-assistant.select", error)
+  })
+}
+
+function activateCenterWorkbenchTab(tab: CenterWorkbenchTab): void {
+  setActiveCenterWorkbenchTab(tab)
+}
+
+function selectRightActivity(activity: RightActivity): void {
+  if (activity === "assistant") {
+    activateCodingAssistantSession()
+    return
   }
-  setRightActivity(activity)
-  setChatView(activity === "inspector" ? "conversation" : activity)
+  openCenterWorkbenchTab(activity)
+}
+
+function openCenterWorkbenchTab(tab: CenterWorkbenchTab): void {
+  setCenterWorkbenchTabs((current) => current.includes(tab) ? current : [...current, tab])
+  activateCenterWorkbenchTab(tab)
+}
+
+function removeCenterWorkbenchTab(tab: CenterWorkbenchTab): void {
+  const current = untrack(centerWorkbenchTabs)
+  const index = current.indexOf(tab)
+  if (index < 0) return
+  const next = current.filter((item) => item !== tab)
+  setCenterWorkbenchTabs(next)
+  if (untrack(activeCenterWorkbenchTab) === tab) {
+    setActiveCenterWorkbenchTab(next[index] ?? next[index - 1] ?? null)
+  }
+}
+
+function closeCenterWorkbenchTab(tab: CenterWorkbenchTab): void {
+  if (tab === "diff") setWorkspaceOpen(false)
+  if (tab === "file") closeFileEditor()
+  removeCenterWorkbenchTab(tab)
+}
+
+function clampCenterWorkbenchWidth(value: number): number {
+  const scale = currentUIScale()
+  const workspace = document.getElementById("conversationWorkspace")
+  const total = workspace?.clientWidth || window.visualViewport?.width || window.innerWidth || 1000
+  const min = 280 * scale
+  const conversationMin = 360 * scale
+  const max = Math.max(min, total - conversationMin)
+  return Math.round(Math.min(Math.max(value, min), max))
+}
+
+function centerWorkbenchWidth(): number {
+  return clampCenterWorkbenchWidth(settingsStore.centerWorkbenchWidth ?? DEFAULT_CENTER_WORKBENCH_WIDTH * currentUIScale())
+}
+
+function renderCenterWorkbenchWidth(width = centerWorkbenchWidth()): void {
+  document.body.style.setProperty("--ui-center-workbench-width", `${clampCenterWorkbenchWidth(width)}px`)
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -514,20 +561,19 @@ function buildTaskDebugBlob(board: any): string {
 /** Open the workspace panel. */
 function openWorkspace(): void {
   setWorkspaceOpen(true)
-  setChatView("diff")
+  openCenterWorkbenchTab("diff")
 }
 
 /** Close the workspace panel. */
 function closeWorkspace(): void {
   setWorkspaceOpen(false)
-  if (untrack(chatView) === "diff") setChatView("conversation")
+  removeCenterWorkbenchTab("diff")
 }
 
 /** Open (or switch to) a diff file in the workspace. */
 function openWorkspaceDiff(target: DiffTarget): void {
   setWorkspaceTarget(target)
   closeFileEditor()
-  setLeftActivity("changes")
   openWorkspace()
 }
 
@@ -618,7 +664,7 @@ document.addEventListener(
 
 window.addEventListener(
   "acceptance:focus-changes",
-  () => setLeftActivity("changes"),
+  () => openCenterWorkbenchTab("diff"),
   listenerOpts,
 )
 
@@ -735,35 +781,64 @@ if (fileChangesMountEl) {
   )
 }
 
-// ── Mount: WorkspacePanel (Diff) ──
-
-const workspaceMountEl = document.getElementById("solidWorkspaceMount")
-if (workspaceMountEl) {
-  workspaceMountEl.innerHTML = ""
-  render(
-    () => <WorkspacePanel target={workspaceTarget()} onClose={closeWorkspace} />,
-    workspaceMountEl,
-  )
-}
-
 const fileExplorerMountEl = document.getElementById("solidFileExplorerMount")
 if (fileExplorerMountEl) {
   fileExplorerMountEl.innerHTML = ""
-  render(() => <FileExplorerPanel active={() => leftActivity() === "explorer"} directory={activeDirectory} />, fileExplorerMountEl)
+  render(() => <FileExplorerPanel active={() => activeCenterWorkbenchTab() === "explorer"} directory={activeDirectory} />, fileExplorerMountEl)
 }
 
-const tuiHostMountEl = document.getElementById("solidTuiHostMount")
-if (tuiHostMountEl) {
-  tuiHostMountEl.innerHTML = ""
-  const CodingAgentTuiPanel = codingAgentTuiPlugin.Panel
+const centerWorkbenchTabsEl = document.getElementById("solidCenterWorkbenchTabs")
+if (centerWorkbenchTabsEl) {
+  centerWorkbenchTabsEl.innerHTML = ""
   render(
     () => (
-      <CodingAgentTuiPanel
-        active={() => chatView() === codingAgentTuiPlugin.id}
-        directory={activeDirectory}
-      />
+      <>
+        <div class="center-workbench-tabs" role="tablist" aria-label={t("workspace.tabs")}>
+          <For each={centerWorkbenchTabs()}>
+            {(tab) => (
+              <div class="center-workbench-tab-shell" data-active={activeCenterWorkbenchTab() === tab ? "true" : "false"}>
+                <button
+                  type="button"
+                  class="center-workbench-tab"
+                  role="tab"
+                  data-active={activeCenterWorkbenchTab() === tab ? "true" : "false"}
+                  aria-selected={activeCenterWorkbenchTab() === tab}
+                  onClick={() => activateCenterWorkbenchTab(tab)}
+                >
+                  <Icon name={CENTER_WORKBENCH_ICONS[tab]} size={13} />
+                  <span>{t(CENTER_WORKBENCH_LABEL_KEYS[tab])}</span>
+                </button>
+                <button
+                  type="button"
+                  class="center-workbench-tab-close"
+                  title={t("workspace.close")}
+                  aria-label={t("workspace.close")}
+                  onClick={(event) => {
+                    event.stopPropagation()
+                    closeCenterWorkbenchTab(tab)
+                  }}
+                >
+                  <Icon name="close" size={12} />
+                </button>
+              </div>
+            )}
+          </For>
+        </div>
+        <button
+          type="button"
+          class="center-workbench-close"
+          title={t("workspace.close")}
+          aria-label={t("workspace.close")}
+          onClick={() => {
+            const active = activeCenterWorkbenchTab()
+            if (active) closeCenterWorkbenchTab(active)
+          }}
+        >
+          <Icon name="close" size={13} />
+        </button>
+      </>
     ),
-    tuiHostMountEl,
+    centerWorkbenchTabsEl,
   )
 }
 
@@ -883,6 +958,8 @@ let lastSuggestionTaskID: string | null = null
 const panelComposerDraftKey = () => {
   const taskID = activeTaskID()
   if (taskID) return composerDraftKey("task", taskID)
+  const sessionID = activeSessionID()
+  if (sessionID) return composerDraftKey("session", sessionID)
   const directory = activeDirectory()
   return directory ? composerDraftKey("task", "new", directory) : composerDraftKey("task", "new")
 }
@@ -955,23 +1032,6 @@ if (projectDirectoryBarEl) {
   render(() => <ProjectDirectoryBar />, projectDirectoryBarEl)
 }
 
-const leftActivityToolbarEl = document.getElementById("solidLeftActivityToolbar")
-if (leftActivityToolbarEl) {
-  render(
-    () => (
-      <SideActivityToolbar
-        side="left"
-        activities={LEFT_ACTIVITIES}
-        active={leftActivity}
-        ariaLabelKey="activity.left"
-        onSelect={setLeftActivity}
-        trailing={<LeftPanelHeaderCollapseControl />}
-      />
-    ),
-    leftActivityToolbarEl,
-  )
-}
-
 const rightActivityToolbarEl = document.getElementById("solidRightActivityToolbar")
 if (rightActivityToolbarEl) {
   render(
@@ -979,7 +1039,7 @@ if (rightActivityToolbarEl) {
       <SideActivityToolbar
         side="right"
         activities={RIGHT_ACTIVITIES}
-        active={rightActivity}
+        active={activeRightActivity}
         ariaLabelKey="activity.right"
         onSelect={selectRightActivity}
         trailing={<RightPanelHeaderCollapseControl />}
@@ -989,12 +1049,22 @@ if (rightActivityToolbarEl) {
   )
 }
 
+const leftPanelCollapseControlEl = document.getElementById("solidLeftPanelCollapseControl")
+if (leftPanelCollapseControlEl) {
+  render(() => <LeftPanelHeaderCollapseControl />, leftPanelCollapseControlEl)
+}
+
+const leftCollapsedRailControlEl = document.getElementById("solidLeftCollapsedRailControl")
+if (leftCollapsedRailControlEl) {
+  render(() => <LeftPanelHeaderCollapseControl />, leftCollapsedRailControlEl)
+}
+
 const browserPreviewEl = document.getElementById("solidBrowserPreviewMount")
 if (browserPreviewEl) {
   render(
     () => (
       <BrowserPreviewPanel
-        active={() => chatView() === "browser"}
+        active={() => activeCenterWorkbenchTab() === "browser"}
         directory={activeDirectory}
         refreshKey={() => boardStore.boardUpdatedAt}
         taskID={() => activeTaskID() || undefined}
@@ -1209,45 +1279,40 @@ disposers.push(
     })
 
     createEffect(() => {
-      const active = leftActivity()
-      const sidebar = document.getElementById("sidebar")
-      const title = document.querySelector<HTMLElement>(".sidebar-title")
-      const actions = document.querySelector<HTMLElement>("[data-activity-actions='tasks']")
-      const bodies: Record<LeftActivity, HTMLElement | null> = {
-        tasks: document.getElementById("leftPanelTasks"),
-        explorer: document.getElementById("leftPanelExplorer"),
-        changes: document.getElementById("leftPanelChanges"),
+      const tabs = centerWorkbenchTabs()
+      const active = activeCenterWorkbenchTab()
+      const workbench = document.getElementById("centerWorkbench")
+      const resizer = document.getElementById("centerWorkbenchResizer")
+      const views: Record<CenterWorkbenchTab, HTMLElement | null> = {
+        explorer: document.getElementById("centerWorkbenchExplorer"),
+        diff: document.getElementById("centerWorkbenchDiff"),
+        browser: document.getElementById("centerWorkbenchBrowser"),
+        file: document.getElementById("centerWorkbenchFile"),
       }
-      if (sidebar) sidebar.dataset.leftActivity = active
-      if (title) title.textContent = t(LEFT_ACTIVITY_LABEL_KEYS[active])
-      if (actions) actions.hidden = active !== "tasks"
-      for (const [activity, body] of Object.entries(bodies)) {
-        if (body) body.dataset.active = String(activity === active)
+      if (workbench) {
+        workbench.dataset.open = String(tabs.length > 0)
+        workbench.hidden = tabs.length === 0
       }
-    })
-
-    createEffect(() => {
-      const active = chatView()
-      const title = document.getElementById("chatViewTitle")
-      const bodies: Record<ChatView, HTMLElement | null> = {
-        conversation: document.getElementById("chatMessagePane"),
-        [codingAgentTuiPlugin.id]: document.getElementById("chatTuiPane"),
-        browser: document.getElementById("chatBrowserPreviewPane"),
-        file: document.getElementById("chatFileEditorPane"),
-        diff: document.getElementById("chatDiffPane"),
+      if (resizer) {
+        resizer.hidden = tabs.length === 0
+        resizer.dataset.disabled = String(tabs.length === 0)
       }
-      if (title) title.textContent = t(CHAT_VIEW_LABEL_KEYS[active])
-      for (const [view, body] of Object.entries(bodies)) {
-        if (body) body.dataset.active = String(view === active)
+      for (const [tab, body] of Object.entries(views)) {
+        if (body) body.dataset.active = String(tab === active)
       }
     })
 
     createEffect(() => {
-      const active = rightActivity()
+      settingsStore.centerWorkbenchWidth
+      centerWorkbenchTabs().length
+      renderCenterWorkbenchWidth()
+    })
+
+    createEffect(() => {
       const sections = document.getElementById("sections")
       const title = document.getElementById("rightPanelTitle")
       const inspector = document.getElementById("rightPanelInspector")
-      if (sections) sections.dataset.rightActivity = active
+      if (sections) sections.dataset.rightActivity = "inspector"
       if (title) title.textContent = t("sections.title")
       if (inspector) inspector.dataset.active = "true"
     })
@@ -1256,18 +1321,18 @@ disposers.push(
       const open = fileWorkbenchOpen()
       if (open) {
         setWorkspaceOpen(false)
-        setChatView("file")
-      } else if (untrack(chatView) === "file") {
-        setChatView("conversation")
+        openCenterWorkbenchTab("file")
+      } else {
+        removeCenterWorkbenchTab("file")
       }
     })
 
     createEffect(() => {
       const open = workspaceOpen()
       if (open) {
-        setChatView("diff")
-      } else if (untrack(chatView) === "diff") {
-        setChatView("conversation")
+        openCenterWorkbenchTab("diff")
+      } else {
+        removeCenterWorkbenchTab("diff")
       }
     })
 
@@ -1335,6 +1400,42 @@ const paneCallbacks = {
 }
 initPaneResizers(paneCallbacks, PANEL_PANE_CONFIG)
 
+let centerWorkbenchDrag = false
+function stopCenterWorkbenchResize() {
+  if (!centerWorkbenchDrag) return
+  centerWorkbenchDrag = false
+  delete document.body.dataset.centerWorkbenchResizing
+  const cssWidth = Number.parseFloat(getComputedStyle(document.body).getPropertyValue("--ui-center-workbench-width"))
+  const width = clampCenterWorkbenchWidth(Number.isFinite(cssWidth) ? cssWidth : centerWorkbenchWidth())
+  setSettingsStore("centerWorkbenchWidth", width)
+  saveSettings()
+}
+
+const centerWorkbenchResizer = document.getElementById("centerWorkbenchResizer")
+centerWorkbenchResizer?.addEventListener(
+  "pointerdown",
+  (event) => {
+    if ((event as PointerEvent).button != null && (event as PointerEvent).button !== 0) return
+    centerWorkbenchDrag = true
+    document.body.dataset.centerWorkbenchResizing = "true"
+    event.preventDefault()
+  },
+  listenerOpts,
+)
+window.addEventListener(
+  "pointermove",
+  (event) => {
+    if (!centerWorkbenchDrag) return
+    const workspace = document.getElementById("conversationWorkspace")
+    const rect = workspace?.getBoundingClientRect()
+    if (!rect) return
+    renderCenterWorkbenchWidth(rect.right - event.clientX)
+  },
+  listenerOpts,
+)
+window.addEventListener("pointerup", stopCenterWorkbenchResize, listenerOpts)
+window.addEventListener("pointercancel", stopCenterWorkbenchResize, listenerOpts)
+
 // ── Global event listeners (
 
 window.addEventListener("keydown", handleZoomHotkey, listenerOpts)
@@ -1348,13 +1449,17 @@ window.addEventListener(
   },
   listenerOpts,
 )
-const onResize = () => applyZoom(settingsStore.zoom)
+const onResize = () => {
+  applyZoom(settingsStore.zoom)
+  renderCenterWorkbenchWidth()
+}
 window.addEventListener("resize", onResize, listenerOpts)
 if (window.visualViewport) window.visualViewport.addEventListener("resize", onResize, listenerOpts)
 window.addEventListener(
   "blur",
   () => {
     void cancelPaneResize(paneCallbacks)
+    stopCenterWorkbenchResize()
   },
   listenerOpts,
 )

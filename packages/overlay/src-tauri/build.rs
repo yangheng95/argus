@@ -3,6 +3,7 @@ use std::{
     env,
     fs::{self, File},
     hash::{Hash, Hasher},
+    io,
     path::{Path, PathBuf},
     time::UNIX_EPOCH,
 };
@@ -90,6 +91,15 @@ fn rel_slash(path: &Path) -> String {
         .join("/")
 }
 
+fn plugin_resource_os_key(target_os: &str) -> &str {
+    match target_os {
+        "windows" => "win32",
+        "macos" => "darwin",
+        "linux" => "linux",
+        other => other,
+    }
+}
+
 fn payload_stamp(source: &Path, files: &[PathBuf]) -> String {
     let mut hasher = DefaultHasher::new();
     for rel in files {
@@ -106,8 +116,91 @@ fn payload_stamp(source: &Path, files: &[PathBuf]) -> String {
     format!("{}-{:x}", files.len(), hasher.finish())
 }
 
-fn payload_executable(rel_path: &str, server_name: &str, node: &str) -> bool {
-    rel_path == server_name || rel_path == node
+fn payload_executable(
+    rel_path: &str,
+    server_name: &str,
+    node: &str,
+    plugin_resources: &[String],
+) -> bool {
+    rel_path == server_name
+        || rel_path == node
+        || plugin_resources
+            .iter()
+            .any(|path| path == rel_path && path.contains("worker"))
+}
+
+fn plugin_manifest_resource_path<'a>(
+    manifest: &Path,
+    target_os: &str,
+    resource: &'a serde_json::Value,
+) -> &'a str {
+    if let Some(paths) = resource.get("paths").and_then(|value| value.as_object()) {
+        return paths
+            .get(plugin_resource_os_key(target_os))
+            .and_then(|value| value.as_str())
+            .unwrap_or_else(|| {
+                panic!(
+                    "plugin manifest {} has a resource without path for {}",
+                    manifest.display(),
+                    plugin_resource_os_key(target_os)
+                )
+            });
+    }
+    resource
+        .get("path")
+        .and_then(|value| value.as_str())
+        .unwrap_or_else(|| {
+            panic!(
+                "plugin manifest {} has a resource without string path",
+                manifest.display()
+            )
+        })
+}
+
+fn collect_plugin_resource_files(root: &Path, files: &[PathBuf], target_os: &str) -> Vec<String> {
+    let mut result = Vec::new();
+    for rel in files {
+        let rel_path = rel_slash(rel);
+        if !(rel_path.starts_with("plugins/") && rel_path.ends_with("/plugin.json")) {
+            continue;
+        }
+        result.push(rel_path);
+        let raw = fs::read_to_string(root.join(rel)).unwrap_or_else(|e| {
+            panic!(
+                "read embedded plugin manifest {}: {e}",
+                root.join(rel).display()
+            )
+        });
+        let parsed: serde_json::Value = serde_json::from_str(&raw).unwrap_or_else(|e| {
+            panic!(
+                "parse embedded plugin manifest {}: {e}",
+                root.join(rel).display()
+            )
+        });
+        let resources = parsed
+            .get("resources")
+            .and_then(|value| value.as_array())
+            .unwrap_or_else(|| {
+                panic!(
+                    "plugin manifest {} must contain resources[]",
+                    root.join(rel).display()
+                )
+            });
+        for resource in resources {
+            let path = plugin_manifest_resource_path(&root.join(rel), target_os, resource);
+            if !root.join(path).is_file() {
+                panic!(
+                    "plugin manifest {} references missing embedded resource {}",
+                    root.join(rel).display(),
+                    path
+                );
+            }
+            result.push(path.to_string());
+        }
+    }
+    result.sort();
+    result.dedup();
+    result
 }
 
 fn write_payload_archive(source: &Path, files: &[PathBuf], target_os: &str, archive_file: &Path) {
@@ -117,8 +210,9 @@ fn write_payload_archive(source: &Path, files: &[PathBuf], target_os: &str, arch
         "opencorvus"
     };
     let node = format!("browser-mcp-node/{}", node_name(target_os));
+    let plugin_resources = collect_plugin_resource_files(source, files, target_os);
     let archive = File::create(archive_file).expect("create embedded sidecar archive");
-    let encoder = GzEncoder::new(archive, Compression::default());
+    let encoder = GzEncoder::new(archive, Compression::fast());
     let mut builder = Builder::new(encoder);
 
     for rel in files {
@@ -131,11 +225,13 @@ fn write_payload_archive(source: &Path, files: &[PathBuf], target_os: &str, arch
             .unwrap_or_else(|e| panic!("stat embedded sidecar file {}: {e}", src.display()));
         let mut header = Header::new_gnu();
         header.set_size(meta.len());
-        header.set_mode(if payload_executable(&rel_path, server_name, &node) {
-            0o755
-        } else {
-            0o644
-        });
+        header.set_mode(
+            if payload_executable(&rel_path, server_name, &node, &plugin_resources) {
+                0o755
+            } else {
+                0o644
+            },
+        );
         if let Ok(modified) = meta.modified() {
             if let Ok(duration) = modified.duration_since(UNIX_EPOCH) {
                 header.set_mtime(duration.as_secs());
@@ -151,6 +247,66 @@ fn write_payload_archive(source: &Path, files: &[PathBuf], target_os: &str, arch
     encoder.finish().expect("finish embedded sidecar gzip");
 }
 
+fn read_stamp(path: &Path) -> Option<String> {
+    fs::read_to_string(path)
+        .ok()
+        .map(|value| value.trim().to_string())
+        .filter(|value| !value.is_empty())
+}
+
+fn copy_if_exists(source: &Path, destination: &Path) -> io::Result<bool> {
+    if !source.is_file() {
+        return Ok(false);
+    }
+    fs::copy(source, destination)?;
+    Ok(true)
+}
+
+fn matching_cached_archive(current_out_dir: &Path, stamp: &str) -> Option<PathBuf> {
+    let build_root = current_out_dir.parent()?.parent()?;
+    let entries = fs::read_dir(build_root).ok()?;
+    for entry in entries.flatten() {
+        let candidate_out = entry.path().join("out");
+        if candidate_out == current_out_dir {
+            continue;
+        }
+        let stamp_file = candidate_out.join("embedded_sidecar.stamp");
+        if read_stamp(&stamp_file).as_deref() != Some(stamp) {
+            continue;
+        }
+        let archive = candidate_out.join("embedded_sidecar.tar.gz");
+        if archive.is_file() {
+            return Some(archive);
+        }
+    }
+    None
+}
+
+fn ensure_payload_archive(
+    source: &Path,
+    files: &[PathBuf],
+    target_os: &str,
+    archive_file: &Path,
+    stamp_file: &Path,
+    stamp: &str,
+) {
+    if archive_file.is_file() && read_stamp(stamp_file).as_deref() == Some(stamp) {
+        return;
+    }
+
+    if let Some(cached) = matching_cached_archive(
+        archive_file
+            .parent()
+            .expect("embedded sidecar archive parent"),
+        stamp,
+    ) {
+        copy_if_exists(&cached, archive_file).expect("copy cached embedded sidecar archive");
+    } else {
+        write_payload_archive(source, files, target_os, archive_file);
+    }
+    fs::write(stamp_file, format!("{stamp}\n")).expect("write embedded sidecar archive stamp");
+}
+
 fn write_embed_module(source: &Path, target_os: &str, out_file: &Path, archive_file: &Path) {
     let server_name = if target_os == "windows" {
         "opencorvus.exe"
@@ -159,22 +315,10 @@ fn write_embed_module(source: &Path, target_os: &str, out_file: &Path, archive_f
     };
 
     if !source.exists() {
-        println!(
-            "cargo:warning=overlay: embedded opencorvus payload not found at {}",
+        panic!(
+            "embedded opencorvus payload not found at {}; build the overlay-server artifact first",
             source.display()
         );
-        fs::write(
-            out_file,
-            format!(
-                "pub const EMBEDDED_SERVER_NAME: &str = {server_name:?};\n\
-                 pub const EMBEDDED_SERVER_STAMP: &str = \"missing\";\n\
-                 pub const EMBEDDED_SERVER_ARCHIVE_GZ: &[u8] = &[];\n\
-                 pub struct EmbeddedSidecarFile {{ pub path: &'static str, pub executable: bool, pub size: u64 }}\n\
-                 pub const EMBEDDED_SERVER_FILES: &[EmbeddedSidecarFile] = &[];\n"
-            ),
-        )
-        .expect("write embedded_sidecar.rs");
-        return;
     }
 
     let root = if source.is_file() {
@@ -184,13 +328,19 @@ fn write_embed_module(source: &Path, target_os: &str, out_file: &Path, archive_f
     };
     let files = collect_payload_files(source);
     let stamp = payload_stamp(root, &files);
+    let stamp_file = archive_file.with_file_name("embedded_sidecar.stamp");
     let node = format!("browser-mcp-node/{}", node_name(target_os));
-    write_payload_archive(root, &files, target_os, archive_file);
+    let plugin_resources = collect_plugin_resource_files(root, &files, target_os);
+    let plugin_resource_entries = plugin_resources
+        .iter()
+        .map(|path| format!("    {path:?},\n"))
+        .collect::<String>();
+    ensure_payload_archive(root, &files, target_os, archive_file, &stamp_file, &stamp);
     let entries = files
         .iter()
         .map(|rel| {
             let rel_path = rel_slash(rel);
-            let executable = payload_executable(&rel_path, server_name, &node);
+            let executable = payload_executable(&rel_path, server_name, &node, &plugin_resources);
             let size = fs::metadata(root.join(rel))
                 .expect("stat embedded sidecar file")
                 .len();
@@ -210,6 +360,9 @@ fn write_embed_module(source: &Path, target_os: &str, out_file: &Path, archive_f
              pub struct EmbeddedSidecarFile {{ pub path: &'static str, pub executable: bool, pub size: u64 }}\n\
              pub const EMBEDDED_SERVER_FILES: &[EmbeddedSidecarFile] = &[\n\
              {entries}\
+             ];\n\
+             pub const EMBEDDED_PLUGIN_RESOURCE_FILES: &[&str] = &[\n\
+             {plugin_resource_entries}\
              ];\n"
         ),
     )

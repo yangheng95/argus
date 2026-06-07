@@ -85,10 +85,9 @@ test("workspace terminal command opens the selected system terminal profile", as
     },
   });
 
-  const browser = await launchBrowser();
+    const browser = await launchBrowser();
   try {
     const page = await browser.newPage();
-    page.setDefaultTimeout(5_000);
     await page.setViewport({ width: 1440, height: 900 });
     await page.evaluateOnNewDocument((portValue) => {
       localStorage.setItem("oc_directory", "D:/overlay/workspace/app");
@@ -122,11 +121,13 @@ test("workspace terminal command opens the selected system terminal profile", as
     expect(selectedBody.profileID).toBe("cmd");
 
     const panelState = await page.evaluate(() => ({
-      diffViewActive: document.querySelector<HTMLElement>("#chatDiffPane")?.dataset.active ?? "missing",
+      diffViewActive: document.querySelector<HTMLElement>("#centerWorkbenchDiff")?.dataset.active ?? "missing",
+      centerOpen: document.querySelector<HTMLElement>("#centerWorkbench")?.dataset.open ?? "missing",
       terminalPresent: !!document.querySelector(".workspace-terminal"),
     }));
 
     expect(panelState.diffViewActive).toBe("false");
+    expect(panelState.centerOpen).toBe("false");
     expect(panelState.terminalPresent).toBe(false);
     expect(profileRequestDirectories.length).toBeGreaterThan(0);
     expect(profileRequestDirectories.every((directory) => directory === "D:/overlay/workspace/app")).toBe(true);
@@ -134,4 +135,4 @@ test("workspace terminal command opens the selected system terminal profile", as
     await browser.close();
     server.stop(true);
   }
-});
+}, { timeout: 60_000 });

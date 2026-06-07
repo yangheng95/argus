@@ -1,6 +1,14 @@
 import { afterEach, describe, expect, test } from "bun:test"
 import { BrowserRuntime } from "../../src/browser/runtime"
-import { createSession, destroySession, getSession, getSessionStats, getSessions, getSessionStatus } from "../../src/mcp/browser/sessions"
+import {
+  createSession,
+  destroySession,
+  getSession,
+  getSessionStats,
+  getSessions,
+  getSessionStatus,
+  withSessionOperationLock,
+} from "../../src/mcp/browser/sessions"
 
 type Handler = (...args: unknown[]) => void
 
@@ -162,6 +170,43 @@ describe("browser MCP session lifecycle", () => {
     expect(context.closed).toBe(false)
     expect(getSessionStats().active).toBe(1)
     expect(getSessionStats().profiles).toBe(1)
+  })
+
+  test("serializes operations against the same browser session", async () => {
+    const sessionId = "sess_operation_lock"
+    const events: string[] = []
+
+    const first = withSessionOperationLock(sessionId, async () => {
+      events.push("first:start")
+      await new Promise((resolve) => setTimeout(resolve, 20))
+      events.push("first:end")
+    })
+    const second = withSessionOperationLock(sessionId, async () => {
+      events.push("second:start")
+      events.push("second:end")
+    })
+
+    await Promise.all([first, second])
+
+    expect(events).toEqual(["first:start", "first:end", "second:start", "second:end"])
+  })
+
+  test("releases the session operation lock after a tool error", async () => {
+    const sessionId = "sess_operation_lock_error"
+    const events: string[] = []
+
+    await expect(
+      withSessionOperationLock(sessionId, async () => {
+        events.push("error:start")
+        throw new Error("simulated tool error")
+      }),
+    ).rejects.toThrow("simulated tool error")
+
+    await withSessionOperationLock(sessionId, async () => {
+      events.push("next:start")
+    })
+
+    expect(events).toEqual(["error:start", "next:start"])
   })
 
   test("records a clear unavailable status when a page closes unexpectedly", async () => {

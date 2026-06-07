@@ -1,8 +1,12 @@
-import { describe, expect, test } from "bun:test"
+import { afterEach, describe, expect, test } from "bun:test"
 import { mkdir, writeFile } from "node:fs/promises"
+import { readFileSync } from "node:fs"
 import path from "node:path"
+import { pathToFileURL } from "node:url"
 import { Instance } from "../../src/project/instance"
 import { Server } from "../../src/server/server"
+import { Database } from "../../src/storage/db"
+import { resetDatabase } from "../fixture/db"
 import { tmpdir } from "../fixture/fixture"
 
 async function writeFixturePlugin(root: string) {
@@ -38,6 +42,10 @@ async function writePlugin(root: string, name: string, source: string) {
 }
 
 describe("plugin service routes", () => {
+  afterEach(async () => {
+    await resetDatabase()
+  })
+
   test("dispatches project-scoped plugin service requests with rewritten path", async () => {
     await using tmp = await tmpdir({
       init: async (dir) => {
@@ -66,7 +74,7 @@ describe("plugin service routes", () => {
         })
       },
     })
-  })
+  }, 30_000)
 
   test("requires project directory before plugin dispatch", async () => {
     const response = await Server.App().request("/plugin/fixture/ping", {
@@ -80,7 +88,7 @@ describe("plugin service routes", () => {
     expect(await response.json()).toMatchObject({
       name: "DirectoryRequiredError",
     })
-  })
+  }, 30_000)
 
   test("returns named 404 for unknown plugin service", async () => {
     await using tmp = await tmpdir()
@@ -101,7 +109,81 @@ describe("plugin service routes", () => {
         })
       },
     })
+  }, 30_000)
+
+  test("loads a generic service from a plugin manifest", async () => {
+    await using tmp = await tmpdir({
+      init: async (dir) => {
+        await writePlugin(
+          dir,
+          "manifest-service.plugin.json",
+          JSON.stringify(
+            {
+              packageSpecifier: pathToFileURL(path.join(dir, ".opencorvus", "manifest-package")).href,
+              serviceID: "manifest-service",
+              backendExport: "./service.ts",
+              overlayExport: "./overlay",
+              resources: [],
+            },
+            null,
+            2,
+          ),
+        )
+        const packageDir = path.join(dir, ".opencorvus", "manifest-package")
+        await mkdir(packageDir, { recursive: true })
+        await writeFile(
+          path.join(packageDir, "service.ts"),
+          `
+            export const ManifestService = async () => ({
+              service: async () => ({
+                id: "manifest-service",
+                app: {
+                  fetch: async (request) => {
+                    const url = new URL(request.url)
+                    return Response.json({ path: url.pathname, query: url.searchParams.get("x") })
+                  },
+                },
+              }),
+            })
+          `,
+        )
+      },
+    })
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const response = await Server.App().request("/plugin/manifest-service/ping?x=1", {
+          headers: {
+            "x-opencorvus-directory": tmp.path,
+          },
+        })
+        expect(response.status).toBe(200)
+        expect(await response.json()).toEqual({ path: "/ping", query: "1" })
+      },
+    })
+  }, 60_000)
+
+  test("core plugin runtime does not import the coding-agent-tui implementation", () => {
+    const source = readFileSync(path.resolve(import.meta.dir, "../../src/plugin/index.ts"), "utf8")
+    expect(source).not.toContain("@opencorvus-ai/coding-agent-tui")
+    expect(source).not.toContain("codingAgentTuiPlugin")
+    expect(source).not.toContain("coding_agent_tui_target")
   })
+
+  test("does not keep the retired core tui embed route", async () => {
+    await using tmp = await tmpdir()
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const response = await Server.App().request("/tui/embed/status", {
+          headers: {
+            "x-opencorvus-directory": tmp.path,
+          },
+        })
+        expect(response.status).toBe(404)
+      },
+    })
+  }, 30_000)
 
   test("returns named 500 for duplicate plugin service id", async () => {
     await using tmp = await tmpdir({
@@ -135,22 +217,38 @@ describe("plugin service routes", () => {
         })
       },
     })
-  })
+  }, 30_000)
 
-  test("returns named 500 for plugin service registration failure", async () => {
+  test("returns named 500 for manifest plugin service registration failure", async () => {
     await using tmp = await tmpdir({
       init: async (dir) => {
+        const pluginDir = path.join(dir, ".opencorvus", "plugin")
         await writePlugin(
           dir,
           "broken.ts",
           'export const Broken = async () => ({ service: async () => { throw new Error("registration failed visibly") } })\n',
+        )
+        await writePlugin(
+          dir,
+          "manifest-name-does-not-contain-service-id.plugin.json",
+          JSON.stringify(
+            {
+              packageSpecifier: pathToFileURL(pluginDir).href,
+              serviceID: "broken-service",
+              backendExport: "./broken.ts",
+              overlayExport: "./overlay",
+              resources: [],
+            },
+            null,
+            2,
+          ),
         )
       },
     })
     await Instance.provide({
       directory: tmp.path,
       fn: async () => {
-        const response = await Server.App().request("/plugin/broken/ping", {
+        const response = await Server.App().request("/plugin/broken-service/ping", {
           headers: {
             "x-opencorvus-directory": tmp.path,
           },
@@ -160,9 +258,11 @@ describe("plugin service routes", () => {
           name: "PluginServiceRegistrationError",
           data: {
             message: "registration failed visibly",
+            serviceID: "broken-service",
+            specifier: expect.stringContaining("manifest-name-does-not-contain-service-id.plugin.json"),
           },
         })
       },
     })
-  })
+  }, 30_000)
 })

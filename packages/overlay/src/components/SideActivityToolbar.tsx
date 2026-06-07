@@ -12,7 +12,7 @@ export interface SideActivity<T extends string> {
 export interface SideActivityToolbarProps<T extends string> {
   side: "left" | "right"
   activities: readonly SideActivity<T>[]
-  active: Accessor<T>
+  active: Accessor<T | null | undefined>
   ariaLabelKey: string
   onSelect: (activity: T) => void
   trailing?: JSX.Element

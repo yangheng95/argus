@@ -113,12 +113,12 @@
 
     <!-- Horizontal body: chat left, sections right -->
     <div class="panel-body" id="panelBody">
-      <aside class="sidebar" id="sidebar" data-collapsed="false" data-left-activity="tasks">
-        <div id="solidLeftActivityToolbar" class="side-activity-toolbar-mount" data-i18n-aria-label="activity.left"></div>
+      <aside class="sidebar" id="sidebar" data-collapsed="false">
         <div class="side-panel-content sidebar-content">
           <div class="sidebar-header oc-surface-header">
             <div class="sidebar-title oc-surface-header__title" data-i18n="sidebar.title">Recent Chats</div>
             <div class="sidebar-header-actions oc-surface-header__actions" data-activity-actions="tasks" role="toolbar" aria-label="Recent Chats" data-i18n-aria-label="sidebar.title">
+              <span id="solidLeftPanelCollapseControl"></span>
               <button
                 type="button"
                 class="oc-button"
@@ -159,12 +159,6 @@
               <div class="sidebar-list session-list-panel sidebar-session-list" id="taskListPanel"></div>
             </div>
           </div>
-          <div class="side-activity-body sidebar-activity-body" id="leftPanelExplorer" data-side-activity="explorer" data-active="false">
-            <div id="solidFileExplorerMount" class="sidebar-explorer-panel"></div>
-          </div>
-          <div class="side-activity-body sidebar-activity-body" id="leftPanelChanges" data-side-activity="changes" data-active="false">
-            <div id="solidFileChangesMount" class="sidebar-file-changes-panel"></div>
-          </div>
 
           <footer class="sidebar-footer" aria-label="Author">
             <span class="chat-version">
@@ -172,10 +166,14 @@
             </span>
           </footer>
         </div>
+        <div class="sidebar-collapsed-rail" aria-label="Recent Chats" data-i18n-aria-label="sidebar.title">
+          <span id="solidLeftCollapsedRailControl"></span>
+        </div>
       </aside>
       <div class="pane-resizer pane-resizer-left" id="leftPaneResizer" role="separator" aria-orientation="vertical" aria-label="Resize tasks panel"></div>
 
       <div class="workspace-main" id="workspaceMain">
+      <div class="conversation-workspace" id="conversationWorkspace">
 
       <!-- Chat Window (always visible) -->
       <section class="chat" id="chatSection">
@@ -201,7 +199,7 @@
           </div>
         </header>
         <div class="chat-content-frame" id="chatContentFrame">
-          <div class="chat-message-pane chat-view-panel" id="chatMessagePane" data-chat-view="conversation" data-active="true">
+          <div class="chat-message-pane" id="chatMessagePane">
             <div class="conversation-body" id="conversationBody">
               <div class="conversation-scroll-shell">
                 <div class="chat-goals-strip" id="chatGoalsStrip"></div>
@@ -210,21 +208,29 @@
             </div>
             <div id="solidConversationAgentRailMount" class="conversation-agent-rail-host"></div>
           </div>
-          <div class="chat-tui-pane chat-view-panel" id="chatTuiPane" data-chat-view="tui" data-active="false">
-            <div id="solidTuiHostMount" class="chat-tui-activity"></div>
-          </div>
-          <div class="chat-browser-preview-pane chat-view-panel" id="chatBrowserPreviewPane" data-chat-view="browser" data-active="false">
-            <div id="solidBrowserPreviewMount" class="chat-browser-preview-activity"></div>
-          </div>
-          <div class="chat-file-editor-pane chat-view-panel" id="chatFileEditorPane" data-chat-view="file" data-active="false">
-            <div id="solidFileEditorMount" class="chat-file-editor-activity file-editor-mount"></div>
-          </div>
-          <div class="chat-diff-pane chat-view-panel" id="chatDiffPane" data-chat-view="diff" data-active="false">
-            <div id="solidWorkspaceMount" class="chat-diff-activity workspace-mount"></div>
-          </div>
         </div>
         <div id="solidChatComposer"></div>
       </section>
+
+      <div class="center-workbench-resizer" id="centerWorkbenchResizer" role="separator" aria-orientation="vertical" aria-label="Resize center workbench" hidden></div>
+      <section class="center-workbench" id="centerWorkbench" data-open="false">
+        <header class="center-workbench-header" id="solidCenterWorkbenchTabs"></header>
+        <div class="center-workbench-body">
+          <div class="center-workbench-view" id="centerWorkbenchExplorer" data-workbench-view="explorer" data-active="false">
+            <div id="solidFileExplorerMount" class="center-workbench-activity sidebar-explorer-panel"></div>
+          </div>
+          <div class="center-workbench-view" id="centerWorkbenchDiff" data-workbench-view="diff" data-active="false">
+            <div id="solidFileChangesMount" class="center-workbench-activity sidebar-file-changes-panel"></div>
+          </div>
+          <div class="center-workbench-view" id="centerWorkbenchBrowser" data-workbench-view="browser" data-active="false">
+            <div id="solidBrowserPreviewMount" class="center-workbench-activity chat-browser-preview-activity"></div>
+          </div>
+          <div class="center-workbench-view" id="centerWorkbenchFile" data-workbench-view="file" data-active="false">
+            <div id="solidFileEditorMount" class="center-workbench-activity chat-file-editor-activity file-editor-mount"></div>
+          </div>
+        </div>
+      </section>
+      </div>
       <div class="pane-resizer pane-resizer-right" id="rightPaneResizer" role="separator" aria-orientation="vertical" aria-label="Resize control panel"></div>
 
       <!-- Collapsible Sections (right) -->
@@ -251,7 +257,7 @@
   </main>
 
   <!-- Goal / Session / App / Config dialogs are mounted by Solid host components. -->
-  <!-- Diff preview lives in WorkspacePanel / DiffPreviewPanel. -->
+  <!-- Explorer, diff, preview, and file editor live in the center workbench tabs. -->
 
   <!-- Skill/MCP/Goal/Channel dialogs removed — Phase 4.
        All functionality moved to Solid components:
