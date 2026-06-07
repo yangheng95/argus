@@ -325,11 +325,11 @@ describe("web clone source project E2E", () => {
     expect(audit.findings.join("\n")).toContain("Frontend-design iteration state still has remaining source debt: FaqRegion.")
   })
 
-  test("frontend_design agent benchmark request points at runtime source project boundaries", () => {
+  test("frontend_design agent benchmark request points at visual HTML skeleton boundaries", () => {
     const request = buildFrontendDesignAgentBenchmarkRequest({
       sourcePackageDir: ".opencorvus/runtime/tasks/tsk_test/frontend-design/web-clone-source",
       skeletonProjectDir: ".opencorvus/runtime/tasks/tsk_test/frontend-design/frontend-design-skeleton",
-      targetProjectDir: ".opencorvus/runtime/tasks/tsk_test/frontend-design/frontend-design-target",
+      targetProjectDir: ".opencorvus/runtime/tasks/tsk_test/frontend-design/visual-html-skeleton",
       webpageEvidenceDir: ".tmp/webpage-evidence",
     })
 
@@ -337,15 +337,22 @@ describe("web clone source project E2E", () => {
     expect(request).toContain("overwrite=true")
     expect(request).toContain(".opencorvus/runtime/tasks/tsk_test/frontend-design/web-clone-source")
     expect(request).toContain(".opencorvus/runtime/tasks/tsk_test/frontend-design/frontend-design-skeleton")
-    expect(request).toContain(".opencorvus/runtime/tasks/tsk_test/frontend-design/frontend-design-target")
-    expect(request).toContain("editing only the target acceptance project, not frontend-design-skeleton")
-    expect(request).toContain("Do not run install/build/render/dev-server commands inside the skeleton evidence project")
-    expect(request).toContain("Create or populate the target acceptance project before any runnable project command")
+    expect(request).toContain(".opencorvus/runtime/tasks/tsk_test/frontend-design/visual-html-skeleton")
+    expect(request).toContain("source-editable static HTML/CSS visual skeleton")
+    expect(request).toContain("visual-html-skeleton/index.html")
+    expect(request).toContain("visual-html-skeleton/styles/tokens.css")
+    expect(request).toContain("editing only the visual HTML skeleton, not frontend-design-skeleton")
+    expect(request).toContain("Do not run install/build/dev-server commands inside the skeleton evidence project or the visual HTML skeleton")
+    expect(request).toContain("Create or populate the visual HTML skeleton before any visual comparison")
+    expect(request).toContain("final_acceptance_mode=visual_baseline_allowed")
+    expect(request).toContain("frontend_project.role=visual_baseline_input")
     expect(request).toContain("record_frontend_region_selection")
     expect(request).toContain("record_frontend_replacement_result")
     expect(request).toContain("frontend-design-process-trace.json")
     expect(request).toContain("frontend-design-iteration-state.json")
     expect(request).toContain("These files are written by frontend-design tools")
+    expect(request).not.toContain("target acceptance project")
+    expect(request).not.toContain("maintainable_replacement_required")
     expect(request).not.toContain("make those artifacts prove")
     expect(request).not.toContain("from scratch")
   })
@@ -615,21 +622,21 @@ function buildFrontendDesignAgentBenchmarkRequest(input: {
   webpageEvidenceDir: string
 }): string {
   return [
-    "Run the frontend-design rawproject refinement benchmark for the prepared webpage clone source package.",
+    "Run the frontend-design visual HTML skeleton benchmark for the prepared webpage clone source package.",
     "",
     `Webpage evidence: ${input.webpageEvidenceDir}`,
     `Prepared web-clone-source package: ${input.sourcePackageDir}`,
     `Frontend-design skeleton evidence project: ${input.skeletonProjectDir}`,
-    `Frontend-design target acceptance project: ${input.targetProjectDir}`,
+    `Frontend-design visual HTML skeleton root: ${input.targetProjectDir}`,
     "",
     "Call `create_frontend_skeleton_project` with that source package, the skeleton evidence project path, and overwrite=true.",
     "Then inspect skeleton sourceDomIterationState.ts, sourceDomReplacementPlan.ts, sourceDomRegions.ts, sourceData.ts, assets, and generated page/components as evidence only.",
-    "Do not run install/build/render/dev-server commands inside the skeleton evidence project.",
-    "Create or populate the target acceptance project before any runnable project command.",
-    "Use normal frontend-design source-edit tools to extract generated source-dom/rawcode evidence into the target acceptance project as semantic project-owned components, extracted mock/API data modules, and scoped styles while preserving visual parity.",
-    "Before each replacement, call `record_frontend_region_selection`; after each replacement attempt, call `record_frontend_replacement_result` with completed/blocked/deferred status and exact remaining source debt.",
-    "Run build plus web_clone_source_audit in maintainable_replacement_required mode on the target acceptance project before claiming completion.",
-    "The benchmark consumes frontend-design-process-trace.json and frontend-design-iteration-state.json. These files are written by frontend-design tools from your normal tool calls; do not edit them directly. Make the normal agent work visible by calling the region-selection/replacement tools and editing only the target acceptance project, not frontend-design-skeleton.",
+    "Do not run install/build/dev-server commands inside the skeleton evidence project or the visual HTML skeleton; render the visual skeleton only through an explicit static file or URL harness for visual comparison.",
+    "Create or populate the visual HTML skeleton before any visual comparison: visual-html-skeleton/index.html, visual-html-skeleton/styles/tokens.css, external layout/region CSS, owned assets, screenshots, and visual-diff/evaluation artifacts.",
+    "Use normal frontend-design source-edit tools to extract generated source-dom/rawcode evidence into the source-editable static HTML/CSS visual skeleton while preserving visual parity.",
+    "Before each major region restoration, call `record_frontend_region_selection`; after each restoration attempt, call `record_frontend_replacement_result` with completed/blocked/deferred status, changed skeleton files, visual evidence, and exact remaining visual/source debt.",
+    "Submit with final_acceptance_mode=visual_baseline_allowed and frontend_project.role=visual_baseline_input. Report project_root=visual-html-skeleton and entrypoints including visual-html-skeleton/index.html and visual-html-skeleton/styles/tokens.css.",
+    "The benchmark consumes frontend-design-process-trace.json and frontend-design-iteration-state.json. These files are written by frontend-design tools from your normal tool calls; do not edit them directly. Make the normal agent work visible by calling the region-selection/replacement tools and editing only the visual HTML skeleton, not frontend-design-skeleton.",
   ].join("\n")
 }
 
