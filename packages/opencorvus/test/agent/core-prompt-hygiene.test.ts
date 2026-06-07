@@ -613,6 +613,8 @@ describe("core prompt hygiene", () => {
     expect(normalized).toContain("frontend design/replica contract")
     expect(normalized).toContain("UI data contract only when necessary to render the frontend")
     expect(normalized).toContain("Do not design backend infrastructure")
+    expect(normalized).toContain("Automatic tool-result continuation is not an operator message")
+    expect(normalized).toContain('unless that exact text appears in the latest real user/delegation message')
     expect(normalized).toContain("skeleton-first source handoff")
     expect(normalized).toContain("existing project components/design-system primitives first")
     expect(normalized).toContain("mature maintained libraries second")
