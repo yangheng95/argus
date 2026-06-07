@@ -1,5 +1,4 @@
 import { describe, expect, test } from "bun:test"
-import { spawn } from "node:child_process"
 import fs from "node:fs/promises"
 import path from "node:path"
 import { Agent } from "../../src/agent/agent"
@@ -13,8 +12,8 @@ import { Session } from "../../src/session"
 import { Database } from "../../src/storage/db"
 import { ToolRegistry } from "../../src/tool/registry"
 import { WebClonePrepareContextTool } from "../../src/tool/web-clone-prepare-context"
-import { WebCloneSourceAuditTool } from "../../src/tool/web-clone-source-audit"
 import { loadBenchmarkEnv } from "../../script/benchmark/env"
+import { runHtmlSkeletonWorkflowCheck } from "../../script/benchmark/html-skeleton-workflow-check"
 import { taskIDForSession } from "../../src/orchestrator/task-event"
 
 await loadBenchmarkEnv(import.meta.dir)
@@ -51,12 +50,10 @@ interface BenchmarkProcessTrace {
   outputDir: string
   expectedFlow: string[]
   events: BenchmarkProcessEvent[]
-  sourceProjectEvidence?: SourceProjectEvidence
+  visualSkeletonEvidence?: VisualSkeletonEvidence
   frontendDesignIterationState?: FrontendDesignIterationState
   audits: {
-    visualBaselineAllowed?: unknown
-    maintainableReplacementRequired?: unknown
-    visualDiff?: unknown
+    htmlSkeletonWorkflow?: unknown
   }
   processAudit: {
     passed: boolean
@@ -73,14 +70,14 @@ interface BenchmarkProcessEvent {
   details?: Record<string, unknown>
 }
 
-interface SourceProjectEvidence {
-  sourceDomPageExists: boolean
-  replacementPlanExists: boolean
-  iterationStateExists: boolean
-  sourceRegionsExists: boolean
+interface VisualSkeletonEvidence {
+  indexHtmlExists: boolean
+  tokenCssExists: boolean
+  externalCssLinked: boolean
+  frameworkEntryPresent: boolean
+  buildOutputPresent: boolean
+  rawSourceDomDumpPresent: boolean
   referenceImageExists: boolean
-  sourceDomRegionFileCount: number
-  semanticReplacementFileCount: number
 }
 
 interface FrontendDesignProcessTrace {
@@ -125,7 +122,7 @@ describe("web clone source project E2E", () => {
     expect(audit.findings.join("\n")).toContain("frontend_design_replacement_result")
     expect(audit.findings.join("\n")).toContain("frontend_design iteration state artifact")
     expect(audit.findings.join("\n")).toContain("frontend_design_region_selection")
-    expect(audit.findings.join("\n")).toContain("maintainable_replacement_required")
+    expect(audit.findings.join("\n")).toContain("html-skeleton-workflow-check")
   })
 
   test("process trace records failed visual comparison as evidence instead of missing execution", () => {
@@ -133,14 +130,14 @@ describe("web clone source project E2E", () => {
       sourcePackageDir: "web-clone-source",
       outputDir: "frontend-design-skeleton",
     })
-    trace.sourceProjectEvidence = {
-      sourceDomPageExists: false,
-      replacementPlanExists: false,
-      iterationStateExists: false,
-      sourceRegionsExists: false,
+    trace.visualSkeletonEvidence = {
+      indexHtmlExists: true,
+      tokenCssExists: true,
+      externalCssLinked: true,
+      frameworkEntryPresent: false,
+      buildOutputPresent: false,
+      rawSourceDomDumpPresent: false,
       referenceImageExists: true,
-      sourceDomRegionFileCount: 0,
-      semanticReplacementFileCount: 4,
     }
     trace.frontendDesignIterationState = createCompletedFrontendDesignIterationState()
     for (const name of [
@@ -148,81 +145,60 @@ describe("web clone source project E2E", () => {
       "web_clone_prepare_context",
       "create_frontend_skeleton_project",
       "source-project-sidecars",
+      "visual-skeleton-artifacts",
       "frontend_design_region_selection",
       "frontend_design_source_edit",
       "frontend_design_replacement_result",
-      "bun install",
-      "bun run build",
     ] as const) {
       recordTraceEvent(trace, {
         step: name,
-        kind: name === "source-project-sidecars" || name === "frontend_design_static_tool_surface" || name === "frontend_design_region_selection" ? "inspection" : name.startsWith("bun") ? "command" : "tool",
+        kind: name === "source-project-sidecars" || name === "visual-skeleton-artifacts" || name === "frontend_design_static_tool_surface" || name === "frontend_design_region_selection" ? "inspection" : "tool",
         name,
         status: "passed",
       })
     }
     recordTraceEvent(trace, {
-      step: "audit-visual-baseline",
-      kind: "tool",
-      name: "web_clone_source_audit",
-      status: "passed",
-      details: { finalAcceptanceMode: "visual_baseline_allowed", passed: true },
-    })
-    recordTraceEvent(trace, {
-      step: "audit-maintainable-replacement",
-      kind: "tool",
-      name: "web_clone_source_audit",
-      status: "passed",
-      details: { finalAcceptanceMode: "maintainable_replacement_required", passed: true },
-    })
-    recordTraceEvent(trace, {
-      step: "compare-rendered-reference",
+      step: "html-skeleton-workflow-check",
       kind: "command",
-      name: "visual-diff",
+      name: "html-skeleton-workflow-check",
       status: "failed",
       details: { passed: false, mssim: 0.46 },
     })
 
     const audit = evaluateBenchmarkProcessTrace(trace)
 
-    expect(audit.findings.join("\n")).not.toContain("Missing process event: visual-diff.")
+    expect(audit.findings.join("\n")).not.toContain("Missing process event: html-skeleton-workflow-check.")
   })
 
-  test("process trace rejects host-only semantic replacements without frontend_design source edits", () => {
+  test("process trace rejects host-only skeleton evidence without frontend_design HTML edits", () => {
     const trace = createBenchmarkProcessTrace({
       sourcePackageDir: "web-clone-source",
       outputDir: "frontend-design-skeleton",
     })
-    trace.sourceProjectEvidence = {
-      sourceDomPageExists: false,
-      replacementPlanExists: false,
-      iterationStateExists: false,
-      sourceRegionsExists: false,
+    trace.visualSkeletonEvidence = {
+      indexHtmlExists: true,
+      tokenCssExists: true,
+      externalCssLinked: true,
+      frameworkEntryPresent: false,
+      buildOutputPresent: false,
+      rawSourceDomDumpPresent: false,
       referenceImageExists: true,
-      sourceDomRegionFileCount: 0,
-      semanticReplacementFileCount: 3,
     }
-    for (const name of ["web_clone_prepare_context", "web_clone_generate_source_project", "source-project-sidecars", "bun install", "bun run build", "visual-diff"] as const) {
+    for (const name of ["web_clone_prepare_context", "create_frontend_skeleton_project", "source-project-sidecars", "visual-skeleton-artifacts", "html-skeleton-workflow-check"] as const) {
+      const details = name === "html-skeleton-workflow-check" ? { passed: true, mssim: 0.96 } : undefined
       recordTraceEvent(trace, {
         step: name,
-        kind: name === "source-project-sidecars" ? "inspection" : name.startsWith("bun") || name === "visual-diff" ? "command" : "tool",
+        kind: name === "source-project-sidecars" || name === "visual-skeleton-artifacts" ? "inspection" : name === "html-skeleton-workflow-check" ? "command" : "tool",
         name,
         status: "passed",
+        ...(details ? { details } : {}),
       })
     }
-    recordTraceEvent(trace, {
-      step: "audit-maintainable-replacement",
-      kind: "tool",
-      name: "web_clone_source_audit",
-      status: "passed",
-      details: { finalAcceptanceMode: "maintainable_replacement_required", passed: true },
-    })
 
     const audit = evaluateBenchmarkProcessTrace(trace)
 
     expect(audit.passed).toBe(false)
     expect(audit.findings.join("\n")).toContain("frontend_design_source_edit")
-    expect(audit.findings.join("\n")).toContain("create_frontend_skeleton_project")
   })
 
   test("process trace accepts merged frontend_design agent events", () => {
@@ -230,14 +206,14 @@ describe("web clone source project E2E", () => {
       sourcePackageDir: "web-clone-source",
       outputDir: "frontend-design-skeleton",
     })
-    trace.sourceProjectEvidence = {
-      sourceDomPageExists: false,
-      replacementPlanExists: false,
-      iterationStateExists: false,
-      sourceRegionsExists: false,
+    trace.visualSkeletonEvidence = {
+      indexHtmlExists: true,
+      tokenCssExists: true,
+      externalCssLinked: true,
+      frameworkEntryPresent: false,
+      buildOutputPresent: false,
+      rawSourceDomDumpPresent: false,
       referenceImageExists: true,
-      sourceDomRegionFileCount: 0,
-      semanticReplacementFileCount: 4,
     }
     trace.frontendDesignIterationState = createCompletedFrontendDesignIterationState()
     mergeFrontendDesignProcessTrace(trace, {
@@ -246,13 +222,12 @@ describe("web clone source project E2E", () => {
       events: [
         { name: "frontend_design_static_tool_surface", status: "passed", timestamp: new Date().toISOString() },
         { name: "create_frontend_skeleton_project", status: "passed", timestamp: new Date().toISOString() },
+        { name: "source-project-sidecars", status: "passed", timestamp: new Date().toISOString() },
         { name: "frontend_design_region_selection", status: "passed", timestamp: new Date().toISOString() },
         { name: "frontend_design_source_edit", status: "passed", timestamp: new Date().toISOString() },
         { name: "frontend_design_replacement_result", status: "passed", timestamp: new Date().toISOString(), details: { replacementStatus: "completed", regionComponentName: "HeroRegion" } },
-        { name: "bun install", status: "passed", timestamp: new Date().toISOString() },
-        { name: "bun run build", status: "passed", timestamp: new Date().toISOString() },
-        { name: "web_clone_source_audit", status: "passed", timestamp: new Date().toISOString(), details: { finalAcceptanceMode: "visual_baseline_allowed", passed: true } },
-        { name: "web_clone_source_audit", status: "passed", timestamp: new Date().toISOString(), details: { finalAcceptanceMode: "maintainable_replacement_required", passed: true } },
+        { name: "visual-skeleton-artifacts", status: "passed", timestamp: new Date().toISOString() },
+        { name: "html-skeleton-workflow-check", status: "passed", timestamp: new Date().toISOString(), details: { passed: true, mssim: 0.96 } },
       ],
     })
     recordTraceEvent(trace, {
@@ -262,17 +237,10 @@ describe("web clone source project E2E", () => {
       status: "passed",
     })
     recordTraceEvent(trace, {
-      step: "inspect-source-project-sidecars",
+      step: "inspect-visual-skeleton-artifacts",
       kind: "inspection",
-      name: "source-project-sidecars",
+      name: "visual-skeleton-artifacts",
       status: "passed",
-    })
-    recordTraceEvent(trace, {
-      step: "compare-rendered-reference",
-      kind: "command",
-      name: "visual-diff",
-      status: "passed",
-      details: { passed: true, mssim: 0.93 },
     })
 
     const audit = evaluateBenchmarkProcessTrace(trace)
@@ -285,14 +253,14 @@ describe("web clone source project E2E", () => {
       sourcePackageDir: "web-clone-source",
       outputDir: "frontend-design-skeleton",
     })
-    trace.sourceProjectEvidence = {
-      sourceDomPageExists: false,
-      replacementPlanExists: false,
-      iterationStateExists: false,
-      sourceRegionsExists: false,
+    trace.visualSkeletonEvidence = {
+      indexHtmlExists: true,
+      tokenCssExists: true,
+      externalCssLinked: true,
+      frameworkEntryPresent: false,
+      buildOutputPresent: false,
+      rawSourceDomDumpPresent: false,
       referenceImageExists: true,
-      sourceDomRegionFileCount: 0,
-      semanticReplacementFileCount: 4,
     }
     trace.frontendDesignIterationState = {
       ...createCompletedFrontendDesignIterationState(),
@@ -306,17 +274,10 @@ describe("web clone source project E2E", () => {
       status: "passed",
     })
     recordTraceEvent(trace, {
-      step: "inspect-source-project-sidecars",
+      step: "inspect-visual-skeleton-artifacts",
       kind: "inspection",
-      name: "source-project-sidecars",
+      name: "visual-skeleton-artifacts",
       status: "passed",
-    })
-    recordTraceEvent(trace, {
-      step: "compare-rendered-reference",
-      kind: "command",
-      name: "visual-diff",
-      status: "passed",
-      details: { passed: true, mssim: 0.93 },
     })
 
     const audit = evaluateBenchmarkProcessTrace(trace)
@@ -391,12 +352,11 @@ describe("web clone source project E2E", () => {
           ? frontendDesignPaths.skeletonProjectAbsolute
           : frontendDesignProjectDir ?? outputDir
         const targetProjectDir = runFrontendDesignAgentE2E
-          ? path.join(path.dirname(frontendDesignPaths.skeletonProjectAbsolute), "frontend-design-target")
+          ? path.join(path.dirname(frontendDesignPaths.skeletonProjectAbsolute), "visual-html-skeleton")
           : frontendDesignProjectDir ?? outputDir
         const trace = createBenchmarkProcessTrace({ sourcePackageDir: webpageEvidenceDir, outputDir: targetProjectDir })
         const toolIds = await ToolRegistry.ids()
         expect(toolIds).toContain("web_clone_prepare_context")
-        expect(toolIds).toContain("web_clone_source_audit")
         const frontendDesign = await Agent.get("frontend-design")
         const frontendDesignToolIds = new Set(frontendDesign?.tools?.include ?? [])
         expect(frontendDesignToolIds.has("create_frontend_skeleton_project")).toBe(true)
@@ -407,7 +367,7 @@ describe("web clone source project E2E", () => {
           name: "frontend_design_static_tool_surface",
           status: "passed",
           details: {
-            requiredTools: ["create_frontend_skeleton_project", "record_frontend_region_selection", "web_clone_source_audit"],
+            requiredTools: ["create_frontend_skeleton_project", "record_frontend_region_selection"],
           },
         })
 
@@ -470,89 +430,46 @@ describe("web clone source project E2E", () => {
           })
           expect(created.title).toBe("Frontend source skeleton project created")
         }
-        trace.sourceProjectEvidence = await inspectSourceProjectEvidence(targetProjectDir)
         recordTraceEvent(trace, {
           step: "inspect-source-project-sidecars",
           kind: "inspection",
           name: "source-project-sidecars",
           status: "passed",
-          details: trace.sourceProjectEvidence,
+          details: { skeletonProjectDir },
+        })
+        trace.visualSkeletonEvidence = await inspectVisualSkeletonEvidence(targetProjectDir, context.metadata.sourcePackageDir)
+        recordTraceEvent(trace, {
+          step: "inspect-visual-skeleton-artifacts",
+          kind: "inspection",
+          name: "visual-skeleton-artifacts",
+          status: "passed",
+          details: trace.visualSkeletonEvidence,
         })
 
-        await run("bun", ["install"], targetProjectDir)
-        recordTraceEvent(trace, {
-          step: "install-source-project",
-          kind: "command",
-          name: "bun install",
-          status: "passed",
-          details: { cwd: targetProjectDir },
-        })
-        await run("bun", ["run", "build"], targetProjectDir)
-        recordTraceEvent(trace, {
-          step: "build-source-project",
-          kind: "command",
-          name: "bun run build",
-          status: "passed",
-          details: { cwd: targetProjectDir },
-        })
-
-        const auditTool = await WebCloneSourceAuditTool.init()
-        const audit = await auditTool.execute({
-          projectDir: targetProjectDir,
-          sourcePackageDir: context.metadata.sourcePackageDir,
-          outputPath: path.join(targetProjectDir, "acceptance", "web-clone-source-skeleton-consumption-audit.json"),
-        }, ctx)
-        expect(audit.metadata.audit.passed).toBe(true)
-        trace.audits.visualBaselineAllowed = audit.metadata.audit
-        recordTraceEvent(trace, {
-          step: "audit-visual-baseline",
-          kind: "tool",
-          name: "web_clone_source_audit",
-          status: "passed",
-          details: { finalAcceptanceMode: "visual_baseline_allowed", passed: audit.metadata.audit.passed },
-        })
-
-        const acceptanceDir = path.join(targetProjectDir, "acceptance")
+        const acceptanceDir = path.join(path.dirname(targetProjectDir), "acceptance")
         await fs.mkdir(acceptanceDir, { recursive: true })
-        const maintainableAudit = await auditTool.execute({
-          projectDir: targetProjectDir,
+        const htmlSkeletonWorkflow = await runHtmlSkeletonWorkflowCheck({
+          frontendDesignDir: path.dirname(skeletonProjectDir),
+          visualRoot: targetProjectDir,
           sourcePackageDir: context.metadata.sourcePackageDir,
-          finalAcceptanceMode: "maintainable_replacement_required",
-          outputPath: path.join(acceptanceDir, "web-clone-source-maintainable-audit.json"),
-        }, ctx)
-        trace.audits.maintainableReplacementRequired = maintainableAudit.metadata.audit
-        recordTraceEvent(trace, {
-          step: "audit-maintainable-replacement",
-          kind: "tool",
-          name: "web_clone_source_audit",
-          status: maintainableAudit.metadata.audit.passed ? "passed" : "failed",
-          details: {
-            finalAcceptanceMode: "maintainable_replacement_required",
-            passed: maintainableAudit.metadata.audit.passed,
-            findings: maintainableAudit.metadata.audit.findings,
-          },
-        })
-        const visualOutDir = path.join(acceptanceDir, "overlay-visual-diff")
-        const visualExitCode = await runVisualDiffCli({
-          renderedDir: targetProjectDir,
           reference: path.join(context.metadata.sourcePackageDir, "reference.png"),
-          outDir: visualOutDir,
+          outDir: path.join(acceptanceDir, "html-skeleton-workflow"),
           threshold,
           worstThreshold,
+          headless: true,
         })
-        const visualReport = JSON.parse(await fs.readFile(path.join(visualOutDir, "diff.json"), "utf8"))
-        trace.audits.visualDiff = visualReport
+        trace.audits.htmlSkeletonWorkflow = htmlSkeletonWorkflow
         recordTraceEvent(trace, {
-          step: "compare-rendered-reference",
+          step: "html-skeleton-workflow-check",
           kind: "command",
-          name: "visual-diff",
-          status: visualExitCode === 0 && visualReport.passed === true ? "passed" : "failed",
+          name: "html-skeleton-workflow-check",
+          status: htmlSkeletonWorkflow.passed ? "passed" : "failed",
           details: {
-            visualExitCode,
-            passed: visualReport.passed,
-            mssim: visualReport.mssim,
+            passed: htmlSkeletonWorkflow.passed,
+            mssim: htmlSkeletonWorkflow.visualDiff?.mssim,
             threshold,
             worstThreshold,
+            report: path.join(htmlSkeletonWorkflow.outDir, "html-skeleton-workflow-report.json"),
           },
         })
         trace.processAudit = evaluateBenchmarkProcessTrace(trace)
@@ -560,21 +477,15 @@ describe("web clone source project E2E", () => {
         const report = {
           version: 1,
           purpose: "web-clone-opencorvus-e2e",
-          passed:
-            visualExitCode === 0 &&
-            visualReport.passed === true &&
-            maintainableAudit.metadata.audit.passed === true &&
-            trace.processAudit.passed === true,
+          passed: htmlSkeletonWorkflow.passed === true && trace.processAudit.passed === true,
           threshold,
           worstThreshold,
           webpageEvidenceDir,
           outputDir: targetProjectDir,
           skeletonProjectDir,
           processTrace: path.join(acceptanceDir, "web-clone-benchmark-process-trace.json"),
-          visualBaselineAudit: audit.metadata.audit,
-          maintainableAudit: maintainableAudit.metadata.audit,
           processAudit: trace.processAudit,
-          overlayVisualDiff: visualReport,
+          htmlSkeletonWorkflow,
         }
         await fs.writeFile(path.join(acceptanceDir, "opencorvus-web-clone-e2e.json"), JSON.stringify(report, null, 2), "utf8")
         expect(report.passed, JSON.stringify(report, null, 2)).toBe(true)
@@ -597,14 +508,11 @@ function createBenchmarkProcessTrace(input: {
       "web_clone_prepare_context",
       "create_frontend_skeleton_project",
       "source-project-sidecars",
+      "visual-skeleton-artifacts",
       "frontend_design_region_selection",
       "frontend_design_source_edit",
       "frontend_design_replacement_result",
-      "bun install",
-      "bun run build",
-      "web_clone_source_audit:visual_baseline_allowed",
-      "web_clone_source_audit:maintainable_replacement_required",
-      "visual-diff",
+      "html-skeleton-workflow-check",
     ],
     events: [],
     audits: {},
@@ -669,8 +577,8 @@ async function ensureFrontendDesignBenchmarkTask(taskID: string): Promise<string
       project_id: Instance.project.id,
       session_id: rootSession.id,
       source: "test",
-      title: "frontend-design rawproject benchmark",
-      request: "Refine the prepared web-clone-source package into a maintainable frontend-design source project.",
+      title: "frontend-design visual HTML skeleton benchmark",
+      request: "Restore the prepared web-clone-source package into a source-editable visual HTML skeleton.",
       priority: "normal",
       time_created: now,
       time_updated: now,
@@ -756,13 +664,12 @@ function createCompletedFrontendDesignProcessTrace(): FrontendDesignProcessTrace
     events: [
       { name: "frontend_design_static_tool_surface", status: "passed", timestamp: new Date().toISOString() },
       { name: "create_frontend_skeleton_project", status: "passed", timestamp: new Date().toISOString() },
+      { name: "source-project-sidecars", status: "passed", timestamp: new Date().toISOString() },
+      { name: "visual-skeleton-artifacts", status: "passed", timestamp: new Date().toISOString() },
       { name: "frontend_design_region_selection", status: "passed", timestamp: new Date().toISOString() },
       { name: "frontend_design_source_edit", status: "passed", timestamp: new Date().toISOString() },
       { name: "frontend_design_replacement_result", status: "passed", timestamp: new Date().toISOString(), details: { replacementStatus: "completed", regionComponentName: "HeroRegion" } },
-      { name: "bun install", status: "passed", timestamp: new Date().toISOString() },
-      { name: "bun run build", status: "passed", timestamp: new Date().toISOString() },
-      { name: "web_clone_source_audit", status: "passed", timestamp: new Date().toISOString(), details: { finalAcceptanceMode: "visual_baseline_allowed", passed: true } },
-      { name: "web_clone_source_audit", status: "passed", timestamp: new Date().toISOString(), details: { finalAcceptanceMode: "maintainable_replacement_required", passed: true } },
+      { name: "html-skeleton-workflow-check", status: "passed", timestamp: new Date().toISOString(), details: { passed: true, mssim: 0.96 } },
     ],
   }
 }
@@ -814,39 +721,36 @@ function frontendDesignEventKind(name: string): BenchmarkProcessEvent["kind"] {
   if (
     name === "frontend_design_static_tool_surface" ||
     name === "frontend_design_region_selection" ||
-    name === "source-project-sidecars"
+    name === "source-project-sidecars" ||
+    name === "visual-skeleton-artifacts"
   ) {
     return "inspection"
   }
-  if (name === "bun install" || name === "bun run build" || name === "visual-diff") return "command"
+  if (name === "html-skeleton-workflow-check") return "command"
   return "tool"
 }
 
-async function inspectSourceProjectEvidence(projectDir: string): Promise<SourceProjectEvidence> {
-  const sourceDomDir = path.join(projectDir, "src", "components", "source-dom")
-  const semanticDir = path.join(projectDir, "src", "components", "semantic")
-  const [sourceDomRegionFileCount, semanticReplacementFileCount] = await Promise.all([
-    countTsxFiles(sourceDomDir),
-    countTsxFiles(semanticDir),
-  ])
+async function inspectVisualSkeletonEvidence(projectDir: string, sourcePackageDir: string): Promise<VisualSkeletonEvidence> {
+  const indexPath = path.join(projectDir, "index.html")
+  const indexHtml = await fs.readFile(indexPath, "utf8").catch(() => "")
   return {
-    sourceDomPageExists: await fileExists(path.join(projectDir, "src", "components", "SourceDomPage.tsx")),
-    replacementPlanExists: await fileExists(path.join(projectDir, "src", "data", "sourceDomReplacementPlan.ts")),
-    iterationStateExists: await fileExists(path.join(projectDir, "src", "data", "sourceDomIterationState.ts")),
-    sourceRegionsExists: await fileExists(path.join(projectDir, "src", "data", "sourceDomRegions.ts")),
-    referenceImageExists: await fileExists(path.join(projectDir, "reference.png")),
-    sourceDomRegionFileCount,
-    semanticReplacementFileCount,
+    indexHtmlExists: await fileExists(indexPath),
+    tokenCssExists: await fileExists(path.join(projectDir, "styles", "tokens.css")),
+    externalCssLinked: /<link\b[^>]*\brel=(?:"stylesheet"|'stylesheet'|stylesheet\b)/i.test(indexHtml),
+    frameworkEntryPresent: /(?:\/assets\/index-[^"']+\.js|\/src\/main\.(?:tsx|ts|jsx|js)|react-refresh|vite\/client)/i.test(indexHtml),
+    buildOutputPresent: await fileExists(path.join(projectDir, "dist", "index.html")) ||
+      await fileExists(path.join(projectDir, "build", "index.html")) ||
+      await fileExists(path.join(projectDir, "out", "index.html")),
+    rawSourceDomDumpPresent: /\bsource-dom-page\b/i.test(indexHtml) ||
+      /\bsinglefile-body\.html\b/i.test(indexHtml) ||
+      /\bsource-skeleton\b/i.test(indexHtml) ||
+      (indexHtml.match(/\bdata-source-node-id=/gi) ?? []).length > 500,
+    referenceImageExists: await fileExists(path.join(sourcePackageDir, "reference.png")),
   }
 }
 
 async function fileExists(file: string): Promise<boolean> {
   return (await fs.stat(file).catch(() => undefined))?.isFile() === true
-}
-
-async function countTsxFiles(dir: string): Promise<number> {
-  const entries = await fs.readdir(dir).catch(() => [])
-  return entries.filter((entry) => entry.endsWith(".tsx")).length
 }
 
 function evaluateBenchmarkProcessTrace(trace: BenchmarkProcessTrace): BenchmarkProcessTrace["processAudit"] {
@@ -857,49 +761,36 @@ function evaluateBenchmarkProcessTrace(trace: BenchmarkProcessTrace): BenchmarkP
     "web_clone_prepare_context",
     "create_frontend_skeleton_project",
     "source-project-sidecars",
+    "visual-skeleton-artifacts",
     "frontend_design_region_selection",
     "frontend_design_source_edit",
     "frontend_design_replacement_result",
-    "bun install",
-    "bun run build",
-    "visual-diff",
+    "html-skeleton-workflow-check",
   ]
   for (const name of requiredNames) {
     if (!eventNames.includes(name)) findings.push(`Missing process event: ${name}.`)
   }
 
-  const visualBaselineAudit = trace.events.find((event) =>
-    event.name === "web_clone_source_audit" &&
-    event.details?.finalAcceptanceMode === "visual_baseline_allowed" &&
-    event.status === "passed"
+  const htmlSkeletonCheck = trace.events.find((event) =>
+    event.name === "html-skeleton-workflow-check" &&
+    event.status === "passed" &&
+    event.details?.passed === true
   )
-  if (!visualBaselineAudit) findings.push("Missing passing web_clone_source_audit event for visual_baseline_allowed.")
+  if (!htmlSkeletonCheck) findings.push("Missing passing html-skeleton-workflow-check event for the visual HTML skeleton.")
 
-  const maintainableAudit = trace.events.find((event) =>
-    event.name === "web_clone_source_audit" &&
-    event.details?.finalAcceptanceMode === "maintainable_replacement_required"
-  )
-  if (!maintainableAudit) findings.push("Missing web_clone_source_audit event for maintainable_replacement_required.")
-
-  const evidence = trace.sourceProjectEvidence
-  if (!evidence?.referenceImageExists) findings.push("Generated source project is missing reference.png.")
-  if ((evidence?.semanticReplacementFileCount ?? 0) <= 0) {
-    findings.push("Frontend-design source project has no semantic replacement components; rawproject refinement did not start.")
+  const evidence = trace.visualSkeletonEvidence
+  if (!evidence?.referenceImageExists) findings.push("Source package is missing reference.png.")
+  if (!evidence?.indexHtmlExists) findings.push("Visual HTML skeleton is missing index.html.")
+  if (!evidence?.tokenCssExists) findings.push("Visual HTML skeleton is missing styles/tokens.css.")
+  if (!evidence?.externalCssLinked) findings.push("Visual HTML skeleton index.html does not link external CSS.")
+  if (evidence?.frameworkEntryPresent) {
+    findings.push("Visual HTML skeleton still uses a framework compiled/dev entry instead of static HTML/CSS.")
   }
-  if (evidence?.sourceDomPageExists) {
-    findings.push("Final target project still contains SourceDomPage.tsx; skeleton rawcode must be extracted into semantic target-project source, not delivered.")
+  if (evidence?.buildOutputPresent) {
+    findings.push("Visual HTML skeleton root contains dist/build/out output; the design artifact must stay source-editable.")
   }
-  if (evidence?.replacementPlanExists) {
-    findings.push("Final target project still contains sourceDomReplacementPlan.ts; this skeleton planning sidecar must not remain in app source.")
-  }
-  if (evidence?.iterationStateExists) {
-    findings.push("Final target project still contains sourceDomIterationState.ts; frontend_design iteration state belongs in the process artifact, not app source.")
-  }
-  if (evidence?.sourceRegionsExists) {
-    findings.push("Final target project still contains sourceDomRegions.ts; source-region metrics are skeleton evidence, not app source.")
-  }
-  if ((evidence?.sourceDomRegionFileCount ?? 0) > 0) {
-    findings.push("Frontend-design source project still contains generated source-dom regions; rawproject refinement is incomplete.")
+  if (evidence?.rawSourceDomDumpPresent) {
+    findings.push("Visual HTML skeleton appears to be a raw source DOM dump instead of restored semantic HTML sections.")
   }
 
   const iterationState = trace.frontendDesignIterationState
@@ -921,14 +812,9 @@ function evaluateBenchmarkProcessTrace(trace: BenchmarkProcessTrace): BenchmarkP
   }
 
   const generateIndex = eventNames.indexOf("create_frontend_skeleton_project")
-  const buildIndex = eventNames.indexOf("bun run build")
-  if (generateIndex >= 0 && buildIndex >= 0 && buildIndex < generateIndex) {
-    findings.push("Project build ran before create_frontend_skeleton_project materialized the rawproject baseline.")
-  }
-
   const sourceEditIndex = eventNames.indexOf("frontend_design_source_edit")
   if (generateIndex >= 0 && sourceEditIndex >= 0 && sourceEditIndex < generateIndex) {
-    findings.push("Frontend-design source edit ran before create_frontend_skeleton_project materialized the rawproject baseline.")
+    findings.push("Frontend-design HTML skeleton edit ran before create_frontend_skeleton_project materialized the source evidence baseline.")
   }
 
   return {
@@ -950,45 +836,4 @@ async function assertFile(file: string): Promise<void> {
 function normalizeVisualThreshold(value: number): number {
   if (!Number.isFinite(value) || value <= 0) return 0.96
   return value > 1 ? value / 100 : value
-}
-
-async function run(command: string, args: string[], cwd: string): Promise<void> {
-  await new Promise<void>((resolve, reject) => {
-    const child = spawn(command, args, { cwd, stdio: "inherit", windowsHide: true })
-    child.on("error", reject)
-    child.on("exit", (code) => {
-      if (code === 0) resolve()
-      else reject(new Error(`${command} ${args.join(" ")} failed with exit code ${code}`))
-    })
-  })
-}
-
-async function runVisualDiffCli(input: {
-  renderedDir: string
-  reference: string
-  outDir: string
-  threshold: number
-  worstThreshold: number
-}): Promise<number> {
-  await fs.mkdir(input.outDir, { recursive: true })
-  return new Promise<number>((resolve, reject) => {
-    const child = spawn("bun", [
-      "run",
-      path.join(repoRoot, "packages", "opencorvus", "script", "benchmark", "visual-diff.ts"),
-      "--rendered-dir",
-      input.renderedDir,
-      "--reference",
-      input.reference,
-      "--out",
-      input.outDir,
-      "--threshold",
-      String(input.threshold),
-      "--worst-threshold",
-      String(input.worstThreshold),
-      "--headless",
-      "--chrome-cli-fallback",
-    ], { cwd: repoRoot, stdio: "inherit", windowsHide: true })
-    child.on("error", reject)
-    child.on("exit", (code) => resolve(code ?? 1))
-  })
 }
