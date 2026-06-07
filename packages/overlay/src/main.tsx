@@ -81,7 +81,7 @@ import {
 import { openConfigDialog, openGoalDialog, renderAboutVersion, setupDialogBackdropClose } from "./services/dialog"
 import { cardTreeStore } from "./store/card-tree"
 import { composerDraftKey } from "./services/composer-draft"
-import { isCodingAssistantSource, selectCodingAssistantSession } from "./services/coding-assistant"
+import { selectCodingAssistantSession } from "./services/coding-assistant"
 
 // ── Module teardown ──
 // Centralised cleanup for top-level document/window listeners and Solid roots.
@@ -168,12 +168,15 @@ const [logOpen, setLogOpen] = createSignal(false)
 const [workspaceOpen, setWorkspaceOpen] = createSignal(false)
 const [workspaceTarget, setWorkspaceTarget] = createSignal<DiffTarget>({ filePath: "" })
 
-type RightActivity = "explorer" | "diff" | "browser" | "assistant"
+type RightPanelActivity = "inspector" | "notifications"
+type RightActivity = "explorer" | "diff" | "browser" | "assistant" | RightPanelActivity
 type CenterWorkbenchTab = "explorer" | "diff" | "browser" | "file"
 
 const DEFAULT_CENTER_WORKBENCH_WIDTH = 420
 
 const RIGHT_ACTIVITIES: readonly SideActivity<RightActivity>[] = [
+  { id: "inspector", icon: "panel-right", labelKey: "sections.title" },
+  { id: "notifications", icon: "log-lines", labelKey: "notify.center_label" },
   { id: "explorer", icon: "folder", labelKey: "explorer.title" },
   { id: "diff", icon: "file-document", labelKey: "workspace.diff" },
   { id: "browser", icon: "inspect", labelKey: "browser_preview.title" },
@@ -196,14 +199,12 @@ const CENTER_WORKBENCH_ICONS: Record<CenterWorkbenchTab, IconName> = {
 
 const [centerWorkbenchTabs, setCenterWorkbenchTabs] = createSignal<CenterWorkbenchTab[]>([])
 const [activeCenterWorkbenchTab, setActiveCenterWorkbenchTab] = createSignal<CenterWorkbenchTab | null>(null)
-const activeRightActivity = () => {
-  if (isCodingAssistantSource()) return "assistant"
-  const active = activeCenterWorkbenchTab()
-  if (active === "explorer" || active === "diff" || active === "browser") return active
-  return undefined
-}
+const [rightPanelActivity, setRightPanelActivity] = createSignal<RightPanelActivity>("inspector")
+const [selectedRightActivity, setSelectedRightActivity] = createSignal<RightActivity>("inspector")
+const activeRightActivity = () => selectedRightActivity()
 
 function activateCodingAssistantSession(): void {
+  setSelectedRightActivity("assistant")
   void selectCodingAssistantSession().catch((error) => {
     reportOverlayRuntimeError("coding-assistant.select", error)
   })
@@ -218,12 +219,26 @@ function selectRightActivity(activity: RightActivity): void {
     activateCodingAssistantSession()
     return
   }
+  if (activity === "inspector" || activity === "notifications") {
+    openRightPanelActivity(activity)
+    return
+  }
   openCenterWorkbenchTab(activity)
+}
+
+function openRightPanelActivity(activity: RightPanelActivity): void {
+  setRightPanelActivity(activity)
+  setSelectedRightActivity(activity)
+  if (settingsStore.rightPanelCollapsed) {
+    setSettingsStore("rightPanelCollapsed", false)
+    saveSettings()
+  }
 }
 
 function openCenterWorkbenchTab(tab: CenterWorkbenchTab): void {
   setCenterWorkbenchTabs((current) => current.includes(tab) ? current : [...current, tab])
   activateCenterWorkbenchTab(tab)
+  if (tab === "explorer" || tab === "diff" || tab === "browser") setSelectedRightActivity(tab)
 }
 
 function removeCenterWorkbenchTab(tab: CenterWorkbenchTab): void {
@@ -240,6 +255,7 @@ function removeCenterWorkbenchTab(tab: CenterWorkbenchTab): void {
 function closeCenterWorkbenchTab(tab: CenterWorkbenchTab): void {
   if (tab === "diff") setWorkspaceOpen(false)
   if (tab === "file") closeFileEditor()
+  if (untrack(selectedRightActivity) === tab) setSelectedRightActivity(untrack(rightPanelActivity))
   removeCenterWorkbenchTab(tab)
 }
 
@@ -705,7 +721,7 @@ setupDialogBackdropClose()
 const notificationHost = document.createElement("div")
 notificationHost.id = "notificationCenterHost"
 document.body.appendChild(notificationHost)
-render(() => <NotificationCenter />, notificationHost)
+render(() => <NotificationCenter surface="toast" />, notificationHost)
 
 function recomputeNotificationsOnForeground() {
   recomputeBadgeFromTasks()
@@ -1146,6 +1162,11 @@ if (boardMountEl) {
   )
 }
 
+const notificationPanelEl = document.getElementById("solidNotificationCenterMount")
+if (notificationPanelEl) {
+  render(() => <NotificationCenter surface="panel" />, notificationPanelEl)
+}
+
 // ── Mount: LogViewer (renders its own <dialog id="logDialog">) ──
 
 const logViewerEl = document.getElementById("solidLogViewer")
@@ -1309,12 +1330,22 @@ disposers.push(
     })
 
     createEffect(() => {
+      const activity = rightPanelActivity()
       const sections = document.getElementById("sections")
       const title = document.getElementById("rightPanelTitle")
-      const inspector = document.getElementById("rightPanelInspector")
-      if (sections) sections.dataset.rightActivity = "inspector"
-      if (title) title.textContent = t("sections.title")
-      if (inspector) inspector.dataset.active = "true"
+      const bodies: Record<RightPanelActivity, HTMLElement | null> = {
+        inspector: document.getElementById("rightPanelInspector"),
+        notifications: document.getElementById("rightPanelNotifications"),
+      }
+      const titleKey: Record<RightPanelActivity, string> = {
+        inspector: "sections.title",
+        notifications: "notify.center_label",
+      }
+      if (sections) sections.dataset.rightActivity = activity
+      if (title) title.textContent = t(titleKey[activity])
+      for (const [id, body] of Object.entries(bodies)) {
+        if (body) body.dataset.active = String(id === activity)
+      }
     })
 
     createEffect(() => {

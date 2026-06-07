@@ -1,7 +1,7 @@
 {
   "_meta": {
     "language": "en-US",
-    "panel_revision": "3db9cae7299f3ba7"
+    "panel_revision": "887b232cd439d44f"
   },
   "about.author_name": "Yang, Heng",
   "about.go_version": "Go Version",
@@ -120,6 +120,9 @@
   "notify.event.workflow_selected.notice.title": "Workflow selected",
   "notify.event.workflow_selected.notice.body": "{{title}} selected a workflow.",
   "notify.center_label": "Notifications",
+  "notify.system_group": "System",
+  "notify.empty_title": "No notifications",
+  "notify.empty_body": "Task and system notifications will collect here.",
   "notify.dismiss": "Dismiss notification",
   "notify.show_details": "Show details",
   "notify.hide_details": "Hide details",

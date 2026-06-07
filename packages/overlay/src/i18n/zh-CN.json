@@ -1,7 +1,7 @@
 {
   "_meta": {
     "language": "zh-CN",
-    "panel_revision": "3db9cae7299f3ba7"
+    "panel_revision": "887b232cd439d44f"
   },
   "about.author_name": "杨恒",
   "about.go_version": "Go 版本",
@@ -120,6 +120,9 @@
   "notify.event.workflow_selected.notice.title": "工作流已选择",
   "notify.event.workflow_selected.notice.body": "{{title}} 已选择工作流。",
   "notify.center_label": "通知",
+  "notify.system_group": "系统",
+  "notify.empty_title": "暂无通知",
+  "notify.empty_body": "任务和系统通知会收纳在这里。",
   "notify.dismiss": "关闭通知",
   "notify.show_details": "展开详情",
   "notify.hide_details": "收起详情",

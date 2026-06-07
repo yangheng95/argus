@@ -2,6 +2,7 @@ import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 
 import {
   clearNotifications,
+  dismissNotification,
   formatErrorDetails,
   notificationStore,
   notifyError,
@@ -9,6 +10,7 @@ import {
   notifySuccess,
   notifyWarning,
   showNotification,
+  visibleNotificationItems,
 } from "../src/services/notify";
 import { ApiError } from "../src/services/api";
 
@@ -71,6 +73,31 @@ describe("notify: details payload round-trips", () => {
   test("details default to empty string when omitted", () => {
     notifyError({ title: "no detail" });
     expect(notificationStore.items[0]?.details).toBe("");
+  });
+});
+
+describe("notify: center history survives toast dismissal", () => {
+  test("dismissNotification hides toast without deleting notification history", () => {
+    const id = notifySuccess({ title: "done", message: "saved" });
+    expect(notificationStore.items).toHaveLength(1);
+    expect(visibleNotificationItems()).toHaveLength(1);
+
+    dismissNotification(id);
+
+    expect(notificationStore.items).toHaveLength(1);
+    expect(notificationStore.items[0]?.dismissedAt).toBeGreaterThan(0);
+    expect(visibleNotificationItems()).toHaveLength(0);
+  });
+
+  test("showing the same notification id reopens the toast and replaces the history row", () => {
+    notifyWarning({ id: "task:repeat", title: "first" });
+    dismissNotification("task:repeat");
+    showNotification({ id: "task:repeat", tone: "success", title: "second" });
+
+    expect(notificationStore.items).toHaveLength(1);
+    expect(notificationStore.items[0]?.title).toBe("second");
+    expect(notificationStore.items[0]?.dismissedAt).toBe(0);
+    expect(visibleNotificationItems()).toHaveLength(1);
   });
 });
 
