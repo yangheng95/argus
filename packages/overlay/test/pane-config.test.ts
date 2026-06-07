@@ -69,12 +69,26 @@ test("right pane drag measures from the whole pane body, not the center column e
   expect(pane).not.toContain("document.getElementById(config.centerId)")
 })
 
-test("default settings collapse the right panel without collapsing Mission", () => {
+test("default settings keep the right inspector expanded without collapsing Mission", () => {
   const settings = readSrc("store/settings.ts")
   const storage = readSrc("services/overlay-settings-storage.ts")
-  expect(settings).toContain("rightPanelCollapsed: true")
+  expect(settings).toContain('typeof input?.sidebarCollapsed === "boolean"')
+  expect(settings).toContain("rightPanelCollapsed: false")
   expect(settings).toContain('typeof input?.rightPanelCollapsed === "boolean"')
+  expect(storage).toContain('sidebarCollapsed: read("oc_sidebar_collapsed") === "true"')
   expect(storage).toContain('rightPanelCollapsedRaw === null ? undefined : rightPanelCollapsedRaw === "true"')
+})
+
+test("center workbench width persists through the existing settings source", () => {
+  const settings = readSrc("store/settings.ts")
+  const storage = readSrc("services/overlay-settings-storage.ts")
+  const main = readSrc("main.tsx")
+  expect(settings).toContain("centerWorkbenchWidth: number | null")
+  expect(settings).toContain("centerWorkbenchWidth: sanitizePaneWidth(input?.centerWorkbenchWidth)")
+  expect(settings).toContain("centerWorkbenchWidth: input.centerWorkbenchWidth || undefined")
+  expect(storage).toContain('centerWorkbenchWidth: read("oc_center_workbench_width") || undefined')
+  expect(storage).toContain('writeOptional("oc_center_workbench_width", input.centerWorkbenchWidth)')
+  expect(main).toContain('setSettingsStore("centerWorkbenchWidth", width)')
 })
 
 test("Mission conversation scroll container opts into the visible chat scrollbar", () => {

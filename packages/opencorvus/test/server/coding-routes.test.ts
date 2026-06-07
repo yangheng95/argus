@@ -5,6 +5,7 @@ import { Instance } from "../../src/project/instance"
 import { Database, eq } from "../../src/storage/db"
 import { EngineTaskTable } from "../../src/engine/engine.sql"
 import { TaskQueueTable } from "../../src/scheduler/task-queue.sql"
+import { RIGHT_SIDEBAR_CODING_ASSISTANT_REQUIRED_TOOLS } from "../../src/coding-assistant/session"
 import { resetDatabase } from "../fixture/db"
 import { tmpdir } from "../fixture/fixture"
 
@@ -227,7 +228,7 @@ describe("coding assistant routes", () => {
           db.select().from(TaskQueueTable).where(eq(TaskQueueTable.id, taskID)).get(),
         )
         expect(row?.metadata.input).toMatchObject({
-          agent: "coding",
+          agent: "coding-assistant",
           tools: { panel: true },
           extra: { surface: "right-sidebar" },
         })
@@ -235,7 +236,7 @@ describe("coding assistant routes", () => {
     })
   })
 
-  test("right sidebar prompt overlay overrides agent, tool, and source spoofing", async () => {
+  test("right sidebar prompt overlay overrides agent, tool, prompt, and source spoofing", async () => {
     await using tmp = await tmpdir({ git: true })
 
     await Instance.provide({
@@ -258,7 +259,21 @@ describe("coding assistant routes", () => {
           },
           body: JSON.stringify({
             agent: "control",
-            tools: { panel: false },
+            system: "malicious complete replacement",
+            systemMode: "complete",
+            tools: {
+              panel: false,
+              question: false,
+              bash: false,
+              read: false,
+              glob: false,
+              search_code: false,
+              edit: false,
+              write: false,
+              apply_patch: false,
+              todoread: false,
+              todowrite: false,
+            },
             extra: { source: "mission" },
             parts: [{ type: "text", text: "spoof route" }],
           }),
@@ -270,13 +285,17 @@ describe("coding assistant routes", () => {
           db.select().from(TaskQueueTable).where(eq(TaskQueueTable.id, taskID)).get(),
         )
         expect(row?.metadata.input).toMatchObject({
-          agent: "coding",
-          tools: { panel: true },
+          agent: "coding-assistant",
           extra: {
             surface: "right-sidebar",
             source: "right-sidebar-assistant",
           },
         })
+        expect(row?.metadata.input.system).toBeUndefined()
+        expect(row?.metadata.input.systemMode).toBeUndefined()
+        for (const tool of RIGHT_SIDEBAR_CODING_ASSISTANT_REQUIRED_TOOLS) {
+          expect(row?.metadata.input.tools?.[tool]).toBe(true)
+        }
 
         const syncPrompt = await app.request(`/session/${session.id}/message`, {
           method: "POST",
@@ -288,15 +307,28 @@ describe("coding assistant routes", () => {
             agent: "mission",
             model: { providerID: "test", modelID: "test-model" },
             noReply: true,
-            tools: { panel: false },
+            system: "sync malicious complete replacement",
+            systemMode: "complete",
+            tools: {
+              panel: false,
+              question: false,
+              bash: false,
+              edit: false,
+              write: false,
+              apply_patch: false,
+            },
             extra: { source: "panel" },
             parts: [{ type: "text", text: "sync spoof" }],
           }),
         })
         expect(syncPrompt.status).toBe(200)
-        const body = (await syncPrompt.json()) as { info: { agent?: string; tools?: Record<string, boolean>; extra?: Record<string, unknown> } }
-        expect(body.info.agent).toBe("coding")
-        expect(body.info.tools).toEqual({ panel: true })
+        const body = (await syncPrompt.json()) as { info: { agent?: string; system?: string; systemMode?: string; tools?: Record<string, boolean>; extra?: Record<string, unknown> } }
+        expect(body.info.agent).toBe("coding-assistant")
+        expect(body.info.system).toBeUndefined()
+        expect(body.info.systemMode).toBeUndefined()
+        for (const tool of RIGHT_SIDEBAR_CODING_ASSISTANT_REQUIRED_TOOLS) {
+          expect(body.info.tools?.[tool]).toBe(true)
+        }
         expect(body.info.extra).toMatchObject({
           surface: "right-sidebar",
           source: "right-sidebar-assistant",

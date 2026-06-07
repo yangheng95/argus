@@ -11,6 +11,19 @@ export const RIGHT_SIDEBAR_CODING_ASSISTANT_METADATA = {
   },
 } as const
 export const RIGHT_SIDEBAR_CODING_ASSISTANT_SOURCE = "right-sidebar-assistant"
+export const RIGHT_SIDEBAR_CODING_ASSISTANT_REQUIRED_TOOLS = [
+  "panel",
+  "question",
+  "bash",
+  "read",
+  "glob",
+  "search_code",
+  "edit",
+  "write",
+  "apply_patch",
+  "todoread",
+  "todowrite",
+] as const
 type RightSidebarCodingAssistantMetadata = {
   surface: "right-sidebar"
   selectedTaskID?: string | null
@@ -33,19 +46,23 @@ export function isRightSidebarCodingAssistantSession(
 export function applyRightSidebarCodingAssistantPromptOverlay<T extends Omit<SessionPrompt.PromptInput, "sessionID">>(
   prompt: T,
 ): T {
+  const { system: _system, systemMode: _systemMode, tools, ...rest } = prompt
+  const forcedTools = Object.fromEntries(
+    RIGHT_SIDEBAR_CODING_ASSISTANT_REQUIRED_TOOLS.map((tool) => [tool, true]),
+  )
   return {
-    ...prompt,
-    agent: "coding",
+    ...rest,
+    agent: "coding-assistant",
     tools: {
-      ...(prompt.tools ?? {}),
-      panel: true,
+      ...(tools ?? {}),
+      ...forcedTools,
     },
     extra: {
       ...(prompt.extra ?? {}),
       surface: "right-sidebar",
       source: RIGHT_SIDEBAR_CODING_ASSISTANT_SOURCE,
     },
-  }
+  } as unknown as T
 }
 
 export async function setRightSidebarCodingAssistantSelectedTask(input: {

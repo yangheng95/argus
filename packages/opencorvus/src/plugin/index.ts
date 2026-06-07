@@ -1,4 +1,15 @@
-import type { Hooks, PluginInput, PluginServiceRegistration, Plugin as PluginInstance } from "@opencorvus-ai/plugin"
+import type {
+  Hooks,
+  PluginInput,
+  PluginResource,
+  PluginResourceManifestEntry,
+  PluginResources,
+  PluginServiceRegistration,
+  Plugin as PluginInstance,
+  PluginTaskArtifact,
+  PluginTaskArtifactCreateInput,
+  PluginTaskArtifactLookupInput,
+} from "@opencorvus-ai/plugin"
 import { Config } from "../config/config"
 import { Bus } from "../bus"
 import { Log } from "../util/log"
@@ -10,7 +21,15 @@ import { NamedError } from "@opencorvus-ai/util/error"
 import { gitlabAuthPlugin as GitlabAuthPlugin } from "@gitlab/opencode-gitlab-auth"
 import { IN_PROCESS_BASE_URL, createInProcessFetch } from "@/server/in-process-client"
 import { runHookIsolated } from "./isolate"
+import { readFile } from "node:fs/promises"
+import path from "node:path"
+import { fileURLToPath } from "node:url"
+import { and, desc, eq } from "drizzle-orm"
 import z from "zod"
+import { Database } from "@/storage/db"
+import { EngineArtifactTable, type EngineArtifactKind } from "@/engine/engine.sql"
+import { Identifier } from "@/id/id"
+import { requireTask } from "@/engine/store"
 
 export namespace Plugin {
   const log = Log.create({ service: "plugin" })
@@ -50,13 +69,167 @@ export namespace Plugin {
 
   type PluginLoadDiagnostic = {
     specifier: string
+    serviceID?: string
     message: string
   }
+
+  const PluginManifest = z.object({
+    packageSpecifier: z.string().min(1),
+    serviceID: z.string().min(1),
+    backendExport: z.string().min(1),
+    overlayExport: z.string().min(1),
+    resources: z
+      .array(
+        z.object({
+          id: z.string().min(1),
+          kind: z.enum(["worker", "asset", "runtime"]),
+          path: z.string().min(1).optional(),
+          paths: z
+            .object({
+              win32: z.string().min(1).optional(),
+              linux: z.string().min(1).optional(),
+              darwin: z.string().min(1).optional(),
+            })
+            .optional(),
+        }),
+      ),
+  })
 
   // Built-in plugins that are directly imported (not installed from npm)
   // GitlabAuthPlugin is compiled against an older @opencode-ai/plugin version whose
   // OpencodeClient type is a strict subset of the current one — safe to cast.
   const INTERNAL_PLUGINS: PluginInstance[] = [GitlabAuthPlugin as unknown as PluginInstance]
+
+  function pluginTaskArtifactFromRow(row: typeof EngineArtifactTable.$inferSelect): PluginTaskArtifact {
+    return {
+      id: row.id,
+      taskID: row.task_id,
+      kind: row.kind,
+      label: row.label,
+      payload: row.payload ?? {},
+      timeCreated: row.time_created,
+      timeUpdated: row.time_updated,
+    }
+  }
+
+  function createTaskArtifacts(): PluginInput["taskArtifacts"] {
+    return {
+      async create(input: PluginTaskArtifactCreateInput): Promise<PluginTaskArtifact> {
+        requireTask(input.taskID)
+        const now = Date.now()
+        const id = Identifier.ascending("artifact")
+        Database.use((db) =>
+          db
+            .insert(EngineArtifactTable)
+            .values({
+              id,
+              task_id: input.taskID,
+              run_id: null,
+              goal_run_id: null,
+              acceptance_id: null,
+              kind: input.kind as EngineArtifactKind,
+              label: input.label,
+              payload: input.payload,
+              time_created: now,
+              time_updated: now,
+            })
+            .run(),
+        )
+        return {
+          id,
+          taskID: input.taskID,
+          kind: input.kind,
+          label: input.label,
+          payload: input.payload,
+          timeCreated: now,
+          timeUpdated: now,
+        }
+      },
+      async latest(input: PluginTaskArtifactLookupInput): Promise<PluginTaskArtifact | undefined> {
+        requireTask(input.taskID)
+        const clauses = [eq(EngineArtifactTable.task_id, input.taskID), eq(EngineArtifactTable.kind, input.kind as EngineArtifactKind)]
+        if (input.label) clauses.push(eq(EngineArtifactTable.label, input.label))
+        const row = Database.use((db) =>
+          db
+            .select()
+            .from(EngineArtifactTable)
+            .where(and(...clauses))
+            .orderBy(desc(EngineArtifactTable.time_created), desc(EngineArtifactTable.id))
+            .limit(1)
+            .get(),
+        )
+        return row ? pluginTaskArtifactFromRow(row) : undefined
+      },
+      async get(input: PluginTaskArtifactLookupInput & { id: string }): Promise<PluginTaskArtifact | undefined> {
+        requireTask(input.taskID)
+        const row = Database.use((db) =>
+          db
+            .select()
+            .from(EngineArtifactTable)
+            .where(
+              and(
+                eq(EngineArtifactTable.task_id, input.taskID),
+                eq(EngineArtifactTable.kind, input.kind as EngineArtifactKind),
+                eq(EngineArtifactTable.id, input.id),
+              ),
+            )
+            .limit(1)
+            .get(),
+        )
+        if (!row) return undefined
+        if (input.label && row.label !== input.label) return undefined
+        return pluginTaskArtifactFromRow(row)
+      },
+    }
+  }
+
+  function emptyResources(): PluginResources {
+    return {
+      all: () => [],
+      get(id) {
+        throw new Error(`Plugin resource not available: ${id}`)
+      },
+    }
+  }
+
+  function pluginManifestPath(plugin: string) {
+    return plugin.startsWith("file://") ? fileURLToPath(plugin) : plugin
+  }
+
+  function pluginManifestResourceRoot(manifestPath: string) {
+    const segments = path.resolve(manifestPath).split(path.sep)
+    const pluginSegment = segments.lastIndexOf("plugins")
+    if (pluginSegment > 0) return segments.slice(0, pluginSegment).join(path.sep)
+    return path.dirname(manifestPath)
+  }
+
+  function resourceManifestPath(resource: PluginResourceManifestEntry) {
+    const osPath = resource.paths?.[process.platform as "win32" | "linux" | "darwin"]
+    const selected = osPath ?? resource.path
+    if (!selected) throw new Error(`Plugin resource ${resource.id} has no path for ${process.platform}`)
+    return selected
+  }
+
+  function createPluginResources(manifestPath: string, resources: PluginResourceManifestEntry[]): PluginResources {
+    const root = pluginManifestResourceRoot(manifestPath)
+    const resolved = resources.map((resource): PluginResource => {
+      const selectedPath = resourceManifestPath(resource)
+      return {
+        id: resource.id,
+        kind: resource.kind,
+        path: selectedPath,
+        absolutePath: path.resolve(root, selectedPath),
+      }
+    })
+    return {
+      all: () => [...resolved],
+      get(id) {
+        const resource = resolved.find((item) => item.id === id)
+        if (!resource) throw new Error(`Plugin resource not available: ${id}`)
+        return resource
+      },
+    }
+  }
 
   const state = lazyInstanceState(async () => {
     const client = createOpenCorvusClient({
@@ -65,26 +238,92 @@ export namespace Plugin {
       fetch: createInProcessFetch(),
     })
     const config = await Config.get()
-    const hooks: Array<{ specifier: string; hook: Hooks }> = []
+    const hooks: Array<{ specifier: string; serviceID?: string; hook: Hooks }> = []
     const diagnostics: PluginLoadDiagnostic[] = []
-    const input: PluginInput = {
+    const baseInput = {
       client,
       project: Instance.project,
       worktree: Instance.worktree,
       directory: Instance.directory,
       serverUrl: new URL(IN_PROCESS_BASE_URL),
       $: Bun.$,
+      taskArtifacts: createTaskArtifacts(),
+    }
+
+    function pluginInput(resources: PluginResources = emptyResources()): PluginInput {
+      return {
+        ...baseInput,
+        resources,
+      }
     }
 
     for (const plugin of INTERNAL_PLUGINS) {
       log.info("loading internal plugin", { name: plugin.name })
       const specifier = `internal:${plugin.name || "anonymous"}`
-      const init = await plugin(input).catch((err) => {
+      const init = await plugin(pluginInput()).catch((err) => {
         const message = err instanceof Error ? err.message : String(err)
         diagnostics.push({ specifier, message })
         log.error("failed to load internal plugin", { name: plugin.name, error: err })
       })
       if (init) hooks.push({ specifier, hook: init })
+    }
+
+    function manifestModuleSpecifier(manifest: z.infer<typeof PluginManifest>) {
+      if (manifest.backendExport.startsWith("./")) {
+        return `${manifest.packageSpecifier}/${manifest.backendExport.slice(2)}`
+      }
+      if (manifest.backendExport.startsWith("/")) {
+        return `${manifest.packageSpecifier}${manifest.backendExport}`
+      }
+      return manifest.backendExport
+    }
+
+    async function loadPluginModule(plugin: string, diagnosticSpecifier = plugin, serviceID?: string, resources = emptyResources()) {
+      await import(plugin)
+        .then(async (mod) => {
+          const seen = new Set<PluginInstance>()
+          for (const [_name, fn] of Object.entries<PluginInstance>(mod)) {
+            if (seen.has(fn)) continue
+            seen.add(fn)
+            hooks.push({ specifier: diagnosticSpecifier, serviceID, hook: await fn(pluginInput(resources)) })
+          }
+        })
+        .catch((err) => {
+          const message = err instanceof Error ? err.message : String(err)
+          diagnostics.push({ specifier: diagnosticSpecifier, serviceID, message })
+          log.error("failed to load plugin", { path: diagnosticSpecifier, error: message })
+          Bus.publish(Session.Event.Error, {
+            error: new NamedError.Unknown({
+              message: `Failed to load plugin ${diagnosticSpecifier}: ${message}`,
+            }).toObject(),
+          })
+        })
+    }
+
+    async function loadPluginSpecifier(plugin: string) {
+      if (plugin.endsWith(".json") || plugin.endsWith(".jsonc")) {
+        try {
+          const manifestPath = pluginManifestPath(plugin)
+          const raw = await readFile(manifestPath, "utf8")
+          const manifest = PluginManifest.parse(JSON.parse(raw))
+          const backend = manifestModuleSpecifier(manifest)
+          const resources = createPluginResources(manifestPath, manifest.resources)
+          log.info("loading plugin manifest", {
+            path: plugin,
+            packageSpecifier: manifest.packageSpecifier,
+            backendExport: manifest.backendExport,
+            serviceID: manifest.serviceID,
+          })
+          await loadPluginModule(backend, plugin, manifest.serviceID, resources)
+        } catch (err) {
+          const message = err instanceof Error ? err.message : String(err)
+          diagnostics.push({ specifier: plugin, message })
+          log.error("failed to load plugin manifest", { path: plugin, error: message })
+        }
+        return
+      }
+
+      await loadPluginModule(plugin)
     }
 
     let plugins = config.plugin ?? []
@@ -116,30 +355,12 @@ export namespace Plugin {
       // Prevent duplicate initialization when plugins export the same function
       // as both a named export and default export (e.g., `export const X` and `export default X`).
       // Object.entries(mod) would return both entries pointing to the same function reference.
-      await import(plugin)
-        .then(async (mod) => {
-          const seen = new Set<PluginInstance>()
-          for (const [_name, fn] of Object.entries<PluginInstance>(mod)) {
-            if (seen.has(fn)) continue
-            seen.add(fn)
-            hooks.push({ specifier: plugin, hook: await fn(input) })
-          }
-        })
-        .catch((err) => {
-          const message = err instanceof Error ? err.message : String(err)
-          diagnostics.push({ specifier: plugin, message })
-          log.error("failed to load plugin", { path: plugin, error: message })
-          Bus.publish(Session.Event.Error, {
-            error: new NamedError.Unknown({
-              message: `Failed to load plugin ${plugin}: ${message}`,
-            }).toObject(),
-          })
-        })
+      await loadPluginSpecifier(plugin)
     }
 
     return {
       hooks,
-      input,
+      input: pluginInput(),
       diagnostics,
       services: undefined as Promise<{
         services: Map<string, PluginServiceInfo>
@@ -165,7 +386,7 @@ export namespace Plugin {
           registrations = registrationList(await entry.hook.service())
         } catch (err) {
           const message = err instanceof Error ? err.message : String(err)
-          diagnostics.push({ specifier: entry.specifier, message })
+          diagnostics.push({ specifier: entry.specifier, serviceID: entry.serviceID, message })
           continue
         }
         for (const registration of registrations) {
@@ -177,7 +398,7 @@ export namespace Plugin {
               firstSpecifier: existing.specifier,
               secondSpecifier: entry.specifier,
             })
-            diagnostics.push({ specifier: entry.specifier, message: error.message })
+            diagnostics.push({ specifier: entry.specifier, serviceID: registration.id, message: error.message })
             throw error
           }
           services.set(registration.id, { ...registration, specifier: entry.specifier })

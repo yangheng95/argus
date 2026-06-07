@@ -144,17 +144,18 @@ export namespace Agent {
         mode: "primary",
         native: true,
       },
-      "tui-coding": {
-        name: "tui-coding",
-        description: "Right-sidebar OpenCode-style coding assistant. Executes tools based on configured permissions.",
+      "coding-assistant": {
+        name: "coding-assistant",
+        description: "Right-sidebar coding assistant session. Uses the project conversation panel and executes tools based on configured permissions.",
+        tools: { exclude: ["task_report", "analytics", ...WEBPAGE_EVIDENCE_TOOL_IDS] },
         options: {},
-        permission: PermissionNext.merge(
-          defaults,
+        prompt: PROMPT_CODING,
+        permission: nonDesignPermissions(
           PermissionNext.fromConfig({
             question: "allow",
-            plan_enter: "allow",
+            webfetch: "allow",
+            panel: "allow",
           }),
-          user,
         ),
         mode: "primary",
         native: true,
@@ -232,7 +233,6 @@ export namespace Agent {
             "read",
             "glob",
             "search_code",
-            "bash",
             "external_code_search",
             "lsp",
             "webfetch",
@@ -744,7 +744,7 @@ export namespace Agent {
    *  into visually identical cards. */
   const NATIVE_DEFAULTS: Record<string, string> = {
     coding: PROMPT_CODING,
-    "tui-coding": "",
+    "coding-assistant": PROMPT_CODING,
     build: BUILD_CORE,
     "visual-qa": VISUAL_QA_CORE,
     general: PROMPT_GENERAL,

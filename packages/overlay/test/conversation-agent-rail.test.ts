@@ -24,6 +24,7 @@ test("ConversationAgentRail locates cards through renderedCardID and CSS.escape"
   expect(source).toContain("conversationCardContainsMessage")
   expect(source).toContain("messageID: targetMessageID")
   expect(source).toContain("CSS.escape(record.renderedCardID")
+  expect(source).toContain("setCardExpanded(record.renderedCardID, true")
   expect(source).toContain("setCardExpanded(parentID, true")
   expect(source).toContain("requestConversationCardScroll")
   expect(source).toContain('focus: "header"')

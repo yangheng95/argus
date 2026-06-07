@@ -31,13 +31,13 @@ const linuxTargets = process.argv
   .filter((a) => a.startsWith("--target="))
   .map((a) => a.split("=")[1])
 
-// ── 1. opencorvus CLI — all platforms ────────────────────────────────────────
+// ── 1. opencorvus overlay server — all platforms ─────────────────────────────
 if (!skipCli) {
-  console.log("\n=== opencorvus CLI (all platforms) ===")
-  await $`bun run build --all`.cwd(opencorvus)
-  console.log("  opencorvus CLI done → packages/opencorvus/dist/")
+  console.log("\n=== opencorvus overlay server (all platforms) ===")
+  await $`bun run build --overlay-server --all`.cwd(opencorvus)
+  console.log("  opencorvus overlay server done -> packages/opencorvus/dist/")
 } else {
-  console.log("  [skip] opencorvus CLI (--skip-cli)")
+  console.log("  [skip] opencorvus overlay server (--skip-cli)")
 }
 
 // ── 2. overlay — current platform (native) ───────────────────────────────────
@@ -78,7 +78,7 @@ if (process.platform !== "darwin") {
 // ── Summary ───────────────────────────────────────────────────────────────────
 console.log(`
 === Package complete ===
-  opencorvus CLI:      packages/opencorvus/dist/opencorvus-{platform}-{arch}/
+  opencorvus server:   packages/opencorvus/dist/opencorvus-overlay-server-{platform}-{arch}/
   overlay (native):    packages/overlay/src-tauri/target/release/bundle/
   overlay (linux):     packages/overlay/dist-artifacts/{linux-x64,linux-arm64}/
   overlay (darwin):    — requires macOS machine —

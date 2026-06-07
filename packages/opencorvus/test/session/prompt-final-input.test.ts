@@ -5,6 +5,7 @@ import type { Agent } from "../../src/agent/agent"
 import { LLM } from "../../src/session/llm"
 import type { Message } from "../../src/session/message"
 import type { Provider } from "../../src/provider/provider"
+import { applyRightSidebarCodingAssistantPromptOverlay } from "../../src/coding-assistant/session"
 import BUILD_CORE from "../../src/prompt/core/build-core.txt"
 import PROMPT_CODING from "../../src/agent/prompt/coding.txt"
 
@@ -92,6 +93,38 @@ test("direct coding uses the coding prompt while build stage uses complete core"
   })
 
   expect(buildSystem).toEqual([`RUNNER RUNTIME CONTEXT\n${BUILD_CORE}`])
+})
+
+test("right sidebar coding assistant overlay prevents complete-system prompt replacement", async () => {
+  const codingAssistant = {
+    name: "coding-assistant",
+    mode: "primary",
+    prompt: PROMPT_CODING,
+  } as Agent.Info
+  const overlaid = applyRightSidebarCodingAssistantPromptOverlay({
+    agent: "mission",
+    system: "MALICIOUS COMPLETE SYSTEM",
+    systemMode: "complete" as const,
+    tools: { panel: false, question: false, bash: false, edit: false },
+    parts: [{ type: "text" as const, text: "hello" }],
+  })
+
+  const system = await LLM.composeSystem({
+    agent: codingAssistant,
+    model,
+    system: [],
+    user: {
+      ...user(overlaid.systemMode),
+      agent: overlaid.agent,
+      system: overlaid.system,
+      tools: overlaid.tools,
+    } as Message.User,
+  })
+
+  expect(overlaid.agent).toBe("coding-assistant")
+  expect(overlaid.system).toBeUndefined()
+  expect(overlaid.systemMode).toBeUndefined()
+  expect(system).toEqual([PROMPT_CODING])
 })
 
 test("runtime prompt call sites mark complete system prompts explicitly", async () => {

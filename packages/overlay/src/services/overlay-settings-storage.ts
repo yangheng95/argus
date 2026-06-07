@@ -48,6 +48,7 @@ export function loadBrowserOverlaySettings(): BrowserOverlaySettings {
     rightPanelCollapsed: rightPanelCollapsedRaw === null ? undefined : rightPanelCollapsedRaw === "true",
     sidebarWidth: read("oc_sidebar_width") || undefined,
     sectionsWidth: read("oc_sections_width") || undefined,
+    centerWorkbenchWidth: read("oc_center_workbench_width") || undefined,
     opacity: read("oc_opacity") || undefined,
     zoom: read("oc_zoom") || undefined,
     theme: read("oc_theme") || undefined,
@@ -71,6 +72,7 @@ export function saveBrowserOverlaySettings(input: BrowserOverlaySettings): boole
   write("oc_right_panel_collapsed", input.rightPanelCollapsed === true);
   writeOptional("oc_sidebar_width", input.sidebarWidth);
   writeOptional("oc_sections_width", input.sectionsWidth);
+  writeOptional("oc_center_workbench_width", input.centerWorkbenchWidth);
   write("oc_opacity", input.opacity ?? 0.99);
   write("oc_zoom", input.zoom ?? 1);
   write("oc_theme", input.theme ?? "light");

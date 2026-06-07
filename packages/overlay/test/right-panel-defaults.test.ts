@@ -29,12 +29,12 @@ afterEach(() => {
   applySettings({})
 })
 
-test("right panel defaults collapsed while preserving explicit expanded settings", () => {
+test("right panel defaults expanded while preserving explicit collapsed settings", () => {
   applySettings({})
-  expect(settingsStore.rightPanelCollapsed).toBe(true)
-
-  applySettings({ rightPanelCollapsed: false })
   expect(settingsStore.rightPanelCollapsed).toBe(false)
+
+  applySettings({ rightPanelCollapsed: true })
+  expect(settingsStore.rightPanelCollapsed).toBe(true)
 })
 
 test("browser settings leave missing right panel collapse value to DEFAULT_SETTINGS", () => {
@@ -44,13 +44,13 @@ test("browser settings leave missing right panel collapse value to DEFAULT_SETTI
   const missing = loadBrowserOverlaySettings()
   expect(missing.rightPanelCollapsed).toBeUndefined()
   applySettings(missing)
-  expect(settingsStore.rightPanelCollapsed).toBe(true)
-
-  localStorage.setItem("oc_right_panel_collapsed", "false")
-  const expanded = loadBrowserOverlaySettings()
-  expect(expanded.rightPanelCollapsed).toBe(false)
-  applySettings(expanded)
   expect(settingsStore.rightPanelCollapsed).toBe(false)
+
+  localStorage.setItem("oc_right_panel_collapsed", "true")
+  const collapsed = loadBrowserOverlaySettings()
+  expect(collapsed.rightPanelCollapsed).toBe(true)
+  applySettings(collapsed)
+  expect(settingsStore.rightPanelCollapsed).toBe(true)
 })
 
 test("right panel default width tokens are wider than the left rail", () => {

@@ -16,7 +16,7 @@ export function PluginRoutes() {
     const registered = await Plugin.services()
     const service = registered.services.get(serviceID)
     if (!service) {
-      const diagnostic = registered.diagnostics.find((item) => item.specifier.includes(serviceID))
+      const diagnostic = registered.diagnostics.find((item) => item.serviceID === serviceID)
       if (diagnostic) {
         throw new Plugin.PluginServiceRegistrationError({
           message: diagnostic.message,

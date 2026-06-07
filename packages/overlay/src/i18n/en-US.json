@@ -1,7 +1,7 @@
 {
   "_meta": {
     "language": "en-US",
-    "panel_revision": "48cdb6b79a9ebdd9"
+    "panel_revision": "3db9cae7299f3ba7"
   },
   "about.author_name": "Yang, Heng",
   "about.go_version": "Go Version",
@@ -30,7 +30,6 @@
   "about.shortcut_zoom_reset": "Reset Zoom",
   "about.shortcuts": "Keyboard Shortcuts",
   "about.title": "About",
-  "activity.left": "Left side activities",
   "activity.right": "Right side activities",
   "brand.guide_kicker": "Quick Guide",
   "brand.guide_positioning_body": "This workspace is for conversations and acceptance evidence: left selects recent chats, center drives execution, right keeps documents, plan, evaluation, and file changes together.",
@@ -330,6 +329,7 @@
   "chat.thinking": "Thinking…",
   "chat.tip": "Drag files here · Drag the top edge to resize",
   "chat.title": "Conversation",
+  "coding_assistant.title": "Coding Assistant",
   "checks.pending": "Pending",
   "common.active": "Active",
   "common.cancel": "Cancel",
@@ -812,11 +812,6 @@
   "titlebar.zoom_hint": "Scale the overlay interface.",
   "trace.copy_json": "Copy trace as JSON",
   "trace.copy_failed": "Copy failed (clipboard blocked)",
-  "tui.host_error": "Terminal error",
-  "tui.host_restart": "Restart TUI",
-  "tui.host_running": "Connected",
-  "tui.host_stopped": "Stopped",
-  "tui.title": "TUI",
   "card.context_tokens_tooltip": "~{value} prompt tokens at this turn (provider-reported; actual billing may differ)",
   "card.duration_tooltip": "Session ran for {{value}} (between first message and terminal status)",
   "card.context_tokens_tooltip_estimated": "~{value} prompt tokens at this turn (local chars/token approximation — provider figure not yet available)",
@@ -836,6 +831,7 @@
   "file_editor.unsaved": "Unsaved changes",
   "workspace.close": "Close workspace",
   "workspace.diff": "Diff",
+  "workspace.tabs": "Workspace tabs",
   "workspace.editor_launchers": "IDE launchers",
   "workspace.editor_launchers_menu": "Choose IDE",
   "coding_cli.open": "Open coding CLI",

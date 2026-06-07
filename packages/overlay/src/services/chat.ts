@@ -18,6 +18,7 @@ import {
 } from "../store/messages";
 import { boardStore, setTasksData, loadBoard, loadTasks,
   activeTaskID,
+  activeSessionID,
 } from "../store/board";
 import { appStore, setConnectionStatus } from "../store/app";
 import { workspaceMode } from "./workspace";
@@ -157,6 +158,7 @@ export function panelResultNavigates(result: any): boolean {
  */
 export function canComposeChat(): boolean {
   if (!appStore.connected) return false;
+  if (activeSessionID()) return true;
  // Derive workspace mode from store state.
  // "task" mode: a task is selected.
  // "empty" mode: no task selected, no session-only workspace.
@@ -412,6 +414,26 @@ function ensureTaskListEntry(
   setTasksData([entry, ...rest]);
 }
 
+function sessionPromptParts(text: string, attachments: any[], metadata: any): any[] {
+  const parts: any[] = [
+    {
+      type: "text",
+      text,
+      ...(metadata && Object.keys(metadata).length > 0 ? { metadata } : {}),
+    },
+  ];
+  for (const attachment of attachments) {
+    if (!attachment?.url || !attachment?.mime) continue;
+    parts.push({
+      type: "file",
+      mime: String(attachment.mime),
+      url: String(attachment.url),
+      ...(attachment.filename ? { filename: String(attachment.filename) } : {}),
+    });
+  }
+  return parts;
+}
+
 async function applyPanelResult(result: any): Promise<void> {
   const taskID = String(result?.task_id || result?.taskID || "");
   const requestText = typeof result?._request === "string" ? result._request : "";
@@ -437,6 +459,20 @@ export async function panelMessage(text: string, attachmentsOrMeta: any[] | Reco
     manualAbort: false,
   };
   try {
+    const sessionID = activeSessionID();
+    if (sessionID) {
+      setConnectionStatus("online");
+      request.target = { kind: "session", sessionID };
+      setChatRequest(request as any);
+      return await apiJson(`session/${encodeURIComponent(sessionID)}/prompt_async`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          parts: sessionPromptParts(text, attachments, meta),
+        }),
+        signal: controller.signal,
+      });
+    }
     const taskID = await resolvePanelMessageTaskID();
     setConnectionStatus("online");
     setChatRequest(request as any);

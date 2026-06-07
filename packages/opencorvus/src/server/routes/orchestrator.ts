@@ -57,6 +57,36 @@ import { Instance } from "@/project/instance"
 const log = Log.create({ service: "server.routes.orchestrator" })
 const CONVERSATION_EVENT_PAGE_LIMIT = 500
 const TASK_MESSAGE_CHANGE_POLL_MS = 2_000
+const TASK_LIST_PROJECTION_EVENT_TYPES = new Set([
+  "task.created",
+  "task.updated",
+  "task.started",
+  "task.completed",
+  "task.failed",
+  "task.cancelled",
+  "task.blocked",
+  "task.requeued",
+  "task.rewound",
+  "task.deleted",
+  "task.archived",
+  "acceptance.ready",
+  "acceptance.evidence.updated",
+])
+const TASK_LIST_PROJECTION_EVENT_PREFIXES = [
+  "run.",
+  "plan.",
+  "goal.",
+  "goal_run.",
+  "evaluation.",
+  "interaction.",
+  "workflow.",
+] as const
+
+function isTaskListProjectionEventType(type: string) {
+  const normalized = type.replace(/^engine\./, "")
+  return TASK_LIST_PROJECTION_EVENT_TYPES.has(normalized) ||
+    TASK_LIST_PROJECTION_EVENT_PREFIXES.some((prefix) => normalized.startsWith(prefix))
+}
 
 export const TaskListEvent = z.object({
   type: z.string(),
@@ -303,8 +333,9 @@ export const EngineRoutes = lazy(() =>
         summary: "Subscribe to global task-list change notifications",
         description:
           "Pure change-notification SSE for the task list sidebar. Emits " +
-          "`{type, taskID, sequence}` whenever any task aggregate event is " +
-          "persisted (created/updated/completed/failed/cancelled/...). Notify-worthy " +
+          "`{type, taskID, sequence}` when a persisted task aggregate event " +
+          "changes the task-list projection. Conversation stream/status chunks " +
+          "belong to /task/:taskID/events and are intentionally not sent here. Notify-worthy " +
           "events also carry `notificationDetails` for copyable diagnostics. No " +
           "replay — clients call /task separately to fetch the refreshed list.",
         operationId: "task.list.events",
@@ -330,6 +361,7 @@ export const EngineRoutes = lazy(() =>
           }
           const stop = ProtocolStore.subscribeEvents(
             (event) => {
+              if (!isTaskListProjectionEventType(event.type)) return
               const payload = JSON.stringify(taskListProtocolEvent(event))
               void writeData(payload)
             },
@@ -409,7 +441,7 @@ export const EngineRoutes = lazy(() =>
         try {
           const archive = await buildTaskProjectArchive({
             taskID,
-            transcript: await loadTaskTranscript(taskID),
+            transcript: await loadFullTaskTranscript(taskID),
           })
           return new Response(archive.bytes, {
             status: 200,
@@ -670,11 +702,14 @@ export const EngineRoutes = lazy(() =>
         const taskID = c.req.valid("param").taskID
         const query = c.req.valid("query")
         const rewindCursor = taskRewindCursor(taskID)
-        const [board, transcript, timeline] = await Promise.all([
+        const tailLimit = query.tail_limit ?? CONVERSATION_TAIL_MESSAGE_LIMIT
+        const transcriptLimit = Math.max(tailLimit, CONVERSATION_TAIL_MESSAGE_LIMIT)
+        const [board, transcriptResult, timeline] = await Promise.all([
           EngineService.getBoard(taskID, { sync: true }),
-          loadTaskTranscript(taskID),
+          loadTaskTranscript(taskID, { perSessionLimit: transcriptLimit }),
           Promise.resolve(ControlTimeline.list({ taskID })),
         ])
+        const transcript = transcriptResult.transcript
         const filterByCursor = <T extends { info?: { time?: { created?: number } }; timestamp?: number }>(items: T[]) => {
           if (rewindCursor == null) return items
           return items.filter((item) => {
@@ -689,11 +724,15 @@ export const EngineRoutes = lazy(() =>
         }
         const filteredTranscript = filterByCursor(transcript)
         const filteredTimeline = filterByCursor(timeline)
-        const tailLimit = query.tail_limit ?? CONVERSATION_TAIL_MESSAGE_LIMIT
         const messageWatermark = taskMessageWatermark(taskID)
         const historyWindow = __conversationHistoryWindowForTest(filteredTranscript, filteredTimeline, {
           tailLimit,
         })
+        const history = {
+          ...historyWindow.history,
+          hasMore: historyWindow.history.hasMore ||
+            (transcriptResult.truncated && historyWindow.history.oldestTimestamp != null),
+        }
         const latestSequence = Number(board.lastSequence)
         if (!Number.isInteger(latestSequence) || latestSequence < 0) {
           throw new Error(`conversation hydrate board.lastSequence invalid: ${JSON.stringify(board.lastSequence)}`)
@@ -703,12 +742,12 @@ export const EngineRoutes = lazy(() =>
           until: latestSequence,
           limit: CONVERSATION_EVENT_PAGE_LIMIT,
           rewindCursor,
-          sinceTimestamp: historyWindow.history.hasMore
-            ? historyWindow.history.oldestTimestamp
+          sinceTimestamp: history.hasMore
+            ? history.oldestTimestamp
             : null,
         })
         const view = projectConversationView(board, historyWindow.transcript, eventPage.events)
-        const agentView = historyWindow.history.hasMore
+        const agentView = history.hasMore
           ? projectConversationView(board, filteredTranscript, eventPage.events)
           : view
         return c.json({
@@ -719,7 +758,7 @@ export const EngineRoutes = lazy(() =>
           timeline: historyWindow.timeline,
           events: eventPage.events,
           eventReplay: eventPage.eventReplay,
-          history: historyWindow.history,
+          history,
           agentView,
           view,
         })
@@ -750,7 +789,7 @@ export const EngineRoutes = lazy(() =>
         const rewindCursor = taskRewindCursor(taskID)
         const [board, transcript, timeline] = await Promise.all([
           EngineService.getBoard(taskID, { sync: false }),
-          loadTaskTranscript(taskID),
+          loadFullTaskTranscript(taskID),
           Promise.resolve(ControlTimeline.list({ taskID })),
         ])
         const sessionTranscript = transcript.filter((item) => {
@@ -813,7 +852,7 @@ export const EngineRoutes = lazy(() =>
         const rewindCursor = taskRewindCursor(taskID)
         const [board, transcript, timeline] = await Promise.all([
           EngineService.getBoard(taskID, { sync: false }),
-          loadTaskTranscript(taskID),
+          loadFullTaskTranscript(taskID),
           Promise.resolve(ControlTimeline.list({ taskID })),
         ])
         const filterByCursor = <T extends { info?: { time?: { created?: number } }; timestamp?: number }>(items: T[]) => {
@@ -956,7 +995,7 @@ export const EngineRoutes = lazy(() =>
       }),
       validator("param", z.object({ taskID: Task.shape.id })),
       async (c) => {
-        return c.json(await loadTaskTranscript(c.req.valid("param").taskID))
+        return c.json(await loadFullTaskTranscript(c.req.valid("param").taskID))
       },
     )
     .get(
@@ -1687,6 +1726,7 @@ function conversationItemTimestamp(item: any): number {
 }
 
 export const __taskMessageWatermarkForTest = taskMessageWatermark
+export const __taskListProjectionEventTypeForTest = isTaskListProjectionEventType
 
 function conversationItemSessionID(item: any): string {
   return String(item?.info?.sessionID || "")
@@ -1792,10 +1832,16 @@ export function __displayableConversationTranscriptForTest(transcript: any[]) {
   return transcript.filter(conversationMessageHasDisplay)
 }
 
-async function loadTaskTranscript(taskID: string) {
+async function taskSessionIDs(taskID: string) {
   const task = requireTask(taskID)
   const rootSessionID = task.session_id
-  if (!rootSessionID) return []
+  if (!rootSessionID) {
+    return {
+      task,
+      rootSessionID: "",
+      sessionIDs: [] as string[],
+    }
+  }
   const rootSession = await Session.get(rootSessionID)
   if (rootSession.projectID !== task.project_id) {
     throw new Error(
@@ -1810,7 +1856,28 @@ async function loadTaskTranscript(taskID: string) {
     const children = await Session.childrenInProject({ parentID: id, projectID: task.project_id })
     queue.push(...children.map((child) => child.id))
   }
-  const all = await Promise.all(sessionIDs.map((id) => Session.messages({ sessionID: id })))
+  return { task, rootSessionID, sessionIDs }
+}
+
+async function loadTaskTranscript(
+  taskID: string,
+  input: { perSessionLimit?: number } = {},
+) {
+  const { rootSessionID, sessionIDs } = await taskSessionIDs(taskID)
+  if (!rootSessionID) return { transcript: [], truncated: false }
+  const perSessionLimit = typeof input.perSessionLimit === "number"
+    ? Math.max(1, Math.floor(input.perSessionLimit))
+    : undefined
+  let truncated = false
+  const all = await Promise.all(sessionIDs.map(async (id) => {
+    if (!perSessionLimit) return Session.messages({ sessionID: id })
+    const messages = await Session.messages({ sessionID: id, limit: perSessionLimit + 1 })
+    if (messages.length > perSessionLimit) {
+      truncated = true
+      return messages.slice(messages.length - perSessionLimit)
+    }
+    return messages
+  }))
   const messages = all.flat().sort((a, b) => (a.info.time?.created ?? 0) - (b.info.time?.created ?? 0))
   for (const msg of messages) {
     const sid = msg.info.sessionID || ""
@@ -1822,7 +1889,14 @@ async function loadTaskTranscript(taskID: string) {
     const parentSessionID = sessionParentID(sid)
     if (parentSessionID) (msg.info as any).parentSessionID = parentSessionID
   }
-  return __displayableConversationTranscriptForTest(messages)
+  return {
+    transcript: __displayableConversationTranscriptForTest(messages),
+    truncated,
+  }
+}
+
+async function loadFullTaskTranscript(taskID: string) {
+  return (await loadTaskTranscript(taskID)).transcript
 }
 
 function conversationEventPage(

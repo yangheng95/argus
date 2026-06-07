@@ -6,7 +6,10 @@ import { Event } from "../../src/engine/model"
 import { EngineProtocol } from "../../src/engine/protocol"
 import { Identifier } from "../../src/id/id"
 import { Instance } from "../../src/project/instance"
-import { __taskMessageWatermarkForTest } from "../../src/server/routes/orchestrator"
+import {
+  __taskListProjectionEventTypeForTest,
+  __taskMessageWatermarkForTest,
+} from "../../src/server/routes/orchestrator"
 import { Server } from "../../src/server/server"
 import { Session } from "../../src/session"
 import { MessageTable, PartTable } from "../../src/session/session.sql"
@@ -106,6 +109,15 @@ describe("task conversation routes", () => {
     mock.restore()
     await Instance.disposeAll()
     await resetDatabase()
+  })
+
+  test("task-list projection stream excludes conversation noise event types", () => {
+    for (const type of ["message.part.delta", "session.status", "review.stream.chunk", "task.messages.changed"]) {
+      expect(__taskListProjectionEventTypeForTest(type)).toBe(false)
+    }
+    for (const type of ["task.completed", "engine.task.updated", "run.output", "workflow.step.updated"]) {
+      expect(__taskListProjectionEventTypeForTest(type)).toBe(true)
+    }
   })
 
   test("GET /task/:taskID/conversation preserves emittedAt for fidelity replays", async () => {
@@ -852,6 +864,100 @@ describe("task conversation routes", () => {
         placement: "top_level",
       }),
     )
+  })
+
+  test("GET /task/:taskID/conversation bounds hydrate transcript while preserving tail history state", async () => {
+    await using tmp = await tmpdir({ git: true })
+
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const app = Server.App()
+        const taskID = Identifier.ascending("task")
+        const root = await Session.create({
+          kind: "root",
+          title: "bounded hydrate root",
+        })
+        const assistant = await Session.create({
+          kind: "assistant",
+          parentID: root.id,
+          title: "bounded hydrate assistant",
+        })
+        const now = Date.now()
+
+        Database.use((db) =>
+          db.insert(EngineTaskTable).values({
+            id: taskID,
+            project_id: Instance.project.id,
+            session_id: root.id,
+            source: "panel",
+            title: "bounded hydrate task",
+            request: "bounded hydrate task",
+            priority: "normal",
+            time_created: now,
+            time_updated: now,
+            time_started: now,
+          }).run(),
+        )
+
+        Database.use((db) => {
+          for (let index = 0; index < 100; index++) {
+            const suffix = index.toString().padStart(3, "0")
+            const id = `msg_bounded_${suffix}`
+            const created = now + index
+            db.insert(MessageTable).values({
+              id,
+              session_id: assistant.id,
+              time_created: created,
+              time_updated: created,
+              data: {
+                role: "assistant",
+                time: { created },
+              } as any,
+            }).run()
+            db.insert(PartTable).values({
+              id: `prt_bounded_${suffix}`,
+              message_id: id,
+              session_id: assistant.id,
+              time_created: created,
+              time_updated: created,
+              data: {
+                type: "text",
+                text: `visible ${index}`,
+              } as any,
+            }).run()
+          }
+        })
+
+        const response = await app.request(`/task/${taskID}/conversation?tail_limit=2`, {
+          headers: {
+            "x-opencorvus-directory": tmp.path,
+          },
+        })
+
+        if (response.status !== 200) {
+          throw new Error(await response.text())
+        }
+        const body = await response.json() as {
+          transcript?: Array<{ info?: { id?: string } }>
+          history?: { hasMore?: boolean; oldestMessageID?: string | null; limit?: number }
+          agentView?: { sessions?: Array<{ sessionID?: string; messageIDs?: string[] }> }
+        }
+
+        expect(body.transcript?.map((message) => message.info?.id)).toEqual([
+          "msg_bounded_098",
+          "msg_bounded_099",
+        ])
+        expect(body.history).toMatchObject({
+          hasMore: true,
+          oldestMessageID: "msg_bounded_098",
+          limit: 2,
+        })
+        const assistantView = body.agentView?.sessions?.find((session) => session.sessionID === assistant.id)
+        expect(assistantView?.messageIDs?.at(-1)).toBe("msg_bounded_099")
+        expect(assistantView?.messageIDs?.length).toBeLessThanOrEqual(80)
+      },
+    })
   })
 
   test("POST /task/:taskID/session/:sessionID/reply appends overlay direct user input to an agent session", async () => {

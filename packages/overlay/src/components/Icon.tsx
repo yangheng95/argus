@@ -71,6 +71,7 @@ export type IconName =
   | "panel-left"
   | "panel-right"
   | "terminal"
+  | "message"
   | "terminal-powershell"
   | "terminal-command-prompt"
   | "terminal-bash"
@@ -195,6 +196,7 @@ const LUCIDE_ICON_MAP: Partial<Record<IconName, LucideIconRecord>> = {
   "panel-left": { component: PanelLeft },
   "panel-right": { component: PanelRight },
   terminal: { component: Terminal },
+  message: { component: MessageSquare },
   "terminal-powershell": { component: Terminal },
   "terminal-command-prompt": { component: Terminal },
   "terminal-bash": { component: Terminal },

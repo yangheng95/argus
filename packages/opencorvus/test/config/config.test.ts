@@ -751,6 +751,49 @@ test("does not install config dependencies when no local plugin files exist", as
   }
 })
 
+test("loads packaged plugin manifests from generic packaged plugin directory", async () => {
+  await using tmp = await tmpdir<string>({
+    init: async (dir) => {
+      const packaged = path.join(dir, "packaged")
+      const manifest = path.join(packaged, "plugins", "fixture-plugin", "plugin.json")
+      await fs.mkdir(path.dirname(manifest), { recursive: true })
+      await Filesystem.write(
+        manifest,
+        JSON.stringify(
+          {
+            packageSpecifier: "@opencorvus-ai/fixture-plugin",
+            serviceID: "fixture-plugin",
+            backendExport: "./backend",
+            overlayExport: "./overlay",
+            resources: [],
+          },
+          null,
+          2,
+        ),
+      )
+      return packaged
+    },
+  })
+
+  const prev = process.env.OPENCORVUS_PACKAGED_PLUGIN_DIR
+  process.env.OPENCORVUS_PACKAGED_PLUGIN_DIR = tmp.extra
+
+  try {
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const config = await Config.get()
+        expect(config.plugin ?? []).toContain(
+          pathToFileURL(path.join(tmp.extra, "plugins", "fixture-plugin", "plugin.json")).href,
+        )
+      },
+    })
+  } finally {
+    if (prev === undefined) delete process.env.OPENCORVUS_PACKAGED_PLUGIN_DIR
+    else process.env.OPENCORVUS_PACKAGED_PLUGIN_DIR = prev
+  }
+})
+
 test("resolves scoped npm plugins in config", async () => {
   await using tmp = await tmpdir({
     init: async (dir) => {

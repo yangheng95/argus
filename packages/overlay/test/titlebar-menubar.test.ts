@@ -66,7 +66,6 @@ test(
         if (path === "/mcp") return send({})
         if (path === "/panel/knowledge/memory") return send([])
         if (path === "/panel/knowledge/preference") return send([])
-        if (path === "/tui/runtime/status") return send({ running: false, mode: "none", url: null, sessionID: null })
         if (path === "/log" && req.method === "POST") return send({ ok: true })
         return new Response(`unhandled ${req.method} ${url.pathname}`, { status: 404 })
       },
@@ -364,7 +363,6 @@ test(
         if (path === "/mcp") return send({})
         if (path === "/panel/knowledge/memory") return send([])
         if (path === "/panel/knowledge/preference") return send([])
-        if (path === "/tui/runtime/status") return send({ running: false, mode: "none", url: null, sessionID: null })
         if (path === "/log" && req.method === "POST") return send({ ok: true })
         return new Response(`unhandled ${req.method} ${url.pathname}`, { status: 404 })
       },
@@ -489,7 +487,6 @@ test(
         const staticResponse = await overlayStaticResponse(path)
         if (staticResponse) return staticResponse
         if (path === "/global/health") return send({ version: "1.2.3" })
-        if (path === "/tui/runtime/status") return send({ running: false, mode: "none", url: null, sessionID: null })
         if (path === "/log" && req.method === "POST") return send({ ok: true })
         return new Response(`unhandled ${req.method} ${url.pathname}`, { status: 404 })
       },
@@ -567,9 +564,9 @@ test(
       expect(intro.brandWordmark).toBe("OpenCorvus")
       expect(intro.brandLabel).toBe("Workspace")
       expect(intro.rightActivities).toEqual([
-        { activity: "tui", active: "false" },
+        { activity: "assistant", active: "true" },
         { activity: "browser", active: "false" },
-        { activity: "inspector", active: "true" },
+        { activity: "inspector", active: "false" },
       ])
       await page.close()
     } finally {
@@ -622,7 +619,6 @@ test(
         if (path === "/mcp") return send({})
         if (path === "/panel/knowledge/memory") return send([])
         if (path === "/panel/knowledge/preference") return send([])
-        if (path === "/tui/runtime/status") return send({ running: false, mode: "none", url: null, sessionID: null })
         if (path === "/log" && req.method === "POST") return send({ ok: true })
         return new Response(`unhandled ${req.method} ${url.pathname}`, { status: 404 })
       },
@@ -757,7 +753,6 @@ test(
         if (path === "/mcp") return send({})
         if (path === "/panel/knowledge/memory") return send([])
         if (path === "/panel/knowledge/preference") return send([])
-        if (path === "/tui/runtime/status") return send({ running: false, mode: "none", url: null, sessionID: null })
         if (path === "/log" && req.method === "POST") return send({ ok: true })
         return new Response(`unhandled ${req.method} ${url.pathname}`, { status: 404 })
       },

@@ -132,6 +132,10 @@ export namespace Config {
       }
     }
 
+    for (const plugin of await loadPackagedPlugins()) {
+      result.plugin = [...(result.plugin ?? []), plugin]
+    }
+
     // Global user config overrides remote config.
     result = mergeConfigConcatArrays(result, await global())
 
@@ -499,10 +503,26 @@ export namespace Config {
     return result
   }
 
+  function packagedPluginRoots() {
+    const explicit = (process.env.OPENCORVUS_PACKAGED_PLUGIN_DIR ?? "")
+      .split(path.delimiter)
+      .map((item) => item.trim())
+      .filter(Boolean)
+    return unique([...explicit, path.dirname(process.execPath)])
+  }
+
+  async function loadPackagedPlugins() {
+    const plugins: string[] = []
+    for (const dir of packagedPluginRoots()) {
+      plugins.push(...(await loadPlugin(dir)))
+    }
+    return plugins
+  }
+
   async function loadPlugin(dir: string) {
     const plugins: string[] = []
 
-    for (const item of await Glob.scan("{plugin,plugins}/*.{ts,js}", {
+    for (const item of await Glob.scan("{plugin,plugins}/**/*.{ts,js,json}", {
       cwd: dir,
       absolute: true,
       dot: true,

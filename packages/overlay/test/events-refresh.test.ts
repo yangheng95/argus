@@ -3,6 +3,13 @@ import type { HostTransport, TransportRequest, TransportResponse } from "../src/
 
 (globalThis as typeof globalThis & { __OPENCORVUS_OVERLAY_VERSION__?: string }).__OPENCORVUS_OVERLAY_VERSION__ = "test";
 
+mock.module("../src/utils/icon-html", () => ({
+  hydrateIconPlaceholders() {},
+  iconHtml() {
+    return "";
+  },
+}));
+
 const { routeSSEEvent, handleEventStreamEvent, handleTaskListNotification } = await import("../src/services/events");
 const { boardStore, loadTasks, setBoardStore } = await import("../src/store/board");
 const { appStore, setAppStore } = await import("../src/store/app");
@@ -89,6 +96,7 @@ function selectTaskForTest(taskID: string): void {
 }
 
 afterEach(() => {
+  mock.clearAllMocks();
   __setHostTransportForTest(undefined);
   resetSelectedLiveCursor();
   selectTaskForTest("");
@@ -788,42 +796,35 @@ test("task-list selected sequence gap triggers selected-task recovery", async ()
   expect(boardStore.taskSequence).toBe(5);
 });
 
-test("task-list notifications reload tasks for message deltas", async () => {
-  const originalFetch = globalThis.fetch;
-  const originalLocalStorage = globalThis.localStorage;
-  const originalWindow = (globalThis as any).window;
-  const fetchMock = mock(async () =>
-    new Response(JSON.stringify({ tasks: [] }), {
-      status: 200,
-      headers: { "content-type": "application/json" },
-    }));
-  globalThis.fetch = fetchMock as typeof fetch;
-  globalThis.localStorage = {
-    getItem: () => null,
-    setItem: () => {},
-    removeItem: () => {},
-    clear: () => {},
-    key: () => null,
-    length: 0,
-  } as Storage;
-  (globalThis as any).window = {};
+test("task-list lifecycle notifications still reload global tasks", async () => {
+  const paths: string[] = [];
+  __setHostTransportForTest({
+    kind: "tauri",
+    async request<T>(req: TransportRequest): Promise<TransportResponse<T>> {
+      paths.push(req.path);
+      return { status: 200, ok: true, headers: {}, body: { tasks: [] } as T };
+    },
+    openStream() {
+      throw new Error("openStream not used");
+    },
+    async native() {
+      throw new Error("native not used");
+    },
+    subscribeUiCommand() {
+      return { unsubscribe() {} };
+    },
+  });
+  await new Promise((resolve) => setTimeout(resolve, 650));
+  paths.length = 0;
 
-  try {
-    handleTaskListNotification({
-      type: "message.part.delta",
-      taskID: "tsk_sidebar_refresh",
-      sequence: 7,
-    });
+  handleTaskListNotification({
+    type: "task.completed",
+    taskID: "tsk_sidebar_refresh",
+    sequence: 7,
+  });
 
-    await new Promise((resolve) => setTimeout(resolve, 650));
-    expect(
-      fetchMock.mock.calls.some(([url]) => String(url).includes("/global/tasks")),
-    ).toBe(true);
-  } finally {
-    globalThis.fetch = originalFetch;
-    globalThis.localStorage = originalLocalStorage;
-    (globalThis as any).window = originalWindow;
-  }
+  await new Promise((resolve) => setTimeout(resolve, 650));
+  expect(paths).toEqual(["global/tasks"]);
 });
 
 test("task-list reloads are single-flight across refresh triggers", async () => {

@@ -6,7 +6,7 @@
     "check:i18n": "bun run script/check-panel-i18n.ts",
     "dev": "tauri dev",
     "dev:vite": "vite --config vite.config.ts",
-    "build": "bun run check:i18n && bun run script/build.ts",
+    "build": "bun run script/build-overlay.ts",
     "build:vite": "vite build --config vite.config.ts",
     "build:overlay": "bun run script/build-overlay.ts",
     "build:docker": "bun run script/build-docker.ts",

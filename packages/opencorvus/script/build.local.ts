@@ -22,7 +22,6 @@ import {
   artifactHostCanProvideNodeRuntime,
   artifactPackageBaseName,
   artifactSourcemap,
-  artifactTuiSiblingExecutableName,
   parseBuildFlavor,
 } from "./build-artifact"
 import { detectArtifactNodeRuntimeHost } from "./build-host-runtime"
@@ -228,6 +227,18 @@ await $`rm -rf dist`
 
 const binaries: Record<string, string> = {}
 let windowsSupervisorHelper: string | undefined
+const DEFAULT_PACKAGED_PLUGIN_MODULES: Array<{ name: string }> = []
+const DEFAULT_PACKAGED_PLUGIN_MANIFESTS: Array<{ source: string; destination: string }> = []
+
+type PackagedPluginManifest = {
+  resources?: Array<{
+    id?: unknown
+    path?: unknown
+    paths?: Partial<Record<"win32" | "linux" | "darwin", unknown>>
+  }>
+}
+
+type PackagedPluginTargetOS = "win32" | "linux" | "darwin"
 
 async function buildWindowsSupervisorHelper() {
   if (windowsSupervisorHelper) return windowsSupervisorHelper
@@ -297,6 +308,30 @@ async function copyBrowserMcpNodeRuntime(item: Target, outdir: string) {
   }
 }
 
+function pluginResourcePath(resource: NonNullable<PackagedPluginManifest["resources"]>[number], targetOS: PackagedPluginTargetOS) {
+  const selected = resource.paths?.[targetOS] ?? resource.path
+  return typeof selected === "string" ? selected : ""
+}
+
+async function stageDefaultPluginManifests(outdir: string, targetOS: PackagedPluginTargetOS) {
+  for (const manifest of DEFAULT_PACKAGED_PLUGIN_MANIFESTS) {
+    if (!fs.existsSync(manifest.source)) {
+      throw new Error(`Missing default plugin manifest at ${manifest.source}`)
+    }
+    const raw = await fs.promises.readFile(manifest.source, "utf8")
+    const parsed = JSON.parse(raw) as PackagedPluginManifest
+    const destination = path.join(outdir, manifest.destination)
+    await fs.promises.mkdir(path.dirname(destination), { recursive: true })
+    await fs.promises.writeFile(destination, raw)
+    const missing = (parsed.resources ?? [])
+      .map((resource) => pluginResourcePath(resource, targetOS))
+      .filter((resourcePath) => resourcePath.length === 0 || !fs.existsSync(path.join(outdir, resourcePath)))
+    if (missing.length > 0) {
+      throw new Error(`Packaged plugin manifest ${manifest.source} references missing resources: ${missing.join(", ")}`)
+    }
+  }
+}
+
 for (const item of targets) {
   const compileTarget = [
     "bun",
@@ -362,31 +397,13 @@ for (const item of targets) {
       OPENCORVUS_EMBEDDED_ENV: embeddedEnvDefine,
     },
   })
-  if (buildFlavor === "overlay-server") {
-    await Bun.build({
-      conditions: ["browser"],
-      tsconfig: "./tsconfig.json",
-      plugins: [solidPlugin],
-      sourcemap: artifactSourcemap(),
-      external: artifactExternalModules(),
-      compile: {
-        ...compile,
-        outfile: `dist/${name}/${artifactTuiSiblingExecutableName(item.os).replace(/\.exe$/, "")}`,
-      } as any,
-      entrypoints: artifactEntrypoints("cli", parserWorker, workerPath),
-      define: {
-        OPENCORVUS_VERSION: `'${Script.version}'`,
-        OTUI_TREE_SITTER_WORKER_PATH: bunfsRoot + workerRelativePath,
-        OPENCORVUS_WORKER_PATH: workerPath,
-        OPENCORVUS_CHANNEL: `'${Script.channel}'`,
-        OPENCORVUS_LIBC: item.os === "linux" ? `'${item.abi ?? "glibc"}'` : "",
-        OPENCORVUS_EMBEDDED_ENV: embeddedEnvDefine,
-      },
-    })
-  }
   const browserMcpRuntimeDir = path.join(dir, "dist", name, "browser-mcp-node")
   await buildBrowserMcpNodeBundle(browserMcpRuntimeDir)
   await copyRuntimeNodeModules(item, path.join(dir, "dist", name), dir)
+  if (buildFlavor === "overlay-server") {
+    await copyRuntimeNodeModules(item, path.join(dir, "dist", name), dir, DEFAULT_PACKAGED_PLUGIN_MODULES)
+    await stageDefaultPluginManifests(path.join(dir, "dist", name), item.os as PackagedPluginTargetOS)
+  }
   await copyRuntimeNodeModules(item, browserMcpRuntimeDir, dir)
   await copyBrowserMcpNodeRuntime(item, browserMcpRuntimeDir)
 

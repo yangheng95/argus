@@ -18,19 +18,98 @@ function send(value: unknown, init?: ResponseInit) {
   })
 }
 
-test("side activity toolbar switches bound panels and survives collapse", async () => {
+function conversationPayload(sessionID: string) {
+  return {
+    lastSequence: 1,
+    board: {
+      snapshotVersion: `board:${sessionID}`,
+      task: null,
+      goalWorkflows: [],
+      interactions: [],
+    },
+    transcript: [],
+    timeline: [],
+    events: [],
+    eventReplay: { cursor: 1, latestSequence: 1, complete: true, limit: 500, sinceTimestamp: null },
+    history: { oldestTimestamp: null, oldestMessageID: null, hasMore: false, limit: 160 },
+    view: { sessions: [] },
+    agentView: { sessions: [] },
+  }
+}
+
+test("right activity toolbar opens center workbench tabs while side panels stay mounted", async () => {
+  const requestLog: Array<{ method: string; path: string }> = []
   const server = Bun.serve({
     idleTimeout: 255,
     port: 0,
     async fetch(req) {
       const url = new URL(req.url)
       const path = route(url)
+      requestLog.push({ method: req.method, path })
       if (path === "/" || path === "/ui") return Response.redirect(`${url.origin}/ui/index.html`, 302)
       const staticResponse = await overlayStaticResponse(path)
       if (staticResponse) return staticResponse
       if (path === "/global/health") return send({ version: "1.2.3" })
       if (path === "/tasks" || path === "/global/tasks") return send({ tasks: [] })
       if (path === "/session") return send([])
+      if (path === "/coding/sessions") {
+        return send({
+          sessions: [{
+            id: "ses_right_sidebar_assistant",
+            kind: "assistant",
+            title: "Coding assistant",
+            directory: "D:/overlay/workspace/app",
+            metadata: { codingAssistant: { surface: "right-sidebar" } },
+          }],
+        })
+      }
+      if (path === "/coding/session") {
+        return send({
+          session: {
+            id: "ses_right_sidebar_assistant",
+            kind: "assistant",
+            title: "Coding assistant",
+            directory: "D:/overlay/workspace/app",
+            metadata: { codingAssistant: { surface: "right-sidebar" } },
+          },
+        }, { status: 201 })
+      }
+      if (path === "/session/ses_right_sidebar_assistant/conversation") {
+        return send({
+          board: {
+            kind: "session",
+            sessionID: "ses_right_sidebar_assistant",
+            status: "active",
+            title: "Coding assistant",
+            directory: "D:/overlay/workspace/app",
+          },
+          transcript: [],
+          timeline: [],
+          events: [],
+          view: { rootID: "root", cards: {}, order: [] },
+          agentView: { rootID: "root", cards: {}, order: [] },
+          history: { oldestTimestamp: null, oldestMessageID: null, hasMore: false, limit: 0 },
+          messageWatermark: 0,
+        })
+      }
+      if (path === "/session/ses_right_sidebar_assistant/prompt_async") {
+        return send({ taskID: "tsk_right_sidebar_prompt" }, { status: 202 })
+      }
+      if (path === "/session/ses_right_sidebar_assistant/events") {
+        return new Response(
+          `data: ${JSON.stringify({
+            event_id: "session-connected-test",
+            session_id: "ses_right_sidebar_assistant",
+            type: "session.connected",
+            emittedAt: Date.now(),
+            timestamp: Date.now(),
+            sequence: 0,
+            summary: "connected",
+            payload: { sessionID: "ses_right_sidebar_assistant" },
+          })}\n\n`,
+          { headers: { "content-type": "text/event-stream; charset=utf-8" } },
+        )
+      }
       if (path === "/path") return send({ directory: "D:/overlay/workspace/app" })
       if (path === "/vcs") return send({ branch: "dev", clean: true, dirty: false, staged: 0, modified: 0, untracked: 0, conflicts: 0, ahead: 0, behind: 0 })
       if (path === "/provider") return send({ all: [], connected: [], default: {} })
@@ -44,7 +123,6 @@ test("side activity toolbar switches bound panels and survives collapse", async 
       if (path === "/mcp") return send({})
       if (path === "/panel/knowledge/memory") return send([])
       if (path === "/panel/knowledge/preference") return send([])
-      if (path === "/tui/runtime/status") return send({ running: false, mode: "none", url: null, sessionID: null })
       if (path === "/file") return send({ entries: [{ path: "src/main.tsx", name: "main.tsx", type: "file" }] })
       if (path === "/find/file") return send({ entries: [] })
       return send({})
@@ -62,9 +140,8 @@ test("side activity toolbar switches bound panels and survives collapse", async 
     }, server.port)
 
     await page.goto(`http://127.0.0.1:${server.port}/ui/index.html`, { waitUntil: "domcontentloaded" })
-    await page.waitForSelector('[data-ui="side-activity-button"][data-side="left"][data-activity="tasks"]')
     await page.waitForSelector('#solidRightActivityToolbar')
-    await page.waitForSelector('[data-ui="side-activity-button"][data-side="right"][data-activity="browser"]')
+    await page.waitForSelector('[data-ui="side-activity-button"][data-side="right"][data-activity="assistant"]')
 
     const clickButton = async (selector: string) => {
       await page.$eval(selector, (node) => (node as HTMLButtonElement).click())
@@ -75,77 +152,103 @@ test("side activity toolbar switches bound panels and survives collapse", async 
       const display = (selector: string) => getComputedStyle(document.querySelector<HTMLElement>(selector)!).display
       return {
         leftTasks: active("#leftPanelTasks"),
-        leftExplorer: active("#leftPanelExplorer"),
-        leftChanges: active("#leftPanelChanges"),
         rightInspector: active("#rightPanelInspector"),
-        chatConversation: active("#chatMessagePane"),
-        chatPreview: active("#chatBrowserPreviewPane"),
-        leftToolbarDisplay: display("#solidLeftActivityToolbar"),
+        centerOpen: document.querySelector<HTMLElement>("#centerWorkbench")?.dataset.open ?? "",
+        centerExplorer: active("#centerWorkbenchExplorer"),
+        centerDiff: active("#centerWorkbenchDiff"),
+        centerPreview: active("#centerWorkbenchBrowser"),
+        leftToolbarExists: !!document.querySelector("#solidLeftActivityToolbar"),
         rightToolbarDisplay: display("#solidRightActivityToolbar"),
+        centerResizerHidden: document.querySelector<HTMLElement>("#centerWorkbenchResizer")?.hidden ?? true,
         rightActivityButtons: document.querySelectorAll('[data-ui="side-activity-button"][data-side="right"]').length,
-        rightTuiButton: document.querySelector<HTMLElement>('[data-ui="side-activity-button"][data-side="right"][data-activity="tui"]')?.dataset.active ?? "",
+        rightTuiButtonExists: !!document.querySelector<HTMLElement>('[data-ui="side-activity-button"][data-side="right"][data-activity="tui"]'),
+        rightExplorerButton: document.querySelector<HTMLElement>('[data-ui="side-activity-button"][data-side="right"][data-activity="explorer"]')?.dataset.active ?? "",
+        rightDiffButton: document.querySelector<HTMLElement>('[data-ui="side-activity-button"][data-side="right"][data-activity="diff"]')?.dataset.active ?? "",
+        rightAssistantButton: document.querySelector<HTMLElement>('[data-ui="side-activity-button"][data-side="right"][data-activity="assistant"]')?.dataset.active ?? "",
         rightPreviewButton: document.querySelector<HTMLElement>('[data-ui="side-activity-button"][data-side="right"][data-activity="browser"]')?.dataset.active ?? "",
-        rightInspectorButton: document.querySelector<HTMLElement>('[data-ui="side-activity-button"][data-side="right"][data-activity="inspector"]')?.dataset.active ?? "",
+        rightInspectorButtonExists: !!document.querySelector<HTMLElement>('[data-ui="side-activity-button"][data-side="right"][data-activity="inspector"]'),
         chatTitle: document.querySelector<HTMLElement>("#chatViewTitle")?.textContent ?? "",
         rightTitle: document.querySelector<HTMLElement>("#rightPanelTitle")?.textContent ?? "",
+        tabs: Array.from(document.querySelectorAll<HTMLElement>(".center-workbench-tab")).map((node) => node.textContent?.trim() ?? ""),
       }
     })
 
     expect(await activeState()).toMatchObject({
       leftTasks: "true",
-      leftExplorer: "false",
-      leftChanges: "false",
       rightInspector: "true",
-      chatConversation: "true",
-      chatPreview: "false",
-      leftToolbarDisplay: "flex",
+      centerOpen: "false",
+      centerExplorer: "false",
+      centerDiff: "false",
+      centerPreview: "false",
+      leftToolbarExists: false,
       rightToolbarDisplay: "flex",
-      rightActivityButtons: 3,
-      rightTuiButton: "false",
+      centerResizerHidden: true,
+      rightActivityButtons: 4,
+      rightTuiButtonExists: false,
+      rightExplorerButton: "false",
+      rightDiffButton: "false",
+      rightAssistantButton: "false",
       rightPreviewButton: "false",
-      rightInspectorButton: "true",
+      rightInspectorButtonExists: false,
       chatTitle: "Conversation",
       rightTitle: "Inspector",
     })
-    await clickButton('[data-ui="side-activity-button"][data-side="left"][data-activity="explorer"]')
-    expect(await activeState()).toMatchObject({ leftTasks: "false", leftExplorer: "true", leftChanges: "false" })
 
-    await clickButton('[data-ui="side-activity-button"][data-side="left"][data-activity="changes"]')
-    expect(await activeState()).toMatchObject({ leftTasks: "false", leftExplorer: "false", leftChanges: "true" })
-
-    await clickButton('[data-ui="side-activity-button"][data-side="left"][data-activity="tasks"]')
     await page.evaluate(() => window.dispatchEvent(new CustomEvent("acceptance:focus-changes")))
-    expect(await activeState()).toMatchObject({ leftTasks: "false", leftExplorer: "false", leftChanges: "true" })
+    expect(await activeState()).toMatchObject({ centerOpen: "true", centerDiff: "true", rightDiffButton: "true" })
+
+    await clickButton('[data-ui="side-activity-button"][data-side="right"][data-activity="explorer"]')
+    expect(await activeState()).toMatchObject({
+      centerOpen: "true",
+      centerExplorer: "true",
+      centerDiff: "false",
+      rightExplorerButton: "true",
+      rightDiffButton: "false",
+    })
 
     await clickButton('[data-ui="side-activity-button"][data-side="right"][data-activity="browser"]')
     expect(await activeState()).toMatchObject({
-      chatConversation: "false",
-      chatPreview: "true",
+      centerPreview: "true",
+      centerExplorer: "false",
       rightPreviewButton: "true",
-      rightInspectorButton: "false",
       rightInspector: "true",
-      chatTitle: "Preview",
+      chatTitle: "Conversation",
       rightTitle: "Inspector",
     })
 
-    await clickButton('[data-ui="side-activity-button"][data-side="right"][data-activity="tui"]')
+    await clickButton('[data-ui="side-activity-button"][data-side="right"][data-activity="assistant"]')
+    await page.waitForFunction(() => document.querySelector<HTMLElement>('[data-ui="side-activity-button"][data-side="right"][data-activity="assistant"]')?.dataset.active === "true")
     expect(await activeState()).toMatchObject({
-      chatConversation: "false",
-      chatPreview: "false",
-      rightTuiButton: "true",
+      centerPreview: "true",
+      rightAssistantButton: "true",
       rightPreviewButton: "false",
-      chatTitle: "TUI",
-    })
-
-    await clickButton('[data-ui="side-activity-button"][data-side="right"][data-activity="inspector"]')
-    expect(await activeState()).toMatchObject({
-      chatConversation: "true",
-      chatPreview: "false",
-      rightInspectorButton: "true",
       chatTitle: "Conversation",
+      rightTitle: "Inspector",
     })
 
-    await clickButton('[data-ui="sidebar-header-collapse-toggle"]')
+    expect((await activeState()).tabs).toEqual(expect.arrayContaining(["Diff", "Explorer", "Preview"]))
+
+    await page.$eval("#chatTextarea", (node) => {
+      const textarea = node as HTMLTextAreaElement
+      textarea.value = "independent assistant ping"
+      textarea.dispatchEvent(new InputEvent("input", {
+        bubbles: true,
+        inputType: "insertText",
+        data: "independent assistant ping",
+      }))
+    })
+    await clickButton("#chatSend")
+    for (let attempt = 0; attempt < 50; attempt += 1) {
+      if (requestLog.some((entry) => entry.method === "POST" && entry.path === "/session/ses_right_sidebar_assistant/prompt_async")) break
+      await new Promise((resolve) => setTimeout(resolve, 100))
+    }
+    expect(requestLog).toContainEqual({
+      method: "POST",
+      path: "/session/ses_right_sidebar_assistant/prompt_async",
+    })
+    expect(requestLog.some((entry) => /^\/task\/[^/]+\/message$/.test(entry.path))).toBe(false)
+    expect(requestLog.some((entry) => entry.path.includes("coding-agent-tui") || entry.path.startsWith("/tui/"))).toBe(false)
+
     await clickButton('[data-ui="right-panel-header-collapse-toggle"]')
     const collapsed = await page.evaluate(() => {
       const measure = (selector: string) => {
@@ -158,46 +261,21 @@ test("side activity toolbar switches bound panels and survives collapse", async 
       return {
         sidebar: measure("#sidebar"),
         sections: measure("#sections"),
-        leftToolbar: measure("#solidLeftActivityToolbar"),
         rightToolbar: measure("#solidRightActivityToolbar"),
         leftContent: measure("#sidebar .side-panel-content"),
         rightContent: measure("#sections .side-panel-content"),
       }
     })
 
-    expect(collapsed.sidebar.width).toBeLessThanOrEqual(48)
+    expect(collapsed.sidebar.width).toBeGreaterThan(120)
     expect(collapsed.sections.width).toBeLessThanOrEqual(48)
-    expect(collapsed.leftToolbar.display).toBe("flex")
     expect(collapsed.rightToolbar.display).toBe("flex")
-    expect(collapsed.leftToolbar.height).toBeGreaterThan(300)
     expect(collapsed.rightToolbar.height).toBeGreaterThan(300)
-    expect(collapsed.leftContent.display).toBe("none")
+    expect(collapsed.leftContent.display).toBe("flex")
     expect(collapsed.rightContent.display).toBe("none")
 
-    await clickButton('[data-ui="side-activity-button"][data-side="right"][data-activity="inspector"]')
-    await page.waitForFunction(() => localStorage.getItem("oc_right_panel_collapsed") === "false")
-    const reopened = await page.evaluate(() => {
-      const sections = document.querySelector<HTMLElement>("#sections")
-      const content = document.querySelector<HTMLElement>("#sections .side-panel-content")
-      const inspectorButton = document.querySelector<HTMLElement>(
-        '[data-ui="side-activity-button"][data-side="right"][data-activity="inspector"]',
-      )
-      if (!sections || !content || !inspectorButton) throw new Error("Missing right panel activity nodes")
-      return {
-        collapsed: sections.dataset.collapsed || "",
-        contentDisplay: getComputedStyle(content).display,
-        sectionsWidth: Math.round(sections.getBoundingClientRect().width),
-        inspectorButtonActive: inspectorButton.dataset.active || "",
-        persisted: localStorage.getItem("oc_right_panel_collapsed") || "",
-      }
-    })
-    expect(reopened).toMatchObject({
-      collapsed: "false",
-      contentDisplay: "flex",
-      inspectorButtonActive: "true",
-      persisted: "false",
-    })
-    expect(reopened.sectionsWidth).toBeGreaterThan(300)
+    await clickButton('[data-ui="side-activity-button"][data-side="right"][data-activity="browser"]')
+    expect(await activeState()).toMatchObject({ centerOpen: "true", centerPreview: "true" })
   } finally {
     await browser.close()
     server.stop(true)

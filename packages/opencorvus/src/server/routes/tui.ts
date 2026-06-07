@@ -6,7 +6,6 @@ import { Session, SessionStatus } from "../../session"
 import { TuiEvent } from "@/cli/cmd/tui/event"
 import { TuiCommand } from "@/tui/command"
 import { TuiRuntime } from "@/tui/runtime"
-import { EmbeddedTui, EmbeddedTuiInput, EmbeddedTuiResizeInput, EmbeddedTuiStartInput } from "@/tui/embedded"
 import { Flag } from "../../flag/flag"
 import { errors } from "../error"
 import { lazy } from "../../util/lazy"
@@ -368,112 +367,6 @@ export const TuiRoutes = lazy(() =>
         const body = c.req.valid("json")
         return c.json(TuiRuntime.taskStatus(body))
       },
-    )
-    // === embed: OpenTUI renderer frames ===
-    .post(
-      "/embed/start",
-      describeRoute({
-        summary: "Start embedded OpenTUI renderer",
-        description: "Start the project-bound OpenTUI renderer used by the overlay coding-agent TUI plugin.",
-        operationId: "tui.embed.start",
-        responses: {
-          200: {
-            description: "Embedded TUI renderer state",
-            content: {
-              "application/json": {
-                schema: resolver(z.unknown()),
-              },
-            },
-          },
-          ...errors(400),
-        },
-      }),
-      validator("json", EmbeddedTuiStartInput),
-      async (c) => {
-        const body = c.req.valid("json")
-        const url = new URL(c.req.url).origin
-        return c.json(await EmbeddedTui.start({ ...body, url, directory: Instance.directory }))
-      },
-    )
-    .get(
-      "/embed/status",
-      describeRoute({
-        summary: "Get embedded OpenTUI renderer status",
-        description: "Get the latest project-bound OpenTUI renderer frame for the overlay coding-agent TUI plugin.",
-        operationId: "tui.embed.status",
-        responses: {
-          200: {
-            description: "Embedded TUI renderer state",
-            content: {
-              "application/json": {
-                schema: resolver(z.unknown()),
-              },
-            },
-          },
-        },
-      }),
-      async (c) => c.json(await EmbeddedTui.status()),
-    )
-    .post(
-      "/embed/input",
-      describeRoute({
-        summary: "Send input to embedded OpenTUI renderer",
-        description: "Send keyboard text or key input to the project-bound embedded OpenTUI renderer.",
-        operationId: "tui.embed.input",
-        responses: {
-          200: {
-            description: "Embedded TUI renderer state",
-            content: {
-              "application/json": {
-                schema: resolver(z.unknown()),
-              },
-            },
-          },
-          ...errors(400),
-        },
-      }),
-      validator("json", EmbeddedTuiInput),
-      async (c) => c.json(await EmbeddedTui.input(c.req.valid("json"))),
-    )
-    .post(
-      "/embed/resize",
-      describeRoute({
-        summary: "Resize embedded OpenTUI renderer",
-        description: "Resize the project-bound embedded OpenTUI renderer.",
-        operationId: "tui.embed.resize",
-        responses: {
-          200: {
-            description: "Embedded TUI renderer state",
-            content: {
-              "application/json": {
-                schema: resolver(z.unknown()),
-              },
-            },
-          },
-          ...errors(400),
-        },
-      }),
-      validator("json", EmbeddedTuiResizeInput),
-      async (c) => c.json(await EmbeddedTui.resize(c.req.valid("json"))),
-    )
-    .post(
-      "/embed/stop",
-      describeRoute({
-        summary: "Stop embedded OpenTUI renderer",
-        description: "Stop the project-bound embedded OpenTUI renderer.",
-        operationId: "tui.embed.stop",
-        responses: {
-          200: {
-            description: "Embedded TUI renderer stopped",
-            content: {
-              "application/json": {
-                schema: resolver(z.boolean()),
-              },
-            },
-          },
-        },
-      }),
-      async (c) => c.json(await EmbeddedTui.stop()),
     )
     // === action: dialog ===
     .post(

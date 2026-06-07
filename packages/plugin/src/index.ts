@@ -31,13 +31,76 @@ export type PluginInput = {
   worktree: string
   serverUrl: URL
   $: BunShell
+  taskArtifacts: PluginTaskArtifacts
+  resources: PluginResources
 }
 
 export type Plugin = (input: PluginInput) => Promise<Hooks>
 
+export type PluginTaskArtifact = {
+  id: string
+  taskID: string
+  kind: string
+  label: string
+  payload: Record<string, unknown>
+  timeCreated: number
+  timeUpdated: number
+}
+
+export type PluginTaskArtifactCreateInput = {
+  taskID: string
+  kind: string
+  label: string
+  payload: Record<string, unknown>
+}
+
+export type PluginTaskArtifactLookupInput = {
+  taskID: string
+  kind: string
+  label?: string
+}
+
+export type PluginTaskArtifacts = {
+  create(input: PluginTaskArtifactCreateInput): Promise<PluginTaskArtifact>
+  latest(input: PluginTaskArtifactLookupInput): Promise<PluginTaskArtifact | undefined>
+  get(input: PluginTaskArtifactLookupInput & { id: string }): Promise<PluginTaskArtifact | undefined>
+}
+
+export type PluginResourceOS = "win32" | "linux" | "darwin"
+
+export type PluginResourceKind = "worker" | "asset" | "runtime"
+
+export type PluginResourceManifestEntry = {
+  id: string
+  kind: PluginResourceKind
+  path?: string
+  paths?: Partial<Record<PluginResourceOS, string>>
+}
+
+export type PluginResource = {
+  id: string
+  kind: PluginResourceKind
+  path: string
+  absolutePath: string
+}
+
+export type PluginResources = {
+  all(): PluginResource[]
+  get(id: string): PluginResource
+}
+
 export type PluginServiceRegistration = {
   id: string
   app: Hono
+}
+
+export type OpenCorvusPluginManifest = {
+  packageSpecifier: string
+  // ID = identifier. The serviceID owns the dynamic /plugin/:id namespace.
+  serviceID: string
+  backendExport: string
+  overlayExport: string
+  resources: PluginResourceManifestEntry[]
 }
 
 export type AuthHook = {

@@ -104,6 +104,7 @@ export type TabInfo = {
 const sessions = new Map<string, Session>()
 const profiles = new Map<string, Profile>()
 const profileLocks = new Map<string, Promise<void>>()
+const sessionOperationLocks = new Map<string, Promise<void>>()
 const terminatedSessions = new Map<string, SessionTermination>()
 const intentionalSessionClose = new Set<string>()
 let browser: Browser | null = null
@@ -171,6 +172,23 @@ const withProfileLock = async <T>(profileId: string, fn: () => Promise<T>): Prom
   } finally {
     release()
     if (profileLocks.get(profileId) === current) profileLocks.delete(profileId)
+  }
+}
+
+export const withSessionOperationLock = async <T>(sessionId: string, fn: () => Promise<T>): Promise<T> => {
+  const previous = sessionOperationLocks.get(sessionId) ?? Promise.resolve()
+  let release!: () => void
+  const gate = new Promise<void>((resolve) => {
+    release = resolve
+  })
+  const current = previous.catch(() => {}).then(() => gate)
+  sessionOperationLocks.set(sessionId, current)
+  await previous.catch(() => {})
+  try {
+    return await fn()
+  } finally {
+    release()
+    if (sessionOperationLocks.get(sessionId) === current) sessionOperationLocks.delete(sessionId)
   }
 }
 
@@ -289,6 +307,7 @@ const detachSession = (sessionId: string, reason: SessionTermination["reason"], 
   if (!session) return
   if (reason !== "destroyed") rememberTermination(sessionId, session, { reason, message })
   sessions.delete(sessionId)
+  sessionOperationLocks.delete(sessionId)
   const profile = profiles.get(session.profileId)
   profile?.sessionIds.delete(sessionId)
   if (reason !== "destroyed" && profile?.sessionIds.size === 0) {
@@ -495,6 +514,7 @@ const destroySessionLocked = async (sessionId: string, preserveProfile?: Preserv
   intentionalSessionClose.add(sessionId)
   await session.page.close()
   sessions.delete(sessionId)
+  sessionOperationLocks.delete(sessionId)
   profile?.sessionIds.delete(sessionId)
   if (!profile) return { profileId: session.profileId, profilePreserved: false }
   profile.lastActive = Date.now()
