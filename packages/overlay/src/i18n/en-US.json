@@ -1,7 +1,7 @@
 {
   "_meta": {
     "language": "en-US",
-    "panel_revision": "887b232cd439d44f"
+    "panel_revision": "06289302186933db"
   },
   "about.author_name": "Yang, Heng",
   "about.go_version": "Go Version",
@@ -331,7 +331,8 @@
   "chat.stop_title": "Stop generation and halt task execution.",
   "chat.thinking": "Thinking…",
   "chat.tip": "Drag files here · Drag the top edge to resize",
-  "chat.title": "Conversation",
+  "chat.title": "Workflow",
+  "chat.assistant_title": "Assistant",
   "coding_assistant.title": "Coding Assistant",
   "checks.pending": "Pending",
   "common.active": "Active",

@@ -154,6 +154,7 @@ test("right activity toolbar opens center workbench tabs while side panels stay 
         leftTasks: active("#leftPanelTasks"),
         rightInspector: active("#rightPanelInspector"),
         centerOpen: document.querySelector<HTMLElement>("#centerWorkbench")?.dataset.open ?? "",
+        centerWorkflow: active("#centerWorkbenchWorkflow"),
         centerExplorer: active("#centerWorkbenchExplorer"),
         centerDiff: active("#centerWorkbenchDiff"),
         centerPreview: active("#centerWorkbenchBrowser"),
@@ -162,6 +163,7 @@ test("right activity toolbar opens center workbench tabs while side panels stay 
         centerResizerHidden: document.querySelector<HTMLElement>("#centerWorkbenchResizer")?.hidden ?? true,
         rightActivityButtons: document.querySelectorAll('[data-ui="side-activity-button"][data-side="right"]').length,
         rightTuiButtonExists: !!document.querySelector<HTMLElement>('[data-ui="side-activity-button"][data-side="right"][data-activity="tui"]'),
+        rightWorkflowButton: document.querySelector<HTMLElement>('[data-ui="side-activity-button"][data-side="right"][data-activity="workflow"]')?.dataset.active ?? "",
         rightExplorerButton: document.querySelector<HTMLElement>('[data-ui="side-activity-button"][data-side="right"][data-activity="explorer"]')?.dataset.active ?? "",
         rightDiffButton: document.querySelector<HTMLElement>('[data-ui="side-activity-button"][data-side="right"][data-activity="diff"]')?.dataset.active ?? "",
         rightAssistantButton: document.querySelector<HTMLElement>('[data-ui="side-activity-button"][data-side="right"][data-activity="assistant"]')?.dataset.active ?? "",
@@ -179,29 +181,47 @@ test("right activity toolbar opens center workbench tabs while side panels stay 
     expect(await activeState()).toMatchObject({
       leftTasks: "true",
       rightInspector: "true",
-      centerOpen: "false",
+      centerOpen: "true",
+      centerWorkflow: "true",
       centerExplorer: "false",
       centerDiff: "false",
       centerPreview: "false",
       leftToolbarExists: false,
       rightToolbarDisplay: "flex",
-      centerResizerHidden: true,
-      rightActivityButtons: 6,
+      centerResizerHidden: false,
+      rightActivityButtons: 7,
       rightTuiButtonExists: false,
+      rightWorkflowButton: "true",
       rightExplorerButton: "false",
       rightDiffButton: "false",
       rightAssistantButton: "false",
       rightPreviewButton: "false",
-      rightInspectorButton: "true",
+      rightInspectorButton: "false",
       rightNotificationsButton: "false",
       rightNotifications: "false",
       notificationPanelExists: true,
-      chatTitle: "Conversation",
+      chatTitle: "Workflow",
       rightTitle: "Inspector",
     })
 
+    await clickButton(".center-workbench-tab-close")
+    expect(await activeState()).toMatchObject({
+      centerOpen: "false",
+      centerWorkflow: "false",
+      rightWorkflowButton: "false",
+      rightInspectorButton: "true",
+    })
+
+    await clickButton('[data-ui="side-activity-button"][data-side="right"][data-activity="workflow"]')
+    expect(await activeState()).toMatchObject({
+      centerOpen: "true",
+      centerWorkflow: "true",
+      rightWorkflowButton: "true",
+      chatTitle: "Workflow",
+    })
+
     await page.evaluate(() => window.dispatchEvent(new CustomEvent("acceptance:focus-changes")))
-    expect(await activeState()).toMatchObject({ centerOpen: "true", centerDiff: "true", rightDiffButton: "true" })
+    expect(await activeState()).toMatchObject({ centerOpen: "true", centerDiff: "true", centerWorkflow: "false", rightDiffButton: "true" })
 
     await clickButton('[data-ui="side-activity-button"][data-side="right"][data-activity="explorer"]')
     expect(await activeState()).toMatchObject({
@@ -218,7 +238,7 @@ test("right activity toolbar opens center workbench tabs while side panels stay 
       centerExplorer: "false",
       rightPreviewButton: "true",
       rightInspector: "true",
-      chatTitle: "Conversation",
+      chatTitle: "Workflow",
       rightTitle: "Inspector",
     })
 
@@ -243,14 +263,15 @@ test("right activity toolbar opens center workbench tabs while side panels stay 
     await clickButton('[data-ui="side-activity-button"][data-side="right"][data-activity="assistant"]')
     await page.waitForFunction(() => document.querySelector<HTMLElement>('[data-ui="side-activity-button"][data-side="right"][data-activity="assistant"]')?.dataset.active === "true")
     expect(await activeState()).toMatchObject({
-      centerPreview: "true",
+      centerPreview: "false",
+      centerWorkflow: "true",
       rightAssistantButton: "true",
       rightPreviewButton: "false",
-      chatTitle: "Conversation",
+      chatTitle: "Assistant",
       rightTitle: "Inspector",
     })
 
-    expect((await activeState()).tabs).toEqual(expect.arrayContaining(["Diff", "Explorer", "Preview"]))
+    expect((await activeState()).tabs).toEqual(expect.arrayContaining(["Workflow", "Diff", "Explorer", "Preview"]))
 
     await page.$eval("#chatTextarea", (node) => {
       const textarea = node as HTMLTextAreaElement

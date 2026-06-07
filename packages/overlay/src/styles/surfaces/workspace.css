@@ -239,6 +239,7 @@ code .file-link:hover {
   min-width: 0;
   min-height: 0;
   display: flex;
+  justify-content: flex-end;
   overflow: hidden;
 }
 
@@ -388,9 +389,16 @@ body[data-center-workbench-resizing="true"] .center-workbench-resizer {
   padding: var(--ui-gap-sm);
 }
 
+.center-workbench-activity.chat-workflow-activity,
 .center-workbench-activity.file-editor-mount,
 .center-workbench-activity.chat-browser-preview-activity {
   padding: 0;
+}
+
+.chat-workflow-activity .chat {
+  flex: 1 1 0;
+  width: 100%;
+  min-width: 0;
 }
 
 .coding-assistant-activity {
@@ -788,6 +796,7 @@ body[data-resizing="true"] .pane-resizer::after {
   .conversation-workspace {
     flex: 1 1 auto;
     flex-direction: column;
+    justify-content: flex-end;
   }
 
   .center-workbench,
