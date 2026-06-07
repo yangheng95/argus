@@ -306,9 +306,104 @@ test("submit_frontend_template renders compact structured fields into markdown h
   expect(report).toContain("## Reuse Constraints")
   expect(report).not.toContain("## Component Inventory")
   expect(report).toContain("- acceptance_root: .")
-  expect(report).toContain("frontend-design-skeleton is source_baseline_input evidence only")
+  expect(report).toContain("frontend-design-skeleton is captured source evidence only")
+  expect(report).toContain("restore a separate static HTML/CSS visual skeleton")
   expect(report).toContain("maintainable_status: incomplete_source_baseline")
   expect(report).toContain("unfinished frontend_design work")
+})
+
+test("submit_frontend_template renders visual HTML skeleton as non-implementation baseline", async () => {
+  const kit = createFrontendTemplateOutputTools()
+  const submit = kit.tools.submit_frontend_template as any
+
+  await submit.execute({
+    design_system: "source-derived static visual baseline",
+    tech_stack: ["static HTML", "CSS", "Playwright visual diff"],
+    final_acceptance_mode: "visual_baseline_allowed",
+    frontend_template_sections: [
+      {
+        title: "Visual skeleton route",
+        detail: "Render the captured page as a static HTML/CSS skeleton for visual parity only.",
+        source_refs: ["web-clone-source/source-skeleton/index.html"],
+      },
+    ],
+    fillable_module_items: [
+      {
+        title: "Skeleton assets",
+        detail: "Use source-owned CSS and assets copied from the task-runtime source package.",
+        source_refs: ["web-clone-source/assets", "web-clone-source/source-skeleton/critical.css"],
+      },
+    ],
+    component_reuse_plan: [
+      {
+        family_id: "comp-static-skeleton",
+        name: "Static visual skeleton",
+        observed_surface: "Full captured page first viewport",
+        source_refs: ["web-clone-source/reference.png", "web-clone-source/source-ir/style-profile.json"],
+        implementation_strategy: "extracted_baseline_defer",
+        reuse_source: "visual-html-skeleton/index.html",
+        mature_library_candidates: [],
+        props_states: "static representative visual states only",
+        replacement_boundary: "visual skeleton root",
+        parity_guard: "Compare skeleton screenshot against source reference.png before transcription.",
+        custom_fallback_reason: "not applicable",
+      },
+    ],
+    material_inventory_items: [
+      {
+        title: "Source authority",
+        detail: "The skeleton is derived from source IR, source skeleton CSS, assets, and the reference screenshot.",
+        source_refs: ["web-clone-source/source-ir/style-profile.json", "web-clone-source/source-skeleton/critical.css"],
+      },
+    ],
+    frontend_project: {
+      status: "created",
+      role: "visual_baseline_input",
+      project_root: "visual-html-skeleton",
+      source_package: "web-clone-source",
+      entrypoints: [
+        "visual-html-skeleton/index.html",
+        "visual-html-skeleton/styles.css",
+        "visual-html-skeleton/screenshots/desktop.png",
+        "visual-html-skeleton/visual-diff.json",
+      ],
+      generation_tool: "source-ir-static-html-skeleton",
+      notes: [
+        "Derived from source IR and source skeleton; not a final app.",
+        "Future project work transcribes this visual skeleton into semantic source.",
+      ],
+    },
+    visual_consistency_items: [
+      {
+        title: "Reference parity",
+        detail: "Skeleton screenshots must be compared against source reference.png.",
+        source_refs: ["web-clone-source/reference.png"],
+      },
+    ],
+    ui_data_contract_items: [
+      {
+        title: "Static content",
+        detail: "Use visible content from source-ir/content-model.json; no runtime API required for the skeleton.",
+        source_refs: ["web-clone-source/source-ir/content-model.json"],
+      },
+    ],
+    template_iteration_notes: ["checked visual skeleton source authority and transcription boundary"],
+    completeness_review: "Visual HTML skeleton is complete enough as a source-derived baseline, not as maintainable completion.",
+    reference_artifacts: ["web-clone-source/reference.png", "visual-html-skeleton/index.html"],
+    open_questions: [],
+  }, {})
+
+  const report = buildFrontendTemplateReport(kit.getCollector()).detail
+  expect(report).toContain("- role: visual_baseline_input")
+  expect(report).toContain("- acceptance_root: .")
+  expect(report).toContain("not an implementation target")
+  expect(report).toContain("not the acceptance app root")
+  expect(report).toContain("original `web-clone-source/source-ir/*`")
+  expect(report).toContain("`web-clone-source/reference.png` remain authoritative")
+  expect(report).toContain("Current workflow deliverable")
+  expect(report).toContain("Requirements, Architect, Build, and Integrity")
+  expect(report).toContain("transcribe the accepted HTML skeleton")
+  expect(report).not.toContain("maintainable_status: incomplete_source_baseline")
 })
 
 test("component reuse plan accepts provider naming and incomplete library hints without schema rejection", async () => {

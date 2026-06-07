@@ -620,7 +620,7 @@ describe("core prompt hygiene", () => {
     expect(normalized).toContain("Do not design backend infrastructure")
     expect(normalized).toContain("Automatic tool-result continuation is not an operator message")
     expect(normalized).toContain('unless that exact text appears in the latest real user/delegation message')
-    expect(normalized).toContain("skeleton-first source handoff")
+    expect(normalized).toContain("skeleton-first visual handoff")
     expect(normalized).toContain("existing project components/design-system primitives first")
     expect(normalized).toContain("mature maintained libraries second")
     expect(normalized).toContain("custom components only for truly page-specific surfaces")
@@ -646,6 +646,9 @@ describe("core prompt hygiene", () => {
     expect(normalized).toContain("Data/Content Questions")
     expect(normalized).toContain("Interaction/State Questions")
     expect(normalized).toContain("Style/Layout Questions")
+    expect(normalized).toContain("Visual HTML Skeleton Coverage")
+    expect(normalized).toContain("publish visual skeleton coverage packets only")
+    expect(normalized).toContain("Do not create the HTML skeleton, source skeleton, implementation template, acceptance app, or token catalog yourself")
     expect(normalized).toContain("Treat `source-ir/style-profile.json` as a pointer to deterministic region-scoped style evidence")
     expect(normalized).toContain("do not synthesize a parallel token catalog")
     expect(normalized).toContain("Treat `webpage_contract` as an investigation partition contract")
@@ -662,7 +665,7 @@ describe("core prompt hygiene", () => {
     expect(normalized).toContain("pervasive `data-source-node-id`")
   })
 
-  test("webpage replica prompts enforce skeleton-first baseline then functional fill", async () => {
+  test("webpage replica prompts enforce frontend-owned visual skeleton first workflow", async () => {
     const design = await readPrompt("frontendDesign")
     const requirements = await readPrompt("requirements")
     const architect = await readPrompt("architect")
@@ -687,9 +690,9 @@ describe("core prompt hygiene", () => {
     expect(design).toContain("`webpage-evidence/source-skeleton/full-source.css` as the complete CSS sidecar")
     expect(design).toContain("`webpage-evidence/source-skeleton/source-skeleton-audit.json` as the skeleton quality evidence")
     expect(design).toContain("`webpage-evidence/source-ir/source-quality-audit.json` as semantic IR quality evidence")
-    expect(design).toContain("skeleton-first source handoff")
+    expect(design).toContain("skeleton-first visual handoff")
     expect(design).toContain("`web-clone-source/implementation-blueprint.md`")
-    expect(design).toContain("uses `reference.png` as visual truth")
+    expect(design).toContain("and `reference.png` as visual truth")
     expect(design).toContain("mock/static data contract")
     expect(design).toContain("full-stack replica")
     expect(design).toContain("seed/reset")
@@ -704,13 +707,12 @@ describe("core prompt hygiene", () => {
     )
     expect(design).toContain("use bounded `read_file` / project-structure tools")
     expect(design).toContain(
-      "then frontend_design creates the runtime `frontend-design-skeleton/` captured source project from that package as evidence and extracts from it into the target acceptance project before handoff",
-    )
-    expect(design).toContain(
-      "Build must start from the target project that frontend_design populated and should only perform integration and precision fixes",
+      "then frontend_design creates the runtime `frontend-design-skeleton/` captured source project from that package as evidence and restores a static HTML/CSS visual skeleton before handoff",
     )
     expect(design).toContain("`final_acceptance_mode`")
     expect(design).toContain("`baseline_replacement_plan`")
+    expect(design).toContain("visual_baseline_allowed")
+    expect(design).toContain("`frontend_project.role=visual_baseline_input`")
     expect(design).toContain("maintainable_replacement_required")
     expect(design).toContain("existing project components and mature libraries")
     expect(design).toContain("Source authority for maintainable webpage replicas")
@@ -719,15 +721,14 @@ describe("core prompt hygiene", () => {
     expect(design).toContain("`source-ir/style-profile.json` is the deterministic region-scoped style source")
     expect(design).toContain("Div-soup boundary")
     expect(design).toContain("`<div>` is a valid semantic-neutral layout primitive")
-    expect(design).toContain("The defect is delivering a mechanical DOM dump as application source")
+    expect(design).toContain("future transcription debt rather than final app source")
     expect(design).toContain("`SourceDomPage`, `src/components/source-dom/*`, `src/data/sourceDom*`")
     expect(design).toContain("pervasive `data-source-node-id`")
-    expect(design).toContain("no mechanical DOM dump / `div soup` remains as the primary app source")
     expect(design).toContain("Component-kind fidelity is mandatory")
     expect(design).toContain("chart, map, heatmap, geographic visualization")
     expect(design).toContain("must not be delivered as a flat copied SVG, image, or decorative vector")
-    expect(design).toContain("All visible content in maintainable UI/webpage acceptance must be componentized")
-    expect(design).toContain("fed by props/data modules/fixtures/API adapters")
+    expect(design).toContain("All visible content in the HTML skeleton must be traceable")
+    expect(design).toContain("later component/data transcription obligation")
 
     expect(requirements).toContain("`frontend_design` is the sole owner of the webpage-clone implementation contract")
     expect(requirements).toContain("`final_acceptance_mode`")

@@ -57,18 +57,32 @@ function latestByKey(entries: DecisionEntry[]): Map<string, DecisionEntry> {
 
 function renderSourceRegionRefactorGuidance(entries: Map<string, DecisionEntry>): string {
   const frontendProject = entries.get("frontend_project")?.value ?? ""
+  const isVisualBaseline = /\brole:\s*visual_baseline_input\b/i.test(frontendProject)
   const isSourceBaseline = /\brole:\s*source_baseline_input\b/i.test(frontendProject)
-  if (!isSourceBaseline) return ""
+  if (!isSourceBaseline && !isVisualBaseline) return ""
+
+  if (isVisualBaseline) {
+    return [
+      "## Visual HTML Skeleton Guidance",
+      "",
+      "Dynamic interpretation from the frontend_design decision log: this webpage handoff delivers a source-derived static HTML/CSS visual skeleton as `visual_baseline_input`. Treat it as the accepted visual baseline for the current workflow, not as implementation target source or an independent design source.",
+      "",
+      "- Requirements: express downstream work as skeleton-to-project transcription from the accepted HTML skeleton plus original source IR/content/style evidence and `reference.png`.",
+      "- Architect: keep ownership inside the frontend-design handoff and downstream implementation. Do not change other agent prompts or communication paths. Decompose later work by named visual/source regions and preserve source traceability.",
+      "- Build: transcribe the accepted visual skeleton into maintainable project source with semantic components, data modules, scoped styles, asset ownership, and mature library choices for hard UI domains while preserving visual parity against both the skeleton and original reference evidence.",
+      "- Acceptance/Integrity: verify source traceability, visual parity for unchanged reference surfaces, absence of screenshot/base64/iframe replay, and documented handling for every restored/deferred visual region.",
+    ].join("\n")
+  }
 
   return [
     "## Source-Region Refactor Guidance",
     "",
-    "Dynamic interpretation from the frontend_design decision log: this webpage handoff starts from a source_baseline_input skeleton. Treat that project as captured rawproject evidence and the traceable source seed for extraction into the target acceptance project.",
+    "Dynamic interpretation from the frontend_design decision log: this webpage handoff starts from a source_baseline_input skeleton. Treat that project as captured rawproject evidence and unfinished frontend_design visual/source debt, not as the implementation target.",
     "",
-    "- Requirements: express maintainability as source-region traceability. Every new component, source data extraction module, style rule, and boundary cleanup must map to source nodes/regions/assets/reference screenshots. Maintainable mode should report measured webpage_evaluate evidence and zero-finding web_clone_source_audit evidence before claiming final maintainability.",
+    "- Requirements: express follow-up work as completing the missing visual HTML skeleton or transcribing an accepted skeleton into maintainable source, depending on what the frontend_design report says is missing.",
     "- Architect: keep ownership inside the frontend-design handoff and downstream implementation. Do not change other agent prompts or communication paths. Decompose work by named sourceDomReplacementPlan/source region only when that region is in scope.",
-    "- Build: start from the target acceptance project populated by frontend_design. Only finish integration and precision fixes; do not treat frontend-design-skeleton as app source. Reuse project components or mature libraries for hard UI domains; do not hand-roll complex controls.",
-    "- Acceptance/Integrity: verify source traceability, visual parity for unchanged reference surfaces, absence of screenshot/base64/iframe replay, and documented handling for every replaced/deferred source region.",
+    "- Build: do not treat frontend-design-skeleton as app source. Use it only as captured source evidence; create/repair the visual skeleton first if frontend_design did not provide one, or transcribe the accepted skeleton into maintainable project source in the later workflow.",
+    "- Acceptance/Integrity: verify source traceability, visual parity for unchanged reference surfaces, absence of screenshot/base64/iframe replay, and documented handling for every restored/deferred source region.",
   ].join("\n")
 }
 
