@@ -127,7 +127,8 @@ function renderQualityProjectContract(final: FrontendTemplateFinal): string {
   if (final.frontend_project.role === "visual_baseline_input") {
     return [
       "## Visual HTML Skeleton Workflow",
-      "- Current workflow deliverable: a source-derived static HTML/CSS design skeleton whose visual fidelity is verified against the original reference artifacts.",
+      "- Current workflow deliverable: a source-editable static HTML/CSS design skeleton whose visual fidelity is verified against the original reference artifacts.",
+      "- Token rule: `visual-html-skeleton/styles/tokens.css` should contain source-backed CSS custom properties for colors, typography, spacing/density, radii, borders, shadows, media/icon sizing, chart/table/map range colors, and responsive widths; regional CSS should consume those tokens or document source-backed exceptions.",
       "- This skeleton is the workflow target for Requirements, Architect, Build, and Integrity in this round; they should improve and verify HTML/CSS visual parity, not convert it into a complete application source tree in the same workflow unless the active task explicitly says to combine both rounds.",
       "- Later workflow deliverable: transcribe the accepted HTML skeleton plus source IR/content/style evidence into maintainable project source with semantic components, data modules, scoped styles, asset ownership, and runtime verification.",
       "- Conflict rule: `web-clone-source/source-ir/*`, `web-clone-source/source-skeleton/*`, source assets, and `web-clone-source/reference.png` remain authoritative if the HTML skeleton conflicts with source evidence or visible pixels.",
@@ -441,7 +442,7 @@ export const FrontendTemplateFinalSchema = z.object({
       "Optional source-region evolution plan. Use it only when a specific raw/generated skeleton region should be replaced, deleted, or deferred during in-place refinement. It is diagnostic/planning evidence, not a schema requirement and not a requirement to delete the whole skeleton.",
     ),
   quality_project_contract: OptionalMarkdownField(
-      "The skeleton-to-project transcription contract for the later workflow. It explains how the accepted visual HTML skeleton plus source IR/content/style evidence becomes maintainable project source with semantic components, data modules, styling, asset ownership, runtime entrypoints, and verification evidence. The current skeleton is not the implementation target or acceptance app root.",
+      "The skeleton-to-project transcription contract for the later workflow. It explains how the accepted visual HTML skeleton plus source IR/content/style/token evidence becomes maintainable project source with semantic components, data modules, styling, asset ownership, runtime entrypoints, and verification evidence. The current skeleton is not the implementation target or acceptance app root.",
   ),
   quality_project_items: z
     .array(CompactTemplateItemSchema)
@@ -474,7 +475,7 @@ export const FrontendTemplateFinalSchema = z.object({
       notes: [],
     })
     .describe(
-      "Concrete frontend-design project output. For webpage replica first workflows, identify the visual HTML skeleton root, role=visual_baseline_input, entrypoints, source package, generation tool, completed visual-region restorations, unfinished visual debt, and any materialization defects. frontend-design-skeleton is captured source evidence and must never be the implementation_target.",
+      "Concrete frontend-design project output. For webpage replica first workflows, identify the source-editable visual HTML skeleton root, role=visual_baseline_input, entrypoints including index.html and tokens/region CSS, source package, generation tool, completed visual-region restorations, unfinished visual debt, and any materialization defects. frontend-design-skeleton is captured source evidence and must never be the implementation_target.",
     ),
   visual_consistency_contract: OptionalMarkdownField(
     "Binding visual-fidelity frontend template section: viewport inventory, pixel hierarchy, colors, typography, spacing, states, responsive rules, comparison criteria, and reference artifacts.",
@@ -515,7 +516,7 @@ export const FrontendTemplateFinalSchema = z.object({
     .describe(
       "Compact artifact anchors used as evidence. Prefer small canonical entrypoints such as web-clone-source/README.md, " +
       "implementation-blueprint.md, web-clone-implementation-contract.json, reference.png, source-ir/*, source-skeleton/critical.css, " +
-      "frontend-design-skeleton/README.md, frontend-design-skeleton/src/App.tsx, frontend-design-skeleton/src/components/SourceClonePage.tsx, frontend-design-skeleton/src/data/sourceData.ts, and frontend-design-skeleton/src/styles.css. Do not enumerate every dense raw/generated file; " +
+      "visual-html-skeleton/index.html, visual-html-skeleton/styles/tokens.css, visual-html-skeleton/styles/regions/*, frontend-design-skeleton/README.md, frontend-design-skeleton/src/App.tsx, frontend-design-skeleton/src/components/SourceClonePage.tsx, frontend-design-skeleton/src/data/sourceData.ts, and frontend-design-skeleton/src/styles.css. Do not enumerate every dense raw/generated file; " +
       "group public/source.html, src/generated/*, source-skeleton/index.html, page.ir.json, assets/manifest.json, segments.json, and codegen-context.json as targeted-gap evidence when needed.",
     ),
   open_questions: FlexibleStringListSchema
