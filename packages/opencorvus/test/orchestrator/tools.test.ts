@@ -3121,7 +3121,7 @@ describe("orchestrator tools", () => {
       frontendTemplate: "Frontend replica scope body",
       finalAcceptanceMode: "maintainable_replacement_required",
       fillableModules:
-        "Frontend fillable modules body. Use web-clone-source/README.md, web-clone-source/implementation-blueprint.md, web-clone-source/source-ir/component-tree.json, web-clone-source/source-ir/content-model.json, web-clone-source/source-skeleton/critical.css, and web-clone-source/reference.png as the development handoff; use raw webpage evidence only as diagnostics for named gaps.",
+        "Frontend fillable modules body. Use web-clone-source/README.md, web-clone-source/implementation-blueprint.md, web-clone-source/source-ir/component-tree.json, web-clone-source/source-ir/content-model.json, web-clone-source/source-ir/style-profile.json, web-clone-source/source-skeleton/critical.css, and web-clone-source/reference.png as the development handoff; use raw webpage evidence only as diagnostics for named gaps.",
       componentInventory: "Component inventory body.",
       qualityProjectContract:
         "High-quality target project body. Build semantic React source from the source skeleton, component modules, data modules, style modules, CSS sidecars, and verification commands.",
@@ -3163,6 +3163,7 @@ describe("orchestrator tools", () => {
         "web-clone-source/source-ir/component-tree.json",
         "web-clone-source/source-ir/content-model.json",
         "web-clone-source/source-ir/layout-map.json",
+        "web-clone-source/source-ir/style-profile.json",
         "web-clone-source/source-ir/style-tokens.json",
         "web-clone-source/source-ir/interaction-hints.json",
         "web-clone-source/source-skeleton/critical.css",
@@ -3184,6 +3185,7 @@ describe("orchestrator tools", () => {
         "webpage-evidence/source-ir/component-tree.json",
         "webpage-evidence/source-ir/content-model.json",
         "webpage-evidence/source-ir/layout-map.json",
+        "webpage-evidence/source-ir/style-profile.json",
         "webpage-evidence/source-ir/style-tokens.json",
         "webpage-evidence/source-ir/interaction-hints.json",
         "webpage-evidence/source-ir/source-quality-audit.json",
@@ -3199,7 +3201,7 @@ describe("orchestrator tools", () => {
           "maintainable_replacement_required",
           "",
           "## Fillable Modules",
-          "Frontend fillable modules body. Use web-clone-source/README.md, web-clone-source/implementation-blueprint.md, web-clone-source/source-ir/component-tree.json, web-clone-source/source-ir/content-model.json, web-clone-source/source-skeleton/critical.css, and web-clone-source/reference.png as the development handoff; use raw webpage evidence only as diagnostics for named gaps.",
+          "Frontend fillable modules body. Use web-clone-source/README.md, web-clone-source/implementation-blueprint.md, web-clone-source/source-ir/component-tree.json, web-clone-source/source-ir/content-model.json, web-clone-source/source-ir/style-profile.json, web-clone-source/source-skeleton/critical.css, and web-clone-source/reference.png as the development handoff; use raw webpage evidence only as diagnostics for named gaps.",
           "",
           "## Implementation Problems And Agent Handoff",
           "Complete enough for downstream implementation.",
@@ -3237,6 +3239,7 @@ describe("orchestrator tools", () => {
           "- web-clone-source/implementation-blueprint.md",
           "- web-clone-source/source-skeleton/critical.css",
           "- web-clone-source/source-ir/component-tree.json",
+          "- web-clone-source/source-ir/style-profile.json",
         ].join("\n"),
       },
       sessionID: "ses_frontend_design_mock",
@@ -3282,6 +3285,7 @@ describe("orchestrator tools", () => {
         expect(template).toContain("web-clone-source/implementation-blueprint.md")
         expect(template).toContain("web-clone-source/source-skeleton/critical.css")
         expect(template).toContain("web-clone-source/source-ir/component-tree.json")
+        expect(template).toContain("web-clone-source/source-ir/style-profile.json")
         expect(template).toContain("measured visual comparison")
         expect(manifest).toContain(`Canonical frontend_design public report file: ${paths.templateRelative}`)
         expect(manifest).toContain("design-reference.png")
@@ -3293,6 +3297,7 @@ describe("orchestrator tools", () => {
         expect(manifest).toContain("web-clone-source/implementation-blueprint.md")
         expect(manifest).toContain("web-clone-source/source-skeleton/critical.css")
         expect(manifest).toContain("web-clone-source/source-ir/content-model.json")
+        expect(manifest).toContain("web-clone-source/source-ir/style-profile.json")
         expect(manifest).toContain("web-clone-source/reference.png")
       },
     })
@@ -3390,6 +3395,7 @@ describe("orchestrator tools", () => {
             "web-clone-source/source-skeleton/critical.css\n" +
             "web-clone-source/source-skeleton/source-skeleton-audit.json\n" +
             "web-clone-source/source-ir/component-tree.json\n" +
+            "web-clone-source/source-ir/style-profile.json\n" +
             "web-clone-source/source-ir/source-quality-audit.json",
           reason: "web_clone_source_skeleton",
         })
@@ -3516,6 +3522,7 @@ describe("orchestrator tools", () => {
             "webpage-evidence/source-ir/component-tree.json\n" +
             "webpage-evidence/source-ir/content-model.json\n" +
             "webpage-evidence/source-ir/layout-map.json\n" +
+            "webpage-evidence/source-ir/style-profile.json\n" +
             "webpage-evidence/source-ir/style-tokens.json\n" +
             "webpage-evidence/source-ir/interaction-hints.json\n" +
             "webpage-evidence/source-ir/source-quality-audit.json",

@@ -170,7 +170,7 @@ type CenterWorkbenchPanel = "workflow" | "inspector" | "notifications" | "explor
 type RightActivity = Exclude<CenterWorkbenchPanel, "file"> | "assistant"
 
 const DEFAULT_CENTER_WORKBENCH_WIDTH = 420
-const CENTER_WORKBENCH_MIN_PANEL_WIDTH = 180
+const CENTER_WORKBENCH_MIN_PANEL_WIDTH = 128
 const CENTER_WORKBENCH_PANEL_ORDER: readonly CenterWorkbenchPanel[] = [
   "workflow",
   "explorer",
@@ -183,7 +183,7 @@ const CENTER_WORKBENCH_PANEL_ORDER: readonly CenterWorkbenchPanel[] = [
 
 const RIGHT_ACTIVITIES: readonly SideActivity<RightActivity>[] = [
   { id: "workflow", icon: "workflow", labelKey: "chat.title" },
-  { id: "inspector", icon: "panel-right", labelKey: "sections.title" },
+  { id: "inspector", icon: "inspect", labelKey: "sections.title" },
   { id: "notifications", icon: "notifications", labelKey: "notify.center_label" },
   { id: "explorer", icon: "folder", labelKey: "explorer.title" },
   { id: "diff", icon: "files", labelKey: "workspace.diff" },
@@ -282,6 +282,7 @@ function centerWorkbenchPanelWeight(panel: CenterWorkbenchPanel): number {
 function renderCenterWorkbenchPanelWeights(): void {
   const panels = orderedCenterWorkbenchPanels()
   const lastPanel = panels[panels.length - 1]
+  const firstPanel = panels[0]
   const views = getCenterWorkbenchViews()
   for (const panel of CENTER_WORKBENCH_PANEL_ORDER) {
     const body = views[panel]
@@ -289,9 +290,11 @@ function renderCenterWorkbenchPanelWeights(): void {
     if (panels.includes(panel)) {
       body.style.setProperty("--center-workbench-panel-grow", String(centerWorkbenchPanelWeight(panel)))
       body.dataset.resizableNext = String(panel !== lastPanel && panels.length > 1)
+      body.dataset.resizablePrev = String(panel !== firstPanel && panels.length > 1)
     } else {
       body.style.removeProperty("--center-workbench-panel-grow")
       delete body.dataset.resizableNext
+      delete body.dataset.resizablePrev
     }
   }
 }
@@ -1432,6 +1435,25 @@ function startCenterWorkbenchPanelResize(event: PointerEvent, leftPanel: CenterW
   event.preventDefault()
 }
 
+function findCenterWorkbenchResizePanel(event: PointerEvent): CenterWorkbenchPanel | null {
+  const panels = orderedCenterWorkbenchPanels(untrack(centerWorkbenchPanels))
+  if (panels.length < 2) return null
+  const views = getCenterWorkbenchViews()
+  const handleWidth = 10 * currentUIScale()
+  for (let index = 0; index < panels.length - 1; index += 1) {
+    const leftPanel = panels[index]
+    if (!leftPanel) continue
+    const leftBody = views[leftPanel]
+    const rightBody = views[panels[index + 1]!]
+    if (!leftBody || !rightBody) continue
+    const leftRect = leftBody.getBoundingClientRect()
+    const rightRect = rightBody.getBoundingClientRect()
+    const boundaryX = Math.round((leftRect.right + rightRect.left) / 2)
+    if (Math.abs(event.clientX - boundaryX) <= handleWidth) return leftPanel
+  }
+  return null
+}
+
 function updateCenterWorkbenchPanelResize(event: PointerEvent): void {
   const drag = centerWorkbenchPanelResize
   if (!drag) return
@@ -1483,14 +1505,8 @@ centerWorkbench?.addEventListener(
   (event) => {
     const pointer = event as PointerEvent
     if (pointer.button != null && pointer.button !== 0) return
-    const target = pointer.target instanceof Element ? pointer.target : null
-    const view = target?.closest<HTMLElement>(".center-workbench-view[data-resizable-next='true']")
-    if (!view) return
-    const rect = view.getBoundingClientRect()
-    const handleWidth = 8 * currentUIScale()
-    if (rect.right - pointer.clientX > handleWidth) return
-    const panel = view.dataset.workbenchView as CenterWorkbenchPanel | undefined
-    if (!panel || !CENTER_WORKBENCH_PANEL_ORDER.includes(panel)) return
+    const panel = findCenterWorkbenchResizePanel(pointer)
+    if (!panel) return
     startCenterWorkbenchPanelResize(pointer, panel)
   },
   listenerOpts,

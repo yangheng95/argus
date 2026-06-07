@@ -199,6 +199,24 @@ function artifactContent(relative: string, url: string, options: { longEvidenceS
   if (relative === "source-ir/style-tokens.json") {
     return JSON.stringify({ colors: ["#ffffff", "#131722", "#2962ff"], fonts: ["Inter"] }, null, 2)
   }
+  if (relative === "source-ir/style-profile.json") {
+    return JSON.stringify({
+      version: 1,
+      purpose: "web-clone-style-profile",
+      regions: [{
+        id: "economic-trends",
+        name: "EconomicTrendsSkeleton",
+        kind: "section",
+        rootNodeId: "node-economic-trends",
+        bounds: { x: 40, y: 440, w: 1360, h: 620 },
+        styleSummary: {
+          typography: [{ value: "font-size=14px; line-height=20px", count: 3 }],
+          colors: [{ value: "#131722", count: 4 }],
+          spacing: [{ value: "padding=40px", count: 1 }],
+        },
+      }],
+    }, null, 2)
+  }
   if (relative === "source-ir/interaction-hints.json") {
     return JSON.stringify({ interactions: [{ type: "tabs", label: "Popular Recent Video" }] }, null, 2)
   }

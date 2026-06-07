@@ -70,6 +70,7 @@ describe("web-clone source skeleton", () => {
     expect(result.files).toContain("source-ir/content-model.json")
     expect(result.files).toContain("source-ir/layout-map.json")
     expect(result.files).toContain("source-ir/style-tokens.json")
+    expect(result.files).toContain("source-ir/style-profile.json")
     expect(result.files).toContain("source-ir/interaction-hints.json")
     expect(result.files).toContain("source-ir/source-quality-audit.json")
     expect(result.audit.passed).toBe(true)
@@ -83,6 +84,7 @@ describe("web-clone source skeleton", () => {
     const componentTree = JSON.parse(await Bun.file(path.join(sourcePackageDir, "source-ir", "component-tree.json")).text())
     const contentModel = JSON.parse(await Bun.file(path.join(sourcePackageDir, "source-ir", "content-model.json")).text())
     const sourceQualityAudit = JSON.parse(await Bun.file(path.join(sourcePackageDir, "source-ir", "source-quality-audit.json")).text())
+    const styleProfile = JSON.parse(await Bun.file(path.join(sourcePackageDir, "source-ir", "style-profile.json")).text())
 
     expect(html).toContain('data-reference-image="../reference.png"')
     expect(html).toContain("data-source-node-id=")
@@ -97,6 +99,9 @@ describe("web-clone source skeleton", () => {
     expect(usedSelectors.stats.reachableRules).toBeGreaterThan(0)
     expect(componentTree.components.length).toBeGreaterThan(0)
     expect(contentModel.tables.length).toBe(1)
+    expect(styleProfile.purpose).toBe("web-clone-style-profile")
+    expect(styleProfile.regions.length).toBeGreaterThan(0)
+    expect(styleProfile.regions[0].styleSummary).toBeDefined()
     expect(contentModel.sourceComponentPatterns).toEqual(expect.arrayContaining([
       expect.objectContaining({
         kind: "data_grid_surface",
@@ -106,6 +111,7 @@ describe("web-clone source skeleton", () => {
     expect(sourceQualityAudit.passed).toBe(true)
     expect(readme).toContain("This directory is the only development-facing webpage clone seed.")
     expect(readme).toContain("component-tree.json")
+    expect(readme).toContain("style-profile.json")
     expect(readme).toContain("critical.css")
     expect(readme).toContain("../assets/manifest.json")
     expect(readme).toContain("data-asset-*")
@@ -203,7 +209,7 @@ describe("web-clone source skeleton", () => {
       generatedProjectDetected: false,
       findings: [],
     }))
-    for (const file of ["component-tree.json", "content-model.json", "layout-map.json", "style-tokens.json", "interaction-hints.json"]) {
+    for (const file of ["component-tree.json", "content-model.json", "layout-map.json", "style-tokens.json", "style-profile.json", "interaction-hints.json"]) {
       await Bun.write(path.join(sourceIrDir, file), JSON.stringify({ version: 1 }))
     }
     await Bun.write(path.join(sourceIrDir, "source-quality-audit.json"), JSON.stringify({ passed: true }))

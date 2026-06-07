@@ -36,6 +36,7 @@ describe("live webpage evidence pipeline", () => {
     expect(result.artifacts).toContain(path.posix.join(paths.webpageEvidenceRelative, "source-skeleton/used-selectors.json"))
     expect(result.artifacts).toContain(path.posix.join(paths.webpageEvidenceRelative, "source-skeleton/skeleton-manifest.json"))
     expect(result.artifacts).toContain(path.posix.join(paths.webpageEvidenceRelative, "source-ir/component-tree.json"))
+    expect(result.artifacts).toContain(path.posix.join(paths.webpageEvidenceRelative, "source-ir/style-profile.json"))
     expect(result.artifacts).toContain(path.posix.join(paths.webpageEvidenceRelative, "source-ir/interaction-state-snapshots.json"))
     expect(result.artifacts).toContain(path.posix.join(paths.webpageEvidenceRelative, "interaction-states/scroll-50.png"))
     expect(result.artifacts).toContain(path.posix.join(paths.webpageEvidenceRelative, "visual-surface-candidates.json"))

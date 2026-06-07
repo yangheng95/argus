@@ -288,6 +288,26 @@ test("right activity toolbar opens equal-width workbench panels while workflow k
       rightInspector: "false",
       chatTitle: "Workflow",
     })
+    const previewWidth = async () => await page.evaluate(() => Math.round(document.querySelector<HTMLElement>("#centerWorkbenchBrowser")!.getBoundingClientRect().width))
+    const previewLeftEdge = async () => await page.evaluate(() => {
+      const rect = document.querySelector<HTMLElement>("#centerWorkbenchBrowser")!.getBoundingClientRect()
+      return { x: rect.left + 2, y: rect.top + rect.height / 2 }
+    })
+    const previewWidthBeforeDrag = await previewWidth()
+    let previewEdge = await previewLeftEdge()
+    await page.mouse.move(previewEdge.x, previewEdge.y)
+    await page.mouse.down()
+    await page.mouse.move(previewEdge.x - 80, previewEdge.y, { steps: 8 })
+    await page.mouse.up()
+    const previewWidthAfterWiden = await previewWidth()
+    expect(previewWidthAfterWiden - previewWidthBeforeDrag).toBeGreaterThan(50)
+    previewEdge = await previewLeftEdge()
+    await page.mouse.move(previewEdge.x, previewEdge.y)
+    await page.mouse.down()
+    await page.mouse.move(previewEdge.x + 80, previewEdge.y, { steps: 8 })
+    await page.mouse.up()
+    const previewWidthAfterNarrow = await previewWidth()
+    expect(previewWidthAfterWiden - previewWidthAfterNarrow).toBeGreaterThan(50)
 
     await clickButton('[data-ui="side-activity-button"][data-side="right"][data-activity="notifications"]')
     expect(await activeState()).toMatchObject({

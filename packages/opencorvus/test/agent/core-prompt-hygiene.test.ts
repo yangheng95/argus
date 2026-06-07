@@ -646,6 +646,8 @@ describe("core prompt hygiene", () => {
     expect(normalized).toContain("Data/Content Questions")
     expect(normalized).toContain("Interaction/State Questions")
     expect(normalized).toContain("Style/Layout Questions")
+    expect(normalized).toContain("Treat `source-ir/style-profile.json` as a pointer to deterministic region-scoped style evidence")
+    expect(normalized).toContain("do not synthesize a parallel token catalog")
     expect(normalized).toContain("Treat `webpage_contract` as an investigation partition contract")
     expect(normalized).toContain("Build the brief with small registration tools")
     expect(normalized).toContain("Do not submit raw markdown or JSON documents as string fields")
@@ -677,6 +679,7 @@ describe("core prompt hygiene", () => {
     expect(design).toContain(
       "`webpage-evidence/source-ir/content-model.json` as tables/lists/cards/controls/repeated group evidence",
     )
+    expect(design).toContain("`webpage-evidence/source-ir/style-profile.json` as region-scoped style/layout/selector/asset guidance")
     expect(design).toContain("`webpage-evidence/source-skeleton/index.html` as raw semantic HTML evidence")
     expect(design).toContain(
       "`webpage-evidence/source-skeleton/critical.css` as reachable CSS plus computed-style fallback rules",
@@ -710,11 +713,10 @@ describe("core prompt hygiene", () => {
     expect(design).toContain("`baseline_replacement_plan`")
     expect(design).toContain("maintainable_replacement_required")
     expect(design).toContain("existing project components and mature libraries")
-    expect(design).toContain("PRD-to-skeleton weighting for maintainable webpage replicas")
-    expect(design).toContain("The implementation contract is PRD-first")
-    expect(design).toContain("about 70% of reconstruction authority")
-    expect(design).toContain("Skeleton/source-dom/source-skeleton evidence carries the remaining 30%")
-    expect(design).toContain("the PRD/component contract wins")
+    expect(design).toContain("Source authority for maintainable webpage replicas")
+    expect(design).toContain("define user-facing semantics")
+    expect(design).toContain("defines implementation facts")
+    expect(design).toContain("`source-ir/style-profile.json` is the deterministic region-scoped style source")
     expect(design).toContain("Div-soup boundary")
     expect(design).toContain("`<div>` is a valid semantic-neutral layout primitive")
     expect(design).toContain("The defect is delivering a mechanical DOM dump as application source")
@@ -770,6 +772,7 @@ describe("core prompt hygiene", () => {
     expect(buildOverlays).toContain("web-clone-source/")
     expect(buildOverlays).toContain("source_baseline_input")
     expect(buildOverlays).toContain("source package files named by the handoff")
+    expect(buildOverlays).toContain("web-clone-source/source-ir/style-profile.json")
     expect(buildOverlays).toContain("do not hide it by starting a freehand rebuild")
     expect(buildOverlays).toContain("perform only integration, precision visual repair, and acceptance fixes")
     expect(buildOverlays).toContain("do not search sibling worktrees")
@@ -810,6 +813,7 @@ describe("core prompt hygiene", () => {
 
     expect(workflow).toContain("web-clone-source/implementation-blueprint.md")
     expect(workflow).toContain("source-ir/component-tree.json")
+    expect(workflow).toContain("source-ir/style-profile.json")
     expect(workflow).toContain("source-skeleton/critical.css")
     expect(workflow).toContain("LLM 写 React/Vue")
     expect(workflow).toContain("frontend-design source skeleton/CSS sidecars 必须先成为实现基底")
