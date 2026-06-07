@@ -13,24 +13,16 @@ export function AppDialogHost() {
   let selectRef: HTMLSelectElement | undefined;
   const [remainingSeconds, setRemainingSeconds] = createSignal(0);
 
-  const isTaskRouteDecision = () => dialogStore.app.kind === "task-route-decision";
   const isTaskQueueDecision = () => dialogStore.app.kind === "task-queue-decision";
-  const isTaskCardDecision = () => isTaskRouteDecision() || isTaskQueueDecision();
+  const isTaskCardDecision = () => isTaskQueueDecision();
   const hasTaskDecisionCountdown = () =>
     isTaskCardDecision() &&
     Number(dialogStore.app.countdownSeconds || 0) > 0 &&
     Number(dialogStore.app.countdownDeadlineMs || 0) > 0;
-  const decisionEyebrow = () =>
-    isTaskQueueDecision() ? t("task.queue_decision.eyebrow") : t("task.route_decision.eyebrow");
-  const decisionCountdownText = () =>
-    isTaskQueueDecision()
-      ? t("task.queue_decision.countdown", { seconds: remainingSeconds() })
-      : t("task.route_decision.countdown", { seconds: remainingSeconds() });
+  const decisionEyebrow = () => t("task.queue_decision.eyebrow");
+  const decisionCountdownText = () => t("task.queue_decision.countdown", { seconds: remainingSeconds() });
   const decisionDescription = (value: string) => {
-    if (isTaskQueueDecision()) {
-      return value === "start" ? t("task.queue_decision.start_desc") : t("task.queue_decision.queue_desc");
-    }
-    return value === "workflow" ? t("task.route_decision.agent_team_desc") : t("task.route_decision.direct_build_desc");
+    return value === "start" ? t("task.queue_decision.start_desc") : t("task.queue_decision.queue_desc");
   };
   const chooseTaskDecision = (value: string) => {
     settleAppDialog(true, dialogStore.app.epoch, value);
@@ -134,7 +126,7 @@ export function AppDialogHost() {
                     <span class="app-dialog-decision__choice-top">
                       <span>{option.label || option.value}</span>
                       <Show when={recommended()}>
-                        <span class="app-dialog-decision__badge">{t("task.route_decision.recommended")}</span>
+                        <span class="app-dialog-decision__badge">{t("task.queue_decision.recommended")}</span>
                       </Show>
                     </span>
                     <span class="app-dialog-decision__choice-body">{decisionDescription(option.value)}</span>

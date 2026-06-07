@@ -214,7 +214,10 @@ describe("core prompt hygiene", () => {
     const orchestrator = await readPrompt("orchestrator")
     const orchestratorFlat = orchestrator.replace(/\s+/g, " ")
 
-    expect(architect).toContain("Produce the smallest executable goal graph")
+    expect(architect).toContain("Produce the most decomposed executable goal graph")
+    expect(architect).toContain("generally register 5-30 goals")
+    expect(architect).toContain("If the user explicitly asks for a different goal count or granularity")
+    expect(architect).toContain("where 5 goals would be fake slicing")
     expect(architect).toContain("do not chase perfection in Architect")
 
     expect(orchestrator).toContain("Plan closure during execution")
@@ -404,8 +407,9 @@ describe("core prompt hygiene", () => {
     expect(normalized).toContain("Before registering goals, analyze the requirement surfaces")
     expect(normalized).toContain("Register at least two goals")
     expect(normalized).toContain("A single all-in-one goal is forbidden")
-    expect(normalized).toContain("Keep every goal modest and independently executable")
+    expect(normalized).toContain("Keep every goal modest, narrow, and independently executable")
     expect(normalized).toContain("Call `submit_architect({ summary, decomposition_analysis })`")
+    expect(normalized).toContain("default 5-30 high-granularity target")
     expect(normalized).toContain("why no goal is too large")
     expect(normalized).toContain("At least two goals exist")
   })
@@ -419,11 +423,11 @@ describe("core prompt hygiene", () => {
     expect(normalized).toContain("not authorized to narrow, defer, water down, or silently drop any requirement")
     expect(normalized).toContain("Decompose humbly")
 
-    // "smallest" / "modest" / "do not chase perfection" must be disambiguated
-    // as graph shape and effort bounds — never licenses for a smaller deliverable.
-    expect(normalized).toContain('"Smallest" governs graph shape')
-    expect(normalized).toContain("It never licenses a smaller deliverable")
+    // High-granularity / modest / do-not-chase-perfection guidance must remain
+    // an execution-boundary rule, never a license for fake slicing or smaller scope.
+    expect(normalized).toContain("where 5 goals would be fake slicing")
     expect(normalized).toContain('"Modest" bounds one goal')
+    expect(normalized).toContain("it never licenses delivering less than that goal's requirements ask")
     expect(normalized).toContain("full requirement coverage is never optional")
 
     // Every requirement must land on a capable owning goal.
@@ -460,7 +464,8 @@ describe("core prompt hygiene", () => {
     const architect = await readPrompt("architect")
     const build = await readPrompt("build")
 
-    expect(architect).toContain("Produce the smallest executable goal graph")
+    expect(architect).toContain("Produce the most decomposed executable goal graph")
+    expect(architect).toContain("default 5-30 high-granularity target")
     expect(architect).toContain("Do not design fallback, compatibility, parallel implementations")
 
     expect(build).toContain("## Repository Discipline")

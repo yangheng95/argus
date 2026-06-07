@@ -1,6 +1,12 @@
-import { afterEach, describe, expect, test } from "bun:test";
+import { afterEach, describe, expect, mock, test } from "bun:test";
 import { dialogStore } from "../src/store/dialog";
-import { dismissAppDialog, settleAppDialog, showAppDialog } from "../src/services/app-dialog";
+
+mock.module("../src/services/dialog", () => ({
+  closeConfigDialog() {},
+  openConfigDialog() {},
+}))
+
+const { dismissAppDialog, settleAppDialog, showAppDialog } = await import("../src/services/app-dialog");
 
 afterEach(() => {
   dismissAppDialog();
@@ -9,19 +15,19 @@ afterEach(() => {
 describe("app dialog countdown authority", () => {
   test("countdown dialogs auto-settle without relying on the dialog component", async () => {
     const result = await showAppDialog({
-      kind: "task-route-decision",
-      title: "Route",
+      kind: "task-queue-decision",
+      title: "Queue",
       message: "Choose",
-      recommendedValue: "workflow",
-      selectValue: "workflow",
+      recommendedValue: "start",
+      selectValue: "start",
       countdownSeconds: 0.01,
       selectOptions: [
-        { value: "workflow", label: "Agent Team" },
-        { value: "build", label: "Direct Build" },
+        { value: "start", label: "Start" },
+        { value: "queue", label: "Queue" },
       ],
     });
 
-    expect(result).toEqual({ confirmed: true, value: "workflow" });
+    expect(result).toEqual({ confirmed: true, value: "start" });
     expect(dialogStore.app.open).toBe(false);
   });
 

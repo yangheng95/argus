@@ -14,18 +14,25 @@ import type {
 
 let dialogResponse: { confirmed: boolean } = { confirmed: true }
 let queueDialogResponse: { confirmed: boolean; value: string | null } = { confirmed: true, value: "start" }
-let routeDialogResponse: { confirmed: boolean; value: string | null } = { confirmed: true, value: "workflow" }
 const dialogCalls: Array<{ title?: string; message?: string; select?: boolean; kind?: string; countdownSeconds?: number }> = []
 const initCalls: number[] = []
 let initResult = true
 
-// Preserve every other export so unrelated consumers (nativeMessage,
-// gitCheckpointTitle, etc.) keep working.
-const realAppDialog = await import("../src/services/app-dialog")
-const realGit = await import("../src/utils/git")
+mock.module("../src/utils/icon-html", () => ({
+  hydrateIconPlaceholders() {},
+  iconHtml() {
+    return ""
+  },
+}))
+
+mock.module("../src/utils/icon-html.tsx", () => ({
+  hydrateIconPlaceholders() {},
+  iconHtml() {
+    return ""
+  },
+}))
 
 mock.module("../src/services/app-dialog", () => ({
-  ...realAppDialog,
   showAppDialog: async (options: any) => {
     dialogCalls.push({
       title: options?.title,
@@ -34,14 +41,16 @@ mock.module("../src/services/app-dialog", () => ({
       kind: options?.kind,
       countdownSeconds: options?.countdownSeconds,
     })
-    if (options?.kind === "task-route-decision") return routeDialogResponse
     if (options?.kind === "task-queue-decision") return queueDialogResponse
+    return { confirmed: dialogResponse.confirmed, value: null }
+  },
+  nativeMessage: async (message: string, options: any = {}) => {
+    dialogCalls.push({ title: options?.title, message, kind: options?.kind })
     return { confirmed: dialogResponse.confirmed, value: null }
   },
 }))
 
 mock.module("../src/utils/git", () => ({
-  ...realGit,
   initGitCurrent: async (_options: any) => {
     initCalls.push(Date.now())
     return initResult
@@ -75,7 +84,6 @@ beforeEach(() => {
   initCalls.length = 0
   dialogResponse = { confirmed: true }
   queueDialogResponse = { confirmed: true, value: "start" }
-  routeDialogResponse = { confirmed: true, value: "workflow" }
   initResult = true
 })
 
@@ -212,9 +220,8 @@ describe("createTask + WorktreeNotGitError init-git retry", () => {
     expect(posted.queue).toBe(true)
   })
 
-  test("missing route decision posts the selected workflow task kind", async () => {
+  test("missing task kind defaults to workflow without opening the removed route dialog", async () => {
     let posted: any
-    routeDialogResponse = { confirmed: true, value: "workflow" }
     __setHostTransportForTest(
       fakeTransport((req) => {
         posted = req.body?.kind === "json" ? req.body.value : JSON.parse(String(req.body))
@@ -225,14 +232,12 @@ describe("createTask + WorktreeNotGitError init-git retry", () => {
     const taskID = await createTask({ text: "hello", queue: false })
 
     expect(taskID).toBe("tsk_workflow_route")
-    expect(dialogCalls.some((item) => item.kind === "task-route-decision")).toBe(true)
-    expect(dialogCalls.some((item) => item.kind === "task-route-decision" && item.select === true)).toBe(false)
+    expect(dialogCalls.some((item) => item.kind === "task-route-decision")).toBe(false)
     expect(posted.kind).toBe("workflow")
   })
 
-  test("route decision can explicitly create a direct build task", async () => {
+  test("explicit task kind can still create a direct build task", async () => {
     let posted: any
-    routeDialogResponse = { confirmed: true, value: "build" }
     __setHostTransportForTest(
       fakeTransport((req) => {
         posted = req.body?.kind === "json" ? req.body.value : JSON.parse(String(req.body))
@@ -240,9 +245,10 @@ describe("createTask + WorktreeNotGitError init-git retry", () => {
       }),
     )
 
-    const taskID = await createTask({ text: "hello", queue: false })
+    const taskID = await createTask({ text: "hello", queue: false, kind: "build" })
 
     expect(taskID).toBe("tsk_build_route")
+    expect(dialogCalls.some((item) => item.kind === "task-route-decision")).toBe(false)
     expect(posted.kind).toBe("build")
   })
 })
