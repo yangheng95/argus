@@ -135,6 +135,15 @@ function renderQualityProjectContract(final: FrontendTemplateFinal): string {
       "- The HTML skeleton is not an implementation target, not the acceptance app root, and not an independent design source.",
     ].join("\n")
   }
+  if (final.final_acceptance_mode === "visual_baseline_allowed") {
+    return [
+      "## Visual HTML Skeleton Workflow Incomplete",
+      "- Current workflow expectation: frontend_design must deliver `frontend_project.role=visual_baseline_input` with a separate source-editable static HTML/CSS skeleton rooted at `visual-html-skeleton/`.",
+      "- Submitted project is not the visual HTML skeleton baseline. Treat it as frontend_design decision-log evidence that the source-evidence baseline still has to be restored into editable HTML/CSS before downstream workflow work begins.",
+      "- Required next frontend_design action: restore `visual-html-skeleton/index.html`, `visual-html-skeleton/styles/tokens.css`, regional CSS/assets, rendered screenshots, and visual comparison evidence from the task-runtime `web-clone-source/` package and reference pixels.",
+      "- Do not ask other agents to reinterpret `frontend-design-skeleton`, framework source, compiled output, raw source DOM replay, or screenshot-only HTML as the visual baseline.",
+    ].join("\n")
+  }
   const lines = [
     "## Maintainable Target Project",
     "- The frontend-design high-fidelity skeleton project is source evidence, not the implementation target.",
@@ -627,6 +636,8 @@ function renderFrontendProjectReport(
   const isFrontendDesignSkeleton = isFrontendDesignSkeletonRoot(normalizedRoot)
   const maintainableSourceBaseline =
     finalAcceptanceMode === "maintainable_replacement_required" && project.role === "source_baseline_input"
+  const visualSourceBaseline =
+    finalAcceptanceMode === "visual_baseline_allowed" && project.role !== "visual_baseline_input"
   const lines = [
     `- status: ${project.status}`,
     `- role: ${project.role}`,
@@ -637,6 +648,10 @@ function renderFrontendProjectReport(
   ]
   if (maintainableSourceBaseline) {
     lines.push("- maintainable_status: incomplete_source_baseline. This is explicit unfinished frontend_design source debt, not a final maintainable implementation target.")
+  }
+  if (visualSourceBaseline) {
+    lines.push("- visual_status: incomplete_visual_baseline. This visual-only workflow has not delivered the required `visual-html-skeleton/` static HTML/CSS baseline.")
+    lines.push("- visual_next_action: frontend_design must restore and verify `visual-html-skeleton/index.html`, `visual-html-skeleton/styles/tokens.css`, external region CSS/assets, screenshots, and visual-diff evidence before handoff.")
   }
   if (project.role === "visual_baseline_input") {
     lines.push("- visual_baseline_rule: this project is a derived static HTML/CSS visual baseline input, not an implementation target and not the acceptance app root.")
