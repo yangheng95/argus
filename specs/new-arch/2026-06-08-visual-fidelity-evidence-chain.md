@@ -30,20 +30,20 @@ The chain treated visual fidelity as prose in several places where it needed to 
 3. `architect` only checked that a final visual `llm_judge` existed. It did not require that the final verification goal enumerate the same visual regions that frontend-design marked as authoritative.
 4. `metrics` `llm_judge` supports only `acceptance_summary`, `changed_files`, and `requirement_text`. That makes a visual judge read reports instead of seeing pixels.
 5. `integrity` tools expose code/diff/context inspection and guarded commands, but do not expose a bounded "render current app, compare against reference, return numeric + qualitative visual evidence" tool.
-6. Integrity traceability and severity discipline require findings to anchor to REQ / AcceptanceSpec / user quote. When architect did not create strict region acceptance specs, many visual defects lost their blocking anchor.
+6. Integrity traceability and severity discipline require findings to anchor to REQ / AcceptanceSpec / user quote. When architect did not create strict region acceptance specs, many visual defects lost their severity anchor.
 
 ## Call Point Inventory
 
 | Area | Current File(s) | Current Behavior | Required Change |
 | --- | --- | --- | --- |
 | Frontend design visual tools | `packages/opencorvus/src/frontend-design/tools/webpage-evaluate.ts`, `webpage-vision-judge.ts` | Numeric and qualitative visual evidence can be generated, but only frontend-design has direct tool access. | Keep these tools as the single comparison implementation; expose their evidence through shared visual evidence helpers instead of duplicating logic. |
-| Frontend design handoff | `packages/opencorvus/src/frontend-design/agent.ts`, `handoff.ts`, `output-tools.ts`, `prompt/core/frontend-design-core.txt` | Handoff can describe visual debt while still publishing a "complete" template. | Handoff must publish a structured visual evidence bundle and region matrix. A region is `complete` only when latest numeric and qualitative evidence for that region is passing or explicitly marked deferred with a blocking downstream acceptance item. |
+| Frontend design handoff | `packages/opencorvus/src/frontend-design/agent.ts`, `handoff.ts`, `output-tools.ts`, `prompt/core/frontend-design-core.txt` | Handoff can describe visual debt while still publishing a "complete" template. | Handoff must publish a structured visual evidence bundle and region matrix. A region is `complete` only when latest numeric and qualitative evidence for that region is passing or explicitly marked deferred with a downstream acceptance owner. |
 | Web clone evidence integrity | `packages/opencorvus/src/web-clone/evidence-integrity.ts`, `context.ts`, `source-skeleton.ts` | Validates presence and integrity of source evidence files such as `reference.png`, `eval-result.json`, and `vision-judge.json`. | Extend to validate the latest current visual evidence bundle: reference PNG, rendered PNG, eval result, vision verdict, viewport, source commit/worktree provenance, and region coverage. |
-| Architect fidelity validation | `packages/opencorvus/src/architect/output-tools.ts`, `fidelity.ts`, `prompt/core/architect-core.txt` | `missing_final_visual_acceptance` is only a concern and only checks for a final essential `llm_judge`. | Require a final verification/integration goal whose acceptance specs enumerate every required visual region and reference the visual evidence bundle contract. Missing region coverage must be a blocker for reference-driven UI tasks. |
-| Acceptance judge inputs | `packages/opencorvus/src/acceptance/types.ts`, `metrics/executor.ts`, tests under `packages/opencorvus/test/metrics` | Judge inputs are text-only: `acceptance_summary`, `changed_files`, `requirement_text`. | Add visual evidence input support that passes structured references to rendered/reference image artifacts and evaluation reports. Do not let visual-fidelity judge specs run with text-only inputs. |
+| Architect fidelity validation | `packages/opencorvus/src/architect/output-tools.ts`, `fidelity.ts`, `prompt/core/architect-core.txt` | `missing_final_visual_acceptance` is only a concern and only checks for a final essential `llm_judge`. | Require a final verification/integration goal whose acceptance specs enumerate every required visual region and reference the visual evidence bundle contract. Missing region coverage means the architect has not produced positive visual-fidelity ownership for reference-driven UI tasks. |
+| Acceptance judge inputs | `packages/opencorvus/src/acceptance/types.ts`, `metrics/executor.ts`, tests under `packages/opencorvus/test/metrics` | Judge inputs are text-only: `acceptance_summary`, `changed_files`, `requirement_text`. | Add visual evidence input support that passes structured references to rendered/reference image artifacts and evaluation reports. Visual-fidelity judge specs must receive visual evidence artifacts instead of text-only inputs. |
 | Integrity tools | `packages/opencorvus/src/integrity/acceptance-tools.ts`, `team-agent.ts`, `prompt/core/integrity-team-core.txt` | Reviewers can run commands and inspect context, but visual comparison is not a first-class scoped tool. | Add a scoped integrity visual comparison tool that starts from a proven repository root, renders the app, compares against the authoritative reference, and returns the current visual evidence bundle. |
 | Orchestrator evidence plumbing | `packages/opencorvus/src/orchestrator/tools.ts`, `webpage-evidence.ts`, `engine/git.ts` | Frontend-design evidence and acceptance summaries are passed as text/context. | Persist and pass visual evidence bundle IDs through task artifacts and build/integrity acceptance context. |
-| Prompt/tests | `packages/opencorvus/test/frontend-design/*`, `test/orchestrator/architect-fidelity-gate.test.ts`, `test/integrity/*`, `test/prompt/*` | Tests verify prompt strings and minimal final judge existence. | Add regression tests for region coverage, visual evidence bundle propagation, and integrity-side visual comparison. |
+| Prompt/tests | `packages/opencorvus/test/frontend-design/*`, architect fidelity regression tests, `test/integrity/*`, `test/prompt/*` | Tests verify prompt strings and minimal final judge existence. | Add regression tests for region coverage, visual evidence bundle propagation, and integrity-side visual comparison. |
 
 ## Target Contract
 
@@ -106,7 +106,7 @@ type VisualRegionEvidence = {
 }
 ```
 
-The bundle is not a new workflow gate. It is the single evidence object that existing frontend-design, architect, build, and integrity stages must consume when they claim visual fidelity.
+The bundle is not a new workflow decision mechanism. It is the single evidence object that existing frontend-design, architect, build, and integrity stages must consume when they claim visual fidelity.
 
 ## Required Behavior
 
@@ -153,7 +153,7 @@ Rules:
   - region-specific acceptance specs for every required visual region named in `visual_consistency_contract`, `visual_layout`, or frontend-design region evidence.
 - Each required visual region must appear in an acceptance spec title, scenario, or scorer criteria.
 - The final verification goal must require a visual evidence bundle, not only an `acceptance_summary` judge.
-- `missing_final_visual_acceptance` must remain about graph validity, but missing required region coverage for a reference-driven task is a blocker because it leaves a user-visible requirement unowned.
+- `missing_final_visual_acceptance` must remain about graph validity, while missing required region coverage for a reference-driven task means the graph has no positive ownership evidence for a user-visible requirement.
 
 Example final verification acceptance spec:
 
@@ -255,8 +255,8 @@ Rules:
   - Preserve existing alias test.
   - Add exact raw object from TradingView failure: `see`, `should_see`, `fix`, `accepted:false`.
 
-- `packages/opencorvus/test/orchestrator/architect-fidelity-gate.test.ts`
-  - Reference-driven task with final `llm_judge` but no region specs must fail architect validation.
+- Architect fidelity regression tests
+  - Reference-driven task with final `llm_judge` but no region specs produces unresolved architect validation evidence.
   - Reference-driven task with region specs and final visual bundle prebuilt scorer passes validation.
 
 - `packages/opencorvus/test/metrics/executor.test.ts`
@@ -275,7 +275,7 @@ Rules:
 - Synthetic task where `webpage_evaluate` returns `passed=false`:
   - frontend-design handoff is allowed only as `visual_baseline_status=failing`;
   - architect must create failing-region follow-up acceptance ownership;
-  - final integrity cannot pass without a passing bundle.
+  - final integrity has no positive visual-fidelity evidence without a passing bundle.
 
 - Synthetic task where executor report claims "visual verification passed" but no rendered screenshot exists:
   - integrity must report missing visual evidence.
@@ -285,7 +285,7 @@ Rules:
 
 ## Acceptance Criteria
 
-- A reference-driven webpage replica cannot complete from build/typecheck/grep plus text-only judge.
+- A reference-driven webpage replica has no positive completion evidence from build/typecheck/grep plus text-only judge alone.
 - Every required visual region has an owner, acceptance spec, and evidence row.
 - The final visual acceptance proof contains:
   - valid authoritative reference PNG;
