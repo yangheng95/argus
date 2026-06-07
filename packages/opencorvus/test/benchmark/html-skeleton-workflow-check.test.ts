@@ -65,6 +65,70 @@ describe("html skeleton workflow check", () => {
     expect(await Bun.file(path.join(tmp.path, "out", "html-skeleton-workflow-report.json")).exists()).toBe(true)
   })
 
+  test("recognizes frontend-research JSON evidence in session-scoped output", async () => {
+    await using tmp = await tmpdir()
+    const taskDir = path.join(tmp.path, "tasks", "tsk_full_workflow")
+    const frontendDesignDir = path.join(taskDir, "frontend-design")
+    const frontendResearchDir = path.join(taskDir, "frontend-research", "ses_research")
+    const visualRoot = path.join(frontendDesignDir, "visual-html-skeleton")
+    const sourcePackageDir = path.join(frontendDesignDir, "web-clone-source")
+    await writeSourceEvidence(sourcePackageDir)
+    await Bun.write(path.join(visualRoot, "index.html"), [
+      "<!doctype html>",
+      "<html>",
+      "<head><link rel=\"stylesheet\" href=\"./styles/tokens.css\"><link rel=\"stylesheet\" href=\"./styles.css\"></head>",
+      "<body><main><h1>World Economy</h1><section>Visual HTML skeleton</section></main></body>",
+      "</html>",
+    ].join(""))
+    await Bun.write(path.join(visualRoot, "styles", "tokens.css"), ":root{--color-canvas:#fff;--text-primary:#131722;--space-4:16px}")
+    await Bun.write(path.join(visualRoot, "styles.css"), "body{font-family:Arial,sans-serif}")
+    await Bun.write(path.join(frontendDesignDir, "frontend-template.md"), [
+      "- role: visual_baseline_input",
+      "- entrypoints: visual-html-skeleton/index.html",
+      "- evidence: webpage_evaluate visual-diff",
+      "submit_frontend_template",
+    ].join("\n"))
+    await Bun.write(path.join(frontendDesignDir, "evidence-source-manifest.md"), "web-clone-source/reference.png")
+    await Bun.write(path.join(frontendDesignDir, "frontend-design-process-trace.json"), JSON.stringify({
+      events: [
+        { name: "create_frontend_skeleton_project" },
+        { name: "record_frontend_replacement_result" },
+        { name: "submit_frontend_template" },
+      ],
+    }))
+    await Bun.write(path.join(frontendDesignDir, "frontend-design-iteration-state.json"), JSON.stringify({
+      completed: ["visual skeleton"],
+      remainingSourceDebt: [],
+    }))
+    await Bun.write(path.join(frontendResearchDir, "research-bundle.md"), "Evidence: ev_webpage_reference_image")
+    await Bun.write(path.join(frontendResearchDir, "evidence.json"), JSON.stringify({
+      evidence_notes: [
+        {
+          evidence_id: "ev_webpage_reference_image",
+          observations: ["Used as reference_image_evidence_ids in webpage_contract"],
+        },
+      ],
+    }))
+    await Bun.write(path.join(frontendResearchDir, "citation-map.json"), JSON.stringify({
+      citations: [{ claim_id: "visual_target", evidence_ids: ["ev_webpage_reference_image"] }],
+    }))
+
+    const report = await runHtmlSkeletonWorkflowCheck({
+      taskDir,
+      outDir: path.join(tmp.path, "out"),
+      threshold: 0.95,
+      worstThreshold: 0.8,
+      headless: true,
+      artifactsOnly: true,
+    })
+
+    expect(report.passed).toBe(true)
+    expect(report.checks.find((check) => check.id === "frontend-research-evidence")?.passed).toBe(true)
+    expect(report.checks.find((check) => check.id === "frontend-research-citation-map")?.passed).toBe(true)
+    expect(report.checks.find((check) => check.id === "frontend-research-webpage-contract")?.passed).toBe(true)
+    expect(report.checks.find((check) => check.id === "logs-mention-skeleton-tool")?.passed).toBe(true)
+  })
+
   test("rejects captured source evidence and screenshot-only HTML as the visual skeleton", async () => {
     await using tmp = await tmpdir()
     const frontendDesignDir = path.join(tmp.path, "frontend-design")

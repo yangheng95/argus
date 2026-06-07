@@ -28,6 +28,8 @@ export interface FrontendTemplateOutputCollector {
 }
 
 const VISUAL_ANCHOR_BUDGET = 80
+const HIGH_FIDELITY_VISUAL_SCORE = 96
+const HIGH_FIDELITY_VISUAL_SIMILARITY = 0.95
 
 const FlexibleStringListSchema = z.preprocess((value) => {
   if (value == null || value === "") return []
@@ -275,7 +277,7 @@ export function buildFrontendTemplateReport(collector: FrontendTemplateOutputCol
       `## Source Region Evolution Plan\n${renderBaselineReplacementPlan(collector.final.baseline_replacement_plan)}`,
       `## Quality Project Contract\n${collector.final.quality_project_contract}`,
       `## Material Inventory\n${collector.final.material_inventory}`,
-      `## Frontend Project\n${renderFrontendProjectReport(collector.final.frontend_project, collector.final.final_acceptance_mode)}`,
+      `## Frontend Project\n${renderFrontendProjectReport(collector.final)}`,
       `## Visual Consistency Contract\n${collector.final.visual_consistency_contract}`,
       `## UI Data Contract\n${collector.final.ui_data_contract}`,
       `## Template Iteration Notes\n${markdownList(collector.final.template_iteration_notes)}`,
@@ -628,10 +630,9 @@ function assertFrontendTemplateFinal(final: FrontendTemplateFinal): void {
   }
 }
 
-function renderFrontendProjectReport(
-  project: FrontendTemplateFinal["frontend_project"],
-  finalAcceptanceMode: FrontendTemplateFinal["final_acceptance_mode"],
-): string {
+function renderFrontendProjectReport(final: FrontendTemplateFinal): string {
+  const project = final.frontend_project
+  const finalAcceptanceMode = final.final_acceptance_mode
   const normalizedRoot = normalizeProjectRootForReport(project.project_root)
   const isFrontendDesignSkeleton = isFrontendDesignSkeletonRoot(normalizedRoot)
   const maintainableSourceBaseline =
@@ -657,6 +658,7 @@ function renderFrontendProjectReport(
     lines.push("- visual_baseline_rule: this project is a derived static HTML/CSS visual baseline input, not an implementation target and not the acceptance app root.")
     lines.push("- visual_authority: original `web-clone-source/source-ir/*`, `web-clone-source/source-skeleton/*`, and `web-clone-source/reference.png` remain authoritative if this skeleton conflicts with source evidence or visible pixels.")
     lines.push("- transcription_rule: future maintainable project work must transcribe this skeleton into semantic components/data/style modules while preserving the original source IR, assets, and reference screenshot as verification evidence.")
+    lines.push(renderVisualBaselineQualityStatus(final))
   }
   if (isFrontendDesignSkeleton) {
     lines.push("- adoption_rule: frontend-design-skeleton is captured source evidence only. frontend_design must restore a separate static HTML/CSS visual skeleton from it; if this remains the named project, the named visual/source debt is unfinished frontend_design work.")
@@ -670,6 +672,82 @@ function renderFrontendProjectReport(
     for (const item of project.notes) lines.push(`  - ${item}`)
   }
   return lines.join("\n")
+}
+
+function renderVisualBaselineQualityStatus(final: FrontendTemplateFinal): string {
+  const evidence = inspectVisualBaselineQuality(final)
+  if (evidence.status === "evidence_missing") {
+    return "- visual_quality_status: evidence_missing. No measured high-fidelity `webpage_evaluate` score was reported for the visual HTML skeleton; treat the skeleton as unproven until a 96/100 evaluation or >=0.95 similarity is recorded."
+  }
+  if (evidence.status === "incomplete_visual_fidelity") {
+    const score = evidence.lastScore === undefined ? "" : ` Reported score ${formatNumber(evidence.lastScore)}/100 is below required ${HIGH_FIDELITY_VISUAL_SCORE}/100.`
+    const similarity = evidence.lastSimilarity === undefined ? "" : ` Reported similarity ${formatNumber(evidence.lastSimilarity)} is below required ${HIGH_FIDELITY_VISUAL_SIMILARITY}.`
+    const debt = evidence.hasRemainingDebt ? " Remaining visual debt is present in the submitted contract." : ""
+    return `- visual_quality_status: incomplete_visual_fidelity.${score}${similarity}${debt} This skeleton is unproven and must not be treated as ready for downstream transcription.`
+  }
+  return `- visual_quality_status: high_fidelity_evidence_reported. Reported visual evidence meets ${HIGH_FIDELITY_VISUAL_SCORE}/100 or >=${HIGH_FIDELITY_VISUAL_SIMILARITY} similarity; source traceability and placeholder review still remain authoritative.`
+}
+
+function inspectVisualBaselineQuality(final: FrontendTemplateFinal): {
+  status: "high_fidelity_evidence_reported" | "incomplete_visual_fidelity" | "evidence_missing"
+  lastScore?: number
+  lastSimilarity?: number
+  hasRemainingDebt: boolean
+} {
+  const text = collectVisualBaselineText(final)
+  const scores = Array.from(text.matchAll(/\b(?:score|overallScore|current score)\s*:?\s*(\d{1,3}(?:\.\d+)?)\s*\/\s*100\b/gi))
+    .map((match) => Number(match[1]))
+    .filter((score) => Number.isFinite(score))
+  const similarities = Array.from(text.matchAll(/\b(?:similarity|mean)\s*(?:=|:)\s*(0(?:\.\d+)?|1(?:\.0+)?)\b/gi))
+    .map((match) => Number(match[1]))
+    .filter((score) => Number.isFinite(score))
+  const lastScore = scores.at(-1)
+  const lastSimilarity = similarities.at(-1)
+  const explicitBelowThreshold = /\b(?:below|under|less than)\s+(?:the\s+)?(?:95%|0\.95|95\/100|96\/100|threshold)\b/i.test(text)
+  const hasRemainingDebt = /\bremaining visual debt\s*:\s*(?!\s*(?:none|no|0|\(\s*none\s*\))\b)/i.test(text)
+
+  if (explicitBelowThreshold || hasRemainingDebt) {
+    return { status: "incomplete_visual_fidelity", lastScore, lastSimilarity, hasRemainingDebt }
+  }
+  if (lastScore !== undefined) {
+    return {
+      status: lastScore >= HIGH_FIDELITY_VISUAL_SCORE ? "high_fidelity_evidence_reported" : "incomplete_visual_fidelity",
+      lastScore,
+      lastSimilarity,
+      hasRemainingDebt,
+    }
+  }
+  if (lastSimilarity !== undefined) {
+    return {
+      status: lastSimilarity >= HIGH_FIDELITY_VISUAL_SIMILARITY ? "high_fidelity_evidence_reported" : "incomplete_visual_fidelity",
+      lastScore,
+      lastSimilarity,
+      hasRemainingDebt,
+    }
+  }
+  return { status: "evidence_missing", hasRemainingDebt }
+}
+
+function collectVisualBaselineText(final: FrontendTemplateFinal): string {
+  return [
+    final.frontend_template,
+    final.fillable_modules,
+    final.component_inventory,
+    final.quality_project_contract,
+    final.material_inventory,
+    final.visual_consistency_contract,
+    final.ui_data_contract,
+    final.completeness_review,
+    ...final.frontend_project.entrypoints,
+    ...final.frontend_project.notes,
+    ...final.template_iteration_notes,
+    ...final.reference_artifacts,
+    ...final.open_questions,
+  ].join("\n")
+}
+
+function formatNumber(value: number): string {
+  return Number.isInteger(value) ? String(value) : value.toFixed(4).replace(/0+$/, "").replace(/\.$/, "")
 }
 
 // ---------------------------------------------------------------------------
