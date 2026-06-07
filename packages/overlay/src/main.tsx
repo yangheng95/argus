@@ -81,7 +81,7 @@ import {
 import { openConfigDialog, openGoalDialog, renderAboutVersion, setupDialogBackdropClose } from "./services/dialog"
 import { cardTreeStore } from "./store/card-tree"
 import { composerDraftKey } from "./services/composer-draft"
-import { selectCodingAssistantSession } from "./services/coding-assistant"
+import { isCodingAssistantSource, selectCodingAssistantSession } from "./services/coding-assistant"
 
 // ── Module teardown ──
 // Centralised cleanup for top-level document/window listeners and Solid roots.
@@ -169,12 +169,13 @@ const [workspaceOpen, setWorkspaceOpen] = createSignal(false)
 const [workspaceTarget, setWorkspaceTarget] = createSignal<DiffTarget>({ filePath: "" })
 
 type RightPanelActivity = "inspector" | "notifications"
-type RightActivity = "explorer" | "diff" | "browser" | "assistant" | RightPanelActivity
-type CenterWorkbenchTab = "explorer" | "diff" | "browser" | "file"
+type RightActivity = "workflow" | "explorer" | "diff" | "browser" | "assistant" | RightPanelActivity
+type CenterWorkbenchTab = "workflow" | "explorer" | "diff" | "browser" | "file"
 
 const DEFAULT_CENTER_WORKBENCH_WIDTH = 420
 
 const RIGHT_ACTIVITIES: readonly SideActivity<RightActivity>[] = [
+  { id: "workflow", icon: "goals", labelKey: "chat.title" },
   { id: "inspector", icon: "panel-right", labelKey: "sections.title" },
   { id: "notifications", icon: "log-lines", labelKey: "notify.center_label" },
   { id: "explorer", icon: "folder", labelKey: "explorer.title" },
@@ -184,6 +185,7 @@ const RIGHT_ACTIVITIES: readonly SideActivity<RightActivity>[] = [
 ]
 
 const CENTER_WORKBENCH_LABEL_KEYS: Record<CenterWorkbenchTab, string> = {
+  workflow: "chat.title",
   explorer: "explorer.title",
   diff: "workspace.diff",
   browser: "browser_preview.title",
@@ -191,19 +193,21 @@ const CENTER_WORKBENCH_LABEL_KEYS: Record<CenterWorkbenchTab, string> = {
 }
 
 const CENTER_WORKBENCH_ICONS: Record<CenterWorkbenchTab, IconName> = {
+  workflow: "goals",
   explorer: "folder",
   diff: "file-document",
   browser: "inspect",
   file: "file-document",
 }
 
-const [centerWorkbenchTabs, setCenterWorkbenchTabs] = createSignal<CenterWorkbenchTab[]>([])
-const [activeCenterWorkbenchTab, setActiveCenterWorkbenchTab] = createSignal<CenterWorkbenchTab | null>(null)
+const [centerWorkbenchTabs, setCenterWorkbenchTabs] = createSignal<CenterWorkbenchTab[]>(["workflow"])
+const [activeCenterWorkbenchTab, setActiveCenterWorkbenchTab] = createSignal<CenterWorkbenchTab | null>("workflow")
 const [rightPanelActivity, setRightPanelActivity] = createSignal<RightPanelActivity>("inspector")
-const [selectedRightActivity, setSelectedRightActivity] = createSignal<RightActivity>("inspector")
+const [selectedRightActivity, setSelectedRightActivity] = createSignal<RightActivity>("workflow")
 const activeRightActivity = () => selectedRightActivity()
 
 function activateCodingAssistantSession(): void {
+  openCenterWorkbenchTab("workflow")
   setSelectedRightActivity("assistant")
   void selectCodingAssistantSession().catch((error) => {
     reportOverlayRuntimeError("coding-assistant.select", error)
@@ -238,7 +242,7 @@ function openRightPanelActivity(activity: RightPanelActivity): void {
 function openCenterWorkbenchTab(tab: CenterWorkbenchTab): void {
   setCenterWorkbenchTabs((current) => current.includes(tab) ? current : [...current, tab])
   activateCenterWorkbenchTab(tab)
-  if (tab === "explorer" || tab === "diff" || tab === "browser") setSelectedRightActivity(tab)
+  if (tab === "workflow" || tab === "explorer" || tab === "diff" || tab === "browser") setSelectedRightActivity(tab)
 }
 
 function removeCenterWorkbenchTab(tab: CenterWorkbenchTab): void {
@@ -256,6 +260,7 @@ function closeCenterWorkbenchTab(tab: CenterWorkbenchTab): void {
   if (tab === "diff") setWorkspaceOpen(false)
   if (tab === "file") closeFileEditor()
   if (untrack(selectedRightActivity) === tab) setSelectedRightActivity(untrack(rightPanelActivity))
+  if (tab === "workflow" && untrack(selectedRightActivity) === "assistant") setSelectedRightActivity(untrack(rightPanelActivity))
   removeCenterWorkbenchTab(tab)
 }
 
@@ -1292,6 +1297,13 @@ disposers.push(
     // cleared when the async load chain completes). The bar lives in a fixed
     // slot above the chat header so user input is never gated on load.
     createEffect(() => {
+      settingsStore.locale
+      boardStore.selectedSource
+      const title = document.querySelector("#chatViewTitle") as HTMLElement | null
+      if (title) title.textContent = isCodingAssistantSource() ? t("chat.assistant_title") : t("chat.title")
+    })
+
+    createEffect(() => {
       const active = boardStore.taskSwitching
       const bar = document.getElementById("taskSwitchProgress")
       if (!bar) return
@@ -1305,6 +1317,7 @@ disposers.push(
       const workbench = document.getElementById("centerWorkbench")
       const resizer = document.getElementById("centerWorkbenchResizer")
       const views: Record<CenterWorkbenchTab, HTMLElement | null> = {
+        workflow: document.getElementById("centerWorkbenchWorkflow"),
         explorer: document.getElementById("centerWorkbenchExplorer"),
         diff: document.getElementById("centerWorkbenchDiff"),
         browser: document.getElementById("centerWorkbenchBrowser"),

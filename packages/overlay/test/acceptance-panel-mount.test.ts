@@ -50,6 +50,7 @@ test("index.html declares side activity bodies and the default right Inspector a
   expect(html).toContain('id="centerWorkbench"')
   expect(html).toContain('id="solidCenterWorkbenchTabs"')
   expect(html).toContain('id="centerWorkbenchResizer"')
+  expect(html).toContain('id="centerWorkbenchWorkflow"')
   expect(html).toContain('id="centerWorkbenchExplorer"')
   expect(html).toContain('id="centerWorkbenchDiff"')
   expect(html).toContain('id="centerWorkbenchBrowser"')
@@ -137,12 +138,18 @@ test("main.tsx mounts the top-level side activity toolbars and bodies", async ()
   expect(main).toContain("<SideActivityToolbar")
   expect(main).toContain("selectRightActivity")
   expect(main).toContain('type RightPanelActivity = "inspector" | "notifications"')
-  expect(main).toContain('type RightActivity = "explorer" | "diff" | "browser" | "assistant" | RightPanelActivity')
+  expect(main).toContain('type RightActivity = "workflow" | "explorer" | "diff" | "browser" | "assistant" | RightPanelActivity')
+  expect(main).toContain('type CenterWorkbenchTab = "workflow" | "explorer" | "diff" | "browser" | "file"')
+  expect(main).toContain('id: "workflow", icon: "goals", labelKey: "chat.title"')
   expect(main).toContain('id: "inspector", icon: "panel-right", labelKey: "sections.title"')
   expect(main).toContain('id: "notifications", icon: "log-lines", labelKey: "notify.center_label"')
   expect(main).toContain('id: "explorer", icon: "folder", labelKey: "explorer.title"')
   expect(main).toContain('id: "diff", icon: "file-document", labelKey: "workspace.diff"')
   expect(main).toContain('{ id: "assistant", icon: "message", labelKey: "coding_assistant.title" }')
+  expect(main).toContain('const [centerWorkbenchTabs, setCenterWorkbenchTabs] = createSignal<CenterWorkbenchTab[]>(["workflow"])')
+  expect(main).toContain('const [activeCenterWorkbenchTab, setActiveCenterWorkbenchTab] = createSignal<CenterWorkbenchTab | null>("workflow")')
+  expect(main).toContain('workflow: document.getElementById("centerWorkbenchWorkflow")')
+  expect(main).toContain('isCodingAssistantSource() ? t("chat.assistant_title") : t("chat.title")')
   expect(main).toContain('render(() => <NotificationCenter surface="panel" />, notificationPanelEl)')
   expect(main).toContain('render(() => <NotificationCenter surface="toast" />, notificationHost)')
   expect(main).toContain("selectCodingAssistantSession()")
@@ -299,6 +306,7 @@ test("redesign-required i18n keys exist in both locales; the legacy lifecycle ke
     "browser_preview.capture_loading",
     "browser_preview.viewport.desktop",
     "coding_assistant.title",
+    "chat.assistant_title",
   ]
   // i18n keys are flat strings with literal dots, not nested paths — use
   // `key in obj` instead of toHaveProperty (which would mis-traverse).

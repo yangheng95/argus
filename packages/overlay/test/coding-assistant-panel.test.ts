@@ -25,6 +25,7 @@ test("coding assistant activity selects an independent session in the shared mes
   expect(html).toContain('id="chatMessagePane"')
   expect(html).toContain('id="chatScroll"')
   expect(html).toContain('id="solidChatComposer"')
+  expect(html).toContain('id="centerWorkbenchWorkflow"')
   expect(html).not.toContain('id="centerWorkbenchAssistant"')
   expect(html).not.toContain('id="solidCodingAssistantMount"')
   expect(html).not.toContain('id="chatPluginPane"')
@@ -33,9 +34,11 @@ test("coding assistant activity selects an independent session in the shared mes
   expect(html).not.toContain('id="solidTuiHostMount"')
 
   expect(main).toContain('type RightPanelActivity = "inspector" | "notifications"')
-  expect(main).toContain('type RightActivity = "explorer" | "diff" | "browser" | "assistant" | RightPanelActivity')
-  expect(main).toContain('type CenterWorkbenchTab = "explorer" | "diff" | "browser" | "file"')
+  expect(main).toContain('type RightActivity = "workflow" | "explorer" | "diff" | "browser" | "assistant" | RightPanelActivity')
+  expect(main).toContain('type CenterWorkbenchTab = "workflow" | "explorer" | "diff" | "browser" | "file"')
   expect(main).toContain('{ id: "assistant", icon: "message", labelKey: "coding_assistant.title" }')
+  expect(main).toContain('openCenterWorkbenchTab("workflow")')
+  expect(main).toContain('isCodingAssistantSource() ? t("chat.assistant_title") : t("chat.title")')
   expect(main).toContain('selectCodingAssistantSession()')
   expect(main).not.toContain('document.getElementById("solidCodingAssistantMount")')
   expect(main).not.toContain('assistant: document.getElementById("centerWorkbenchAssistant")')
@@ -58,6 +61,8 @@ test("coding assistant activity selects an independent session in the shared mes
   expect(icons).toContain("message: { component: MessageSquare }")
   expect(en).toContain('"coding_assistant.title": "Coding Assistant"')
   expect(zh).toContain('"coding_assistant.title": "Coding Assistant"')
+  expect(en).toContain('"chat.assistant_title": "Assistant"')
+  expect(zh).toContain('"chat.assistant_title": "Assistant"')
 })
 
 test("retired embedded TUI plugin is absent from overlay packaging and source", () => {

@@ -1,7 +1,7 @@
 {
   "_meta": {
     "language": "zh-CN",
-    "panel_revision": "887b232cd439d44f"
+    "panel_revision": "06289302186933db"
   },
   "about.author_name": "杨恒",
   "about.go_version": "Go 版本",
@@ -331,7 +331,8 @@
   "chat.stop_title": "中止当前生成并停止任务执行。",
   "chat.thinking": "思考中…",
   "chat.tip": "支持拖拽文件 · 拖动上边缘调整输入框大小",
-  "chat.title": "会话",
+  "chat.title": "Workflow",
+  "chat.assistant_title": "Assistant",
   "coding_assistant.title": "Coding Assistant",
   "checks.pending": "等待中",
   "common.active": "活跃",

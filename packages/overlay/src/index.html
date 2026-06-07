@@ -175,47 +175,49 @@
       <div class="workspace-main" id="workspaceMain">
       <div class="conversation-workspace" id="conversationWorkspace">
 
-      <!-- Chat Window (always visible) -->
-      <section class="chat" id="chatSection">
-        <div
-          class="task-switch-progress"
-          id="taskSwitchProgress"
-          aria-label="Loading task"
-          aria-busy="false"
-          data-active="false"
-        ></div>
-        <header class="chat-header oc-surface-header">
-          <div class="chat-header-main oc-surface-header__main">
-            <span class="chat-title oc-surface-header__title" id="chatViewTitle" data-i18n="chat.title">Conversation</span>
-          </div>
-          <div class="chat-header-status" id="solidTaskStatusMount"></div>
-          <div class="chat-header-meta oc-surface-header__actions">
-            <span
-              class="chat-usage"
-              id="chatUsage"
-              data-i18n-title="chat.usage_tooltip"
-              data-i18n-aria-label="chat.usage_aria"
-            ></span>
-          </div>
-        </header>
-        <div class="chat-content-frame" id="chatContentFrame">
-          <div class="chat-message-pane" id="chatMessagePane">
-            <div class="conversation-body" id="conversationBody">
-              <div class="conversation-scroll-shell">
-                <div class="chat-goals-strip" id="chatGoalsStrip"></div>
-                <div class="chat-scroll session-content" id="chatScroll"></div>
-              </div>
-            </div>
-            <div id="solidConversationAgentRailMount" class="conversation-agent-rail-host"></div>
-          </div>
-        </div>
-        <div id="solidChatComposer"></div>
-      </section>
-
       <div class="center-workbench-resizer" id="centerWorkbenchResizer" role="separator" aria-orientation="vertical" aria-label="Resize center workbench" hidden></div>
       <section class="center-workbench" id="centerWorkbench" data-open="false">
         <header class="center-workbench-header" id="solidCenterWorkbenchTabs"></header>
         <div class="center-workbench-body">
+          <div class="center-workbench-view" id="centerWorkbenchWorkflow" data-workbench-view="workflow" data-active="true">
+            <div class="center-workbench-activity chat-workflow-activity">
+              <section class="chat" id="chatSection">
+                <div
+                  class="task-switch-progress"
+                  id="taskSwitchProgress"
+                  aria-label="Loading task"
+                  aria-busy="false"
+                  data-active="false"
+                ></div>
+                <header class="chat-header oc-surface-header">
+                  <div class="chat-header-main oc-surface-header__main">
+                    <span class="chat-title oc-surface-header__title" id="chatViewTitle" data-i18n="chat.title">Workflow</span>
+                  </div>
+                  <div class="chat-header-status" id="solidTaskStatusMount"></div>
+                  <div class="chat-header-meta oc-surface-header__actions">
+                    <span
+                      class="chat-usage"
+                      id="chatUsage"
+                      data-i18n-title="chat.usage_tooltip"
+                      data-i18n-aria-label="chat.usage_aria"
+                    ></span>
+                  </div>
+                </header>
+                <div class="chat-content-frame" id="chatContentFrame">
+                  <div class="chat-message-pane" id="chatMessagePane">
+                    <div class="conversation-body" id="conversationBody">
+                      <div class="conversation-scroll-shell">
+                        <div class="chat-goals-strip" id="chatGoalsStrip"></div>
+                        <div class="chat-scroll session-content" id="chatScroll"></div>
+                      </div>
+                    </div>
+                    <div id="solidConversationAgentRailMount" class="conversation-agent-rail-host"></div>
+                  </div>
+                </div>
+                <div id="solidChatComposer"></div>
+              </section>
+            </div>
+          </div>
           <div class="center-workbench-view" id="centerWorkbenchExplorer" data-workbench-view="explorer" data-active="false">
             <div id="solidFileExplorerMount" class="center-workbench-activity sidebar-explorer-panel"></div>
           </div>
