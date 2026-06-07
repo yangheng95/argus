@@ -124,6 +124,16 @@ function renderComponentInventoryFromReusePlan(items: readonly FrontendTemplateF
 }
 
 function renderQualityProjectContract(final: FrontendTemplateFinal): string {
+  if (final.frontend_project.role === "visual_baseline_input") {
+    return [
+      "## Visual HTML Skeleton Workflow",
+      "- Current workflow deliverable: a source-derived static HTML/CSS design skeleton whose visual fidelity is verified against the original reference artifacts.",
+      "- This skeleton is the workflow target for Requirements, Architect, Build, and Integrity in this round; they should improve and verify HTML/CSS visual parity, not convert it into a complete application source tree in the same workflow unless the active task explicitly says to combine both rounds.",
+      "- Later workflow deliverable: transcribe the accepted HTML skeleton plus source IR/content/style evidence into maintainable project source with semantic components, data modules, scoped styles, asset ownership, and runtime verification.",
+      "- Conflict rule: `web-clone-source/source-ir/*`, `web-clone-source/source-skeleton/*`, source assets, and `web-clone-source/reference.png` remain authoritative if the HTML skeleton conflicts with source evidence or visible pixels.",
+      "- The HTML skeleton is not an implementation target, not the acceptance app root, and not an independent design source.",
+    ].join("\n")
+  }
   const lines = [
     "## Maintainable Target Project",
     "- The frontend-design high-fidelity skeleton project is source evidence, not the implementation target.",
@@ -399,10 +409,10 @@ export const FrontendTemplateFinalSchema = z.object({
   final_acceptance_mode: z
     .enum(["visual_baseline_allowed", "maintainable_replacement_required"])
     .describe(
-      "Explicit acceptance mode. Use maintainable_replacement_required whenever the user asks for maintainability, real implementation, component reuse, or replacement of mechanical output; otherwise use visual_baseline_allowed. This field selects implementation expectations; it is not a standalone pass/fail mechanism.",
+      "Explicit acceptance mode. For webpage replica first workflows, use visual_baseline_allowed with frontend_project.role=visual_baseline_input; reserve maintainable_replacement_required for a later or explicitly combined skeleton-to-project transcription workflow. This field selects implementation expectations; it is not a standalone pass/fail mechanism.",
     ),
   frontend_template: OptionalMarkdownField(
-    "Authoritative frontend template for the frontend_design-delivered target project and downstream fine-tuning: routes, layout slots, source-package entrypoints, semantic containers, states, and acceptance anchors.",
+    "Authoritative frontend template for the frontend_design-delivered visual HTML skeleton: static route/file, layout slots, source-package entrypoints, visible regions, states, viewport matrix, and acceptance anchors.",
   ),
   frontend_template_sections: z
     .array(CompactTemplateItemSchema)
@@ -431,7 +441,7 @@ export const FrontendTemplateFinalSchema = z.object({
       "Optional source-region evolution plan. Use it only when a specific raw/generated skeleton region should be replaced, deleted, or deferred during in-place refinement. It is diagnostic/planning evidence, not a schema requirement and not a requirement to delete the whole skeleton.",
     ),
   quality_project_contract: OptionalMarkdownField(
-      "The high-quality project contract for the target acceptance project frontend_design is delivering before Build fine-tuning. It defines the maintainable target app shape, source ownership, semantic component tree, data modules, styling system, library use, runtime entrypoints, verification commands, measured webpage_evaluate visual evidence, and zero-finding web_clone_source_audit evidence needed before claiming final maintainability. The skeleton project is source evidence only.",
+      "The skeleton-to-project transcription contract for the later workflow. It explains how the accepted visual HTML skeleton plus source IR/content/style evidence becomes maintainable project source with semantic components, data modules, styling, asset ownership, runtime entrypoints, and verification evidence. The current skeleton is not the implementation target or acceptance app root.",
   ),
   quality_project_items: z
     .array(CompactTemplateItemSchema)
@@ -464,8 +474,7 @@ export const FrontendTemplateFinalSchema = z.object({
       notes: [],
     })
     .describe(
-      "Concrete frontend-design project output. For webpage replicas, this should identify the target acceptance project root when role=implementation_target, " +
-      "its role, entrypoints, source package, generation tool, completed replacements, unfinished source debt, and any materialization defects. frontend-design-skeleton is source_baseline_input evidence only and must never be the implementation_target. Build starts from the target project for integration and precision fixes.",
+      "Concrete frontend-design project output. For webpage replica first workflows, identify the visual HTML skeleton root, role=visual_baseline_input, entrypoints, source package, generation tool, completed visual-region restorations, unfinished visual debt, and any materialization defects. frontend-design-skeleton is captured source evidence and must never be the implementation_target.",
     ),
   visual_consistency_contract: OptionalMarkdownField(
     "Binding visual-fidelity frontend template section: viewport inventory, pixel hierarchy, colors, typography, spacing, states, responsive rules, comparison criteria, and reference artifacts.",
@@ -628,8 +637,13 @@ function renderFrontendProjectReport(
   if (maintainableSourceBaseline) {
     lines.push("- maintainable_status: incomplete_source_baseline. This is explicit unfinished frontend_design source debt, not a final maintainable implementation target.")
   }
+  if (project.role === "visual_baseline_input") {
+    lines.push("- visual_baseline_rule: this project is a derived static HTML/CSS visual baseline input, not an implementation target and not the acceptance app root.")
+    lines.push("- visual_authority: original `web-clone-source/source-ir/*`, `web-clone-source/source-skeleton/*`, and `web-clone-source/reference.png` remain authoritative if this skeleton conflicts with source evidence or visible pixels.")
+    lines.push("- transcription_rule: future maintainable project work must transcribe this skeleton into semantic components/data/style modules while preserving the original source IR, assets, and reference screenshot as verification evidence.")
+  }
   if (isFrontendDesignSkeleton) {
-    lines.push("- adoption_rule: frontend-design-skeleton is source_baseline_input evidence only. frontend_design must extract from it into the target acceptance project; if this remains the named project in maintainable mode, the named source debt is unfinished frontend_design work.")
+    lines.push("- adoption_rule: frontend-design-skeleton is captured source evidence only. frontend_design must restore a separate static HTML/CSS visual skeleton from it; if this remains the named project, the named visual/source debt is unfinished frontend_design work.")
   }
   if (project.entrypoints.length > 0) {
     lines.push("- entrypoints:")
