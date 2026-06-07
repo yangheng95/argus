@@ -5,6 +5,16 @@ import path from "node:path"
 import { runVisualDiff, summarizeVisualReport, type VisualDiffReport } from "../../src/runtime/visual-page"
 import { serveRenderedDir } from "./static-render-server"
 
+const VISUAL_RENDER_PREREQUISITE_CHECK_IDS = new Set([
+  "visual-root-index",
+  "reference-png",
+  "visual-root-is-design-output",
+  "not-build-output-root",
+  "editable-html-size",
+  "not-framework-compiled-entry",
+  "not-reference-image-only",
+])
+
 export interface HtmlSkeletonWorkflowCheckInput {
   taskID?: string
   taskDir?: string
@@ -100,7 +110,10 @@ export async function runHtmlSkeletonWorkflowCheck(input: HtmlSkeletonWorkflowCh
 
   let visualDiff: VisualDiffReport | undefined
   const artifactChecksPassed = checks.every((check) => check.passed)
-  if (!input.artifactsOnly && artifactChecksPassed) {
+  const visualRenderPrerequisitesPassed = checks
+    .filter((check) => VISUAL_RENDER_PREREQUISITE_CHECK_IDS.has(check.id))
+    .every((check) => check.passed)
+  if (!input.artifactsOnly && visualRenderPrerequisitesPassed) {
     const server = await serveRenderedDir(resolved.visualRoot)
     try {
       visualDiff = await runVisualDiff({
@@ -565,7 +578,7 @@ async function listLogFiles(root: string): Promise<string[]> {
       const full = path.join(dir, entry.name)
       if (entry.isDirectory()) {
         if (out.length < 80) await walk(full)
-      } else if (/\.(log|jsonl|md|txt)$/i.test(entry.name)) {
+      } else if (/\.(json|jsonl|log|md|txt)$/i.test(entry.name)) {
         out.push(full)
       }
     }

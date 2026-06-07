@@ -403,7 +403,64 @@ test("submit_frontend_template renders visual HTML skeleton as non-implementatio
   expect(report).toContain("Current workflow deliverable")
   expect(report).toContain("Requirements, Architect, Build, and Integrity")
   expect(report).toContain("transcribe the accepted HTML skeleton")
+  expect(report).toContain("visual_quality_status: evidence_missing")
   expect(report).not.toContain("maintainable_status: incomplete_source_baseline")
+})
+
+test("visual baseline report marks below-threshold measured skeleton as incomplete fidelity", async () => {
+  const kit = createFrontendTemplateOutputTools()
+  const submit = kit.tools.submit_frontend_template as any
+
+  await submit.execute({
+    design_system: "TradingView source-derived visual baseline",
+    tech_stack: ["static HTML", "CSS", "Playwright visual diff"],
+    final_acceptance_mode: "visual_baseline_allowed",
+    frontend_template: "Restore the source-derived page into visual-html-skeleton/index.html.",
+    fillable_modules: "All visible regions are represented, but map and icon fidelity still need repair.",
+    component_inventory: "Static visual skeleton regions.",
+    component_reuse_plan: [
+      {
+        family_id: "comp-static-skeleton",
+        name: "Static visual skeleton",
+        observed_surface: "Full captured page first viewport",
+        source_refs: ["web-clone-source/reference.png"],
+        implementation_strategy: "extracted_baseline_defer",
+        reuse_source: "visual-html-skeleton/index.html",
+        mature_library_candidates: [],
+        props_states: "static representative visual states only",
+        replacement_boundary: "visual skeleton root",
+        parity_guard: "webpage_evaluate against reference.png",
+        custom_fallback_reason: "not applicable",
+      },
+    ],
+    baseline_replacement_plan: [],
+    material_inventory: "web-clone-source source IR, source skeleton CSS, assets, and reference pixels.",
+    visual_consistency_contract: "Current score: 81/100 (SSIM 0.8263, pixel diff 10.69%) against reference.png.",
+    ui_data_contract: "Static visible source content only.",
+    frontend_project: {
+      status: "created",
+      role: "visual_baseline_input",
+      project_root: "visual-html-skeleton",
+      source_package: "web-clone-source",
+      entrypoints: ["visual-html-skeleton/index.html", "visual-html-skeleton/styles/tokens.css"],
+      generation_tool: "source-ir-static-html-skeleton",
+      notes: [
+        "Visual score below 95% target (81 vs 95 required).",
+        "Remaining visual debt: canvas map, table heat colors, simplified legend SVG, logo path, and social icons.",
+        "The skeleton is a usable visual baseline for downstream transcription work.",
+      ],
+    },
+    template_iteration_notes: ["checked visual score and remaining debt"],
+    completeness_review: "Visual evidence is below the requested threshold.",
+    reference_artifacts: ["web-clone-source/reference.png", "visual-html-skeleton/index.html"],
+    open_questions: [],
+  }, {})
+
+  const report = buildFrontendTemplateReport(kit.getCollector()).detail
+  expect(report).toContain("visual_quality_status: incomplete_visual_fidelity")
+  expect(report).toContain("Reported score 81/100 is below required 96/100")
+  expect(report).toContain("Remaining visual debt is present")
+  expect(report).toContain("must not be treated as ready for downstream transcription")
 })
 
 test("visual baseline workflow reports source baseline submissions as incomplete frontend_design work", async () => {
