@@ -1,7 +1,7 @@
 {
   "_meta": {
     "language": "zh-CN",
-    "panel_revision": "06289302186933db"
+    "panel_revision": "28c85db7029bb3da"
   },
   "about.author_name": "杨恒",
   "about.go_version": "Go 版本",
@@ -655,8 +655,6 @@
   "explorer.empty": "当前目录没有文件",
   "explorer.load_failed": "无法加载文件",
   "explorer.no_matches": "没有匹配的文件",
-  "right_panel.close": "收起 Inspector",
-  "right_panel.open": "展开 Inspector",
   "sections.title": "Inspector",
   "settings.language": "语言",
   "settings.language.en_us": "English",

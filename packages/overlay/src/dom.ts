@@ -25,7 +25,6 @@ export interface DomRefs {
   sidebar: HTMLElement | null;
   leftPaneResizer: HTMLElement | null;
   workspaceMain: HTMLElement | null;
-  rightPaneResizer: HTMLElement | null;
   sections: HTMLElement | null;
 
  // Engine / model panels
@@ -162,7 +161,6 @@ export function getDomRefs(): DomRefs {
     sidebar: $<HTMLElement>("#sidebar"),
     leftPaneResizer: $<HTMLElement>("#leftPaneResizer"),
     workspaceMain: $<HTMLElement>("#workspaceMain"),
-    rightPaneResizer: $<HTMLElement>("#rightPaneResizer"),
     sections: $<HTMLElement>("#sections"),
 
  // Engine / model panels

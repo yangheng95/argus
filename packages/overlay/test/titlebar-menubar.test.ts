@@ -564,9 +564,13 @@ test(
       expect(intro.brandWordmark).toBe("OpenCorvus")
       expect(intro.brandLabel).toBe("Workspace")
       expect(intro.rightActivities).toEqual([
-        { activity: "assistant", active: "true" },
-        { activity: "browser", active: "false" },
+        { activity: "workflow", active: "true" },
         { activity: "inspector", active: "false" },
+        { activity: "notifications", active: "false" },
+        { activity: "explorer", active: "false" },
+        { activity: "diff", active: "false" },
+        { activity: "browser", active: "false" },
+        { activity: "assistant", active: "false" },
       ])
       await page.close()
     } finally {
@@ -802,16 +806,17 @@ test(
 
       await page.goto(`http://127.0.0.1:${server.port}/ui/index.html`, { waitUntil: "load" })
       await page.waitForSelector("#leftPaneResizer", { visible: true })
-      await page.waitForSelector("#rightPaneResizer", { visible: true })
+      await page.waitForSelector("#solidRightActivityToolbar", { visible: true })
 
       const initial = await page.evaluate(() => {
         const panelBody = document.querySelector<HTMLElement>("#panelBody")!
         const workspaceMain = document.querySelector<HTMLElement>("#workspaceMain")!
+        const workspace = workspaceMain.getBoundingClientRect()
         const sidebar = document.querySelector<HTMLElement>(".sidebar")!.getBoundingClientRect()
+        const workbench = document.querySelector<HTMLElement>("#centerWorkbench")!.getBoundingClientRect()
         const chat = document.querySelector<HTMLElement>(".chat")!.getBoundingClientRect()
-        const sections = document.querySelector<HTMLElement>(".sections")!.getBoundingClientRect()
+        const toolbar = document.querySelector<HTMLElement>("#solidRightActivityToolbar")!.getBoundingClientRect()
         const left = document.querySelector<HTMLElement>("#leftPaneResizer")!.getBoundingClientRect()
-        const right = document.querySelector<HTMLElement>("#rightPaneResizer")!.getBoundingClientRect()
         const panelStyle = getComputedStyle(panelBody)
         const workspaceStyle = getComputedStyle(workspaceMain)
         return {
@@ -821,14 +826,14 @@ test(
           panelPaddingBottom: panelStyle.paddingBottom,
           panelPaddingLeft: panelStyle.paddingLeft,
           workspaceGap: workspaceStyle.gap,
-          leftDivider: chat.left - sidebar.right,
-          rightDivider: sections.left - chat.right,
+          leftDivider: workspace.left - sidebar.right,
+          rightDivider: toolbar.left - workbench.right,
+          workbenchStartsAtWorkspace: Math.abs(workbench.left - workspace.left) <= 1,
           leftHandleWidth: left.width,
-          rightHandleWidth: right.width,
+          rightToolbarWidth: toolbar.width,
           leftCenterX: left.left + left.width / 2,
           leftCenterY: left.top + left.height / 2,
-          rightCenterX: right.left + right.width / 2,
-          rightCenterY: right.top + right.height / 2,
+          rightPaneResizerExists: !!document.querySelector("#rightPaneResizer"),
         }
       })
       expect(initial.panelGap).toBe("0px")
@@ -840,8 +845,10 @@ test(
       expect(initial.leftDivider).toBeLessThanOrEqual(2)
       expect(initial.rightDivider).toBeLessThanOrEqual(2)
       expect(Math.abs(initial.leftDivider - initial.rightDivider)).toBeLessThanOrEqual(1)
+      expect(initial.workbenchStartsAtWorkspace).toBe(true)
       expect(initial.leftHandleWidth).toBeLessThanOrEqual(2)
-      expect(initial.rightHandleWidth).toBeLessThanOrEqual(2)
+      expect(initial.rightToolbarWidth).toBeGreaterThan(32)
+      expect(initial.rightPaneResizerExists).toBe(false)
 
       const controlsWithMargins = await page.evaluate(() => {
         const selectors = [
@@ -1038,44 +1045,37 @@ test(
       })
       expect(nonPrimaryControlsWithBackgrounds).toEqual([])
 
-      const rightDrag = await page.evaluate(() => {
-        const right = document.querySelector<HTMLElement>("#rightPaneResizer")!.getBoundingClientRect()
-        const workspace = document.querySelector<HTMLElement>("#workspaceMain")!.getBoundingClientRect()
-        return {
-          centerX: right.left + right.width / 2,
-          centerY: right.top + right.height / 2,
-          targetX: workspace.right - 620,
-        }
-      })
-      await page.mouse.move(rightDrag.centerX, rightDrag.centerY)
-      await page.mouse.down()
-      await page.mouse.move(rightDrag.targetX, rightDrag.centerY, { steps: 10 })
-      await page.mouse.up()
+      await page.click('[data-ui="side-activity-button"][data-side="right"][data-activity="inspector"]')
 
-      const afterRightDrag = await page.evaluate(() => {
+      const afterInspectorOpen = await page.evaluate(() => {
         const sidebar = document.querySelector<HTMLElement>(".sidebar")!.getBoundingClientRect()
-        const chat = document.querySelector<HTMLElement>(".chat")!.getBoundingClientRect()
+        const workspace = document.querySelector<HTMLElement>("#workspaceMain")!.getBoundingClientRect()
+        const workbench = document.querySelector<HTMLElement>("#centerWorkbench")!.getBoundingClientRect()
         const sections = document.querySelector<HTMLElement>(".sections")!.getBoundingClientRect()
         const left = document.querySelector<HTMLElement>("#leftPaneResizer")!.getBoundingClientRect()
-        const right = document.querySelector<HTMLElement>("#rightPaneResizer")!.getBoundingClientRect()
+        const toolbar = document.querySelector<HTMLElement>("#solidRightActivityToolbar")!.getBoundingClientRect()
         return {
           sidebar: sidebar.width,
-          chat: chat.width,
           sections: sections.width,
-          leftDivider: chat.left - sidebar.right,
-          rightDivider: sections.left - chat.right,
+          leftDivider: workspace.left - sidebar.right,
+          rightDivider: toolbar.left - workbench.right,
+          workbenchStartsAtWorkspace: Math.abs(workbench.left - workspace.left) <= 1,
+          centerInspectorActive: document.querySelector<HTMLElement>("#centerWorkbenchInspector")?.dataset.active || "",
+          inspectorButtonActive: document.querySelector<HTMLElement>('[data-ui="side-activity-button"][data-side="right"][data-activity="inspector"]')?.dataset.active || "",
           leftHandleWidth: left.width,
-          rightHandleWidth: right.width,
+          rightPaneResizerExists: !!document.querySelector("#rightPaneResizer"),
         }
       })
 
-      expect(afterRightDrag.sections).toBeGreaterThan(560)
-      expect(afterRightDrag.chat).toBeGreaterThan(300)
-      expect(afterRightDrag.leftDivider).toBeLessThanOrEqual(2)
-      expect(afterRightDrag.rightDivider).toBeLessThanOrEqual(2)
-      expect(Math.abs(afterRightDrag.leftDivider - afterRightDrag.rightDivider)).toBeLessThanOrEqual(1)
-      expect(afterRightDrag.leftHandleWidth).toBeLessThanOrEqual(2)
-      expect(afterRightDrag.rightHandleWidth).toBeLessThanOrEqual(2)
+      expect(afterInspectorOpen.sections).toBeGreaterThan(900)
+      expect(afterInspectorOpen.leftDivider).toBeLessThanOrEqual(2)
+      expect(afterInspectorOpen.rightDivider).toBeLessThanOrEqual(2)
+      expect(Math.abs(afterInspectorOpen.leftDivider - afterInspectorOpen.rightDivider)).toBeLessThanOrEqual(1)
+      expect(afterInspectorOpen.workbenchStartsAtWorkspace).toBe(true)
+      expect(afterInspectorOpen.centerInspectorActive).toBe("true")
+      expect(afterInspectorOpen.inspectorButtonActive).toBe("true")
+      expect(afterInspectorOpen.leftHandleWidth).toBeLessThanOrEqual(2)
+      expect(afterInspectorOpen.rightPaneResizerExists).toBe(false)
 
       await page.evaluate(() => {
         localStorage.removeItem("oc_sidebar_width")
@@ -1099,17 +1099,18 @@ test(
 
       const afterLeftDrag = await page.evaluate(() => {
         const sidebar = document.querySelector<HTMLElement>(".sidebar")!.getBoundingClientRect()
+        const workspace = document.querySelector<HTMLElement>("#workspaceMain")!.getBoundingClientRect()
+        const workbench = document.querySelector<HTMLElement>("#centerWorkbench")!.getBoundingClientRect()
         const chat = document.querySelector<HTMLElement>(".chat")!.getBoundingClientRect()
-        const sections = document.querySelector<HTMLElement>(".sections")!.getBoundingClientRect()
         const left = document.querySelector<HTMLElement>("#leftPaneResizer")!.getBoundingClientRect()
-        const right = document.querySelector<HTMLElement>("#rightPaneResizer")!.getBoundingClientRect()
+        const toolbar = document.querySelector<HTMLElement>("#solidRightActivityToolbar")!.getBoundingClientRect()
         return {
           sidebar: sidebar.width,
           chat: chat.width,
-          leftDivider: chat.left - sidebar.right,
-          rightDivider: sections.left - chat.right,
+          leftDivider: workspace.left - sidebar.right,
+          rightDivider: toolbar.left - workbench.right,
           leftHandleWidth: left.width,
-          rightHandleWidth: right.width,
+          rightPaneResizerExists: !!document.querySelector("#rightPaneResizer"),
         }
       })
       expect(afterLeftDrag.sidebar).toBeGreaterThan(600)
@@ -1118,7 +1119,7 @@ test(
       expect(afterLeftDrag.rightDivider).toBeLessThanOrEqual(2)
       expect(Math.abs(afterLeftDrag.leftDivider - afterLeftDrag.rightDivider)).toBeLessThanOrEqual(1)
       expect(afterLeftDrag.leftHandleWidth).toBeLessThanOrEqual(2)
-      expect(afterLeftDrag.rightHandleWidth).toBeLessThanOrEqual(2)
+      expect(afterLeftDrag.rightPaneResizerExists).toBe(false)
       await page.close()
     } finally {
       await browser.close().catch(() => undefined)

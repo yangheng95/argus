@@ -1,7 +1,7 @@
 {
   "_meta": {
     "language": "en-US",
-    "panel_revision": "06289302186933db"
+    "panel_revision": "28c85db7029bb3da"
   },
   "about.author_name": "Yang, Heng",
   "about.go_version": "Go Version",
@@ -655,8 +655,6 @@
   "explorer.empty": "No files in this directory",
   "explorer.load_failed": "Unable to load files",
   "explorer.no_matches": "No matching files",
-  "right_panel.close": "Collapse inspector",
-  "right_panel.open": "Open inspector",
   "sections.title": "Inspector",
   "settings.language": "Language",
   "settings.language.en_us": "English",

@@ -49,12 +49,12 @@ test("NotificationCenter separates toast visibility from task-grouped panel hist
   expect(NOTIFY).toContain("visibleNotificationItems");
 });
 
-test("main mounts toast and right-side notification center from the same component", () => {
+test("main mounts toast and workbench notification center from the same component", () => {
   expect(MAIN).toContain('<NotificationCenter surface="toast" />');
   expect(MAIN).toContain('document.getElementById("solidNotificationCenterMount")');
   expect(MAIN).toContain('<NotificationCenter surface="panel" />');
   expect(MAIN).toContain('id: "notifications", icon: "log-lines", labelKey: "notify.center_label"');
-  expect(MAIN).toContain('type RightPanelActivity = "inspector" | "notifications"');
+  expect(MAIN).toContain('notifications: document.getElementById("centerWorkbenchNotifications")');
 });
 
 test("foregrounding the overlay recomputes the notification projection", () => {

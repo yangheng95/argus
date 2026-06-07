@@ -18,7 +18,7 @@ function send(value: unknown, init?: ResponseInit) {
   });
 }
 
-test("panel header controls collapse side panes to message-adjacent rails", async () => {
+test("panel header controls keep left collapse and right toolbar workbench layout", async () => {
   const codingCliOpenBodies: Record<string, unknown>[] = [];
   const terminalOpenBodies: Record<string, unknown>[] = [];
   const server = Bun.serve({
@@ -90,7 +90,7 @@ test("panel header controls collapse side panes to message-adjacent rails", asyn
       localStorage.setItem("oc_right_panel_collapsed", "false");
     }, server.port);
     await page.goto(`http://127.0.0.1:${server.port}/ui/index.html`, { waitUntil: "domcontentloaded" });
-    await page.waitForSelector('[data-ui="right-panel-header-collapse-toggle"]');
+    await page.waitForSelector("#solidRightActivityToolbar");
     expect(await page.$("#titlebar .workspace-layout-controls")).toBeNull();
     expect(await page.$(".workspace-command-dock .workspace-layout-controls")).not.toBeNull();
     expect(await page.$('.workspace-command-dock [data-ui="workspace-terminal-open"]')).not.toBeNull();
@@ -109,7 +109,7 @@ test("panel header controls collapse side panes to message-adjacent rails", asyn
     expect(await page.$('[data-ui="sidebar-header-collapse-toggle"]')).not.toBeNull();
     expect(await page.$("#solidLeftActivityToolbar")).toBeNull();
     expect(await page.$("#solidLeftActivityToolbar")).toBeNull();
-    expect(await page.$('#solidRightActivityToolbar [data-ui="right-panel-header-collapse-toggle"]')).not.toBeNull();
+    expect(await page.$('#solidRightActivityToolbar [data-ui="right-panel-header-collapse-toggle"]')).toBeNull();
     expect(await page.$(".workspace-command-dock .workspace-editor-launchers")).not.toBeNull();
     expect(await page.$('.workspace-command-dock [data-ui="workspace-editor-open-default"]')).not.toBeNull();
     expect(await page.$('.workspace-command-dock [data-ui="workspace-editor-menu"]')).not.toBeNull();
@@ -274,7 +274,7 @@ test("panel header controls collapse side panes to message-adjacent rails", asyn
     await page.keyboard.press("Escape");
 
     const toolbarPlacement = await page.evaluate(() => {
-      const rightButton = document.querySelector<HTMLElement>('[data-ui="right-panel-header-collapse-toggle"]')!;
+      const rightButton = document.querySelector<HTMLElement>('[data-ui="side-activity-button"][data-side="right"][data-activity="inspector"]')!;
       const right = rightButton.getBoundingClientRect();
       return {
         rightInsideActivityToolbar: Boolean(rightButton.closest("#solidRightActivityToolbar")),
@@ -286,32 +286,10 @@ test("panel header controls collapse side panes to message-adjacent rails", asyn
     expect(toolbarPlacement.rightWidth).toBeLessThanOrEqual(40);
     expect(toolbarPlacement.rightHeight).toBeLessThanOrEqual(40);
 
-    const beforeCollapse = await page.evaluate(() => {
-      const measure = (selector: string) => {
-        const node = document.querySelector<HTMLElement>(selector);
-        if (!node) throw new Error(`Missing ${selector}`);
-        const style = getComputedStyle(node);
-        const rect = node.getBoundingClientRect();
-        return {
-          hidden: node.hidden,
-          display: style.display,
-          width: rect.width,
-          height: rect.height,
-          disabled: node.dataset.disabled || "",
-        };
-      };
-      return {
-        sidebar: measure("#sidebar"),
-        leftResizer: measure("#leftPaneResizer"),
-        chat: measure("#chatSection"),
-        sections: measure("#sections"),
-        rightResizer: measure("#rightPaneResizer"),
-      };
-    });
+    expect(await page.$("#rightPaneResizer")).toBeNull();
+    await page.click('[data-ui="side-activity-button"][data-side="right"][data-activity="inspector"]');
 
-    await page.click('[data-ui="right-panel-header-collapse-toggle"]');
-
-    const collapsed = await page.evaluate(() => {
+    const inspectorWorkbench = await page.evaluate(() => {
       const measure = (selector: string) => {
         const node = document.querySelector<HTMLElement>(selector);
         if (!node) throw new Error(`Missing ${selector}`);
@@ -326,13 +304,16 @@ test("panel header controls collapse side panes to message-adjacent rails", asyn
         };
       };
       const exists = (selector: string) => document.querySelector(selector) != null;
+      const workspace = document.querySelector<HTMLElement>("#conversationWorkspace")!.getBoundingClientRect();
+      const workbench = document.querySelector<HTMLElement>("#centerWorkbench")!.getBoundingClientRect();
       return {
         sidebar: measure("#sidebar"),
         leftResizer: measure("#leftPaneResizer"),
         chat: measure("#chatSection"),
         sections: measure("#sections"),
-        rightResizer: measure("#rightPaneResizer"),
-        rightToggle: measure('[data-ui="right-panel-header-collapse-toggle"]'),
+        centerInspectorActive: document.querySelector<HTMLElement>("#centerWorkbenchInspector")?.dataset.active || "",
+        inspectorButtonActive: document.querySelector<HTMLElement>('[data-ui="side-activity-button"][data-side="right"][data-activity="inspector"]')?.dataset.active || "",
+        workbenchStartsAtWorkspace: Math.abs(workbench.left - workspace.left) <= 1,
         sidebarContentVisible: getComputedStyle(document.querySelector<HTMLElement>("#sidebar .side-panel-content")!).display !== "none",
         sectionsContentVisible: getComputedStyle(document.querySelector<HTMLElement>("#sections .side-panel-content")!).display !== "none",
         dockLeftControlExists: exists('.workspace-command-dock [data-ui="workspace-left-panel-toggle"]'),
@@ -340,60 +321,20 @@ test("panel header controls collapse side panes to message-adjacent rails", asyn
       };
     });
 
-    expect(collapsed.sidebar.hidden).toBe(false);
-    expect(collapsed.sidebar.display).toBe("flex");
-    expect(Math.abs(collapsed.sidebar.width - beforeCollapse.sidebar.width)).toBeLessThanOrEqual(1);
-    expect(Math.abs(collapsed.sidebar.height - beforeCollapse.sidebar.height)).toBeLessThanOrEqual(1);
-    expect(collapsed.leftResizer.hidden).toBe(false);
-    expect(collapsed.leftResizer.disabled).toBe("false");
-    expect(collapsed.chat.width).toBeGreaterThan(beforeCollapse.chat.width);
-    expect(Math.abs(collapsed.chat.height - beforeCollapse.chat.height)).toBeLessThanOrEqual(1);
-    expect(collapsed.sections.hidden).toBe(false);
-    expect(collapsed.sections.display).toBe("flex");
-    expect(collapsed.sections.width).toBeLessThanOrEqual(48);
-    expect(collapsed.sections.width).toBeLessThan(beforeCollapse.sections.width / 2);
-    expect(Math.abs(collapsed.sections.height - beforeCollapse.sections.height)).toBeLessThanOrEqual(1);
-    expect(collapsed.rightResizer.hidden).toBe(true);
-    expect(collapsed.rightResizer.display).toBe("none");
-    expect(collapsed.rightResizer.disabled).toBe("true");
-    expect(collapsed.rightResizer.width).toBe(0);
-    expect(collapsed.rightToggle.hidden).toBe(false);
-    expect(collapsed.rightToggle.display).not.toBe("none");
-    expect(collapsed.sidebarContentVisible).toBe(true);
-    expect(collapsed.sectionsContentVisible).toBe(false);
-    expect(collapsed.dockLeftControlExists).toBe(false);
-    expect(collapsed.dockRightControlExists).toBe(false);
-
-    await page.click('[data-ui="right-panel-header-collapse-toggle"]');
-
-    const expanded = await page.evaluate(() => {
-      const measure = (selector: string) => {
-        const node = document.querySelector<HTMLElement>(selector);
-        if (!node) throw new Error(`Missing ${selector}`);
-        const style = getComputedStyle(node);
-        return {
-          hidden: node.hidden,
-          display: style.display,
-          width: node.getBoundingClientRect().width,
-          disabled: node.dataset.disabled || "",
-        };
-      };
-      return {
-        sidebar: measure("#sidebar"),
-        leftResizer: measure("#leftPaneResizer"),
-        sections: measure("#sections"),
-        rightResizer: measure("#rightPaneResizer"),
-      };
-    });
-
-    expect(expanded.sidebar.hidden).toBe(false);
-    expect(Math.abs(expanded.sidebar.width - beforeCollapse.sidebar.width)).toBeLessThanOrEqual(1);
-    expect(expanded.leftResizer.hidden).toBe(false);
-    expect(expanded.leftResizer.disabled).toBe("false");
-    expect(expanded.sections.hidden).toBe(false);
-    expect(Math.abs(expanded.sections.width - beforeCollapse.sections.width)).toBeLessThanOrEqual(1);
-    expect(expanded.rightResizer.hidden).toBe(false);
-    expect(expanded.rightResizer.disabled).toBe("false");
+    expect(inspectorWorkbench.sidebar.hidden).toBe(false);
+    expect(inspectorWorkbench.sidebar.display).toBe("flex");
+    expect(inspectorWorkbench.leftResizer.hidden).toBe(false);
+    expect(inspectorWorkbench.leftResizer.disabled).toBe("false");
+    expect(inspectorWorkbench.sections.hidden).toBe(false);
+    expect(inspectorWorkbench.sections.display).toBe("flex");
+    expect(inspectorWorkbench.sections.width).toBeGreaterThan(600);
+    expect(inspectorWorkbench.centerInspectorActive).toBe("true");
+    expect(inspectorWorkbench.inspectorButtonActive).toBe("true");
+    expect(inspectorWorkbench.workbenchStartsAtWorkspace).toBe(true);
+    expect(inspectorWorkbench.sidebarContentVisible).toBe(true);
+    expect(inspectorWorkbench.sectionsContentVisible).toBe(true);
+    expect(inspectorWorkbench.dockLeftControlExists).toBe(false);
+    expect(inspectorWorkbench.dockRightControlExists).toBe(false);
   } finally {
     await browser.close();
     server.stop(true);
