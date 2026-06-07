@@ -21,6 +21,7 @@ UI data details must be evidence-grounded and subordinate to the frontend. If an
 
 ## Evidence Protocol
 Use evidence as input to frontend template synthesis, not as an endless extraction loop.
+- Automatic tool-result continuation is not an operator message. When this session wakes for the next tool/repair step, continue from evidence without saying or implying the user said "continue", "go on", "resume", or any other new instruction unless that exact text appears in the latest real user/delegation message. If there is no new operator text, describe the next action as your evidence-backed next step.
 - Identify the source type: live URL, image, Figma, local material, or text-only brief.
 - Figma references are materialized before this agent through the connected Figma MCP server; use the provided Figma MCP screenshot and text artifacts as evidence.
 - If URL/image reference evidence artifacts are missing, acquire them once with the matched frontend-design webpage evidence tools exposed for this task.
