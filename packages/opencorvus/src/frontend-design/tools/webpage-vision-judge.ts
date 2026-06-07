@@ -69,8 +69,8 @@ function normalizeDifferenceShape(value: unknown): unknown {
   if (!value || typeof value !== "object" || Array.isArray(value)) return value
   const record = { ...(value as Record<string, unknown>) }
   record.severity = normalizeSeverity(record.severity)
-  record.observed ??= record.what_you_see ?? record.whatYouSee
-  record.expected ??= record.what_you_should_see ?? record.whatYouShouldSee
+  record.observed ??= record.see ?? record.what_you_see ?? record.whatYouSee
+  record.expected ??= record.should_see ?? record.shouldSee ?? record.what_you_should_see ?? record.whatYouShouldSee
   record.fix_hint ??= record.fix ?? record.fixHint
   return record
 }
