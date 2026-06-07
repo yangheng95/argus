@@ -156,6 +156,39 @@ describe("EngineRuntime goal-run convergence", () => {
     })
   })
 
+  test("notified terminal batch does not clear orchestrator stream-error blocker", async () => {
+    await using tmp = await tmpdir({ git: true })
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const runTaskLoop = spyOn(TaskLoop, "runTaskLoop").mockResolvedValue(undefined)
+        const taskID = `task_goal_stream_error_${Date.now()}`
+        const runID = `run_goal_stream_error_${Date.now()}`
+        const now = Date.now()
+        seedTaskRun(taskID, runID, now, {
+          status: "blocked",
+          blocking_reason: "orchestrator_stream_error",
+          error: "Error: session prompt loop finished",
+        })
+        seedGoalRun(taskID, runID, "grun_aborted_one", "aborted", now + 1)
+        seedGoalRun(taskID, runID, "grun_aborted_two", "aborted", now + 2)
+        seedGoalBatchNotification(taskID, runID, [
+          { id: "grun_aborted_one", status: "aborted" },
+          { id: "grun_aborted_two", status: "aborted" },
+        ], now + 3)
+
+        await EngineRuntime.syncRun(runID, hooks())
+        await new Promise((resolve) => setTimeout(resolve, 0))
+
+        const run = findRun(runID)
+        expect(run?.status).toBe("blocked")
+        expect(run?.blocking_reason).toBe("orchestrator_stream_error")
+        expect(run?.error).toBe("Error: session prompt loop finished")
+        expect(runTaskLoop).not.toHaveBeenCalled()
+      },
+    })
+  })
+
   test("terminal batch notification is recorded only after a wake starts", async () => {
     await using tmp = await tmpdir({ git: true })
     await Instance.provide({
@@ -356,6 +389,39 @@ function seedGoalRun(taskID: string, runID: string, goalRunID: string, status: s
           metadata: null,
           time_started: now,
           time_completed: status === "completed" || status === "failed" || status === "aborted" ? now : null,
+        },
+        time_created: now,
+        time_updated: now,
+      } as any)
+      .run(),
+  )
+}
+
+function seedGoalBatchNotification(
+  taskID: string,
+  runID: string,
+  goalRuns: Array<{ id: string; status: string }>,
+  now: number,
+) {
+  const fingerprint = goalRuns
+    .map((goalRun) => `${goalRun.id}:${goalRun.status}`)
+    .sort()
+    .join("|")
+  Database.use((db) =>
+    db.insert(EngineArtifactTable)
+      .values({
+        id: `art_goal_batch_notification_${now}`,
+        task_id: taskID,
+        run_id: runID,
+        goal_run_id: null,
+        kind: "goal_batch_notification" as EngineArtifactKind,
+        label: "goal-batch-wake-dispatched",
+        payload: {
+          task_id: taskID,
+          run_id: runID,
+          fingerprint,
+          goal_runs: goalRuns.sort((a, b) => a.id.localeCompare(b.id)),
+          time_dispatched: now,
         },
         time_created: now,
         time_updated: now,
