@@ -892,6 +892,7 @@ function buildWorkflowFields(
     projectTaskSteps(task.id, workflow),
     projectTaskStepsFromWorkflowEvents(task.id),
   )
+  const taskStatus = deriveTaskStatus(task)
 
   const workflowBoard = {
     id: workflow.id,
@@ -904,7 +905,7 @@ function buildWorkflowFields(
       skippable: step.skippable,
       status: (step.scope === "task"
         ? (projectedTaskSteps[step.id]?.status ?? "pending")
-        : deriveGoalScopeStatusFromProjection(projectedGoalSteps, step.id)) as "pending" | "running" | "completed" | "skipped" | "failed",
+        : deriveGoalScopeStatusFromProjection(projectedGoalSteps, step.id, taskStatus)) as "pending" | "running" | "completed" | "skipped" | "failed",
       ...(step.phases && step.phases.length > 0
         ? { phases: step.phases.map(p => ({ id: p.id, label: p.label, sessionKind: p.sessionKind })) }
         : {}),
@@ -1062,14 +1063,29 @@ function mergeTaskStepProjections(
 function deriveGoalScopeStatusFromProjection(
   projection: Record<string, { steps: Record<string, { status: string }> }>,
   stepID: string,
+  taskStatus: ReturnType<typeof deriveTaskStatus>,
 ): string {
   const entries = Object.values(projection)
-  if (entries.length === 0) return "pending"
+  const terminalCancelled = taskStatus === "cancelled"
+  const terminalFailed = taskStatus === "failed"
+  const terminalCompleted = taskStatus === "completed"
+  if (entries.length === 0) return terminalCancelled ? "skipped" : "pending"
   const statuses = entries.map((g) => g.steps[stepID]?.status ?? "pending")
-  if (statuses.some((s) => s === "running")) return "running"
+  if (statuses.some((s) => s === "running")) {
+    if (terminalCancelled) return "skipped"
+    if (terminalFailed) return "failed"
+    if (terminalCompleted) return "completed"
+    return "running"
+  }
   if (statuses.every((s) => s === "completed" || s === "skipped")) return "completed"
   if (statuses.some((s) => s === "failed")) return "failed"
-  if (statuses.some((s) => s === "completed")) return "running"
+  if (statuses.some((s) => s === "completed")) {
+    if (terminalCancelled) return "skipped"
+    if (terminalFailed) return "failed"
+    if (terminalCompleted) return "completed"
+    return "running"
+  }
+  if (terminalCancelled) return "skipped"
   return "pending"
 }
 

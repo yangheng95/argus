@@ -1,4 +1,4 @@
-import { Show, createMemo, onMount, onCleanup, createSignal, createEffect, on } from "solid-js";
+import { ErrorBoundary, Show, createMemo, onMount, onCleanup, createSignal, createEffect, on } from "solid-js";
 import { Virtualizer, type CustomContainerComponentProps, type VirtualizerHandle } from "virtua/solid";
 import { Card } from "./Card";
 import { ChatBubble } from "./ChatBubble";
@@ -66,18 +66,46 @@ function waitForAnimationFrame(): Promise<void> {
   return new Promise((resolve) => requestAnimationFrame(() => resolve()));
 }
 
+function renderErrorMessage(error: unknown): string {
+  if (error instanceof Error) return error.message || error.name
+  return String(error || "Unknown render error")
+}
+
+function ConversationCardRenderFailure(props: { id: string; error: unknown }) {
+  const message = () => clipText(renderErrorMessage(props.error), 180)
+  return (
+    <article
+      class="card conversation-card-render-failure"
+      data-card-id={props.id}
+      data-kind="render-error"
+      role="group"
+      aria-label="Card render failed"
+    >
+      <div class="card__head">
+        <div class="card__title">Card render failed</div>
+        <div class="card__meta">{clipText(props.id, 64)}</div>
+      </div>
+      <div class="card__body">
+        <div class="msg-tool-error">{message()}</div>
+      </div>
+    </article>
+  )
+}
+
 function VirtualizedConversationItem(props: {
   id: string;
 }) {
   return (
     <div class="conversation-virtual-item" data-virtual-card-id={props.id}>
-      <StoreCardNode id={props.id}>
-        {(node) =>
-          renderAsBubble(node)
-            ? <ChatBubble node={node} depth={0} />
-            : <Card node={node} depth={0} />
-        }
-      </StoreCardNode>
+      <ErrorBoundary fallback={(error) => <ConversationCardRenderFailure id={props.id} error={error} />}>
+        <StoreCardNode id={props.id}>
+          {(node) =>
+            renderAsBubble(node)
+              ? <ChatBubble node={node} depth={0} />
+              : <Card node={node} depth={0} />
+          }
+        </StoreCardNode>
+      </ErrorBoundary>
     </div>
   );
 }

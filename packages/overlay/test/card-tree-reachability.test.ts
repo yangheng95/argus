@@ -69,7 +69,8 @@ test("store-backed conversation renderers use explicit card dereference primitiv
 
   expect(primitive).toContain("export function storeCardNode")
   expect(primitive).toContain("cardTreeStore.cards[id]")
-  expect(conversation).toContain("<StoreCardNode id={id}>")
+  expect(conversation).toContain("<StoreCardNode id={props.id}>")
+  expect(conversation).toContain("<ErrorBoundary fallback={(error) => <ConversationCardRenderFailure id={props.id} error={error} />}>")
   expect(card).toContain("<StoreCardNode id={id} ownerID={props.node.id}>")
   expect(chatBubble).toContain("storeCardNode(props.childID, props.parentID)")
   expect(conversation).not.toContain("cardTreeStore.cards[id]!")

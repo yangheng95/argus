@@ -19,6 +19,13 @@ import langMD from "highlight.js/lib/languages/markdown"
 import langDiff from "highlight.js/lib/languages/diff"
 import { iconHtml } from "./icon-html"
 
+export const MARKDOWN_RENDER_CHAR_LIMIT = 120_000
+export const CODE_BLOCK_RENDER_CHAR_LIMIT = 120_000
+export const CODE_BLOCK_RENDER_LINE_LIMIT = 2_000
+export const MARKDOWN_DATA_IMAGE_CHAR_LIMIT = 120_000
+const RENDER_CLIP_NOTICE = "\n\n[Overlay display clipped; full content remains available in the task trace.]"
+const DATA_IMAGE_MARKDOWN_RE = /!\[([^\]]*)\]\((data:image\/(?:png|jpe?g|gif|webp|avif);base64,[^)]+)\)/gi
+
 // Register languages (selective import keeps bundle small)
 const LANGUAGES: [string, any][] = [
   ["typescript", langTS],
@@ -179,7 +186,9 @@ function safeMarkdownImageSrc(raw: string): string {
   if (!url) return ""
   const protocol = protocolForMarkdownUrl(url)
   if (!protocol || protocol === "http" || protocol === "https") return url
-  if (/^data:image\/(?:png|jpe?g|gif|webp|avif);base64,/i.test(url)) return url
+  if (/^data:image\/(?:png|jpe?g|gif|webp|avif);base64,/i.test(url)) {
+    return url.length <= MARKDOWN_DATA_IMAGE_CHAR_LIMIT ? url : ""
+  }
   return ""
 }
 
@@ -235,7 +244,14 @@ export function inlineMarkdown(text: string): string {
 
 /** Render full markdown (block + inline). */
 export function renderMarkdown(text: string): string {
-  return marked.parse(text) as string
+  const withoutOversizedImages = text.replace(DATA_IMAGE_MARKDOWN_RE, (_match, alt: string, url: string) => {
+    if (url.length <= MARKDOWN_DATA_IMAGE_CHAR_LIMIT) return _match
+    return alt || "[image omitted]"
+  })
+  const source = withoutOversizedImages.length > MARKDOWN_RENDER_CHAR_LIMIT
+    ? `${withoutOversizedImages.slice(0, MARKDOWN_RENDER_CHAR_LIMIT)}${RENDER_CLIP_NOTICE}`
+    : withoutOversizedImages
+  return marked.parse(source) as string
 }
 
 /** Alias for renderMarkdown — used by some callers. */
@@ -248,9 +264,20 @@ export function renderMarkdownBlock(text: string): string {
 export function renderCodeBlock(
   content: string,
   lang: string,
-  _maxLines = Infinity,
+  maxLines = CODE_BLOCK_RENDER_LINE_LIMIT,
 ): { html: string; truncated: boolean; totalLines: number } {
   const lines = content.split("\n")
-  const html = renderMarkdown("```" + lang + "\n" + content + "\n```")
-  return { html, truncated: false, totalLines: lines.length }
+  const requestedLineLimit = Number.isFinite(maxLines)
+    ? Math.max(0, Math.floor(maxLines))
+    : CODE_BLOCK_RENDER_LINE_LIMIT
+  const lineLimit = Math.min(requestedLineLimit, CODE_BLOCK_RENDER_LINE_LIMIT)
+  let clipped = lines.slice(0, lineLimit).join("\n")
+  let truncated = lines.length > lineLimit
+  if (clipped.length > CODE_BLOCK_RENDER_CHAR_LIMIT) {
+    clipped = clipped.slice(0, CODE_BLOCK_RENDER_CHAR_LIMIT)
+    truncated = true
+  }
+  const displayed = truncated ? `${clipped}${RENDER_CLIP_NOTICE}` : clipped
+  const html = renderMarkdown("```" + lang + "\n" + displayed + "\n```")
+  return { html, truncated, totalLines: lines.length }
 }
