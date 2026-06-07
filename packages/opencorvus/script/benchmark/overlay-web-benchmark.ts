@@ -329,10 +329,10 @@ const TASK_TITLE = flag("--title")?.trim()
   || DEFAULT_TASK_TITLE
 // ACCEPTANCE_VERIFY_CMD is assigned after temp.dir is initialized (see below).
 // Auto-registration rules when no explicit --acceptance-verify-cmd is supplied:
-//   1. --reference-images provided → visual-diff SSIM gate against that file
+//   1. --reference-images provided → task-scoped HTML skeleton workflow check
 //   2. no reference images (default chat-app brief, or external --request-file) → no auto-verify
-// Web-clone SSIM thresholds are explicit. The visual-diff CLI defaults are
-// looser generic smoke-test values and are not acceptable for replica scoring.
+// Web-clone SSIM thresholds are explicit. Generic project-root visual-diff
+// checks do not prove the frontend-design visual HTML skeleton workflow ran.
 let ACCEPTANCE_VERIFY_CMD = ""
 
 const AUTO_REPLY =
@@ -522,7 +522,7 @@ await fs.mkdir(path.dirname(reportFile), { recursive: true })
 
 // Now that temp.dir and reportFile are known, resolve ACCEPTANCE_VERIFY_CMD.
 {
-  const visualDiffScript = path.join(import.meta.dir, "visual-diff.ts")
+  const htmlSkeletonWorkflowCheckScript = path.join(import.meta.dir, "html-skeleton-workflow-check.ts")
   // The verify command is executed through `cmd /c <string>` on Windows or
   // `bash -lc <string>` on POSIX (see runLocalVerify). On Windows, cmd.exe
   // round-trips paths wrapped in `"…"` correctly — including paths with
@@ -546,15 +546,16 @@ await fs.mkdir(path.dirname(reportFile), { recursive: true })
     }
     return `'${s.replace(/'/g, "'\\''")}'`
   }
-  const buildVisualDiffCmd = (refs: readonly string[]) => {
-    const baseOut = path.join(path.dirname(reportFile), path.basename(reportFile, ".json") + ".visual-diff-out")
+  const buildHtmlSkeletonWorkflowCmd = (refs: readonly string[]) => {
+    const baseOut = path.join(path.dirname(reportFile), path.basename(reportFile, ".json") + ".html-skeleton-workflow-out")
+    const taskRoot = path.join(temp.dir, ".opencorvus", "runtime", "tasks")
     return refs.map((ref, index) => {
-      const visualOut = refs.length === 1 ? baseOut : path.join(baseOut, `reference-${index + 1}`)
+      const outDir = refs.length === 1 ? baseOut : path.join(baseOut, `reference-${index + 1}`)
       return [
-        `bun run ${safe(visualDiffScript)}`,
-        `--rendered-dir=${safe(temp.dir)}`,
+        `bun run ${safe(htmlSkeletonWorkflowCheckScript)}`,
+        `--task-dir=${safe(taskRoot)}`,
         `--reference=${safe(path.resolve(ref))}`,
-        `--out=${safe(visualOut)}`,
+        `--out=${safe(outDir)}`,
         `--threshold=${WEB_CLONE_VISUAL_THRESHOLD}`,
         `--worst-threshold=${WEB_CLONE_VISUAL_WORST_THRESHOLD}`,
       ].join(" ")
@@ -563,9 +564,9 @@ await fs.mkdir(path.dirname(reportFile), { recursive: true })
   ACCEPTANCE_VERIFY_CMD = skipLocalVerify
     ? ""
     : (acceptanceVerifyCmd?.trim()
-      || (referenceImages.length > 0 ? buildVisualDiffCmd(referenceImages) : ""))
+      || (referenceImages.length > 0 ? buildHtmlSkeletonWorkflowCmd(referenceImages) : ""))
   if (ACCEPTANCE_VERIFY_CMD) {
-    console.log(`[overlay-benchmark] acceptance_verify_cmd=${ACCEPTANCE_VERIFY_CMD}`)
+    console.log(`[overlay-benchmark] verify_cmd=${ACCEPTANCE_VERIFY_CMD}`)
   }
 }
 _emergencyReportPath = reportFile.endsWith(".json")
@@ -987,7 +988,7 @@ try {
         ...(ACCEPTANCE_VERIFY_CMD || figmaUrl
           ? {
               metadata: {
-                ...(ACCEPTANCE_VERIFY_CMD ? { acceptance_verify_cmd: ACCEPTANCE_VERIFY_CMD } : {}),
+                ...(ACCEPTANCE_VERIFY_CMD ? { checks: { verify_cmd: [ACCEPTANCE_VERIFY_CMD] } } : {}),
                 ...(figmaUrl ? { figma_url: figmaUrl } : {}),
               },
             }

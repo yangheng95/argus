@@ -120,6 +120,59 @@ describe("html skeleton workflow check", () => {
     expect(report.checks.find((check) => check.id === "visual-token-css")?.passed).toBe(false)
   })
 
+  test("resolves a runtime tasks parent to the task-scoped frontend-design skeleton", async () => {
+    await using tmp = await tmpdir()
+    const tasksDir = path.join(tmp.path, ".opencorvus", "runtime", "tasks")
+    const frontendDesignDir = path.join(tasksDir, "tsk_full_workflow", "frontend-design")
+    const visualRoot = path.join(frontendDesignDir, "visual-html-skeleton")
+    const sourcePackageDir = path.join(frontendDesignDir, "web-clone-source")
+    await writeSourceEvidence(sourcePackageDir)
+    await Bun.write(path.join(visualRoot, "index.html"), [
+      "<!doctype html>",
+      "<html>",
+      "<head><link rel=\"stylesheet\" href=\"./styles/tokens.css\"><link rel=\"stylesheet\" href=\"./styles/page.css\"></head>",
+      "<body><main><h1>World Economy</h1><section>Countries, markets, ideas, calendar, news, and metrics.</section></main></body>",
+      "</html>",
+    ].join(""))
+    await Bun.write(path.join(visualRoot, "styles", "tokens.css"), ":root{--color-canvas:#ffffff;--text-primary:#131722;--space-4:16px}")
+    await Bun.write(path.join(visualRoot, "styles", "page.css"), "body{font-family:Arial,sans-serif}main{max-width:1200px;margin:auto}")
+    await Bun.write(path.join(frontendDesignDir, "frontend-template.md"), [
+      "- role: visual_baseline_input",
+      "- project_root: visual-html-skeleton",
+      "- entrypoints: visual-html-skeleton/index.html, visual-html-skeleton/styles/tokens.css",
+      "- decision log: visual-diff rendered screenshot evidence",
+      "submit_frontend_template",
+    ].join("\n"))
+    await Bun.write(path.join(frontendDesignDir, "evidence-source-manifest.md"), "web-clone-source/reference.png")
+    await Bun.write(path.join(frontendDesignDir, "frontend-design-process-trace.json"), JSON.stringify({
+      events: [
+        { name: "create_frontend_skeleton_project" },
+        { name: "record_frontend_region_selection" },
+        { name: "submit_frontend_template" },
+      ],
+    }))
+    await Bun.write(path.join(frontendDesignDir, "frontend-design-iteration-state.json"), JSON.stringify({
+      completed: ["viewport"],
+      blocked: [],
+      deferred: [],
+      remainingSourceDebt: [],
+    }))
+    await Bun.write(path.join(frontendDesignDir, "workflow.log"), "create_frontend_skeleton_project\nsubmit_frontend_template\n")
+
+    const report = await runHtmlSkeletonWorkflowCheck({
+      taskDir: tasksDir,
+      outDir: path.join(tmp.path, "out"),
+      threshold: 0.95,
+      worstThreshold: 0.8,
+      headless: true,
+      artifactsOnly: true,
+    })
+
+    expect(report.passed).toBe(true)
+    expect(report.frontendDesignDir).toBe(frontendDesignDir)
+    expect(report.visualRoot).toBe(visualRoot)
+  })
+
   test("rejects old task-scoped source baseline handoffs that never restored visual-html-skeleton", async () => {
     await using tmp = await tmpdir()
     const taskDir = path.join(tmp.path, "tasks", "tsk_old")
@@ -150,6 +203,29 @@ describe("html skeleton workflow check", () => {
     expect(report.checks.find((check) => check.id === "visual-root-index")?.passed).toBe(false)
     expect(report.checks.find((check) => check.id === "template-role-visual-baseline")?.passed).toBe(false)
     expect(report.checks.find((check) => check.id === "template-names-visual-root")?.passed).toBe(false)
+  })
+
+  test("writes a failed report instead of starting visual render when skeleton artifacts are missing", async () => {
+    await using tmp = await tmpdir()
+    const taskDir = path.join(tmp.path, "tasks", "tsk_missing_visual")
+    const frontendDesignDir = path.join(taskDir, "frontend-design")
+    const sourcePackageDir = path.join(frontendDesignDir, "web-clone-source")
+    await writeSourceEvidence(sourcePackageDir)
+    await Bun.write(path.join(frontendDesignDir, "frontend-template.md"), "- role: visual_baseline_input\nvisual-html-skeleton/index.html\nvisual-diff\n")
+
+    const outDir = path.join(tmp.path, "out")
+    const report = await runHtmlSkeletonWorkflowCheck({
+      taskDir,
+      outDir,
+      threshold: 0.95,
+      worstThreshold: 0.8,
+      headless: true,
+    })
+
+    expect(report.passed).toBe(false)
+    expect(report.visualDiff).toBeUndefined()
+    expect(report.checks.find((check) => check.id === "visual-root-index")?.passed).toBe(false)
+    expect(await Bun.file(path.join(outDir, "html-skeleton-workflow-report.json")).exists()).toBe(true)
   })
 })
 

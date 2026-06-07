@@ -92,14 +92,15 @@ export function parseHtmlSkeletonWorkflowCheckArgs(): HtmlSkeletonWorkflowCheckI
 }
 
 export async function runHtmlSkeletonWorkflowCheck(input: HtmlSkeletonWorkflowCheckInput): Promise<HtmlSkeletonWorkflowCheckReport> {
-  const resolved = resolveInputs(input)
+  const resolved = await resolveInputs(input)
   await fs.mkdir(resolved.outDir, { recursive: true })
 
   const checks: HtmlSkeletonWorkflowCheckReport["checks"] = []
   await collectArtifactChecks(resolved, checks)
 
   let visualDiff: VisualDiffReport | undefined
-  if (!input.artifactsOnly) {
+  const artifactChecksPassed = checks.every((check) => check.passed)
+  if (!input.artifactsOnly && artifactChecksPassed) {
     const server = await serveRenderedDir(resolved.visualRoot)
     try {
       visualDiff = await runVisualDiff({
@@ -116,7 +117,7 @@ export async function runHtmlSkeletonWorkflowCheck(input: HtmlSkeletonWorkflowCh
     }
   }
 
-  const passed = checks.every((check) => check.passed) && (input.artifactsOnly || visualDiff?.passed === true)
+  const passed = artifactChecksPassed && (input.artifactsOnly || visualDiff?.passed === true)
   const report: HtmlSkeletonWorkflowCheckReport = {
     passed,
     outDir: resolved.outDir,
@@ -136,7 +137,7 @@ export async function runHtmlSkeletonWorkflowCheck(input: HtmlSkeletonWorkflowCh
   return report
 }
 
-function resolveInputs(input: HtmlSkeletonWorkflowCheckInput): Required<Pick<HtmlSkeletonWorkflowCheckInput, "outDir" | "threshold" | "worstThreshold" | "headless">> & {
+async function resolveInputs(input: HtmlSkeletonWorkflowCheckInput): Promise<Required<Pick<HtmlSkeletonWorkflowCheckInput, "outDir" | "threshold" | "worstThreshold" | "headless">> & {
   frontendDesignDir?: string
   frontendResearchDir?: string
   visualRoot: string
@@ -148,9 +149,9 @@ function resolveInputs(input: HtmlSkeletonWorkflowCheckInput): Required<Pick<Htm
   logDir?: string
   reference: string
   browserLaunchTimeoutMs?: number
-} {
+}> {
   const taskDir = input.taskDir
-    ? path.resolve(input.taskDir)
+    ? await resolveTaskDir(path.resolve(input.taskDir))
     : input.taskID
       ? path.join(repoRoot(), ".opencorvus", "runtime", "tasks", input.taskID)
       : undefined
@@ -210,6 +211,28 @@ function resolveInputs(input: HtmlSkeletonWorkflowCheckInput): Required<Pick<Htm
     logDir: input.logDir ? path.resolve(input.logDir) : frontendDesignDir,
     reference,
   }
+}
+
+async function resolveTaskDir(inputDir: string): Promise<string> {
+  const directFrontendDesign = path.join(inputDir, "frontend-design")
+  if (await dirExists(directFrontendDesign) || path.basename(inputDir).toLowerCase() === "frontend-design") {
+    return inputDir
+  }
+  if (path.basename(inputDir).toLowerCase() !== "tasks") return inputDir
+
+  const entries = await fs.readdir(inputDir, { withFileTypes: true }).catch(() => [])
+  const candidates = await Promise.all(entries
+    .filter((entry) => entry.isDirectory())
+    .map(async (entry) => {
+      const taskDir = path.join(inputDir, entry.name)
+      const frontendDesignDir = path.join(taskDir, "frontend-design")
+      const stat = await fs.stat(frontendDesignDir).catch(() => undefined)
+      return stat?.isDirectory() ? { taskDir, mtimeMs: stat.mtimeMs } : undefined
+    }))
+  const sorted = candidates
+    .filter((item): item is { taskDir: string; mtimeMs: number } => Boolean(item))
+    .sort((a, b) => b.mtimeMs - a.mtimeMs)
+  return sorted[0]?.taskDir ?? inputDir
 }
 
 async function collectArtifactChecks(
@@ -557,7 +580,11 @@ function normalizePath(input: string): string {
 
 async function main() {
   const report = await runHtmlSkeletonWorkflowCheck(parseHtmlSkeletonWorkflowCheckArgs())
-  const visual = report.visualDiff ? ` ${summarizeVisualReport(report.visualDiff)}` : " artifacts-only"
+  const visual = report.visualDiff
+    ? ` ${summarizeVisualReport(report.visualDiff)}`
+    : process.argv.includes("--artifacts-only")
+      ? " artifacts-only"
+      : " visual-skipped"
   console.log(`[html-skeleton-workflow-check] ${report.passed ? "PASS" : "FAIL"}${visual} report=${path.join(report.outDir, "html-skeleton-workflow-report.json")}`)
   process.exit(report.passed ? 0 : 1)
 }
