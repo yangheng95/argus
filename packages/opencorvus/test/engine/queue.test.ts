@@ -21,6 +21,13 @@ async function waitForTaskStatus(id: string, status: string) {
     await new Promise((resolve) => setTimeout(resolve, 10))
   }
 }
+
+async function waitForMockCalls(mockFn: { mock: { calls: unknown[] } }, count: number) {
+  for (let i = 0; i < 50; i++) {
+    if (mockFn.mock.calls.length >= count) return
+    await new Promise((resolve) => setTimeout(resolve, 10))
+  }
+}
 import { Instance } from "../../src/project/instance"
 import * as TaskLoop from "../../src/orchestrator/loop"
 import { Orchestrator } from "../../src/orchestrator/agent"
@@ -88,6 +95,7 @@ describe("engine queue", () => {
           queue: false,
         })
         await waitForTaskStatus(taskID, "active")
+        await waitForMockCalls(runTaskLoop, 1)
 
         expect(taskStatus(taskID)).toBe("active")
         expect(runTaskLoop).toHaveBeenCalledTimes(1)
@@ -127,6 +135,7 @@ describe("engine queue", () => {
           queue: false,
         })
         await waitForTaskStatus(taskID, "active")
+        await waitForMockCalls(runTaskLoop, 1)
 
         expect(taskStatus(activeID)).toBe("active")
         expect(taskStatus(taskID)).toBe("active")

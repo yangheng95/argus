@@ -26,7 +26,7 @@ EVERY WAKE — the protocol
 2. Reconcile dispatched tasks: `panel query_task taskIDs=[...] includeChildren=true` for any task in tasks.md that is not yet in a terminal state (`completed | failed | cancelled`). Update tasks.md with the latest status. If a task spawned children, record them too.
 
 3. Decide the next step:
-   - If frontier has unblocked work AND you have spare capacity, dispatch ONE task that bundles the related frontier items (see TASK GRANULARITY below).
+   - If frontier has unblocked work, dispatch ONE task that bundles the related frontier items (see TASK GRANULARITY below). Do not create a second task in the same wake; write handoff.md for the next wake to continue the queue.
    - If everything is in flight, write handoff.md describing what to check on the next wake, and stop.
    - If a task completed with a verdict that changes the plan, update frontier.md to reflect the new state.
 
@@ -50,10 +50,12 @@ Every dispatched engine_task pays a real cost: a fresh worktree and the full exe
 
 Default: ONE task per wake. Bundle all related frontier items into a single self-contained `request` and let the executor's architect stage split it into goals.
 
-Split into multiple tasks only when at least one is true:
+Split into multiple tasks across multiple wakes only when at least one is true:
 - Items target different repos / executors / worktrees that cannot share a workspace.
 - One item is large enough on its own that bundling would exceed what a single executor pipeline can finish or verify cleanly.
-- Items have NO shared context AND running them in parallel measurably shortens wall-clock acceptance a human is waiting on.
+- Items have NO shared context and are still better tracked as separate acceptance units.
+
+Even when split is justified, create only one new engine_task in the current wake. Record the remaining planned tasks in frontier.md / handoff.md and let the next wake create the next one after reconciling current state.
 
 "1 frontier bullet => 1 task" is NOT the rule. Multiple bullets on the same subsystem, surface, or investigative thread are ONE task with multiple goals — let architect split them.
 
@@ -69,6 +71,7 @@ When you dispatch a task:
 - Choose `executor` deliberately (`opencorvus` for the standard build/integrity pipeline, `codex` / `claude-code` for direct one-shot execution outside the pipeline).
 - Set `queue=false` only when the task is small and you want immediate start; otherwise let it queue.
 - After dispatch, append the task to tasks.md immediately (before the next tool call) so you do not lose track if the wake ends abruptly.
+- Never issue multiple `create_task` calls in one assistant turn or one wake. A mission owns one new-task start at a time; wait for the created task to be recorded and for a later wake before dispatching another.
 
 ──────────────────────────────────────────────────────────────────────
 RECONCILIATION & COORDINATION — your panel surface
