@@ -32,6 +32,7 @@ export const WebCloneSourceSkeletonManifestSchema = z.object({
       contentModel: z.literal("../source-ir/content-model.json"),
       layoutMap: z.literal("../source-ir/layout-map.json"),
       styleTokens: z.literal("../source-ir/style-tokens.json"),
+      styleProfile: z.literal("../source-ir/style-profile.json"),
       interactionHints: z.literal("../source-ir/interaction-hints.json"),
       sourceQualityAudit: z.literal("../source-ir/source-quality-audit.json"),
     }),
@@ -203,6 +204,7 @@ export async function writeWebCloneSourceSkeleton(
         contentModel: "../source-ir/content-model.json",
         layoutMap: "../source-ir/layout-map.json",
         styleTokens: "../source-ir/style-tokens.json",
+        styleProfile: "../source-ir/style-profile.json",
         interactionHints: "../source-ir/interaction-hints.json",
         sourceQualityAudit: "../source-ir/source-quality-audit.json",
       },
@@ -241,6 +243,7 @@ export async function writeWebCloneSourceSkeleton(
   await writeText(input.outputDir, files, "source-ir/content-model.json", JSON.stringify(sourceIr.contentModel, null, 2))
   await writeText(input.outputDir, files, "source-ir/layout-map.json", JSON.stringify(sourceIr.layoutMap, null, 2))
   await writeText(input.outputDir, files, "source-ir/style-tokens.json", JSON.stringify(sourceIr.styleTokens, null, 2))
+  await writeText(input.outputDir, files, "source-ir/style-profile.json", JSON.stringify(sourceIr.styleProfile, null, 2))
   await writeText(input.outputDir, files, "source-ir/interaction-hints.json", JSON.stringify(sourceIr.interactionHints, null, 2))
   await writeText(input.outputDir, files, "source-ir/source-quality-audit.json", JSON.stringify(sourceIr.sourceQualityAudit, null, 2))
 
@@ -279,6 +282,7 @@ export async function auditWebCloneSourceSkeleton(skeletonDir: string): Promise<
     "content-model.json",
     "layout-map.json",
     "style-tokens.json",
+    "style-profile.json",
     "interaction-hints.json",
     "source-quality-audit.json",
   ])
@@ -359,7 +363,7 @@ export async function inspectWebCloneSourceSkeletonEvidence(input: {
     }
   }
   const sourceIrDir = path.join(sourceRoot, "source-ir")
-  for (const file of ["component-tree.json", "content-model.json", "layout-map.json", "style-tokens.json", "interaction-hints.json", "source-quality-audit.json"]) {
+  for (const file of ["component-tree.json", "content-model.json", "layout-map.json", "style-tokens.json", "style-profile.json", "interaction-hints.json", "source-quality-audit.json"]) {
     if (!await exists(path.join(sourceIrDir, file))) {
       return { referenced: true, ok: false, auditPath, referencePath, findings: [`source skeleton handoff is missing ${sourceLabel}/source-ir/${file}`] }
     }
@@ -620,6 +624,7 @@ function renderSkeletonReadme(pageIr: WebClonePageIr, manifest: WebCloneSourceSk
     "- `../source-ir/content-model.json`: visible text, repeated structures, tables, lists, cards, controls, links, and media.",
     "- `../source-ir/layout-map.json`: source-node bounds and key computed styles.",
     "- `../source-ir/style-tokens.json`: color, typography, spacing, radius, and shadow candidates.",
+    "- `../source-ir/style-profile.json`: region-scoped style source with component bounds, computed style summaries, selector refs, assets, and source-node ids.",
     "- `../source-ir/interaction-hints.json`: links, buttons, inputs, tabs, dropdowns, search, and accordion candidates.",
     "- `../assets/manifest.json`: asset sidecar index. `data-asset-*` attributes in `index.html` point to dense values moved out of HTML, including SVG `path` geometry under `../assets/svg/*.path.txt`.",
     "- `../reference.png`: visual truth for final screenshot regression.",
@@ -629,7 +634,7 @@ function renderSkeletonReadme(pageIr: WebClonePageIr, manifest: WebCloneSourceSk
     "",
     "Generation workflow:",
     "",
-    "1. Read this README, `../source-ir/component-tree.json`, `../source-ir/content-model.json`, `../source-ir/style-tokens.json`, and `critical.css` first.",
+    "1. Read this README, `../source-ir/component-tree.json`, `../source-ir/content-model.json`, `../source-ir/style-profile.json`, `../source-ir/style-tokens.json`, and `critical.css` first.",
     "2. Use `index.html` for exact hierarchy and `full-source.css` only for targeted missing CSS detail.",
     "3. Convert semantic regions into the target framework's normal components.",
     "4. Preserve useful class names, source ids, visible text, links, assets, `data-asset-*` sidecar references, and data table/list structure.",
@@ -709,6 +714,7 @@ function buildSourceIr(
       })),
   }
   const styleTokens = buildStyleTokens(pageIr.root, usedSelectors)
+  const styleProfile = buildStyleProfile(pageIr, assetGraph, segments, usedSelectors)
   const interactionHints = buildInteractionHints(pageIr.root)
   const sourceQualityAudit = {
     version: 1,
@@ -720,6 +726,7 @@ function buildSourceIr(
       "../source-skeleton/README.md",
       "component-tree.json",
       "content-model.json",
+      "style-profile.json",
       "style-tokens.json",
       "../source-skeleton/critical.css",
       "../source-skeleton/index.html",
@@ -733,6 +740,7 @@ function buildSourceIr(
       repeatedGroups: contentModel.repeatedGroups.length,
       controls: contentModel.controls.length,
       layoutElements: layoutMap.elements.length,
+      styleProfiles: styleProfile.regions.length,
       reachableCssRules: usedSelectors.stats.reachableRules,
       totalCssRules: usedSelectors.stats.totalRules,
       colorTokens: styleTokens.colors.length,
@@ -745,9 +753,158 @@ function buildSourceIr(
     contentModel,
     layoutMap,
     styleTokens,
+    styleProfile,
     interactionHints,
     sourceQualityAudit,
   }
+}
+
+function buildStyleProfile(
+  pageIr: WebClonePageIr,
+  assetGraph: WebCloneAssetGraph,
+  segments: WebCloneSegments,
+  usedSelectors: CssSelectorReachability,
+) {
+  const nodeById = new Map(flattenElements(pageIr.root).map((node) => [node.id, node]))
+  const selectorRefsByNode = buildSelectorRefsByNode(usedSelectors)
+  const assetRefsByNode = buildAssetRefsByNode(assetGraph)
+  const regions = segments.segments.map((segment) => {
+    const root = nodeById.get(segment.rootNodeId)
+    const sourceNodeIds = [segment.rootNodeId, ...segment.nodeIds.filter((nodeId) => nodeId !== segment.rootNodeId)].slice(0, 80)
+    const sampledNodes = sourceNodeIds
+      .map((nodeId) => nodeById.get(nodeId))
+      .filter((node): node is WebCloneNode => Boolean(node))
+      .slice(0, 32)
+    const styleSummary = summarizeRegionStyles(sampledNodes)
+    const selectorRefs = Array.from(new Set(sourceNodeIds.flatMap((nodeId) => selectorRefsByNode.get(nodeId) ?? []))).slice(0, 32)
+    const assetRefs = Array.from(new Set(sourceNodeIds.flatMap((nodeId) => assetRefsByNode.get(nodeId) ?? []))).slice(0, 32)
+    return {
+      id: segment.id,
+      name: componentName(segment),
+      kind: inferSkeletonKind(segment),
+      rootNodeId: segment.rootNodeId,
+      sourceNodeIds,
+      bounds: segment.bounds ?? root?.layout?.bounds,
+      selector: root?.layout?.selector,
+      tag: segment.tag,
+      classNames: classTokens(root?.attrs).slice(0, 24),
+      textPreview: segment.textPreview.slice(0, 12),
+      styleSummary,
+      selectorRefs,
+      assetRefs,
+      implementationGuidance: [
+        "Read this region profile before editing the matching component/style files.",
+        "Use bounds, computed typography, spacing, border, color, source node ids, selector refs, and assets as implementation facts.",
+        "Use source-skeleton/critical.css for exact declarations and full-source.css only for targeted missing details.",
+        implementationHintForSegment(segment),
+      ],
+    }
+  })
+  return {
+    version: 1,
+    purpose: "web-clone-style-profile",
+    sourceEvidence: {
+      pageIr: "../page.ir.json",
+      referenceImage: "../reference.png",
+      componentTree: "component-tree.json",
+      layoutMap: "layout-map.json",
+      styleTokens: "style-tokens.json",
+      criticalCss: "../source-skeleton/critical.css",
+      usedSelectors: "../source-skeleton/used-selectors.json",
+    },
+    policy: {
+      sourceOfTruth: "deterministic browser/DOM/CSS evidence grouped by source region",
+      consumer: "frontend_design, frontend_research, requirements, architect, and build agents",
+      noParallelStyleSummary: true,
+    },
+    regions,
+    stats: {
+      regionCount: regions.length,
+      cssRuleRefs: usedSelectors.rules.length,
+      reachableCssRuleRefs: usedSelectors.stats.reachableRules,
+    },
+  }
+}
+
+function buildSelectorRefsByNode(usedSelectors: CssSelectorReachability): Map<string, string[]> {
+  const refs = new Map<string, string[]>()
+  for (const rule of usedSelectors.rules) {
+    if (!rule.reachable) continue
+    const ref = `${rule.assetPath} :: ${rule.selector}`
+    for (const nodeId of rule.matchedBy) {
+      const existing = refs.get(nodeId) ?? []
+      existing.push(ref)
+      refs.set(nodeId, existing)
+    }
+  }
+  return refs
+}
+
+function buildAssetRefsByNode(assetGraph: WebCloneAssetGraph): Map<string, string[]> {
+  const refs = new Map<string, string[]>()
+  for (const asset of assetGraph.assets) {
+    for (const use of asset.usedBy) {
+      const existing = refs.get(use.nodeId) ?? []
+      existing.push(`${asset.id} ${asset.kind} ${asset.path}`)
+      refs.set(use.nodeId, existing)
+    }
+  }
+  return refs
+}
+
+function summarizeRegionStyles(nodes: WebCloneNode[]) {
+  const values = {
+    display: new Map<string, number>(),
+    position: new Map<string, number>(),
+    typography: new Map<string, number>(),
+    color: new Map<string, number>(),
+    background: new Map<string, number>(),
+    spacing: new Map<string, number>(),
+    border: new Map<string, number>(),
+    radius: new Map<string, number>(),
+    shadow: new Map<string, number>(),
+    layout: new Map<string, number>(),
+  }
+  for (const node of nodes) {
+    const styles = node.layout?.styles ?? {}
+    addStyleValue(values.display, styles.display)
+    addStyleValue(values.position, styles.position)
+    addStyleValue(values.typography, compactStyleTuple(styles, ["fontFamily", "fontSize", "fontWeight", "lineHeight", "letterSpacing"]))
+    addStyleValue(values.color, styles.color)
+    addStyleValue(values.background, styles.backgroundColor ?? styles.background)
+    addStyleValue(values.spacing, compactStyleTuple(styles, ["margin", "padding", "gap", "rowGap", "columnGap"]))
+    addStyleValue(values.border, compactStyleTuple(styles, ["border", "borderTop", "borderRight", "borderBottom", "borderLeft"]))
+    addStyleValue(values.radius, styles.borderRadius)
+    addStyleValue(values.shadow, styles.boxShadow)
+    addStyleValue(values.layout, compactStyleTuple(styles, ["width", "height", "minWidth", "minHeight", "maxWidth", "maxHeight", "gridTemplateColumns", "gridTemplateRows", "flexDirection", "alignItems", "justifyContent"]))
+  }
+  return {
+    display: rankedTokens(values.display).slice(0, 8),
+    position: rankedTokens(values.position).slice(0, 8),
+    typography: rankedTokens(values.typography).slice(0, 12),
+    colors: rankedTokens(values.color).slice(0, 12),
+    backgrounds: rankedTokens(values.background).slice(0, 12),
+    spacing: rankedTokens(values.spacing).slice(0, 16),
+    borders: rankedTokens(values.border).slice(0, 12),
+    radii: rankedTokens(values.radius).slice(0, 8),
+    shadows: rankedTokens(values.shadow).slice(0, 8),
+    layout: rankedTokens(values.layout).slice(0, 16),
+  }
+}
+
+function compactStyleTuple(styles: Record<string, string>, keys: string[]): string | undefined {
+  const parts = keys
+    .map((key) => {
+      const value = styles[key]
+      return value && value !== "initial" ? `${toKebabCase(key)}=${value}` : undefined
+    })
+    .filter((part): part is string => Boolean(part))
+  return parts.length > 0 ? parts.join("; ") : undefined
+}
+
+function addStyleValue(counts: Map<string, number>, value: string | undefined): void {
+  if (!value || value === "initial" || value === "none" || value === "normal") return
+  increment(counts, value)
 }
 
 function buildContentModel(root: WebCloneNode, assetGraph: WebCloneAssetGraph) {

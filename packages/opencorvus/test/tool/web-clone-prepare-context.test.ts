@@ -50,8 +50,10 @@ describe("tool.web_clone_prepare_context", () => {
         expect(result.metadata.contractPath).toBe(path.join(sourcePackageDir, "web-clone-implementation-contract.json"))
         expect(result.metadata.materializedFiles).toContain(path.join(sourcePackageDir, "source-skeleton", "index.html"))
         expect(result.metadata.materializedFiles).toContain(path.join(sourcePackageDir, "source-ir", "content-model.json"))
+        expect(result.metadata.materializedFiles).toContain(path.join(sourcePackageDir, "source-ir", "style-profile.json"))
         expect(result.metadata.materializedFiles).toContain(path.join(sourcePackageDir, "assets", "manifest.json"))
         expect(result.metadata.stats.components).toBe(2)
+        expect(result.metadata.stats.styleProfiles).toBe(1)
         expect(result.metadata.stats.tables).toBe(1)
         expect(result.metadata.stats.sourceSkeletonAuditPassed).toBe(true)
 
@@ -60,6 +62,7 @@ describe("tool.web_clone_prepare_context", () => {
         expect(context).toContain("web_clone_source_audit")
         expect(context).toContain("EconomicCalendarTable")
         expect(context).toContain("GDP Growth Rate")
+        expect(context).toContain("Region Style Profiles")
         expect(context).toContain("schema, seed/reset data, and read APIs")
         expect(context).not.toContain("data:image")
         expect(context).not.toContain(";base64,")
@@ -200,6 +203,22 @@ async function writeFixtureEvidence(root: string): Promise<string> {
       ],
     }],
     repeatedGroups: [{ title: "Calendar rows", sampleTexts: ["08:30 US GDP Growth Rate 2.1%", "09:45 US Manufacturing PMI 51.3"] }],
+  }, null, 2))
+  await Bun.write(path.join(webpageEvidenceDir, "source-ir", "style-profile.json"), JSON.stringify({
+    purpose: "web-clone-style-profile",
+    regions: [{
+      id: "style_main",
+      name: "EconomicCalendarTable",
+      kind: "table",
+      rootNodeId: "node_table",
+      bounds: { x: 0, y: 80, width: 960, height: 360 },
+      styleSummary: {
+        typography: [{ value: "font-size: 14px; line-height: 20px", count: 2 }],
+        colors: [{ value: "color: rgb(17, 24, 39)", count: 2 }],
+        spacing: [{ value: "padding: 16px", count: 1 }],
+      },
+      implementationGuidance: ["Use compact grid/table spacing from source CSS."],
+    }],
   }, null, 2))
   await Bun.write(path.join(webpageEvidenceDir, "source-ir", "style-tokens.json"), JSON.stringify({ colors: [{ name: "text", value: "#111827" }] }, null, 2))
   await Bun.write(path.join(webpageEvidenceDir, "source-ir", "interaction-hints.json"), JSON.stringify({ controls: [{ type: "link", label: "Markets", href: "/markets" }] }, null, 2))

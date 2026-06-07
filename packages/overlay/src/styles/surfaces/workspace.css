@@ -325,8 +325,23 @@ body[data-center-workbench-resizing="true"] .center-workbench-resizer {
   background: transparent;
 }
 
+.center-workbench-view[data-resizable-prev="true"]::before {
+  content: "";
+  position: absolute;
+  top: 0;
+  left: calc(-4px * var(--ui-scale));
+  bottom: 0;
+  width: calc(8px * var(--ui-scale));
+  z-index: 4;
+  cursor: col-resize;
+  touch-action: none;
+  background: transparent;
+}
+
 .center-workbench-view[data-resizable-next="true"]:hover::after,
-body[data-center-workbench-panel-resizing="true"] .center-workbench-view[data-resizable-next="true"]::after {
+.center-workbench-view[data-resizable-prev="true"]:hover::before,
+body[data-center-workbench-panel-resizing="true"] .center-workbench-view[data-resizable-next="true"]::after,
+body[data-center-workbench-panel-resizing="true"] .center-workbench-view[data-resizable-prev="true"]::before {
   background: color-mix(in srgb, var(--accent) 22%, transparent);
 }
 

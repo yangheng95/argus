@@ -103,6 +103,7 @@ describe("tool.web_clone_generate_source_project", () => {
         expect(sourceDomIterationState).toContain('"mobile-review"')
         expect(sourceDomIterationState).toContain('"wide-review"')
         expect(sourceProjectManifest.visualIteration.comparisonTool).toBe("webpage_evaluate")
+        expect(sourceProjectManifest.generatedFrom).toContain("source-ir/style-profile.json")
         expect(sourceProjectManifest.visualIteration.viewportMatrix[0]).toMatchObject({
           name: "desktop-reference",
           width: 1366,
@@ -116,6 +117,7 @@ describe("tool.web_clone_generate_source_project", () => {
         ])
         expect(readme).toContain("Visual iteration viewport matrix")
         expect(readme).toContain("desktop-reference 1366x768")
+        expect(readme).toContain("source-ir/style-profile.json")
         expect(sourceSvgAssetGroups).toContain("sourceSvgAssetGroups")
         expect(sourceFaqGroups).toContain("sourceFaqGroups")
         expect(await Bun.file(path.join(outputDir, "public", "assets", "images", "asset_000002.webp")).exists()).toBe(true)
@@ -265,6 +267,8 @@ describe("tool.web_clone_generate_source_project", () => {
         expect(sourceDomReplacementPlan).toContain('"sourceMap"')
         expect(sourceDomReplacementPlan).toContain('"bounds"')
         expect(sourceDomReplacementPlan).toContain('"styleSources"')
+        expect(sourceDomReplacementPlan).toContain("Read web-clone-source/source-ir/style-profile.json")
+        expect(sourceDomReplacementPlan).toContain("web-clone-source/source-ir/style-profile.json")
         expect(sourceDomReplacementPlan).toContain('"visualSources"')
         expect(sourceDomReplacementPlan).toContain('"generatedCleanupTargets"')
         expect(sourceDomReplacementPlan).toContain('"verticalSliceSteps"')
@@ -275,6 +279,7 @@ describe("tool.web_clone_generate_source_project", () => {
         expect(sourceDomIterationState).toContain('"desktop-reference"')
         expect(sourceDomIterationState).toContain('"replacementKind": "map_or_chart_asset_component"')
         expect(sourceProjectManifest.visualIteration.referenceImage).toBe("reference.png")
+        expect(sourceProjectManifest.generatedFrom).toContain("source-ir/style-profile.json")
         expect(sourceProjectManifest.visualIteration.viewportMatrix[0].name).toBe("desktop-reference")
         expect(sourceProjectManifest.visualIteration.viewportMatrix[0].width).toBe(1440)
         expect(sourceProjectManifest.visualIteration.viewportMatrix[0].evidenceSource).toBe("default")

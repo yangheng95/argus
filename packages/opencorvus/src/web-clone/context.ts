@@ -26,6 +26,7 @@ export interface PrepareWebCloneContextOutput {
     cards: number
     repeatedGroups: number
     styleTokens: number
+    styleProfiles: number
     interactionHints: number
     assets: number
     sourceSkeletonAuditPassed: boolean | undefined
@@ -40,6 +41,7 @@ interface ContextSummary {
   cards: Array<{ title?: string; text: string[] }>
   repeatedGroups: Array<{ title?: string; sampleTexts: string[] }>
   styleTokens: string[]
+  styleProfiles: string[]
   interactionHints: string[]
   assets: Array<{ id: string; kind: string; path: string; semanticRole?: string }>
   textSignals: string[]
@@ -54,6 +56,7 @@ const REQUIRED_READS = [
   "source-ir/content-model.json",
   "source-ir/layout-map.json",
   "source-ir/style-tokens.json",
+  "source-ir/style-profile.json",
   "source-ir/interaction-hints.json",
   "source-ir/interaction-state-snapshots.json",
   "source-skeleton/critical.css",
@@ -65,6 +68,7 @@ const REQUIRED_SOURCE_HANDOFF_ARTIFACTS = [
   "source-skeleton/critical.css",
   "source-ir/component-tree.json",
   "source-ir/content-model.json",
+  "source-ir/style-profile.json",
   "source-ir/interaction-state-snapshots.json",
 ] as const
 
@@ -76,10 +80,11 @@ export async function prepareWebCloneContext(input: PrepareWebCloneContextInput)
     throw new Error(`Web clone context outputDir must not overlap webpageEvidenceDir: ${outputDir}`)
   }
 
-  const [componentTree, contentModel, styleTokens, interactionHints, assetManifest, skeletonAudit, sourceQualityAudit, sourceSkeleton] = await Promise.all([
+  const [componentTree, contentModel, styleTokens, styleProfile, interactionHints, assetManifest, skeletonAudit, sourceQualityAudit, sourceSkeleton] = await Promise.all([
     readJsonOptional(path.join(webpageEvidenceDir, "source-ir", "component-tree.json")),
     readJsonOptional(path.join(webpageEvidenceDir, "source-ir", "content-model.json")),
     readJsonOptional(path.join(webpageEvidenceDir, "source-ir", "style-tokens.json")),
+    readJsonOptional(path.join(webpageEvidenceDir, "source-ir", "style-profile.json")),
     readJsonOptional(path.join(webpageEvidenceDir, "source-ir", "interaction-hints.json")),
     readJsonOptional(path.join(webpageEvidenceDir, "assets", "manifest.json")),
     readJsonOptional(path.join(webpageEvidenceDir, "source-skeleton", "source-skeleton-audit.json")),
@@ -90,6 +95,7 @@ export async function prepareWebCloneContext(input: PrepareWebCloneContextInput)
     componentTree,
     contentModel,
     styleTokens,
+    styleProfile,
     interactionHints,
     assetManifest,
     sourceSkeleton,
@@ -101,6 +107,7 @@ export async function prepareWebCloneContext(input: PrepareWebCloneContextInput)
     cards: summary.cards.length,
     repeatedGroups: summary.repeatedGroups.length,
     styleTokens: summary.styleTokens.length,
+    styleProfiles: summary.styleProfiles.length,
     interactionHints: summary.interactionHints.length,
     assets: summary.assets.length,
     sourceSkeletonAuditPassed: readPassed(skeletonAudit),
@@ -130,6 +137,7 @@ function buildContextSummary(input: {
   componentTree: unknown
   contentModel: unknown
   styleTokens: unknown
+  styleProfile: unknown
   interactionHints: unknown
   assetManifest: unknown
   sourceSkeleton: string
@@ -141,6 +149,7 @@ function buildContextSummary(input: {
     cards: readCards(input.contentModel),
     repeatedGroups: readRepeatedGroups(input.contentModel),
     styleTokens: collectNamedStrings(input.styleTokens, ["name", "token", "property", "value"]).slice(0, 80),
+    styleProfiles: readStyleProfiles(input.styleProfile),
     interactionHints: collectNamedStrings(input.interactionHints, ["type", "role", "label", "text", "href"]).slice(0, 80),
     assets: readAssets(input.assetManifest),
     textSignals: rankTextSignals([
@@ -170,6 +179,7 @@ function renderContextMarkdown(
     "## Implementation Rules",
     "- Treat this task-runtime `web-clone-source/` package as the mandatory implementation source before writing app code.",
     "- Start from `implementation-blueprint.md`, `source-ir/*`, and data/component contracts; use `source-skeleton/index.html` only to resolve ambiguous DOM order or missing text.",
+    "- Treat `source-ir/style-profile.json` as the region-scoped style source before CSS/layout edits; do not invent a parallel style summary from prose.",
     "- Do not run an unstructured HTML-to-JSX/Vue converter over `source-skeleton/index.html`; preserve the generated source skeleton modules and CSS sidecars as the editable baseline instead.",
     "- Write or repair normal target app source in the project tree; do not create a disconnected generated app as the default deliverable.",
     "- Implement normal framework components, data arrays, adapters, states, and interactions.",
@@ -197,6 +207,9 @@ function renderContextMarkdown(
     "",
     "## Interaction Hints",
     ...summary.interactionHints.slice(0, 40).map((hint) => `- ${hint}`),
+    "",
+    "## Region Style Profiles",
+    ...summary.styleProfiles.slice(0, 40).map((profile) => `- ${profile}`),
     "",
     "## Asset References",
     ...summary.assets.slice(0, 40).map((asset) => `- ${asset.id} ${asset.kind} ${asset.path}${asset.semanticRole ? ` (${asset.semanticRole})` : ""}`),
@@ -246,6 +259,7 @@ function renderContract(
       textSignals: summary.textSignals,
     },
     styleTokens: summary.styleTokens,
+    styleProfiles: summary.styleProfiles,
     interactionHints: summary.interactionHints,
     assets: summary.assets,
   }
@@ -316,6 +330,7 @@ async function materializeVisibleSourcePackage(input: {
       "source-ir/content-model.json",
       "source-ir/layout-map.json",
       "source-ir/style-tokens.json",
+      "source-ir/style-profile.json",
       "source-ir/interaction-hints.json",
       "source-ir/interaction-state-snapshots.json",
       "interaction-states/initial.png",
@@ -331,6 +346,7 @@ async function materializeVisibleSourcePackage(input: {
     rules: [
       "Build agents must read this project-root source package before implementation.",
       "implementation-blueprint.md and source-ir/* are the primary app-source inputs.",
+      "source-ir/style-profile.json is the region-scoped style source for CSS/layout generation.",
       "source-skeleton/index.html is raw evidence only; do not mechanically convert it into one giant framework component.",
       "Implementation code belongs in the target app source tree; this package is the reusable source handoff, not a generated app.",
       "source-ir/interaction-state-snapshots.json is runtime evidence, not prose requirements or implementation code.",
@@ -356,17 +372,18 @@ function renderSourcePackageReadme(webpageEvidenceDir: string, stats: PrepareWeb
     "4. `source-ir/component-tree.json`",
     "5. `source-ir/content-model.json`",
     "6. `source-ir/layout-map.json`, `source-ir/style-tokens.json`, and `source-ir/interaction-hints.json`",
-    "7. `source-ir/interaction-state-snapshots.json` and `interaction-states/*.png` for scroll/click/runtime state evidence",
-    "8. `visual-surface-candidates.json` when present",
-    "9. `singlefile.html` as optional visual DOM/CSS evidence for frontend-design skeleton generation",
-    "10. `source-skeleton/critical.css`",
-    "11. `source-skeleton/index.html` only as raw evidence for ambiguous DOM order or missing text",
+    "7. `source-ir/style-profile.json` for region-scoped computed style, layout, selector, and asset facts",
+    "8. `source-ir/interaction-state-snapshots.json` and `interaction-states/*.png` for scroll/click/runtime state evidence",
+    "9. `visual-surface-candidates.json` when present",
+    "10. `singlefile.html` as optional visual DOM/CSS evidence for frontend-design skeleton generation",
+    "11. `source-skeleton/critical.css`",
+    "12. `source-skeleton/index.html` only as raw evidence for ambiguous DOM order or missing text",
     "",
     "Use `assets/manifest.json`, `assets/svg/`, and `assets/images/` as reusable sidecars for dense geometry and extracted resources. Reference those files from normal React/Vue/etc. source instead of pasting the payloads inline.",
     "",
     "Do not mechanically convert `source-skeleton/index.html` into one giant React/Vue/Svelte component. Preserve the structured source skeleton/CSS sidecars and refine modules in place.",
     "",
-    "Do not runtime-load source-site or other third-party CSS bundles. The target project must own the CSS it needs, derived from `source-skeleton/critical.css`, `source-ir/style-tokens.json`, and explicit component styling.",
+    "Do not runtime-load source-site or other third-party CSS bundles. The target project must own the CSS it needs, derived from `source-ir/style-profile.json`, `source-skeleton/critical.css`, `source-ir/style-tokens.json`, and explicit component styling.",
     "",
     "Do not treat this package as the deliverable app. The deliverable is the project-owned app source seeded from this package's structure, content, styles, and assets.",
     "",
@@ -382,6 +399,7 @@ function renderSourcePackageReadme(webpageEvidenceDir: string, stats: PrepareWeb
     `- lists: ${stats.lists}`,
     `- cards: ${stats.cards}`,
     `- repeated groups: ${stats.repeatedGroups}`,
+    `- style profiles: ${stats.styleProfiles}`,
     `- asset refs: ${stats.assets}`,
     "",
   ].join("\n")
@@ -398,6 +416,7 @@ function renderImplementationBlueprint(summary: ContextSummary, stats: PrepareWe
     "- Repeated tables, lists, cards, country chips, news rows, calendar events, footer columns, and FAQ rows must be data arrays rendered with framework loops.",
     "- Complex visual surfaces such as maps, charts, heatmaps, and idea thumbnails must be implemented as named components that either use extracted sidecar assets or authored SVG/CSS/Canvas primitives. They must not disappear as empty `<canvas>` tags.",
     "- Use `source-skeleton/critical.css` as style evidence, but consolidate it into maintainable app styles instead of depending on raw node-id rules alone.",
+    "- Use `source-ir/style-profile.json` before editing each region's CSS/layout; it binds computed styles, bounds, selector refs, assets, and source-node ids to component regions.",
     "- Keep `source-skeleton/index.html` available for audit and DOM-order lookup only.",
     "",
     "## Expected Component Slices",
@@ -422,6 +441,7 @@ function renderImplementationBlueprint(summary: ContextSummary, stats: PrepareWe
     "",
     "## Visual/Asset Handoff",
     "- Check `visual-surface-candidates.json` for high-impact visual surfaces and bounds when present.",
+    "- Check `source-ir/style-profile.json` for region-level computed typography, spacing, colors, borders, radii, CSS selector refs, and source-node ids before authoring CSS.",
     "- Check `assets/manifest.json`, `assets/svg/`, and `assets/images/` before authoring dense geometry by hand.",
     "- If the raw skeleton contains `<canvas src=\"images/canvas/...\">`, implement it as an actual visible chart/image component; browsers do not render a `src` attribute on `<canvas>`.",
     "",
@@ -550,6 +570,54 @@ function readRepeatedGroups(contentModel: unknown): ContextSummary["repeatedGrou
     .slice(0, 48)
 }
 
+function readStyleProfiles(styleProfile: unknown): ContextSummary["styleProfiles"] {
+  return readArray(styleProfile, "regions")
+    .map((item, index) => {
+      const row = asRecord(item)
+      const name = readString(row.name) ?? readString(row.id) ?? `Style profile ${index + 1}`
+      const kind = readString(row.kind)
+      const bounds = formatBounds(asRecord(row.bounds))
+      const preview = readStringArray(row.textPreview).slice(0, 3).join(" | ")
+      const rootNodeId = readString(row.rootNodeId)
+      const selector = readString(row.selector)
+      const styleSummary = asRecord(row.styleSummary)
+      const typography = formatTokenPreview(styleSummary.typography)
+      const colors = formatTokenPreview(styleSummary.colors)
+      const spacing = formatTokenPreview(styleSummary.spacing)
+      return [
+        `${name}${kind ? ` (${kind})` : ""}`,
+        rootNodeId ? `node ${rootNodeId}` : undefined,
+        bounds,
+        selector ? `selector ${selector}` : undefined,
+        typography ? `type ${typography}` : undefined,
+        colors ? `colors ${colors}` : undefined,
+        spacing ? `spacing ${spacing}` : undefined,
+        preview ? `text ${preview}` : undefined,
+      ].filter(Boolean).join("; ")
+    })
+    .filter(Boolean)
+    .slice(0, 80)
+}
+
+function formatBounds(bounds: Record<string, unknown>): string | undefined {
+  const x = readNumber(bounds.x)
+  const y = readNumber(bounds.y)
+  const w = readNumber(bounds.w)
+  const h = readNumber(bounds.h)
+  if ([x, y, w, h].some((value) => value === undefined)) return undefined
+  return `bounds ${x},${y},${w}x${h}`
+}
+
+function formatTokenPreview(value: unknown): string | undefined {
+  const items = Array.isArray(value) ? value : []
+  const preview = items
+    .map((item) => readString(asRecord(item).value))
+    .filter((item): item is string => Boolean(item))
+    .slice(0, 3)
+    .join(" | ")
+  return preview || undefined
+}
+
 function readAssets(assetManifest: unknown): ContextSummary["assets"] {
   const root = asRecord(assetManifest)
   const assets = Array.isArray(root.assets) ? root.assets : []
@@ -635,6 +703,10 @@ function asRecord(value: unknown): Record<string, unknown> {
 
 function readString(value: unknown): string | undefined {
   return typeof value === "string" && value.trim().length > 0 ? decodeEntities(value).replace(/\s+/g, " ").trim() : undefined
+}
+
+function readNumber(value: unknown): number | undefined {
+  return typeof value === "number" && Number.isFinite(value) ? value : undefined
 }
 
 function decodeEntities(value: string): string {

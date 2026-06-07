@@ -1070,6 +1070,7 @@ export async function generateWebCloneSourceProject(
       "source-skeleton/full-source.css",
       "source-ir/content-model.json",
       "source-ir/component-tree.json",
+      "source-ir/style-profile.json",
       "assets/manifest.json",
     ],
     sourceDomRegions: {
@@ -6051,6 +6052,7 @@ function sourceDomReusableSources(
     "src/data/sourceDomRegions.ts",
     "web-clone-source/reference.png",
     "web-clone-source/source-skeleton/critical.css",
+    "web-clone-source/source-ir/style-profile.json",
   ]
   if (kind === "map_or_chart_asset_component") sources.push("src/data/svgPaths.ts", "src/data/sourceSvgAssetGroups.ts", "web-clone-source/assets/svg/")
   if (kind === "faq_disclosure_component") sources.push("src/data/sourceFaqGroups.ts")
@@ -6087,6 +6089,7 @@ function sourceDomStyleSources(kind: SourceDomReplacementPlanItem["replacementKi
     "src/styles/source-critical.css",
     "src/styles/source-full.css",
     "web-clone-source/source-skeleton/critical.css",
+    "web-clone-source/source-ir/style-profile.json",
     "web-clone-source/source-ir/style-tokens.json",
   ]
   if (kind === "map_or_chart_asset_component") sources.push("src/data/sourceSvgAssetGroups.ts", "src/data/svgPaths.ts")
@@ -6118,6 +6121,7 @@ function sourceDomVerticalSliceSteps(
 ): string[] {
   return [
     `Read ${region.filePath} plus sourceMap evidence for source ids, text, classes, and asset references.`,
+    "Read web-clone-source/source-ir/style-profile.json for this source node/segment before editing layout CSS.",
     `Extract the visible data for ${recommendedComponentName} into sourceData.ts or a small typed module instead of duplicating JSX literals.`,
     `Render ${recommendedComponentName} as a semantic component with loops/props/states appropriate for ${kind}.`,
     "Preserve only the scoped classes or CSS variables needed by the replacement; leave unrelated source CSS untouched.",
@@ -6925,6 +6929,7 @@ function renderReadme(webpageEvidenceDir: string, visualIteration: SourceProject
     "- `source-skeleton/critical.css` and `source-skeleton/full-source.css` for CSS sidecars",
     "- `source-ir/content-model.json` for tables, lists, cards, and repeated groups",
     "- `source-ir/component-tree.json` for component boundary hints",
+    "- `source-ir/style-profile.json` for region-scoped typography, spacing, color, selector, asset, and implementation guidance",
     "- `assets/manifest.json` for sidecar asset references",
     "- `src/data/sourceDomRegions.ts` for generated-region size, text preview, and replacement priority metrics",
     "- `src/data/sourceDomReplacementPlan.ts` for concrete semantic replacement steps, sourceMap evidence, data/style/asset/visual sources, generated cleanup targets, verticalSliceSteps, and parity guards",

@@ -48,6 +48,7 @@ export const WEB_CLONE_REQUIRED_WEBPAGE_EVIDENCE_ARTIFACTS = [
   "source-ir/content-model.json",
   "source-ir/layout-map.json",
   "source-ir/style-tokens.json",
+  "source-ir/style-profile.json",
   "source-ir/interaction-hints.json",
   "source-ir/interaction-state-snapshots.json",
   "source-ir/source-quality-audit.json",
