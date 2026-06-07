@@ -134,12 +134,22 @@ test("benchmark local visual verification waits for completed tasks", () => {
   expect(src).toContain("skipped because benchmark ended before task completion")
 })
 
-test("benchmark auto visual-diff uses webpage replica thresholds", () => {
+test("benchmark auto verification uses task-scoped HTML skeleton workflow thresholds", () => {
   expect(src).toContain("WEB_CLONE_VISUAL_THRESHOLD")
   expect(src).toContain("WEB_CLONE_VISUAL_WORST_THRESHOLD")
+  expect(src).toContain("html-skeleton-workflow-check.ts")
+  expect(src).toContain(`".opencorvus", "runtime", "tasks"`)
+  expect(src).toContain("--task-dir=${safe(taskRoot)}")
+  expect(src).toContain(".html-skeleton-workflow-out")
   expect(src).toContain("--threshold=${WEB_CLONE_VISUAL_THRESHOLD}")
   expect(src).toContain("--worst-threshold=${WEB_CLONE_VISUAL_WORST_THRESHOLD}")
+  expect(src).not.toContain("--rendered-dir=${safe(temp.dir)}")
   expect(src).not.toContain("Fig2code SSIM thresholds (mean 0.85")
+})
+
+test("benchmark task metadata wires auto verification into acceptance checks", () => {
+  expect(src).toContain("checks: { verify_cmd: [ACCEPTANCE_VERIFY_CMD] }")
+  expect(src).not.toContain("acceptance_verify_cmd: ACCEPTANCE_VERIFY_CMD")
 })
 
 test("benchmark evidence inputs stay outside the project worktree", () => {
