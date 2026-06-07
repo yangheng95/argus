@@ -45,9 +45,7 @@ import { SubAgentProtocol } from "@/agent/sub-agent-protocol"
 import { Event as EngineEvent } from "@/engine/model"
 import { EngineProtocol } from "@/engine/protocol"
 import { abortChildExecutionForSession, abortGoalRunExecution } from "@/engine/execution-abort"
-import { Message } from "@/session/message"
-import { toolFailureCauseFromUnknown } from "@/session/tool-failure-cause"
-import { PartTable } from "@/session/session.sql"
+import { abortLiveOrchestratorToolOwnership } from "@/engine/writer"
 import { renderFrontendDesignHandoffReference, frontendDesignArtifactPaths } from "@/frontend-design/handoff"
 import { renderFrontendResearchBriefPromptSection } from "@/research/prompt-section"
 import { ensureLiveWebpageEvidence, primaryWebpageEvidenceArtifacts } from "./webpage-evidence"
@@ -107,6 +105,7 @@ import {
   findLiveBuildOwnershipBySession,
   insertOrchestratorToolOwnershipArtifact,
   type OrchestratorToolOwnershipPayload,
+  type OrchestratorToolOwnershipRow,
 } from "@/engine/tool-ownership"
 import { Ownership } from "@/engine/ownership"
 
@@ -663,64 +662,6 @@ function assertDirectReplySessionOwnership(input: { taskID: string; sessionID: s
   return { kind }
 }
 
-async function markOwnedBuildToolPartErrored(input: {
-  ownership: OrchestratorToolOwnershipPayload
-  reason: string
-  originSite: string
-  metadata?: Record<string, unknown>
-  now?: number
-}) {
-  const row = Database.use((db) =>
-    db
-      .select()
-      .from(PartTable)
-      .where(
-        and(
-          eq(PartTable.id, input.ownership.tool_part_id),
-          eq(PartTable.session_id, input.ownership.orchestrator_session_id),
-        ),
-      )
-      .get(),
-  )
-  const part = row
-    ? ({
-        ...row.data,
-        id: row.id,
-        sessionID: row.session_id,
-        messageID: row.message_id,
-      } as Message.Part)
-    : undefined
-  if (!part || part.type !== "tool" || part.state.status === "completed" || part.state.status === "error") return
-
-  const now = input.now ?? Date.now()
-  const start = part.state.status === "running" ? part.state.time.start : input.ownership.time_started
-  await Session.updatePart({
-    ...part,
-    state: {
-      status: "error",
-      input: part.state.input,
-      failure: toolFailureCauseFromUnknown({
-        error: input.reason,
-        originSite: input.originSite,
-        classification: "tool-execution",
-        kind: "tool-execute-error",
-        data: {
-          toolName: part.tool,
-          callID: part.callID,
-        },
-      }),
-      metadata: {
-        ...(part.state.status === "running" ? (part.state.metadata ?? {}) : {}),
-        ...(input.metadata ?? {}),
-      },
-      time: {
-        start,
-        end: now,
-      },
-    },
-  })
-}
-
 function isObjectRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value)
 }
@@ -729,49 +670,31 @@ async function cancelLiveOwnedBuild(input: {
   taskID: string
   sessionID: string
   goalRunID?: string
-  owner: { ownershipID: string; payload: OrchestratorToolOwnershipPayload }
+  owner: OrchestratorToolOwnershipRow
   reason: string
   reasonPrefix?: string
   originSite?: string
   metadata?: Record<string, unknown>
 }) {
-  const now = Date.now()
   const cancelReason = `${input.reasonPrefix ?? "cancel_subagent"}: ${input.reason}`
-  SessionPrompt.cancel(input.sessionID)
-  SessionStatus.set(input.sessionID, { type: "terminal", reason: "aborted", error: cancelReason })
-
   const goalRunID = input.goalRunID ?? input.owner.payload.goal_run_id
+  const before = goalRunID ? findGoalRun(goalRunID) : undefined
+  const aborted = await abortLiveOrchestratorToolOwnership({
+    taskID: input.taskID,
+    ownerships: [input.owner],
+    reason: cancelReason,
+    originSite: input.originSite ?? "orchestrator.tools.cancel-subagent-live-build",
+    metadata: input.metadata ?? { cancelled_live_build: true },
+  })
   let goalFact = ""
   if (goalRunID) {
-    const aborted = await abortGoalRunExecution({
-      taskID: input.taskID,
-      goalRunID,
-      reason: cancelReason,
-    })
     const goalRun = findGoalRun(goalRunID)
-    if (goalRun && (aborted.goalRunAborted || aborted.executorAbortAttempted)) {
-      goalFact =
-        ` goal_run ${goalRun.id} aborted` +
-        `${aborted.executorAbortAttempted ? `; executor_abort=${aborted.executorAbortSucceeded ? "ok" : "failed"}` : ""}.`
+    if (goalRun && (aborted.goalRuns > 0 || before?.status !== goalRun.status)) {
+      goalFact = ` goal_run ${goalRun.id} aborted.`
     } else if (goalRun) {
       goalFact = ` goal_run ${goalRun.id} was already terminal (${goalRun.status}); ownership closed.`
     }
   }
-
-  await markOwnedBuildToolPartErrored({
-    ownership: input.owner.payload,
-    reason: cancelReason,
-    originSite: input.originSite ?? "orchestrator.tools.cancel-subagent-live-build",
-    metadata: input.metadata ?? { cancelled_live_build: true },
-    now,
-  })
-  completeOrchestratorToolOwnership({
-    taskID: input.taskID,
-    ownershipID: input.owner.ownershipID,
-    outcome: "cancelled",
-    error: cancelReason,
-    now,
-  })
   return goalFact
 }
 

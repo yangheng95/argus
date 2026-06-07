@@ -28,7 +28,6 @@
 | `OPENCORVUS_EXECUTOR_CLAUDE_PERMISSION_MODE` | Claude executor 权限模式 | `ask` |
 | `OPENCORVUS_EXECUTOR_CODEX_PERMISSION_MODE` | Codex executor 权限模式 | `ask` |
 | `OPENCORVUS_TOOL_TIMEOUT_MS` | 单工具调用无活动超时 | 无全局默认（按工具类型单独控制） |
-| `OPENCORVUS_GOAL_RUN_TIMEOUT_MS` | Goal 运行上限 | 无限 |
 | `OPENCORVUS_INTERACTION_TIMEOUT_MS` | 交互请求超时 | 300000（见 `src/engine/runtime.ts:48`） |
 
 ## Permission
