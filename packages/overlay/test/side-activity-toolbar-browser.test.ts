@@ -155,6 +155,8 @@ test("right activity toolbar opens center workbench tabs while side panels stay 
         rightInspector: active("#rightPanelInspector"),
         centerOpen: document.querySelector<HTMLElement>("#centerWorkbench")?.dataset.open ?? "",
         centerWorkflow: active("#centerWorkbenchWorkflow"),
+        centerInspector: active("#centerWorkbenchInspector"),
+        centerNotifications: active("#centerWorkbenchNotifications"),
         centerExplorer: active("#centerWorkbenchExplorer"),
         centerDiff: active("#centerWorkbenchDiff"),
         centerPreview: active("#centerWorkbenchBrowser"),
@@ -174,21 +176,29 @@ test("right activity toolbar opens center workbench tabs while side panels stay 
         notificationPanelExists: !!document.querySelector("#solidNotificationCenterMount"),
         chatTitle: document.querySelector<HTMLElement>("#chatViewTitle")?.textContent ?? "",
         rightTitle: document.querySelector<HTMLElement>("#rightPanelTitle")?.textContent ?? "",
+        notificationTitle: document.querySelector<HTMLElement>("#notificationPanelTitle")?.textContent ?? "",
+        workbenchStartsAtWorkspace: (() => {
+          const workspace = document.querySelector<HTMLElement>("#conversationWorkspace")?.getBoundingClientRect()
+          const workbench = document.querySelector<HTMLElement>("#centerWorkbench")?.getBoundingClientRect()
+          return !!workspace && !!workbench && Math.abs(workbench.left - workspace.left) <= 1
+        })(),
         tabs: Array.from(document.querySelectorAll<HTMLElement>(".center-workbench-tab")).map((node) => node.textContent?.trim() ?? ""),
       }
     })
 
     expect(await activeState()).toMatchObject({
       leftTasks: "true",
-      rightInspector: "true",
+      rightInspector: "false",
       centerOpen: "true",
       centerWorkflow: "true",
+      centerInspector: "false",
+      centerNotifications: "false",
       centerExplorer: "false",
       centerDiff: "false",
       centerPreview: "false",
       leftToolbarExists: false,
       rightToolbarDisplay: "flex",
-      centerResizerHidden: false,
+      centerResizerHidden: true,
       rightActivityButtons: 7,
       rightTuiButtonExists: false,
       rightWorkflowButton: "true",
@@ -202,6 +212,8 @@ test("right activity toolbar opens center workbench tabs while side panels stay 
       notificationPanelExists: true,
       chatTitle: "Workflow",
       rightTitle: "Inspector",
+      notificationTitle: "Notifications",
+      workbenchStartsAtWorkspace: true,
     })
 
     await clickButton(".center-workbench-tab-close")
@@ -209,7 +221,7 @@ test("right activity toolbar opens center workbench tabs while side panels stay 
       centerOpen: "false",
       centerWorkflow: "false",
       rightWorkflowButton: "false",
-      rightInspectorButton: "true",
+      rightInspectorButton: "false",
     })
 
     await clickButton('[data-ui="side-activity-button"][data-side="right"][data-activity="workflow"]')
@@ -237,22 +249,25 @@ test("right activity toolbar opens center workbench tabs while side panels stay 
       centerPreview: "true",
       centerExplorer: "false",
       rightPreviewButton: "true",
-      rightInspector: "true",
+      rightInspector: "false",
       chatTitle: "Workflow",
-      rightTitle: "Inspector",
     })
 
     await clickButton('[data-ui="side-activity-button"][data-side="right"][data-activity="notifications"]')
     expect(await activeState()).toMatchObject({
+      centerNotifications: "true",
+      centerPreview: "false",
       rightNotificationsButton: "true",
       rightPreviewButton: "false",
       rightInspector: "false",
       rightNotifications: "true",
-      rightTitle: "Notifications",
+      notificationTitle: "Notifications",
     })
 
     await clickButton('[data-ui="side-activity-button"][data-side="right"][data-activity="inspector"]')
     expect(await activeState()).toMatchObject({
+      centerInspector: "true",
+      centerNotifications: "false",
       rightInspectorButton: "true",
       rightNotificationsButton: "false",
       rightInspector: "true",
@@ -268,10 +283,9 @@ test("right activity toolbar opens center workbench tabs while side panels stay 
       rightAssistantButton: "true",
       rightPreviewButton: "false",
       chatTitle: "Assistant",
-      rightTitle: "Inspector",
     })
 
-    expect((await activeState()).tabs).toEqual(expect.arrayContaining(["Workflow", "Diff", "Explorer", "Preview"]))
+    expect((await activeState()).tabs).toEqual(expect.arrayContaining(["Workflow", "Diff", "Explorer", "Preview", "Notifications", "Inspector"]))
 
     await page.$eval("#chatTextarea", (node) => {
       const textarea = node as HTMLTextAreaElement
@@ -294,30 +308,8 @@ test("right activity toolbar opens center workbench tabs while side panels stay 
     expect(requestLog.some((entry) => /^\/task\/[^/]+\/message$/.test(entry.path))).toBe(false)
     expect(requestLog.some((entry) => entry.path.includes("coding-agent-tui") || entry.path.startsWith("/tui/"))).toBe(false)
 
-    await clickButton('[data-ui="right-panel-header-collapse-toggle"]')
-    const collapsed = await page.evaluate(() => {
-      const measure = (selector: string) => {
-        const node = document.querySelector<HTMLElement>(selector)
-        if (!node) throw new Error(`Missing ${selector}`)
-        const style = getComputedStyle(node)
-        const rect = node.getBoundingClientRect()
-        return { display: style.display, width: Math.round(rect.width), height: Math.round(rect.height) }
-      }
-      return {
-        sidebar: measure("#sidebar"),
-        sections: measure("#sections"),
-        rightToolbar: measure("#solidRightActivityToolbar"),
-        leftContent: measure("#sidebar .side-panel-content"),
-        rightContent: measure("#sections .side-panel-content"),
-      }
-    })
-
-    expect(collapsed.sidebar.width).toBeGreaterThan(120)
-    expect(collapsed.sections.width).toBeLessThanOrEqual(48)
-    expect(collapsed.rightToolbar.display).toBe("flex")
-    expect(collapsed.rightToolbar.height).toBeGreaterThan(300)
-    expect(collapsed.leftContent.display).toBe("flex")
-    expect(collapsed.rightContent.display).toBe("none")
+    expect(await page.$('[data-ui="right-panel-header-collapse-toggle"]')).toBeNull()
+    expect(await page.$("#rightPaneResizer")).toBeNull()
 
     await clickButton('[data-ui="side-activity-button"][data-side="right"][data-activity="browser"]')
     expect(await activeState()).toMatchObject({ centerOpen: "true", centerPreview: "true" })

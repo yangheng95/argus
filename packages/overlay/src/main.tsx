@@ -16,7 +16,6 @@ import { ChatComposer } from "./components/ChatComposer"
 import { WindowControls } from "./components/WindowControls"
 import {
   LeftPanelHeaderCollapseControl,
-  RightPanelHeaderCollapseControl,
 } from "./components/PanelHeaderCollapseControl"
 import { TitlebarMenubar } from "./components/titlebar/TitlebarMenubar"
 import { ConnectionBadge } from "./components/ConnectionBadge"
@@ -168,9 +167,8 @@ const [logOpen, setLogOpen] = createSignal(false)
 const [workspaceOpen, setWorkspaceOpen] = createSignal(false)
 const [workspaceTarget, setWorkspaceTarget] = createSignal<DiffTarget>({ filePath: "" })
 
-type RightPanelActivity = "inspector" | "notifications"
-type RightActivity = "workflow" | "explorer" | "diff" | "browser" | "assistant" | RightPanelActivity
-type CenterWorkbenchTab = "workflow" | "explorer" | "diff" | "browser" | "file"
+type CenterWorkbenchTab = "workflow" | "inspector" | "notifications" | "explorer" | "diff" | "browser" | "file"
+type RightActivity = Exclude<CenterWorkbenchTab, "file"> | "assistant"
 
 const DEFAULT_CENTER_WORKBENCH_WIDTH = 420
 
@@ -186,6 +184,8 @@ const RIGHT_ACTIVITIES: readonly SideActivity<RightActivity>[] = [
 
 const CENTER_WORKBENCH_LABEL_KEYS: Record<CenterWorkbenchTab, string> = {
   workflow: "chat.title",
+  inspector: "sections.title",
+  notifications: "notify.center_label",
   explorer: "explorer.title",
   diff: "workspace.diff",
   browser: "browser_preview.title",
@@ -194,6 +194,8 @@ const CENTER_WORKBENCH_LABEL_KEYS: Record<CenterWorkbenchTab, string> = {
 
 const CENTER_WORKBENCH_ICONS: Record<CenterWorkbenchTab, IconName> = {
   workflow: "goals",
+  inspector: "panel-right",
+  notifications: "log-lines",
   explorer: "folder",
   diff: "file-document",
   browser: "inspect",
@@ -202,8 +204,7 @@ const CENTER_WORKBENCH_ICONS: Record<CenterWorkbenchTab, IconName> = {
 
 const [centerWorkbenchTabs, setCenterWorkbenchTabs] = createSignal<CenterWorkbenchTab[]>(["workflow"])
 const [activeCenterWorkbenchTab, setActiveCenterWorkbenchTab] = createSignal<CenterWorkbenchTab | null>("workflow")
-const [rightPanelActivity, setRightPanelActivity] = createSignal<RightPanelActivity>("inspector")
-const [selectedRightActivity, setSelectedRightActivity] = createSignal<RightActivity>("workflow")
+const [selectedRightActivity, setSelectedRightActivity] = createSignal<RightActivity | null>("workflow")
 const activeRightActivity = () => selectedRightActivity()
 
 function activateCodingAssistantSession(): void {
@@ -216,6 +217,7 @@ function activateCodingAssistantSession(): void {
 
 function activateCenterWorkbenchTab(tab: CenterWorkbenchTab): void {
   setActiveCenterWorkbenchTab(tab)
+  if (tab !== "file") setSelectedRightActivity(tab)
 }
 
 function selectRightActivity(activity: RightActivity): void {
@@ -223,45 +225,40 @@ function selectRightActivity(activity: RightActivity): void {
     activateCodingAssistantSession()
     return
   }
-  if (activity === "inspector" || activity === "notifications") {
-    openRightPanelActivity(activity)
-    return
-  }
   openCenterWorkbenchTab(activity)
-}
-
-function openRightPanelActivity(activity: RightPanelActivity): void {
-  setRightPanelActivity(activity)
-  setSelectedRightActivity(activity)
-  if (settingsStore.rightPanelCollapsed) {
-    setSettingsStore("rightPanelCollapsed", false)
-    saveSettings()
-  }
 }
 
 function openCenterWorkbenchTab(tab: CenterWorkbenchTab): void {
   setCenterWorkbenchTabs((current) => current.includes(tab) ? current : [...current, tab])
   activateCenterWorkbenchTab(tab)
-  if (tab === "workflow" || tab === "explorer" || tab === "diff" || tab === "browser") setSelectedRightActivity(tab)
 }
 
-function removeCenterWorkbenchTab(tab: CenterWorkbenchTab): void {
+function toolbarActivityForTab(tab: CenterWorkbenchTab | null): RightActivity | null {
+  return tab && tab !== "file" ? tab : null
+}
+
+function removeCenterWorkbenchTab(tab: CenterWorkbenchTab): CenterWorkbenchTab | null {
   const current = untrack(centerWorkbenchTabs)
   const index = current.indexOf(tab)
-  if (index < 0) return
+  if (index < 0) return untrack(activeCenterWorkbenchTab)
   const next = current.filter((item) => item !== tab)
+  let nextActive = untrack(activeCenterWorkbenchTab)
   setCenterWorkbenchTabs(next)
   if (untrack(activeCenterWorkbenchTab) === tab) {
-    setActiveCenterWorkbenchTab(next[index] ?? next[index - 1] ?? null)
+    nextActive = next[index] ?? next[index - 1] ?? null
+    setActiveCenterWorkbenchTab(nextActive)
   }
+  return nextActive
 }
 
 function closeCenterWorkbenchTab(tab: CenterWorkbenchTab): void {
   if (tab === "diff") setWorkspaceOpen(false)
   if (tab === "file") closeFileEditor()
-  if (untrack(selectedRightActivity) === tab) setSelectedRightActivity(untrack(rightPanelActivity))
-  if (tab === "workflow" && untrack(selectedRightActivity) === "assistant") setSelectedRightActivity(untrack(rightPanelActivity))
-  removeCenterWorkbenchTab(tab)
+  const selected = untrack(selectedRightActivity)
+  const nextActive = removeCenterWorkbenchTab(tab)
+  if (selected === tab || (tab === "workflow" && selected === "assistant")) {
+    setSelectedRightActivity(toolbarActivityForTab(nextActive))
+  }
 }
 
 function clampCenterWorkbenchWidth(value: number): number {
@@ -1063,7 +1060,6 @@ if (rightActivityToolbarEl) {
         active={activeRightActivity}
         ariaLabelKey="activity.right"
         onSelect={selectRightActivity}
-        trailing={<RightPanelHeaderCollapseControl />}
       />
     ),
     rightActivityToolbarEl,
@@ -1321,6 +1317,8 @@ disposers.push(
         explorer: document.getElementById("centerWorkbenchExplorer"),
         diff: document.getElementById("centerWorkbenchDiff"),
         browser: document.getElementById("centerWorkbenchBrowser"),
+        inspector: document.getElementById("centerWorkbenchInspector"),
+        notifications: document.getElementById("centerWorkbenchNotifications"),
         file: document.getElementById("centerWorkbenchFile"),
       }
       if (workbench) {
@@ -1328,8 +1326,8 @@ disposers.push(
         workbench.hidden = tabs.length === 0
       }
       if (resizer) {
-        resizer.hidden = tabs.length === 0
-        resizer.dataset.disabled = String(tabs.length === 0)
+        resizer.hidden = true
+        resizer.dataset.disabled = "true"
       }
       for (const [tab, body] of Object.entries(views)) {
         if (body) body.dataset.active = String(tab === active)
@@ -1343,22 +1341,17 @@ disposers.push(
     })
 
     createEffect(() => {
-      const activity = rightPanelActivity()
+      const active = activeCenterWorkbenchTab()
       const sections = document.getElementById("sections")
-      const title = document.getElementById("rightPanelTitle")
-      const bodies: Record<RightPanelActivity, HTMLElement | null> = {
-        inspector: document.getElementById("rightPanelInspector"),
-        notifications: document.getElementById("rightPanelNotifications"),
-      }
-      const titleKey: Record<RightPanelActivity, string> = {
-        inspector: "sections.title",
-        notifications: "notify.center_label",
-      }
-      if (sections) sections.dataset.rightActivity = activity
-      if (title) title.textContent = t(titleKey[activity])
-      for (const [id, body] of Object.entries(bodies)) {
-        if (body) body.dataset.active = String(id === activity)
-      }
+      const inspectorBody = document.getElementById("rightPanelInspector")
+      const notificationsBody = document.getElementById("rightPanelNotifications")
+      const inspectorTitle = document.getElementById("rightPanelTitle")
+      const notificationsTitle = document.getElementById("notificationPanelTitle")
+      if (sections) sections.dataset.rightActivity = "inspector"
+      if (inspectorTitle) inspectorTitle.textContent = t("sections.title")
+      if (notificationsTitle) notificationsTitle.textContent = t("notify.center_label")
+      if (inspectorBody) inspectorBody.dataset.active = String(active === "inspector")
+      if (notificationsBody) notificationsBody.dataset.active = String(active === "notifications")
     })
 
     createEffect(() => {
@@ -1387,23 +1380,18 @@ disposers.push(
       const sidebar = document.getElementById("sidebar")
       const sections = document.getElementById("sections")
       const leftResizer = document.getElementById("leftPaneResizer") as HTMLElement | null
-      const rightResizer = document.getElementById("rightPaneResizer") as HTMLElement | null
 
       if (sidebar) {
         sidebar.dataset.collapsed = String(sidebarCollapsed)
         sidebar.hidden = false
       }
       if (sections) {
-        sections.dataset.collapsed = String(rightPanelCollapsed)
+        sections.dataset.collapsed = "false"
         sections.hidden = false
       }
       if (leftResizer) {
         leftResizer.hidden = sidebarCollapsed
         leftResizer.dataset.disabled = String(sidebarCollapsed)
-      }
-      if (rightResizer) {
-        rightResizer.hidden = rightPanelCollapsed
-        rightResizer.dataset.disabled = String(rightPanelCollapsed)
       }
 
       renderPaneLayout({

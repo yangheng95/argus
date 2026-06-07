@@ -46,14 +46,8 @@
   min-width: var(--ui-collapsed-pane-width);
   display: flex;
   min-height: 0;
-  border-right: var(--oc-border-width) solid color-mix(in srgb, var(--border) 72%, transparent);
-  background: var(--surface-inset);
-}
-
-.sections > .side-activity-toolbar-mount {
-  order: 2;
-  border-right: 0;
   border-left: var(--oc-border-width) solid color-mix(in srgb, var(--border) 72%, transparent);
+  background: var(--surface-inset);
 }
 
 .side-activity-toolbar {

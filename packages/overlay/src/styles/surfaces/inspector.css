@@ -4,10 +4,10 @@
    (their hover states + theme overrides need a deliberate sweep). */
 
 .sections {
-  width: var(--ui-sections-width);
-  min-width: min(100%, var(--ui-rail-min-width));
-  max-width: var(--ui-sections-width);
-  flex: 0 1 var(--ui-sections-width);
+  width: 100%;
+  min-width: 0;
+  max-width: none;
+  flex: 1 1 0;
   overflow: hidden;
   display: flex;
   flex-direction: row;

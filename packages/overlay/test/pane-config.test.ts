@@ -18,7 +18,7 @@ test("PANEL_PANE_CONFIG targets the default panel's elements + variables", () =>
   expect(PANEL_PANE_CONFIG).toEqual({
     bodyId: "panelBody",
     leftHandleId: "leftPaneResizer",
-    rightHandleId: "rightPaneResizer",
+    rightHandleId: null,
     sidebarVar: "--ui-sidebar-width",
     sectionsVar: "--ui-sections-width",
   } satisfies PaneConfig)

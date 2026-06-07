@@ -35,8 +35,8 @@ export interface PaneConfig {
   bodyId: string;
   /** Left (sidebar) resize handle element id. */
   leftHandleId: string;
-  /** Right (sections) resize handle element id. */
-  rightHandleId: string;
+  /** Right (sections) resize handle element id, absent in layouts without a right pane. */
+  rightHandleId: string | null;
   /** CSS custom property that carries the left column width (px). */
   sidebarVar: string;
   /** CSS custom property that carries the right column width (px). */
@@ -47,7 +47,7 @@ export interface PaneConfig {
 export const PANEL_PANE_CONFIG: PaneConfig = {
   bodyId: "panelBody",
   leftHandleId: "leftPaneResizer",
-  rightHandleId: "rightPaneResizer",
+  rightHandleId: null,
   sidebarVar: "--ui-sidebar-width",
   sectionsVar: "--ui-sections-width",
 };
@@ -126,6 +126,11 @@ function paneBodyWidth(config: PaneConfig): number {
   );
 }
 
+function paneHandleElement(config: PaneConfig, side: "left" | "right"): HTMLElement | null {
+  const id = side === "left" ? config.leftHandleId : config.rightHandleId;
+  return id ? document.getElementById(id) : null;
+}
+
 /**
  * Compute the default rail width based on the current panel width.
  */
@@ -186,8 +191,8 @@ export function resolvedPaneWidths(
   const chatPreferred = 500 * scale;
   const chatMin = 300 * scale;
 
-  const leftHandle = paneHandleWidth(document.getElementById(config.leftHandleId));
-  const rightHandle = paneHandleWidth(document.getElementById(config.rightHandleId));
+  const leftHandle = paneHandleWidth(paneHandleElement(config, "left"));
+  const rightHandle = paneHandleWidth(paneHandleElement(config, "right"));
 
   const total = panelWidth - leftHandle - rightHandle;
   const railMax = Math.max(railMin, total - chatMin - railMin);
@@ -308,10 +313,10 @@ function resizePane(
     if (!rect) return;
     const { sections } = resolvedPaneWidths(state, config);
     const leftHandle = paneHandleWidth(
-      document.getElementById(config.leftHandleId),
+      paneHandleElement(config, "left"),
     );
     const rightHandle = paneHandleWidth(
-      document.getElementById(config.rightHandleId),
+      paneHandleElement(config, "right"),
     );
     const max = Math.max(
       railMin,
@@ -330,10 +335,10 @@ function resizePane(
   if (!rect) return;
   const { sidebar } = resolvedPaneWidths(state, config);
   const leftHandle = paneHandleWidth(
-    document.getElementById(config.leftHandleId),
+    paneHandleElement(config, "left"),
   );
   const rightHandle = paneHandleWidth(
-    document.getElementById(config.rightHandleId),
+    paneHandleElement(config, "right"),
   );
   const max = Math.max(
     railMin,
@@ -356,9 +361,7 @@ function onPaneResizeMove(
 async function stopPaneResize(callbacks: PaneCallbacks): Promise<void> {
   if (!paneDrag) return;
   const config = paneDrag.config;
-  const handleId =
-    paneDrag.side === "left" ? config.leftHandleId : config.rightHandleId;
-  const handle = document.getElementById(handleId);
+  const handle = paneHandleElement(config, paneDrag.side);
   if (handle) delete (handle as HTMLElement).dataset.active;
   paneDrag = null;
   delete document.body.dataset.resizing;
@@ -384,20 +387,19 @@ function startPaneResize(
   if (
     side === "left" &&
     (state.sidebarCollapsed ||
-      paneHandleWidth(document.getElementById(config.leftHandleId)) === 0)
+      paneHandleWidth(paneHandleElement(config, "left")) === 0)
   ) {
     return;
   }
   if (
     side === "right" &&
     (state.rightPanelCollapsed ||
-      paneHandleWidth(document.getElementById(config.rightHandleId)) === 0)
+      paneHandleWidth(paneHandleElement(config, "right")) === 0)
   ) {
     return;
   }
   paneDrag = { side, config };
-  const handleId = side === "left" ? config.leftHandleId : config.rightHandleId;
-  const handle = document.getElementById(handleId);
+  const handle = paneHandleElement(config, side);
   if (handle) (handle as HTMLElement).dataset.active = "true";
   document.body.dataset.resizing = "true";
 
@@ -430,8 +432,8 @@ export function initPaneResizers(
   callbacks: PaneCallbacks,
   config: PaneConfig,
 ): () => void {
-  const leftHandle = document.getElementById(config.leftHandleId);
-  const rightHandle = document.getElementById(config.rightHandleId);
+  const leftHandle = paneHandleElement(config, "left");
+  const rightHandle = paneHandleElement(config, "right");
 
   function onLeftDown(ev: Event) {
     startPaneResize("left", ev as PointerEvent, callbacks, config);

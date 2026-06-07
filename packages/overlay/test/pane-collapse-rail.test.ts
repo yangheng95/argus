@@ -18,7 +18,7 @@ function send(value: unknown, init?: ResponseInit) {
   });
 }
 
-test("both side panels collapse while their panel roots stay permanently mounted", async () => {
+test("left side panel collapses while its panel root stays permanently mounted", async () => {
   const server = Bun.serve({
     idleTimeout: 255,
     port: 0,
@@ -55,14 +55,14 @@ test("both side panels collapse while their panel roots stay permanently mounted
     await page.evaluateOnNewDocument((portValue) => {
       localStorage.setItem("oc_directory", "D:/overlay/workspace/app");
       localStorage.setItem("oc_server_url", `http://127.0.0.1:${portValue}`);
-      if (localStorage.getItem("oc_right_panel_collapsed") === null) {
-        localStorage.setItem("oc_right_panel_collapsed", "false");
-      }
+      localStorage.setItem("oc_sidebar_collapsed", "false");
     }, server.port);
     await page.goto(`http://127.0.0.1:${server.port}/ui/index.html`, { waitUntil: "domcontentloaded" });
-    await page.waitForSelector('[data-ui="right-panel-header-collapse-toggle"]');
+    await page.waitForSelector('[data-ui="sidebar-header-collapse-toggle"]');
     expect(await page.$('[data-ui="sidebar-header-collapse-toggle"]')).not.toBeNull();
     expect(await page.$("#solidLeftActivityToolbar")).toBeNull();
+    expect(await page.$('[data-ui="right-panel-header-collapse-toggle"]')).toBeNull();
+    expect(await page.$("#rightPaneResizer")).toBeNull();
 
     const beforeCollapse = await page.evaluate(() => {
       const measure = (selector: string) => {
@@ -83,60 +83,8 @@ test("both side panels collapse while their panel roots stay permanently mounted
         leftResizer: measure("#leftPaneResizer"),
         leftRail: measure(".sidebar-collapsed-rail"),
         chat: measure("#chatSection"),
-        sections: measure("#sections"),
-        rightResizer: measure("#rightPaneResizer"),
       };
     });
-
-    await page.click('[data-ui="right-panel-header-collapse-toggle"]');
-
-    const collapsed = await page.evaluate(() => {
-      const measure = (selector: string) => {
-        const node = document.querySelector<HTMLElement>(selector);
-        if (!node) throw new Error(`Missing ${selector}`);
-        const style = getComputedStyle(node);
-        const rect = node.getBoundingClientRect();
-        return {
-          hidden: node.hidden,
-          display: style.display,
-          width: rect.width,
-          height: rect.height,
-          disabled: node.dataset.disabled || "",
-        };
-      };
-      return {
-        sidebar: measure("#sidebar"),
-        leftResizer: measure("#leftPaneResizer"),
-        chat: measure("#chatSection"),
-        sections: measure("#sections"),
-        rightResizer: measure("#rightPaneResizer"),
-        rightToggle: measure('[data-ui="right-panel-header-collapse-toggle"]'),
-        sidebarContentVisible: getComputedStyle(document.querySelector<HTMLElement>("#sidebar .side-panel-content")!).display !== "none",
-        sectionsContentVisible: getComputedStyle(document.querySelector<HTMLElement>("#sections .side-panel-content")!).display !== "none",
-      };
-    });
-
-    expect(collapsed.sidebar.hidden).toBe(false);
-    expect(collapsed.sidebar.display).toBe("flex");
-    expect(Math.abs(collapsed.sidebar.width - beforeCollapse.sidebar.width)).toBeLessThanOrEqual(1);
-    expect(Math.abs(collapsed.sidebar.height - beforeCollapse.sidebar.height)).toBeLessThanOrEqual(1);
-    expect(collapsed.leftResizer.hidden).toBe(false);
-    expect(collapsed.leftResizer.disabled).toBe("false");
-    expect(collapsed.chat.width).toBeGreaterThan(beforeCollapse.chat.width);
-    expect(Math.abs(collapsed.chat.height - beforeCollapse.chat.height)).toBeLessThanOrEqual(1);
-    expect(collapsed.sections.hidden).toBe(false);
-    expect(collapsed.sections.display).toBe("flex");
-    expect(collapsed.sections.width).toBeLessThanOrEqual(48);
-    expect(collapsed.sections.width).toBeLessThan(beforeCollapse.sections.width / 2);
-    expect(Math.abs(collapsed.sections.height - beforeCollapse.sections.height)).toBeLessThanOrEqual(1);
-    expect(collapsed.rightResizer.hidden).toBe(true);
-    expect(collapsed.rightResizer.display).toBe("none");
-    expect(collapsed.rightResizer.disabled).toBe("true");
-    expect(collapsed.rightResizer.width).toBe(0);
-    expect(collapsed.rightToggle.hidden).toBe(false);
-    expect(collapsed.rightToggle.display).not.toBe("none");
-    expect(collapsed.sidebarContentVisible).toBe(true);
-    expect(collapsed.sectionsContentVisible).toBe(false);
 
     await page.click('[data-ui="sidebar-header-collapse-toggle"]');
 
@@ -206,83 +154,6 @@ test("both side panels collapse while their panel roots stay permanently mounted
     expect(leftExpanded.leftRail.display).toBe("none");
     expect(leftExpanded.sidebarContentVisible).toBe(true);
 
-    await page.click('[data-ui="right-panel-header-collapse-toggle"]');
-
-    const expanded = await page.evaluate(() => {
-      const measure = (selector: string) => {
-        const node = document.querySelector<HTMLElement>(selector);
-        if (!node) throw new Error(`Missing ${selector}`);
-        return {
-          hidden: node.hidden,
-          width: node.getBoundingClientRect().width,
-          disabled: node.dataset.disabled || "",
-        };
-      };
-      return {
-        sidebar: measure("#sidebar"),
-        leftResizer: measure("#leftPaneResizer"),
-        sections: measure("#sections"),
-        rightResizer: measure("#rightPaneResizer"),
-      };
-    });
-
-    expect(expanded.sidebar.hidden).toBe(false);
-    expect(Math.abs(expanded.sidebar.width - beforeCollapse.sidebar.width)).toBeLessThanOrEqual(1);
-    expect(expanded.leftResizer.hidden).toBe(false);
-    expect(expanded.leftResizer.disabled).toBe("false");
-    expect(expanded.sections.hidden).toBe(false);
-    expect(Math.abs(expanded.sections.width - beforeCollapse.sections.width)).toBeLessThanOrEqual(1);
-    expect(expanded.rightResizer.hidden).toBe(false);
-    expect(expanded.rightResizer.disabled).toBe("false");
-
-    await page.setViewport({ width: 607, height: 900 });
-    await page.waitForFunction(() => localStorage.getItem("oc_right_panel_collapsed") === "false");
-    await page.evaluate(() => {
-      localStorage.setItem("oc_sidebar_collapsed", "true");
-      localStorage.setItem("oc_right_panel_collapsed", "true");
-    });
-    await page.reload({ waitUntil: "domcontentloaded" });
-    await page.waitForSelector('[data-ui="right-panel-header-collapse-toggle"]');
-    expect(await page.$('[data-ui="sidebar-header-collapse-toggle"]')).not.toBeNull();
-
-    const narrowCollapsed = await page.evaluate(() => {
-      const measure = (selector: string) => {
-        const node = document.querySelector<HTMLElement>(selector);
-        if (!node) throw new Error(`Missing ${selector}`);
-        const style = getComputedStyle(node);
-        const rect = node.getBoundingClientRect();
-        return {
-          hidden: node.hidden,
-          display: style.display,
-          width: rect.width,
-          height: rect.height,
-          disabled: node.dataset.disabled || "",
-        };
-      };
-      return {
-        sidebar: measure("#sidebar"),
-        leftResizer: measure("#leftPaneResizer"),
-        leftRail: measure(".sidebar-collapsed-rail"),
-        chat: measure("#chatSection"),
-        sections: measure("#sections"),
-        rightResizer: measure("#rightPaneResizer"),
-      };
-    });
-
-    expect(narrowCollapsed.sidebar.hidden).toBe(false);
-    expect(narrowCollapsed.sidebar.width).toBeGreaterThan(600);
-    expect(narrowCollapsed.sidebar.height).toBeLessThanOrEqual(48);
-    expect(narrowCollapsed.leftResizer.hidden).toBe(true);
-    expect(narrowCollapsed.leftResizer.display).toBe("none");
-    expect(narrowCollapsed.leftResizer.disabled).toBe("true");
-    expect(narrowCollapsed.leftRail.display).toBe("flex");
-    expect(narrowCollapsed.chat.height).toBeGreaterThan(300);
-    expect(narrowCollapsed.sections.hidden).toBe(false);
-    expect(narrowCollapsed.sections.width).toBeGreaterThan(600);
-    expect(narrowCollapsed.sections.height).toBeLessThanOrEqual(48);
-    expect(narrowCollapsed.rightResizer.hidden).toBe(true);
-    expect(narrowCollapsed.rightResizer.display).toBe("none");
-    expect(narrowCollapsed.rightResizer.disabled).toBe("true");
   } finally {
     await browser.close();
     server.stop(true);

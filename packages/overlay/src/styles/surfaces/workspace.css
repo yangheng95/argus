@@ -239,20 +239,18 @@ code .file-link:hover {
   min-width: 0;
   min-height: 0;
   display: flex;
-  justify-content: flex-end;
   overflow: hidden;
 }
 
 .center-workbench {
-  flex: 0 0 var(--ui-center-workbench-width, calc(420px * var(--ui-scale)));
-  width: var(--ui-center-workbench-width, calc(420px * var(--ui-scale)));
-  min-width: min(100%, calc(280px * var(--ui-scale)));
-  max-width: var(--ui-center-workbench-width, calc(420px * var(--ui-scale)));
+  flex: 1 1 0;
+  width: 100%;
+  min-width: 0;
+  max-width: none;
   min-height: 0;
   display: flex;
   flex-direction: column;
   overflow: hidden;
-  border-left: var(--oc-border-width) solid color-mix(in srgb, var(--border) 72%, transparent);
   background: var(--surface);
 }
 
@@ -271,6 +269,10 @@ code .file-link:hover {
 }
 
 .center-workbench-resizer[hidden] {
+  display: none;
+}
+
+.center-workbench-resizer {
   display: none;
 }
 
