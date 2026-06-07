@@ -1,9 +1,12 @@
 import { describe, expect, test, beforeEach } from "bun:test"
+import fs from "fs/promises"
 import path from "path"
+import { LSP } from "../../src/lsp"
 import { LSPClient } from "../../src/lsp/client"
 import { LSPServer } from "../../src/lsp/server"
 import { Instance } from "../../src/project/instance"
 import { Log } from "../../src/util/log"
+import { tmpdir } from "../fixture/fixture"
 
 // Minimal fake LSP server that speaks JSON-RPC over stdio
 function spawnFakeServer() {
@@ -14,6 +17,19 @@ function spawnFakeServer() {
       stdio: "pipe",
     }),
   }
+}
+
+async function waitForFile(filepath: string, timeoutMs = 3000) {
+  const deadline = Date.now() + timeoutMs
+  while (Date.now() < deadline) {
+    const exists = await fs
+      .stat(filepath)
+      .then(() => true)
+      .catch(() => false)
+    if (exists) return true
+    await Bun.sleep(20)
+  }
+  return false
 }
 
 describe("LSPClient interop", () => {
@@ -122,5 +138,50 @@ describe("LSPClient interop", () => {
 
     expect(disposeCalls).toBe(1)
     expect(directKillCalls).toBe(0)
+  })
+
+  test("instance dispose closes LSP server that is still initializing", async () => {
+    await using tmp = await tmpdir({
+      git: true,
+      init: async (dir) => {
+        await fs.writeFile(
+          path.join(dir, "opencorvus.json"),
+          JSON.stringify({
+            $schema: "https://opencorvus.ai/config.json",
+            lsp: {
+              slow: {
+                command: [
+                  process.execPath,
+                  path.join(__dirname, "../fixture/lsp/slow-lsp-server.js"),
+                  path.join(dir, "lsp-started.tmp"),
+                  path.join(dir, "lsp-closed.tmp"),
+                  "250",
+                ],
+                extensions: [".race"],
+              },
+            },
+          }),
+          "utf8",
+        )
+        await fs.writeFile(path.join(dir, "file.race"), "x\n", "utf8")
+      },
+    })
+
+    const started = path.join(tmp.path, "lsp-started.tmp")
+    const closed = path.join(tmp.path, "lsp-closed.tmp")
+    const file = path.join(tmp.path, "file.race")
+
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const touch = LSP.touchFile(file, false)
+        expect(await waitForFile(started)).toBe(true)
+
+        await Instance.dispose()
+        await touch.catch(() => undefined)
+
+        expect(await waitForFile(closed, 1000)).toBe(true)
+      },
+    })
   })
 })

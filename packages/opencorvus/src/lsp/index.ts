@@ -77,6 +77,32 @@ export namespace LSP {
     }
   }
 
+  type State = {
+    broken: Set<string>
+    servers: Record<string, LSPServer.Info>
+    clients: LSPClient.Info[]
+    spawning: Map<string, Promise<LSPClient.Info | undefined>>
+    disposed: boolean
+  }
+
+  const createState = (servers: Record<string, LSPServer.Info>, clients: LSPClient.Info[] = []): State => ({
+    broken: new Set<string>(),
+    servers,
+    clients,
+    spawning: new Map<string, Promise<LSPClient.Info | undefined>>(),
+    disposed: false,
+  })
+
+  async function disposeClient(client: LSPClient.Info) {
+    await client.shutdown().catch((error) => {
+      log.warn("LSP client shutdown failed during dispose", {
+        serverID: client.serverID,
+        root: client.root,
+        error: String(error),
+      })
+    })
+  }
+
   const state = lazyInstanceState(
     async () => {
       const clients: LSPClient.Info[] = []
@@ -85,12 +111,7 @@ export namespace LSP {
 
       if (cfg.lsp === false) {
         log.info("all LSPs are disabled")
-        return {
-          broken: new Set<string>(),
-          servers,
-          clients,
-          spawning: new Map<string, Promise<LSPClient.Info | undefined>>(),
-        }
+        return createState(servers, clients)
       }
 
       for (const server of objectValues(LSPServer as Record<string, LSPServer.Info>)) {
@@ -132,15 +153,19 @@ export namespace LSP {
             .join(", "),
       })
 
-      return {
-        broken: new Set<string>(),
-        servers,
-        clients,
-        spawning: new Map<string, Promise<LSPClient.Info | undefined>>(),
-      }
+      return createState(servers, clients)
     },
     async (state) => {
-      await Promise.all(state.clients.map((client) => client.shutdown()))
+      state.disposed = true
+      const clients = new Set<LSPClient.Info>(state.clients)
+      const inflight = [...state.spawning.values()]
+      const settled = await Promise.allSettled(inflight)
+      for (const item of settled) {
+        if (item.status === "fulfilled" && item.value) clients.add(item.value)
+      }
+      await Promise.all([...clients].map(disposeClient))
+      state.clients.length = 0
+      state.spawning.clear()
     },
   )
 
@@ -177,10 +202,12 @@ export namespace LSP {
 
   async function getClients(file: string) {
     const s = await state()
+    if (s.disposed) return []
     const extension = path.parse(file).ext || file
     const result: LSPClient.Info[] = []
 
     async function schedule(server: LSPServer.Info, root: string, key: string) {
+      if (s.disposed) return undefined
       const handle = await server
         .spawn(root)
         .then((value) => {
@@ -194,6 +221,10 @@ export namespace LSP {
         })
 
       if (!handle) return undefined
+      if (s.disposed) {
+        await (handle.dispose?.() ?? Promise.resolve(handle.process.kill()))
+        return undefined
+      }
       log.info("spawned lsp server", { serverID: server.id })
 
       const client = await LSPClient.create({
@@ -211,6 +242,10 @@ export namespace LSP {
         await (handle.dispose?.() ?? Promise.resolve(handle.process.kill()))
         return undefined
       }
+      if (s.disposed) {
+        await disposeClient(client)
+        return undefined
+      }
 
       const existing = s.clients.find((x) => x.root === root && x.serverID === server.id)
       if (existing) {
@@ -223,6 +258,7 @@ export namespace LSP {
     }
 
     for (const server of objectValues(s.servers)) {
+      if (s.disposed) break
       if (server.extensions.length && !server.extensions.includes(extension)) continue
 
       const root = await server.root(file)
@@ -254,6 +290,7 @@ export namespace LSP {
 
       const client = await task
       if (!client) continue
+      if (s.disposed) continue
 
       result.push(client)
       Bus.publish(Event.Updated, {})
