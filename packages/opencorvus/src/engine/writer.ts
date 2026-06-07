@@ -25,7 +25,9 @@ import { EngineProtocol } from "./protocol"
 import { Message } from "@/session/message"
 import { Session } from "@/session"
 import { SessionPrompt } from "@/session/prompt"
+import { SessionStatus } from "@/session/status"
 import { toolFailureCauseFromUnknown } from "@/session/tool-failure-cause"
+import { PartTable } from "@/session/session.sql"
 import {
   updateGoalRun,
 } from "./persist"
@@ -44,6 +46,13 @@ import {
   type TaskRow,
 } from "./store"
 import { updateRun, updateTask } from "./state"
+import {
+  completeOrchestratorToolOwnership,
+  listLiveOrchestratorToolOwnership,
+  type OrchestratorToolOwnershipRow,
+  type OrchestratorToolOwnershipPayload,
+} from "./tool-ownership"
+import { abortGoalRunExecution } from "./execution-abort"
 import { updateGoalWorkspace } from "./persist"
 
 const log = Log.create({ service: "engine-writer" })
@@ -249,6 +258,13 @@ export interface AbortActiveTasksResult {
   toolParts: number
 }
 
+export interface AbortLiveOwnershipResult {
+  ownerships: number
+  goalRuns: number
+  sessions: number
+  toolParts: number
+}
+
 async function abortOpenToolParts(sessionID: string, reason: string): Promise<number> {
   const messages = await Session.messages({ sessionID })
   let updated = 0
@@ -285,6 +301,65 @@ async function abortOpenToolParts(sessionID: string, reason: string): Promise<nu
     }
   }
   return updated
+}
+
+async function abortOwnedToolPart(input: {
+  ownership: OrchestratorToolOwnershipPayload
+  reason: string
+  originSite: string
+  metadata?: Record<string, unknown>
+  now?: number
+}): Promise<number> {
+  const row = Database.use((db) =>
+    db
+      .select()
+      .from(PartTable)
+      .where(
+        and(
+          eq(PartTable.id, input.ownership.tool_part_id),
+          eq(PartTable.session_id, input.ownership.orchestrator_session_id),
+        ),
+      )
+      .get(),
+  )
+  const part = row
+    ? ({
+        ...row.data,
+        id: row.id,
+        sessionID: row.session_id,
+        messageID: row.message_id,
+      } as Message.Part)
+    : undefined
+  if (!part || part.type !== "tool" || part.state.status === "completed" || part.state.status === "error") return 0
+
+  const now = input.now ?? Date.now()
+  const start = part.state.status === "running" ? part.state.time.start : input.ownership.time_started
+  await Session.updatePart({
+    ...part,
+    state: {
+      status: "error",
+      input: part.state.input,
+      failure: toolFailureCauseFromUnknown({
+        error: input.reason,
+        originSite: input.originSite,
+        classification: "tool-execution",
+        kind: "tool-execute-error",
+        data: {
+          toolName: part.tool,
+          callID: part.callID,
+        },
+      }),
+      metadata: {
+        ...(part.state.status === "running" ? (part.state.metadata ?? {}) : {}),
+        ...(input.metadata ?? {}),
+      },
+      time: {
+        start,
+        end: now,
+      },
+    },
+  })
+  return 1
 }
 
 function listActiveTasksForProject(projectID: string): TaskRow[] {
@@ -332,6 +407,70 @@ export async function abortActiveTasksForProject(input: {
     tasks += 1
   }
   return { tasks, sessions, toolParts }
+}
+
+/**
+ * Close live orchestrator-owned child tool execution for one task.
+ *
+ * This is used for explicit operator interrupts. It does not decide a retry
+ * policy; it records the physical fact that the current child execution was
+ * cancelled so the next orchestrator turn can read the terminal goal_run and
+ * choose the next action.
+ */
+export async function abortLiveOrchestratorToolOwnership(input: {
+  taskID: string
+  reason: string
+  ownerships?: OrchestratorToolOwnershipRow[]
+  originSite?: string
+  metadata?: Record<string, unknown>
+}): Promise<AbortLiveOwnershipResult> {
+  const ownerships = input.ownerships ?? listLiveOrchestratorToolOwnership(input.taskID)
+  const originSite = input.originSite ?? "engine.writer.abort-live-orchestrator-tool-ownership"
+  const now = Date.now()
+  let closed = 0
+  let goalRuns = 0
+  let sessions = 0
+  let toolParts = 0
+
+  for (const ownership of ownerships) {
+    const childSessionID = ownership.payload.child_session_id
+    SessionPrompt.cancel(childSessionID)
+    SessionStatus.abortActivityGate(childSessionID, new DOMException(input.reason, "AbortError"))
+    SessionStatus.set(childSessionID, {
+      type: "terminal",
+      reason: "aborted",
+      error: input.reason,
+    })
+    sessions += 1
+
+    if (ownership.payload.goal_run_id) {
+      const aborted = await abortGoalRunExecution({
+        taskID: input.taskID,
+        goalRunID: ownership.payload.goal_run_id,
+        reason: input.reason,
+      })
+      if (aborted.goalRunAborted) goalRuns += 1
+    }
+
+    toolParts += await abortOwnedToolPart({
+      ownership: ownership.payload,
+      reason: input.reason,
+      originSite,
+      metadata: input.metadata,
+      now,
+    })
+
+    completeOrchestratorToolOwnership({
+      taskID: input.taskID,
+      ownershipID: ownership.ownershipID,
+      outcome: "cancelled",
+      error: input.reason,
+      now,
+    })
+    closed += 1
+  }
+
+  return { ownerships: closed, goalRuns, sessions, toolParts }
 }
 
 /**

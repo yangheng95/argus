@@ -1,12 +1,14 @@
 import { afterEach, describe, expect, mock, spyOn, test } from "bun:test"
 import { advanceQueue, directoryQueueSnapshot, dispatchTaskLoop, reorderQueuedTasksForCwd, taskCwd } from "../../src/engine/queue"
-import { EngineArtifactTable, EngineTaskTable } from "../../src/engine/engine.sql"
-import { findTask } from "../../src/engine/store"
+import { EngineArtifactTable, EngineGoalTable, EngineTaskTable } from "../../src/engine/engine.sql"
+import { beginBuildAttempt } from "../../src/engine/persist"
+import { findGoalRun, findTask } from "../../src/engine/store"
 import { deriveTaskStatus } from "../../src/engine/task-status"
 import {
   completeOrchestratorToolOwnership,
   createOrchestratorToolOwnershipPayload,
   insertOrchestratorToolOwnershipArtifact,
+  listLiveOrchestratorToolOwnership,
 } from "../../src/engine/tool-ownership"
 import { EngineService } from "../../src/task-api"
 
@@ -314,7 +316,7 @@ describe("engine queue", () => {
     })
   })
 
-  test("interrupting a live-owned active task queues the wake until ownership closes", async () => {
+  test("interrupting a live-owned active task aborts the child goal and starts a new wake", async () => {
     await using tmp = await tmpdir({ git: true })
 
     await Instance.provide({
@@ -346,6 +348,33 @@ describe("engine queue", () => {
             time_updated: now,
           }).run(),
         )
+        const goalID = `goal_queue_live_interrupt_${now}`
+        Database.use((db) =>
+          db.insert(EngineGoalTable).values({
+            id: goalID,
+            task_id: taskID,
+            title: "Interrupt live goal",
+            slug: "interrupt-live-goal",
+            objective: "Prove operator interrupt closes the running goal.",
+            acceptance_specs: [],
+            owned_paths: [],
+            depends_on: [],
+            kind: "feature",
+            requirement_ids: [],
+            priority: "blocking",
+            source: "test",
+            order_index: 0,
+            time_created: now,
+            time_updated: now,
+          }).run(),
+        )
+        const childSessionID = `ses_build_${now}`
+        const goalRunID = beginBuildAttempt({
+          taskID,
+          goalID,
+          sessionID: childSessionID,
+          now,
+        })
 
         await dispatchTaskLoop({ taskID })
         await new Promise((resolve) => setTimeout(resolve, 0))
@@ -356,14 +385,16 @@ describe("engine queue", () => {
           orchestratorSessionID: `ses_orchestrator_${now}`,
           orchestratorMessageID: `msg_orchestrator_${now}`,
           toolCallID: `cal_build_${now}`,
-          toolPartID: `prt_integrity_${now}`,
-          childSessionID: `ses_integrity_${now}`,
-          toolName: "integrity",
-          scope: "task",
+          toolPartID: `prt_build_${now}`,
+          childSessionID,
+          scope: "goal",
+          goalID,
+          goalRunID,
           now,
         })
         insertOrchestratorToolOwnershipArtifact({
           taskID,
+          goalRunID,
           label: "tool-ownership-start",
           payload: ownershipPayload,
           now,
@@ -376,8 +407,18 @@ describe("engine queue", () => {
         })
         await new Promise((resolve) => setTimeout(resolve, 0))
 
-        expect(interruptTaskLoop).not.toHaveBeenCalled()
-        expect(runTaskLoop).toHaveBeenCalledTimes(1)
+        for (let i = 0; i < 10; i++) {
+          await new Promise((resolve) => setTimeout(resolve, 0))
+          if (runTaskLoop.mock.calls.length >= 2) break
+        }
+        expect(interruptTaskLoop).toHaveBeenCalledWith(taskID, "task loop dispatch interrupt")
+        expect(runTaskLoop).toHaveBeenCalledTimes(2)
+        expect(runTaskLoop.mock.calls[1]?.[0]).toMatchObject({
+          taskID,
+          event: { note: "stop the running agent and reconsider" },
+        })
+        expect(findGoalRun(goalRunID)?.status).toBe("aborted")
+        expect(listLiveOrchestratorToolOwnership(taskID)).toHaveLength(0)
 
         completeOrchestratorToolOwnership({
           taskID,
@@ -385,18 +426,10 @@ describe("engine queue", () => {
           outcome: "completed",
           now: now + 1,
         })
+        expect(listLiveOrchestratorToolOwnership(taskID)).toHaveLength(0)
 
         release!()
         await holdLoop
-        for (let i = 0; i < 10; i++) {
-          await new Promise((resolve) => setTimeout(resolve, 0))
-          if (runTaskLoop.mock.calls.length >= 2) break
-        }
-        expect(runTaskLoop).toHaveBeenCalledTimes(2)
-        expect(runTaskLoop.mock.calls[1]?.[0]).toMatchObject({
-          taskID,
-          event: { note: "stop the running agent and reconsider" },
-        })
       },
     })
   })

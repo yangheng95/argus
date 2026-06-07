@@ -475,6 +475,26 @@ export async function dispatchTaskLoop(input: {
 
   const liveOwners = listLiveOrchestratorToolOwnership(task.id)
   if (liveOwners.length > 0 && loopInFlightFor(task.id)) {
+    if (input.interrupt === true) {
+      const { abortLiveOrchestratorToolOwnership } = await import("./writer")
+      const reason = input.event?.note
+        ? `operator interrupt while orchestrator tool ownership was live: ${input.event.note}`
+        : "operator interrupt while orchestrator tool ownership was live"
+      const aborted = await abortLiveOrchestratorToolOwnership({
+        taskID: task.id,
+        ownerships: liveOwners,
+        reason,
+        originSite: "engine.queue.dispatchTaskLoop.interrupt-live-ownership",
+        metadata: { operator_interrupt: true },
+      })
+      log.warn("dispatchTaskLoop: interrupted live orchestrator tool ownership", {
+        taskID: task.id,
+        liveOwners: liveOwners.map((owner) => owner.ownershipID),
+        aborted,
+      })
+      attachLoopCompletion(task.id, cwd, launchTaskLoop(task.id, input.event, true))
+      return "started"
+    }
     if (input.event) queuedTaskEvents.set(task.id, input.event)
     log.info("dispatchTaskLoop: queued wake behind live orchestrator tool ownership", {
       taskID: task.id,

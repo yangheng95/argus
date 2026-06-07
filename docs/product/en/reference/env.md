@@ -28,7 +28,6 @@ All variables, grouped by category. Sources: `packages/opencorvus/src/flag/flag.
 | `OPENCORVUS_EXECUTOR_CLAUDE_PERMISSION_MODE` | Claude executor permission | `ask` |
 | `OPENCORVUS_EXECUTOR_CODEX_PERMISSION_MODE` | Codex executor permission | `ask` |
 | `OPENCORVUS_TOOL_TIMEOUT_MS` | Per-tool inactivity timeout | no global default (per-tool) |
-| `OPENCORVUS_GOAL_RUN_TIMEOUT_MS` | Goal run hard cap | unlimited |
 | `OPENCORVUS_INTERACTION_TIMEOUT_MS` | Interaction request timeout | 300000 (`src/engine/runtime.ts:48`) |
 
 ## Permission
