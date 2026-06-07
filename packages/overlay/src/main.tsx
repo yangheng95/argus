@@ -170,11 +170,21 @@ type CenterWorkbenchPanel = "workflow" | "inspector" | "notifications" | "explor
 type RightActivity = Exclude<CenterWorkbenchPanel, "file"> | "assistant"
 
 const DEFAULT_CENTER_WORKBENCH_WIDTH = 420
+const CENTER_WORKBENCH_MIN_PANEL_WIDTH = 180
+const CENTER_WORKBENCH_PANEL_ORDER: readonly CenterWorkbenchPanel[] = [
+  "workflow",
+  "explorer",
+  "diff",
+  "browser",
+  "inspector",
+  "notifications",
+  "file",
+]
 
 const RIGHT_ACTIVITIES: readonly SideActivity<RightActivity>[] = [
-  { id: "workflow", icon: "plan", labelKey: "chat.title" },
+  { id: "workflow", icon: "workflow", labelKey: "chat.title" },
   { id: "inspector", icon: "panel-right", labelKey: "sections.title" },
-  { id: "notifications", icon: "log-lines", labelKey: "notify.center_label" },
+  { id: "notifications", icon: "notifications", labelKey: "notify.center_label" },
   { id: "explorer", icon: "folder", labelKey: "explorer.title" },
   { id: "diff", icon: "files", labelKey: "workspace.diff" },
   { id: "browser", icon: "web-search", labelKey: "browser_preview.title" },
@@ -245,6 +255,45 @@ function centerWorkbenchWidth(): number {
 
 function renderCenterWorkbenchWidth(width = centerWorkbenchWidth()): void {
   document.body.style.setProperty("--ui-center-workbench-width", `${clampCenterWorkbenchWidth(width)}px`)
+}
+
+function getCenterWorkbenchViews(): Record<CenterWorkbenchPanel, HTMLElement | null> {
+  return {
+    workflow: document.getElementById("centerWorkbenchWorkflow"),
+    explorer: document.getElementById("centerWorkbenchExplorer"),
+    diff: document.getElementById("centerWorkbenchDiff"),
+    browser: document.getElementById("centerWorkbenchBrowser"),
+    inspector: document.getElementById("centerWorkbenchInspector"),
+    notifications: document.getElementById("centerWorkbenchNotifications"),
+    file: document.getElementById("centerWorkbenchFile"),
+  }
+}
+
+function orderedCenterWorkbenchPanels(panels = centerWorkbenchPanels()): CenterWorkbenchPanel[] {
+  const open = new Set(panels)
+  return CENTER_WORKBENCH_PANEL_ORDER.filter((panel) => open.has(panel))
+}
+
+function centerWorkbenchPanelWeight(panel: CenterWorkbenchPanel): number {
+  const weight = Number(settingsStore.centerWorkbenchPanelWeights?.[panel])
+  return Number.isFinite(weight) && weight > 0 ? weight : 1
+}
+
+function renderCenterWorkbenchPanelWeights(): void {
+  const panels = orderedCenterWorkbenchPanels()
+  const lastPanel = panels[panels.length - 1]
+  const views = getCenterWorkbenchViews()
+  for (const panel of CENTER_WORKBENCH_PANEL_ORDER) {
+    const body = views[panel]
+    if (!body) continue
+    if (panels.includes(panel)) {
+      body.style.setProperty("--center-workbench-panel-grow", String(centerWorkbenchPanelWeight(panel)))
+      body.dataset.resizableNext = String(panel !== lastPanel && panels.length > 1)
+    } else {
+      body.style.removeProperty("--center-workbench-panel-grow")
+      delete body.dataset.resizableNext
+    }
+  }
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -1225,15 +1274,7 @@ disposers.push(
       const panels = centerWorkbenchPanels()
       const workbench = document.getElementById("centerWorkbench")
       const resizer = document.getElementById("centerWorkbenchResizer")
-      const views: Record<CenterWorkbenchPanel, HTMLElement | null> = {
-        workflow: document.getElementById("centerWorkbenchWorkflow"),
-        explorer: document.getElementById("centerWorkbenchExplorer"),
-        diff: document.getElementById("centerWorkbenchDiff"),
-        browser: document.getElementById("centerWorkbenchBrowser"),
-        inspector: document.getElementById("centerWorkbenchInspector"),
-        notifications: document.getElementById("centerWorkbenchNotifications"),
-        file: document.getElementById("centerWorkbenchFile"),
-      }
+      const views = getCenterWorkbenchViews()
       if (workbench) {
         workbench.dataset.open = String(panels.length > 0)
         workbench.hidden = panels.length === 0
@@ -1249,12 +1290,15 @@ disposers.push(
           body.dataset.active = String(open)
         }
       }
+      renderCenterWorkbenchPanelWeights()
     })
 
     createEffect(() => {
       settingsStore.centerWorkbenchWidth
+      settingsStore.centerWorkbenchPanelWeights
       centerWorkbenchPanels().length
       renderCenterWorkbenchWidth()
+      renderCenterWorkbenchPanelWeights()
     })
 
     createEffect(() => {
@@ -1349,6 +1393,68 @@ const paneCallbacks = {
 }
 initPaneResizers(paneCallbacks, PANEL_PANE_CONFIG)
 
+interface CenterWorkbenchPanelResize {
+  leftPanel: CenterWorkbenchPanel
+  rightPanel: CenterWorkbenchPanel
+  leftRect: DOMRect
+  totalWidth: number
+  totalWeight: number
+  minWidth: number
+}
+
+let centerWorkbenchPanelResize: CenterWorkbenchPanelResize | null = null
+
+function startCenterWorkbenchPanelResize(event: PointerEvent, leftPanel: CenterWorkbenchPanel): void {
+  const panels = orderedCenterWorkbenchPanels(untrack(centerWorkbenchPanels))
+  const index = panels.indexOf(leftPanel)
+  const rightPanel = panels[index + 1]
+  if (!rightPanel) return
+  const views = getCenterWorkbenchViews()
+  const leftBody = views[leftPanel]
+  const rightBody = views[rightPanel]
+  if (!leftBody || !rightBody) return
+  const leftRect = leftBody.getBoundingClientRect()
+  const rightRect = rightBody.getBoundingClientRect()
+  const totalWidth = leftRect.width + rightRect.width
+  if (totalWidth <= 0) return
+  const scale = currentUIScale()
+  const desiredMin = CENTER_WORKBENCH_MIN_PANEL_WIDTH * scale
+  const minWidth = Math.min(desiredMin, Math.max(80 * scale, (totalWidth - 2) / 2))
+  centerWorkbenchPanelResize = {
+    leftPanel,
+    rightPanel,
+    leftRect,
+    totalWidth,
+    totalWeight: centerWorkbenchPanelWeight(leftPanel) + centerWorkbenchPanelWeight(rightPanel),
+    minWidth,
+  }
+  document.body.dataset.centerWorkbenchPanelResizing = "true"
+  event.preventDefault()
+}
+
+function updateCenterWorkbenchPanelResize(event: PointerEvent): void {
+  const drag = centerWorkbenchPanelResize
+  if (!drag) return
+  const leftWidth = Math.min(
+    Math.max(event.clientX - drag.leftRect.left, drag.minWidth),
+    drag.totalWidth - drag.minWidth,
+  )
+  const leftWeight = drag.totalWeight * (leftWidth / drag.totalWidth)
+  const rightWeight = drag.totalWeight - leftWeight
+  setSettingsStore("centerWorkbenchPanelWeights", {
+    ...(settingsStore.centerWorkbenchPanelWeights ?? {}),
+    [drag.leftPanel]: leftWeight,
+    [drag.rightPanel]: rightWeight,
+  })
+}
+
+function stopCenterWorkbenchPanelResize(): void {
+  if (!centerWorkbenchPanelResize) return
+  centerWorkbenchPanelResize = null
+  delete document.body.dataset.centerWorkbenchPanelResizing
+  saveSettings()
+}
+
 let centerWorkbenchDrag = false
 function stopCenterWorkbenchResize() {
   if (!centerWorkbenchDrag) return
@@ -1371,9 +1477,28 @@ centerWorkbenchResizer?.addEventListener(
   },
   listenerOpts,
 )
+const centerWorkbench = document.getElementById("centerWorkbench")
+centerWorkbench?.addEventListener(
+  "pointerdown",
+  (event) => {
+    const pointer = event as PointerEvent
+    if (pointer.button != null && pointer.button !== 0) return
+    const target = pointer.target instanceof Element ? pointer.target : null
+    const view = target?.closest<HTMLElement>(".center-workbench-view[data-resizable-next='true']")
+    if (!view) return
+    const rect = view.getBoundingClientRect()
+    const handleWidth = 8 * currentUIScale()
+    if (rect.right - pointer.clientX > handleWidth) return
+    const panel = view.dataset.workbenchView as CenterWorkbenchPanel | undefined
+    if (!panel || !CENTER_WORKBENCH_PANEL_ORDER.includes(panel)) return
+    startCenterWorkbenchPanelResize(pointer, panel)
+  },
+  listenerOpts,
+)
 window.addEventListener(
   "pointermove",
   (event) => {
+    updateCenterWorkbenchPanelResize(event)
     if (!centerWorkbenchDrag) return
     const workspace = document.getElementById("conversationWorkspace")
     const rect = workspace?.getBoundingClientRect()
@@ -1383,7 +1508,9 @@ window.addEventListener(
   listenerOpts,
 )
 window.addEventListener("pointerup", stopCenterWorkbenchResize, listenerOpts)
+window.addEventListener("pointerup", stopCenterWorkbenchPanelResize, listenerOpts)
 window.addEventListener("pointercancel", stopCenterWorkbenchResize, listenerOpts)
+window.addEventListener("pointercancel", stopCenterWorkbenchPanelResize, listenerOpts)
 
 // ── Global event listeners (
 
@@ -1409,6 +1536,7 @@ window.addEventListener(
   () => {
     void cancelPaneResize(paneCallbacks)
     stopCenterWorkbenchResize()
+    stopCenterWorkbenchPanelResize()
   },
   listenerOpts,
 )

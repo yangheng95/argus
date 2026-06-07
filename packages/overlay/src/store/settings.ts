@@ -35,6 +35,7 @@ export interface OverlaySettings {
   sidebarWidth: number | null;
   sectionsWidth: number | null;
   centerWorkbenchWidth: number | null;
+  centerWorkbenchPanelWeights: Record<string, number> | null;
   /** Mission page column widths — persisted independently of the Panel's
    *  sidebarWidth/sectionsWidth so resizing one mode never moves the other
    *  (the ledger/channels content differs from the Panel's chat list /
@@ -109,6 +110,17 @@ function sanitizePaneWidth(value: any): number | null {
   return n;
 }
 
+export function sanitizePanelWeights(value: any): Record<string, number> | null {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return null;
+  const entries = Object.entries(value)
+    .map(([key, raw]) => {
+      const weight = typeof raw === "number" ? raw : Number.parseFloat(String(raw ?? ""));
+      return [key, weight] as const;
+    })
+    .filter(([key, weight]) => key.length > 0 && Number.isFinite(weight) && weight > 0);
+  return entries.length > 0 ? Object.fromEntries(entries) : null;
+}
+
 function defaultAutoServer(url: string): boolean {
   return !url || url === DEFAULT_SERVER;
 }
@@ -156,6 +168,7 @@ export const DEFAULT_SETTINGS: OverlaySettings = {
   sidebarWidth: null,
   sectionsWidth: null,
   centerWorkbenchWidth: null,
+  centerWorkbenchPanelWeights: null,
   missionLedgerWidth: null,
   missionChannelsWidth: null,
   opacity: 0.99,
@@ -233,6 +246,7 @@ export function applySettings(input: Partial<OverlaySettings>): void {
     sidebarWidth: sanitizePaneWidth(input?.sidebarWidth),
     sectionsWidth: sanitizePaneWidth(input?.sectionsWidth),
     centerWorkbenchWidth: sanitizePaneWidth(input?.centerWorkbenchWidth),
+    centerWorkbenchPanelWeights: sanitizePanelWeights(input?.centerWorkbenchPanelWeights),
     missionLedgerWidth: sanitizePaneWidth(input?.missionLedgerWidth),
     missionChannelsWidth: sanitizePaneWidth(input?.missionChannelsWidth),
     opacity: sanitizeOpacity(input?.opacity),
@@ -315,6 +329,7 @@ export function bootstrapOverlaySettings(
   sidebarWidth?: number;
   sectionsWidth?: number;
   centerWorkbenchWidth?: number;
+  centerWorkbenchPanelWeights?: Record<string, number>;
   missionLedgerWidth?: number;
   missionChannelsWidth?: number;
   preferredProjectEditor?: ProjectEditorID;
@@ -336,6 +351,7 @@ export function bootstrapOverlaySettings(
     sidebarWidth: input.sidebarWidth || undefined,
     sectionsWidth: input.sectionsWidth || undefined,
     centerWorkbenchWidth: input.centerWorkbenchWidth || undefined,
+    centerWorkbenchPanelWeights: input.centerWorkbenchPanelWeights || undefined,
     missionLedgerWidth: input.missionLedgerWidth || undefined,
     missionChannelsWidth: input.missionChannelsWidth || undefined,
     opacity: input.opacity ?? DEFAULT_SETTINGS.opacity,

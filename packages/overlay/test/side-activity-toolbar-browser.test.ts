@@ -187,6 +187,7 @@ test("right activity toolbar opens equal-width workbench panels while workflow k
         tabCount: document.querySelectorAll<HTMLElement>(".center-workbench-tab").length,
         openPanels: Array.from(document.querySelectorAll<HTMLElement>(".center-workbench-view[data-open='true']")).map((node) => node.dataset.workbenchView || ""),
         openPanelWidths: Array.from(document.querySelectorAll<HTMLElement>(".center-workbench-view[data-open='true']")).map((node) => Math.round(node.getBoundingClientRect().width)),
+        workflowResizableNext: document.querySelector<HTMLElement>("#centerWorkbenchWorkflow")?.dataset.resizableNext ?? "",
       }
     })
 
@@ -238,6 +239,35 @@ test("right activity toolbar opens equal-width workbench panels while workflow k
       chatTitle: "Workflow",
     })
 
+    await clickButton('[data-ui="side-activity-button"][data-side="right"][data-activity="inspector"]')
+    const twoPanelState = await activeState()
+    expect(twoPanelState).toMatchObject({
+      centerWorkflow: "true",
+      centerInspector: "true",
+      rightInspectorButton: "true",
+      workflowResizableNext: "true",
+    })
+    expect(twoPanelState.openPanels).toEqual(["workflow", "inspector"])
+    expect(Math.abs(twoPanelState.openPanelWidths[0]! - twoPanelState.openPanelWidths[1]!)).toBeLessThanOrEqual(2)
+
+    const workflowEdge = await page.evaluate(() => {
+      const rect = document.querySelector<HTMLElement>("#centerWorkbenchWorkflow")!.getBoundingClientRect()
+      return { x: rect.right - 2, y: rect.top + rect.height / 2 }
+    })
+    await page.mouse.move(workflowEdge.x, workflowEdge.y)
+    await page.mouse.down()
+    await page.mouse.move(workflowEdge.x + 120, workflowEdge.y, { steps: 8 })
+    await page.mouse.up()
+    const resizedTwoPanelState = await activeState()
+    expect(resizedTwoPanelState.openPanels).toEqual(["workflow", "inspector"])
+    expect(resizedTwoPanelState.openPanelWidths[0]! - resizedTwoPanelState.openPanelWidths[1]!).toBeGreaterThan(80)
+
+    await clickButton('[data-ui="side-activity-button"][data-side="right"][data-activity="inspector"]')
+    expect(await activeState()).toMatchObject({
+      centerInspector: "false",
+      rightInspectorButton: "false",
+    })
+
     await page.evaluate(() => window.dispatchEvent(new CustomEvent("acceptance:focus-changes")))
     expect(await activeState()).toMatchObject({ centerOpen: "true", centerDiff: "true", centerWorkflow: "true", rightDiffButton: "true" })
 
@@ -283,7 +313,8 @@ test("right activity toolbar opens equal-width workbench panels while workflow k
     })
     expect(inspectorOpenState.tabCount).toBe(0)
     expect(inspectorOpenState.openPanels).toEqual(["workflow", "explorer", "diff", "browser", "inspector", "notifications"])
-    expect(Math.max(...inspectorOpenState.openPanelWidths) - Math.min(...inspectorOpenState.openPanelWidths)).toBeLessThanOrEqual(2)
+    expect(inspectorOpenState.openPanelWidths.every((width) => width > 0)).toBe(true)
+    expect(inspectorOpenState.workflowResizableNext).toBe("true")
 
     await clickButton('[data-ui="side-activity-button"][data-side="right"][data-activity="assistant"]')
     await page.waitForFunction(() => document.querySelector<HTMLElement>('[data-ui="side-activity-button"][data-side="right"][data-activity="assistant"]')?.dataset.active === "true")

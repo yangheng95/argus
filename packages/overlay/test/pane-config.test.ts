@@ -91,6 +91,22 @@ test("center workbench width persists through the existing settings source", () 
   expect(main).toContain('setSettingsStore("centerWorkbenchWidth", width)')
 })
 
+test("center workbench panel weights persist through the existing settings source", () => {
+  const settings = readSrc("store/settings.ts")
+  const storage = readSrc("services/overlay-settings-storage.ts")
+  const main = readSrc("main.tsx")
+  const css = readSrc("styles/surfaces/workspace.css")
+  expect(settings).toContain("centerWorkbenchPanelWeights: Record<string, number> | null")
+  expect(settings).toContain("centerWorkbenchPanelWeights: sanitizePanelWeights(input?.centerWorkbenchPanelWeights)")
+  expect(settings).toContain("centerWorkbenchPanelWeights: input.centerWorkbenchPanelWeights || undefined")
+  expect(storage).toContain('centerWorkbenchPanelWeights: readJSON("oc_center_workbench_panel_weights")')
+  expect(storage).toContain('writeOptionalJSON("oc_center_workbench_panel_weights", input.centerWorkbenchPanelWeights)')
+  expect(main).toContain('setSettingsStore("centerWorkbenchPanelWeights"')
+  expect(main).toContain("renderCenterWorkbenchPanelWeights")
+  expect(css).toContain("--center-workbench-panel-grow")
+  expect(css).toContain('body[data-center-workbench-panel-resizing="true"]')
+})
+
 test("Mission conversation scroll container opts into the visible chat scrollbar", () => {
   const base = readSrc("styles/cascade/base.css")
   expect(base).toContain(".mission-conversation-body,")
