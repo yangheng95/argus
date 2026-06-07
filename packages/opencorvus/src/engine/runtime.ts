@@ -113,12 +113,12 @@ export namespace EngineRuntime {
       return
     }
 
+    const fingerprint = terminalGoalBatchFingerprint(goalRuns)
+    if (hasGoalBatchNotification({ taskID: run.task_id, runID: run.id, fingerprint })) return
+
     if (run.status === "blocked") {
       await hooks.updateRun(run, { status: "running", blocking_reason: null, error: null }, "Goal runs settled")
     }
-
-    const fingerprint = terminalGoalBatchFingerprint(goalRuns)
-    if (hasGoalBatchNotification({ taskID: run.task_id, runID: run.id, fingerprint })) return
 
     const task = findTask(run.task_id)
     if (task && isTaskCancelled(task)) {
