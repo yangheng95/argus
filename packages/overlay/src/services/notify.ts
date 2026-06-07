@@ -75,11 +75,13 @@ export interface AppNotificationItem {
   taskID: string;
   time: number;
   timeoutMs: number;
+  dismissedAt: number;
 }
 
 let permissionRequestPending = false;
 let notificationSeq = 0;
 const notificationTimers = new Map<string, ReturnType<typeof setTimeout>>();
+const MAX_NOTIFICATION_HISTORY = 100;
 
 export const [notificationStore, setNotificationStore] = createStore<{ items: AppNotificationItem[] }>({
   items: [],
@@ -179,12 +181,13 @@ export function showNotification(input: AppNotificationInput): string {
     taskID: input.taskID || "",
     timeoutMs: input.timeoutMs ?? defaultTimeout(input.tone),
     time: Date.now(),
+    dismissedAt: 0,
   };
   const existingIndex = notificationStore.items.findIndex((notice) => notice.id === id);
   if (existingIndex >= 0) {
     setNotificationStore("items", existingIndex, item);
   } else {
-    setNotificationStore("items", (items) => [item, ...items].slice(0, 6));
+    setNotificationStore("items", (items) => [item, ...items].slice(0, MAX_NOTIFICATION_HISTORY));
   }
   armDismissTimer(id, item.timeoutMs);
   return id;
@@ -194,13 +197,19 @@ export function dismissNotification(id: string): void {
   const timer = notificationTimers.get(id);
   if (timer) clearTimeout(timer);
   notificationTimers.delete(id);
-  setNotificationStore("items", (items) => items.filter((item) => item.id !== id));
+  const index = notificationStore.items.findIndex((item) => item.id === id);
+  if (index < 0) return;
+  setNotificationStore("items", index, "dismissedAt", Date.now());
 }
 
 export function clearNotifications(): void {
   for (const timer of notificationTimers.values()) clearTimeout(timer);
   notificationTimers.clear();
   setNotificationStore("items", []);
+}
+
+export function visibleNotificationItems(): AppNotificationItem[] {
+  return notificationStore.items.filter((item) => item.dismissedAt <= 0);
 }
 
 export function notifyProgress(input: Omit<AppNotificationInput, "tone">): string {
@@ -281,7 +290,7 @@ export async function ensureDesktopNotificationPermission(): Promise<HostPermiss
   }
 }
 
-function lookupTaskTitle(taskID: string): string {
+export function notificationTaskTitle(taskID: string): string {
   if (!taskID) return "";
   const list = boardStore.tasks ?? [];
   for (const item of list as any[]) {
@@ -368,7 +377,7 @@ export function routeNotification(event: RoutedNotificationEvent): void {
   const taskID = taskIDForEvent(event);
   const copyKey = eventCopyKey(event.type, notify);
   const title = t(`notify.event.${copyKey}.title`);
-  const body = t(`notify.event.${copyKey}.body`, { title: lookupTaskTitle(taskID) });
+  const body = t(`notify.event.${copyKey}.body`, { title: notificationTaskTitle(taskID) });
   showNotification({
     id: `event:${taskID || "global"}:${event.type}:${notify.tier}`,
     tone: toneForTier(notify),

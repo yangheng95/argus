@@ -166,7 +166,10 @@ test("right activity toolbar opens center workbench tabs while side panels stay 
         rightDiffButton: document.querySelector<HTMLElement>('[data-ui="side-activity-button"][data-side="right"][data-activity="diff"]')?.dataset.active ?? "",
         rightAssistantButton: document.querySelector<HTMLElement>('[data-ui="side-activity-button"][data-side="right"][data-activity="assistant"]')?.dataset.active ?? "",
         rightPreviewButton: document.querySelector<HTMLElement>('[data-ui="side-activity-button"][data-side="right"][data-activity="browser"]')?.dataset.active ?? "",
-        rightInspectorButtonExists: !!document.querySelector<HTMLElement>('[data-ui="side-activity-button"][data-side="right"][data-activity="inspector"]'),
+        rightInspectorButton: document.querySelector<HTMLElement>('[data-ui="side-activity-button"][data-side="right"][data-activity="inspector"]')?.dataset.active ?? "",
+        rightNotificationsButton: document.querySelector<HTMLElement>('[data-ui="side-activity-button"][data-side="right"][data-activity="notifications"]')?.dataset.active ?? "",
+        rightNotifications: active("#rightPanelNotifications"),
+        notificationPanelExists: !!document.querySelector("#solidNotificationCenterMount"),
         chatTitle: document.querySelector<HTMLElement>("#chatViewTitle")?.textContent ?? "",
         rightTitle: document.querySelector<HTMLElement>("#rightPanelTitle")?.textContent ?? "",
         tabs: Array.from(document.querySelectorAll<HTMLElement>(".center-workbench-tab")).map((node) => node.textContent?.trim() ?? ""),
@@ -183,13 +186,16 @@ test("right activity toolbar opens center workbench tabs while side panels stay 
       leftToolbarExists: false,
       rightToolbarDisplay: "flex",
       centerResizerHidden: true,
-      rightActivityButtons: 4,
+      rightActivityButtons: 6,
       rightTuiButtonExists: false,
       rightExplorerButton: "false",
       rightDiffButton: "false",
       rightAssistantButton: "false",
       rightPreviewButton: "false",
-      rightInspectorButtonExists: false,
+      rightInspectorButton: "true",
+      rightNotificationsButton: "false",
+      rightNotifications: "false",
+      notificationPanelExists: true,
       chatTitle: "Conversation",
       rightTitle: "Inspector",
     })
@@ -213,6 +219,24 @@ test("right activity toolbar opens center workbench tabs while side panels stay 
       rightPreviewButton: "true",
       rightInspector: "true",
       chatTitle: "Conversation",
+      rightTitle: "Inspector",
+    })
+
+    await clickButton('[data-ui="side-activity-button"][data-side="right"][data-activity="notifications"]')
+    expect(await activeState()).toMatchObject({
+      rightNotificationsButton: "true",
+      rightPreviewButton: "false",
+      rightInspector: "false",
+      rightNotifications: "true",
+      rightTitle: "Notifications",
+    })
+
+    await clickButton('[data-ui="side-activity-button"][data-side="right"][data-activity="inspector"]')
+    expect(await activeState()).toMatchObject({
+      rightInspectorButton: "true",
+      rightNotificationsButton: "false",
+      rightInspector: "true",
+      rightNotifications: "false",
       rightTitle: "Inspector",
     })
 

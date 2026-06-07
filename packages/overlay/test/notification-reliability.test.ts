@@ -1,4 +1,4 @@
-import { afterEach, beforeAll, beforeEach, describe, expect, test } from "bun:test";
+import { afterEach, beforeAll, beforeEach, describe, expect, mock, test } from "bun:test";
 import {
   clearNotifications,
   ackTaskNotification,
@@ -23,6 +23,12 @@ import { setSettingsStore } from "../src/store/settings";
 let events: typeof import("../src/services/events");
 
 beforeAll(async () => {
+  mock.module("../src/utils/icon-html", () => ({
+    hydrateIconPlaceholders() {},
+    iconHtml() {
+      return "";
+    },
+  }));
   events = await import("../src/services/events");
 });
 
