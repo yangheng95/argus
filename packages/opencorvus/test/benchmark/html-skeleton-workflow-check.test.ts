@@ -90,6 +90,67 @@ describe("html skeleton workflow check", () => {
     expect(report.checks.find((check) => check.id === "visual-root-is-design-output")?.passed).toBe(false)
     expect(report.checks.find((check) => check.id === "not-reference-image-only")?.passed).toBe(false)
   })
+
+  test("rejects framework project roots and build outputs as visual HTML skeletons", async () => {
+    await using tmp = await tmpdir()
+    const root = path.join(tmp.path, "react-app")
+    await Bun.write(path.join(root, "reference.png"), minimalPngBytes())
+    await Bun.write(path.join(root, "index.html"), [
+      "<!doctype html>",
+      "<html>",
+      "<head><script type=\"module\" src=\"/src/main.tsx\"></script></head>",
+      "<body><div id=\"root\"></div></body>",
+      "</html>",
+    ].join(""))
+    await Bun.write(path.join(root, "dist", "index.html"), "<div id=\"root\"></div>")
+
+    const report = await runHtmlSkeletonWorkflowCheck({
+      visualRoot: root,
+      reference: path.join(root, "reference.png"),
+      outDir: path.join(tmp.path, "out"),
+      threshold: 0.95,
+      worstThreshold: 0.8,
+      headless: true,
+      artifactsOnly: true,
+    })
+
+    expect(report.passed).toBe(false)
+    expect(report.checks.find((check) => check.id === "not-build-output-root")?.passed).toBe(false)
+    expect(report.checks.find((check) => check.id === "not-framework-compiled-entry")?.passed).toBe(false)
+    expect(report.checks.find((check) => check.id === "visual-token-css")?.passed).toBe(false)
+  })
+
+  test("rejects old task-scoped source baseline handoffs that never restored visual-html-skeleton", async () => {
+    await using tmp = await tmpdir()
+    const taskDir = path.join(tmp.path, "tasks", "tsk_old")
+    const frontendDesignDir = path.join(taskDir, "frontend-design")
+    const sourcePackageDir = path.join(frontendDesignDir, "web-clone-source")
+    await writeSourceEvidence(sourcePackageDir)
+    await Bun.write(path.join(frontendDesignDir, "frontend-template.md"), [
+      "## Frontend Project",
+      "- role: source_baseline_input",
+      "- project_root: frontend-design-skeleton",
+      "- entrypoints:",
+      "  - frontend-design-skeleton/src/App.tsx",
+      "  - frontend-design-skeleton/src/components/SourceDomPage.tsx",
+      "- decision log: visual-diff not run against editable HTML skeleton",
+    ].join("\n"))
+
+    const report = await runHtmlSkeletonWorkflowCheck({
+      taskDir,
+      outDir: path.join(tmp.path, "out"),
+      threshold: 0.95,
+      worstThreshold: 0.8,
+      headless: true,
+      artifactsOnly: true,
+    })
+
+    expect(report.passed).toBe(false)
+    expect(report.visualRoot).toBe(path.join(frontendDesignDir, "visual-html-skeleton"))
+    expect(report.checks.find((check) => check.id === "visual-root-index")?.passed).toBe(false)
+    expect(report.checks.find((check) => check.id === "template-role-visual-baseline")?.passed).toBe(false)
+    expect(report.checks.find((check) => check.id === "template-names-visual-root")?.passed).toBe(false)
+  })
 })
 
 async function writeSourceEvidence(sourcePackageDir: string): Promise<void> {

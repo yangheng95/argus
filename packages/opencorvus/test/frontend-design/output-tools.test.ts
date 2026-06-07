@@ -406,6 +406,61 @@ test("submit_frontend_template renders visual HTML skeleton as non-implementatio
   expect(report).not.toContain("maintainable_status: incomplete_source_baseline")
 })
 
+test("visual baseline workflow reports source baseline submissions as incomplete frontend_design work", async () => {
+  const kit = createFrontendTemplateOutputTools()
+  const submit = kit.tools.submit_frontend_template as any
+
+  await submit.execute({
+    design_system: "source-derived static visual baseline",
+    tech_stack: ["static HTML", "CSS", "Playwright visual diff"],
+    final_acceptance_mode: "visual_baseline_allowed",
+    frontend_template: "Restore the captured page into a source-editable static HTML/CSS visual skeleton.",
+    fillable_modules: "Create visual-html-skeleton/index.html, tokens.css, regional CSS, assets, screenshots, and visual diff evidence.",
+    component_inventory: "Static visual skeleton regions.",
+    component_reuse_plan: [
+      {
+        family_id: "comp-static-skeleton",
+        name: "Static visual skeleton",
+        observed_surface: "Full captured page",
+        source_refs: ["web-clone-source/reference.png"],
+        implementation_strategy: "extracted_baseline_defer",
+        reuse_source: "frontend-design-skeleton",
+        mature_library_candidates: [],
+        props_states: "static representative visual states",
+        replacement_boundary: "visual skeleton root",
+        parity_guard: "Compare the restored static skeleton against reference.png.",
+        custom_fallback_reason: "not applicable",
+      },
+    ],
+    baseline_replacement_plan: [],
+    material_inventory: "web-clone-source source IR, source skeleton CSS, assets, and reference pixels.",
+    visual_consistency_contract: "95% visual similarity against web-clone-source/reference.png.",
+    ui_data_contract: "Static visible source content only.",
+    frontend_project: {
+      status: "created",
+      role: "source_baseline_input",
+      project_root: "frontend-design-skeleton",
+      source_package: "web-clone-source",
+      entrypoints: ["README.md", "src/App.tsx", "src/components/SourceDomPage.tsx"],
+      generation_tool: "host-prepared:create_frontend_skeleton_project",
+      notes: ["Captured source evidence exists, but the visual HTML skeleton was not restored."],
+    },
+    template_iteration_notes: ["checked visual-only output contract"],
+    completeness_review: "Not complete: this is still the captured source evidence baseline.",
+    reference_artifacts: ["web-clone-source/reference.png"],
+    open_questions: [],
+  }, {})
+
+  const report = buildFrontendTemplateReport(kit.getCollector()).detail
+  expect(report).toContain("- role: source_baseline_input")
+  expect(report).toContain("visual_status: incomplete_visual_baseline")
+  expect(report).toContain("visual_next_action")
+  expect(report).toContain("Visual HTML Skeleton Workflow Incomplete")
+  expect(report).toContain("frontend_design must deliver `frontend_project.role=visual_baseline_input`")
+  expect(report).toContain("Do not ask other agents to reinterpret `frontend-design-skeleton`")
+  expect(report).toContain("frontend-design-skeleton is captured source evidence only")
+})
+
 test("component reuse plan accepts provider naming and incomplete library hints without schema rejection", async () => {
   const submit = createFrontendTemplateOutputTools().tools.submit_frontend_template as any
   const base = {
