@@ -20,6 +20,7 @@ import {
   isEvaluationReportPassing,
 } from "@/verification/visual/evaluate"
 import { resolveWebpageEvidenceOutputDir, DEFAULT_WEBPAGE_EVIDENCE_SUBDIR } from "./output-dir"
+import { tryMaterializeVisualEvidenceBundle } from "./visual-evidence-bundle"
 
 export const WebpageEvaluateTool = Tool.define("webpage_evaluate", {
   description: `Score visual similarity between a reference and a rendered screenshot.
@@ -81,6 +82,12 @@ Returns score, SSIM, pixelDiff%, and whether the numeric visual threshold passed
       comparisonDimensions: report.comparisonDimensions,
     }
     await fs.writeFile(evalResultPath, JSON.stringify(evalResult, null, 2), "utf8")
+    const visualEvidenceBundle = await tryMaterializeVisualEvidenceBundle({
+      outputDir,
+      taskID: typeof ctx.extra?.taskID === "string" ? ctx.extra.taskID : undefined,
+      source: sourceForAgent(ctx.agent),
+      projectDirectory: process.cwd(),
+    })
 
     return {
       title: `Score ${report.overallScore}/100 ${passed ? "passed" : "below"} threshold ${passThreshold}/100 (ssim=${report.ssimScore.toFixed(3)} pixelDiff=${report.pixelDiffPercent.toFixed(2)}%)`,
@@ -90,6 +97,7 @@ Returns score, SSIM, pixelDiff%, and whether the numeric visual threshold passed
         `- Reference: \`${referencePath}\``,
         `- Rendered:  \`${renderedPath}\``,
         `- Result:    \`${evalResultPath}\``,
+        visualEvidenceBundle ? `- Visual evidence bundle: \`${path.join(outputDir, "visual-evidence-bundle.json")}\`` : "",
         "",
         `## Score: **${report.overallScore}/100**`,
         `- Numeric threshold: ${passThreshold}/100`,
@@ -110,7 +118,14 @@ Returns score, SSIM, pixelDiff%, and whether the numeric visual threshold passed
         mismatchedPixels: report.mismatchedPixels,
         totalPixels: report.totalPixels,
         evalResultPath,
+        visualEvidenceBundlePath: visualEvidenceBundle ? path.join(outputDir, "visual-evidence-bundle.json") : undefined,
       },
     }
   },
 })
+
+function sourceForAgent(agent: string): "frontend_design" | "build" | "integrity" {
+  if (agent === "integrity") return "integrity"
+  if (agent === "build") return "build"
+  return "frontend_design"
+}

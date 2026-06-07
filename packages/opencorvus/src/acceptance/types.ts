@@ -14,6 +14,7 @@ import z from "zod"
 
 export const AcceptanceSeverity = z.enum(["essential", "important", "optional", "pitfall"])
 export const AcceptanceTrigger = z.enum(["on_goal", "on_integrity", "on_acceptance"])
+export const LlmJudgeInputKind = z.enum(["acceptance_summary", "changed_files", "requirement_text", "visual_evidence"])
 
 const GherkinScenarioSchema = z
   .object({
@@ -75,7 +76,7 @@ const LlmJudgeScorerSchema = z.object({
     .optional()
     .describe("Ordinal anchors, 2-5 levels. Omit for binary MET/UNMET."),
   inputs: z
-    .array(z.enum(["acceptance_summary", "changed_files", "requirement_text"]))
+    .array(LlmJudgeInputKind)
     .optional()
     .describe("Which parts of the acceptance to feed the judge. Default: acceptance_summary."),
 })
@@ -87,6 +88,7 @@ const PREBUILT_SCORER_NAMES = [
   "exact_match",
   "length_within",
   "json_schema",
+  "visual-evidence-bundle",
 ] as const
 
 const PrebuiltScorerSchema = z.object({
@@ -97,6 +99,19 @@ const PrebuiltScorerSchema = z.object({
     ),
   name: z.enum(PREBUILT_SCORER_NAMES),
   config: z.record(z.string(), z.unknown()).default({}),
+  spec: z
+    .object({
+      kind: z.literal("visual_evidence_bundle"),
+      viewport: z.string().min(1).optional(),
+    })
+    .optional()
+    .describe("For name=visual-evidence-bundle, identifies the required visual evidence bundle shape."),
+  expect: z
+    .object({
+      status: z.literal("passed"),
+    })
+    .optional()
+    .describe("For name=visual-evidence-bundle, requires a passing current bundle."),
 })
 
 const ContractAuditScorerSchema = z.object({
@@ -183,7 +198,11 @@ export function renderSpecsAsText(specs: readonly AcceptanceSpec[]): string {
           `    - [contract_audit] ${sc.name} — ${sc.spec.kind} contracts=${sc.spec.contract_ids.join(", ")} expect=${sc.expect.status}`,
         )
       } else {
-        lines.push(`    - [prebuilt:${sc.name}] ${JSON.stringify(sc.config)}`)
+        const visualBundle =
+          sc.name === "visual-evidence-bundle" && sc.spec?.kind === "visual_evidence_bundle"
+            ? ` — ${sc.spec.kind}${sc.spec.viewport ? ` viewport=${sc.spec.viewport}` : ""} expect=${sc.expect?.status ?? "(unspecified)"}`
+            : ""
+        lines.push(`    - [prebuilt:${sc.name}] ${JSON.stringify(sc.config)}${visualBundle}`)
       }
     }
   }

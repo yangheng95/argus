@@ -1,6 +1,61 @@
 import { expect, test } from "bun:test"
 import { Instance } from "../../src/project/instance"
 import { tmpdir } from "../fixture/fixture"
+import type { VisualEvidenceBundle } from "../../src/acceptance/visual-evidence"
+
+function visualBundle(taskID: string, projectDirectory: string): VisualEvidenceBundle {
+  return {
+    id: "veb_integrity_desktop",
+    taskID,
+    source: "integrity",
+    reference: {
+      path: "webpage-evidence/reference.png",
+      sha256: "sha_reference",
+      width: 1440,
+      height: 900,
+    },
+    rendered: {
+      path: "webpage-evidence/rendered.png",
+      sha256: "sha_rendered",
+      width: 1440,
+      height: 900,
+      capturedAt: "2026-06-08T00:00:00.000Z",
+      viewport: { width: 1440, height: 900 },
+      appURL: "http://127.0.0.1:4173",
+      projectDirectory,
+      commitRef: "abc123",
+    },
+    evaluation: {
+      path: "webpage-evidence/eval-result.json",
+      overallScore: 98,
+      passThreshold: 96,
+      passed: true,
+      ssimScore: 0.99,
+      pixelDiffPercent: 0.2,
+      dimensionsMatch: true,
+    },
+    vision: {
+      path: "webpage-evidence/vision-judge.json",
+      accepted: true,
+      differenceCount: 0,
+      criticalCount: 0,
+      majorCount: 0,
+      minorCount: 0,
+    },
+    regions: [{
+      id: "region_header",
+      label: "Header",
+      requirementIDs: ["REQ-visual"],
+      acceptanceSpecIDs: ["acc-final-visual"],
+      sourceRefs: ["webpage-evidence/reference.png"],
+      viewport: "desktop-primary",
+      required: true,
+      status: "passing",
+      evidenceRefs: ["webpage-evidence/rendered.png", "webpage-evidence/eval-result.json"],
+      notes: "Header matches.",
+    }],
+  }
+}
 
 test("provider-bound integrity run_command applies the default foreground timeout", async () => {
   await import("../../src/session/prompt")
@@ -90,6 +145,7 @@ test("integrity evidence tools expose scoped drilldown without upstream full-con
         },
         frontendDesign:
           "## visual_consistency_contract\nMatch web-clone-source/reference.png with measured overlay evidence.\n\n## evidence_source_manifest\nweb-clone-source/implementation-blueprint.md",
+        visualEvidence: [visualBundle("tsk_integrity_tools", dir.path)],
         attachments: [],
       })
 
@@ -101,6 +157,7 @@ test("integrity evidence tools expose scoped drilldown without upstream full-con
         false,
       )
       expect(Object.keys(tools)).toContain("inspect_integrity_evidence")
+      expect(Object.keys(tools)).toContain("inspect_visual_evidence")
       expect(Object.keys(tools)).toContain("run_command")
       expect(Object.keys(tools)).toContain("read_file")
       expect(Object.keys(tools)).toContain("search_code")
@@ -133,6 +190,17 @@ test("integrity evidence tools expose scoped drilldown without upstream full-con
       )
       expect(String(design)).toContain("visual_consistency_contract")
       expect(String(design)).toContain("web-clone-source/implementation-blueprint.md")
+
+      const visual = await tools.inspect_visual_evidence.execute!(
+        { bundle_id: "veb_integrity_desktop", max_chars: 4_000 },
+        {} as any,
+      )
+      expect(String(visual)).toContain("status=passing")
+      expect(String(visual)).toContain("reference=webpage-evidence/reference.png")
+      expect(String(visual)).toContain("rendered=webpage-evidence/rendered.png")
+      expect(String(visual)).toContain("score=98/96")
+      expect(String(visual)).toContain("project_directory=" + dir.path)
+      expect(String(visual)).toContain("region_header")
 
       const command = await tools.run_command.execute!(
         { command: "printf guard > integrity-mutation.txt", timeout_ms: 10_000 },

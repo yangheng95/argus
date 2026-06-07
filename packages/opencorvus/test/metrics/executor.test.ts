@@ -18,6 +18,7 @@ import {
   writeMetricResult,
 } from "../../src/metrics/store"
 import { resetDatabase } from "../fixture/db"
+import type { VisualEvidenceBundle } from "../../src/acceptance/visual-evidence"
 
 let projectID = ""
 let taskID = ""
@@ -55,6 +56,61 @@ function seedProjectAndTask() {
       })
       .run(),
   )
+}
+
+function visualBundle(overrides: Partial<VisualEvidenceBundle> = {}): VisualEvidenceBundle {
+  const bundle: VisualEvidenceBundle = {
+    id: "veb_desktop",
+    taskID,
+    source: "integrity",
+    reference: {
+      path: "webpage-evidence/reference.png",
+      sha256: "sha_reference",
+      width: 1440,
+      height: 900,
+    },
+    rendered: {
+      path: "webpage-evidence/rendered.png",
+      sha256: "sha_rendered",
+      width: 1440,
+      height: 900,
+      capturedAt: "2026-06-08T00:00:00.000Z",
+      viewport: { width: 1440, height: 900 },
+      appURL: "http://127.0.0.1:4173",
+      projectDirectory: os.tmpdir(),
+      commitRef: "abc123",
+    },
+    evaluation: {
+      path: "webpage-evidence/eval-result.json",
+      overallScore: 98,
+      passThreshold: 96,
+      passed: true,
+      ssimScore: 0.99,
+      pixelDiffPercent: 0.2,
+      dimensionsMatch: true,
+    },
+    vision: {
+      path: "webpage-evidence/vision-judge.json",
+      accepted: true,
+      differenceCount: 0,
+      criticalCount: 0,
+      majorCount: 0,
+      minorCount: 0,
+    },
+    regions: [{
+      id: "region_header",
+      label: "Header",
+      requirementIDs: ["REQ-visual"],
+      acceptanceSpecIDs: ["acc-final-visual"],
+      sourceRefs: ["webpage-evidence/reference.png"],
+      viewport: "desktop-primary",
+      required: true,
+      status: "passing",
+      evidenceRefs: ["webpage-evidence/rendered.png", "webpage-evidence/eval-result.json"],
+      notes: "Header matches the reference.",
+    }],
+  }
+  return { ...bundle, ...overrides }
 }
 
 beforeEach(async () => {
@@ -331,6 +387,95 @@ describe("executeMetrics — judge evaluator (pluggable runner)", () => {
     expect(outcome.results[0].raw_value).toBe(0)
     expect(outcome.skipped).toHaveLength(1)
     expect(outcome.skipped[0].reason).toContain("no runner injected")
+  })
+
+  test("visual judge requiring visual evidence but omitting visual_evidence input is non-fresh", async () => {
+    registerBaselineSpec({
+      task_id: taskID,
+      scope: "global",
+      goal_id: null,
+      name: "visual_text_only",
+      description: "visual judge must declare visual evidence input",
+      unit: "ratio",
+      direction: "higher_better",
+      target: 1,
+      floor: 0.5,
+      weight: 1,
+      gate_class: "diagnostic",
+      evaluator_kind: "judge",
+      evaluator_config: {
+        criteria: "Judge final rendered-vs-reference visual fidelity.",
+        requires_visual_evidence: true,
+        inputs: ["acceptance_summary"],
+      },
+      source_requirement_ids: ["REQ-visual"],
+    })
+    const calls: string[] = []
+    const judge: JudgeRunner = async (req) => {
+      calls.push(req.spec.id)
+      return { score: 1, rationale: "text-only pass" }
+    }
+
+    const outcome = await executeMetrics(
+      {
+        task_id: taskID,
+        iteration: 0,
+        acceptance: { summary: "visual verification passed" },
+      },
+      { judge },
+    )
+
+    expect(calls).toEqual([])
+    expect(outcome.results[0].evidence_fresh).toBe(false)
+    expect(outcome.results[0].evidence_ref).toContain("visual_evidence input required")
+    expect(outcome.skipped[0].reason).toContain("visual_evidence input required")
+  })
+
+  test("visual judge with visual_evidence input receives structured bundle artifacts", async () => {
+    registerBaselineSpec({
+      task_id: taskID,
+      scope: "global",
+      goal_id: null,
+      name: "visual_with_bundle",
+      description: "visual judge consumes bundle artifacts",
+      unit: "ratio",
+      direction: "higher_better",
+      target: 1,
+      floor: 0.5,
+      weight: 1,
+      gate_class: "diagnostic",
+      evaluator_kind: "judge",
+      evaluator_config: {
+        criteria: "Judge final rendered-vs-reference visual fidelity.",
+        requires_visual_evidence: true,
+        inputs: ["visual_evidence", "requirement_text"],
+      },
+      source_requirement_ids: ["REQ-visual"],
+    })
+    const calls: Array<VisualEvidenceBundle[] | undefined> = []
+    const judge: JudgeRunner = async (req) => {
+      calls.push(req.inputs.visual_evidence)
+      return { score: 1, rationale: "bundle supports pass" }
+    }
+    const bundle = visualBundle()
+
+    const outcome = await executeMetrics(
+      {
+        task_id: taskID,
+        iteration: 0,
+        acceptance: {
+          requirement_text: "Match the reference screenshot.",
+          visual_evidence: [bundle],
+        },
+      },
+      { judge },
+    )
+
+    expect(calls).toHaveLength(1)
+    expect(calls[0]?.[0]?.id).toBe(bundle.id)
+    expect(outcome.results[0].evidence_fresh).toBe(true)
+    expect(outcome.results[0].evidence_ref).toContain("visual_evidence_bundle=veb_desktop")
+    expect(outcome.results[0].evidence_ref).toContain("reference=webpage-evidence/reference.png")
   })
 })
 

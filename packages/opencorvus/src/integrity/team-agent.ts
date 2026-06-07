@@ -4,6 +4,7 @@ import { runAgentSession } from "@/agent/runner"
 import { withFactCheckRegistration } from "@/prompt/fragments/fact-check-registration"
 import { limitSummary, markdownList } from "@/agent/report"
 import type { AcceptanceSpec } from "@/acceptance/types"
+import { summarizeVisualEvidenceBundle, type VisualEvidenceBundle } from "@/acceptance/visual-evidence"
 import { Event as EngineEvent } from "@/engine/model"
 import { EngineProtocol } from "@/engine/protocol"
 import type { TaskRow } from "@/engine/store"
@@ -159,6 +160,7 @@ export type ReviewPromptInput = {
   attachments?: Array<{ sha: string; url: string; mime: string; size: number; filename?: string }>
   acceptance?: IntegrityAcceptanceContext
   frontendDesign?: string
+  visualEvidence?: VisualEvidenceBundle[]
   replayContext: IntegrityReplayContext
   signal?: AbortSignal
   taskID?: string
@@ -208,6 +210,7 @@ export async function reviewIntegrity(input: {
   attachments?: Array<{ sha: string; url: string; mime: string; size: number; filename?: string }>
   acceptance?: IntegrityAcceptanceContext
   frontendDesign?: string
+  visualEvidence?: VisualEvidenceBundle[]
   replayContext?: IntegrityReplayContext
   signal?: AbortSignal
   taskID?: string
@@ -247,6 +250,7 @@ export async function reviewIntegrity(input: {
       goals: input.goals,
       acceptance: input.acceptance,
       frontendDesign: input.frontendDesign,
+      visualEvidence: input.visualEvidence,
       attachments: input.attachments,
       signal: input.signal,
     }),
@@ -327,6 +331,7 @@ function createSingleSessionIntegrityToolKit(input: {
   goals: GoalContractFields[]
   acceptance?: IntegrityAcceptanceContext
   frontendDesign?: string
+  visualEvidence?: VisualEvidenceBundle[]
   attachments?: Array<{ sha: string; url: string; mime: string; size: number; filename?: string }>
   signal?: AbortSignal
 }) {
@@ -336,6 +341,7 @@ function createSingleSessionIntegrityToolKit(input: {
         goals: input.goals.map(goalToIntegrityEvidenceGoalInfo),
         buildEvidence: input.acceptance,
         frontendDesign: input.frontendDesign,
+        visualEvidence: input.visualEvidence,
         attachments: input.attachments,
         signal: input.signal,
       })
@@ -492,6 +498,9 @@ export function buildIntegrityEvidencePrompt(input: ReviewPromptInput): string {
   if (input.frontendDesign?.trim()) {
     sections.push(renderFrontendDesignSummary(input.frontendDesign))
   }
+  if (input.visualEvidence?.length) {
+    sections.push(renderVisualEvidenceSummary(input.visualEvidence))
+  }
   sections.push(renderGoalContractSummary(input.goals))
   sections.push(renderScopeBoundedMaturityEvidenceSection(input))
   return clipIntegrityEvidenceText(
@@ -507,6 +516,14 @@ function renderFrontendDesignSummary(frontendDesign: string): string {
     "",
     "Reviewers must verify that reference-driven UI work follows this frontend replica contract, source manifest, web-clone-source handoff, source audit expectations, and visual reference requirements.",
     "Use `inspect_integrity_evidence({ section: \"frontend_design_contract\" })` for the bounded full contract excerpt when this matters to your scope.",
+  ].join("\n")
+}
+
+function renderVisualEvidenceSummary(visualEvidence: VisualEvidenceBundle[]): string {
+  return [
+    "# Visual Evidence Bundles",
+    ...visualEvidence.slice(0, 4).map((bundle) => `- ${summarizeVisualEvidenceBundle(bundle)}`),
+    "Use `inspect_visual_evidence` for region-level details before accepting reference visual fidelity.",
   ].join("\n")
 }
 

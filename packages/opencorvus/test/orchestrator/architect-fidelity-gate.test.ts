@@ -7,13 +7,34 @@ const essentialAcceptanceVisualSpec: AcceptanceSpec = {
   id: "acc-final-visual-fidelity",
   source_requirement_id: "REQ-visual",
   goal_id: "goal_verify",
-  title: "Final rendered page matches the authoritative visual references",
+  title: "Final rendered page matches the authoritative visual references for final-page",
   severity: "essential",
   trigger: "on_integrity",
   scorers: [{
     type: "llm_judge",
     name: "rendered-reference-fidelity",
     criteria: "Compare final rendered_output against the authoritative references and frontend template visual_consistency_contract.",
+    inputs: ["visual_evidence"],
+  }],
+}
+
+const textOnlyAcceptanceVisualSpec: AcceptanceSpec = {
+  ...essentialAcceptanceVisualSpec,
+  scorers: [{
+    type: "llm_judge",
+    name: "rendered-reference-fidelity",
+    criteria: "Compare final rendered_output against the authoritative references and frontend template visual_consistency_contract.",
+  }],
+}
+
+const prebuiltVisualEvidenceSpec: AcceptanceSpec = {
+  ...essentialAcceptanceVisualSpec,
+  scorers: [{
+    type: "prebuilt",
+    name: "visual-evidence-bundle",
+    config: {},
+    spec: { kind: "visual_evidence_bundle", viewport: "desktop-primary" },
+    expect: { status: "passed" },
   }],
 }
 
@@ -194,7 +215,7 @@ describe("orchestrator architect fidelity diagnostics", () => {
     expect(issues).toContain("Missing reference coverage for visual specs: vis-hero")
   })
 
-  test("reports reference-driven architecture without essential acceptance visual acceptance as concern", () => {
+  test("reports reference-driven architecture without visual evidence acceptance as concern", () => {
     const weakVisualSpec: AcceptanceSpec = {
       ...essentialAcceptanceVisualSpec,
       severity: "important",
@@ -206,14 +227,42 @@ describe("orchestrator architect fidelity diagnostics", () => {
     expect(
       findings.some((finding) =>
         finding.severity === "concern" && finding.message.includes(
-          "Missing essential integrity visual acceptance: reference-driven tasks must include a blocking verification/integration goal with an essential on_integrity llm_judge acceptance spec for final rendered-vs-reference fidelity.",
+          "Missing essential visual evidence acceptance: reference-driven tasks must include a verification/integration goal with an essential on_integrity acceptance spec that consumes a VisualEvidenceBundle.",
         ),
       ),
     ).toBe(true)
   })
 
-  test("allows reference-driven architecture with essential acceptance visual acceptance", () => {
+  test("reports text-only visual judge as missing visual evidence acceptance", () => {
+    const findings = architectValidationFindings(collectorForReferenceTask([textOnlyAcceptanceVisualSpec]), {
+      requireReferenceCoverage: true,
+    })
+
+    expect(findings.some((finding) => finding.code === "missing_final_visual_acceptance")).toBe(true)
+  })
+
+  test("reports final visual evidence spec that omits a registered reference region", () => {
+    const spec: AcceptanceSpec = {
+      ...prebuiltVisualEvidenceSpec,
+      title: "Desktop visual evidence bundle passes",
+    }
+    const findings = architectValidationFindings(collectorForReferenceTask([spec]), {
+      requireReferenceCoverage: true,
+    })
+
+    expect(findings.some((finding) => finding.code === "missing_visual_region_acceptance_ownership")).toBe(true)
+  })
+
+  test("allows reference-driven architecture with visual_evidence judge input", () => {
     const issues = architectValidationIssues(collectorForReferenceTask([essentialAcceptanceVisualSpec]), {
+      requireReferenceCoverage: true,
+    })
+
+    expect(issues).toEqual([])
+  })
+
+  test("allows reference-driven architecture with visual evidence bundle prebuilt scorer", () => {
+    const issues = architectValidationIssues(collectorForReferenceTask([prebuiltVisualEvidenceSpec]), {
       requireReferenceCoverage: true,
     })
 

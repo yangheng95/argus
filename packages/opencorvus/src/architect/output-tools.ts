@@ -532,22 +532,31 @@ export function architectValidationFindings(
   if (input?.requireReferenceCoverage) {
     const visualAcceptanceOwners = collector.goals.filter(
       (goal) =>
-        goal.priority === "blocking" &&
         (goal.kind === "verification" || goal.kind === "integration") &&
-        goal.acceptance_specs.some(isEssentialAcceptanceJudgeSpec),
+        goal.acceptance_specs.some(isEssentialVisualEvidenceAcceptanceSpec),
     )
     if (visualAcceptanceOwners.length === 0) {
       concern(
         "missing_final_visual_acceptance",
         [
-          "Missing essential integrity visual acceptance: reference-driven tasks must include a blocking verification/integration goal with an essential on_integrity llm_judge acceptance spec for final rendered-vs-reference fidelity.",
+          "Missing essential visual evidence acceptance: reference-driven tasks must include a verification/integration goal with an essential on_integrity acceptance spec that consumes a VisualEvidenceBundle.",
           `Reference coverage requirement: ${formatReferenceCoverageReason(input)}`,
-          "Required shape: priority=blocking kind=verification|integration acceptance_specs includes severity=essential trigger=on_integrity scorer=llm_judge.",
+          "Required shape: kind=verification|integration acceptance_specs includes severity=essential trigger=on_integrity and either scorer=prebuilt name=visual-evidence-bundle or llm_judge inputs includes visual_evidence.",
           `Goal candidates: ${formatGoalCandidateList(collector.goals)}`,
         ].join(" "),
         { goal_ids: collector.goals.map((goal) => goal.id) },
         ["register_goal", "modify_goal"],
       )
+    } else {
+      const missingRegionOwnership = visualAcceptanceRegionOwnershipFindings(collector, visualAcceptanceOwners)
+      for (const missing of missingRegionOwnership) {
+        concern(
+          "missing_visual_region_acceptance_ownership",
+          missing.message,
+          { goal_ids: missing.goalIDs },
+          ["register_goal", "modify_goal", "register_reference_coverage"],
+        )
+      }
     }
   }
 
@@ -578,9 +587,8 @@ function formatGoalSnapshot(goal: RegisteredGoal): string {
     goal.acceptance_specs.length > 0 ? goal.acceptance_specs.map(formatAcceptanceSpecSnapshot).join(", ") : "(none)"
   const deps = goal.depends_on.length > 0 ? goal.depends_on.join(",") : "(none)"
   const finalReferenceAcceptance =
-    goal.priority === "blocking" &&
     (goal.kind === "verification" || goal.kind === "integration") &&
-    goal.acceptance_specs.some(isEssentialAcceptanceJudgeSpec)
+    goal.acceptance_specs.some(isEssentialVisualEvidenceAcceptanceSpec)
       ? "yes"
       : "no"
   return `${goal.id} kind=${goal.kind} priority=${goal.priority} depends_on=[${deps}] acceptance_specs=[${specs}] final_reference_acceptance=${finalReferenceAcceptance}`
@@ -591,12 +599,55 @@ function formatAcceptanceSpecSnapshot(spec: AcceptanceSpec): string {
   return `${spec.id}:${spec.severity}:${spec.trigger ?? "default"}:${scorerTypes}`
 }
 
-function isEssentialAcceptanceJudgeSpec(spec: AcceptanceSpec): boolean {
+function isEssentialVisualEvidenceAcceptanceSpec(spec: AcceptanceSpec): boolean {
   return (
     spec.severity === "essential" &&
     (spec.trigger === "on_integrity" || spec.trigger === "on_acceptance") &&
-    spec.scorers.some((scorer) => scorer.type === "llm_judge")
+    spec.scorers.some((scorer) => {
+      if (scorer.type === "prebuilt") {
+        return scorer.name === "visual-evidence-bundle" && scorer.spec?.kind === "visual_evidence_bundle"
+      }
+      if (scorer.type === "llm_judge") {
+        return scorer.inputs?.includes("visual_evidence") === true
+      }
+      return false
+    })
   )
+}
+
+function visualAcceptanceRegionOwnershipFindings(
+  collector: ArchitectCollector,
+  visualAcceptanceOwners: RegisteredGoal[],
+): Array<{ message: string; goalIDs: string[] }> {
+  const finalSpecs = visualAcceptanceOwners.flatMap((goal) => goal.acceptance_specs)
+  const finalSpecText = finalSpecs.map(formatAcceptanceSpecCoverageText).join("\n").toLowerCase()
+  const missing = collector.reference_coverage.filter((row) => {
+    const tokens = [row.id, row.surface, ...row.visual_spec_ids]
+      .map((token) => token.trim().toLowerCase())
+      .filter(Boolean)
+    return tokens.length > 0 && !tokens.some((token) => finalSpecText.includes(token))
+  })
+  return missing.map((row) => ({
+    goalIDs: [...new Set([...row.goal_ids, ...visualAcceptanceOwners.map((goal) => goal.id)])],
+    message:
+      `Reference coverage ${row.id} (${row.surface}) has no matching final visual acceptance ownership. ` +
+      `Add the reference id, surface, or visual_spec_id to the final VisualEvidenceBundle acceptance spec so Integrity can anchor region evidence.`,
+  }))
+}
+
+function formatAcceptanceSpecCoverageText(spec: AcceptanceSpec): string {
+  const scenario = spec.scenario
+    ? [...spec.scenario.given, ...spec.scenario.when, ...spec.scenario.then].join("\n")
+    : ""
+  const scorerText = spec.scorers
+    .map((scorer) => {
+      if (scorer.type === "llm_judge") return `${scorer.name}\n${scorer.criteria}\n${scorer.inputs?.join(" ") ?? ""}`
+      if (scorer.type === "prebuilt") return `${scorer.name}\n${JSON.stringify(scorer.spec ?? {})}\n${JSON.stringify(scorer.expect ?? {})}`
+      if (scorer.type === "contract_audit") return `${scorer.name}\n${scorer.spec.contract_ids.join(" ")}`
+      return scorer.name
+    })
+    .join("\n")
+  return [spec.id, spec.title, scenario, scorerText].join("\n")
 }
 
 function isVerificationOwnedPath(ownedPath: string): boolean {

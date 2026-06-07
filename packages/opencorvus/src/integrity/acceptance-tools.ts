@@ -6,6 +6,12 @@ import { Instance } from "@/project/instance"
 import { runGuardedCommand } from "@/shell/guarded-command"
 import { DEFAULT_BASH_TIMEOUT_MS } from "@/shell/timeout"
 import { Filesystem } from "@/util/filesystem"
+import {
+  summarizeVisualEvidenceBundle,
+  visualEvidenceBundlePasses,
+  VisualEvidenceBundleListSchema,
+  type VisualEvidenceBundle,
+} from "@/acceptance/visual-evidence"
 
 /**
  * Integrity acceptance tools are scoped to semantic review. They expose
@@ -55,6 +61,7 @@ export type IntegrityEvidenceToolContext = {
     }>
   }
   frontendDesign?: string
+  visualEvidence?: VisualEvidenceBundle[]
   attachments?: Array<{ sha: string; url: string; mime: string; size: number; filename?: string }>
   signal?: AbortSignal
 }
@@ -125,7 +132,48 @@ export function createIntegrityAcceptanceTools(input?: IntegrityEvidenceToolCont
           max_chars,
         ),
     }),
+    inspect_visual_evidence: tool({
+      description:
+        "Inspect the scoped VisualEvidenceBundle artifacts for reference-driven UI review. " +
+        "Use this before accepting visual fidelity claims; it returns reference/rendered paths, score, qualitative verdict, region coverage, and provenance from the reviewed task context.",
+      inputSchema: z.object({
+        bundle_id: z.string().optional().describe("Specific VisualEvidenceBundle id. Omit to inspect every scoped bundle."),
+        max_chars: z.number().int().min(1_000).max(40_000).default(12_000),
+      }),
+      execute: async ({ bundle_id, max_chars }) =>
+        truncateIntegrityEvidence(renderVisualEvidenceSection(input?.visualEvidence, bundle_id), max_chars),
+    }),
   }
+}
+
+function renderVisualEvidenceSection(
+  visualEvidence: VisualEvidenceBundle[] | undefined,
+  bundleID: string | undefined,
+): string {
+  const parsed = VisualEvidenceBundleListSchema.safeParse(visualEvidence ?? [])
+  if (!parsed.success || parsed.data.length === 0) {
+    return "# Visual Evidence\n\nNo VisualEvidenceBundle was provided in scoped integrity context."
+  }
+  const bundles = bundleID ? parsed.data.filter((bundle) => bundle.id === bundleID) : parsed.data
+  if (bundles.length === 0) {
+    return `# Visual Evidence\n\nNo VisualEvidenceBundle matched id=${bundleID}. Available: ${parsed.data.map((bundle) => bundle.id).join(", ")}`
+  }
+  const lines = ["# Visual Evidence"]
+  for (const bundle of bundles) {
+    lines.push("")
+    lines.push(`## ${bundle.id}`)
+    lines.push(`status=${visualEvidenceBundlePasses(bundle) ? "passing" : "not_passing"}`)
+    lines.push(summarizeVisualEvidenceBundle(bundle))
+    if (bundle.regions.length > 0) {
+      lines.push("Regions:")
+      for (const region of bundle.regions) {
+        lines.push(
+          `- ${region.id}: ${region.label}; required=${region.required}; status=${region.status}; acceptance_specs=${region.acceptanceSpecIDs.join(", ") || "(none)"}; evidence=${region.evidenceRefs.join(", ") || "(none)"}`,
+        )
+      }
+    }
+  }
+  return lines.join("\n")
 }
 
 function renderIntegrityEvidenceSection(

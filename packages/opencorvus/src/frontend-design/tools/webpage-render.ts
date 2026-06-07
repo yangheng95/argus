@@ -70,6 +70,21 @@ Returns the screenshot path + render time. This is a Build/Integrity runtime evi
 
     const pngPath = path.join(outputDir, outputName)
     await fs.writeFile(pngPath, render.screenshotBuffer)
+    const renderResultPath = path.join(outputDir, "render-result.json")
+    await fs.writeFile(
+      renderResultPath,
+      JSON.stringify({
+        generatedAt: new Date().toISOString(),
+        url: params.url,
+        renderedPath: pngPath,
+        viewport,
+        fullPage: params.full_page ?? false,
+        renderTimeMs: render.renderTimeMs,
+        projectDirectory: process.cwd(),
+        consoleErrors: render.consoleErrors,
+      }, null, 2),
+      "utf8",
+    )
 
     return {
       title: `Rendered ${outputName} (${render.renderTimeMs}ms)`,
@@ -78,6 +93,7 @@ Returns the screenshot path + render time. This is a Build/Integrity runtime evi
         "",
         `- Input: \`${params.url}\``,
         `- Output: \`${pngPath}\``,
+        `- Render metadata: \`${renderResultPath}\``,
         `- Viewport: ${viewport.width}×${viewport.height}${params.full_page ? " (full page)" : ""}`,
         `- Render time: ${render.renderTimeMs}ms`,
         render.consoleErrors && render.consoleErrors.length > 0
@@ -88,6 +104,7 @@ Returns the screenshot path + render time. This is a Build/Integrity runtime evi
       ].filter(Boolean).join("\n"),
       metadata: {
         renderedPath: pngPath,
+        renderResultPath,
         renderTimeMs: render.renderTimeMs,
         viewport,
         consoleErrors: render.consoleErrors,

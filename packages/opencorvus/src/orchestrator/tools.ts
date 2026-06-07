@@ -49,6 +49,7 @@ import { abortLiveOrchestratorToolOwnership } from "@/engine/writer"
 import { renderFrontendDesignHandoffReference, frontendDesignArtifactPaths } from "@/frontend-design/handoff"
 import { renderFrontendResearchBriefPromptSection } from "@/research/prompt-section"
 import { ensureLiveWebpageEvidence, primaryWebpageEvidenceArtifacts } from "./webpage-evidence"
+import { VisualEvidenceBundleSchema, type VisualEvidenceBundle } from "@/acceptance/visual-evidence"
 import { renderUserRequestSection } from "@/intent/request-prompt"
 import { materializeMcpToolResult } from "@/mcp/materialize"
 import { EngineArtifactTable, EngineGoalTable, EngineTaskTable, type EngineArtifactKind } from "@/engine/engine.sql"
@@ -153,6 +154,20 @@ export const ORCHESTRATOR_WAIT_MIN_MS = 1_000
 export const ORCHESTRATOR_WAIT_MAX_MS = 10 * 60 * 1000
 
 const log = Log.create({ service: "task-tools" })
+
+async function readLatestTaskVisualEvidenceBundle(input: {
+  projectDir: string
+  taskID: string
+}): Promise<VisualEvidenceBundle[] | undefined> {
+  const paths = ProjectRuntimePaths.frontendDesignPaths(input.projectDir, input.taskID)
+  const bundlePath = path.join(paths.webpageEvidenceAbsolute, "visual-evidence-bundle.json")
+  try {
+    const parsed = VisualEvidenceBundleSchema.safeParse(JSON.parse(await fs.readFile(bundlePath, "utf8")))
+    return parsed.success ? [parsed.data] : undefined
+  } catch {
+    return undefined
+  }
+}
 
 async function appendResearchBriefContext(
   sections: string[],
@@ -1831,6 +1846,7 @@ export function createOrchestratorTools(input: {
       .readByPhase("frontend_design")
       .map((entry) => `## ${entry.key}\nreason: ${entry.reason}\n\n${entry.value}`)
       .join("\n\n")
+    const visualEvidence = await readLatestTaskVisualEvidenceBundle({ projectDir: Instance.directory, taskID })
 
     let activeOwnership: OrchestratorToolOwnershipPayload | undefined
     let ownershipClosed = false
@@ -1861,6 +1877,7 @@ export function createOrchestratorTools(input: {
           diffs: acceptanceDiffs,
         },
         frontendDesign: frontendDesignContract,
+        visualEvidence,
         replayContext,
         signal: input.signal,
         taskID,
