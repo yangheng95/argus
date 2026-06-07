@@ -615,25 +615,7 @@ async function resolveTaskKindDecision(input: { kind?: "workflow" | "build"; sig
   if (input.signal?.aborted) {
     throw input.signal.reason instanceof Error ? input.signal.reason : new DOMException("Task creation aborted", "AbortError");
   }
-  const recommended = "workflow" as const;
-  const result = await showAppDialog({
-    kind: "task-route-decision",
-    title: t("task.route_decision.title"),
-    message: t("task.route_decision.message"),
-    selectLabel: t("task.route_decision.label"),
-    selectValue: recommended,
-    recommendedValue: recommended,
-    countdownSeconds: TASK_DECISION_COUNTDOWN_SECONDS,
-    selectOptions: [
-      { value: "workflow", label: t("task.route_decision.agent_team") },
-      { value: "build", label: t("task.route_decision.direct_build") },
-    ],
-  });
-  if (!result.confirmed) {
-    throw new DOMException("Task creation cancelled before workflow route decision", "AbortError");
-  }
-  if (result.value === "workflow" || result.value === "build") return result.value;
-  throw new Error(`Unknown task workflow route decision: ${String(result.value)}`);
+  return "workflow";
 }
 
 /**

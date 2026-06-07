@@ -109,8 +109,7 @@ export async function nativeMessage(
 export function settleAppDialog(confirmed: boolean, epoch?: number, valueOverride?: string | null): void {
   if (typeof epoch === "number" && epoch !== dialogStore.app.epoch) return;
   clearAutoSettleTimer();
-  const isTaskCardDecision =
-    dialogStore.app.kind === "task-route-decision" || dialogStore.app.kind === "task-queue-decision";
+  const isTaskCardDecision = dialogStore.app.kind === "task-queue-decision";
   const inputValue =
     typeof document !== "undefined"
       ? (document.getElementById("appDialogInput") as HTMLInputElement | null)?.value
