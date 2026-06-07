@@ -1,28 +1,28 @@
-# Workflow Center Workbench Tab - 2026-06-07
+# Workflow Center Workbench Panels - 2026-06-07
 
 ## Problem
 
-The message panel was a fixed `chat` column labelled Conversation while toolbar panels used the closable center workbench tabs. The follow-up correction is that Inspector and Notifications must not remain a separate right column: every right toolbar activity opens a peer center workbench view, and the center workbench fills the middle panel instead of leaving an empty conversation shell.
+The message panel was a fixed `chat` column labelled Conversation while toolbar panels used a tab strip. The final correction is that the tab strip itself is the wrong primitive here: Workflow already owns its header and run status, so adding a second Workflow tab above it duplicates the label and hides the original status hierarchy. Right toolbar activities should open independent panels inside the middle workbench; every open panel shares the middle area equally.
 
 ## Call Points
 
 | Area | File | Decision |
 | --- | --- | --- |
-| Message panel DOM | `packages/overlay/src/index.html` `chatSection` | Move the chat section into a `centerWorkbenchWorkflow` view so Workflow is a center workbench tab, not a permanently mounted sibling. |
-| Inspector DOM | `packages/overlay/src/index.html` `sections`, `rightPanelInspector` | Move the Inspector stack into `centerWorkbenchInspector`; remove the sibling right-panel column and right pane resizer from the default workspace layout. |
-| Notifications DOM | `packages/overlay/src/index.html` `rightPanelNotifications` | Move the notification center into `centerWorkbenchNotifications` so it shares the same workbench tab system. |
-| Center workbench state | `packages/overlay/src/main.tsx` `CenterWorkbenchTab`, `centerWorkbenchTabs`, `activeCenterWorkbenchTab` | Include `workflow`, `inspector`, `notifications`, `explorer`, `diff`, `browser`, and `file`; all closable views use the same tab close path. |
-| Right toolbar | `packages/overlay/src/main.tsx` `RIGHT_ACTIVITIES`, `selectRightActivity()` | Toolbar buttons open center workbench tabs only. Assistant opens the same `workflow` tab after selecting the assistant session. |
-| Message title | `packages/overlay/src/main.tsx` `chatViewTitle` effect and i18n | Rename normal message title to Workflow. When `isCodingAssistantSource()` is true, render Assistant. |
-| Shared width | `packages/overlay/src/styles/surfaces/workspace.css`, `packages/overlay/src/styles/surfaces/inspector.css` | Let `centerWorkbench` fill the middle panel; Inspector/Notifications/Workflow all consume that same workbench width and no longer create an extra right column. |
-| Tests | `packages/overlay/test/*` | Update static and browser tests for default Workflow tab, closeability, toolbar entry, and Assistant title. |
+| Message panel DOM | `packages/overlay/src/index.html` `chatSection` | Keep Workflow as a workbench panel and restore its own `chat-header` as the only Workflow header. |
+| Inspector DOM | `packages/overlay/src/index.html` `sections`, `rightPanelInspector` | Keep the Inspector stack in `centerWorkbenchInspector`; remove the sibling right-panel column and right pane resizer from the default workspace layout. |
+| Notifications DOM | `packages/overlay/src/index.html` `rightPanelNotifications` | Keep the notification center in `centerWorkbenchNotifications` so it opens as a peer panel. |
+| Center workbench state | `packages/overlay/src/main.tsx` `CenterWorkbenchPanel`, `centerWorkbenchPanels` | Replace tab state with an open-panel collection; multiple panels can be open at once. |
+| Right toolbar | `packages/overlay/src/main.tsx` `RIGHT_ACTIVITIES`, `selectRightActivity()` | Toolbar buttons toggle panels. Active state means the panel is open, not that a tab is selected. |
+| Message title | `packages/overlay/src/main.tsx` `chatViewTitle` effect and i18n | Normal message title is Workflow. When `isCodingAssistantSource()` is true, render Assistant while preserving the run-status header row. |
+| Shared width | `packages/overlay/src/styles/surfaces/workspace.css`, `packages/overlay/src/styles/surfaces/inspector.css` | Let every `data-open=true` panel flex equally inside the middle workbench. |
+| Tests | `packages/overlay/test/*` | Update static and browser tests for no tab strip, panel toggling, equal-width split, meaningful toolbar icons, and Assistant title. |
 
 ## Constraints
 
 - No separate right-panel width source in the default workspace; right toolbar activities share the center workbench surface.
-- No separate workflow-open state; open tabs remain the center workbench source.
+- No tab strip. Open panels are the single source for visibility.
 - No duplicate conversation renderer; the existing `Conversation`, `ConversationAgentRail`, and `ChatComposer` move with the Workflow view.
-- No persistent Inspector column; Inspector opens only through its toolbar activity or an existing workbench tab.
+- No persistent Inspector column; Inspector opens only through its toolbar activity.
 
 ## Verification
 

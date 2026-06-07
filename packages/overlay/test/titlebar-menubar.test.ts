@@ -1051,11 +1051,13 @@ test(
         const sidebar = document.querySelector<HTMLElement>(".sidebar")!.getBoundingClientRect()
         const workspace = document.querySelector<HTMLElement>("#workspaceMain")!.getBoundingClientRect()
         const workbench = document.querySelector<HTMLElement>("#centerWorkbench")!.getBoundingClientRect()
+        const chat = document.querySelector<HTMLElement>(".chat")!.getBoundingClientRect()
         const sections = document.querySelector<HTMLElement>(".sections")!.getBoundingClientRect()
         const left = document.querySelector<HTMLElement>("#leftPaneResizer")!.getBoundingClientRect()
         const toolbar = document.querySelector<HTMLElement>("#solidRightActivityToolbar")!.getBoundingClientRect()
         return {
           sidebar: sidebar.width,
+          chat: chat.width,
           sections: sections.width,
           leftDivider: workspace.left - sidebar.right,
           rightDivider: toolbar.left - workbench.right,
@@ -1067,7 +1069,8 @@ test(
         }
       })
 
-      expect(afterInspectorOpen.sections).toBeGreaterThan(900)
+      expect(afterInspectorOpen.sections).toBeGreaterThan(300)
+      expect(Math.abs(afterInspectorOpen.sections - afterInspectorOpen.chat)).toBeLessThanOrEqual(2)
       expect(afterInspectorOpen.leftDivider).toBeLessThanOrEqual(2)
       expect(afterInspectorOpen.rightDivider).toBeLessThanOrEqual(2)
       expect(Math.abs(afterInspectorOpen.leftDivider - afterInspectorOpen.rightDivider)).toBeLessThanOrEqual(1)

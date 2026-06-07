@@ -327,7 +327,8 @@ test("panel header controls keep left collapse and right toolbar workbench layou
     expect(inspectorWorkbench.leftResizer.disabled).toBe("false");
     expect(inspectorWorkbench.sections.hidden).toBe(false);
     expect(inspectorWorkbench.sections.display).toBe("flex");
-    expect(inspectorWorkbench.sections.width).toBeGreaterThan(600);
+    expect(inspectorWorkbench.sections.width).toBeGreaterThan(300);
+    expect(Math.abs(inspectorWorkbench.sections.width - inspectorWorkbench.chat.width)).toBeLessThanOrEqual(2);
     expect(inspectorWorkbench.centerInspectorActive).toBe("true");
     expect(inspectorWorkbench.inspectorButtonActive).toBe("true");
     expect(inspectorWorkbench.workbenchStartsAtWorkspace).toBe(true);

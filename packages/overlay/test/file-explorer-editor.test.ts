@@ -14,7 +14,7 @@ function readText(rel: string): string {
   return readFileSync(path.join(ROOT, rel), "utf8")
 }
 
-test("file explorer, diff, and editor are wired through center workbench tabs", () => {
+test("file explorer, diff, and editor are wired through center workbench panels", () => {
   const explorer = readText("src/components/FileExplorerPanel.tsx")
   const editor = readText("src/components/FileEditorPane.tsx")
   const filesPanel = readText("src/components/FileChangesPanel.tsx")
@@ -50,12 +50,12 @@ test("file explorer, diff, and editor are wired through center workbench tabs", 
   expect(html).not.toContain('id="solidRightFilesMount"')
   expect(html).not.toContain('id="solidFileEditorToggleMount"')
   expect(html).not.toContain('id="solidFileEditorMount" class="sections-files-tab"')
-  expect(main).toContain('<FileExplorerPanel active={() => activeCenterWorkbenchTab() === "explorer"} directory={activeDirectory}')
+  expect(main).toContain('<FileExplorerPanel active={() => isCenterWorkbenchPanelOpen("explorer")} directory={activeDirectory}')
   expect(main).toContain("<FileEditorPane")
   expect(main).toContain("<FileChangesPanel")
   expect(main).toContain('workflow: document.getElementById("centerWorkbenchWorkflow")')
   expect(main).toContain("diffOpen={workspaceOpen()}")
-  expect(main).toContain('openCenterWorkbenchTab("diff")')
+  expect(main).toContain('openCenterWorkbenchPanel("diff")')
   expect(main).not.toContain('setLeftActivity("changes")')
   expect(main).not.toContain('document.getElementById("leftPanelChanges")')
   expect(main).toContain('document.getElementById("solidFileChangesMount")')
@@ -133,7 +133,8 @@ test("file explorer, diff, and editor are wired through center workbench tabs", 
   expect(workspaceCss).toContain(".chat-content-frame")
   expect(workspaceCss).toContain("container: chat-workbench / inline-size")
   expect(workspaceCss).toContain(".center-workbench")
-  expect(workspaceCss).toContain(".center-workbench-tabs")
+  expect(workspaceCss).not.toContain(".center-workbench-tabs")
+  expect(workspaceCss).toContain('.center-workbench-view[data-open="true"]')
   expect(workspaceCss).toContain(".center-workbench-resizer")
   expect(workspaceCss).toContain(".chat-file-editor-activity")
   expect(workspaceCss).not.toContain(".chat-diff-activity.workspace-mount")

@@ -13,6 +13,7 @@ export interface SideActivityToolbarProps<T extends string> {
   side: "left" | "right"
   activities: readonly SideActivity<T>[]
   active: Accessor<T | null | undefined>
+  isActive?: (activity: T) => boolean
   ariaLabelKey: string
   onSelect: (activity: T) => void
   trailing?: JSX.Element
@@ -25,7 +26,7 @@ export function SideActivityToolbar<T extends string>(props: SideActivityToolbar
         <For each={props.activities}>
           {(activity) => {
             const label = () => t(activity.labelKey)
-            const active = () => props.active() === activity.id
+            const active = () => props.isActive?.(activity.id) ?? props.active() === activity.id
             return (
               <Button
                 type="button"
