@@ -143,6 +143,8 @@ import {
 import { goalStatusByID } from "@/engine/describe"
 import { Identifier } from "@/id/id"
 import { AttachmentStore } from "@/storage/attachment-store"
+import { SessionWake } from "@/session/wake"
+import { withTaskCreationOwnerLock } from "@/engine/task-creation-owner"
 
 const log = Log.create({ service: "assistant" })
 
@@ -465,6 +467,38 @@ async function appendAndWakeTaskOperatorMessage(input: {
   }
 }
 
+function terminalTaskNotificationText(input: {
+  task: TaskRow
+  status: string
+  summary: string
+  error?: string
+  relation: "parent" | "mission"
+}) {
+  const lines = [
+    input.relation === "parent"
+      ? "Child task terminal update."
+      : "Mission task terminal update.",
+    `task_id: ${input.task.id}`,
+    `title: ${input.task.title}`,
+    `status: ${input.status}`,
+    `summary: ${input.summary}`,
+  ]
+  if (input.error) lines.push(`error: ${input.error}`)
+  lines.push("Reconcile this task result now and decide the next action.")
+  return lines.join("\n")
+}
+
+function missionProvenance(metadata: EngineMetadata | null | undefined): { id: string; session_id: string } | undefined {
+  if (!metadata || typeof metadata !== "object" || Array.isArray(metadata)) return undefined
+  const mission = metadata.mission
+  if (!mission || typeof mission !== "object" || Array.isArray(mission)) return undefined
+  const id = (mission as Record<string, unknown>).id
+  const sessionID = (mission as Record<string, unknown>).session_id
+  if (typeof id !== "string" || id.length === 0) return undefined
+  if (typeof sessionID !== "string" || sessionID.length === 0) return undefined
+  return { id, session_id: sessionID }
+}
+
 async function appendTaskSessionMessage(
   task: TaskRow,
   text: string,
@@ -743,6 +777,10 @@ export namespace EngineService {
 
   export async function createTask(raw: z.input<typeof CreateTaskInput>) {
     const input = CreateTaskInput.parse(raw)
+    return withTaskCreationOwnerLock(input, () => createTaskInner(input))
+  }
+
+  async function createTaskInner(input: z.infer<typeof CreateTaskInput>) {
     await prepareProject(input.project)
     const requestID = input.requestID?.trim() || undefined
     if (requestID) {
@@ -876,6 +914,46 @@ export namespace EngineService {
     })
     await dispatchTaskLoop({ taskID })
     return taskID
+  }
+
+  export async function notifyTaskLineageTerminal(input: {
+    taskID: string
+    status: "completed" | "failed" | "cancelled"
+    summary: string
+    error?: string
+  }) {
+    const task = requireTask(input.taskID)
+    const metadata = task.metadata && typeof task.metadata === "object" && !Array.isArray(task.metadata)
+      ? task.metadata as Record<string, unknown>
+      : {}
+    const parentTaskID = typeof metadata.parent_task_id === "string" ? metadata.parent_task_id : undefined
+    if (parentTaskID && parentTaskID !== task.id) {
+      await handleTaskMessage(parentTaskID, {
+        text: terminalTaskNotificationText({
+          task,
+          status: input.status,
+          summary: input.summary,
+          error: input.error,
+          relation: "parent",
+        }),
+        source: "system:child_task_terminal",
+      })
+    }
+
+    const mission = missionProvenance(task.metadata)
+    if (mission) {
+      await SessionWake.wake({
+        sessionID: mission.session_id,
+        agent: "mission",
+        prompt: terminalTaskNotificationText({
+          task,
+          status: input.status,
+          summary: input.summary,
+          error: input.error,
+          relation: "mission",
+        }),
+      })
+    }
   }
 
   export async function getTask(taskID: string) {

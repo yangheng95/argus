@@ -170,24 +170,37 @@ export async function updateTask(
           { taskID: row.id, status: nextStatus, summary },
           { source: "state.task" },
         )
+        await notifyTaskLineageTerminal(row.id, nextStatus, summary)
       } else if (nextStatus === "failed") {
         await EngineProtocol.emit(
           Event.TaskFailed,
           { taskID: row.id, status: nextStatus, summary, error: nextError ?? undefined },
           { source: "state.task" },
         )
+        await notifyTaskLineageTerminal(row.id, nextStatus, summary, nextError ?? undefined)
       } else if (nextStatus === "cancelled") {
         await EngineProtocol.emit(
           Event.TaskCancelled,
           { taskID: row.id, status: nextStatus, summary },
           { source: "state.task" },
         )
+        await notifyTaskLineageTerminal(row.id, nextStatus, summary)
       }
     })
   })
   const result = updated ?? requireTask(row.id)
   await finalizeLiveRunForTerminalTask(result, intent, resolved, summary)
   return result
+}
+
+async function notifyTaskLineageTerminal(
+  taskID: string,
+  status: "completed" | "failed" | "cancelled",
+  summary: string,
+  error?: string,
+) {
+  const { EngineService } = await import("@/task-api")
+  await EngineService.notifyTaskLineageTerminal({ taskID, status, summary, error })
 }
 
 async function finalizeLiveRunForTerminalTask(

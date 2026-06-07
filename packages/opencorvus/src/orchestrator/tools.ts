@@ -5373,6 +5373,7 @@ export function createOrchestratorTools(input: {
         "This is the orchestrator's ONLY new-engine-task creation path: it follows `experimental.confirm_proposed_tasks`, " +
         "creating directly by default and asking the user first only when that policy is enabled. Do not use this for normal workflow progress, do not use it " +
         "instead of build/integrity on the current task, and do not call generic `task` or control-plane `panel`. " +
+        "Create at most one follow-up task per orchestrator turn; wait for the created task to be recorded and for a later wake before proposing another. " +
         "Use propose_task when execution evidence, artifact state, integrity history, or the obvious product path shows separate inheriting work: supplemental features, deeper implementation detail, quality hardening, tests, docs, operations, performance, or project-improvement suggestions. " +
         "It is also the right path when reviewers keep demanding a capability the original user request never authorised, and adding it inside the current task would expand scope beyond what the user agreed to.",
       inputSchema: z.object({

@@ -323,8 +323,8 @@ export namespace Agent {
         // apply_patch (it is not a coding executor — would let it bypass the
         // orchestrator, rule 11); url_screenshot / webpage_* (crawling/visual
         // capture belong to frontend-design inside a dispatched task); task
-        // targets other than explore (the generic sub-agent dispatch is the
-        // orchestrator's, not mission's).
+        // (generic sub-agent dispatch is not Mission's engine-task dispatch
+        // path; Mission creates engine tasks through panel.create_task).
         //
         // panel is allowed but action-filtered to the coordination set by
         // panel.ts execute (actor-based whitelist on derivePanelActor value):
@@ -345,7 +345,6 @@ export namespace Agent {
             "websearch",
             "mission_state",
             "panel",
-            "task",
             "memory",
             "todoread",
             "todowrite",
@@ -359,10 +358,6 @@ export namespace Agent {
             search_code: "allow",
             lsp: "allow",
             panel: "allow",
-            task: {
-              "*": "deny",
-              explore: "allow",
-            },
             mission_state: "allow",
             webfetch: "allow",
             websearch: "allow",
