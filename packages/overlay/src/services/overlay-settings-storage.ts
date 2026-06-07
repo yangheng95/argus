@@ -16,6 +16,16 @@ function read(key: string): string | null {
   return storage()?.getItem(key) ?? null;
 }
 
+function readJSON(key: string): unknown {
+  const raw = read(key);
+  if (!raw) return undefined;
+  try {
+    return JSON.parse(raw);
+  } catch {
+    return undefined;
+  }
+}
+
 function write(key: string, value: unknown): void {
   storage()?.setItem(key, String(value));
 }
@@ -29,6 +39,14 @@ function writeOptional(key: string, value: unknown): void {
     remove(key);
   } else {
     write(key, value);
+  }
+}
+
+function writeOptionalJSON(key: string, value: unknown): void {
+  if (value === undefined || value === null) {
+    remove(key);
+  } else {
+    write(key, JSON.stringify(value));
   }
 }
 
@@ -49,6 +67,7 @@ export function loadBrowserOverlaySettings(): BrowserOverlaySettings {
     sidebarWidth: read("oc_sidebar_width") || undefined,
     sectionsWidth: read("oc_sections_width") || undefined,
     centerWorkbenchWidth: read("oc_center_workbench_width") || undefined,
+    centerWorkbenchPanelWeights: readJSON("oc_center_workbench_panel_weights"),
     opacity: read("oc_opacity") || undefined,
     zoom: read("oc_zoom") || undefined,
     theme: read("oc_theme") || undefined,
@@ -73,6 +92,7 @@ export function saveBrowserOverlaySettings(input: BrowserOverlaySettings): boole
   writeOptional("oc_sidebar_width", input.sidebarWidth);
   writeOptional("oc_sections_width", input.sectionsWidth);
   writeOptional("oc_center_workbench_width", input.centerWorkbenchWidth);
+  writeOptionalJSON("oc_center_workbench_panel_weights", input.centerWorkbenchPanelWeights);
   write("oc_opacity", input.opacity ?? 0.99);
   write("oc_zoom", input.zoom ?? 1);
   write("oc_theme", input.theme ?? "light");

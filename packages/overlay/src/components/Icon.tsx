@@ -9,6 +9,7 @@ import { createUniqueId, Show, type JSX } from "solid-js"
 import type { LucideIcon } from "lucide-solid"
 import {
   Ban,
+  Bell,
   Bot,
   BrainCircuit,
   Cable,
@@ -54,6 +55,7 @@ import {
   Terminal,
   Undo2,
   Upload,
+  Workflow,
   X,
 } from "lucide-solid"
 
@@ -72,6 +74,8 @@ export type IconName =
   | "panel-right"
   | "terminal"
   | "message"
+  | "workflow"
+  | "notifications"
   | "terminal-powershell"
   | "terminal-command-prompt"
   | "terminal-bash"
@@ -197,6 +201,8 @@ const LUCIDE_ICON_MAP: Partial<Record<IconName, LucideIconRecord>> = {
   "panel-right": { component: PanelRight },
   terminal: { component: Terminal },
   message: { component: MessageSquare },
+  workflow: { component: Workflow },
+  notifications: { component: Bell },
   "terminal-powershell": { component: Terminal },
   "terminal-command-prompt": { component: Terminal },
   "terminal-bash": { component: Terminal },
