@@ -42,6 +42,7 @@ import {
 } from "../../llm/activity"
 import { streamText } from "../../llm/api"
 import { resolveWebpageEvidenceOutputDir, DEFAULT_WEBPAGE_EVIDENCE_SUBDIR } from "./output-dir"
+import { tryMaterializeVisualEvidenceBundle } from "./visual-evidence-bundle"
 
 // Idle window before we abort a hung vision-judge stream. Mirrors the
 // session.processor 180s gate (util/stream-activity.ts callers); kept in
@@ -329,6 +330,12 @@ Pure transformation, no network besides the LLM call. Deterministic per (model, 
       ...verdict,
     }
     await fs.writeFile(judgePath, JSON.stringify(payload, null, 2), "utf8")
+    const visualEvidenceBundle = await tryMaterializeVisualEvidenceBundle({
+      outputDir,
+      taskID: typeof ctx.extra?.taskID === "string" ? ctx.extra.taskID : undefined,
+      source: sourceForAgent(ctx.agent),
+      projectDirectory: process.cwd(),
+    })
 
     const lines: string[] = [
       `# Vision-judge verdict — ${verdict.accepted ? "✅ accepted" : "❌ not yet accepted"}`,
@@ -337,6 +344,7 @@ Pure transformation, no network besides the LLM call. Deterministic per (model, 
       `_Reference:_ ${referencePath}`,
       `_Rendered:_  ${renderedPath}`,
       `_Verdict file:_ ${judgePath}`,
+      visualEvidenceBundle ? `_Visual evidence bundle:_ ${path.join(outputDir, "visual-evidence-bundle.json")}` : "",
       "",
       `**Overall impression:** ${verdict.overall_impression}`,
       "",
@@ -377,7 +385,14 @@ Pure transformation, no network besides the LLM call. Deterministic per (model, 
         majorCount: verdict.differences.filter((d) => d.severity === "major").length,
         minorCount: verdict.differences.filter((d) => d.severity === "minor").length,
         verdictPath: judgePath,
+        visualEvidenceBundlePath: visualEvidenceBundle ? path.join(outputDir, "visual-evidence-bundle.json") : undefined,
       },
     }
   },
 })
+
+function sourceForAgent(agent: string): "frontend_design" | "build" | "integrity" {
+  if (agent === "integrity") return "integrity"
+  if (agent === "build") return "build"
+  return "frontend_design"
+}

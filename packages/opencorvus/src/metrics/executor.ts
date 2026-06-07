@@ -29,6 +29,11 @@ import { DEFAULT_BASH_TIMEOUT_MS } from "@/shell/timeout"
 import { Filesystem } from "@/util/filesystem"
 import { Log } from "@/util/log"
 import {
+  summarizeVisualEvidenceBundle,
+  VisualEvidenceBundleListSchema,
+  type VisualEvidenceBundle,
+} from "@/acceptance/visual-evidence"
+import {
   readResultsForIteration,
   readSpecsForTask,
   writeMetricResult,
@@ -61,6 +66,7 @@ export interface AcceptanceContext {
   summary?: string
   changed_files?: string[]
   requirement_text?: string
+  visual_evidence?: VisualEvidenceBundle[]
 }
 
 export interface ExecuteMetricsOutcome {
@@ -303,6 +309,7 @@ export interface JudgeRequest {
     acceptance_summary?: string
     changed_files?: string[]
     requirement_text?: string
+    visual_evidence?: VisualEvidenceBundle[]
   }
 }
 
@@ -317,7 +324,8 @@ export type JudgeRunner = (req: JudgeRequest) => Promise<JudgeResponse>
 interface JudgeConfig {
   criteria: string
   rubric?: Array<{ score: number; label: string; anchor: string; passes: boolean }>
-  inputs?: Array<"acceptance_summary" | "changed_files" | "requirement_text">
+  inputs?: Array<"acceptance_summary" | "changed_files" | "requirement_text" | "visual_evidence">
+  requires_visual_evidence?: boolean
 }
 
 async function runJudge(
@@ -342,7 +350,26 @@ async function runJudge(
     }
   }
   const requested = new Set(cfg.inputs ?? ["acceptance_summary"])
+  if (cfg.requires_visual_evidence && !requested.has("visual_evidence")) {
+    return {
+      raw_value: 0,
+      evidence_ref: `judge://visual_evidence input required by ${spec.id} but evaluator_config.inputs omitted it`,
+      evidence_fresh: false,
+    }
+  }
   const acceptance = input.acceptance ?? {}
+  let visualEvidence: VisualEvidenceBundle[] | undefined
+  if (requested.has("visual_evidence")) {
+    const parsed = VisualEvidenceBundleListSchema.safeParse(acceptance.visual_evidence ?? [])
+    if (!parsed.success || parsed.data.length === 0) {
+      return {
+        raw_value: 0,
+        evidence_ref: `judge://visual_evidence missing or invalid for ${spec.id}`,
+        evidence_fresh: false,
+      }
+    }
+    visualEvidence = parsed.data
+  }
   const req: JudgeRequest = {
     spec,
     criteria: cfg.criteria,
@@ -351,14 +378,23 @@ async function runJudge(
       acceptance_summary: requested.has("acceptance_summary") ? acceptance.summary : undefined,
       changed_files: requested.has("changed_files") ? acceptance.changed_files : undefined,
       requirement_text: requested.has("requirement_text") ? acceptance.requirement_text : undefined,
+      visual_evidence: visualEvidence,
     },
   }
   const resp = await ctx.judge(req)
   return {
     raw_value: resp.score,
-    evidence_ref: `judge://${truncate(resp.rationale, 400)}`,
+    evidence_ref: `judge://${truncate(formatJudgeEvidenceRef(resp.rationale, visualEvidence), 400)}`,
     evidence_fresh: true,
   }
+}
+
+function formatJudgeEvidenceRef(rationale: string, visualEvidence: VisualEvidenceBundle[] | undefined): string {
+  if (!visualEvidence?.length) return rationale
+  return [
+    rationale,
+    ...visualEvidence.map((bundle) => summarizeVisualEvidenceBundle(bundle)),
+  ].join(" | ")
 }
 
 // ---------------------------------------------------------------------------
