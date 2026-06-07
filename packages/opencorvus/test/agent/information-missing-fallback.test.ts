@@ -27,7 +27,7 @@ const AGENT_PROMPTS = [
   "build-core.txt",
   "frontend-design-core.txt",
   "frontend-research-core.txt",
-  "integrity-core.txt",
+  "integrity-team-core.txt",
   "intent-analysis-core.txt",
   "orchestrator-core.txt",
   "requirements-core.txt",

@@ -15,8 +15,7 @@ import VISUAL_QA_CORE from "@/prompt/core/visual-qa-core.txt"
 import MISSION_CORE from "@/prompt/core/mission-core.txt"
 import REQUIREMENTS_CORE from "@/prompt/core/requirements-core.txt"
 import FRONTEND_DESIGN_CORE from "@/prompt/core/frontend-design-core.txt"
-import INTEGRITY_CORE from "@/prompt/core/integrity-core.txt"
-import ACCEPTANCE_REVIEW_CORE from "@/prompt/core/acceptance-review-core.txt"
+import INTEGRITY_TEAM_CORE from "@/prompt/core/integrity-team-core.txt"
 import INTENT_ANALYSIS_CORE from "@/prompt/core/intent-analysis-core.txt"
 import FACT_CHECK_CORE from "@/prompt/core/fact-check-core.txt"
 import DEEP_RESEARCH_CORE from "@/prompt/core/deep-research-core.txt"
@@ -46,7 +45,7 @@ const CONTROL_RUNTIME_PROMPT = [
   "Use only the panel tool exposed in the current turn.",
 ].join("\n")
 
-const INTEGRITY_RUNTIME_PROMPT = [INTEGRITY_CORE, ACCEPTANCE_REVIEW_CORE].join("\n\n")
+const INTEGRITY_RUNTIME_PROMPT = INTEGRITY_TEAM_CORE
 
 export namespace Agent {
   export const Info = z

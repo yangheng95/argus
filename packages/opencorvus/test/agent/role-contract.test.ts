@@ -148,16 +148,17 @@ test("coding override and build append catalog entries stay distinct", async () 
   })
 })
 
-test("mission may dispatch only the explore subagent", async () => {
+test("mission uses coordination tools without generic subagent dispatch", async () => {
   await using tmp = await tmpdir({ git: true })
   await Instance.provide({
     directory: tmp.path,
     fn: async () => {
       const mission = await Agent.get("mission")
-      expect(mission?.tools?.include).toContain("task")
-      expect(PermissionNext.evaluate("task", "explore", mission?.permission).action).toBe("allow")
-      expect(PermissionNext.evaluate("task", "general", mission?.permission).action).toBe("deny")
-      expect(PermissionNext.evaluate("task", "build", mission?.permission).action).toBe("deny")
+      expect(mission?.tools?.include).toContain("panel")
+      expect(mission?.tools?.include).toContain("mission_state")
+      expect(mission?.tools?.include).not.toContain("task")
+      expect(PermissionNext.evaluate("panel", "*", mission?.permission).action).toBe("allow")
+      expect(PermissionNext.evaluate("mission_state", "*", mission?.permission).action).toBe("allow")
     },
   })
 })
@@ -191,6 +192,29 @@ test("compaction prompt is host-owned and not configurable", async () => {
     Config.Info.parse({
       agent: {
         compaction: { prompt: "replace host handoff" },
+      },
+    }),
+  ).toThrow("prompt configuration is not editable")
+})
+
+test("integrity prompt is host-owned so catalog cannot diverge from team runtime", async () => {
+  expect(AgentRoleContract.get("integrity").promptEditable).toBe(false)
+  expect(AgentRoleContract.promptMode("integrity")).toBe("none")
+
+  await using tmp = await tmpdir({ git: true })
+  await Instance.provide({
+    directory: tmp.path,
+    fn: async () => {
+      const entries = await PromptCatalog.list()
+      expect(entries.find((entry) => entry.scope === "agent" && entry.key === "integrity")).toBeUndefined()
+      expect(await Agent.nativeDefaultPrompt("integrity")).toContain("submit_integrity_consensus")
+    },
+  })
+
+  expect(() =>
+    Config.Info.parse({
+      agent: {
+        integrity: { prompt_append: "replace team integrity prompt" },
       },
     }),
   ).toThrow("prompt configuration is not editable")

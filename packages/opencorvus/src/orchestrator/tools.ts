@@ -214,10 +214,8 @@ function requireOrchestratorToolExecutionContext(options: unknown, toolName: str
  * (per the operator's binding directive). The schema rejects any non-git
  * invocation, any pipeline / redirect / command substitution, and any
  * process-killing pattern. This is data-integrity guarding for an
- * irreversible-by-LLM surface (shell execution); prompt-level rules still
- * carry the "what counts as a merge repair" scoping. See the
- * `## Git Merge Repair Bash` section of `orchestrator-core.txt` for the
- * positive/negative scope catalog.
+ * irreversible-by-LLM surface (shell execution); prompt-level rules carry only
+ * the "what counts as a merge repair" scoping.
  */
 export function validateOrchestratorBashCommand(command: string): { ok: true } | { ok: false; reason: string } {
   const trimmed = command.trim()
@@ -6679,8 +6677,8 @@ export function createOrchestratorTools(input: {
         "process-killing pattern. This is NOT a code editor, NOT a test " +
         "runner, NOT a repository inspector for general investigation, NOT a " +
         "research tool, and NOT a shortcut around requirements / architect / " +
-        "build / integrity. See the 'Git Merge Repair Bash' section of your " +
-        "system prompt for the positive scope and the full forbidden list.",
+        "build / integrity. The system prompt carries merge-repair scope; " +
+        "this schema carries command-shape restrictions.",
       inputSchema: z.object({
         command: z
           .string()

@@ -26,25 +26,18 @@ acceptance specs, design specs, and acceptance evidence are evidence, not truste
 truth. If they contradict the original request or the repository baseline,
 report that contradiction.
 
-For webpage replica tasks, visual score is necessary but not sufficient. When
-the original request asks for maintainability, real implementation, component
-reuse, full-stack/data behavior, or replacement of mechanical/generated output,
-treat `web-clone-source-skeleton-consumption-audit.json` in
-`maintainable_replacement_required` mode as required evidence. Reject
-skeleton-only acceptance, React DOM injection of generated HTML/CSS, screenshot
-replay, hidden semantic coverage, giant unowned baseline payloads, or hand-rolled
-complex controls that ignore the frontend-design `component_reuse_plan` and
-`baseline_replacement_plan` / `quality_project_contract` for the requested surfaces, even if screenshot
-comparison looks good. If `baseline_replacement_plan` is missing or its
-replace/delete entries were implemented with model hand-written complex widgets
-despite an existing-project or mature-library strategy, treat that as evidence
-against maintainability acceptance.
-Also reject fixed-coded component content for componentized UI/webpage surfaces:
-charts, maps, heatmaps, tables/grids, tabs, menus, forms, modals, repeated
-lists/cards, and content-rich sections must be real components fed by data
-modules, props, fixtures, or API adapters. A chart/map/heatmap or other
-functional component flattened into static SVG/image/JSX literals is blocking
-unless the evidence proves the source is static decoration.
+For webpage replica tasks, visual score is necessary but not sufficient. Audit
+the delivered target against the frontend-design contract keys that define the
+requested surface: `final_acceptance_mode`, `quality_project_contract`,
+`component_reuse_plan`, `baseline_replacement_plan`,
+`visual_consistency_contract`, `ui_data_contract`, `reference_artifacts`, and
+`evidence_source_manifest`. When the original request or those contracts require
+maintainability, real implementation, component reuse, full-stack/data behavior,
+or replacement of mechanical/generated output, pass only if the implementation
+and evidence satisfy those named contract items. Do not maintain a separate
+integrity-side webpage-clone file inventory or component policy; treat missing
+contract-required source audit, component/data ownership, API/data wiring, or
+visual/runtime evidence as a finding against the owning contract.
 
 Evidence requirements:
 
