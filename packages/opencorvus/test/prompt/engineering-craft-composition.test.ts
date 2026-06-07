@@ -20,7 +20,7 @@ import fs from "node:fs"
 import path from "node:path"
 import ENGINEERING_CRAFT from "../../src/prompt/core/engineering-craft.txt"
 import BUILD_CORE from "../../src/prompt/core/build-core.txt"
-import INTEGRITY_CORE from "../../src/prompt/core/integrity-core.txt"
+import INTEGRITY_TEAM_CORE from "../../src/prompt/core/integrity-team-core.txt"
 import PROMPT_CODING from "../../src/agent/prompt/coding.txt"
 import { composeBuildCore } from "../../src/build/agent"
 
@@ -47,8 +47,8 @@ describe("engineering-craft shared fragment", () => {
     // exactly once, in engineering-craft.txt. Inlining it elsewhere is rule 8.
     expect(BUILD_CORE).not.toContain(SENTINEL)
     expect(BUILD_CORE).not.toContain(HEADING)
-    expect(INTEGRITY_CORE).not.toContain(SENTINEL)
-    expect(INTEGRITY_CORE).not.toContain(HEADING)
+    expect(INTEGRITY_TEAM_CORE).not.toContain(SENTINEL)
+    expect(INTEGRITY_TEAM_CORE).not.toContain(HEADING)
   })
 
   test("Build composes the craft fragment exactly once (both auto modes)", () => {
@@ -78,13 +78,13 @@ describe("engineering-craft shared fragment", () => {
     // Integrity records feedback only and does not mutate code. Assert the
     // real composition point (agent core: line), not just the .txt — a future
     // change that pollutes integrity would edit agent.ts, not the core file.
-    expect(INTEGRITY_CORE).not.toContain(HEADING)
+    expect(INTEGRITY_TEAM_CORE).not.toContain(HEADING)
     const integritySrc = fs.readFileSync(
       path.join(import.meta.dir, "../../src/integrity/team-agent.ts"),
       "utf8",
     )
     expect(integritySrc).not.toContain("engineering-craft")
-    expect(integritySrc).toContain("core: TEAM_CORE")
+    expect(integritySrc).toContain("core: withFactCheckRegistration(TEAM_CORE)")
   })
 
   test("interactive coding agent keeps its own clauses, is not re-injected", () => {

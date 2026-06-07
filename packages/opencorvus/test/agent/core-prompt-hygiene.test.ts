@@ -11,8 +11,7 @@ const promptFiles = {
   frontendDesign: "frontend-design-core.txt",
   frontendResearch: "frontend-research-core.txt",
   factCheck: "fact-check-core.txt",
-  integrity: "integrity-core.txt",
-  integrityTeam: "integrity-team-core.txt",
+  integrity: "integrity-team-core.txt",
   intentAnalysis: "intent-analysis-core.txt",
   goalWorkloadAnalyst: "goal-workload-analyst-core.txt",
   orchestrator: "orchestrator-core.txt",
@@ -22,7 +21,6 @@ const promptFiles = {
 }
 
 const sharedPromptFiles = {
-  acceptanceReview: "acceptance-review-core.txt",
   engineeringCraft: "engineering-craft.txt",
   mission: "mission-core.txt",
 }
@@ -285,12 +283,11 @@ describe("core prompt hygiene", () => {
     const tools = await readSource("orchestrator/tools.ts")
     const integrityFlat = integrity.replace(/\s+/g, " ")
 
-    expect(integrity).toContain("MUST NOT include `corrections` or")
-    expect(integrityFlat).toContain("If you need to emit any `corrections`, `missing_goals`, or `graph_corrections`")
-    expect(integrityFlat).toContain("the dimension verdict is `needs_correction`, not `concerns`")
-    expect(integrityFlat).toContain("unsupported REQ IDs")
-    expect(integrityFlat).toContain("requirement_ids")
-    expect(integrityFlat).toContain("does not apply graph mutations automatically")
+    expect(integrityFlat).toContain("does not rewrite requirements, mutate goals, edit files")
+    expect(integrityFlat).toContain("repair requirements back to the orchestrator")
+    expect(integrityFlat).toContain("Every finding MUST carry at least one of")
+    expect(integrityFlat).toContain("requirementIDs")
+    expect(integrityFlat).toContain("Do not retrofit a REQ-N tag")
     expect(orchestrator.replace(/\s+/g, " ")).toContain("Integrity is the workflow acceptance gate")
     expect(orchestrator).not.toContain("zero correction")
     expect(tools).not.toContain("integrityAttemptExecutionBlockReason")
@@ -303,15 +300,16 @@ describe("core prompt hygiene", () => {
   test("orchestrator prompt scopes bash to git merge repair only and forbids replacing sub-agents", async () => {
     // The orchestrator bash tool is a narrow git-only repair surface; the
     // prompt must (a) declare the section, (b) explicitly forbid using bash
-    // as a code editor / test runner / investigation surface, and (c) repeat
-    // the no-chain-bash discipline so a non-zero exit cannot escalate into a
-    // multi-call loop. Spec — 2026-05-20 orchestrator-bash-git-only.
+    // as a code editor / test runner / investigation surface, and (c) point
+    // exact command-shape rejection to the tool schema single source.
     const orchestrator = await readPrompt("orchestrator")
     const flat = orchestrator.replace(/\s+/g, " ")
 
     expect(orchestrator).toContain("## Git Merge Repair Bash")
     expect(flat).toContain("single repair surface for a stuck merge")
-    expect(flat).toContain("schema HARD-rejects anything that is not a single `git <subcommand>` invocation")
+    expect(flat).toContain("bash tool schema is the single source for exact command-shape rejection")
+    expect(flat).not.toContain("no pipelines")
+    expect(flat).not.toContain("command substitution (`$(...)` / backticks)")
     expect(flat).toContain("Build is the only code-author path")
     expect(flat).toContain("Network git (`fetch`, `pull`, `push`, `clone`, `remote ...`)")
     expect(flat).toContain("worktrees are Build's surface")
@@ -594,7 +592,7 @@ describe("core prompt hygiene", () => {
     )
   })
 
-  test("frontend-design routes visual_consistency_contract to integrity acceptance review", async () => {
+  test("frontend-design routes visual_consistency_contract to integrity team review", async () => {
     const design = await readPrompt("frontendDesign")
     expect(design).not.toContain("ADVISORY")
     expect(design).not.toContain("not automatically scored or gated")
@@ -602,8 +600,9 @@ describe("core prompt hygiene", () => {
     expect(design).toContain("`visual_consistency_contract`: binding visual-fidelity contract")
     expect(design).not.toContain("register_color_spec")
     expect(design).not.toContain("register_layout_spec")
-    const acceptanceReview = await readPrompt("integrity")
-    expect(acceptanceReview).toContain("final acceptance reviewer")
+    const integrity = await readPrompt("integrity")
+    expect(integrity).toContain("`visual_consistency_contract`")
+    expect(integrity).toContain("The final consensus is the only integrity gate output")
   })
 
   test("frontend-design is scoped as frontend design and replica contract owner", async () => {
@@ -661,7 +660,6 @@ describe("core prompt hygiene", () => {
     const build = await readPrompt("build")
     const buildOverlays = await readSource("build/prompt-context.ts")
     const integrity = await readPrompt("integrity")
-    const integrityTeam = await readPrompt("integrityTeam")
     const orchestrator = await readPrompt("orchestrator")
     const workflow = await readSource("engine/workflow.ts")
 
@@ -722,67 +720,34 @@ describe("core prompt hygiene", () => {
     expect(design).toContain("All visible content in maintainable UI/webpage acceptance must be componentized")
     expect(design).toContain("fed by props/data modules/fixtures/API adapters")
 
-    expect(requirements).toContain("skeleton-first implementation constraint")
-    expect(requirements).toContain("must first be adopted into the root app as a temporary visual baseline")
-    expect(requirements).toContain('Do not phrase this as "skeleton is reference only"')
-    expect(requirements).toContain("first implementation goal must copy/adapt the frontend-design skeleton entrypoints")
+    expect(requirements).toContain("`frontend_design` is the sole owner of the webpage-clone implementation contract")
     expect(requirements).toContain("`final_acceptance_mode`")
-    expect(requirements).toContain("`baseline_replacement_plan`")
-    expect(requirements).toContain("web-clone-source/implementation-blueprint.md")
-    expect(requirements).toContain("source-skeleton/index.html` is raw evidence only")
-    expect(requirements).toContain("functional container/API/mock workflows")
-    expect(requirements).toContain("cannot be accepted as skeleton injection alone")
-    expect(requirements).toContain("componentized content is a user-facing acceptance constraint")
-    expect(requirements).toContain("not fixed-coded JSX/SVG literals")
-    expect(requirements).toContain("Charts, maps, heatmaps, tables/grids, tab panels")
-    expect(requirements).toContain("PRD/frontend_design component contracts are the primary source")
-    expect(requirements).toContain("Frontend_research briefs are investigation coverage checklists")
+    expect(requirements).toContain("`quality_project_contract`")
+    expect(requirements).toContain("`component_reuse_plan`")
+    expect(requirements).toContain("`ui_data_contract`")
+    expect(requirements).toContain("Do not restate frontend-design file inventories")
+    expect(requirements).toContain("downstream phase order")
+    expect(requirements).toContain("source-baseline adoption rule")
     expect(requirements).toContain("register a requirement for a real persisted artifact")
     expect(requirements).toContain("not proof that the requested document has already been delivered")
-    expect(requirements).toContain("roughly 70% of reconstruction decisions")
-    expect(requirements).toContain("skeleton/source-dom evidence is roughly 30% visual support")
-    expect(requirements).toContain("database schema/entities and seed/reset data")
     expect(requirements).toContain("database_contracts")
-    expect(requirements).toContain("keep this decision compact")
-    expect(requirements).toContain("source-ir/*")
-    expect(requirements).toContain("source-skeleton/critical.css")
-    expect(requirements).toContain("targeted-gap evidence only")
-    expect(requirements).toContain("`webpage-evidence/` is raw frontend_design provenance")
+    expect(requirements).toContain("frontend-design contract key")
+    expect(requirements).toContain("frontend_design owns that inventory")
 
-    expect(architect).toContain("decompose by phase outcomes, not UI parts")
-    expect(architect).toContain("first adopt the frontend-design skeleton/slots/CSS as the root app baseline")
-    expect(architect).toContain("must not create a blank scaffold, blank route shell, placeholder-only section shell")
-    expect(architect).toContain('if it says the skeleton is "reference only" or "do not copy", the graph is wrong')
-    expect(architect).toContain("source-IR-derived semantic component source")
-    expect(architect).toContain(
-      "Require `web-clone-source/source-skeleton/source-skeleton-audit.json` and `web-clone-source/source-ir/source-quality-audit.json`",
-    )
-    expect(architect).toContain("if either audit did not pass, make that a blocking decomposition concern")
-    expect(architect).toContain(
-      "then data/API/state adapters, then user workflows/interactions, then final integrated visual/runtime verification",
-    )
-    expect(architect).toContain(
-      "buttons, dropdowns, cards, toolbar items, tabs, and sidebars belong inside a phase goal or contract",
-    )
+    expect(architect).toContain("frontend_design owns the implementation contract and source-file inventory")
+    expect(architect).toContain("Decompose by phase outcomes from the registered frontend-design decision keys")
+    expect(architect).toContain("must not plan a blank scaffold or freehand replacement")
+    expect(architect).toContain("Register graph contracts by rendered surface")
+    expect(architect).toContain("cite frontend-design contract ids")
     expect(architect).toContain("database/API phase before frontend binding")
     expect(architect).toContain("database entities, and seed data")
-    expect(architect).toContain("Do not put API/state wiring directly into extracted static markup")
-    expect(architect).toContain("project-owned semantic components/data modules/API bindings")
-    expect(architect).toContain("must not treat the frontend-design skeleton alone as deliverable completion")
-    expect(architect).toContain("mechanical DOM dump / `div soup`")
     expect(architect).toContain("a Build goal must own writing that persisted artifact")
     expect(architect).toContain("templates, REQ rows, and decision-log summaries are inputs")
-    expect(architect).toContain("`SourceDomPage`, `src/components/source-dom/*`, `src/data/sourceDom*`")
-    expect(architect).toContain("pervasive `data-source-node-id`")
-    expect(architect).toContain("`<div>` usage itself is normal")
     expect(architect).toContain("preserve componentized content as a graph contract")
     expect(architect).toContain("Register component/render_surface/static_data contracts for charts, maps, heatmaps")
     expect(architect).toContain(
       "fixed-coded chart/map/component content in JSX/SVG is not an acceptable implementation target",
     )
-    expect(architect).toContain("preserve the PRD-first weighting in the graph")
-    expect(architect).toContain("roughly 70% of reconstruction authority")
-    expect(architect).toContain("roughly 30% as style, geometry, CSS, asset, and pixel-consistency support")
 
     expect(build).not.toContain("web-clone-source")
     expect(build).not.toContain("frontend-design")
@@ -804,26 +769,37 @@ describe("core prompt hygiene", () => {
     expect(buildOverlays).toContain("Preserve visible text, layout hierarchy")
     expect(buildOverlays).toContain("Run source/visual audits only when the handoff")
 
-    expect(integrity).toContain("web-clone-source-skeleton-consumption-audit.json")
-    expect(integrity).toContain("Visual score is")
-    expect(integrity).toContain("not sufficient evidence")
-    expect(integrity).toContain("database schema/seed/reset")
-    expect(integrity).toContain("backend API responses")
-    expect(integrity).toContain("reject fixed-coded component content")
-    expect(integrity).toContain("charts, maps, heatmaps, tables/grids")
-    expect(integrity).toContain("flattened into static SVG/image/JSX literals")
-    expect(integrityTeam).toContain("maintainable_replacement_required")
-    expect(integrityTeam).toContain("component_reuse_plan")
-    expect(integrityTeam).toContain("baseline_replacement_plan")
-    expect(integrityTeam).toContain("hand-rolled")
-    expect(integrityTeam).toContain("fixed-coded component content")
-    expect(integrityTeam).toContain("must be real components fed by data")
+    expect(integrity).toContain("visual score is necessary but not sufficient")
+    expect(integrity).toContain("`final_acceptance_mode`")
+    expect(integrity).toContain("`quality_project_contract`")
+    expect(integrity).toContain("`component_reuse_plan`")
+    expect(integrity).toContain("`baseline_replacement_plan`")
+    expect(integrity.replace(/\s+/g, " ")).toContain("Do not maintain a separate integrity-side webpage-clone file inventory")
+    expect(integrity).toContain("component/data ownership")
     expect(orchestrator).toContain("Routine web-clone policy belongs to internal agent/tool prompts")
     expect(design).toContain("recurring webpage-clone workflow as internal policy")
-    expect(requirements).toContain("Do not require the user request to restate recurring clone rules")
-    expect(architect).toContain("These web-clone acceptance rules are internal architecture policy")
     expect(buildOverlays).toContain("This overlay applies because the frontend_design handoff names")
-    expect(integrity).toContain("Treat those recurring webpage-clone gates as internal acceptance policy")
+
+    const frontendDesignOwnedTokens = [
+      "SourceDomPage",
+      "src/components/source-dom/*",
+      "src/data/sourceDom*",
+      "data-source-node-id",
+      "source-ir/style-profile.json",
+      "web-clone-source/source-skeleton/source-skeleton-audit.json",
+      "source-skeleton/index.html",
+      "96/100 visual gates",
+      "div soup",
+    ]
+    for (const [name, text] of [
+      ["requirements", requirements],
+      ["architect", architect],
+      ["integrity", integrity],
+    ] as const) {
+      for (const token of frontendDesignOwnedTokens) {
+        expect(text, `${name} must not repeat frontend-design-owned token ${token}`).not.toContain(token)
+      }
+    }
 
     expect(workflow).toContain("web-clone-source/implementation-blueprint.md")
     expect(workflow).toContain("source-ir/component-tree.json")
@@ -1078,24 +1054,20 @@ describe("core prompt hygiene", () => {
 
   test("integrity prompt audits original request mining, not only generated REQ rows", async () => {
     const integrity = await readPrompt("integrity")
-    const integrityTeam = await Bun.file(path.join(coreDir, "integrity-team-core.txt")).text()
     const orchestrator = await readPrompt("orchestrator")
     const architect = await readPrompt("architect")
     const agent = await readSource("integrity/team-agent.ts")
 
-    for (const text of [integrity, integrityTeam]) {
-      const normalized = text.replace(/\s+/g, " ")
-      const lower = normalized.toLowerCase()
-      expect(lower).toContain("original user request")
-      expect(lower).toContain("generated req rows")
-      expect(lower).toContain("evidence")
-    }
+    const normalized = integrity.replace(/\s+/g, " ")
+    const lower = normalized.toLowerCase()
+    expect(lower).toContain("original user request")
+    expect(lower).toContain("generated req rows")
+    expect(lower).toContain("evidence")
     expect(agent).toContain("renderUserRequestSection")
     expect(agent).toContain("buildIntegrityEvidencePrompt")
-    expect(integrity.toLowerCase()).toContain("audit universe")
-    expect(integrity.toLowerCase()).toContain("requirements extraction")
-    expect(integrity).toContain("If the original request implies a requirement that has no corresponding REQ-N row")
-    expect(integrity).toContain("leave `requirement_ids` empty")
+    expect(normalized).toContain("The original user request is the audit source")
+    expect(normalized).toContain("evidence, not trusted truth")
+    expect(normalized).toContain("If they contradict the original request or the repository baseline")
     expect(orchestrator).toContain("late-stage requirements-mining and system-integrity review")
     expect(orchestrator.replace(/\s+/g, " ")).toContain("final workflow gate")
     expect(orchestrator.replace(/\s+/g, " ")).toContain(

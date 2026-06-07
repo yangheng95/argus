@@ -140,9 +140,9 @@ export namespace AgentRoleContract {
     integrity: {
       id: "integrity",
       description: "Integrity reviewer. Audits requirement and goal integrity and owns final session-bound acceptance review, including runtime, frontend, visual, and rejection-detail evidence.",
-      promptEditable: true,
-      defaultPromptRequired: true,
-      promptConfigMode: "append",
+      promptEditable: false,
+      defaultPromptRequired: false,
+      promptConfigMode: "none",
     },
     "fact-check": {
       id: "fact-check",

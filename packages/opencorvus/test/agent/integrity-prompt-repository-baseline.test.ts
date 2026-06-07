@@ -4,7 +4,7 @@ import path from "node:path"
 const repoRoot = path.resolve(import.meta.dir, "../../../..")
 const integrityPromptPath = path.join(
   repoRoot,
-  "packages/opencorvus/src/prompt/core/integrity-core.txt",
+  "packages/opencorvus/src/prompt/core/integrity-team-core.txt",
 )
 const orchestratorToolsPath = path.join(repoRoot, "packages/opencorvus/src/orchestrator/tools.ts")
 
@@ -14,13 +14,9 @@ describe("integrity review scope boundaries", () => {
     const normalized = integrity.replace(/\s+/g, " ")
 
     expect(integrity).not.toContain("## Repository Baseline")
-    expect(integrity).toContain("Repository baseline is evidence, not a separate review surface")
-    expect(normalized).toContain("existing tests")
-    expect(normalized).toContain("existing public behavior")
-    expect(normalized).toContain("existing design documents")
-    expect(normalized).toContain("historical plans")
-    expect(normalized).toContain("current source contracts")
-    expect(integrity).toContain("repository evidence")
+    expect(normalized).toContain("repository baseline")
+    expect(normalized).toContain("evidence")
+    expect(normalized).toContain("not trusted truth")
   })
 
   test("does not route every build wave through standalone integrity", async () => {
