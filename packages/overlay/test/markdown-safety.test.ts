@@ -1,5 +1,11 @@
 import { expect, test } from "bun:test"
-import { renderMarkdown } from "../src/utils/markdown"
+import {
+  CODE_BLOCK_RENDER_LINE_LIMIT,
+  MARKDOWN_DATA_IMAGE_CHAR_LIMIT,
+  MARKDOWN_RENDER_CHAR_LIMIT,
+  renderCodeBlock,
+  renderMarkdown,
+} from "../src/utils/markdown"
 
 test("renderMarkdown escapes raw html instead of injecting it", () => {
   const html = renderMarkdown("<script>alert(1)</script>\n<img src=x onerror=alert(1)>")
@@ -19,4 +25,32 @@ test("renderMarkdown keeps safe http links", () => {
   const html = renderMarkdown("[docs](https://example.com)")
   expect(html).toContain('href="https://example.com"')
   expect(html).toContain('rel="noopener noreferrer"')
+})
+
+test("renderMarkdown clips oversized static text before parsing", () => {
+  const tail = "SHOULD_NOT_RENDER"
+  const html = renderMarkdown(`${"a".repeat(MARKDOWN_RENDER_CHAR_LIMIT + 1)}${tail}`)
+
+  expect(html).toContain("Overlay display clipped")
+  expect(html).not.toContain(tail)
+})
+
+test("renderMarkdown drops oversized data images", () => {
+  const html = renderMarkdown(`![huge](data:image/png;base64,${"A".repeat(MARKDOWN_DATA_IMAGE_CHAR_LIMIT + 1)})`)
+
+  expect(html).toContain("huge")
+  expect(html).not.toContain("data:image")
+  expect(html).not.toContain("<img")
+})
+
+test("renderCodeBlock respects render line and copy budgets", () => {
+  const sentinel = "SHOULD_NOT_RENDER"
+  const content = `${Array.from({ length: CODE_BLOCK_RENDER_LINE_LIMIT + 1 }, (_, index) => `line-${index}`).join("\n")}\n${sentinel}`
+  const result = renderCodeBlock(content, "plaintext", Infinity)
+
+  expect(result.truncated).toBe(true)
+  expect(result.totalLines).toBe(CODE_BLOCK_RENDER_LINE_LIMIT + 2)
+  expect(result.html).toContain("Overlay display clipped")
+  expect(result.html).not.toContain(sentinel)
+  expect(result.html).not.toContain(`data-md-copy="${content}`)
 })

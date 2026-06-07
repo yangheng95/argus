@@ -3,7 +3,7 @@ import { boardTag, currentGoalRunFromRows, compileBoard } from "../../src/workbe
 import { latestDeliveredGoalRunFromRows } from "../../src/engine/store"
 import { Database } from "../../src/storage/db"
 import { ProjectTable } from "../../src/project/project.sql"
-import { EngineTaskTable } from "../../src/engine/engine.sql"
+import { EngineArtifactTable, EngineGoalTable, EngineTaskTable } from "../../src/engine/engine.sql"
 import { Event } from "../../src/engine/model"
 import { EngineProtocol } from "../../src/engine/protocol"
 import { Instance } from "../../src/project/instance"
@@ -242,6 +242,96 @@ test("cancelled terminal task without a run exposes task-level retry", async () 
       expect(board.overview.nextStep.kind).toBe("retry")
       expect(board.overview.controls.canRetry).toBe(true)
       expect(board.overview.controls.canCancel).toBe(false)
+    },
+  })
+})
+
+test("cancelled terminal task does not project partially completed goal workflow as running", async () => {
+  await resetDatabase()
+  await using tmp = await tmpdir()
+  const now = Date.now()
+  const stamp = now.toString(16)
+  const projectID = `project_board_cancelled_workflow_${stamp}`
+  const taskID = `tsk_board_cancelled_workflow_${stamp}`
+  const runID = `run_board_cancelled_workflow_${stamp}`
+  const completedGoalID = `gol_board_done_${stamp}`
+  const pendingGoalID = `gol_board_pending_${stamp}`
+  const completedGoalRunID = `glr_board_done_${stamp}`
+
+  Database.use((db) => {
+    db.insert(ProjectTable).values({
+      id: projectID,
+      worktree: tmp.path,
+      name: "Board cancelled workflow projection",
+      sandboxes: "[]",
+      time_created: now,
+      time_updated: now,
+    }).run()
+    db.insert(EngineTaskTable).values({
+      id: taskID,
+      project_id: projectID,
+      source: "test",
+      title: "Cancelled partial workflow",
+      request: "cancel after some goals finish",
+      kind: "workflow",
+      priority: "normal",
+      time_created: now - 10_000,
+      time_updated: now,
+      time_started: now - 10_000,
+      time_completed: now,
+      error: "operator cancelled",
+      metadata: { cancelled: true },
+    } as any).run()
+    db.insert(EngineGoalTable).values([
+      {
+        id: completedGoalID,
+        task_id: taskID,
+        title: "Finished goal",
+        slug: "finished-goal",
+        objective: "Finish one goal before cancellation.",
+        order_index: 0,
+        time_created: now,
+        time_updated: now,
+      },
+      {
+        id: pendingGoalID,
+        task_id: taskID,
+        title: "Pending goal",
+        slug: "pending-goal",
+        objective: "Remain pending after cancellation.",
+        order_index: 1,
+        time_created: now,
+        time_updated: now,
+      },
+    ] as any).run()
+    db.insert(EngineArtifactTable).values({
+      id: completedGoalRunID,
+      task_id: taskID,
+      run_id: runID,
+      goal_run_id: completedGoalRunID,
+      kind: "goal_run_attempt",
+      label: "completed-before-cancel",
+      payload: {
+        goal_id: completedGoalID,
+        status: "completed",
+        retry_count: 0,
+        time_started: now - 5_000,
+        time_completed: now - 1_000,
+      },
+      time_created: now - 1_000,
+      time_updated: now - 1_000,
+    }).run()
+  })
+
+  await Instance.provide({
+    directory: tmp.path,
+    fn: async () => {
+      const board = compileBoard({ taskID }) as any
+      const buildStep = board.workflow.steps.find((step: any) => step.id === "build")
+      expect(board.task.status).toBe("cancelled")
+      expect(board.overview.headline).toBe("Task was cancelled")
+      expect(buildStep?.status).toBe("skipped")
+      expect(buildStep?.status).not.toBe("running")
     },
   })
 })
