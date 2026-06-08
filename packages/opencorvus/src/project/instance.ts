@@ -18,8 +18,8 @@ type StateFactory = <S>(
   init: () => S,
   dispose?: (state: Awaited<S>) => Promise<void>,
 ) => (() => S) & {
-  reset(): void
-  resetAll(): void
+  reset(): Promise<void>
+  resetAll(): Promise<void>
 }
 
 type InstanceApi = {
@@ -173,8 +173,8 @@ export const Instance: InstanceApi = {
     init: () => S,
     dispose?: (state: Awaited<S>) => Promise<void>,
   ): (() => S) & {
-    reset(): void
-    resetAll(): void
+    reset(): Promise<void>
+    resetAll(): Promise<void>
   } {
     return State.create(() => Instance.directory, init, dispose)
   },
@@ -247,18 +247,18 @@ export const Instance: InstanceApi = {
 export function lazyInstanceState<S>(
   init: () => S,
   dispose?: (state: Awaited<S>) => Promise<void>,
-): (() => S) & { reset(): void; resetAll(): void } {
-  let cached: ((() => S) & { reset(): void; resetAll(): void }) | undefined
+): (() => S) & { reset(): Promise<void>; resetAll(): Promise<void> } {
+  let cached: ((() => S) & { reset(): Promise<void>; resetAll(): Promise<void> }) | undefined
   const get = ((): S => {
     if (!cached) cached = Instance.state(init, dispose)
     return cached()
-  }) as (() => S) & { reset(): void; resetAll(): void }
+  }) as (() => S) & { reset(): Promise<void>; resetAll(): Promise<void> }
   get.reset = () => {
-    cached?.reset()
+    return cached?.reset() ?? Promise.resolve()
   }
   get.resetAll = () => {
     if (!cached) cached = Instance.state(init, dispose)
-    cached.resetAll()
+    return cached.resetAll()
   }
   return get
 }

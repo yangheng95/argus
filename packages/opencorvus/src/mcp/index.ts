@@ -243,7 +243,6 @@ export namespace MCP {
         clients,
         connecting,
       }
-      scheduleConfiguredConnections(snapshot, config)
       return snapshot
     },
     async (state) => {
@@ -259,15 +258,6 @@ export namespace MCP {
       pendingOAuthTransports.clear()
     },
   )
-
-  function scheduleConfiguredConnections(state: McpState, config: NonNullable<Config.Info["mcp"]>) {
-    for (const [key, mcp] of entries(config)) {
-      if (!isMcpConfigured(mcp)) continue
-      if (mcp.enabled === false) continue
-      if (state.status[key]?.status !== "disconnected") continue
-      startConnection(state, key, mcp)
-    }
-  }
 
   function startConnection(state: McpState, key: string, mcp: Config.Mcp) {
     if (state.connecting[key]) return state.connecting[key]
@@ -292,6 +282,22 @@ export namespace MCP {
       })
     state.connecting[key] = connection
     return connection
+  }
+
+  async function ensureConfiguredConnections(state: McpState, config: NonNullable<Config.Info["mcp"]>) {
+    const tasks: Promise<void>[] = []
+    for (const [key, mcp] of entries(config)) {
+      if (!isMcpConfigured(mcp)) continue
+      if (mcp.enabled === false) continue
+      if (state.status[key]?.status === "connected") continue
+      if (state.status[key]?.status === "connecting" && state.connecting[key]) {
+        tasks.push(state.connecting[key])
+        continue
+      }
+      if (state.status[key]?.status !== "disconnected") continue
+      tasks.push(startConnection(state, key, mcp))
+    }
+    await Promise.all(tasks)
   }
 
   // Helper function to fetch prompts for a specific client
@@ -502,8 +508,9 @@ export namespace MCP {
       })
 
       const connectTimeout = mcp.timeout ?? DEFAULT_TIMEOUT
+      let client: Client | undefined
       try {
-        const client = new Client({
+        client = new Client({
           name: "opencorvus",
           version: Installation.VERSION,
         })
@@ -527,6 +534,12 @@ export namespace MCP {
           status: "failed" as const,
           error: detail ? `${message}\n${detail}` : message,
         }
+        await client?.close().catch((closeError) => {
+          log.error("Failed to close failed local MCP client", { key, error: closeError })
+        })
+        await transport.close().catch((closeError) => {
+          log.error("Failed to close failed local MCP transport", { key, error: closeError })
+        })
       }
     }
 
@@ -590,7 +603,6 @@ export namespace MCP {
       result[key] = s.status[key] ?? (mcp.enabled === false ? { status: "disabled" } : { status: "disconnected" })
     }
 
-    scheduleConfiguredConnections(s, config)
     return result
   }
 
@@ -634,8 +646,9 @@ export namespace MCP {
     const s = await state()
     const cfg = await Config.get()
     const config = cfg.mcp ?? {}
-    const clientsSnapshot = await clients()
     const defaultTimeout = cfg.experimental?.mcp_timeout
+    await ensureConfiguredConnections(s, config)
+    const clientsSnapshot = await clients()
 
     const connectedClients = entries(clientsSnapshot).filter(
       ([clientName]) => s.status[clientName]?.status === "connected",
@@ -673,6 +686,8 @@ export namespace MCP {
 
   export async function prompts() {
     const s = await state()
+    const cfg = await Config.get()
+    await ensureConfiguredConnections(s, cfg.mcp ?? {})
     const clientsSnapshot = await clients()
 
     const prompts = Object.fromEntries(
@@ -694,6 +709,8 @@ export namespace MCP {
 
   export async function resources() {
     const s = await state()
+    const cfg = await Config.get()
+    await ensureConfiguredConnections(s, cfg.mcp ?? {})
     const clientsSnapshot = await clients()
 
     const result = Object.fromEntries(
