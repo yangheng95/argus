@@ -47,7 +47,7 @@ export namespace AgentRoleContract {
     "visual-qa": {
       id: "visual-qa",
       description:
-        "Full-function visual QA agent. Uses browser/runtime evidence to test frontend visual quality, may repair defects like build, and reports reproducible visual findings instead of relying on fixed screenshot baselines.",
+        "Full-function visual QA (Quality Assurance) agent. Uses browser/runtime evidence to test frontend visual quality, may repair defects like build, and reports reproducible visual findings instead of relying on fixed screenshot baselines.",
       promptEditable: true,
       defaultPromptRequired: true,
       promptConfigMode: "append",

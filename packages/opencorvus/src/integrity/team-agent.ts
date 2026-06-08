@@ -92,6 +92,15 @@ const REVIEWER_DRILLDOWN_ROW_CONTRACT_PROMPT = [
   "- Put impacted symbols and files on `findings[]` only when there is an actual finding.",
 ].join("\n")
 
+const ADVERSARIAL_INVESTIGATION_PROMPT = [
+  "Adversarial investigation discipline:",
+  "- Start each reviewer perspective by deriving concrete failure hypotheses from the original request, REQ rows, goal contracts, acceptance specs, changed directories, prior findings, and runtime/visual evidence. Do not start from executor self-assessment.",
+  "- Treat executor reports, goal reports, build/typecheck success, grep output, and file listings as leads, not proof. A pass claim needs scoped evidence that could have disproved it.",
+  "- A pass reviewer report still needs `investigationPlan`, `drilldowns[]`, `coverage[]`, and `evidence[]` showing what was inspected and why that inspection would expose the scoped failure.",
+  "- If tools are available but a high-risk surface was not inspected, record `coverage` as `inconclusive` or `missing` and include `uninspectedRisks`; do not turn an inspection gap into praise.",
+  "- Do not write congratulatory or effort-focused summaries. Summaries should say which request promises survived falsification, which did not, and what remains uninspected.",
+].join("\n")
+
 export interface IntegrityIssue {
   type: string
   description: string
@@ -160,6 +169,7 @@ export type ReviewPromptInput = {
   attachments?: Array<{ sha: string; url: string; mime: string; size: number; filename?: string }>
   acceptance?: IntegrityAcceptanceContext
   frontendDesign?: string
+  visualQa?: string
   visualEvidence?: VisualEvidenceBundle[]
   replayContext: IntegrityReplayContext
   signal?: AbortSignal
@@ -210,6 +220,7 @@ export async function reviewIntegrity(input: {
   attachments?: Array<{ sha: string; url: string; mime: string; size: number; filename?: string }>
   acceptance?: IntegrityAcceptanceContext
   frontendDesign?: string
+  visualQa?: string
   visualEvidence?: VisualEvidenceBundle[]
   replayContext?: IntegrityReplayContext
   signal?: AbortSignal
@@ -250,6 +261,7 @@ export async function reviewIntegrity(input: {
       goals: input.goals,
       acceptance: input.acceptance,
       frontendDesign: input.frontendDesign,
+      visualQa: input.visualQa,
       visualEvidence: input.visualEvidence,
       attachments: input.attachments,
       signal: input.signal,
@@ -331,6 +343,7 @@ function createSingleSessionIntegrityToolKit(input: {
   goals: GoalContractFields[]
   acceptance?: IntegrityAcceptanceContext
   frontendDesign?: string
+  visualQa?: string
   visualEvidence?: VisualEvidenceBundle[]
   attachments?: Array<{ sha: string; url: string; mime: string; size: number; filename?: string }>
   signal?: AbortSignal
@@ -341,6 +354,7 @@ function createSingleSessionIntegrityToolKit(input: {
         goals: input.goals.map(goalToIntegrityEvidenceGoalInfo),
         buildEvidence: input.acceptance,
         frontendDesign: input.frontendDesign,
+        visualQa: input.visualQa,
         visualEvidence: input.visualEvidence,
         attachments: input.attachments,
         signal: input.signal,
@@ -406,12 +420,13 @@ export function buildSingleSessionIntegrityPrompt(input: ReviewPromptInput): str
     ].join("\n\n"),
     CONSENSUS_TRACEABILITY_PROMPT,
     FINDING_MANIFEST_PROMPT,
+    ADVERSARIAL_INVESTIGATION_PROMPT,
     COVERAGE_AUDIT_STATUS_CONTRACT_PROMPT,
     REVIEWER_COVERAGE_ROW_CONTRACT_PROMPT,
     REVIEWER_DRILLDOWN_ROW_CONTRACT_PROMPT,
     buildIntegrityEvidencePrompt(input),
-    "Use scoped evidence tools when needed. Do not request full upstream context, full contract graph, raw decision log, or broad full-diff dumps unless a specific finding requires it.",
-    "Perform a coverage audit before final verdict: every critical request promise should be `covered`, `missing`, or explicitly `inconclusive`. Include `coverageAudit`; include `uninspectedRisks` for high-risk surfaces you could not inspect.",
+    "Use scoped evidence tools for the initial falsification pass: inspect overview, changed directories, goal summary, executor reports, and then exact files/diffs/runtime/visual evidence for the reviewer perspectives that matter. Do not request full upstream context, full contract graph, raw decision log, or broad full-diff dumps unless a specific finding requires it.",
+    "Perform a coverage audit before final verdict: every critical request promise should be `covered`, `missing`, or explicitly `inconclusive`. Include `coverageAudit`; include `uninspectedRisks` for high-risk surfaces no reviewer actually inspected.",
     "Call submit_integrity_consensus exactly once.",
   ].join("\n\n")
 }
@@ -427,14 +442,15 @@ export function buildReviewerPrompt(input: ReviewPromptInput, scope: IntegrityRe
     renderIntegrityReplayContextPrompt(input.replayContext),
     FINDING_TRACEABILITY_PROMPT,
     FINDING_MANIFEST_PROMPT,
+    ADVERSARIAL_INVESTIGATION_PROMPT,
     COVERAGE_AUDIT_STATUS_CONTRACT_PROMPT,
     REVIEWER_COVERAGE_ROW_CONTRACT_PROMPT,
     REVIEWER_DRILLDOWN_ROW_CONTRACT_PROMPT,
     renderSeverityNewEvidenceSection(input),
     [
       "Before deep evidence reads, form an investigation plan for your scope: request promise, risk hypothesis, evidence plan, and pass/finding criteria. Include it in `investigationPlan` in submit_reviewer_report.",
-      "Record scoped tool work in `drilldowns[]`, and record request/REQ/spec coverage in `coverage[]`. A pass report still needs coverage evidence.",
-      "Use scoped drilldown. Prefer `inspect_integrity_evidence` sections such as overview, changed_directories, changed_files_in_directory, diff_for_file, goal_summary, goal_detail, and frontend_design_contract when visual/reference fidelity matters. Do not request full upstream context, full contract graph, raw decision log, or broad full-diff dumps.",
+      "Actively try to falsify your scoped pass story before writing it. Record scoped tool work in `drilldowns[]`, and record request/REQ/spec coverage in `coverage[]`. A pass report still needs coverage evidence.",
+      "Use scoped drilldown. Prefer `inspect_integrity_evidence` sections such as overview, changed_directories, changed_files_in_directory, diff_for_file, goal_summary, goal_detail, frontend_design_contract, and visual_qa_report when visual/reference fidelity matters. Do not request full upstream context, full contract graph, raw decision log, or broad full-diff dumps.",
       "Explore independently, gather evidence, and call submit_reviewer_report once.",
       "When no prior integrity attempt exists for this task/spec, review your assigned surface independently using evidence from files, diffs, commands, runtime checks, requirements, goals, and the original request.",
       "When prior attempts exist, you are reviewing the current attempt, not starting from zero. Prior findings and required repairs are evidence. First check whether prior blockers relevant to your scope were repaired in the files/evidence changed since the latest review. If the same blocker remains, report it as persistent and cite both the prior finding id and current evidence. Then inspect new risk introduced by the repair. Do not relabel an unchanged prior blocker as a brand-new discovery.",
@@ -457,6 +473,7 @@ export function buildSupervisorConsensusPrompt(
     "Compare the current reviewer reports against prior attempts. A repeated blocking finding should be represented as persistent or regressed when the evidence supports that conclusion. Do not pass while a prior blocking repair has no convincing current evidence. Do not suppress a prior blocker merely because current reviewers used a different id.",
     CONSENSUS_TRACEABILITY_PROMPT,
     FINDING_MANIFEST_PROMPT,
+    ADVERSARIAL_INVESTIGATION_PROMPT,
     COVERAGE_AUDIT_STATUS_CONTRACT_PROMPT,
     REVIEWER_COVERAGE_ROW_CONTRACT_PROMPT,
     REVIEWER_DRILLDOWN_ROW_CONTRACT_PROMPT,
@@ -466,7 +483,7 @@ export function buildSupervisorConsensusPrompt(
     renderReviewerReportsForConsensusPrompt(reports),
     "Original review context:",
     buildIntegrityEvidencePrompt(input),
-    "Perform a coverage audit before final verdict: every critical request promise from the plan should be `covered`, `missing`, or explicitly `inconclusive`. Include `coverageAudit`; include `uninspectedRisks` for high-risk surfaces that no reviewer actually checked.",
+    "Perform a coverage audit before final verdict: every critical request promise from the plan should be `covered`, `missing`, or explicitly `inconclusive`. Include `coverageAudit`; include `uninspectedRisks` for high-risk surfaces that no reviewer actually checked. If a reviewer report only summarizes executor claims without falsification-oriented drilldown, treat that surface as uninspected.",
     "Call submit_integrity_consensus exactly once.",
   ].join("\n\n")
 }
@@ -498,6 +515,9 @@ export function buildIntegrityEvidencePrompt(input: ReviewPromptInput): string {
   if (input.frontendDesign?.trim()) {
     sections.push(renderFrontendDesignSummary(input.frontendDesign))
   }
+  if (input.visualQa?.trim()) {
+    sections.push(renderVisualQaSummary(input.visualQa))
+  }
   if (input.visualEvidence?.length) {
     sections.push(renderVisualEvidenceSummary(input.visualEvidence))
   }
@@ -516,6 +536,16 @@ function renderFrontendDesignSummary(frontendDesign: string): string {
     "",
     "Reviewers must verify that reference-driven UI work follows this frontend replica contract, source manifest, web-clone-source handoff, source audit expectations, and visual reference requirements.",
     "Use `inspect_integrity_evidence({ section: \"frontend_design_contract\" })` for the bounded full contract excerpt when this matters to your scope.",
+  ].join("\n")
+}
+
+function renderVisualQaSummary(visualQa: string): string {
+  return [
+    "# Visual QA Report",
+    sanitizePromptBlock(visualQa, 2_400),
+    "",
+    "Reviewers must consider this fresh frontend UI/UX evidence when assessing visual/runtime acceptance. UI means User Interface; UX means User Experience.",
+    "Use `inspect_integrity_evidence({ section: \"visual_qa_report\" })` for the bounded full report excerpt when visual/runtime QA matters to your scope.",
   ].join("\n")
 }
 

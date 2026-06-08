@@ -63,6 +63,10 @@ import { Timestamps } from "@/storage/schema.sql"
  *                  It pairs with frontend-design and emits durable
  *                  frontend_research_brief artifacts for requirements and
  *                  architect.
+ *   visual-qa      dedicated frontend UI/UX QA worker. UI means User
+ *                  Interface; UX means User Experience. It consumes
+ *                  frontend-design/build evidence, may repair in-scope visual
+ *                  defects, and submits a structured visual QA report.
  *   evaluator      LLM judge / evaluator sessions
  *   system         internal maintenance (compaction, summary, title generation)
  */
@@ -88,6 +92,7 @@ export const SESSION_KINDS = [
   "explore",
   "deep-research",
   "frontend-research",
+  "visual-qa",
   "evaluator",
   "system",
 ] as const

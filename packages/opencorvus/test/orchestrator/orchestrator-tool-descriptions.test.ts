@@ -57,6 +57,13 @@ describe("orchestrator tool descriptions for integrity stuck loops", () => {
     expect(tools.frontend_research.description).toContain("frontend_research_brief/webpage_contract")
     expect(tools.frontend_research.description).toContain("NOT build")
     expect(tools.frontend_research.description).toContain("NOT the frontend implementation template owner")
+
+    expect(tools.visual_qa.description).toContain("frontend UI/UX visual testing")
+    expect(tools.visual_qa.description).toContain("UI means User Interface")
+    expect(tools.visual_qa.description).toContain("UX means User Experience")
+    expect(tools.visual_qa.description).toContain("webpage_render/evaluate/text_diff/vision_judge")
+    expect(tools.visual_qa.description).toContain("does NOT acquire new webpage clone evidence")
+    expect(tools.visual_qa.description).toContain("NOT the final acceptance gate")
   })
 
   test("frontend tool schemas expose one registered field per tool input", () => {
@@ -80,5 +87,9 @@ describe("orchestrator tool descriptions for integrity stuck loops", () => {
       }).success,
     ).toBe(true)
     expect(tools.frontend_research.inputSchema!.safeParse({ reason: "missing urls" }).success).toBe(false)
+
+    expect(Object.keys(tools.visual_qa.inputSchema!.shape)).toEqual(["reason", "focus", "app_url", "preview_command"])
+    expect(tools.visual_qa.inputSchema!.safeParse({ reason: "need fresh visual evidence" }).success).toBe(true)
+    expect(tools.visual_qa.inputSchema!.safeParse({ focus: "mobile" }).success).toBe(false)
   })
 })

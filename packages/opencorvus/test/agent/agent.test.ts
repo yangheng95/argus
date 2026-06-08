@@ -12,6 +12,7 @@ import {
   WEBPAGE_EVIDENCE_ANALYSIS_TOOL_IDS,
 } from "../../src/frontend-design/tools/ids"
 import { FRONTEND_DESIGN_STATIC_TOOL_IDS } from "../../src/frontend-design/static-tools"
+import { VISUAL_QA_STATIC_TOOL_IDS } from "../../src/visual-qa/static-tools"
 import BUILD_CORE from "../../src/prompt/core/build-core.txt"
 import VISUAL_QA_CORE from "../../src/prompt/core/visual-qa-core.txt"
 import PROMPT_CODING from "../../src/agent/prompt/coding.txt"
@@ -107,8 +108,10 @@ test("visual-qa agent is full-function build-grade with visual acceptance tools"
       expect(evalPerm(visualQa, "webpage_render")).toBe("allow")
       expect(evalPerm(visualQa, "webpage_vision_judge")).toBe("allow")
       expect(evalPerm(visualQa, "webpage_extract")).toBe("deny")
-      expect(visualQa?.tools?.exclude).toContain("webpage_extract")
-      expect(visualQa?.tools?.exclude).not.toContain("webpage_render")
+      expect(visualQa?.tools?.include).toEqual([...VISUAL_QA_STATIC_TOOL_IDS])
+      expect(visualQa?.tools?.include).not.toContain("webpage_extract")
+      expect(visualQa?.tools?.include).toContain("webpage_render")
+      expect(visualQa?.tools?.include).toContain("skill")
 
       const tools = await ToolRegistry.tools({ providerID: "", modelID: "" }, visualQa)
       const ids = new Set(tools.map((tool) => tool.id))
@@ -145,6 +148,7 @@ test("visual-qa webpage evidence analysis denial cannot be reopened by per-agent
       expect(ids.has("webpage_extract")).toBe(false)
       expect(ids.has("webpage_runtime_state")).toBe(false)
       expect(ids.has("webpage_render")).toBe(true)
+      expect(ids.has("skill")).toBe(true)
     },
   })
 }, 30_000)
@@ -467,6 +471,18 @@ test("native stage agent registry tool surfaces match role boundaries", async ()
       expect(design?.tools?.include).toContain("skill")
       expect(design?.tools?.include).not.toContain("websearch")
       expect(design?.tools?.include).not.toContain("task")
+
+      const visualQa = await Agent.get("visual-qa")
+      expect(visualQa).toBeDefined()
+      expect(visualQa?.tools?.include).toEqual([...VISUAL_QA_STATIC_TOOL_IDS])
+      expect(visualQa?.tools?.include).toContain("skill")
+      expect(visualQa?.tools?.include).toContain("bash")
+      expect(visualQa?.tools?.include).toContain("webpage_render")
+      expect(visualQa?.tools?.include).toContain("webpage_evaluate")
+      expect(visualQa?.tools?.include).not.toContain("webpage_extract")
+      expect(visualQa?.tools?.include).not.toContain("webpage_analyze")
+      expect(visualQa?.tools?.include).not.toContain("websearch")
+      expect(visualQa?.tools?.include).not.toContain("task")
 
       const deepResearch = await Agent.get("deep-research")
       expect(deepResearch).toBeDefined()
@@ -1083,6 +1099,25 @@ test("frontend-design rejects config-defined dynamic tool surface", async () => 
     directory: tmp.path,
     fn: async () => {
       await expect(Agent.get("frontend-design")).rejects.toThrow("config.agent.frontend-design.tools is not supported")
+    },
+  })
+})
+
+test("visual-qa rejects config-defined dynamic tool surface", async () => {
+  await using tmp = await tmpdir({
+    config: {
+      agent: {
+        "visual-qa": {
+          tools: { include: ["read_file"] },
+        },
+      },
+    },
+  })
+
+  await Instance.provide({
+    directory: tmp.path,
+    fn: async () => {
+      await expect(Agent.get("visual-qa")).rejects.toThrow("config.agent.visual-qa.tools is not supported")
     },
   })
 })

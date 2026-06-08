@@ -52,7 +52,13 @@ import { ensureLiveWebpageEvidence, primaryWebpageEvidenceArtifacts } from "./we
 import { VisualEvidenceBundleSchema, type VisualEvidenceBundle } from "@/acceptance/visual-evidence"
 import { renderUserRequestSection } from "@/intent/request-prompt"
 import { materializeMcpToolResult } from "@/mcp/materialize"
-import { EngineArtifactTable, EngineGoalTable, EngineTaskTable, type EngineArtifactKind } from "@/engine/engine.sql"
+import {
+  EngineArtifactTable,
+  EngineGoalTable,
+  EngineTaskTable,
+  type AcceptanceResult,
+  type EngineArtifactKind,
+} from "@/engine/engine.sql"
 import {
   supersedePriorActivePlansForTask,
   ensureBuildRetryFeedbackForGoal,
@@ -610,6 +616,16 @@ const FrontendResearchInputSchema = z
   .extend({ reason: FrontendResearchReasonField })
   .extend({ source_urls: FrontendResearchSourceUrlsField })
   .extend({ focus: FrontendResearchFocusField })
+
+const VisualQaInputSchema = z.object({
+  reason: z.string().min(1).describe("Why dedicated frontend UI/UX testing is useful now."),
+  focus: z.string().optional().describe("Optional narrowed region/state/viewport focus for visual QA."),
+  app_url: z.string().optional().describe("Known preview URL to inspect. Omit when the agent should discover/start preview from scripts."),
+  preview_command: z
+    .string()
+    .optional()
+    .describe("Suggested project command to start the real preview target. Use Node for Playwright/browser automation on Windows."),
+})
 
 function resolveSteerTarget(input: { taskID: string; sessionID?: string; goalID?: string }): {
   sessionID: string
@@ -1846,6 +1862,10 @@ export function createOrchestratorTools(input: {
       .readByPhase("frontend_design")
       .map((entry) => `## ${entry.key}\nreason: ${entry.reason}\n\n${entry.value}`)
       .join("\n\n")
+    const visualQaContract = decisionLog
+      .readByPhase("visual_qa")
+      .map((entry) => `## ${entry.key}\nreason: ${entry.reason}\n\n${entry.value}`)
+      .join("\n\n")
     const visualEvidence = await readLatestTaskVisualEvidenceBundle({ projectDir: Instance.directory, taskID })
 
     let activeOwnership: OrchestratorToolOwnershipPayload | undefined
@@ -1877,6 +1897,7 @@ export function createOrchestratorTools(input: {
           diffs: acceptanceDiffs,
         },
         frontendDesign: frontendDesignContract,
+        visualQa: visualQaContract,
         visualEvidence,
         replayContext,
         signal: input.signal,
@@ -3651,6 +3672,122 @@ export function createOrchestratorTools(input: {
             })
           }
           throw err
+        }
+      },
+    }),
+
+    // -----------------------------------------------------------------------
+    // Visual QA — dedicated frontend UI/UX runtime testing and repair
+    // -----------------------------------------------------------------------
+
+    visual_qa: tool({
+      description:
+        "Dedicated frontend UI/UX visual testing and in-scope repair agent. UI means User Interface; UX means User Experience. " +
+        "Use after build or visual repair when a frontend/UI surface needs fresh real-preview evidence before integrity: desktop/mobile screenshots, " +
+        "interaction-state checks, visual comparison, console/network review, or direct repair of visual/runtime defects. " +
+        "It consumes task-scoped frontend_design/build evidence and may use skills, bash/edit/write/apply_patch, and webpage_render/evaluate/text_diff/vision_judge. " +
+        "It does NOT acquire new webpage clone evidence and is NOT the final acceptance gate; integrity remains final.",
+      inputSchema: VisualQaInputSchema,
+      execute: async ({ reason, focus, app_url, preview_command }) => {
+        const task = requireTask(taskID)
+        await trackStepStart("visual_qa")
+        let closed = false
+        const close = async (failed = false) => {
+          if (closed) return
+          closed = true
+          await trackStepComplete("visual_qa", undefined, failed)
+        }
+
+        const decisionLog = createDecisionLog(taskID)
+        const frontendDesign = decisionLog
+          .readByPhase("frontend_design")
+          .map((entry) => `## ${entry.key}\nreason: ${entry.reason}\n\n${entry.value}`)
+          .join("\n\n")
+        const frontendResearch = renderFrontendResearchBriefPromptSection({ taskID, request: task.request })
+        const buildEvidence = findDeliveriesForTask(taskID)
+          .map((delivery) => {
+            const result = delivery.result as AcceptanceResult | undefined
+            const changed = result?.changed_files?.length ? `\nchanged_files:\n${result.changed_files.map((file) => `- ${file}`).join("\n")}` : ""
+            return `## ${delivery.id}\nsummary: ${delivery.summary}${changed}`
+          })
+          .join("\n\n")
+        const priorVisualQa = decisionLog
+          .readByPhase("visual_qa")
+          .map((entry) => `## ${entry.key}\nreason: ${entry.reason}\n\n${entry.value}`)
+          .join("\n\n")
+
+        try {
+          const { VisualQaAgent } = await import("@/visual-qa")
+          const result = await VisualQaAgent.analyze({
+            taskTitle: task.title,
+            taskRequest: task.request,
+            reason,
+            focus,
+            appUrl: app_url,
+            previewCommand: preview_command,
+            frontendDesign,
+            frontendResearch,
+            buildEvidence,
+            priorVisualQa,
+            taskID,
+            parentSessionID: input.agentSessionID,
+            signal: input.signal,
+          })
+
+          decisionLog.append({
+            phase: "visual_qa",
+            key: `report_${Date.now()}`,
+            value: JSON.stringify(result.report, null, 2),
+            reason: `Dedicated frontend UI/UX QA report from session ${result.sessionID}`,
+          })
+          decisionLog.append({
+            phase: "visual_qa",
+            key: "latest_summary",
+            value: [
+              `accepted=${result.report.accepted}`,
+              `summary=${result.report.summary}`,
+              `coverage=${result.report.coverage.length}`,
+              `findings=${result.report.findings.length}`,
+              `evidence=${result.report.evidence.length}`,
+              `changed_files=${result.report.changed_files.join(", ") || "(none)"}`,
+            ].join("\n"),
+            reason: "Latest structured visual QA summary for read_context and integrity review.",
+          })
+
+          await close()
+          return SubAgentProtocol.yieldResult({
+            headline: `visual_qa complete: accepted=${result.report.accepted}`,
+            summary: result.report.summary,
+            fields: [
+              ["session", result.sessionID],
+              ["accepted", String(result.report.accepted)],
+              ["coverage", String(result.report.coverage.length)],
+              ["findings", String(result.report.findings.length)],
+              ["evidence", String(result.report.evidence.length)],
+              ["repairs", String(result.report.repairs.length)],
+              ["changed_files", result.report.changed_files.join(", ") || "(none)"],
+              ["open_questions", String(result.report.open_questions.length)],
+            ],
+            pointer: "decision_log phase=visual_qa",
+          })
+        } catch (err) {
+          await close(true)
+          const msg = err instanceof Error ? err.message : String(err)
+          log.error("visual_qa: failed", { taskID, error: msg })
+          try {
+            decisionLog.append({
+              phase: "visual_qa",
+              key: "abort_visual_qa_failed",
+              value: `Visual QA stage aborted: ${msg.slice(0, 400)}`,
+              reason: "visual_qa_threw",
+            })
+          } catch (logErr) {
+            log.warn("visual_qa: decision_log write failed (non-fatal)", {
+              taskID,
+              error: logErr instanceof Error ? logErr.message : String(logErr),
+            })
+          }
+          throw err instanceof Error ? err : new Error(msg)
         }
       },
     }),

@@ -6,7 +6,7 @@ import { Skill } from "../skill"
 import { PermissionNext } from "../permission/next"
 import { Ripgrep } from "../file/ripgrep"
 import { iife } from "@/util/iife"
-import { isWebpageEvidenceToolId } from "@/frontend-design/tools/ids"
+import { isWebpageEvidenceAcceptanceToolId, isWebpageEvidenceAnalysisToolId } from "@/frontend-design/tools/ids"
 
 export const SkillTool = Tool.define("skill", async (ctx) => {
   const skills = await Skill.all()
@@ -20,7 +20,14 @@ export const SkillTool = Tool.define("skill", async (ctx) => {
         if (rule.action === "deny") return false
         if (
           agent.name !== "frontend-design" &&
-          (skill.required_tools ?? []).some((toolID) => isWebpageEvidenceToolId(toolID))
+          (skill.required_tools ?? []).some((toolID) => isWebpageEvidenceAnalysisToolId(toolID))
+        ) {
+          return false
+        }
+        if (
+          agent.name !== "frontend-design" &&
+          agent.name !== "visual-qa" &&
+          (skill.required_tools ?? []).some((toolID) => isWebpageEvidenceAcceptanceToolId(toolID))
         ) {
           return false
         }
