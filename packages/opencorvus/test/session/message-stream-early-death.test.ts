@@ -144,7 +144,7 @@ describe("toModelMessages — stream early-death structural gate", () => {
           callID: "call-1",
           state: {
             status: "completed",
-            input: { name: "webpage-generate" },
+            input: { name: "research-report" },
             output: "skill body",
             title: "skill",
             metadata: {},

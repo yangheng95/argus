@@ -131,7 +131,7 @@ Use this skill.
     }
   })
 
-  test("webpage evidence extraction skills are visible only to frontend-design", async () => {
+  test("removed webpage-generate skill is not visible and ainvest design system loads for build", async () => {
     await using tmp = await tmpdir({ git: true })
     const home = process.env.OPENCORVUS_TEST_HOME
     process.env.OPENCORVUS_TEST_HOME = tmp.path
@@ -153,9 +153,17 @@ Use this skill.
             { query: "webpage" },
             { ...baseCtx, agent: "frontend-design", ask: async () => {} },
           )
+          const ainvestResult = await buildSkill.execute(
+            { name: "ainvest-design-system" },
+            { ...baseCtx, ask: async () => {} },
+          )
 
           expect(buildResult.output).not.toContain("<name>webpage-generate</name>")
-          expect(frontendDesignResult.output).toContain("<name>webpage-generate</name>")
+          expect(frontendDesignResult.output).not.toContain("<name>webpage-generate</name>")
+          expect(ainvestResult.output).toContain("<skill_content name=\"ainvest-design-system\">")
+          expect(ainvestResult.output).toContain("Closed-System Rule")
+          expect(ainvestResult.output).toContain("Base directory for this skill:")
+          expect(ainvestResult.output).toContain("assets/tokens/color.json")
         },
       })
     } finally {
