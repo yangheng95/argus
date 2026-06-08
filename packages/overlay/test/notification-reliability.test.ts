@@ -143,6 +143,7 @@ describe("routeNotification tier matrix", () => {
 
     expect(notificationStore.items).toHaveLength(1);
     expect(notificationStore.items[0]?.taskID).toBe("tsk_notify");
+    expect(notificationStore.items[0]?.centerHistory).toBe(true);
     expect(calls.sends).toBe(0);
   });
 
@@ -152,6 +153,7 @@ describe("routeNotification tier matrix", () => {
     routeNotification({ type: "task.completed", taskID: "tsk_notify", notify: { tier: 2 } });
     await flushNotifications();
     expect(notificationStore.items).toHaveLength(1);
+    expect(notificationStore.items[0]?.centerHistory).toBe(true);
     expect(calls.sends).toBe(0);
 
     clearNotifications();

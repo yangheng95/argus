@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 
 import {
+  centerHistoryNotificationItems,
   clearNotifications,
   dismissNotification,
   formatErrorDetails,
@@ -77,16 +78,41 @@ describe("notify: details payload round-trips", () => {
 });
 
 describe("notify: center history survives toast dismissal", () => {
-  test("dismissNotification hides toast without deleting notification history", () => {
-    const id = notifySuccess({ title: "done", message: "saved" });
+  test("dismissNotification hides history notifications without deleting center history", () => {
+    const id = notifyError({ title: "failed", message: "needs attention" });
     expect(notificationStore.items).toHaveLength(1);
     expect(visibleNotificationItems()).toHaveLength(1);
+    expect(centerHistoryNotificationItems()).toHaveLength(1);
 
     dismissNotification(id);
 
     expect(notificationStore.items).toHaveLength(1);
     expect(notificationStore.items[0]?.dismissedAt).toBeGreaterThan(0);
     expect(visibleNotificationItems()).toHaveLength(0);
+    expect(centerHistoryNotificationItems()).toHaveLength(1);
+  });
+
+  test("dismissNotification removes transient non-history notifications", () => {
+    const id = notifySuccess({ title: "done", message: "saved" });
+    expect(notificationStore.items).toHaveLength(1);
+    expect(visibleNotificationItems()).toHaveLength(1);
+    expect(centerHistoryNotificationItems()).toHaveLength(0);
+
+    dismissNotification(id);
+
+    expect(notificationStore.items).toHaveLength(0);
+    expect(visibleNotificationItems()).toHaveLength(0);
+    expect(centerHistoryNotificationItems()).toHaveLength(0);
+  });
+
+  test("showNotification can explicitly opt a transient tone into center history", () => {
+    const id = showNotification({ tone: "success", title: "saved", centerHistory: true });
+    dismissNotification(id);
+
+    expect(notificationStore.items).toHaveLength(1);
+    expect(notificationStore.items[0]?.centerHistory).toBe(true);
+    expect(visibleNotificationItems()).toHaveLength(0);
+    expect(centerHistoryNotificationItems()).toHaveLength(1);
   });
 
   test("showing the same notification id reopens the toast and replaces the history row", () => {
@@ -98,6 +124,7 @@ describe("notify: center history survives toast dismissal", () => {
     expect(notificationStore.items[0]?.title).toBe("second");
     expect(notificationStore.items[0]?.dismissedAt).toBe(0);
     expect(visibleNotificationItems()).toHaveLength(1);
+    expect(centerHistoryNotificationItems()).toHaveLength(0);
   });
 });
 

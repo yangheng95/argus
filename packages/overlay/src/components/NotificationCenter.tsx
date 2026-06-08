@@ -1,8 +1,8 @@
 import { For, Show, createMemo, createSignal } from "solid-js";
 import { loadTasks } from "../store/board";
 import {
+  centerHistoryNotificationItems,
   dismissNotification,
-  notificationStore,
   notificationTaskTitle,
   visibleNotificationItems,
   type AppNotificationItem,
@@ -165,7 +165,7 @@ function NotificationItem(props: { item: AppNotificationItem; surface: Notificat
 
 export function NotificationCenter(props: NotificationCenterProps) {
   const surface = () => props.surface ?? "toast";
-  const items = createMemo(() => surface() === "toast" ? visibleNotificationItems() : notificationStore.items);
+  const items = createMemo(() => surface() === "toast" ? visibleNotificationItems() : centerHistoryNotificationItems());
   const groups = createMemo(() => groupByTask(items()));
 
   return (
