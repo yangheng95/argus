@@ -222,6 +222,8 @@ test("integrity prompt is host-owned so catalog cannot diverge from team runtime
 
 test("deep-research and frontend-design role descriptions keep document research distinct from UI replication", () => {
   expect(AgentRoleContract.description("frontend-design")).toContain("frontend implementation template")
+  expect(AgentRoleContract.description("frontend-design")).toContain("generated code and PRD/SPEC/report material are reference inputs only")
+  expect(AgentRoleContract.description("frontend-design")).toContain("rewritten webpage must be based on ainvest-frontend-design")
   expect(AgentRoleContract.description("frontend-design")).toContain("not the owner for PRD/SPEC/report webpage research")
   expect(AgentRoleContract.description("frontend-design")).toContain("UI implementation or replication")
 
@@ -232,6 +234,8 @@ test("deep-research and frontend-design role descriptions keep document research
   expect(AgentRoleContract.description("frontend-research")).toContain("host-prepared rendered webpage evidence")
   expect(AgentRoleContract.description("frontend-research")).toContain("source-backed webpage investigation work packets")
   expect(AgentRoleContract.description("frontend-research")).toContain("frontend_research_brief")
+  expect(AgentRoleContract.description("frontend-research")).toContain("PRD outline, or document material are reference inputs only")
+  expect(AgentRoleContract.description("frontend-research")).toContain("downstream webpage rewriting must be based on ainvest-frontend-design")
   expect(AgentRoleContract.description("frontend-research")).toContain("does not call build")
   expect(AgentRoleContract.description("frontend-research")).toContain("does not create the frontend implementation template")
 })
