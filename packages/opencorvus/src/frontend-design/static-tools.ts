@@ -36,6 +36,7 @@ export const FRONTEND_DESIGN_SESSION_TOOL_IDS = [
   "list_directory",
   "memory_search",
   "memory_get",
+  "skill",
   "url_screenshot",
   "create_frontend_skeleton_project",
   "record_frontend_region_selection",
@@ -81,7 +82,7 @@ export const FRONTEND_DESIGN_IMPLEMENTATION_TOOL_IDS = [
   "webpage_vision_judge",
 ] as const
 
-export const FRONTEND_DESIGN_UTILITY_TOOL_IDS = [] as const
+export const FRONTEND_DESIGN_UTILITY_TOOL_IDS = ["skill"] as const
 
 export type FrontendDesignStaticToolID = typeof FRONTEND_DESIGN_STATIC_TOOL_IDS[number]
 export type FrontendDesignSessionToolID = typeof FRONTEND_DESIGN_SESSION_TOOL_IDS[number]

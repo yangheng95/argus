@@ -25,6 +25,7 @@ import fs from "node:fs/promises"
 import path from "node:path"
 import z from "zod"
 import { runAgentSession } from "@/agent/runner"
+import { Agent } from "@/agent/agent"
 import { withFactCheckRegistration } from "@/prompt/fragments/fact-check-registration"
 import { createAgentContextTools } from "@/agent/context-tools"
 import { Log } from "@/util/log"
@@ -39,6 +40,7 @@ import { BashTool } from "@/tool/bash"
 import { EditTool } from "@/tool/edit"
 import { WriteTool } from "@/tool/write"
 import { ApplyPatchTool } from "@/tool/apply_patch"
+import { SkillTool } from "@/tool/skill"
 import { WebCloneSourceAuditTool } from "@/tool/web-clone-source-audit"
 import type { AgentReport } from "@/agent/report"
 import {
@@ -760,8 +762,13 @@ function createFrontendProcessTraceTools(trace: FrontendDesignAgent.ProcessTrace
   }
 }
 
-async function createFrontendTool(info: Tool.Info, input: { taskID?: string; signal?: AbortSignal }, trace: FrontendDesignAgent.ProcessTrace) {
-  const initialized = await info.init()
+async function createFrontendTool(
+  info: Tool.Info,
+  input: { taskID?: string; signal?: AbortSignal },
+  trace: FrontendDesignAgent.ProcessTrace,
+  initCtx?: Tool.InitContext,
+) {
+  const initialized = await info.init(initCtx)
   return tool({
     description: initialized.description,
     inputSchema: initialized.parameters,
@@ -958,9 +965,11 @@ async function createFrontendImplementationTools(input: { taskID?: string; signa
 }
 
 async function createFrontendUtilityTools(input: { taskID?: string; signal?: AbortSignal }, trace = createFrontendProcessTrace()): Promise<ToolSet> {
-  void input
-  void trace
-  const tools = {}
+  const agent = await Agent.get("frontend-design")
+  if (!agent) throw new Error("frontend-design agent definition is missing")
+  const tools = {
+    skill: await createFrontendTool(SkillTool, input, trace, { agent }),
+  }
   return selectFrontendStaticTools(tools, FRONTEND_DESIGN_UTILITY_TOOL_IDS, "frontend-design utility")
 }
 

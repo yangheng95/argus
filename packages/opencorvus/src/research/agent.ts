@@ -1,6 +1,8 @@
 import fs from "node:fs/promises"
 import path from "node:path"
+import { tool, type ToolSet } from "ai"
 import { runAgentSession } from "@/agent/runner"
+import { Agent } from "@/agent/agent"
 import { filterAgentTools } from "@/agent/filter-tools"
 import { createReadonlyRetrievalTools } from "@/agent/retrieval-tools"
 import { withFactCheckRegistration } from "@/prompt/fragments/fact-check-registration"
@@ -11,6 +13,8 @@ import { Session } from "@/session"
 import { SessionStatus } from "@/session/status"
 import { renderUserRequestSection } from "@/intent/request-prompt"
 import { FactCheckItemListSchema, type FactCheckItem } from "@/fact-check/schema"
+import type { Tool } from "@/tool/tool"
+import { SkillTool } from "@/tool/skill"
 import { clarificationTranscriptSection, operatorNotesSection } from "@/engine/helpers"
 import {
   buildResearchBriefFromDraft,
@@ -112,6 +116,10 @@ export async function runResearchSession(
           sessionID: input.parentSessionID,
         })
       : {}
+  const utilityTools = await createResearchUtilityTools(config.kind, {
+    taskID: input.taskID,
+    signal: input.signal,
+  })
   const outputToolKit = createResearchOutputTools()
 
   log.info(`${config.kind} starting`, {
@@ -131,7 +139,7 @@ export async function runResearchSession(
     signal: input.signal,
     onStatus: input.onStatus,
     toolKit: {
-      tools: { ...retrievalTools, ...outputToolKit.tools },
+      tools: { ...retrievalTools, ...utilityTools, ...outputToolKit.tools },
       getCollector: outputToolKit.getCollector,
       buildReport: outputToolKit.buildReport,
     },
@@ -184,6 +192,53 @@ export async function runResearchSession(
   })
 
   return { brief, bundle, factCheckItems, sessionID: out.session.id }
+}
+
+async function createResearchUtilityTools(
+  kind: ResearchLikeAgentKind,
+  input: { taskID?: string; signal?: AbortSignal },
+): Promise<ToolSet> {
+  if (kind !== "frontend-research") return {}
+  const agent = await Agent.get("frontend-research")
+  if (!agent) throw new Error("frontend-research agent definition is missing")
+  return {
+    skill: await createResearchTool(SkillTool, {
+      ...input,
+      agentName: "frontend-research",
+      initCtx: { agent },
+    }),
+  }
+}
+
+async function createResearchTool(
+  info: Tool.Info,
+  input: {
+    agentName: ResearchLikeAgentKind
+    taskID?: string
+    signal?: AbortSignal
+    initCtx?: Tool.InitContext
+  },
+) {
+  const initialized = await info.init(input.initCtx)
+  return tool({
+    description: initialized.description,
+    inputSchema: initialized.parameters,
+    execute: async (args, options) => {
+      const meta = (options as { opencorvus?: { sessionID?: string; messageID?: string; toolCallID?: string } } | undefined)?.opencorvus
+      const abort = (options as { abortSignal?: AbortSignal } | undefined)?.abortSignal ?? input.signal ?? new AbortController().signal
+      return initialized.execute(args as never, {
+        sessionID: meta?.sessionID ?? "",
+        messageID: meta?.messageID ?? "",
+        callID: meta?.toolCallID,
+        agent: input.agentName,
+        abort,
+        messages: [],
+        extra: { taskID: input.taskID },
+        metadata: () => {},
+        ask: async () => {},
+      })
+    },
+  })
 }
 
 async function prepareInputWebpagePrdEvidence(
