@@ -9,6 +9,7 @@ export const FRONTEND_DESIGN_STATIC_TOOL_IDS = [
   "list_directory",
   "memory_search",
   "memory_get",
+  "skill",
   "url_screenshot",
   "create_frontend_skeleton_project",
   "record_frontend_region_selection",
