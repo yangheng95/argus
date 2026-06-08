@@ -64,6 +64,7 @@ export interface AppNotificationInput {
   details?: string;
   taskID?: string;
   timeoutMs?: number;
+  centerHistory?: boolean;
 }
 
 export interface AppNotificationItem {
@@ -76,6 +77,7 @@ export interface AppNotificationItem {
   time: number;
   timeoutMs: number;
   dismissedAt: number;
+  centerHistory: boolean;
 }
 
 let permissionRequestPending = false;
@@ -126,6 +128,10 @@ function defaultTimeout(tone: AppNotificationTone): number {
   // import that failed while the user was looking elsewhere).
   if (tone === "progress" || tone === "error" || tone === "warning") return 0;
   return 5000;
+}
+
+function defaultCenterHistory(tone: AppNotificationTone): boolean {
+  return tone === "error" || tone === "warning";
 }
 
 /**
@@ -182,6 +188,7 @@ export function showNotification(input: AppNotificationInput): string {
     timeoutMs: input.timeoutMs ?? defaultTimeout(input.tone),
     time: Date.now(),
     dismissedAt: 0,
+    centerHistory: input.centerHistory ?? defaultCenterHistory(input.tone),
   };
   const existingIndex = notificationStore.items.findIndex((notice) => notice.id === id);
   if (existingIndex >= 0) {
@@ -199,6 +206,10 @@ export function dismissNotification(id: string): void {
   notificationTimers.delete(id);
   const index = notificationStore.items.findIndex((item) => item.id === id);
   if (index < 0) return;
+  if (!notificationStore.items[index]?.centerHistory) {
+    setNotificationStore("items", (items) => items.filter((item) => item.id !== id));
+    return;
+  }
   setNotificationStore("items", index, "dismissedAt", Date.now());
 }
 
@@ -210,6 +221,10 @@ export function clearNotifications(): void {
 
 export function visibleNotificationItems(): AppNotificationItem[] {
   return notificationStore.items.filter((item) => item.dismissedAt <= 0);
+}
+
+export function centerHistoryNotificationItems(): AppNotificationItem[] {
+  return notificationStore.items.filter((item) => item.centerHistory);
 }
 
 export function notifyProgress(input: Omit<AppNotificationInput, "tone">): string {
@@ -385,6 +400,7 @@ export function routeNotification(event: RoutedNotificationEvent): void {
     message: body,
     details: notificationDetails(event),
     taskID,
+    centerHistory: true,
   });
   void sendDesktopIfAllowed(event, taskID, title, body);
 }

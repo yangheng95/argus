@@ -35,6 +35,7 @@ test("NotificationCenter exposes a copy control whenever details exist", () => {
 test("NotificationCenter separates toast visibility from task-grouped panel history", () => {
   expect(SOURCE).toContain('type NotificationSurface = "toast" | "panel"');
   expect(SOURCE).toContain("visibleNotificationItems()");
+  expect(SOURCE).toContain("centerHistoryNotificationItems()");
   expect(SOURCE).toContain("groupByTask");
   expect(SOURCE).toContain("notificationTaskTitle(item.taskID)");
   expect(SOURCE).toContain('t("notify.system_group")');
@@ -43,17 +44,20 @@ test("NotificationCenter separates toast visibility from task-grouped panel hist
   expect(SOURCE).toContain('class="app-notification-empty"');
   expect(STYLES).toContain('.app-notifications[data-surface="toast"]');
   expect(STYLES).toContain('.app-notifications[data-surface="panel"]');
+  expect(STYLES).toContain('padding: 0;');
   expect(STYLES).toContain(".app-notification-group__header");
   expect(NOTIFY).toContain("dismissedAt: number");
+  expect(NOTIFY).toContain("centerHistory: boolean");
   expect(NOTIFY).toContain("MAX_NOTIFICATION_HISTORY");
   expect(NOTIFY).toContain("visibleNotificationItems");
+  expect(NOTIFY).toContain("centerHistoryNotificationItems");
 });
 
 test("main mounts toast and workbench notification center from the same component", () => {
   expect(MAIN).toContain('<NotificationCenter surface="toast" />');
   expect(MAIN).toContain('document.getElementById("solidNotificationCenterMount")');
   expect(MAIN).toContain('<NotificationCenter surface="panel" />');
-  expect(MAIN).toContain('id: "notifications", icon: "log-lines", labelKey: "notify.center_label"');
+  expect(MAIN).toContain('id: "notifications", icon: "notifications", labelKey: "notify.center_label"');
   expect(MAIN).toContain('notifications: document.getElementById("centerWorkbenchNotifications")');
 });
 
