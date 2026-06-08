@@ -610,7 +610,7 @@ export namespace Agent {
         description: AgentRoleContract.description("frontend-research"),
         prompt: FRONTEND_RESEARCH_CORE,
         tools: {
-          include: [],
+          include: ["skill"],
         },
         steps: 1000,
         options: {},

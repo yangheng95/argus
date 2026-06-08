@@ -346,6 +346,44 @@ description: Skill for resolved-tool visibility tests.
   })
 })
 
+test("frontend agents expose skill loading without reopening retrieval tools", async () => {
+  await using tmp = await tmpdir({
+    git: true,
+    init: async (dir) => {
+      await Bun.write(
+        path.join(dir, ".opencorvus", "skill", "frontend-skill", "SKILL.md"),
+        `---
+name: frontend-skill
+description: Skill for frontend agent visibility tests.
+---
+
+# Frontend Skill
+`,
+      )
+    },
+  })
+  await Instance.provide({
+    directory: tmp.path,
+    fn: async () => {
+      for (const name of ["frontend-design", "frontend-research"] as const) {
+        const agent = await Agent.get(name)
+        expect(agent).toBeDefined()
+        expect(agent?.tools?.include).toContain("skill")
+        expect(await SystemPrompt.skills(agent!, { availableToolNames: ["skill"] })).toContain("frontend-skill")
+
+        const tools = await ToolRegistry.tools({ providerID: "", modelID: "" }, agent!)
+        const ids = tools.map((tool) => tool.id)
+        expect(ids).toContain("skill")
+      }
+
+      const frontendResearch = await Agent.get("frontend-research")
+      const frontendResearchTools = await ToolRegistry.tools({ providerID: "", modelID: "" }, frontendResearch!)
+      const frontendResearchToolIDs = frontendResearchTools.map((tool) => tool.id)
+      expect(frontendResearchToolIDs).toEqual(["skill"])
+    },
+  })
+})
+
 test("orchestrator does not inherit the generic task-tool prompt policy", async () => {
   await using tmp = await tmpdir()
   await Instance.provide({
@@ -426,6 +464,7 @@ test("native stage agent registry tool surfaces match role boundaries", async ()
       expect(design?.tools?.include).toContain("url_screenshot")
       expect(design?.tools?.include).toContain("webpage_render")
       expect(design?.tools?.include).toContain("webpage_evaluate")
+      expect(design?.tools?.include).toContain("skill")
       expect(design?.tools?.include).not.toContain("websearch")
       expect(design?.tools?.include).not.toContain("task")
 
@@ -463,7 +502,8 @@ test("native stage agent registry tool surfaces match role boundaries", async ()
 
       const frontendResearch = await Agent.get("frontend-research")
       expect(frontendResearch).toBeDefined()
-      expect(frontendResearch?.tools?.include).toEqual([])
+      expect(frontendResearch?.tools?.include).toEqual(["skill"])
+      expect(frontendResearch?.tools?.include).toContain("skill")
       expect(frontendResearch?.tools?.include).not.toContain("websearch")
       expect(frontendResearch?.tools?.include).not.toContain("webfetch")
       expect(frontendResearch?.tools?.include).not.toContain("read_file")
