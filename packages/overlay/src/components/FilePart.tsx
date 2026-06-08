@@ -1,6 +1,7 @@
 import { createResource, Show, Switch, Match } from "solid-js";
 import { fetchResourceAsObjectUrl, peekResourceObjectUrl, resolveResourceUrl } from "../services/api";
 import { t } from "../utils/i18n";
+import { PreviewableImage } from "./ImagePreview";
 
 // Render a message "file" part: server-persisted attachments carry a URL that
 // is either a server-relative path (/attachment/<projectID>/<sha>.<ext>) or
@@ -79,7 +80,7 @@ export function FilePart(props: {
       </Match>
       <Match when={kind() === "image" && url()}>
         <div class="msg-img-wrap">
-          <img class="md-img" src={resolveResourceUrl(url())} alt={name()} loading="lazy" />
+          <PreviewableImage src={resolveResourceUrl(url())} alt={name()} />
         </div>
       </Match>
 
@@ -129,7 +130,7 @@ function AuthedImage(props: { url: string; alt: string }) {
       <Show when={objectUrl()}>
         {(resolved) => (
           <div class="msg-img-wrap">
-            <img class="md-img" src={resolved()} alt={props.alt} loading="lazy" />
+            <PreviewableImage src={resolved()} alt={props.alt} />
           </div>
         )}
       </Show>

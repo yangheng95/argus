@@ -153,7 +153,8 @@ marked.use({
       const src = safeMarkdownImageSrc(href)
       if (!src) return escapeHtml(text || href || "")
       const titleAttr = title ? ` title="${escapeAttr(title)}"` : ""
-      return `<img src="${escapeAttr(src)}" alt="${escapeAttr(text || "")}"${titleAttr}>`
+      const alt = escapeAttr(text || "")
+      return `<button type="button" class="msg-image-trigger" data-image-preview-trigger="true" data-image-preview-src="${escapeAttr(src)}" data-image-preview-alt="${alt}" title="Open image preview" aria-label="Open image preview"><img class="md-img" src="${escapeAttr(src)}" alt="${alt}"${titleAttr} loading="lazy"></button>`
     },
   },
 })
