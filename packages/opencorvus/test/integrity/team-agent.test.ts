@@ -607,4 +607,108 @@ describe("integrity team-agent replay attempts", () => {
     expect(prompt).toContain("`kind`, `target`, `purpose`, and `result`")
     expect(prompt).toContain("no `affectedSymbols`")
   })
+
+  test("integrity prompts require falsification-oriented investigation before pass", async () => {
+    const { buildReviewerPrompt, buildSingleSessionIntegrityPrompt, buildSupervisorConsensusPrompt } = await import(
+      "../../src/integrity/team-agent"
+    )
+    const input = {
+      userRequest: "Build a real settings page that saves valid changes and rejects invalid changes.",
+      taskTitle: "Settings page",
+      goals: [
+        {
+          id: "goal_settings",
+          title: "Settings page",
+          objective: "Implement settings save and validation.",
+          acceptance_specs: [],
+          owned_paths: ["src/settings.ts"],
+          depends_on: [],
+          priority: "blocking" as const,
+          kind: "feature",
+          requirement_ids: ["REQ-settings"],
+        },
+      ],
+      replayContext: replayContext(1),
+    }
+
+    const reviewerPrompt = buildReviewerPrompt(input, {
+      reviewerID: "rev_settings",
+      title: "Settings reviewer",
+      focus: "Settings runtime behavior",
+      riskHypothesisIDs: [],
+      drilldownPlan: [],
+      adversarialQuestions: ["Can invalid settings still be persisted?"],
+    })
+    const singleSessionPrompt = buildSingleSessionIntegrityPrompt(input)
+    const consensusPrompt = buildSupervisorConsensusPrompt(
+      input,
+      {
+        rationale: "Settings behavior needs active investigation.",
+        riskHypotheses: [],
+        coveragePlan: [],
+        reviewers: [
+          {
+            reviewerID: "rev_settings",
+            title: "Settings reviewer",
+            focus: "Settings runtime behavior",
+            riskHypothesisIDs: [],
+            drilldownPlan: [],
+            adversarialQuestions: ["Can invalid settings still be persisted?"],
+          },
+          {
+            reviewerID: "rev_contract",
+            title: "Contract reviewer",
+            focus: "Request coverage",
+            riskHypothesisIDs: [],
+            drilldownPlan: [],
+            adversarialQuestions: ["Was the original request covered?"],
+          },
+        ],
+      },
+      [
+        {
+          reviewerID: "rev_settings",
+          scope: "Settings runtime behavior",
+          verdict: "pass",
+          summary: "Runtime behavior inspected.",
+          investigationPlan: {
+            requestPromise: "saves valid changes and rejects invalid changes",
+            hypothesis: "invalid settings may still be persisted",
+            evidencePlan: ["inspect settings handler"],
+            passCriteria: ["invalid settings rejected before persistence"],
+          },
+          drilldowns: [
+            {
+              kind: "diff_for_file",
+              target: "src/settings.ts",
+              purpose: "Check validation before persistence.",
+              result: "Validation occurs before save.",
+            },
+          ],
+          coverage: [
+            {
+              userRequestQuote: "rejects invalid changes",
+              status: "covered",
+              evidence: "Validation handler inspected.",
+            },
+          ],
+          evidence: ["Scoped settings diff inspected."],
+          findings: [],
+          openQuestions: [],
+        },
+      ],
+    )
+
+    for (const prompt of [reviewerPrompt, singleSessionPrompt, consensusPrompt]) {
+      expect(prompt).toContain("Adversarial investigation discipline:")
+      expect(prompt).toContain("failure hypotheses")
+      expect(prompt).toContain("not proof")
+      expect(prompt).toContain("A pass reviewer report still needs `investigationPlan`, `drilldowns[]`, `coverage[]`, and `evidence[]`")
+      expect(prompt).toContain("Do not write congratulatory or effort-focused summaries")
+    }
+
+    expect(reviewerPrompt).toContain("Actively try to falsify your scoped pass story")
+    expect(singleSessionPrompt).toContain("initial falsification pass")
+    expect(consensusPrompt).toContain("only summarizes executor claims without falsification-oriented drilldown")
+  })
 })
