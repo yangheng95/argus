@@ -452,7 +452,11 @@
 }
 
 .md-img {
-  max-width: 100%;
+  width: auto;
+  height: auto;
+  max-width: min(100%, calc(720px * var(--ui-scale)));
+  max-height: calc(420px * var(--ui-scale));
+  object-fit: contain;
   border-radius: var(--oc-radius-soft);
   margin: calc(4px * var(--ui-scale)) 0;
   border: var(--oc-border-width) solid var(--border);

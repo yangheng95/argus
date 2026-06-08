@@ -80,6 +80,8 @@ import { openConfigDialog, openGoalDialog, renderAboutVersion, setupDialogBackdr
 import { cardTreeStore } from "./store/card-tree"
 import { composerDraftKey } from "./services/composer-draft"
 import { isCodingAssistantSource, selectCodingAssistantSession } from "./services/coding-assistant"
+import { openImagePreview } from "./services/image-preview"
+import { ImagePreviewHost } from "./components/ImagePreview"
 
 // ── Module teardown ──
 // Centralised cleanup for top-level document/window listeners and Solid roots.
@@ -628,6 +630,18 @@ document.addEventListener(
   (ev) => {
     const target = ev.target as HTMLElement | null
     if (!target) return
+    const imageTrigger = target.closest<HTMLElement>("[data-image-preview-trigger]")
+    if (imageTrigger) {
+      const src = imageTrigger.getAttribute("data-image-preview-src")
+        || imageTrigger.querySelector("img")?.getAttribute("src")
+        || ""
+      const alt = imageTrigger.getAttribute("data-image-preview-alt")
+        || imageTrigger.querySelector("img")?.getAttribute("alt")
+        || ""
+      ev.preventDefault()
+      openImagePreview(src, alt)
+      return
+    }
     const link = target.closest<HTMLElement>("[data-file-path]")
     if (!link) return
     const path = link.getAttribute("data-file-path")
@@ -1656,6 +1670,10 @@ void (async () => {
     document.body.appendChild(goalDialogHost)
     render(() => <GoalDialogHost />, goalDialogHost)
     ensureConfigDialogHost()
+    const imagePreviewHost = document.createElement("div")
+    imagePreviewHost.id = "imagePreviewHost"
+    document.body.appendChild(imagePreviewHost)
+    render(() => <ImagePreviewHost />, imagePreviewHost)
     const onboardingHost = document.createElement("div")
     onboardingHost.id = "workspaceOnboardingHost"
     document.body.appendChild(onboardingHost)

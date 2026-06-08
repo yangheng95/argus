@@ -503,6 +503,60 @@
   margin: calc(3px * var(--ui-scale)) 0;
 }
 
+.msg-image-trigger {
+  appearance: none;
+  display: inline-flex;
+  max-width: 100%;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  cursor: zoom-in;
+  vertical-align: top;
+}
+
+.msg-image-trigger:focus-visible {
+  outline: var(--oc-border-width) solid var(--accent);
+  outline-offset: calc(2px * var(--ui-scale));
+  border-radius: var(--oc-radius-soft);
+}
+
+.image-preview-dialog__form {
+  width: min(calc(96vw - calc(24px * var(--ui-scale))), calc(1280px * var(--ui-scale)));
+  max-width: min(calc(96vw - calc(24px * var(--ui-scale))), calc(1280px * var(--ui-scale)));
+  max-height: min(calc(92vh - calc(24px * var(--ui-scale))), calc(900px * var(--ui-scale)));
+  padding: 0;
+  gap: 0;
+  overflow: hidden;
+}
+
+.image-preview-dialog__toolbar {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--ui-gap-xs);
+}
+
+.image-preview-dialog__body {
+  min-height: 0;
+  overflow: auto;
+  padding: var(--ui-gap-md);
+  background: var(--surface-inset);
+  display: grid;
+  place-items: center;
+}
+
+.image-preview-dialog__image {
+  display: block;
+  width: auto;
+  height: auto;
+  max-width: none;
+  max-height: none;
+  transform: scale(var(--image-preview-scale, 1));
+  transform-origin: center;
+  border-radius: var(--oc-radius-soft);
+  border: var(--oc-border-width) solid var(--border);
+  background: var(--surface);
+}
+
 .msg-video-wrap,
 .msg-audio-wrap,
 .msg-pdf-wrap {
