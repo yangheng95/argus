@@ -343,7 +343,7 @@ describe("frontend-design prompt assembly", () => {
           ...utilityTools,
           ...mirrorTools,
         }
-        expect(Object.keys(tools)).not.toContain("skill")
+        expect(Object.keys(tools)).toContain("skill")
         expect(Object.keys(tools)).not.toContain("webfetch")
         expect(Object.keys(tools)).not.toContain("websearch")
         expect(Object.keys(tools)).not.toContain("todoread")

@@ -396,14 +396,14 @@ describe("extras execute-return normalisation (integration via resolveTools)", (
     expect(SessionLoop.usesExactRuntimeContractTools("build", contract)).toBe(false)
   })
 
-  test("frontend-research runtime contract uses exact submit-only tools instead of registry or MCP inheritance", () => {
+  test("frontend-research runtime contract uses exact submit and skill tools instead of registry or MCP inheritance", () => {
     const contract = runtimeContract("ses_frontend_research_exact", {
       identity: {
         sessionID: "ses_frontend_research_exact",
         agentKind: "frontend-research",
         contractKind: "stage-attempt",
       },
-      tools: { submit_research_brief: dummyTool() },
+      tools: { skill: dummyTool(), submit_research_brief: dummyTool() },
     })
 
     expect(SessionLoop.usesExactRuntimeContractTools("frontend-research", contract)).toBe(true)
@@ -484,6 +484,99 @@ describe("extras execute-return normalisation (integration via resolveTools)", (
 
         expect(Object.keys(resolved)).toEqual(["requirements"])
         expect(resolved.skill).toBeUndefined()
+        SessionLoop.clearSessionRuntimeContract(sessionID)
+      },
+    })
+  })
+
+  test("frontend-research resolveTools preserves runtime skill under exact stage contracts", async () => {
+    await using tmp = await tmpdir({ git: true })
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const sessionID = `ses_runtime_${Date.now()}_frontend_research_exact`
+        SessionLoop.setSessionRuntimeContract(
+          sessionID,
+          runtimeContract(sessionID, {
+            identity: {
+              sessionID,
+              agentKind: "frontend-research",
+              contractKind: "stage-attempt",
+            },
+            tools: {
+              skill: dummyTool(),
+              submit_research_brief: dummyTool(),
+            },
+          }),
+        )
+        const resolved = await SessionLoop.resolveTools({
+          agent: (await Agent.get("frontend-research"))!,
+          model: {
+            providerID: "test",
+            id: "test",
+            api: { id: "test", npm: "@ai-sdk/openai" },
+            capabilities: { input: {}, reasoning: false },
+          } as any,
+          session: { id: sessionID, kind: "frontend-research", permission: [] } as any,
+          processor: {
+            message: { id: "msg_test" },
+            partFromToolCall: () => undefined,
+            ensureToolPart: async () => undefined,
+          } as any,
+          bypassAgentCheck: false,
+          messages: [],
+          config: {} as any,
+        })
+
+        expect(Object.keys(resolved).sort()).toEqual(["skill", "submit_research_brief"])
+        expect(resolved.read_file).toBeUndefined()
+        expect(resolved.websearch).toBeUndefined()
+        SessionLoop.clearSessionRuntimeContract(sessionID)
+      },
+    })
+  })
+
+  test("frontend-design resolveTools preserves runtime skill under exact stage contracts", async () => {
+    await using tmp = await tmpdir({ git: true })
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const sessionID = `ses_runtime_${Date.now()}_frontend_design_exact`
+        SessionLoop.setSessionRuntimeContract(
+          sessionID,
+          runtimeContract(sessionID, {
+            identity: {
+              sessionID,
+              agentKind: "frontend-design",
+              contractKind: "stage-attempt",
+            },
+            tools: {
+              skill: dummyTool(),
+              submit_frontend_template: dummyTool(),
+            },
+          }),
+        )
+        const resolved = await SessionLoop.resolveTools({
+          agent: (await Agent.get("frontend-design"))!,
+          model: {
+            providerID: "test",
+            id: "test",
+            api: { id: "test", npm: "@ai-sdk/openai" },
+            capabilities: { input: {}, reasoning: false },
+          } as any,
+          session: { id: sessionID, kind: "frontend-design", permission: [] } as any,
+          processor: {
+            message: { id: "msg_test" },
+            partFromToolCall: () => undefined,
+            ensureToolPart: async () => undefined,
+          } as any,
+          bypassAgentCheck: false,
+          messages: [],
+          config: {} as any,
+        })
+
+        expect(Object.keys(resolved).sort()).toEqual(["skill", "submit_frontend_template"])
+        expect(resolved.websearch).toBeUndefined()
         SessionLoop.clearSessionRuntimeContract(sessionID)
       },
     })
