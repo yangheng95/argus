@@ -125,7 +125,7 @@ export namespace AgentRoleContract {
     },
     "frontend-design": {
       id: "frontend-design",
-      description: "Frontend design and webpage-replica agent. Converts visual/reference evidence into the authoritative frontend implementation template, fillable modules, component inventory, material inventory, source handoff, and visual/data contracts. It is not the owner for PRD/SPEC/report webpage research unless the requested deliverable is UI implementation or replication.",
+      description: "Frontend design and webpage-replica agent. Converts visual/reference evidence into the authoritative frontend implementation template, fillable modules, component inventory, material inventory, source handoff, and visual/data contracts. For ainvest webpage rewrite work, generated code and PRD/SPEC/report material are reference inputs only; the rewritten webpage must be based on ainvest-frontend-design. It is not the owner for PRD/SPEC/report webpage research unless the requested deliverable is UI implementation or replication.",
       promptEditable: true,
       defaultPromptRequired: true,
       promptConfigMode: "append",
@@ -162,7 +162,7 @@ export namespace AgentRoleContract {
     "frontend-research": {
       id: "frontend-research",
       description:
-        "Frontend research agent. Uses host-prepared rendered webpage evidence from source URLs to publish source-backed webpage investigation work packets, then emits a frontend_research_brief with an investigation-partition webpage_contract covering visible surfaces, component questions, layout/style checks, interaction/data checks, fidelity risks, document outlines, constraints, and open questions. It does not create the frontend implementation template, does not call build, and never chooses routes or delivers final documents.",
+        "Frontend research agent. Uses host-prepared rendered webpage evidence from source URLs to publish source-backed webpage investigation work packets, then emits a frontend_research_brief with an investigation-partition webpage_contract covering visible surfaces, component questions, layout/style checks, interaction/data checks, fidelity risks, document outlines, constraints, and open questions. For ainvest webpage rewrite work, any generated code snippets, PRD outline, or document material are reference inputs only; downstream webpage rewriting must be based on ainvest-frontend-design. It does not create the frontend implementation template, does not call build, and never chooses routes or delivers final documents.",
       promptEditable: true,
       defaultPromptRequired: true,
       promptConfigMode: "append",
