@@ -61,6 +61,7 @@ export type IntegrityEvidenceToolContext = {
     }>
   }
   frontendDesign?: string
+  visualQa?: string
   visualEvidence?: VisualEvidenceBundle[]
   attachments?: Array<{ sha: string; url: string; mime: string; size: number; filename?: string }>
   signal?: AbortSignal
@@ -119,6 +120,7 @@ export function createIntegrityAcceptanceTools(input?: IntegrityEvidenceToolCont
           "goal_detail",
           "executor_reports",
           "frontend_design_contract",
+          "visual_qa_report",
           "attachments",
         ]),
         directory: z.string().optional(),
@@ -187,6 +189,7 @@ function renderIntegrityEvidenceSection(
     | "goal_detail"
     | "executor_reports"
     | "frontend_design_contract"
+    | "visual_qa_report"
     | "attachments",
   directory?: string,
   filePath?: string,
@@ -270,6 +273,9 @@ function renderIntegrityEvidenceSection(
 
     case "frontend_design_contract":
       return "# Frontend Design Contract\n\n" + (input?.frontendDesign?.trim() || "(none)")
+
+    case "visual_qa_report":
+      return "# Visual QA Report\n\n" + (input?.visualQa?.trim() || "(none)")
 
     case "attachments":
       return [

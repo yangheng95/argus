@@ -59,10 +59,11 @@ const EXECUTOR_TOOLS = {
 } as const
 
 type ExecutorToolID = keyof typeof EXECUTOR_TOOLS
-const EXECUTOR_TOOL_IMPLS: Record<ExecutorToolID, Tool.Info> = {
-  skill: SkillTool,
-  memory: MemoryTool,
-  task_report: TaskReportTool,
+
+function executorToolImpl(id: ExecutorToolID): Tool.Info {
+  if (id === "skill") return SkillTool
+  if (id === "memory") return MemoryTool
+  return TaskReportTool
 }
 
 const EXECUTOR_PROXIED_TOOL_DENY_IDS = new Set([
@@ -332,7 +333,7 @@ async function runtimeTools(toolset: Toolset, sessionID = "ses_mcp", approved: P
   const ids = toolset === "executor" ? (Object.keys(EXECUTOR_TOOLS) as ExecutorToolID[]) : []
   return Promise.all(
     ids.map(async (id) => {
-      const item = EXECUTOR_TOOL_IMPLS[id]
+      const item = executorToolImpl(id)
       const initialized = await item.init()
       return {
         id: item.id,

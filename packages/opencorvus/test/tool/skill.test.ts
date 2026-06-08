@@ -171,4 +171,85 @@ Use this skill.
     }
   })
 
+  test("visual-qa can load acceptance skills without reopening webpage extraction skills", async () => {
+    await using tmp = await tmpdir({
+      git: true,
+      init: async (dir) => {
+        const visualSkillDir = path.join(dir, ".opencorvus", "skill", "visual-acceptance")
+        await Bun.write(
+          path.join(visualSkillDir, "SKILL.md"),
+          `---
+name: visual-acceptance
+description: Visual QA acceptance workflow. QA means Quality Assurance.
+required_tools:
+  - webpage_render
+---
+
+# Visual Acceptance
+
+Use rendered evidence to inspect the implemented interface.
+`,
+        )
+
+        const extractionSkillDir = path.join(dir, ".opencorvus", "skill", "visual-extraction")
+        await Bun.write(
+          path.join(extractionSkillDir, "SKILL.md"),
+          `---
+name: visual-extraction
+description: Frontend design extraction workflow.
+required_tools:
+  - webpage_extract
+---
+
+# Visual Extraction
+
+Collect source webpage evidence.
+`,
+        )
+      },
+    })
+
+    const home = process.env.OPENCORVUS_TEST_HOME
+    process.env.OPENCORVUS_TEST_HOME = tmp.path
+
+    try {
+      await Instance.provide({
+        directory: tmp.path,
+        fn: async () => {
+          const visualQa = await Agent.get("visual-qa")
+          const frontendDesign = await Agent.get("frontend-design")
+          const build = await Agent.get("build")
+          expect(visualQa).toBeDefined()
+          expect(frontendDesign).toBeDefined()
+          expect(build).toBeDefined()
+
+          const visualQaSkill = await SkillTool.init({ agent: visualQa })
+          const frontendDesignSkill = await SkillTool.init({ agent: frontendDesign })
+          const buildSkill = await SkillTool.init({ agent: build })
+          const ctx: Tool.Context = { ...baseCtx, ask: async () => {} }
+
+          const visualQaResult = await visualQaSkill.execute({ query: "visual" }, ctx)
+          expect(visualQaResult.output).toContain("<name>visual-acceptance</name>")
+          expect(visualQaResult.output).not.toContain("<name>visual-extraction</name>")
+          await expect(visualQaSkill.execute({ name: "visual-extraction" }, ctx)).rejects.toThrow(
+            'Skill "visual-extraction" not found or not allowed',
+          )
+          expect((await visualQaSkill.execute({ name: "visual-acceptance" }, ctx)).output).toContain(
+            '<skill_content name="visual-acceptance">',
+          )
+
+          const frontendDesignResult = await frontendDesignSkill.execute({ query: "visual" }, ctx)
+          expect(frontendDesignResult.output).toContain("<name>visual-acceptance</name>")
+          expect(frontendDesignResult.output).toContain("<name>visual-extraction</name>")
+
+          const buildResult = await buildSkill.execute({ query: "visual" }, ctx)
+          expect(buildResult.output).not.toContain("<name>visual-acceptance</name>")
+          expect(buildResult.output).not.toContain("<name>visual-extraction</name>")
+        },
+      })
+    } finally {
+      process.env.OPENCORVUS_TEST_HOME = home
+    }
+  })
+
 })

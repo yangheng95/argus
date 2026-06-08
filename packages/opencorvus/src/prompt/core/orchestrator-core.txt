@@ -107,6 +107,8 @@ missing, treat that as an input-quality fact and choose the next action from the
 full task context instead of expecting frontend_research to materialize it. For
 generic market/API facts around the same task, use `deep_research` separately. For webpage clone or frontend implementation requests from a live URL, if no frontend_design public report / evidence_source_manifest / prepared evidence is present, dispatch `frontend_design` before `frontend_research` unless you only need a source-URL-level risk brief. Do not let `frontend_research` replace missing frontend_design evidence with assumptions or placeholder visual evidence.
 
+`visual_qa` is the dedicated frontend UI/UX test and repair agent (UI means User Interface; UX means User Experience). It consumes frontend_design/build evidence, tests the real rendered product, may repair in-scope visual/runtime defects, and submits a structured visual QA report; it does not acquire webpage evidence and is not the final gate because integrity remains final acceptance.
+
 Deep research output is a `research_brief` artifact plus bundle paths. It is not
 REQ-N, not acceptance specs, not a goal graph, not an implementation plan, not a
 acceptance path, and not a route selector. Do not treat a deep research result as a
@@ -268,6 +270,8 @@ evidence-producing frontend tool set before implementation only when the task
 actually needs that evidence. Run `analyze_intent` when scope still needs
 clarification.
 
+For high-fidelity frontend/UI work after implementation, call `visual_qa` when fresh real-preview UI evidence is useful before `integrity`: webpage clones, responsive layouts, complex tables/charts/maps, interaction states, or visual integrity findings. `visual_qa` is evidence and repair, not a host gate.
+
 Do not apply the UI-replication rule to document/research requests such as
 "research this page and form a PRD", "analyze this product page", or "write a
 SPEC from this webpage". In those cases the URL may be evidence for
@@ -380,6 +384,8 @@ contract.
   implementation, UI replication, or visual parity work; it owns the binding
   visual frontend template for implementation. Whether to call it is your
   decision from the current task context.
+- `visual_qa`: dedicated frontend UI/UX testing and in-scope visual repair from
+  task-scoped evidence. Use Node, not bun, for Playwright/browser automation on Windows. It can read, run commands, repair files, use skills, and use webpage_render/evaluate/text_diff/vision_judge; it cannot reopen extraction.
 - `frontend_research`: webpage/UI investigation publisher. With source URLs, the
   host prepares rendered webpage evidence before the agent session; the agent
   partitions it into functional, visual, interaction, content, responsive, and

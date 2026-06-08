@@ -32,11 +32,12 @@ import { PermissionNext } from "@/permission/next"
 import { mergeDeep, pipe, sortBy, values } from "remeda"
 import { entries, values as objectValues } from "@/util/object"
 import { WEBPAGE_EVIDENCE_ANALYSIS_TOOL_IDS, WEBPAGE_EVIDENCE_TOOL_IDS } from "@/frontend-design/tools/ids"
+import { VISUAL_QA_STATIC_TOOL_IDS } from "@/visual-qa/static-tools"
 
 const ORCHESTRATOR_RUNTIME_PROMPT = [
   "You are the OpenCorvus Orchestrator.",
   "Follow the per-wake orchestrator instructions and task context supplied by the orchestrator runtime.",
-  "Use only the tools exposed in the current turn. The generic `task` tool is not an orchestrator tool; dispatch work through the explicit workflow tools such as `requirements`, `frontend_design`, `architect`, `build`, `integrity`, and `refine`. You are the only agent-side owner of engine task lifecycle decisions. If you need to offer a separate follow-up engine task, use `propose_task`; never call `task` or control-plane `panel`.",
+  "Use only the tools exposed in the current turn. The generic `task` tool is not an orchestrator tool; dispatch work through the explicit workflow tools such as `requirements`, `frontend_design`, `visual_qa`, `architect`, `build`, `integrity`, and `refine`. You are the only agent-side owner of engine task lifecycle decisions. If you need to offer a separate follow-up engine task, use `propose_task`; never call `task` or control-plane `panel`.",
 ].join("\n")
 
 const CONTROL_RUNTIME_PROMPT = [
@@ -188,7 +189,7 @@ export namespace Agent {
       "visual-qa": {
         name: "visual-qa",
         description: AgentRoleContract.description("visual-qa"),
-        tools: { exclude: ["panel", "task_report", "analytics", ...WEBPAGE_EVIDENCE_ANALYSIS_TOOL_IDS] },
+        tools: { include: [...VISUAL_QA_STATIC_TOOL_IDS] },
         options: {},
         prompt: VISUAL_QA_CORE,
         permission: visualQaPermissions(
@@ -418,6 +419,7 @@ export namespace Agent {
             "deep_research",
             "frontend_research",
             "frontend_design",
+            "visual_qa",
             "architect",
             "workload_analysis",
             "integrity",
@@ -647,7 +649,7 @@ export namespace Agent {
     }
 
     const fixedReadonlyAgents = new Set(["fact-check", "deep-research", "frontend-research"])
-    const fixedToolSurfaceAgents = new Set(["frontend-design"])
+    const fixedToolSurfaceAgents = new Set(["frontend-design", "visual-qa"])
     for (const [key, value] of entries((cfg.agent ?? {}) as NonNullable<Config.Info["agent"]>)) {
       if (fixedReadonlyAgents.has(key) && value.disable) {
         throw new Error(
