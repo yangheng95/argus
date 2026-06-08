@@ -50,6 +50,17 @@ describe("build agent goal execution discipline prompt", () => {
     expect(normalized).toContain("severe connection-timeout bug on Windows")
   })
 
+  test("requires observed frontend verification and random preview ports", async () => {
+    const prompt = await readBuildPrompt()
+    const normalized = prompt.replace(/\s+/g, " ")
+
+    expect(normalized).toContain("For frontend design, UI implementation, webpage, or visual tasks")
+    expect(normalized).toContain("Model Context Protocol (MCP) browser/render/preview tooling")
+    expect(normalized).toContain("Do not only write files and infer success from static code")
+    expect(normalized).toContain("use a random or dynamically discovered free high port")
+    expect(normalized).toContain("Do not bind default shared ports such as 3000, 5173, or 4173")
+  })
+
   test("keeps scenario policy out of the build role core", async () => {
     const prompt = await readBuildPrompt()
 
