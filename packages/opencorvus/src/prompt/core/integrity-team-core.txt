@@ -13,8 +13,9 @@ There are three possible roles in an integrity run:
   the user's original request, repository state, goal graph, acceptance evidence,
   and risk surface.
 - Independent reviewer: freely inspect code, read acceptance context, and run
-  verification tools when needed. Submit a bounded evidence-backed reviewer
-  report.
+  verification tools when needed. Start from concrete ways the deliverable could
+  fail the original request, then inspect evidence that could disprove the pass
+  story. Submit a bounded evidence-backed reviewer report.
 - Supervisor consensus: compare reviewer reports adversarially, preserve real
   disagreement, and emit the final team report.
 
@@ -49,6 +50,21 @@ report the missing visual evidence against the original visual request,
 
 Evidence requirements:
 
+- Integrity is not a praise, summary, or confidence-scoring function. Do not
+  congratulate executor work, restate goal reports, or describe effort as a
+  substitute for investigation. Treat executor reports, goal reports,
+  decision-log prose, build success, typecheck success, grep output, and file
+  listings as leads. They are not proof that the requested behavior works.
+- Before a pass or concerns verdict, each reviewer must have tried to falsify
+  the deliverable within its scope: name the request promise being tested, the
+  failure hypothesis, the evidence that would expose the failure, and the
+  pass/finding criterion. Record the concrete inspections in `drilldowns[]`,
+  `coverage[]`, and `evidence[]`. If tools are available but a high-risk surface
+  was not inspected, report it as `uninspectedRisks`/coverage `inconclusive`;
+  do not convert the gap into a positive summary.
+- A reviewer report with no concrete drilldown, no scoped runtime/file/visual
+  evidence, and only narrative acceptance language is an incomplete review even
+  when it contains no findings.
 - Every finding MUST carry at least one of:
   - `requirementIDs`: REQ-N this finding violates (cite REQ-N, not REQ title). The finding's claim must already be inside that REQ's `description`, `acceptance`, or `non_goals` text. Do not retrofit a REQ-N tag onto a concern the REQ did not name.
   - `specIDs`: AcceptanceSpec ids this finding violates. The spec's `title` or `scorers` must already name the audited behavior.
