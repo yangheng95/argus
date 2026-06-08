@@ -14,7 +14,7 @@ import { Bus } from "@/bus"
 import { Session } from "@/session"
 import { Discovery } from "./discovery"
 import { Glob } from "../util/glob"
-import webpageGenerateMd from "./builtin/webpage-generate.md" with { type: "text" }
+import { ainvestDesignSystemFiles, ainvestDesignSystemMd } from "./builtin/ainvest-design-system"
 import researchReportMd from "./builtin/research-report.md" with { type: "text" }
 
 export namespace Skill {
@@ -78,15 +78,28 @@ export namespace Skill {
   const SKILL_PATTERN = "**/SKILL.md"
   const BUILTIN_PATH = path.join(Global.Path.cache, "builtin-skills")
 
+  type BuiltinFile =
+    | string
+    | {
+      encoding: "utf8" | "base64"
+      content: string
+    }
+
   const builtins = [
-    { skill: webpageGenerateMd, files: {} },
+    { skill: ainvestDesignSystemMd, files: ainvestDesignSystemFiles },
     { skill: researchReportMd, files: {} },
   ] as const
 
-  async function install(id: string, skill: string, files: Readonly<Record<string, string>>) {
+  function decodeBuiltinFile(file: BuiltinFile) {
+    if (typeof file === "string") return file
+    if (file.encoding === "base64") return Buffer.from(file.content, "base64")
+    return file.content
+  }
+
+  async function install(id: string, skill: string, files: Readonly<Record<string, BuiltinFile>>) {
     const dir = path.join(BUILTIN_PATH, id)
     await Filesystem.write(path.join(dir, "SKILL.md"), skill)
-    await Promise.all(Object.entries(files).map(([file, content]) => Filesystem.write(path.join(dir, file), content)))
+    await Promise.all(Object.entries(files).map(([file, content]) => Filesystem.write(path.join(dir, file), decodeBuiltinFile(content))))
     return path.join(dir, "SKILL.md")
   }
 

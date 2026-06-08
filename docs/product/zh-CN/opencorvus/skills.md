@@ -28,16 +28,16 @@ Frontmatter 字段（`src/skill/skill.ts:23-63`）：
 
 ## 2. 内置 Skills
 
-随二进制打包（`src/skill/skill.ts:92-96` 的 `builtins` 数组），**只有三个**：
+随二进制打包（`src/skill/skill.ts` 的 `builtins` 数组），**只有两个**：
 
 | Skill | 用途 |
 |---|---|
-| `webpage-generate` | 针对 live webpage reference 产出带 webpage evidence 的 frontend template |
+| `ainvest-design-system` | 提供内置 Ainvest UI tokens、组件、规则和资产，用于 Ainvest 前端工作 |
 | `research-report` | 用 `websearch` 和按需 `webfetch` 产出带来源的 Markdown 调研报告 |
 
 > 其他 skill 需要通过 `skills.paths` / `skills.urls` 显式加载。
 >
-> `panel-control` builtin skill 已在 commit `f94f56231` 删除，仍引用它的客户端会找不到该 skill。
+> `panel-control` builtin skill 已在 commit `f94f56231` 删除；`webpage-generate` builtin skill 也已删除。仍引用这些 skill 的客户端会找不到对应 skill。
 
 内置 Skill 默认权限为 `allow`（`src/skill/manager.ts`）。
 

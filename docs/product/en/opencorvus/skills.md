@@ -38,7 +38,7 @@ Shipped with the binary (`src/skill/skill.ts`), exactly two:
 
 | Name | Purpose |
 |---|---|
-| `webpage-generate` | Produce a webpage-evidence-grounded frontend template for a live webpage reference |
+| `ainvest-design-system` | Provide the bundled Ainvest UI tokens, components, rules, and assets for Ainvest frontend work |
 | `research-report` | Produce a sourced Markdown research report using `websearch` and targeted `webfetch` |
 
 Other skills must be loaded through configured skill paths or URLs if you need them.
