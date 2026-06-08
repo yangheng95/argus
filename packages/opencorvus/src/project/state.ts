@@ -9,6 +9,16 @@ export namespace State {
   const log = Log.create({ service: "state" })
   const recordsByKey = new Map<string, Map<any, Entry>>()
 
+  async function disposeEntry(key: string, init: unknown, entry: Entry) {
+    if (!entry.dispose) return
+    const label = typeof init === "function" ? init.name : String(init)
+    await Promise.resolve(entry.state)
+      .then((state) => entry.dispose!(state))
+      .catch((error) => {
+        log.error("Error while disposing state:", { error, key, init: label })
+      })
+  }
+
   export function create<S>(root: () => string, init: () => S, dispose?: (state: Awaited<S>) => Promise<void>) {
     const fn = (() => {
       const key = root()
@@ -25,14 +35,26 @@ export namespace State {
         dispose,
       })
       return state
-    }) as (() => S) & { reset(): void; resetAll(): void }
-    fn.reset = () => {
+    }) as (() => S) & { reset(): Promise<void>; resetAll(): Promise<void> }
+    fn.reset = async () => {
       const key = root()
       const entries = recordsByKey.get(key)
-      if (entries) entries.delete(init)
+      const entry = entries?.get(init)
+      if (!entries || !entry) return
+      entries.delete(init)
+      if (entries.size === 0) recordsByKey.delete(key)
+      await disposeEntry(key, init, entry)
     }
-    fn.resetAll = () => {
-      for (const entries of recordsByKey.values()) entries.delete(init)
+    fn.resetAll = async () => {
+      const tasks: Promise<void>[] = []
+      for (const [key, entries] of recordsByKey) {
+        const entry = entries.get(init)
+        if (!entry) continue
+        entries.delete(init)
+        if (entries.size === 0) recordsByKey.delete(key)
+        tasks.push(disposeEntry(key, init, entry))
+      }
+      await Promise.all(tasks)
     }
     return fn
   }
@@ -58,15 +80,7 @@ export namespace State {
     for (const [init, entry] of entries) {
       if (!entry.dispose) continue
 
-      const label = typeof init === "function" ? init.name : String(init)
-
-      const task = Promise.resolve(entry.state)
-        .then((state) => entry.dispose!(state))
-        .catch((error) => {
-          log.error("Error while disposing state:", { error, key, init: label })
-        })
-
-      tasks.push(task)
+      tasks.push(disposeEntry(key, init, entry))
     }
     await Promise.all(tasks)
 
