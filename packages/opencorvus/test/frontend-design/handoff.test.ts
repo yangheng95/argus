@@ -110,6 +110,7 @@ test("frontend-design handoff points to source files and keeps excerpts bounded"
       expect(handoff).toContain("measured webpage_evaluate evidence")
       expect(handoff).toContain("zero-finding web_clone_source_audit evidence")
       expect(handoff).toContain("Do not change other agent prompts or communication paths")
+      expect(handoff).toContain("do not delete `web-clone-source/` content until source-derived style evidence and styling obligations have been migrated")
       expect(handoff).not.toContain("freehand")
       expect(handoff).not.toContain("greenfield")
       expect(handoff).not.toContain("100/100")

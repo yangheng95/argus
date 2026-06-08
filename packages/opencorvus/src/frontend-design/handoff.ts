@@ -70,6 +70,7 @@ function renderSourceRegionRefactorGuidance(entries: Map<string, DecisionEntry>)
       "- Requirements: express downstream work as skeleton-to-project transcription from the accepted HTML skeleton plus original source IR/content/style evidence and `reference.png`.",
       "- Architect: keep ownership inside the frontend-design handoff and downstream implementation. Do not change other agent prompts or communication paths. Decompose later work by named visual/source regions and preserve source traceability.",
       "- Build: transcribe the accepted visual skeleton into maintainable project source with semantic components, data modules, scoped styles, asset ownership, and mature library choices for hard UI domains while preserving visual parity against both the skeleton and original reference evidence.",
+      "- Deletion rule: do not delete `web-clone-source/` content until source-derived style evidence and styling obligations have been migrated into the accepted downstream project source and verified against the reference evidence.",
       "- Acceptance/Integrity: verify source traceability, visual parity for unchanged reference surfaces, absence of screenshot/base64/iframe replay, and documented handling for every restored/deferred visual region.",
     ].join("\n")
   }
@@ -82,6 +83,8 @@ function renderSourceRegionRefactorGuidance(entries: Map<string, DecisionEntry>)
     "- Requirements: express follow-up work as completing the missing visual HTML skeleton or transcribing an accepted skeleton into maintainable source, depending on what the frontend_design report says is missing.",
     "- Architect: keep ownership inside the frontend-design handoff and downstream implementation. Do not change other agent prompts or communication paths. Decompose work by named sourceDomReplacementPlan/source region only when that region is in scope.",
     "- Build: do not treat frontend-design-skeleton as app source. Use it only as captured source evidence; create/repair the visual skeleton first if frontend_design did not provide one, or transcribe the accepted skeleton into maintainable project source in the later workflow.",
+    "- Evidence rule: keep source data extraction, measured webpage_evaluate evidence, and zero-finding web_clone_source_audit evidence visible as source-package handoff facts.",
+    "- Deletion rule: do not delete `web-clone-source/` content until source-derived style evidence and styling obligations have been migrated into the accepted downstream project source and verified against the reference evidence.",
     "- Acceptance/Integrity: verify source traceability, visual parity for unchanged reference surfaces, absence of screenshot/base64/iframe replay, and documented handling for every restored/deferred source region.",
   ].join("\n")
 }
