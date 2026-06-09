@@ -307,6 +307,7 @@
     "tree-sitter-bash",
   ],
   "patchedDependencies": {
+    "@kobalte/core@0.13.11": "patches/@kobalte%2Fcore@0.13.11.patch",
     "@standard-community/standard-openapi@0.2.9": "patches/@standard-community%2Fstandard-openapi@0.2.9.patch",
     "follow-redirects@1.15.11": "patches/follow-redirects@1.15.11.patch",
   },
