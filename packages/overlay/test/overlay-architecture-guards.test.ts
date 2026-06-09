@@ -948,8 +948,6 @@ describe("overlay architecture guards", () => {
       "executor-popover-header",
       "executor-popover-title",
       "executor-popover-hint",
-      "executor-popover-tabs",
-      "executor-popover-tab",
       "executor-popover-body",
       "executor-popover-empty",
       "executor-popover-group",
@@ -960,7 +958,9 @@ describe("overlay architecture guards", () => {
       expect(composerSurface).toMatch(new RegExp(`(^|\\n)\\.${className}\\s*\\{`))
     }
 
-    expect(composerSurface).toMatch(/\.executor-popover-tab\[data-active="true"\]\s*\{/)
+    expect(composerSurface).toMatch(/\.oc-tabs\[data-ui="executor-popover-tabs"\]\s*\{/)
+    expect(composerSurface).toMatch(/\.oc-tab\[data-ui="executor-popover-tab"\]\s*\{/)
+    expect(composerSurface).toMatch(/\.oc-tab\[data-ui="executor-popover-tab"\]\[data-active="true"\]\s*\{/)
     expect(composerSurface).toMatch(/\.executor-popover-model\[data-active="true"\]\s*\{/)
     expect(composerSurface).not.toMatch(/rgba\(146,\s*184,\s*252/)
     expect(composerSurface).not.toMatch(/rgba\(86,\s*126,\s*196/)
@@ -978,8 +978,6 @@ describe("overlay architecture guards", () => {
       "prompt-editor",
       "prompt-editor-head",
       "prompt-editor-actions",
-      "prompt-view-tabs",
-      "prompt-view-tab",
       "prompt-textarea",
       "prompt-preview-card",
       "prompt-preview-body",
@@ -991,7 +989,9 @@ describe("overlay architecture guards", () => {
     expect(settingsSurface).toMatch(/\.prompt-card-head\s*\{/)
     expect(settingsSurface).toMatch(/\.prompt-card-copy span,\s*\.prompt-card-copy small\s*\{/)
     expect(settingsSurface).not.toMatch(/\.prompt-preview-head\s*\{/)
-    expect(settingsSurface).toMatch(/\.prompt-view-tab\[data-active="true"\]\s*\{/)
+    expect(settingsSurface).toMatch(/\.oc-tabs\[data-ui="prompt-view-tabs"\]\s*\{/)
+    expect(settingsSurface).toMatch(/\.oc-tab\[data-ui="prompt-view-tab"\]\s*\{/)
+    expect(settingsSurface).toMatch(/\.oc-tab\[data-ui="prompt-view-tab"\]\[data-active="true"\]\s*\{/)
     expect(settingsSurface).not.toMatch(/\.prompt-diff-details\s*\{/)
     expect(settingsSurface).not.toMatch(/\.prompt-diff-summary\s*\{/)
     expect(settingsSurface).not.toMatch(/\.prompt-preview-card--default\s*\{/)

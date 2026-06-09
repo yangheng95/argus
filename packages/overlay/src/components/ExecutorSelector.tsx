@@ -43,6 +43,7 @@ import {
 import { loadProviderInfo } from "../services/init"
 import { t } from "../utils/i18n"
 import { Button } from "./ui/Button"
+import { Tab, Tabs } from "./ui/Tabs"
 
 interface ModelParts {
   provider: string
@@ -59,6 +60,7 @@ interface ProviderGroup {
 }
 
 const INTERNAL_EXECUTOR_ID = "opencorvus"
+const EXTERNAL_DISABLED_TAB_ID = "disabled"
 const EXTERNAL_EXECUTOR_IDS = ["codex", "claude-code"]
 
 function splitModelID(modelID: string): ModelParts {
@@ -345,6 +347,14 @@ export function ExecutorSelector() {
     }
   }
 
+  function changeExternalTab(value: string) {
+    if (value === EXTERNAL_DISABLED_TAB_ID) {
+      disableExternal()
+      return
+    }
+    focusExternal(value)
+  }
+
   return (
     <div class="executor-dualbar" data-ui="executor-dualbar">
       <ExecutorChip
@@ -442,38 +452,42 @@ export function ExecutorSelector() {
             <span class="executor-popover-title">{t("executor.external_popover_title")}</span>
             <span class="executor-popover-hint">{t("executor.external_popover_hint")}</span>
           </div>
-          <div class="executor-popover-tabs" role="tablist">
+          <Tabs
+            size="sm"
+            tone="neutral"
+            value={isExternalActive() ? focusedExternalID() : EXTERNAL_DISABLED_TAB_ID}
+            onValueChange={changeExternalTab}
+            data-ui="executor-popover-tabs"
+          >
             {/* Popover tabs switch the in-popover view; they should not take focus
                 away from Kobalte's dismissable layer and close the popover. */}
-            <button
-              type="button"
-              role="tab"
-              class="executor-popover-tab"
-              data-active={!isExternalActive() ? "true" : "false"}
-              aria-selected={!isExternalActive() ? "true" : "false"}
+            <Tab
+              value={EXTERNAL_DISABLED_TAB_ID}
+              active={!isExternalActive()}
+              size="sm"
+              tone="neutral"
+              data-ui="executor-popover-tab"
               onMouseDown={(event) => event.preventDefault()}
-              onClick={disableExternal}
             >
               {t("executor.external_disabled")}
-            </button>
+            </Tab>
             <For each={externalTabs()}>
               {(tab) => (
-                <button
-                  type="button"
-                  role="tab"
-                  class="executor-popover-tab"
-                  data-active={tab.id === focusedExternalID() ? "true" : "false"}
-                  aria-selected={tab.id === focusedExternalID() ? "true" : "false"}
+                <Tab
+                  value={tab.id}
+                  active={tab.id === focusedExternalID()}
+                  size="sm"
+                  tone="neutral"
+                  data-ui="executor-popover-tab"
                   disabled={!tab.selectable}
                   title={tab.title}
                   onMouseDown={(event) => event.preventDefault()}
-                  onClick={() => focusExternal(tab.id)}
                 >
                   {tab.label}
-                </button>
+                </Tab>
               )}
             </For>
-          </div>
+          </Tabs>
           <Show
             when={isExternalActive()}
             fallback={<div class="executor-popover-empty">{t("executor.external_disabled_hint")}</div>}

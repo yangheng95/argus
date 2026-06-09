@@ -15,6 +15,7 @@ import {
   loadPromptCatalog,
 } from "../../services/config"
 import { Button } from "../ui/Button"
+import { Tab, Tabs } from "../ui/Tabs"
 
 // ── Types ──
 
@@ -215,40 +216,44 @@ export default function PromptCatalog() {
 
                   <div class="prompt-editor">
                     <div class="prompt-editor-head">
-                      <div class="prompt-view-tabs" role="tablist" aria-label={t("prompt.title")}>
-                        <button
-                          type="button"
-                          class="prompt-view-tab"
-                          role="tab"
-                          aria-selected={viewMode(entryID) === "code"}
-                          data-active={viewMode(entryID) === "code" ? "true" : "false"}
-                          onClick={() => setViewMode(entryID, "code")}
+                      <Tabs
+                        size="sm"
+                        tone="neutral"
+                        value={viewMode(entryID)}
+                        onValueChange={(value) => setViewMode(entryID, value as PromptViewMode)}
+                        aria-label={t("prompt.title")}
+                        data-ui="prompt-view-tabs"
+                      >
+                        <Tab
+                          value="code"
+                          active={viewMode(entryID) === "code"}
+                          size="sm"
+                          tone="neutral"
+                          data-ui="prompt-view-tab"
                         >
                           {t("prompt.editor_label")}
-                        </button>
-                        <button
-                          type="button"
-                          class="prompt-view-tab"
-                          role="tab"
-                          aria-selected={viewMode(entryID) === "preview"}
-                          data-active={viewMode(entryID) === "preview" ? "true" : "false"}
-                          onClick={() => setViewMode(entryID, "preview")}
+                        </Tab>
+                        <Tab
+                          value="preview"
+                          active={viewMode(entryID) === "preview"}
+                          size="sm"
+                          tone="neutral"
+                          data-ui="prompt-view-tab"
                         >
                           {t("prompt.preview")}
-                        </button>
+                        </Tab>
                         <Show when={canShowDefault()}>
-                          <button
-                            type="button"
-                            class="prompt-view-tab"
-                            role="tab"
-                            aria-selected={viewMode(entryID) === "default"}
-                            data-active={viewMode(entryID) === "default" ? "true" : "false"}
-                            onClick={() => setViewMode(entryID, "default")}
+                          <Tab
+                            value="default"
+                            active={viewMode(entryID) === "default"}
+                            size="sm"
+                            tone="neutral"
+                            data-ui="prompt-view-tab"
                           >
                             {t("prompt.default_label")}
-                          </button>
+                          </Tab>
                         </Show>
-                      </div>
+                      </Tabs>
                       <div class="prompt-editor-actions">
                         <Button
                           type="button"

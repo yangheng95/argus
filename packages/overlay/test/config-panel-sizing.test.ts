@@ -114,8 +114,12 @@ describe("config panel sizing", () => {
   })
 
   test("prompt editor switches markdown code and preview in one tab surface", () => {
-    expect(PROMPT_CATALOG_TSX).toContain('class="prompt-view-tabs" role="tablist"')
-    expect(PROMPT_CATALOG_TSX).toContain('class="prompt-view-tab"')
+    expect(PROMPT_CATALOG_TSX).toContain("<Tabs")
+    expect(PROMPT_CATALOG_TSX).toContain("<Tab")
+    expect(PROMPT_CATALOG_TSX).toContain('data-ui="prompt-view-tabs"')
+    expect(PROMPT_CATALOG_TSX).toContain('data-ui="prompt-view-tab"')
+    expect(PROMPT_CATALOG_TSX).not.toContain('role="tablist"')
+    expect(PROMPT_CATALOG_TSX).not.toContain('role="tab"')
     expect(PROMPT_CATALOG_TSX).toContain('type PromptViewMode = "code" | "preview" | "default"')
     expect(PROMPT_CATALOG_TSX).toContain('when={viewMode(entryID) !== "code"}')
     expect(PROMPT_CATALOG_TSX).toContain('class="field-input prompt-textarea"')
@@ -123,9 +127,11 @@ describe("config panel sizing", () => {
     expect(PROMPT_CATALOG_TSX).not.toContain('class="prompt-toolbar"')
     expect(PROMPT_CATALOG_TSX).not.toContain('<details class="prompt-diff-details">')
     expect(PROMPT_CATALOG_TSX).not.toContain('{t("prompt.show_default")}')
-    expect(bodyOf(".prompt-view-tabs")).toMatch(/display:\s*inline-flex/)
+    expect(bodyOf('.oc-tabs[data-ui="prompt-view-tabs"]')).toMatch(/--oc-tabs-gap\s*:/)
     expect(bodyOf(".prompt-editor-actions")).toMatch(/display:\s*inline-flex/)
-    expect(bodyOf('.prompt-view-tab[data-active="true"]')).toMatch(/background:\s*var\(--surface\)/)
+    expect(bodyOf('.oc-tab[data-ui="prompt-view-tab"][data-active="true"]')).toMatch(
+      /--oc-tab-bg:\s*var\(--surface\)/,
+    )
     expect(bodyOf(".prompt-preview-card--attached")).toMatch(/min-height:\s*calc\(160px \* var\(--ui-scale\)\)/)
   })
 

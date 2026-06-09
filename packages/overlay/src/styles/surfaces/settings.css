@@ -1763,36 +1763,36 @@
   margin-left: auto;
 }
 
-.prompt-view-tabs {
-  display: inline-flex;
-  align-items: center;
-  gap: calc(2px * var(--ui-scale));
+.oc-tabs[data-ui="prompt-view-tabs"] {
+  --oc-tabs-gap: calc(2px * var(--ui-scale));
+  --oc-tabs-padding-x: calc(2px * var(--ui-scale));
+  --oc-tab-padding-x: calc(9px * var(--ui-scale));
+  --oc-tab-active-bg: var(--surface);
+  --oc-tab-active-color: var(--text-strong);
+
   padding: calc(2px * var(--ui-scale));
   border-radius: var(--oc-radius-soft);
   background: var(--settings-surface-muted);
 }
 
-.prompt-view-tab {
-  min-height: calc(24px * var(--ui-scale));
-  padding: calc(3px * var(--ui-scale)) calc(9px * var(--ui-scale));
+.oc-tab[data-ui="prompt-view-tab"] {
+  --oc-tabs-height: calc(24px * var(--ui-scale));
+
   border: 0 solid transparent;
   border-radius: calc(var(--oc-radius-soft) - calc(2px * var(--ui-scale)));
-  background: transparent;
-  color: var(--text-soft);
   font: inherit;
   font-size: var(--ui-font-control);
   line-height: 1.2;
-  cursor: pointer;
 }
 
-.prompt-view-tab:hover {
-  color: var(--text-strong);
-  background: var(--settings-surface-hover);
+.oc-tab[data-ui="prompt-view-tab"]:hover {
+  --oc-tab-color: var(--text-strong);
+  --oc-tab-bg: var(--settings-surface-hover);
 }
 
-.prompt-view-tab[data-active="true"] {
-  color: var(--text-strong);
-  background: var(--surface);
+.oc-tab[data-ui="prompt-view-tab"][data-active="true"] {
+  --oc-tab-color: var(--text-strong);
+  --oc-tab-bg: var(--surface);
 }
 
 .prompt-textarea {
