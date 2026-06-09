@@ -140,13 +140,7 @@ export function sanitizeProjectEditor(value: any): ProjectEditorID {
 
 // ── Default locale ──
 
-const DEFAULT_LOCALE = sanitizeLocale(
-  typeof document !== "undefined"
-    ? document.documentElement.lang
-    : typeof navigator !== "undefined"
-      ? navigator.language
-      : "en-US",
-)
+const DEFAULT_LOCALE = "en-US"
 
 // ── Defaults ──
 
