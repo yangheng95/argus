@@ -1,6 +1,9 @@
-import { expect, test } from "bun:test"
-import { launchBrowser } from "./launch"
-import { ensureOverlayDist, overlayStaticResponse } from "./overlay-dist"
+import assert from "node:assert/strict"
+import test from "node:test"
+
+import { launchBrowser } from "../launch.ts"
+import { ensureOverlayDist, overlayStaticResponse } from "../overlay-dist.ts"
+import { startBrowserFixture } from "./http-fixture.ts"
 
 await ensureOverlayDist()
 
@@ -24,13 +27,12 @@ function send(value: unknown, init?: ResponseInit) {
 test(
   "titlebar menubar fits documented responsive widths and locales",
   async () => {
+    assert.equal(process.env.OPENCORVUS_OVERLAY_BROWSER_TEST_NODE_RUNNER, "1")
+    assert.equal(typeof globalThis.Bun, "undefined")
     let config: Record<string, unknown> = {
       model: "openai/super-long-provider-model-name-for-titlebar-geometry",
     }
-    const server = Bun.serve({
-      idleTimeout: 255,
-      port: 0,
-      async fetch(req) {
+    const server = await startBrowserFixture(async (req) => {
         const url = new URL(req.url)
         const path = route(url)
         if (path === "/favicon.ico" || path === "/ui/favicon.ico") return new Response(null, { status: 204 })
@@ -68,7 +70,6 @@ test(
         if (path === "/panel/knowledge/preference") return send([])
         if (path === "/log" && req.method === "POST") return send({ ok: true })
         return new Response(`unhandled ${req.method} ${url.pathname}`, { status: 404 })
-      },
     })
 
     const browser = await launchBrowser(["--disable-dev-shm-usage"])
@@ -135,7 +136,7 @@ test(
               accessKey: el.dataset.accessKey,
             }
           })
-          expect(workspaceMenu).toEqual({
+          assert.deepEqual(workspaceMenu, {
             label: expectedWorkspaceMenu,
             title: expectedWorkspaceMenu,
             compact: "P",
@@ -189,6 +190,23 @@ test(
             const triggers = Array.from(document.querySelectorAll<HTMLElement>("[data-menu-trigger]"))
               .filter((node) => getComputedStyle(node).display !== "none")
               .map((node) => node.dataset.menuTrigger || "")
+            const triggerMetrics = Array.from(document.querySelectorAll<HTMLElement>("[data-menu-trigger]"))
+              .filter((node) => getComputedStyle(node).display !== "none")
+              .map((node) => {
+                const rect = node.getBoundingClientRect()
+                const label = node.querySelector<HTMLElement>(".titlebar-menu-trigger-label")
+                const compact = node.querySelector<HTMLElement>(".titlebar-menu-trigger-compact")
+                return {
+                  id: node.dataset.menuTrigger || "",
+                  width: rect.width,
+                  labelDisplay: label ? getComputedStyle(label).display : "",
+                  compactDisplay: compact ? getComputedStyle(compact).display : "",
+                  compactFontSize: compact ? getComputedStyle(compact).fontSize : "",
+                  compactWidth: compact ? compact.getBoundingClientRect().width : 0,
+                  compactHeight: compact ? compact.getBoundingClientRect().height : 0,
+                  height: rect.height,
+                }
+              })
             return {
               overlaps,
               outOfBounds,
@@ -197,26 +215,35 @@ test(
               badgeTitle: badge?.getAttribute("title") || "",
               titlebarHeight: titlebar.getBoundingClientRect().height,
               triggers,
+              triggerMetrics,
             }
           })
 
-          expect(geometry.triggers).not.toContain("product")
-          expect(geometry.triggers).toContain("workspace")
-          expect(geometry.triggers).not.toContain("model")
-          expect(geometry.triggers).not.toContain("agent")
-          expect(geometry.triggers).toContain("provider")
-          expect(geometry.triggers).toContain("tools")
-          expect(geometry.triggers).not.toContain("skill")
-          expect(geometry.triggers).not.toContain("mcp")
-          expect(geometry.triggers).not.toContain("memory")
-          expect(geometry.triggers).toContain("settings")
-          expect(geometry.outOfBounds).toEqual([])
-          expect(geometry.overlaps).toEqual([])
-          expect(geometry.brandWidth).toBeGreaterThan(24)
-          expect(geometry.badgeText).not.toContain(`:${server.port}`)
-          expect(geometry.badgeTitle).toContain(String(server.port))
-          expect(geometry.badgeTitle).toContain("12345")
-          expect(geometry.titlebarHeight).toBeGreaterThan(24)
+          assert.equal((geometry.triggers).includes("product"), false)
+          assert.ok((geometry.triggers).includes("workspace"))
+          assert.equal((geometry.triggers).includes("model"), false)
+          assert.equal((geometry.triggers).includes("agent"), false)
+          assert.ok((geometry.triggers).includes("provider"))
+          assert.ok((geometry.triggers).includes("tools"))
+          assert.equal((geometry.triggers).includes("skill"), false)
+          assert.equal((geometry.triggers).includes("mcp"), false)
+          assert.equal((geometry.triggers).includes("memory"), false)
+          assert.ok((geometry.triggers).includes("settings"))
+          assert.deepEqual(geometry.outOfBounds, [])
+          assert.deepEqual(geometry.overlaps, [])
+          assert.ok((geometry.brandWidth) > 24)
+          assert.equal((geometry.badgeText).includes(`:${server.port}`), false)
+          assert.ok((geometry.badgeTitle).includes(String(server.port)))
+          assert.ok((geometry.badgeTitle).includes("12345"))
+          assert.ok((geometry.titlebarHeight) > 24)
+          if (width <= 760) {
+            assert.equal(geometry.triggerMetrics.every((item) => item.width <= 32), true)
+            assert.equal(new Set(geometry.triggerMetrics.map((item) => Math.round(item.height))).size, 1)
+            assert.equal(geometry.triggerMetrics.every((item) => item.labelDisplay === "none"), true)
+            assert.equal(geometry.triggerMetrics.every((item) => item.compactDisplay !== "none"), true)
+            assert.equal(geometry.triggerMetrics.every((item) => Number.parseFloat(item.compactFontSize) > 0), true)
+            assert.equal(geometry.triggerMetrics.every((item) => item.compactWidth > 0 && item.compactHeight > 0), true)
+          }
           for (const menu of ["workspace", "provider", "run", "tools", "settings", "view", "help"]) {
             await page.click(`[data-menu-trigger="${menu}"]`)
             await page.waitForSelector(`[data-testid="titlebar-menu-${menu}"]`, { visible: true })
@@ -233,12 +260,12 @@ test(
                 viewportHeight: window.innerHeight,
               }
             })
-            expect(panelBounds.left).toBeGreaterThanOrEqual(0)
-            expect(panelBounds.right).toBeLessThanOrEqual(panelBounds.viewportWidth)
-            expect(panelBounds.top).toBeGreaterThanOrEqual(0)
-            expect(panelBounds.bottom).toBeLessThanOrEqual(panelBounds.viewportHeight)
-            expect(panelBounds.width).toBeGreaterThan(120)
-            expect(panelBounds.height).toBeGreaterThan(24)
+            assert.ok((panelBounds.left) >= 0)
+            assert.ok((panelBounds.right) <= panelBounds.viewportWidth)
+            assert.ok((panelBounds.top) >= 0)
+            assert.ok((panelBounds.bottom) <= panelBounds.viewportHeight)
+            assert.ok((panelBounds.width) > 120)
+            assert.ok((panelBounds.height) > 24)
             await page.keyboard.press("Escape")
             await page.waitForFunction(
               (value) => !document.querySelector(`[data-testid="titlebar-menu-${value}"]`),
@@ -262,16 +289,71 @@ test(
               hasDiagnostics: labels.some((item) => item.testid === "titlebar-connection-diagnostics"),
             }
           })
-          expect(helpContract.hasRefresh).toBe(false)
-          expect(helpContract.hasLogs).toBe(false)
-          expect(helpContract.hasDiagnostics).toBe(false)
-          expect(helpContract.labels.map((item) => item.testid)).toEqual([
+          assert.equal(helpContract.hasRefresh, false)
+          assert.equal(helpContract.hasLogs, false)
+          assert.equal(helpContract.hasDiagnostics, false)
+          assert.deepEqual(helpContract.labels.map((item) => item.testid), [
             "titlebar-help-docs",
             "titlebar-help-sdk",
             "titlebar-help-devtools",
             "titlebar-help-about",
           ])
-          expect(helpContract.labels.every((item) => item.title && item.ariaLabel)).toBe(true)
+          assert.equal(helpContract.labels.every((item) => item.title && item.ariaLabel), true)
+          const helpVisual = await page.$eval('[data-testid="titlebar-menu-help"]', (node) => {
+            const panelRect = node.getBoundingClientRect()
+            const itemRects = Array.from(node.querySelectorAll<HTMLElement>('[role="menuitem"]')).map((item) => {
+              const title = item.querySelector<HTMLElement>(".titlebar-menubar-item-title")
+              const meta = item.querySelector<HTMLElement>(".titlebar-menubar-item-meta")
+              if (!title || !meta) throw new Error(`Missing Help menu copy nodes for ${item.dataset.testid || ""}`)
+              const itemRect = item.getBoundingClientRect()
+              const titleRect = title.getBoundingClientRect()
+              const metaRect = meta.getBoundingClientRect()
+              const itemStyle = getComputedStyle(item)
+              const metaStyle = getComputedStyle(meta)
+              return {
+                testid: item.dataset.testid || "",
+                itemLeft: itemRect.left,
+                itemRight: itemRect.right,
+                titleLeft: titleRect.left,
+                titleRight: titleRect.right,
+                metaLeft: metaRect.left,
+                metaRight: metaRect.right,
+                metaHeight: metaRect.height,
+                display: itemStyle.display,
+                gridTemplateColumns: itemStyle.gridTemplateColumns,
+                metaText: meta.textContent || "",
+                metaWhiteSpace: metaStyle.whiteSpace,
+                metaTextOverflow: metaStyle.textOverflow,
+                metaOverflowX: meta.scrollWidth - meta.clientWidth,
+                titleOverflowX: title.scrollWidth - title.clientWidth,
+              }
+            })
+            return {
+              panelLeft: panelRect.left,
+              panelRight: panelRect.right,
+              panelWidth: panelRect.width,
+              viewportWidth: window.innerWidth,
+              itemRects,
+            }
+          })
+          assert.ok((helpVisual.panelLeft) >= 0)
+          assert.ok((helpVisual.panelRight) <= helpVisual.viewportWidth)
+          assert.ok(helpVisual.panelWidth > (width <= 320 ? 280 : 300))
+          for (const item of helpVisual.itemRects) {
+            assert.equal(item.display, "grid")
+            assert.notEqual(item.gridTemplateColumns, "none")
+            assert.ok((item.metaText.trim().length) > 12)
+            assert.notEqual(item.metaWhiteSpace, "nowrap")
+            assert.notEqual(item.metaTextOverflow, "ellipsis")
+            assert.ok((item.itemLeft) >= helpVisual.panelLeft)
+            assert.ok((item.itemRight) <= helpVisual.panelRight)
+            assert.ok((item.titleLeft) >= item.itemLeft)
+            assert.ok((item.metaRight) <= item.itemRight)
+            assert.ok((item.titleRight) <= item.metaLeft)
+            assert.ok((item.metaHeight) > 10)
+            assert.ok((item.metaOverflowX) <= 1)
+            assert.ok((item.titleOverflowX) <= 1)
+          }
           await page.click('[data-testid="titlebar-help-docs"]')
           await page.waitForFunction(() => (window as any).__helpOpenUrls.length === 1)
           await page.click('[data-menu-trigger="help"]')
@@ -297,7 +379,7 @@ test(
           )
           const openedUrls = await page.evaluate(() => (window as any).__helpOpenUrls as string[])
           const localePrefix = locale === "zh-CN" ? "/docs/zh-cn/" : "/docs/"
-          expect(openedUrls).toEqual([
+          assert.deepEqual(openedUrls, [
             `https://opencorvus.ai${localePrefix}start/quickstart/`,
             `https://opencorvus.ai${localePrefix}reference/sdk/`,
           ])
@@ -344,19 +426,19 @@ test(
         await page.goto(`http://127.0.0.1:${server.port}/ui/index.html`, { waitUntil: "load" })
         await page.waitForSelector('[data-menu-trigger="workspace"]', { visible: true })
         const setupCount = await page.$$eval('[data-testid="titlebar-setup-cta"]', (nodes) => nodes.length)
-        expect(setupCount).toBe(0)
+        assert.equal(setupCount, 0)
         const workspaceBounds = await page.$eval('[data-menu-trigger="workspace"]', (node) => {
           const rect = node.getBoundingClientRect()
           return { left: rect.left, right: rect.right, width: rect.width }
         })
-        expect(workspaceBounds.left).toBeGreaterThanOrEqual(0)
-        expect(workspaceBounds.right).toBeLessThanOrEqual(width)
-        expect(workspaceBounds.width).toBeGreaterThan(16)
+        assert.ok((workspaceBounds.left) >= 0)
+        assert.ok((workspaceBounds.right) <= width)
+        assert.ok((workspaceBounds.width) > 16)
         await page.close()
       }
     } finally {
       await browser.close().catch(() => undefined)
-      server.stop(true)
+      await server.close()
     }
   },
   { timeout: 120_000 },
@@ -365,10 +447,9 @@ test(
 test(
   "titlebar menubar uses theme-adaptive text color and supports Alt access keys",
   async () => {
-    const server = Bun.serve({
-      idleTimeout: 255,
-      port: 0,
-      async fetch(req) {
+    assert.equal(process.env.OPENCORVUS_OVERLAY_BROWSER_TEST_NODE_RUNNER, "1")
+    assert.equal(typeof globalThis.Bun, "undefined")
+    const server = await startBrowserFixture(async (req) => {
         const url = new URL(req.url)
         const path = route(url)
         if (path === "/favicon.ico" || path === "/ui/favicon.ico") return new Response(null, { status: 204 })
@@ -406,7 +487,6 @@ test(
         if (path === "/panel/knowledge/preference") return send([])
         if (path === "/log" && req.method === "POST") return send({ ok: true })
         return new Response(`unhandled ${req.method} ${url.pathname}`, { status: 404 })
-      },
     })
 
     const browser = await launchBrowser(["--disable-dev-shm-usage"])
@@ -450,7 +530,7 @@ test(
       await page.goto(`http://127.0.0.1:${server.port}/ui/index.html`, { waitUntil: "load" })
       await page.waitForSelector('[data-menu-trigger="workspace"]', { visible: true })
       await page.waitForFunction(() => document.documentElement.dataset.theme === "vscode-dark")
-      expect(await page.evaluate(() => localStorage.getItem("oc_theme"))).toBe("vscode-dark")
+      assert.equal(await page.evaluate(() => localStorage.getItem("oc_theme")), "vscode-dark")
 
       const shellBackgrounds = await page.evaluate(() => {
         const sidebar = getComputedStyle(document.querySelector<HTMLElement>(".sidebar")!).backgroundColor
@@ -458,9 +538,9 @@ test(
         const panelBody = getComputedStyle(document.querySelector<HTMLElement>("#panelBody")!).backgroundColor
         return { sidebar, sections, panelBody }
       })
-      expect(shellBackgrounds.sidebar).not.toBe("rgba(0, 0, 0, 0)")
-      expect(shellBackgrounds.sections).not.toBe("rgba(0, 0, 0, 0)")
-      expect(shellBackgrounds.panelBody).not.toBe("rgba(0, 0, 0, 0)")
+      assert.notEqual(shellBackgrounds.sidebar, "rgba(0, 0, 0, 0)")
+      assert.notEqual(shellBackgrounds.sections, "rgba(0, 0, 0, 0)")
+      assert.notEqual(shellBackgrounds.panelBody, "rgba(0, 0, 0, 0)")
 
       const vscodeDarkTriggerState = await page.$eval('[data-menu-trigger="workspace"]', (node) => {
         const el = node as HTMLElement
@@ -470,7 +550,7 @@ test(
           ariaKeyshortcuts: el.getAttribute("aria-keyshortcuts"),
         }
       })
-      expect(vscodeDarkTriggerState).toEqual({
+      assert.deepEqual(vscodeDarkTriggerState, {
         color: "rgb(212, 212, 212)",
         accessKey: "p",
         ariaKeyshortcuts: "Alt+P",
@@ -484,7 +564,7 @@ test(
         '[data-menu-trigger="workspace"]',
         (node) => getComputedStyle(node as HTMLElement).color,
       )
-      expect(darkTriggerColor).toBe("rgb(232, 236, 241)")
+      assert.equal(darkTriggerColor, "rgb(232, 236, 241)")
 
       await page.keyboard.down("Alt")
       await page.keyboard.up("Alt")
@@ -496,18 +576,18 @@ test(
       await page.keyboard.press("v")
       await page.keyboard.up("Alt")
       await page.waitForSelector('[data-testid="titlebar-menu-view"]', { visible: true })
-      expect(await page.$('[data-testid="titlebar-theme-vscode-dark"]')).not.toBeNull()
+      assert.notEqual(await page.$('[data-testid="titlebar-theme-vscode-dark"]'), null)
       const altOpenState = await page.evaluate(() => ({
         expanded: document.querySelector('[data-menu-trigger="view"]')?.getAttribute("aria-expanded"),
         focusedMenuText: (document.activeElement as HTMLElement | null)?.textContent?.trim() || "",
       }))
-      expect(altOpenState.expanded).toBe("true")
-      expect(altOpenState.focusedMenuText).toContain("Language")
+      assert.equal(altOpenState.expanded, "true")
+      assert.ok((altOpenState.focusedMenuText).includes("Language"))
 
       await page.close()
     } finally {
       await browser.close().catch(() => undefined)
-      server.stop(true)
+      await server.close()
     }
   },
   { timeout: 120_000 },
@@ -516,10 +596,9 @@ test(
 test(
   "workspace intro owns first-run directory setup when no directory is set",
   async () => {
-    const server = Bun.serve({
-      idleTimeout: 255,
-      port: 0,
-      async fetch(req) {
+    assert.equal(process.env.OPENCORVUS_OVERLAY_BROWSER_TEST_NODE_RUNNER, "1")
+    assert.equal(typeof globalThis.Bun, "undefined")
+    const server = await startBrowserFixture(async (req) => {
         const url = new URL(req.url)
         const path = route(url)
         if (path === "/favicon.ico" || path === "/ui/favicon.ico") return new Response(null, { status: 204 })
@@ -530,7 +609,6 @@ test(
         if (path === "/global/health") return send({ version: "1.2.3" })
         if (path === "/log" && req.method === "POST") return send({ ok: true })
         return new Response(`unhandled ${req.method} ${url.pathname}`, { status: 404 })
-      },
     })
 
     const browser = await launchBrowser(["--disable-dev-shm-usage"])
@@ -601,14 +679,14 @@ test(
           pickDirInvokes: startupInvokes.filter((value) => value === "overlay_pick_dir").length,
         }
       })
-      expect(intro.hasStartup).toBe(true)
-      expect(intro.pickDirInvokes).toBe(0)
-      expect(intro.openFolderText).toContain("Open Local Directory")
-      expect(intro.hasCreateDirectory).toBe(false)
-      expect(intro.title).toContain("Open a workspace directory")
-      expect(intro.brandWordmark).toBe("OpenCorvus")
-      expect(intro.brandLabel).toBe("Workspace")
-      expect(intro.rightActivities).toEqual([
+      assert.equal(intro.hasStartup, true)
+      assert.equal(intro.pickDirInvokes, 0)
+      assert.ok((intro.openFolderText).includes("Open Local Directory"))
+      assert.equal(intro.hasCreateDirectory, false)
+      assert.ok((intro.title).includes("Open a workspace directory"))
+      assert.equal(intro.brandWordmark, "OpenCorvus")
+      assert.equal(intro.brandLabel, "Workspace")
+      assert.deepEqual(intro.rightActivities, [
         { activity: "workflow", active: "true" },
         { activity: "inspector", active: "false" },
         { activity: "explorer", active: "false" },
@@ -619,7 +697,7 @@ test(
       await page.close()
     } finally {
       await browser.close().catch(() => undefined)
-      server.stop(true)
+      await server.close()
     }
   },
   { timeout: 60_000 },
@@ -628,10 +706,9 @@ test(
 test(
   "project menu close clears the current project and opens onboarding",
   async () => {
-    const server = Bun.serve({
-      idleTimeout: 255,
-      port: 0,
-      async fetch(req) {
+    assert.equal(process.env.OPENCORVUS_OVERLAY_BROWSER_TEST_NODE_RUNNER, "1")
+    assert.equal(typeof globalThis.Bun, "undefined")
+    const server = await startBrowserFixture(async (req) => {
         const url = new URL(req.url)
         const path = route(url)
         if (path === "/favicon.ico" || path === "/ui/favicon.ico") return new Response(null, { status: 204 })
@@ -669,7 +746,6 @@ test(
         if (path === "/panel/knowledge/preference") return send([])
         if (path === "/log" && req.method === "POST") return send({ ok: true })
         return new Response(`unhandled ${req.method} ${url.pathname}`, { status: 404 })
-      },
     })
 
     const browser = await launchBrowser(["--disable-dev-shm-usage"])
@@ -740,20 +816,20 @@ test(
         }
       })
 
-      expect(state.directory).toBe("")
-      expect(state.savedDirectory).toBe("")
-      expect(state.selectedSource).toBeNull()
-      expect(state.tasks).toBe(0)
-      expect(state.pendingTasks).toBe(0)
-      expect(state.path).toBeNull()
-      expect(state.vcs).toBeNull()
-      expect(state.config).toBeNull()
-      expect(state.recent).toContain("D:/overlay/workspace/app")
-      expect(state.persistedDirectory).toBeNull()
+      assert.equal(state.directory, "")
+      assert.equal(state.savedDirectory, "")
+      assert.equal(state.selectedSource, null)
+      assert.equal(state.tasks, 0)
+      assert.equal(state.pendingTasks, 0)
+      assert.equal(state.path, null)
+      assert.equal(state.vcs, null)
+      assert.equal(state.config, null)
+      assert.ok((state.recent).includes("D:/overlay/workspace/app"))
+      assert.equal(state.persistedDirectory, null)
       await page.close()
     } finally {
       await browser.close().catch(() => undefined)
-      server.stop(true)
+      await server.close()
     }
   },
   { timeout: 60_000 },
@@ -762,10 +838,9 @@ test(
 test(
   "column resizers allow broad widths without wide visual dividers",
   async () => {
-    const server = Bun.serve({
-      idleTimeout: 255,
-      port: 0,
-      async fetch(req) {
+    assert.equal(process.env.OPENCORVUS_OVERLAY_BROWSER_TEST_NODE_RUNNER, "1")
+    assert.equal(typeof globalThis.Bun, "undefined")
+    const server = await startBrowserFixture(async (req) => {
         const url = new URL(req.url)
         const path = route(url)
         if (path === "/favicon.ico" || path === "/ui/favicon.ico") return new Response(null, { status: 204 })
@@ -803,7 +878,6 @@ test(
         if (path === "/panel/knowledge/preference") return send([])
         if (path === "/log" && req.method === "POST") return send({ ok: true })
         return new Response(`unhandled ${req.method} ${url.pathname}`, { status: 404 })
-      },
     })
 
     const browser = await launchBrowser(["--disable-dev-shm-usage"])
@@ -880,19 +954,31 @@ test(
           rightPaneResizerExists: !!document.querySelector("#rightPaneResizer"),
         }
       })
-      expect(initial.panelGap).toBe("0px")
-      expect(initial.panelPaddingTop).toBe("0px")
-      expect(initial.panelPaddingRight).toBe("0px")
-      expect(initial.panelPaddingBottom).toBe("0px")
-      expect(initial.panelPaddingLeft).toBe("0px")
-      expect(initial.workspaceGap).toBe("0px")
-      expect(initial.leftDivider).toBeLessThanOrEqual(2)
-      expect(initial.rightDivider).toBeLessThanOrEqual(2)
-      expect(Math.abs(initial.leftDivider - initial.rightDivider)).toBeLessThanOrEqual(1)
-      expect(initial.workbenchStartsAtWorkspace).toBe(true)
-      expect(initial.leftHandleWidth).toBeLessThanOrEqual(2)
-      expect(initial.rightToolbarWidth).toBeGreaterThan(32)
-      expect(initial.rightPaneResizerExists).toBe(false)
+      assert.equal(initial.panelGap, "0px")
+      assert.equal(initial.panelPaddingTop, "0px")
+      assert.equal(initial.panelPaddingRight, "0px")
+      assert.equal(initial.panelPaddingBottom, "0px")
+      assert.equal(initial.panelPaddingLeft, "0px")
+      assert.equal(initial.workspaceGap, "0px")
+      assert.ok((initial.leftDivider) <= 2)
+      assert.ok((initial.rightDivider) <= 2)
+      assert.ok((Math.abs(initial.leftDivider - initial.rightDivider)) <= 1)
+      assert.equal(initial.workbenchStartsAtWorkspace, true)
+      assert.ok((initial.leftHandleWidth) <= 2)
+      assert.ok((initial.rightToolbarWidth) > 32)
+      assert.equal(initial.rightPaneResizerExists, false)
+
+      const projectChromeHeights = await page.evaluate(() => {
+        const selectors = [".task-cwd-dropdown", '[data-ui="project-worktree-dropdown"]']
+        return selectors.map((selector) => {
+          const node = document.querySelector<HTMLElement>(selector)
+          if (!node) return { selector, missing: true, height: 0 }
+          const rect = node.getBoundingClientRect()
+          return { selector, missing: false, height: Math.round(rect.height) }
+        })
+      })
+      assert.equal(projectChromeHeights.every((item) => !item.missing), true)
+      assert.equal(new Set(projectChromeHeights.map((item) => item.height)).size, 1)
 
       const controlsWithMargins = await page.evaluate(() => {
         const selectors = [
@@ -916,7 +1002,7 @@ test(
           return margins.every((value) => value === "0px") ? [] : [{ selector, margins }]
         })
       })
-      expect(controlsWithMargins).toEqual([])
+      assert.deepEqual(controlsWithMargins, [])
 
       const looseControlSpacing = await page.evaluate(() => {
         const checks = [
@@ -959,7 +1045,7 @@ test(
           })
         })
       })
-      expect(looseControlSpacing).toEqual([])
+      assert.deepEqual(looseControlSpacing, [])
 
       const controlsWithBorders = await page.evaluate(() => {
         const selectors = [
@@ -982,7 +1068,7 @@ test(
           })
         })
       })
-      expect(controlsWithBorders).toEqual([])
+      assert.deepEqual(controlsWithBorders, [])
 
       const looseRightPanelSpacing = await page.evaluate(() => {
         const checks = [
@@ -1040,7 +1126,7 @@ test(
           })
         })
       })
-      expect(looseRightPanelSpacing).toEqual([])
+      assert.deepEqual(looseRightPanelSpacing, [])
 
       const rightPanelDecorativeBorders = await page.evaluate(() => {
         const selectors = [
@@ -1067,7 +1153,7 @@ test(
           })
         })
       })
-      expect(rightPanelDecorativeBorders).toEqual([])
+      assert.deepEqual(rightPanelDecorativeBorders, [])
 
       const nonPrimaryControlsWithBackgrounds = await page.evaluate(() => {
         const selectors = [
@@ -1091,7 +1177,7 @@ test(
             : [{ selector, backgroundColor: style.backgroundColor, backgroundImage: style.backgroundImage }]
         })
       })
-      expect(nonPrimaryControlsWithBackgrounds).toEqual([])
+      assert.deepEqual(nonPrimaryControlsWithBackgrounds, [])
 
       await page.click('[data-ui="side-activity-button"][data-side="right"][data-activity="inspector"]')
 
@@ -1120,16 +1206,16 @@ test(
         }
       })
 
-      expect(afterInspectorOpen.sections).toBeGreaterThan(300)
-      expect(Math.abs(afterInspectorOpen.sections - afterInspectorOpen.chat)).toBeLessThanOrEqual(2)
-      expect(afterInspectorOpen.leftDivider).toBeLessThanOrEqual(2)
-      expect(afterInspectorOpen.rightDivider).toBeLessThanOrEqual(2)
-      expect(Math.abs(afterInspectorOpen.leftDivider - afterInspectorOpen.rightDivider)).toBeLessThanOrEqual(1)
-      expect(afterInspectorOpen.workbenchStartsAtWorkspace).toBe(true)
-      expect(afterInspectorOpen.centerInspectorActive).toBe("true")
-      expect(afterInspectorOpen.inspectorButtonActive).toBe("true")
-      expect(afterInspectorOpen.leftHandleWidth).toBeLessThanOrEqual(2)
-      expect(afterInspectorOpen.rightPaneResizerExists).toBe(false)
+      assert.ok((afterInspectorOpen.sections) > 300)
+      assert.ok((Math.abs(afterInspectorOpen.sections - afterInspectorOpen.chat)) <= 2)
+      assert.ok((afterInspectorOpen.leftDivider) <= 2)
+      assert.ok((afterInspectorOpen.rightDivider) <= 2)
+      assert.ok((Math.abs(afterInspectorOpen.leftDivider - afterInspectorOpen.rightDivider)) <= 1)
+      assert.equal(afterInspectorOpen.workbenchStartsAtWorkspace, true)
+      assert.equal(afterInspectorOpen.centerInspectorActive, "true")
+      assert.equal(afterInspectorOpen.inspectorButtonActive, "true")
+      assert.ok((afterInspectorOpen.leftHandleWidth) <= 2)
+      assert.equal(afterInspectorOpen.rightPaneResizerExists, false)
 
       await page.evaluate(() => {
         localStorage.removeItem("oc_sidebar_width")
@@ -1167,17 +1253,17 @@ test(
           rightPaneResizerExists: !!document.querySelector("#rightPaneResizer"),
         }
       })
-      expect(afterLeftDrag.sidebar).toBeGreaterThan(600)
-      expect(afterLeftDrag.chat).toBeGreaterThan(300)
-      expect(afterLeftDrag.leftDivider).toBeLessThanOrEqual(2)
-      expect(afterLeftDrag.rightDivider).toBeLessThanOrEqual(2)
-      expect(Math.abs(afterLeftDrag.leftDivider - afterLeftDrag.rightDivider)).toBeLessThanOrEqual(1)
-      expect(afterLeftDrag.leftHandleWidth).toBeLessThanOrEqual(2)
-      expect(afterLeftDrag.rightPaneResizerExists).toBe(false)
+      assert.ok((afterLeftDrag.sidebar) > 600)
+      assert.ok((afterLeftDrag.chat) > 300)
+      assert.ok((afterLeftDrag.leftDivider) <= 2)
+      assert.ok((afterLeftDrag.rightDivider) <= 2)
+      assert.ok((Math.abs(afterLeftDrag.leftDivider - afterLeftDrag.rightDivider)) <= 1)
+      assert.ok((afterLeftDrag.leftHandleWidth) <= 2)
+      assert.equal(afterLeftDrag.rightPaneResizerExists, false)
       await page.close()
     } finally {
       await browser.close().catch(() => undefined)
-      server.stop(true)
+      await server.close()
     }
   },
   { timeout: 60_000 },
