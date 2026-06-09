@@ -1,7 +1,12 @@
-import { expect, test } from "bun:test"
+import assert from "node:assert/strict"
 import { readFileSync } from "node:fs"
-import { join } from "node:path"
-import { launchBrowser } from "./launch"
+import { dirname, join, resolve } from "node:path"
+import test from "node:test"
+import { fileURLToPath } from "node:url"
+
+import { launchBrowser } from "../launch.ts"
+
+const OVERLAY_ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "../..")
 
 function cssRule(css: string, pattern: RegExp, label: string): string {
   const match = css.match(pattern)?.[0]
@@ -12,9 +17,12 @@ function cssRule(css: string, pattern: RegExp, label: string): string {
 test(
   "browser keeps a long transcript pinned without dynamic scrollbar resizing",
   async () => {
-    const conversationCss = readFileSync(join(import.meta.dir, "../src/styles/surfaces/conversation.css"), "utf8")
-    const bubbleCss = readFileSync(join(import.meta.dir, "../src/styles/surfaces/chat-bubble.css"), "utf8")
-    const cardCss = readFileSync(join(import.meta.dir, "../src/styles/surfaces/card.css"), "utf8")
+    assert.equal(process.env.OPENCORVUS_OVERLAY_BROWSER_TEST_NODE_RUNNER, "1")
+    assert.equal(typeof globalThis.Bun, "undefined")
+
+    const conversationCss = readFileSync(join(OVERLAY_ROOT, "src/styles/surfaces/conversation.css"), "utf8")
+    const bubbleCss = readFileSync(join(OVERLAY_ROOT, "src/styles/surfaces/chat-bubble.css"), "utf8")
+    const cardCss = readFileSync(join(OVERLAY_ROOT, "src/styles/surfaces/card.css"), "utf8")
     const structuredCardRule = cssRule(
       conversationCss,
       /\.conversation-virtual-item > \.card,\s*\.conversation-virtual-item > \.interaction-card\s*\{[^}]*\}/,
@@ -162,20 +170,20 @@ test(
         }
       })
 
-      expect(metrics.topCardContentVisibility).toBe("visible")
-      expect(metrics.bubbleRowContentVisibility).toBe("visible")
-      expect(metrics.nestedCardContentVisibility).toBe("visible")
-      expect(metrics.sampledHeights).toEqual([
+      assert.equal(metrics.topCardContentVisibility, "visible")
+      assert.equal(metrics.bubbleRowContentVisibility, "visible")
+      assert.equal(metrics.nestedCardContentVisibility, "visible")
+      assert.deepEqual(metrics.sampledHeights, [
         metrics.stableScrollHeight,
         metrics.stableScrollHeight,
         metrics.stableScrollHeight,
         metrics.stableScrollHeight,
         metrics.stableScrollHeight,
       ])
-      expect(metrics.minTop).toBeGreaterThanOrEqual(metrics.initialTop)
-      expect(metrics.maxDistance).toBeLessThanOrEqual(2)
-      expect(metrics.finalDistance).toBeLessThanOrEqual(2)
-      expect(metrics.finalTop).toBeGreaterThanOrEqual(metrics.initialTop)
+      assert.ok(metrics.minTop >= metrics.initialTop, `expected ${metrics.minTop} >= ${metrics.initialTop}`)
+      assert.ok(metrics.maxDistance <= 2, `expected max distance <= 2, got ${metrics.maxDistance}`)
+      assert.ok(metrics.finalDistance <= 2, `expected final distance <= 2, got ${metrics.finalDistance}`)
+      assert.ok(metrics.finalTop >= metrics.initialTop, `expected ${metrics.finalTop} >= ${metrics.initialTop}`)
 
       await page.close()
     } finally {
@@ -188,6 +196,9 @@ test(
 test(
   "browser preserves the visible anchor while older history prepends",
   async () => {
+    assert.equal(process.env.OPENCORVUS_OVERLAY_BROWSER_TEST_NODE_RUNNER, "1")
+    assert.equal(typeof globalThis.Bun, "undefined")
+
     const browser = await launchBrowser(["--disable-dev-shm-usage"])
     try {
       const page = await browser.newPage()
@@ -289,9 +300,15 @@ test(
         }
       })
 
-      expect(metrics.anchorID).toMatch(/^msg-\d+$/)
-      expect(metrics.shiftedTop).toBeGreaterThan(metrics.beforeTop + 100)
-      expect(Math.abs(metrics.afterTop - metrics.beforeTop)).toBeLessThanOrEqual(1)
+      assert.match(metrics.anchorID, /^msg-\d+$/)
+      assert.ok(
+        metrics.shiftedTop > metrics.beforeTop + 100,
+        `expected shifted top ${metrics.shiftedTop} > ${metrics.beforeTop + 100}`,
+      )
+      assert.ok(
+        Math.abs(metrics.afterTop - metrics.beforeTop) <= 1,
+        `expected anchor delta <= 1, got ${Math.abs(metrics.afterTop - metrics.beforeTop)}`,
+      )
 
       await page.close()
     } finally {
