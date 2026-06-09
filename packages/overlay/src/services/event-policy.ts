@@ -31,9 +31,14 @@ const TREE_WRITER_NOOP_TYPES = new Set([
   "installation.updated",
   "installation.update-available",
   "project.updated",
+  "pty.created",
+  "pty.updated",
+  "pty.exited",
+  "pty.deleted",
   "lsp.client.diagnostics",
   "lsp.updated",
   "mcp.tools.changed",
+  "mcp.auth.required",
   "mcp.browser.open.failed",
   "mcp.prompts.changed",
   "mcp.resources.changed",
@@ -49,10 +54,6 @@ const TREE_WRITER_NOOP_TYPES = new Set([
   "workspace.ready",
   "workspace.failed",
   "todo.updated",
-  "tui.prompt.append",
-  "tui.command.execute",
-  "tui.toast.show",
-  "tui.session.select",
   // Integrity `started` / `progress` / `completed` are NOT noop —
   // started/progress promote a running integrity card, and completed upserts
   // it with the structured verdict. Handled by tree-writer's `handleIntegrity*`

@@ -9,7 +9,7 @@ OpenCorvus's job: **turn a natural-language request into verified code changes, 
 The HTTP server (`packages/opencorvus/src/server/server.ts`) splits routes into two real layers:
 
 - **Control plane** — `/global/*`, `/auth/*`, `/ui/*`, plus `/log`, `/shutdown`, `/restart` are mounted before the `Instance.provide` middleware. They work even when no project directory is open. Use these for health checks, server lifecycle, and authentication.
-- **Instance-scoped** — every other route (`/session`, `/task`, `/run`, `/mcp`, `/tui`, `/experimental`, `/panel`, …) runs inside `Instance.provide({ directory, init: InstanceBootstrap })`. They require a project directory (resolved from `?directory=` query or `x-opencorvus-directory` header).
+- **Instance-scoped** — every other route (`/session`, `/task`, `/run`, `/mcp`, `/experimental`, `/panel`, `/pty`, …) runs inside `Instance.provide({ directory, init: InstanceBootstrap })`. They require a project directory (resolved from `?directory=` query or `x-opencorvus-directory` header).
 
 Route handlers themselves do not read `process.env`, do not call `Database.use(...)`, do not open SQL tables directly, and do not use `z.any()`. The boundary is enforced by `bun run api:routes-check`; the bilingual API reference is regenerated from OpenAPI by `bun run docs:api` / `docs:check`.
 
@@ -22,8 +22,8 @@ External channel → ChannelIngress.message       channel/ingress.ts
                   otherwise enters ControlMessage
 
 Local user     → ControlMessage.handle           control/message.ts
- (overlay /      Short-lived "control" session (not an engine_task);
-  TUI)           outputs JSON actions via PanelCapabilityRegistry allowlist
+ (overlay)       Short-lived "control" session (not an engine_task);
+                 outputs JSON actions via PanelCapabilityRegistry allowlist
                  (create_task / send_task_message / reply_interaction /
                   cancel_task / retry_task / …)
 ```

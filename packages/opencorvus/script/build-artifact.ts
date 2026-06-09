@@ -9,9 +9,9 @@ export function artifactPackageBaseName(pkgName: string, flavor: BuildFlavor): s
   return pkgName
 }
 
-export function artifactEntrypoints(flavor: BuildFlavor, parserWorker: string, workerPath: string): string[] {
+export function artifactEntrypoints(flavor: BuildFlavor): string[] {
   if (flavor === "overlay-server") return ["./src/overlay-launcher.ts"]
-  return ["./src/launcher.ts", parserWorker, workerPath]
+  return ["./src/launcher.ts"]
 }
 
 export function artifactExternalModules(): string[] {
@@ -26,6 +26,11 @@ export function artifactExternalModules(): string[] {
     "playwright",
     "playwright-core",
     "chromium-bidi",
+    // AWS SDK credential providers contain dynamic credential-chain imports
+    // that Bun can rewrite into missing intermediate chunks during bundling.
+    // Keep the credential chain in packaged node_modules just like browser and
+    // native runtime dependencies.
+    "@aws-sdk/credential-providers",
     // Native Node packages must resolve from the executable directory's
     // co-located node_modules tree. Bun compile cannot make their platform
     // .node files available through normal package resolution by itself.
@@ -81,6 +86,7 @@ export function artifactRuntimeNodeModules(target: ArtifactNodeRuntimeTarget): A
     { name: "playwright" },
     { name: "playwright-core" },
     { name: "chromium-bidi" },
+    { name: "@aws-sdk/credential-providers" },
     { name: "@lydell/node-pty", runtimeDependencies: [nodePtyNativePackageName(target)] },
     { name: "sharp", runtimeDependencies: sharpNativePackageNames(target) },
     { name: "@parcel/watcher", runtimeDependencies: [parcelWatcherNativePackageName(target)] },

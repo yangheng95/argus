@@ -170,8 +170,7 @@ bun install && bun run build && bun run start
 ```bash
 cd packages/opencorvus
 DASHSCOPE_API_KEY=sk-... OPENCORVUS_CHANNEL=local \
-  bun run --preload @opentui/solid/preload --conditions=browser \
-  src/index.ts serve --port 7878
+  bun src/index.ts serve --port 7878
 ```
 
 然后另开终端跑 `bun run script/eval-e2e.ts`。Server 必须带 `DASHSCOPE_API_KEY`，否则 executor 返回空响应，所有任务 <10s 失败。

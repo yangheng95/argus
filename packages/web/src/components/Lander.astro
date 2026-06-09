@@ -3,7 +3,7 @@ import { Image } from 'astro:assets';
 import { getRelativeLocaleUrl } from 'astro:i18n';
 import config from "virtual:starlight/user-config";
 
-import TuiScreenshot from "../assets/lander/screenshot-splash.png";
+import OverlayScreenshot from "../assets/lander/screenshot-splash.png";
 
 const { data } = Astro.locals.starlightRoute.entry;
 const { title = data.title, image } = data.hero || {};
@@ -62,7 +62,7 @@ if (image) {
 
     <section class="content">
       <ul>
-        <li><b>{t('app.lander.features.native_tui.title')}</b>: {t('app.lander.features.native_tui.description')}</li>
+        <li><b>{t('app.lander.features.overlay.title')}</b>: {t('app.lander.features.overlay.description')}</li>
         <li><b>{t('app.lander.features.lsp_enabled.title')}</b>: {t('app.lander.features.lsp_enabled.description')}</li>
         <li><b>{t('app.lander.features.multi_session.title')}</b>: {t('app.lander.features.multi_session.description')}</li>
         <li><b>{t('app.lander.features.use_any_model.title')}</b>: {t('app.lander.features.use_any_model.prefix')} <a href="https://models.dev">Models.dev</a>, {t('app.lander.features.use_any_model.suffix')}</li>
@@ -72,9 +72,9 @@ if (image) {
     <section class="images">
       <div class="solo">
         <figure>
-          <figcaption>{t('app.lander.images.tui.caption')}</figcaption>
+          <figcaption>{t('app.lander.images.overlay.caption')}</figcaption>
           <a href={docsCliHref}>
-            <Image src={TuiScreenshot} alt={t('app.lander.images.tui.alt')} />
+            <Image src={OverlayScreenshot} alt={t('app.lander.images.overlay.alt')} />
           </a>
         </figure>
       </div>

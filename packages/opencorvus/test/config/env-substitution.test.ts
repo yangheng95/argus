@@ -18,8 +18,7 @@ Log.init({ print: false })
  *     naming the variable.
  *   - `value === ""` (EXPLICITLY-EMPTY) is honoured — operator
  *     intent.
- *   - missing="empty" mode keeps the silent-empty fallback for
- *     callers that want it (tui.ts uses this).
+ *   - missing="empty" mode keeps the silent-empty fallback for callers that explicitly request it.
  */
 
 describe("ConfigPaths {env:VAR} substitution (audit W2-V23)", () => {
@@ -72,7 +71,7 @@ describe("ConfigPaths {env:VAR} substitution (audit W2-V23)", () => {
     throw new Error("expected throw")
   })
 
-  test("UNSET env var in 'empty' mode falls back to '' silently (back-compat for tui.ts)", async () => {
+  test("UNSET env var in 'empty' mode falls back to '' silently", async () => {
     const json = await ConfigPaths.parseText(`{"x": "{env:W2_V23_MISSING}"}`, fakeSource(), "empty")
     expect(json).toEqual({ x: "" })
   })

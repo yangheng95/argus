@@ -75,21 +75,11 @@ task.completed | task.failed | task.cancelled
 | `POST /task/<id>/replan`  | 丢弃当前 plan，重新规划   |
 | `POST /task/<id>/cancel`  | 取消任务                  |
 
-## 6. 本地 TUI（交互模式）
-
-不想走 HTTP 也可以：
-
-```bash
-opencorvus
-```
-
-会进入 TUI：直接输入任务 → 实时看到 requirements / architect / build / acceptance 滚动。
-
-## 7. Workspace 与 terminal
+## 6. Workspace 与 terminal
 
 Overlay 的 Workspace 面板可以在你配置的**系统终端**里打开当前 worktree（替代了旧的嵌入 PTY，commit `6edd471a3`）。在 `opencorvus.jsonc` 配置 `terminal` profile 后，点击 Workspace 卡的"打开终端"按钮即按 profile 启动 Windows Terminal / iTerm / GNOME Terminal 等。详见 [配置](../opencorvus/configuration.md#terminal)。
 
-## 8. 通过 Slack 创建任务
+## 7. 通过 Slack 创建任务
 
 ```bash
 export SLACK_BOT_TOKEN=xoxb-...

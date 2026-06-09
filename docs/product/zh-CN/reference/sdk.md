@@ -67,7 +67,6 @@ await server.close() // server 句柄上的 close() 关闭进程
 | `client.permission.*`            | `/permission/*`                    |
 | `client.skill.*`                 | `/skill/*`                         |
 | `client.executor.*`              | `/executor/*`                      |
-| `client.tui.runtime.*`           | `/tui/runtime/*`                   |
 
 ## 事件订阅
 

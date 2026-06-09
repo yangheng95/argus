@@ -10,7 +10,6 @@ import {
 import { Identifier } from "@/id/id"
 import { Instance, lazyInstanceState } from "@/project/instance"
 import { requireRuntimePackage, runtimePackageRequire } from "@/runtime/package-require"
-import { Tui } from "@/tui"
 
 const MAX_BUFFER_BYTES = 1_000_000
 const BUFFER_CHUNK = 64 * 1024
@@ -70,7 +69,7 @@ interface HostProcess {
 interface HostSession {
   id: string
   title: string
-  command: Tui.EmbeddedCommand
+  command: PtyPreparedCommand
   process: HostProcess | null
   status: HostStatus
   cols: number
@@ -85,6 +84,17 @@ interface HostSession {
   updatedAt: number
 }
 
+export interface PtyPreparedCommand {
+  command: string
+  args: string[]
+  cwd: string
+  directory: string
+  url?: string
+  port?: number
+  hostname?: string
+  env?: Record<string, string>
+}
+
 const state = lazyInstanceState(
   () => ({
     sessions: new Map<string, HostSession>(),
@@ -92,7 +102,7 @@ const state = lazyInstanceState(
   }),
   async (s) => {
     for (const session of s.sessions.values()) {
-      closeSession(session, "TUI host stopped")
+      closeSession(session, "PTY host stopped")
     }
     s.sessions.clear()
     s.primaryID = null
@@ -200,7 +210,7 @@ function closeSession(session: HostSession, reason: string) {
 }
 
 function hostExitReason(exitCode: number | null) {
-  return exitCode === null ? "TUI host exited" : `TUI host exited with code ${exitCode}`
+  return exitCode === null ? "PTY host exited" : `PTY host exited with code ${exitCode}`
 }
 
 function assertSize(cols: number, rows: number) {
@@ -209,7 +219,7 @@ function assertSize(cols: number, rows: number) {
 }
 
 function directPtyProcess(input: {
-  command: Tui.EmbeddedCommand
+  command: PtyPreparedCommand
   cols: number
   rows: number
   env: Record<string, string>
@@ -252,13 +262,13 @@ async function resolvePtyNodeRuntime() {
   }
   if (isBunExecutable(process.execPath)) {
     return {
-      nodeExecutable: process.env.OPENCORVUS_TUI_PTY_NODE ?? browserNodeExecutableName(process.platform),
+      nodeExecutable: process.env.OPENCORVUS_PTY_NODE ?? browserNodeExecutableName(process.platform),
       cwd: process.cwd(),
       nodePtyRequirePath: runtimePackageRequire().resolve("@lydell/node-pty"),
     }
   }
   throw new Error(
-    `TUI PTY Node runtime is missing. Expected ${packaged.nodeExecutable} beside the opencorvus executable.`,
+    `PTY Node runtime is missing. Expected ${packaged.nodeExecutable} beside the opencorvus executable.`,
   )
 }
 
@@ -272,7 +282,7 @@ function bridgeMessage(child: ChildProcess, message: unknown) {
 }
 
 async function nodeBridgePtyProcess(input: {
-  command: Tui.EmbeddedCommand
+  command: PtyPreparedCommand
   cols: number
   rows: number
   env: Record<string, string>
@@ -368,7 +378,7 @@ async function nodeBridgePtyProcess(input: {
 }
 
 async function hostProcess(input: {
-  command: Tui.EmbeddedCommand
+  command: PtyPreparedCommand
   cols: number
   rows: number
   env: Record<string, string>
@@ -379,12 +389,12 @@ async function hostProcess(input: {
   return directPtyProcess(input)
 }
 
-async function spawnPrepared(input: { command: Tui.EmbeddedCommand; cols: number; rows: number; title?: string }) {
+async function spawnPrepared(input: { command: PtyPreparedCommand; cols: number; rows: number; title?: string }) {
   assertSize(input.cols, input.rows)
   const now = Date.now()
   const session: HostSession = {
     id: Identifier.ascending("pty"),
-    title: input.title ?? "OpenCorvus TUI",
+    title: input.title ?? "Pseudo Terminal",
     command: input.command,
     process: null,
     status: "running",
@@ -403,7 +413,7 @@ async function spawnPrepared(input: { command: Tui.EmbeddedCommand; cols: number
     Object.entries({
       ...process.env,
       ...input.command.env,
-      OPENCORVUS_TUI_HOST: "1",
+      OPENCORVUS_PTY_HOST: "1",
     }).filter((entry): entry is [string, string] => typeof entry[1] === "string"),
   )
   const proc = await hostProcess({
@@ -434,7 +444,7 @@ async function spawnPrepared(input: { command: Tui.EmbeddedCommand; cols: number
   return session
 }
 
-export namespace TuiHost {
+export namespace PtyHost {
   export type Info = ReturnType<typeof info>
   export type Snapshot = Info & { buffer: string }
   export type Output = ReturnType<typeof readOutput>
@@ -445,40 +455,8 @@ export namespace TuiHost {
     }
   }
 
-  export async function start(input: {
-    directory?: string
-    sessionID?: string
-    model?: string
-    agent?: string
-    prompt?: string
-    continue?: boolean
-    fork?: boolean
-    port?: number
-    hostname?: string
-    bin?: string
-    cols?: number
-    rows?: number
-  }) {
-    return startPrepared({
-      command: await Tui.resolveEmbeddedCommand({
-        directory: input.directory ?? Instance.directory,
-        sessionID: input.sessionID,
-        model: input.model,
-        agent: input.agent,
-        prompt: input.prompt,
-        continue: input.continue,
-        fork: input.fork,
-        port: input.port,
-        hostname: input.hostname,
-        bin: input.bin,
-      }),
-      cols: input.cols ?? 100,
-      rows: input.rows ?? 30,
-    })
-  }
-
   export async function startPrepared(input: {
-    command: Tui.EmbeddedCommand
+    command: PtyPreparedCommand
     cols?: number
     rows?: number
     title?: string
@@ -567,7 +545,7 @@ export namespace TuiHost {
 
   export function input(data: string) {
     const session = currentSession()
-    if (!session?.process || session.status !== "running") throw new Error("TUI host is not running")
+    if (!session?.process || session.status !== "running") throw new Error("PTY host is not running")
     session.process.write(data)
     session.updatedAt = Date.now()
     return true
@@ -576,7 +554,7 @@ export namespace TuiHost {
   export function resize(input: { cols: number; rows: number }) {
     assertSize(input.cols, input.rows)
     const session = currentSession()
-    if (!session?.process || session.status !== "running") throw new Error("TUI host is not running")
+    if (!session?.process || session.status !== "running") throw new Error("PTY host is not running")
     session.process.resize(input.cols, input.rows)
     session.cols = input.cols
     session.rows = input.rows
@@ -607,7 +585,7 @@ export namespace TuiHost {
     const s = state()
     const session = currentSession()
     if (!session) return true
-    closeSession(session, "TUI host stopped")
+    closeSession(session, "PTY host stopped")
     s.sessions.delete(session.id)
     if (s.primaryID === session.id) s.primaryID = Array.from(s.sessions.keys()).at(-1) ?? null
     return true

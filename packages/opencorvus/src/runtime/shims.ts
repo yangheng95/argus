@@ -3,7 +3,7 @@
 // so they are easy to audit and test.
 //
 // Side-effects that depend on runtime data (config parse results, server
-// startup, Flag namespace, TUI context) stay in their original modules.
+// startup, Flag namespace, runtime context) stay in their original modules.
 
 declare const OPENCORVUS_EMBEDDED_ENV: Record<string, string> | undefined
 

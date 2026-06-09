@@ -136,8 +136,7 @@ Historical baseline:
 ```bash
 cd packages/opencorvus
 DASHSCOPE_API_KEY=sk-... OPENCORVUS_CHANNEL=local \
-  bun run --preload @opentui/solid/preload --conditions=browser \
-  src/index.ts serve --port 7878
+  bun src/index.ts serve --port 7878
 ```
 
 Then `bun run script/eval-e2e.ts`.

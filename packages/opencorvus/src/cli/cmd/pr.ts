@@ -6,7 +6,7 @@ import { $ } from "bun"
 
 export const PrCommand = cmd({
   command: "pr <number>",
-  describe: "fetch and checkout a GitHub PR branch, then run opencorvus",
+  describe: "fetch and checkout a GitHub PR branch",
   builder: (yargs) =>
     yargs.positional("number", {
       type: "number",
@@ -87,22 +87,7 @@ export const PrCommand = cmd({
         }
 
         UI.println(`Successfully checked out PR #${prNumber} as branch '${localBranchName}'`)
-        UI.println()
-        UI.println("Starting opencorvus...")
-        UI.println()
-
-        // Launch opencorvus TUI with session ID if available
-        const { Tui } = await import("@/tui")
-        const handle = await Tui.spawn({
-          sessionID: sessionId,
-          bin: "opencorvus",
-          directory: process.cwd(),
-        })
-
-        const exitCode = await handle.waitForExit()
-        if (exitCode !== 0 && exitCode !== null) {
-          throw new Error(`opencorvus exited with code ${exitCode}`)
-        }
+        if (sessionId) UI.println(`Imported session ID: ${sessionId}`)
       },
     })
   },

@@ -302,28 +302,6 @@ description: "HTTP API 参考--由 packages/sdk/openapi.json 自动生成。"
 | GET | `/find/symbol` | Find symbols | `find.symbols` |
 | GET | `/lsp` | Get LSP status | `lsp.status` |
 
-### TUI
-
-| Method | 路径 | 说明 | operationId |
-|---|---|---|---|
-| GET | `/tui/control/next` | Get next TUI request | `tui.control.next` |
-| POST | `/tui/control/response` | Submit TUI response | `tui.control.response` |
-| POST | `/tui/execute-command` | Execute TUI command | `tui.executeCommand` |
-| POST | `/tui/open-help` | Open help dialog | `tui.openHelp` |
-| POST | `/tui/open-models` | Open models dialog | `tui.openModels` |
-| POST | `/tui/open-sessions` | Open sessions dialog | `tui.openSessions` |
-| POST | `/tui/open-themes` | Open themes dialog | `tui.openThemes` |
-| POST | `/tui/publish` | Publish TUI event | `tui.publish` |
-| POST | `/tui/runtime/proxy` | Proxy control to managed TUI | `tui.runtime.proxy` |
-| POST | `/tui/runtime/start` | Start or connect TUI runtime | `tui.runtime.start` |
-| GET | `/tui/runtime/status` | Get TUI runtime status | `tui.runtime.status` |
-| POST | `/tui/runtime/stop` | Stop TUI runtime | `tui.runtime.stop` |
-| POST | `/tui/runtime/submit-task` | Submit task to managed TUI and optionally wait | `tui.runtime.submitTask` |
-| POST | `/tui/runtime/task-status` | Get runtime task status | `tui.runtime.taskStatus` |
-| POST | `/tui/select-session` | Select session | `tui.selectSession` |
-| POST | `/tui/show-toast` | Show TUI toast | `tui.showToast` |
-| GET | `/tui/status` | Get TUI status | `tui.status` |
-
 ### Experimental
 
 | Method | 路径 | 说明 | operationId |

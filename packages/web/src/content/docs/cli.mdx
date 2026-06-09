@@ -16,14 +16,6 @@ description: OpenCorvus command-line interface reference.
 
 ## Subcommands
 
-### `opencorvus` (default)
-
-Launches the local TUI.
-
-```bash
-opencorvus
-```
-
 ### `opencorvus serve`
 
 Starts the headless HTTP API server.
@@ -140,7 +132,6 @@ opencorvus db --query "SELECT id, status FROM task ORDER BY id DESC LIMIT 20"
 | `opencorvus github`     | GitHub Action runtime (typically invoked by the Action itself)                     |
 | `opencorvus pr`         | PR helpers                                                                         |
 | `opencorvus attach`     | Attach to an existing session                                                      |
-| `opencorvus tui-thread` | TUI thread mode                                                                    |
 | `opencorvus mcp`        | MCP subcommand group (`mcp serve` / `mcp auth` / `mcp status` / `mcp remove-auth`) |
 | `opencorvus session`    | Session management                                                                 |
 

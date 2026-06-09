@@ -12,7 +12,7 @@ describe("channel runtime system prompt", () => {
     const prompt = core.buildSystemPrompt("slack")
 
     expect(prompt).toContain("The visibility principle")
-    expect(prompt).toContain("OpenCorvus TUI")
+    expect(prompt).toContain("Do not launch retired terminal UI processes")
     expect(prompt).toContain("Search memory at the start of each task")
   })
 

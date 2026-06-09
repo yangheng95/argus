@@ -274,8 +274,6 @@ test("public workflow docs and live prompt describe the current model only", asy
     "packages/web/src/content/docs/zh-cn/concepts/goal-run-task.mdx",
     "packages/web/src/content/docs/concepts/agent-loop.mdx",
     "packages/web/src/content/docs/zh-cn/concepts/agent-loop.mdx",
-    "packages/web/src/content/docs/tui.mdx",
-    "packages/web/src/content/docs/zh-cn/tui.mdx",
     "packages/web/src/content/docs/operations/benchmark.mdx",
     "packages/web/src/content/docs/zh-cn/operations/benchmark.mdx",
     "packages/web/src/content/docs/reference/env.mdx",

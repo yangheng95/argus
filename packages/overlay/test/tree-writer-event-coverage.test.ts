@@ -1,7 +1,6 @@
 import { expect, test } from "bun:test"
 import path from "node:path"
 import { isTreeWriterKnownEventType } from "../src/services/event-policy"
-
 ;(globalThis as typeof globalThis & { __OPENCORVUS_OVERLAY_VERSION__?: string }).__OPENCORVUS_OVERLAY_VERSION__ = "test"
 
 const { applyEvent, resetWriter } = await import("../src/services/tree-writer")
@@ -37,13 +36,17 @@ test("declared non-card control events are explicit tree-writer no-ops", () => {
   resetWriter()
   for (const type of [
     "mcp.tools.changed",
+    "mcp.auth.required",
     "mcp.browser.open.failed",
+    "pty.created",
+    "pty.updated",
+    "pty.exited",
+    "pty.deleted",
     "task_plan.updated",
     "todo.updated",
     "session.compacted",
     "worktree.ready",
     "workspace.failed",
-    "tui.toast.show",
   ]) {
     applyEvent({
       type,

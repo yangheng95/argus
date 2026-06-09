@@ -13,14 +13,6 @@
 
 ## Subcommands
 
-### `opencorvus` (default)
-
-Launches the local TUI.
-
-```bash
-opencorvus
-```
-
 ### `opencorvus serve`
 
 Starts the headless HTTP API server.

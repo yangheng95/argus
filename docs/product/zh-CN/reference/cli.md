@@ -13,14 +13,6 @@
 
 ## 子命令
 
-### `opencorvus`（默认）
-
-进入本地 TUI。交互式输入任务，实时看到 spec / plan / run / eval。
-
-```bash
-opencorvus
-```
-
 ### `opencorvus serve`
 
 启动 headless HTTP API 服务器。
@@ -159,8 +151,6 @@ opencorvus db --query "SELECT id, status FROM task ORDER BY id DESC LIMIT 20"
 | `opencorvus pr`        | PR 相关辅助                                                                 |
 | `opencorvus mcp`       | MCP 子命令族（`mcp serve` / `mcp auth` / `mcp status` / `mcp remove-auth`） |
 | `opencorvus session`   | session 管理                                                                |
-
-> ~~`opencorvus attach`~~ / ~~`opencorvus tui-thread`~~ 不是顶级 CLI 命令——`attach` 仅作为 TUI 内部功能存在于 `packages/opencorvus/src/cli/cmd/tui/attach.ts`。
 
 ## 退出码
 

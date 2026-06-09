@@ -29,8 +29,6 @@ const recordingMock = {
   createOpenCorvusClient: () => stubClient(),
   createOpenCorvusServer: async () => ({ url: "http://127.0.0.1:0", close() {} }),
   createOpencodeServer: async () => ({ url: "http://127.0.0.1:0", close() {} }),
-  createOpenCorvusTui: () => ({ close() {} }),
-  createOpencodeTui: () => ({ close() {} }),
   OpencodeClient: class {} as any,
   OpenCorvusClient: class {} as any,
 }
@@ -57,15 +55,6 @@ function stubClient() {
       get: async () => ({ data: undefined, error: undefined }),
       message: async () => ({ data: { parts: [] }, error: undefined }),
       promptAsync: async () => ({ data: {}, error: undefined }),
-    },
-    tui: {
-      runtime: {
-        start: async () => ({ data: {}, error: undefined }),
-        submitTask: async () => ({
-          data: { accepted: true, taskID: "task_mock", waited: false, completed: false },
-          error: undefined,
-        }),
-      },
     },
   }
 }

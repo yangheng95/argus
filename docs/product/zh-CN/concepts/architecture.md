@@ -9,7 +9,7 @@ OpenCorvus 的职责是：**把一条自然语言需求，稳定地变成已验�
 HTTP 服务器（`packages/opencorvus/src/server/server.ts`）把路由切成两个真实层：
 
 - **Control plane（控制面）**——`/global/*`、`/auth/*`、`/ui/*`，以及 `/log`、`/shutdown`、`/restart`，挂载在 `Instance.provide` 中间件之前。即便没有打开任何项目目录也能工作。健康检查、服务生命周期、鉴权走这层。
-- **Instance-scoped（实例域）**——其余全部路由（`/session`、`/task`、`/run`、`/mcp`、`/tui`、`/experimental`、`/panel` 等）跑在 `Instance.provide({ directory, init: InstanceBootstrap })` 内部。必须有项目目录（来自 `?directory=` query 或 `x-opencorvus-directory` header）。
+- **Instance-scoped（实例域）**——其余全部路由（`/session`、`/task`、`/run`、`/mcp`、`/experimental`、`/panel`、`/pty` 等）跑在 `Instance.provide({ directory, init: InstanceBootstrap })` 内部。必须有项目目录（来自 `?directory=` query 或 `x-opencorvus-directory` header）。
 
 路由 handler 本身不读 `process.env`、不调 `Database.use(...)`、不直连 SQL 表、不使用 `z.any()`。边界由 `bun run api:routes-check` 守护；双语 API 参考由 OpenAPI 通过 `bun run docs:api` / `docs:check` 自动生成。
 
@@ -21,8 +21,8 @@ HTTP 服务器（`packages/opencorvus/src/server/server.ts`）把路由切成两
  HTTP)    时确定性回填，否则进 ControlMessage
 
 本地用户 → ControlMessage.handle        control/message.ts
- (overlay 短暂 "control" session（非 engine_task），以 PanelCapabilityRegistry
-  / TUI)  为白名单输出 JSON action（create_task / send_task_message /
+ (overlay) 短暂 "control" session（非 engine_task），以 PanelCapabilityRegistry
+          为白名单输出 JSON action（create_task / send_task_message /
           reply_interaction / cancel_task / retry_task / …）
 ```
 

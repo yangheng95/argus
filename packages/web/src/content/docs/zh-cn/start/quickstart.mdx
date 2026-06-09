@@ -65,17 +65,7 @@ curl -N http://127.0.0.1:7878/task/<task_id>/events
 | `POST /task/<id>/replan`  | 丢弃当前 plan，重新规划   |
 | `POST /task/<id>/cancel`  | 取消任务                  |
 
-## 6. 本地 TUI（交互模式）
-
-不想走 HTTP 也可以：
-
-```bash
-opencorvus
-```
-
-会进入 TUI：直接输入任务 → 实时看到 spec / goals / plan / run / eval / acceptance 滚动。
-
-## 7. 通过 Slack 创建任务
+## 6. 通过 Slack 创建任务
 
 ```bash
 export SLACK_BOT_TOKEN=xoxb-...

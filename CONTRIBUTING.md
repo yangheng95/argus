@@ -71,7 +71,6 @@ Replace `<platform>` with your platform (e.g., `darwin-arm64`, `linux-x64`).
 
 - Core pieces:
   - `packages/opencorvus`: Core business logic, server, agents, tools, LSP
-  - `packages/opencorvus/src/cli/cmd/tui/`: TUI interface (SolidJS + [opentui](https://github.com/sst/opentui))
   - `packages/sdk`: JavaScript SDK (`@opencorvus-ai/sdk`)
   - `packages/channel-runtime`: Channel runtime adapters (Slack, Telegram, Discord, Feishu, WhatsApp, Google Chat, Microsoft Teams, LINE, Matrix, Mattermost, Signal, WeCom, DingTalk)
   - `packages/plugin`: Plugin system (`@opencorvus-ai/plugin`)
@@ -82,15 +81,11 @@ During development, `bun dev` is the local equivalent of the built `opencorvus` 
 
 ```bash
 # Development (from project root)
-bun dev                  # Start TUI in packages/opencorvus directory
-bun dev <directory>      # Start TUI in a specific directory
-bun dev serve            # Start headless API server only
+bun dev serve            # Start headless API server
 bun dev --help           # Show all available commands
 
 # Production
-opencorvus                    # Start TUI in the current directory
-opencorvus <directory>        # Start TUI in a specific directory
-opencorvus serve              # Start headless API server only
+opencorvus serve              # Start headless API server
 opencorvus --help             # Show all available commands
 ```
 
