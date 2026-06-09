@@ -10,7 +10,7 @@
  * webview reload (no compatibility shim — plan §19.3.3).
  */
 
-export const PROTOCOL_VERSION = 1 as const
+export const PROTOCOL_VERSION = 2 as const
 
 // ── Server route directory policy ──
 
@@ -106,11 +106,48 @@ export interface WebviewRequestAbortMessage {
   id: string
 }
 
+// ── Host native commands ──
+
+export const PROJECT_EDITOR_IDS = ["vscode", "pycharm", "webstorm", "intellij", "cursor"] as const
+
+export type ProjectEditorID = (typeof PROJECT_EDITOR_IDS)[number]
+
+export type HostPermission = "granted" | "denied" | "default" | "unsupported"
+
+export type NativeCommand =
+  | { kind: "open-url"; url: string }
+  | { kind: "open-path"; path: string }
+  | { kind: "settings.load" }
+  | { kind: "settings.save"; payload: unknown }
+  | { kind: "config.write-file"; path: string; content: string }
+  | { kind: "server.info" }
+  | { kind: "server.restart" }
+  | { kind: "devtools.toggle" }
+  | { kind: "window.quit" }
+  | { kind: "tray.attention.set"; active: boolean }
+  | { kind: "badge.set"; count: number }
+  | { kind: "workspace.pickDir"; start?: string }
+  | { kind: "workspace.pickFiles"; start?: string; multiple?: boolean }
+  | { kind: "workspace.openProjectEditor"; editor: ProjectEditorID; path: string }
+  | { kind: "notification.permission" }
+  | { kind: "notification.requestPermission" }
+  | { kind: "notification.send"; title: string; body?: string; tag?: string }
+
+export type NativeCommandKind = NativeCommand["kind"]
+
+export interface WebviewNativeRequestMessage {
+  protocol: typeof PROTOCOL_VERSION
+  type: "native.request"
+  id: string
+  command: NativeCommand
+}
+
 export type WebviewMessage =
   | WebviewRequestMessage
   | WebviewStreamOpenMessage
   | WebviewStreamCloseMessage
   | WebviewRequestAbortMessage
+  | WebviewNativeRequestMessage
 
 // ── Extension → Webview ──
 
@@ -153,6 +190,15 @@ export interface ExtensionStreamCloseMessage {
   type: "stream.close"
   id: string
   reason: string
+}
+
+export interface ExtensionNativeResponseMessage {
+  protocol: typeof PROTOCOL_VERSION
+  type: "native.response"
+  id: string
+  ok: boolean
+  value?: unknown
+  error?: { message: string; name?: string }
 }
 
 /**
@@ -223,6 +269,7 @@ export type ExtensionMessage =
   | ExtensionStreamEventMessage
   | ExtensionStreamErrorMessage
   | ExtensionStreamCloseMessage
+  | ExtensionNativeResponseMessage
   | ExtensionUiCommandMessage
   | ExtensionHostThemeMessage
   | ExtensionProtocolMismatchMessage
@@ -237,12 +284,13 @@ export const EXTENSION_MESSAGE_TYPES = [
   "stream.event",
   "stream.error",
   "stream.close",
+  "native.response",
   "ui-command",
   "host:theme",
 ] as const
 
 /** Whitelisted WebviewMessage `type` values. */
-export const WEBVIEW_MESSAGE_TYPES = ["request", "stream.open", "stream.close", "request.abort"] as const
+export const WEBVIEW_MESSAGE_TYPES = ["request", "stream.open", "stream.close", "request.abort", "native.request"] as const
 
 /**
  * Type-narrowing predicate: does `m` look like a typed extension message?
@@ -284,7 +332,58 @@ export function isWebviewMessage(m: unknown): m is WebviewMessage {
   if (obj["type"] === "request" || obj["type"] === "stream.open") {
     if (!(REQUEST_METHODS as readonly string[]).includes(obj["method"] as string)) return false
   }
+  if (obj["type"] === "native.request") {
+    if (typeof obj["id"] !== "string" || !isNativeCommand(obj["command"])) return false
+  }
   return true
+}
+
+export function isNativeCommand(value: unknown): value is NativeCommand {
+  if (!value || typeof value !== "object") return false
+  const obj = value as Record<string, unknown>
+  switch (obj["kind"]) {
+    case "open-url":
+      return typeof obj["url"] === "string"
+    case "open-path":
+      return typeof obj["path"] === "string"
+    case "settings.load":
+      return true
+    case "settings.save":
+      return Object.prototype.hasOwnProperty.call(obj, "payload")
+    case "config.write-file":
+      return typeof obj["path"] === "string" && typeof obj["content"] === "string"
+    case "server.info":
+    case "server.restart":
+    case "devtools.toggle":
+    case "window.quit":
+    case "notification.permission":
+    case "notification.requestPermission":
+      return true
+    case "tray.attention.set":
+      return typeof obj["active"] === "boolean"
+    case "badge.set":
+      return typeof obj["count"] === "number"
+    case "workspace.pickDir":
+      return obj["start"] === undefined || typeof obj["start"] === "string"
+    case "workspace.pickFiles":
+      return (
+        (obj["start"] === undefined || typeof obj["start"] === "string") &&
+        (obj["multiple"] === undefined || typeof obj["multiple"] === "boolean")
+      )
+    case "workspace.openProjectEditor":
+      return (
+        (PROJECT_EDITOR_IDS as readonly string[]).includes(obj["editor"] as string) &&
+        typeof obj["path"] === "string"
+      )
+    case "notification.send":
+      return (
+        typeof obj["title"] === "string" &&
+        (obj["body"] === undefined || typeof obj["body"] === "string") &&
+        (obj["tag"] === undefined || typeof obj["tag"] === "string")
+      )
+    default:
+      return false
+  }
 }
 
 // ── Body encoding helpers (Buffer-free; works in both webview + node) ──
