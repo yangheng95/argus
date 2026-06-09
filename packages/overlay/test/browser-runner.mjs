@@ -14,7 +14,7 @@ if (files.length === 0) {
   throw new Error("No Node browser tests found under packages/overlay/test/browser")
 }
 
-const child = spawn(process.execPath, ["--test", ...files], {
+const child = spawn(process.execPath, ["--test", "--test-concurrency=1", ...files], {
   stdio: "inherit",
   env: {
     ...process.env,
