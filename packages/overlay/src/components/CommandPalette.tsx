@@ -250,14 +250,14 @@ export function CommandPalette() {
   }
 
   // Global hotkey: Cmd+K (mac) / Ctrl+K (others). Captured in capture
-  // phase so we trump an open <textarea> default behavior. Skip when an
-  // HTML5 dialog has the user's focus — those modals own Esc/Enter.
+  // phase so we trump an open <textarea> default behavior. Skip when a
+  // shared dialog content node is mounted — those modals own Esc/Enter.
   useHotkey({
     key: "k",
     cmdOrCtrl: true,
     target: "window",
     capture: true,
-    when: () => !document.querySelector("dialog[open]"),
+    when: () => !document.querySelector(".dialog"),
     run: (e) => {
       e.preventDefault()
       e.stopPropagation()
