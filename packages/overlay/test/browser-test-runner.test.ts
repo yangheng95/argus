@@ -156,6 +156,12 @@ test("overlay browser tests have a Node-owned Playwright runner", () => {
   expect(taskListPerf).toContain("startBrowserFixture")
   expect(taskListPerf).toContain('typeof globalThis.Bun, "undefined"')
 
+  const titlebarMenubar = readText("test/browser/titlebar-menubar.test.ts")
+  expect(titlebarMenubar).toContain('import test from "node:test"')
+  expect(titlebarMenubar).toContain('from "../launch.ts"')
+  expect(titlebarMenubar).toContain("startBrowserFixture")
+  expect(titlebarMenubar).toContain('typeof globalThis.Bun, "undefined"')
+
   const dist = readText("test/overlay-dist.ts")
   expect(dist).toContain('from "node:child_process"')
   expect(dist).toContain("readFile(file)")
