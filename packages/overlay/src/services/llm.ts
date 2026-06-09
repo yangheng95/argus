@@ -15,7 +15,7 @@
 
 import { appStore } from "../store/app"
 import { apiJson } from "./api"
-import { t, tc } from "../utils/i18n"
+import { t } from "../utils/i18n"
 
 // ── Local helpers ──
 
@@ -214,7 +214,7 @@ export function providerState(providerID: string, configOverride?: any, currentM
     return {
       tone: "warn",
       label: t("llm.status.auth_required"),
-      detail: tc("llm.detail.auth_methods", authMethods.length),
+      detail: t("llm.detail.auth_methods", { value: authMethods.length }),
     }
   }
   if ((item?.env?.length ?? 0) > 0) {
