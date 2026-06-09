@@ -1,7 +1,7 @@
 import { describe, expect, test } from "bun:test"
 import { existsSync } from "node:fs"
 import { readFileSync } from "node:fs"
-import { mkdtemp, rm } from "node:fs/promises"
+import { mkdtemp, rm, writeFile } from "node:fs/promises"
 import { resolve } from "node:path"
 import { tmpdir } from "node:os"
 import {
@@ -11,12 +11,19 @@ import {
   artifactExternalModules,
   artifactHostCanProvideNodeRuntime,
   artifactPackageBaseName,
+  type ArtifactNodeRuntimeTarget,
   artifactRuntimeNodeModules,
   artifactRuntimeNodeModuleNames,
   artifactSourcemap,
   parseBuildFlavor,
 } from "../../script/build-artifact"
 import { copyRuntimeNodeModules } from "../../script/build-runtime-node-modules"
+
+function currentRuntimeTarget(): ArtifactNodeRuntimeTarget {
+  const target: ArtifactNodeRuntimeTarget = { os: process.platform, arch: process.arch }
+  if (process.platform === "linux" && process.env.OPENCORVUS_LIBC === "musl") return { ...target, abi: "musl" }
+  return target
+}
 
 describe("build-artifact", () => {
   test("default flavor stays on the full cli artifact name", () => {
@@ -113,12 +120,14 @@ describe("build-artifact", () => {
     const tuiHostSource = readFileSync(resolve(import.meta.dir, "../../src/tui/host.ts"), "utf8")
 
     expect(watcherSource).not.toContain('from "@parcel/watcher/wrapper"')
-    expect(watcherSource).toContain("requireRuntimePackage<typeof import(\"@parcel/watcher/wrapper\")>")
+    expect(watcherSource).not.toContain("@parcel/watcher-${process.platform}")
+    expect(watcherSource).toContain('requireRuntimePackage<typeof import("@parcel/watcher")>("@parcel/watcher")')
     expect(screenshotSource).not.toContain('from "node-screenshots"')
     expect(screenshotSource).toContain('requireRuntimePackage<typeof import("node-screenshots")>')
     expect(buildScreenshotSource).not.toContain('from "sharp"')
     expect(buildScreenshotSource).toContain('requireRuntimePackage<typeof import("sharp")>')
     expect(capabilitySource).toContain('requireRuntimePackage("node-screenshots")')
+    expect(capabilitySource).toContain('requireRuntimePackage("@parcel/watcher")')
     expect(tuiHostSource).not.toContain('from "@lydell/node-pty"')
     expect(tuiHostSource).toContain('requireRuntimePackage<typeof import("@lydell/node-pty")>')
   })
@@ -178,9 +187,7 @@ describe("build-artifact", () => {
       )
       expect(existsSync(resolve(outdir, "node_modules/@parcel/watcher/wrapper.js"))).toBe(true)
       expect(
-        existsSync(
-          resolve(outdir, "node_modules/@parcel/watcher/node_modules/@parcel/watcher-win32-x64/package.json"),
-        ),
+        existsSync(resolve(outdir, "node_modules/@parcel/watcher/node_modules/@parcel/watcher-win32-x64/package.json")),
       ).toBe(true)
       expect(existsSync(resolve(outdir, "node_modules/@parcel/watcher/node_modules/micromatch/package.json"))).toBe(
         true,
@@ -190,6 +197,39 @@ describe("build-artifact", () => {
           resolve(outdir, "node_modules/node-screenshots/node_modules/node-screenshots-win32-x64-msvc/package.json"),
         ),
       ).toBe(true)
+    } finally {
+      await rm(outdir, { recursive: true, force: true })
+    }
+  })
+
+  test("runtime node module copy lets parcel watcher load through its package entrypoint", async () => {
+    const outdir = await mkdtemp(resolve(tmpdir(), "opencorvus-parcel-watcher-runtime-"))
+    try {
+      const target = currentRuntimeTarget()
+      const watcherRuntimeModule = artifactRuntimeNodeModules(target).find((item) => item.name === "@parcel/watcher")
+      expect(watcherRuntimeModule).toBeDefined()
+      await writeFile(resolve(outdir, "package.json"), JSON.stringify({ type: "commonjs" }))
+      await copyRuntimeNodeModules(target, outdir, resolve(import.meta.dir, "../../"), [watcherRuntimeModule!])
+
+      const packageJson = resolve(outdir, "package.json")
+      const script = [
+        'const { createRequire } = require("node:module")',
+        `const runtimeRequire = createRequire(${JSON.stringify(packageJson)})`,
+        'const watcher = runtimeRequire("@parcel/watcher")',
+        'if (typeof watcher.subscribe !== "function") throw new Error("missing subscribe")',
+      ].join(";")
+      const proc = Bun.spawn([process.execPath, "-e", script], {
+        stdout: "pipe",
+        stderr: "pipe",
+      })
+      const [stdout, stderr, exitCode] = await Promise.all([
+        new Response(proc.stdout).text(),
+        new Response(proc.stderr).text(),
+        proc.exited,
+      ])
+
+      expect(`${stdout}\n${stderr}`).not.toContain("Cannot find module")
+      expect(exitCode).toBe(0)
     } finally {
       await rm(outdir, { recursive: true, force: true })
     }
