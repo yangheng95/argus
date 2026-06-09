@@ -4,24 +4,11 @@
 
 import { appStore, setLocaleState, setI18nReady } from "../store/app"
 
-const SUPPORTED_LOCALES = ["zh-CN", "en-US"]
+const SUPPORTED_LOCALES = ["zh-CN", "en-US"] as const
+export type SupportedLocale = (typeof SUPPORTED_LOCALES)[number]
 
 // Module-level state (
 let messages: Record<string, any> = {}
-// Locale precedence (highest first):
-//   1. window.__OPENCORVUS_LOCALE__ — the host (VS Code extension /
-//      Tauri overlay window) injects vscode.env.language /
-//      sys-locale here so the overlay aligns with the IDE chrome
-//      (plan-vscode-extension.md §19.3.2).
-//   2. <html lang> — set by the host's HTML render step on first
-//      paint; same data as #1 but readable before any JS imports.
-//   3. navigator.language — browser dev preview fallback.
-let currentLocale: string = sanitizeLocale(
-  (typeof globalThis !== "undefined" ? (globalThis as any).__OPENCORVUS_LOCALE__ : "") ||
-    (typeof document !== "undefined" ? document.documentElement.lang : "") ||
-    (typeof navigator !== "undefined" ? navigator.language : "") ||
-    "en-US",
-)
 
 // ── Helpers ──
 
@@ -29,12 +16,36 @@ function record(value: any): boolean {
   return !!value && typeof value === "object" && !Array.isArray(value)
 }
 
-export function sanitizeLocale(value: string): string {
+export function sanitizeLocale(value: string): SupportedLocale {
   const text = String(value || "").trim()
-  if (SUPPORTED_LOCALES.includes(text)) return text
+  if (SUPPORTED_LOCALES.includes(text as SupportedLocale)) return text as SupportedLocale
   if (/^zh\b/i.test(text)) return "zh-CN"
-  return "en-US"
+  if (/^en\b/i.test(text)) return "en-US"
+  throw new UnsupportedLocaleError(text)
 }
+
+export class UnsupportedLocaleError extends Error {
+  constructor(readonly locale: string) {
+    super(`Unsupported locale: ${locale || "(empty)"}`)
+    this.name = "UnsupportedLocaleError"
+  }
+}
+
+function firstRuntimeLocaleCandidate(): string | undefined {
+  const values = [
+    typeof globalThis !== "undefined" ? (globalThis as any).__OPENCORVUS_LOCALE__ : "",
+    typeof document !== "undefined" ? document.documentElement.lang : "",
+    typeof navigator !== "undefined" ? navigator.language : "",
+  ]
+  return values.map((item) => String(item || "").trim()).find(Boolean)
+}
+
+function initialLocale(): SupportedLocale {
+  const candidate = firstRuntimeLocaleCandidate()
+  return candidate ? sanitizeLocale(candidate) : "en-US"
+}
+
+let currentLocale: SupportedLocale = initialLocale()
 
 function localeValue(key: string, locale: string = currentLocale): any {
   appStore.localeSeq
@@ -95,7 +106,7 @@ export function tc(key: string, count: number, vars?: Record<string, any>): stri
 }
 
 export function localeTag(): string {
-  return sanitizeLocale(currentLocale)
+  return currentLocale
 }
 
 export function getLocale(): string {
@@ -145,6 +156,10 @@ export async function setLocale(locale: string): Promise<void> {
 
 /** Pre-load all supported locales (mirrors app.js loadI18n). */
 export async function loadAllLocales(): Promise<void> {
+  if (SUPPORTED_LOCALES.every((locale) => messages[locale])) {
+    setI18nReady(true)
+    return
+  }
   const entries = await Promise.all(
     SUPPORTED_LOCALES.map(async (locale) => {
       const data = await fetchLocaleData(locale)
@@ -159,7 +174,7 @@ export async function loadAllLocales(): Promise<void> {
 
 /** Inject pre-loaded locale data (used when app.js already loaded i18n). */
 export function setLocaleData(locale: string, data: Record<string, any>): void {
-  messages[locale] = data
+  messages[sanitizeLocale(locale)] = data
 }
 
 // ── DOM helpers ──

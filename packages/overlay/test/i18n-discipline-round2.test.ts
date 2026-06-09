@@ -83,7 +83,11 @@ describe("round 2 i18n discipline", () => {
       expect(Object.hasOwn(en, key)).toBe(true)
       expect(Object.hasOwn(zh, key)).toBe(true)
     }
-    expect(providers).toContain("Fixed model mapping examples")
+    expect(providers).toContain('placeholder={t("provider.form.api_placeholder", { value: "https://my-gateway.com/v1" })}')
+    expect(providers).toContain('placeholder={t("provider.form.id_placeholder", { value: "opentoken" })}')
+    expect(providers).toContain('placeholder={t("provider.form.name_placeholder", { value: "OpenToken CN2" })}')
+    expect(providers).toContain('placeholder={t("provider.form.env_placeholder", { value: "OPENTOKEN_API_KEY" })}')
+    expect(providers).toContain('placeholder={"gpt-5.4-mini:GPT-5.4 Mini\\ngpt-5.4:GPT-5.4"}')
     expect(channels).toContain("Fixed example URL")
     expect(channels).toContain("Channel schemas own these placeholders")
     expect(skills).toContain("Fixed MCP server-name example")
@@ -95,6 +99,7 @@ describe("round 2 i18n discipline", () => {
   test("OpenCorvus menubar label is an explicit brand whitelist", () => {
     const titlebar = read("src/components/titlebar/TitlebarMenubar.tsx")
     expect(titlebar).toContain("OpenCorvus is the product brand name")
-    expect(titlebar).toContain('role="menubar" aria-label="OpenCorvus"')
+    expect(titlebar).toContain('role="menubar"')
+    expect(titlebar).toContain('aria-label="OpenCorvus"')
   })
 })
