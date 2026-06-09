@@ -131,6 +131,13 @@ describe("renderOverlayHtml", () => {
     }
   })
 
+  test("keeps VS Code webview frame embedding disabled for browser preview", () => {
+    const { html } = render("en-US")
+    const csp = html.match(/<meta http-equiv="Content-Security-Policy" content="([^"]+)">/)?.[1] ?? ""
+    expect(csp).toContain("frame-src 'none'")
+    expect(csp).not.toMatch(/frame-src[^;]*(https?:|blob:|data:|\*)/)
+  })
+
   test("injects <base href> pointing at the media/ui webview URI", () => {
     const { html } = render("en-US")
     expect(html).toMatch(/<base href="https:\/\/test-cdn\/[^"]+\/"/)

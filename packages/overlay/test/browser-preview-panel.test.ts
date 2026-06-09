@@ -74,6 +74,8 @@ test("browser preview panel uses mature primitives and task evidence-backed serv
   expect(component).toContain("browser-preview-evidence-facts")
   expect(component).toContain("<select")
   expect(component).not.toContain("<iframe")
+  expect(component).not.toMatch(/src=\{?frameUrl/)
+  expect(component).not.toContain("window.open")
   expect(component).not.toContain("data-frame-token")
   expect(component).not.toContain("sandbox=")
   expect(component).not.toContain("referrerPolicy=")
@@ -98,6 +100,9 @@ test("browser preview panel uses mature primitives and task evidence-backed serv
   expect(service).toContain("apiJson(`task/${encodeURIComponent(input.taskID)}/browser-preview/capture`")
   expect(service).not.toContain("apiJson(`browser-preview")
   expect(service).not.toContain("fetch(")
+  expect(service).not.toContain("captureRuntimePage")
+  expect(service).not.toContain("renderPage")
+  expect(service).not.toContain("BrowserEvidenceRunner")
   expect(service).not.toContain("BROWSER_PREVIEW_VIEWPORTS")
 
   expect(activityCss).toContain(".chat-browser-preview-activity")
