@@ -1314,7 +1314,15 @@ if (logViewerEl) {
   render(() => <LogViewer open={logOpen()} onClose={() => setLogOpen(false)} />, logViewerEl)
 }
 
-document.addEventListener("DOMContentLoaded", () => {
+function onDocumentReady(callback: () => void): void {
+  if (document.readyState === "loading") {
+    document.addEventListener("DOMContentLoaded", callback, { once: true })
+    return
+  }
+  callback()
+}
+
+function bindSidebarStaticControls(): void {
   // ── Sidebar buttons ──
   document.getElementById("btnCreateTask")?.addEventListener("click", () => {
     // Deselect current task and focus the composer — the user types their
@@ -1335,7 +1343,9 @@ document.addEventListener("DOMContentLoaded", () => {
   // Executor selection moved to <ExecutorSelector/> mounted inside ChatComposer
   // (chat-compose-meta-left). The component owns its own dropdown, click-out
   // dismissal and Escape handling — Solid lifecycle disposes both on unmount.
-})
+}
+
+onDocumentReady(bindSidebarStaticControls)
 
 // ── Initialise application ──
 
