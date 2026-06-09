@@ -20,6 +20,7 @@ const SESSION_CARD_STAGES = [
   "requirements",
   "frontend-design",
   "frontend-research",
+  "visual-qa",
   "goal",
   "architect",
   "integrity",

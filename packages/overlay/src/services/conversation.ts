@@ -53,7 +53,7 @@ let historyState: HistoryState = {
 }
 let historyLoading = false
 
-export function cancelConversationReplay(): void {
+export function cancelConversationReplay(options: { preserveAgentView?: boolean } = {}): void {
   replayEpoch += 1
   historyEpoch += 1
   tailMergeEpoch += 1
@@ -74,7 +74,7 @@ export function cancelConversationReplay(): void {
     hasMore: false,
     limit: CONVERSATION_HISTORY_PAGE_LIMIT,
   }
-  resetConversationAgentView()
+  if (!options.preserveAgentView) resetConversationAgentView()
 }
 
 function parseEventReplay(raw: any): EventReplay {
@@ -288,7 +288,7 @@ export async function hydrateConversation(
     tailLimit?: number
   } = {},
 ): Promise<number> {
-  cancelConversationReplay()
+  cancelConversationReplay({ preserveAgentView: true })
   const controller = linkedReplayController(options.signal)
   replayAbort = controller
   const epoch = replayEpoch

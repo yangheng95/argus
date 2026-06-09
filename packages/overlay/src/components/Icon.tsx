@@ -101,6 +101,7 @@ export type IconName =
   | "avatar-requirements"
   | "avatar-frontend-design"
   | "avatar-frontend-research"
+  | "avatar-visual-qa"
   | "avatar-architect"
   | "avatar-planner"
   | "avatar-goal"
@@ -580,6 +581,14 @@ const CUSTOM_ICON_PATHS: Partial<Record<IconName, IconRecord>> = {
         <circle cx="6.5" cy="6.5" r="2.4" />
         <path d="M8.3 8.3 11.4 11.4" />
         <path d="M4.5 11.2h5.8M4.9 4.4h3.2M4.9 6.4h2.5" />
+      </>
+    ),
+  },
+  "avatar-visual-qa": {
+    body: () => (
+      <>
+        <rect x="3.3" y="4" width="9.4" height="6.7" rx="1.1" />
+        <path d="M6.2 12.2h3.6M8 10.7v1.5M5.5 7.3l1.4 1.4 3-3.1" />
       </>
     ),
   },

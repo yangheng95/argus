@@ -16,6 +16,7 @@ export type AgentRole =
   | "requirements"
   | "frontend-design"
   | "frontend-research"
+  | "visual-qa"
   | "architect"
   | "planner"
   | "goal"
@@ -38,6 +39,7 @@ export const AGENT_CARD_STAGES = new Set<AgentRole>([
   "requirements",
   "frontend-design",
   "frontend-research",
+  "visual-qa",
   "architect",
   "planner",
   "goal",
@@ -81,6 +83,7 @@ export function normalizeAgentRole(name: string): AgentRole {
   )
     return "frontend-design"
   if (text === "frontend-research" || text === "frontend_research") return "frontend-research"
+  if (text === "visual-qa" || text === "visual_qa" || text === "visualqa") return "visual-qa"
   if (text === "architect" || text === "architecture" || text === "coordination") return "architect"
   if (text === "planner" || text === "plan" || text === "planning" || text === "replan") return "planner"
   if (text === "goal" || text === "goal_gate") return "goal"
@@ -129,6 +132,7 @@ export function agentRoleToSectionPhase(role: AgentRole): string {
   if (role === "intent-analysis") return "intent"
   if (role === "frontend-design") return "design"
   if (role === "frontend-research") return "research"
+  if (role === "visual-qa") return "evaluation"
   if (role === "architect") return "architect"
   if (role === "planner") return "plan"
   if (role === "goal") return "goals"
@@ -173,6 +177,7 @@ export function roleLabel(role: string): string {
   if (role === "requirements") return t("chat.role.requirements")
   if (role === "frontend-design" || role === "frontend_design") return t("chat.role.frontend-design")
   if (role === "frontend-research" || role === "frontend_research") return t("chat.role.frontend-research")
+  if (role === "visual-qa" || role === "visual_qa") return t("chat.role.visual-qa")
   if (role === "architect") return t("chat.role.architect")
   if (role === "planner") return t("chat.role.planner")
   if (role === "evaluator") return t("chat.role.evaluator")
@@ -248,6 +253,7 @@ export function agentStageLabel(stage: string): string {
   if (role === "requirements") return t("chat.role.requirements")
   if (role === "frontend-design") return t("chat.role.frontend-design")
   if (role === "frontend-research") return t("chat.role.frontend-research")
+  if (role === "visual-qa") return t("chat.role.visual-qa")
   if (role === "architect") return t("chat.role.architect")
   if (role === "planner") return t("chat.role.planner")
   if (role === "goal") return t("chat.role.goal")

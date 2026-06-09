@@ -1,7 +1,7 @@
 import { afterAll, afterEach, expect, test } from "bun:test"
 import { setBoardStore } from "../src/store/board"
 import { cardTreeStore } from "../src/store/card-tree"
-import { conversationAgentStore } from "../src/store/conversation-agents"
+import { conversationAgentStore, hydrateConversationAgentView } from "../src/store/conversation-agents"
 import {
   cancelConversationReplay,
   conversationCardContainsMessage,
@@ -192,6 +192,86 @@ test("hydrateTaskConversation waits for persisted event replay before returning 
 
   await expect(hydration).resolves.toBe(2)
   expect(cardTreeStore.cards["executor:session:ses_executor_replay:message:executor:msg:run_replay"]).toBeDefined()
+})
+
+test("hydrateTaskConversation preserves agent rail records until the replacement view arrives", async () => {
+  resetWriter()
+  setBoardStore("selectedTaskID", "tsk_preserve_agents")
+  setBoardStore("selectedSource", { kind: "task", id: "tsk_preserve_agents" })
+  hydrateConversationAgentView("task:tsk_preserve_agents", {
+    sessions: [
+      {
+        sessionID: "ses_existing_agent",
+        stage: "integrity",
+        messageIDs: ["msg_existing"],
+        firstMessageTime: 1_776_000_010_000,
+        lastMessageTime: 1_776_000_010_100,
+        placement: "top_level",
+      },
+    ],
+  })
+
+  let resolveHydrate!: (body: unknown) => void
+  const hydrateResponse = new Promise<unknown>((resolve) => {
+    resolveHydrate = resolve
+  })
+  __setHostTransportForTest(
+    fakeTransport(async (req) => {
+      if (req.path !== "task/tsk_preserve_agents/conversation") {
+        throw new Error(`unexpected request path: ${req.path}`)
+      }
+      return {
+        status: 200,
+        ok: true,
+        headers: {},
+        body: await hydrateResponse,
+      }
+    }),
+  )
+
+  const hydration = hydrateTaskConversation("tsk_preserve_agents")
+  await Promise.resolve()
+  expect(conversationAgentStore.records.map((record) => record.sessionID)).toEqual(["ses_existing_agent"])
+
+  resolveHydrate({
+    board: {
+      snapshotVersion: "board:preserve-agents",
+      task: {
+        id: "tsk_preserve_agents",
+        status: "active",
+        request: "preserve rail agents",
+        sessionID: "ses_root",
+        time: { created: 1_776_000_000_000 },
+        attachments: [],
+      },
+      goalWorkflows: [],
+      interactions: [],
+    },
+    transcript: [],
+    timeline: [],
+    events: [],
+    view: { sessions: [], topLevelSessionIDs: [] },
+    agentView: {
+      sessions: [
+        {
+          sessionID: "ses_new_agent",
+          stage: "visual-qa",
+          messageIDs: ["msg_visual_qa"],
+          firstMessageTime: 1_776_000_020_000,
+          lastMessageTime: 1_776_000_020_100,
+          placement: "top_level",
+        },
+      ],
+      topLevelSessionIDs: ["ses_new_agent"],
+    },
+    eventReplay: { cursor: 9, latestSequence: 9, complete: true, limit: 500 },
+    history: { oldestTimestamp: null, oldestMessageID: null, hasMore: false, limit: 160 },
+    lastSequence: 9,
+  })
+
+  await expect(hydration).resolves.toBe(9)
+  expect(conversationAgentStore.records.map((record) => record.sessionID)).toEqual(["ses_new_agent"])
+  expect(conversationAgentStore.records[0]?.stage).toBe("visual-qa")
 })
 
 test("hydrateTaskConversation renders the live tail first and prepends older history on demand", async () => {

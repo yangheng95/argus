@@ -13,6 +13,7 @@ export const AVATAR_ICON_BY_ROLE: Record<AgentRole, IconName> = {
   requirements: "avatar-requirements",
   "frontend-design": "avatar-frontend-design",
   "frontend-research": "avatar-frontend-research",
+  "visual-qa": "avatar-visual-qa",
   architect: "avatar-architect",
   planner: "avatar-planner",
   goal: "avatar-goal",
