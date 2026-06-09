@@ -354,7 +354,6 @@ test("redesign-required i18n keys exist in both locales; the legacy lifecycle ke
     "browser_preview.capture",
     "browser_preview.capture_loading",
     "browser_preview.viewport.desktop",
-    "browser_preview.viewport.toggle",
     "coding_assistant.title",
     "chat.assistant_title",
   ]
