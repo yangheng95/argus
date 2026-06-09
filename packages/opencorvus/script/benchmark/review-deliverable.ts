@@ -15,7 +15,7 @@ const TARGET = process.argv[2] ?? "http://localhost:3000"
 const OUT_DIR = process.argv[3] ?? "C:/Users/hengu/AppData/Local/Temp/opencorvus-overlay-benchmark-project-w5RoTK"
 const OUT = path.join(OUT_DIR, "review-rendered.png")
 
-const browser = await launchBrowser(["--no-sandbox", "--disable-setuid-sandbox"])
+const browser = await launchBrowser(["--no-sandbox", "--disable-setuid-sandbox"], { headless: false })
 try {
   const page = await browser.newPage()
   await page.setViewportSize({ width: 1440, height: 900 })

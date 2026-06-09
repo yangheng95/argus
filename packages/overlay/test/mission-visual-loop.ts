@@ -711,7 +711,7 @@ async function run(): Promise<void> {
 
   try {
     console.log(`[mission-visual-loop] launching chrome`)
-    browser = await launchBrowser(["--no-sandbox", "--disable-gpu", "--disable-dev-shm-usage"])
+    browser = await launchBrowser(["--no-sandbox", "--disable-gpu", "--disable-dev-shm-usage"], { headless: false })
     const page = await browser.newPage()
     await page.setViewportSize(VIEWPORT_WIDE)
     await applyMocks(page)

@@ -551,11 +551,13 @@ console.log(`\n  Mock server: ${serverUrl}`)
 
 // ── Launch browser through the Node sidecar ──
 
-// Set OVERLAY_BENCHMARK_SHOT=1 to run headless and dump screenshots to
-// docs/cards-visual/, then exit. Useful for non-interactive verification.
+// Set OVERLAY_BENCHMARK_SHOT=1 to dump screenshots to docs/cards-visual/,
+// then exit. The browser remains headed so visual benchmarks are inspectable.
 const SHOT_MODE = process.env.OVERLAY_BENCHMARK_SHOT === "1"
 
-const browser = await launchBrowser(["--no-sandbox", "--no-first-run", "--no-default-browser-check"])
+const browser = await launchBrowser(["--no-sandbox", "--no-first-run", "--no-default-browser-check"], {
+  headless: false,
+})
 const page = await browser.newPage()
 await page.setViewportSize({ width: 900, height: 1200 })
 

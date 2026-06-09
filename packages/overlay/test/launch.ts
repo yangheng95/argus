@@ -83,6 +83,10 @@ export type OverlayBrowser = {
   once(event: string, handler: () => void): void
 }
 
+export type LaunchBrowserOptions = {
+  headless?: boolean
+}
+
 let browserQueue: Promise<void> = Promise.resolve()
 const browserLockDir = join(tmpdir(), "pptr-overlay-browser-lock")
 const browserLockHeartbeat = join(browserLockDir, "heartbeat")
@@ -149,7 +153,7 @@ function releaseBrowserLock() {
   }
 }
 
-export async function launchBrowser(extraArgs?: string[]): Promise<OverlayBrowser> {
+export async function launchBrowser(extraArgs?: string[], options: LaunchBrowserOptions = {}): Promise<OverlayBrowser> {
   const waitForTurn = browserQueue
   let releaseTurn!: () => void
   browserQueue = new Promise<void>((resolve) => {
@@ -175,7 +179,7 @@ export async function launchBrowser(extraArgs?: string[]): Promise<OverlayBrowse
   }
 
   try {
-    const client = new OverlayBrowserSidecar(extraArgs ?? [], releaseOnce)
+    const client = new OverlayBrowserSidecar(extraArgs ?? [], options.headless ?? true, releaseOnce)
     await client.start()
     return client.browserProxy()
   } catch (error) {
@@ -192,10 +196,12 @@ class OverlayBrowserSidecar {
   private buffer = ""
   private disconnectedHandlers: Array<() => void> = []
   private readonly extraArgs: string[]
+  private readonly headless: boolean
   private readonly release: () => void
 
-  constructor(extraArgs: string[], release: () => void) {
+  constructor(extraArgs: string[], headless: boolean, release: () => void) {
     this.extraArgs = extraArgs
+    this.headless = headless
     this.release = release
   }
 
@@ -221,7 +227,7 @@ class OverlayBrowserSidecar {
       this.release()
       for (const item of this.disconnectedHandlers) item()
     })
-    await this.call("launch", { extraArgs: this.extraArgs })
+    await this.call("launch", { extraArgs: this.extraArgs, headless: this.headless })
   }
 
   browserProxy(): OverlayBrowser {
@@ -591,7 +597,7 @@ async function handle(request) {
     const executablePath = await findBrowser();
     browser = await chromium.launch({
       executablePath,
-      headless: true,
+      headless: params.headless !== false,
       args: ["--no-sandbox", "--no-first-run", "--no-default-browser-check", ...(params.extraArgs || [])],
     });
     return ok(id, true);

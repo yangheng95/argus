@@ -42,6 +42,7 @@ describe("webpage evidence architecture guards", () => {
     expect(combined).not.toMatch(/createStaticServer/)
     expect(combined).not.toMatch(/node:http/)
     expect(renderTool).toMatch(/url:\s*z\s*\.\s*string\(\)\s*\.\s*url\(\)/)
+    expect(renderTool).not.toMatch(/visible browser/i)
     expect(renderCore).toMatch(/headless:\s*true/)
   })
 

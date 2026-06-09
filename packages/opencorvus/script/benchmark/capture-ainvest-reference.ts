@@ -14,7 +14,7 @@ import { launchBrowser } from "../../../overlay/test/launch"
 const TARGET_URL = process.argv[2] ?? "https://www.ainvest.com"
 const OUT = path.join(import.meta.dir, "assets", "ainvest.png")
 
-const browser = await launchBrowser(["--no-sandbox", "--disable-setuid-sandbox"])
+const browser = await launchBrowser(["--no-sandbox", "--disable-setuid-sandbox"], { headless: false })
 try {
   const page = await browser.newPage()
   await page.setViewportSize({ width: 1440, height: 900 })
