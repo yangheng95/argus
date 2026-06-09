@@ -519,11 +519,15 @@
 }
 
 .titlebar-menubar-panel {
-  position: absolute;
+  position: absolute !important;
   top: calc(100% + calc(7px * var(--ui-scale)));
   left: 0;
+  transform: none !important;
   z-index: var(--ui-z-dialog);
-  width: min(calc(340px * var(--ui-scale)), calc(100vw - calc(24px * var(--ui-scale))));
+  width: min(
+    calc(340px * var(--ui-scale)),
+    calc(100vw - var(--titlebar-menu-anchor-left, 0px) - calc(24px * var(--ui-scale)))
+  );
   box-sizing: border-box;
   max-height: min(calc(620px * var(--ui-scale)), calc(100vh - calc(88px * var(--ui-scale))));
   overflow: auto;
@@ -538,17 +542,27 @@
 }
 
 .titlebar-menubar-panel[data-menu="workspace"] {
-  width: min(calc(460px * var(--ui-scale)), calc(100vw - calc(24px * var(--ui-scale))));
+  width: min(
+    calc(460px * var(--ui-scale)),
+    calc(100vw - var(--titlebar-menu-anchor-left, 0px) - calc(24px * var(--ui-scale)))
+  );
+}
+
+.titlebar-menubar-panel[data-menu="help"] {
+  width: min(
+    calc(520px * var(--ui-scale)),
+    calc(100vw - var(--titlebar-menu-anchor-left, 0px) - calc(24px * var(--ui-scale)))
+  );
 }
 
 @media (max-width: 520px) {
   /* breakpoint: --ui-breakpoint-sm */
   .titlebar-menubar-panel {
-    position: fixed;
+    position: fixed !important;
     top: calc(var(--ui-titlebar-height) + calc(8px * var(--ui-scale)));
-    left: calc(12px * var(--ui-scale));
-    right: calc(12px * var(--ui-scale));
-    width: auto;
+    left: calc(12px * var(--ui-scale)) !important;
+    right: calc(12px * var(--ui-scale)) !important;
+    width: calc(100vw - var(--titlebar-menu-anchor-left, 0px) - calc(24px * var(--ui-scale))) !important;
     max-height: calc(100vh - var(--ui-titlebar-height) - calc(24px * var(--ui-scale)));
   }
 }
@@ -588,11 +602,11 @@
   text-align: left;
 }
 
-.titlebar-menubar-item:not(:disabled) {
+.titlebar-menubar-item:not(:disabled):not([data-disabled]) {
   cursor: pointer;
 }
 
-.titlebar-menubar-item:hover:not(:disabled),
+.titlebar-menubar-item:hover:not(:disabled):not([data-disabled]),
 .titlebar-menubar-item:focus-visible,
 .titlebar-menubar-toggle:hover,
 .titlebar-menubar-range:hover {
@@ -601,7 +615,8 @@
   outline: none;
 }
 
-.titlebar-menubar-item:disabled {
+.titlebar-menubar-item:disabled,
+.titlebar-menubar-item[data-disabled] {
   opacity: var(--ui-opacity-disabled);
 }
 
@@ -620,6 +635,21 @@
   text-overflow: ellipsis;
   white-space: nowrap;
   text-align: right;
+}
+
+.titlebar-menubar-panel[data-menu="help"] .titlebar-menubar-item {
+  display: grid;
+  grid-template-columns: minmax(calc(116px * var(--ui-scale)), max-content) minmax(0, 1fr);
+  align-items: start;
+  column-gap: calc(16px * var(--ui-scale));
+}
+
+.titlebar-menubar-panel[data-menu="help"] .titlebar-menubar-item-meta {
+  overflow: visible;
+  text-overflow: clip;
+  white-space: normal;
+  overflow-wrap: break-word;
+  text-align: left;
 }
 
 .titlebar-menubar-recent-item {
@@ -714,8 +744,11 @@
     gap: calc(1px * var(--ui-scale));
   }
 
-  .titlebar-menubar-trigger {
+  .titlebar-menubar .oc-button[data-ui="titlebar-menubar-trigger"] {
+    --oc-button-padding-x: 0;
+
     width: calc(24px * var(--ui-scale));
+    min-width: calc(24px * var(--ui-scale));
     padding: 0;
     display: inline-flex;
     align-items: center;
@@ -724,18 +757,34 @@
     font-size: 0;
   }
 
-  .titlebar-menubar-trigger::after {
-    content: attr(data-compact);
+  .titlebar-menu-trigger-label {
+    display: none;
+  }
+
+  .titlebar-menu-trigger-compact {
+    display: inline;
     font-size: var(--ui-font-control);
   }
 
   .titlebar-menubar-panel {
-    position: fixed;
+    position: fixed !important;
     top: calc(var(--ui-titlebar-height) + calc(13px * var(--ui-scale)));
-    left: calc(12px * var(--ui-scale));
-    right: calc(12px * var(--ui-scale));
-    width: auto;
-    max-height: calc(100vh - calc(var(--ui-titlebar-height) + calc(28px * var(--ui-scale))));
+    left: calc(12px * var(--ui-scale)) !important;
+    right: calc(12px * var(--ui-scale)) !important;
+    width: calc(100vw - calc(24px * var(--ui-scale))) !important;
+    transform: translateX(calc(-1 * var(--titlebar-menu-anchor-left, 0px))) !important;
+    max-height: calc(100vh - calc(var(--ui-titlebar-height) + calc(44px * var(--ui-scale))));
+  }
+
+  .titlebar-menubar-panel[data-menu="help"] {
+    left: calc(12px * var(--ui-scale)) !important;
+    right: calc(12px * var(--ui-scale)) !important;
+    width: calc(100vw - calc(24px * var(--ui-scale))) !important;
+  }
+
+  .titlebar-menubar-panel[data-menu="help"] .titlebar-menubar-item {
+    grid-template-columns: minmax(calc(92px * var(--ui-scale)), max-content) minmax(0, 1fr);
+    column-gap: calc(10px * var(--ui-scale));
   }
 }
 
