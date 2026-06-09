@@ -59,6 +59,8 @@ import { normalizeToolInput } from "./tool-input-norm"
 import { toolFailureCauseFromUnknown } from "./tool-failure-cause"
 import { SessionRuntimeContractMissingError } from "@/orchestrator/direct-reply"
 import { AutomaticCompaction } from "./auto-compaction"
+import { AgentRuntimeMetadata } from "./agent-runtime-metadata"
+import type { SessionKind } from "./session.sql"
 import {
   renderPreTerminalReflectionPrompt,
   renderPreTerminalReflectionReminder,
@@ -250,20 +252,7 @@ export namespace SessionLoop {
     return sessionRuntimeContracts.get(sessionID)?.tools ?? {}
   }
 
-  const runtimeContractRequiredAgentKinds = new Set([
-    "architect",
-    "build",
-    "acceptance",
-    "fact-check",
-    "frontend-design",
-    "frontend-research",
-    "integrity",
-    "intent-analysis",
-    "orchestrator",
-    "deep-research",
-    "frontend-research",
-    "requirements",
-  ])
+  const runtimeContractRequiredAgentKinds = AgentRuntimeMetadata.RUNTIME_CONTRACT_REQUIRED_AGENT_KIND_SET
 
   export function automaticCompactionDecision(input: {
     session: Session.Info
@@ -346,7 +335,7 @@ export namespace SessionLoop {
   }
 
   export function agentKindRequiresRuntimeContract(agentKind: string | undefined): boolean {
-    return !!agentKind && runtimeContractRequiredAgentKinds.has(agentKind)
+    return !!agentKind && runtimeContractRequiredAgentKinds.has(agentKind as SessionKind)
   }
 
   export function validateSessionRuntimeContractForContinuation(input: {
@@ -2734,17 +2723,10 @@ export namespace SessionLoop {
     ) {
       return true
     }
-    const exactStageAgents = new Set([
-      "architect",
-      "fact-check",
-      "frontend-design",
-      "frontend-research",
-      "goal-workload-analyst",
-      "intent-analysis",
-      "requirements",
-      "deep-research",
-    ])
-    return exactStageAgents.has(agentName) && contract.identity.agentKind === agentName
+    return (
+      AgentRuntimeMetadata.EXACT_RUNTIME_CONTRACT_AGENT_KIND_SET.has(agentName as SessionKind) &&
+      contract.identity.agentKind === agentName
+    )
   }
 
   export function applyToolSwitches(

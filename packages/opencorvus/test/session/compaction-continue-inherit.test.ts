@@ -20,7 +20,10 @@ describe("SessionCompaction continuation", () => {
       },
     })
 
-  function installRuntimeContinuation(input: { sessionID: string; kind: "build" | "frontend-design" | "integrity" }) {
+  function installRuntimeContinuation(input: {
+    sessionID: string
+    kind: "build" | "frontend-design" | "integrity" | "visual-qa"
+  }) {
     const descriptor = WorkerTurnDescriptor.create({
       sessionID: input.sessionID,
       payload: {
@@ -145,7 +148,7 @@ describe("SessionCompaction continuation", () => {
     })
   })
 
-  for (const kind of ["build", "frontend-design", "integrity"] as const) {
+  for (const kind of ["build", "frontend-design", "integrity", "visual-qa"] as const) {
     test(`queues automatic compaction for ${kind} workflow sessions with live runtime continuation`, async () => {
       await using tmp = await tmpdir()
       await Instance.provide({

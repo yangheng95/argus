@@ -75,8 +75,8 @@ function renderComponentReusePlan(items: readonly FrontendTemplateFinal["compone
       if (item.source_refs.length > 0) {
         lines.push(`  - source_refs: ${item.source_refs.join(", ")}`)
       }
-      if (item.custom_fallback_reason) {
-        lines.push(`  - custom_fallback_reason: ${item.custom_fallback_reason}`)
+      if (item.project_specific_reason) {
+        lines.push(`  - project_specific_reason: ${item.project_specific_reason}`)
       }
       return lines.join("\n")
     })
@@ -104,8 +104,8 @@ function renderBaselineReplacementPlan(
       if (item.source_refs.length > 0) {
         lines.push(`  - source_refs: ${item.source_refs.join(", ")}`)
       }
-      if (item.custom_fallback_reason) {
-        lines.push(`  - custom_fallback_reason: ${item.custom_fallback_reason}`)
+      if (item.project_specific_reason) {
+        lines.push(`  - project_specific_reason: ${item.project_specific_reason}`)
       }
       return lines.join("\n")
     })

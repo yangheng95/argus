@@ -111,12 +111,11 @@ if (!dir || !platform || !current) {
 
 requireAny(dir, [/^opencorvus-overlay(\.exe)?$/], "overlay binary")
 
-// build-overlay.ts / overlay/script/build.ts both run `tauri build
-// --no-bundle`, so per-platform installer bundles (deb/rpm/AppImage on
-// Linux, dmg on macOS, msi/nsis on Windows) are NOT produced for dev
-// snapshot runs. Gate the installer-bundle requirement behind an
-// explicit flag — release builds opt in via `--require-bundle`, dev
-// snapshots stop at the bare overlay binary.
+// build-overlay.ts runs `tauri build --no-bundle`, so per-platform
+// installer bundles (deb/rpm/AppImage on Linux, dmg on macOS, msi/nsis on
+// Windows) are NOT produced for dev snapshot runs. Release workflow uses
+// overlay/script/build.ts, which must keep producing bundles because it opts
+// in to this validator with `--require-bundle`.
 if (requireBundle) {
   if (platform.startsWith("windows")) {
     requireAny(dir, [new RegExp(`^OpenCorvus_${current.replace(/\./g, "\\.")}.*\\.msi$`)], "Windows MSI bundle")

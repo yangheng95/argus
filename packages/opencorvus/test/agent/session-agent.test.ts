@@ -1,7 +1,14 @@
 import { describe, expect, test } from "bun:test"
 import { Agent } from "../../src/agent/agent"
+import { SessionAgentIdentity } from "../../src/session/agent-identity"
 
 describe("resolveSessionAgent (Phase 4)", () => {
+  test("agent-owned stage sessions resolve from the session kind metadata", () => {
+    expect(SessionAgentIdentity.ownedAgentForSessionKind("visual-qa")).toBe("visual-qa")
+    expect(SessionAgentIdentity.ownedAgentForSessionKind("goal-workload-analyst")).toBe("goal-workload-analyst")
+    expect(SessionAgentIdentity.ownedAgentForSessionKind("assistant")).toBeUndefined()
+  })
+
   test("applies prompt and runtime knob overlay without mutating base agent", () => {
     const base = {
       name: "coding",

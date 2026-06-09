@@ -12,6 +12,7 @@ import { defer } from "@/util/defer"
 import { EffectiveConfig } from "../config/effective"
 import { PermissionNext } from "@/permission/next"
 import { resolveAgentModelRef } from "@/agent/model"
+import type { SessionKind } from "@/session/session.sql"
 
 const parameters = z.object({
   description: z.string().describe("A short (3-5 words) description of the task"),
@@ -28,6 +29,43 @@ const parameters = z.object({
 
 export function sessionKindForSubagent(agentName: string) {
   return agentName === "explore" ? "explore" : "assistant"
+}
+
+const taskToolSubagentMetadataKey = "taskToolSubagent"
+
+export function taskToolSessionMetadata(agentName: string): Record<string, unknown> {
+  return {
+    [taskToolSubagentMetadataKey]: agentName,
+  }
+}
+
+export function assertTaskResumeSession(input: {
+  resumeSession: Session.Info
+  callerSession: Session.Info
+  expectedKind: SessionKind
+  expectedSubagent: string
+}) {
+  const metadataSubagent = input.resumeSession.metadata?.[taskToolSubagentMetadataKey]
+  if (input.resumeSession.parentID !== input.callerSession.id) {
+    throw new Error(
+      `Invalid task_id: ${input.resumeSession.id} is not a child session of caller session ${input.callerSession.id}`,
+    )
+  }
+  if (input.resumeSession.kind !== input.expectedKind) {
+    throw new Error(
+      `Invalid task_id: ${input.resumeSession.id} has session kind ${input.resumeSession.kind}; expected ${input.expectedKind}`,
+    )
+  }
+  if (input.resumeSession.directory !== input.callerSession.directory) {
+    throw new Error(
+      `Invalid task_id: ${input.resumeSession.id} belongs to ${input.resumeSession.directory}; expected ${input.callerSession.directory}`,
+    )
+  }
+  if (metadataSubagent !== input.expectedSubagent) {
+    throw new Error(
+      `Invalid task_id: ${input.resumeSession.id} belongs to subagent ${String(metadataSubagent)}; expected ${input.expectedSubagent}`,
+    )
+  }
 }
 
 export const TaskTool = Tool.define("task", async (ctx) => {
@@ -76,14 +114,22 @@ export const TaskTool = Tool.define("task", async (ctx) => {
 
       const session = await iife(async () => {
         if (params.task_id) {
-          const found = await Session.get(params.task_id).catch(() => {})
-          if (found) return found
+          const found = await Session.get(params.task_id)
+          const callerSession = await Session.get(ctx.sessionID)
+          assertTaskResumeSession({
+            resumeSession: found,
+            callerSession,
+            expectedKind: sessionKindForSubagent(agent.name),
+            expectedSubagent: agent.name,
+          })
+          return found
         }
 
         return await Session.create({
           kind: sessionKindForSubagent(agent.name),
           parentID: ctx.sessionID,
           title: params.description + ` (@${agent.name} subagent)`,
+          metadata: taskToolSessionMetadata(agent.name),
           permission: [
             {
               permission: "todowrite",
