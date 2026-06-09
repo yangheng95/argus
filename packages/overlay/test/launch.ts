@@ -181,11 +181,13 @@ class OverlayBrowserSidecar {
   private pageHandlers = new Map<string, Map<string, EventHandler[]>>()
   private buffer = ""
   private disconnectedHandlers: Array<() => void> = []
+  private readonly extraArgs: string[]
+  private readonly release: () => void
 
-  constructor(
-    private readonly extraArgs: string[],
-    private readonly release: () => void,
-  ) {}
+  constructor(extraArgs: string[], release: () => void) {
+    this.extraArgs = extraArgs
+    this.release = release
+  }
 
   async start() {
     const nodeExecutable =

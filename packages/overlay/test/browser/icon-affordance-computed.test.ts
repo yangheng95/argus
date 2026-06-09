@@ -1,10 +1,12 @@
-import { expect, test } from "bun:test"
+import assert from "node:assert/strict"
 import { readFileSync } from "node:fs"
 import path from "node:path"
+import test from "node:test"
+import { fileURLToPath } from "node:url"
 
-import { launchBrowser } from "./launch"
+import { launchBrowser } from "../launch.ts"
 
-const OVERLAY_ROOT = path.resolve(import.meta.dir, "..")
+const OVERLAY_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..")
 
 function css(relativePath: string): string {
   return readFileSync(path.join(OVERLAY_ROOT, relativePath), "utf8")
@@ -26,6 +28,9 @@ function styleSheet(): string {
 test(
   "critical icon affordances keep readable computed contrast",
   async () => {
+    assert.equal(process.env.OPENCORVUS_OVERLAY_BROWSER_TEST_NODE_RUNNER, "1")
+    assert.equal(typeof globalThis.Bun, "undefined")
+
     const browser = await launchBrowser()
     try {
       const page = await browser.newPage()
@@ -108,8 +113,8 @@ test(
         }
       })
 
-      expect(report.send.fgOpacity).toBe("1")
-      expect(report.send.ratio).toBeGreaterThanOrEqual(4.5)
+      assert.equal(report.send.fgOpacity, "1")
+      assert.ok(report.send.ratio >= 4.5, `expected send icon contrast >= 4.5, got ${report.send.ratio}`)
     } finally {
       await browser.close()
     }
