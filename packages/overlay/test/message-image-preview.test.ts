@@ -1,7 +1,7 @@
 import { describe, expect, test } from "bun:test"
 import { readFileSync } from "node:fs"
 import { join } from "node:path"
-import { calculateImagePreviewFitScale } from "../src/utils/image-preview-scale"
+import { calculateImagePreviewFitScale, calculateImagePreviewOpenScale } from "../src/utils/image-preview-scale"
 import { renderMarkdown } from "../src/utils/markdown"
 
 const OVERLAY_ROOT = join(import.meta.dir, "..")
@@ -91,15 +91,18 @@ describe("message image preview", () => {
     expect(scaleHelper).toContain("IMAGE_PREVIEW_MAX_SCALE = 8")
     expect(component).toContain('aria-label="Zoom in"')
     expect(component).toContain('aria-label="Zoom out"')
+    expect(component).toContain('aria-label="Fit width"')
     expect(component).toContain('aria-label="Fit image"')
     expect(component).toContain('aria-label="Original size"')
+    expect(component).toContain("calculateImagePreviewOpenScale")
     expect(component).toContain("calculateImagePreviewFitScale")
     expect(component).toContain("onPointerDown={startPan}")
     expect(component).toContain("onWheel={handleWheel}")
-    expect(form).toContain("width: min(calc(96vw")
-    expect(form).toContain("height: min(calc(92vh")
+    expect(form).toContain("width: calc(100vw - calc(16px * var(--ui-scale)));")
+    expect(form).toContain("height: calc(100vh - calc(16px * var(--ui-scale)));")
     expect(body).toContain("overflow: auto;")
     expect(body).toContain("cursor: grab;")
+    expect(body).toContain("scrollbar-gutter: stable both-edges;")
     expect(stage).toContain("width: max(100%, var(--image-preview-rendered-width, 0px));")
     expect(stage).toContain("height: max(100%, var(--image-preview-rendered-height, 0px));")
     expect(image).toContain("width: var(--image-preview-rendered-width, auto);")
@@ -108,8 +111,11 @@ describe("message image preview", () => {
     expect(image).not.toContain("transform: scale")
   })
 
-  test("modal preview fit scale opens tall screenshots inside the viewport", () => {
+  test("modal preview opens tall screenshots at readable width and keeps whole-image fit explicit", () => {
     expect(calculateImagePreviewFitScale({ width: 600, height: 1800 }, { width: 900, height: 720 })).toBe(0.4)
+    expect(calculateImagePreviewOpenScale({ width: 600, height: 1800 }, { width: 900, height: 720 })).toBe(1)
+    expect(calculateImagePreviewOpenScale({ width: 1200, height: 3600 }, { width: 900, height: 720 })).toBe(0.75)
+    expect(calculateImagePreviewOpenScale({ width: 1200, height: 800 }, { width: 900, height: 720 })).toBe(0.75)
     expect(calculateImagePreviewFitScale({ width: 600, height: 400 }, { width: 900, height: 720 })).toBe(1)
     expect(calculateImagePreviewFitScale({ width: 0, height: 400 }, { width: 900, height: 720 })).toBe(1)
   })
