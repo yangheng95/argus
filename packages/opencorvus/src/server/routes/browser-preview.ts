@@ -5,7 +5,7 @@ import { describeRoute, resolver, validator } from "hono-openapi"
 import z from "zod"
 import { requireTask } from "@/engine/store"
 import {
-  findBrowserPreviewEvidenceByID,
+  findReadableBrowserPreviewEvidenceByID,
   findBrowserPreviewTargetByID,
   promoteBrowserPreviewTarget,
   PersistedBrowserPreviewEvidence,
@@ -76,7 +76,7 @@ export const BrowserPreviewRoutes = lazy(() =>
       async (c) => {
         const { taskID, evidenceID } = c.req.valid("param")
         requireTask(taskID)
-        const evidence = findBrowserPreviewEvidenceByID({ taskID, evidenceID })
+        const evidence = await findReadableBrowserPreviewEvidenceByID({ taskID, evidenceID })
         if (!evidence) return c.json({ message: `Browser preview evidence not found: ${evidenceID}` }, 404)
         return c.json(evidence)
       },

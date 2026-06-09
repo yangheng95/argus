@@ -1,4 +1,6 @@
 import { and, desc, eq } from "drizzle-orm"
+import crypto from "node:crypto"
+import fs from "node:fs/promises"
 import z from "zod"
 import { EngineArtifactTable } from "@/engine/engine.sql"
 import { Event } from "@/engine/model"
@@ -251,7 +253,7 @@ function findBrowserPreviewTargetByUrl(input: {
   return undefined
 }
 
-export function findBrowserPreviewEvidenceByID(input: {
+function findBrowserPreviewEvidenceByID(input: {
   taskID: string
   evidenceID: string
 }): PersistedBrowserPreviewEvidence | undefined {
@@ -294,6 +296,16 @@ export function findBrowserPreviewEvidenceByID(input: {
   }
 }
 
+export async function findReadableBrowserPreviewEvidenceByID(input: {
+  taskID: string
+  evidenceID: string
+}): Promise<PersistedBrowserPreviewEvidence | undefined> {
+  const evidence = findBrowserPreviewEvidenceByID(input)
+  if (!evidence) return undefined
+  if (!(await browserPreviewEvidenceArtifactsReadable(evidence))) return undefined
+  return evidence
+}
+
 export function persistBrowserPreviewEvidence(input: {
   taskID: string
   targetID: string
@@ -332,6 +344,43 @@ export function persistBrowserPreviewEvidence(input: {
       .run(),
   )
   return id
+}
+
+async function browserPreviewEvidenceArtifactsReadable(evidence: PersistedBrowserPreviewEvidence): Promise<boolean> {
+  const artifacts = browserPreviewCaptureArtifacts(evidence.capture)
+  if (evidence.status === "passed" && artifacts.length === 0) return false
+  for (const artifact of artifacts) {
+    let bytes: Buffer
+    try {
+      bytes = await fs.readFile(artifact.path)
+    } catch {
+      return false
+    }
+    if (artifact.sha) {
+      const actual = crypto.createHash("sha256").update(bytes).digest("hex").slice(0, 16)
+      if (actual !== artifact.sha) return false
+    }
+  }
+  return true
+}
+
+function browserPreviewCaptureArtifacts(capture: unknown): Array<{ path: string; sha?: string }> {
+  const artifacts: Array<{ path: string; sha?: string }> = []
+  const seen = new Set<unknown>()
+  const visit = (value: unknown, depth: number) => {
+    if (!value || typeof value !== "object" || seen.has(value) || depth > 6) return
+    seen.add(value)
+    const record = value as Record<string, unknown>
+    if (typeof record.path === "string" && record.path.trim()) {
+      artifacts.push({
+        path: record.path,
+        sha: typeof record.sha === "string" && record.sha.trim() ? record.sha : undefined,
+      })
+    }
+    for (const child of Object.values(record)) visit(child, depth + 1)
+  }
+  visit(capture, 0)
+  return artifacts
 }
 
 export function latestBrowserPreviewEvidenceID(input: { taskID: string; targetID?: string }): string | undefined {
