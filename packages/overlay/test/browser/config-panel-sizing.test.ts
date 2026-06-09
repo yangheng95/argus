@@ -27,6 +27,11 @@ test(
     assert.equal(process.env.OPENCORVUS_OVERLAY_BROWSER_TEST_NODE_RUNNER, "1")
     assert.equal(typeof globalThis.Bun, "undefined")
 
+    let config: Record<string, unknown> = {
+      model: "alibaba/alibaba-coding-plan-long-context",
+      tool_permissions: { websearch: "allow" },
+    }
+    const configPatches: Record<string, unknown>[] = []
     const server = await startBrowserFixture(async (req) => {
       const url = new URL(req.url)
       const path = route(url)
@@ -70,9 +75,20 @@ test(
       }
       if (path === "/provider/auth") return send({})
       if (path === "/config/providers") return send({ providers: [], default: {} })
-      if (path === "/config" && req.method === "GET")
-        return send({ model: "alibaba/alibaba-coding-plan-long-context" })
-      if (path === "/config" && req.method === "PATCH") return send({ ok: true })
+      if (path === "/config" && req.method === "GET") return send(config)
+      if (path === "/config" && req.method === "PATCH") {
+        const body = (await req.json()) as Record<string, unknown>
+        configPatches.push(body)
+        config = {
+          ...config,
+          ...body,
+          tool_permissions: {
+            ...((config.tool_permissions as Record<string, unknown> | undefined) || {}),
+            ...((body.tool_permissions as Record<string, unknown> | undefined) || {}),
+          },
+        }
+        return send(config)
+      }
       if (path === "/config/prompt") return send([])
       if (path === "/agent") return send([])
       if (path === "/channel") return send([])
@@ -207,6 +223,32 @@ test(
 
       assert.ok(clamped.left >= 7)
       assert.ok(clamped.top >= 7)
+
+      await page.click('[data-config-tab="permissions"]')
+      await page.waitForSelector('[data-config-panel="permissions"] .s-segmented-btn[data-value="ask"]')
+      const beforePermissionClick = await page.evaluate(() => {
+        const panel = document.querySelector('[data-config-panel="permissions"]') as HTMLElement
+        const allow = panel.querySelector('.s-segmented-btn[data-value="allow"]') as HTMLElement
+        const ask = panel.querySelector('.s-segmented-btn[data-value="ask"]') as HTMLElement
+        return {
+          allowActive: allow.dataset.active,
+          allowPressed: allow.getAttribute("aria-pressed"),
+          askActive: ask.dataset.active || "",
+          askPressed: ask.getAttribute("aria-pressed"),
+        }
+      })
+      assert.equal(beforePermissionClick.allowActive, "true")
+      assert.equal(beforePermissionClick.allowPressed, "true")
+      assert.equal(beforePermissionClick.askActive, "")
+      assert.equal(beforePermissionClick.askPressed, "false")
+
+      await page.click('[data-config-panel="permissions"] .s-segmented-btn[data-value="ask"]')
+      await page.waitForFunction(() => {
+        const panel = document.querySelector('[data-config-panel="permissions"]') as HTMLElement | null
+        const ask = panel?.querySelector('.s-segmented-btn[data-value="ask"]') as HTMLElement | null
+        return ask?.dataset.active === "true" && ask.getAttribute("aria-pressed") === "true"
+      })
+      assert.deepEqual(configPatches.at(-1), { tool_permissions: { websearch: "ask" } })
       await page.close()
     } finally {
       await browser.close().catch(() => undefined)
