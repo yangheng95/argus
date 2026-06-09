@@ -15,7 +15,7 @@ const fixtureURL =
 const outDir = path.resolve(new URL("../../../docs/cards-visual/", import.meta.url).pathname.replace(/^\/+/, ""))
 await Bun.$`mkdir -p ${outDir}`.quiet().catch(() => {})
 
-const browser = await launchBrowser(["--no-sandbox", "--disable-gpu"])
+const browser = await launchBrowser(["--no-sandbox", "--disable-gpu"], { headless: false })
 try {
   const page = await browser.newPage()
   await page.setViewportSize({ width: 900, height: 3000 })

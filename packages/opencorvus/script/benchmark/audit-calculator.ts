@@ -148,7 +148,7 @@ let browser: OverlayBrowser | null = null
 let page: OverlayPage | null = null
 const consoleErrors: string[] = []
 if (baseURL) {
-  browser = await launchBrowser(["--no-sandbox", "--disable-setuid-sandbox"])
+  browser = await launchBrowser(["--no-sandbox", "--disable-setuid-sandbox"], { headless: false })
   page = await browser.newPage()
   page.on("pageerror", (e) => consoleErrors.push(`pageerror: ${e.message}`))
   page.on("console", (m) => {

@@ -9,7 +9,7 @@ const fixtureURL =
   "file:///" +
   path.resolve(new URL("./card-visual.html", import.meta.url).pathname.replace(/^\/+/, "")).replace(/\\/g, "/")
 
-const browser = await launchBrowser(["--no-sandbox"])
+const browser = await launchBrowser(["--no-sandbox"], { headless: false })
 const page = await browser.newPage()
 await page.setViewportSize({ width: 900, height: 1400 })
 await page.goto(fixtureURL, { waitUntil: "load" })
