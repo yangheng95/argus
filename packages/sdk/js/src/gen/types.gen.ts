@@ -8392,7 +8392,7 @@ export type BrowserPreviewSelectTaskTargetResponse =
 export type BrowserPreviewCaptureTaskTargetData = {
   body: {
     targetID: string
-    viewportID?: "desktop" | "tablet" | "mobile"
+    viewportIDs: Array<"desktop" | "tablet" | "mobile">
   }
   path: {
     taskID: string
@@ -8437,33 +8437,38 @@ export type BrowserPreviewCaptureTaskTargetResponses = {
       }>
       source: "task-artifact" | "none"
     }
-    viewport: {
+    viewports: Array<{
       id: "desktop" | "tablet" | "mobile"
       labelKey: string
       width: number
       height: number
+    }>
+    captures: {
+      [key: string]: {
+        captured: boolean
+        passed: boolean
+        url: string
+        requested_viewport: {
+          width: number
+          height: number
+        }
+        viewport: {
+          width: number
+          height: number
+          capped: boolean
+        }
+        summary: string
+        path?: string
+        sha?: string
+        bytes?: number
+        manifest?: unknown
+        layers?: unknown
+        dom?: unknown
+        capture_error?: unknown
+      }
     }
-    capture?: {
-      captured: boolean
-      passed: boolean
-      url: string
-      requested_viewport: {
-        width: number
-        height: number
-      }
-      viewport: {
-        width: number
-        height: number
-        capped: boolean
-      }
-      summary: string
-      path?: string
-      sha?: string
-      bytes?: number
-      manifest?: unknown
-      layers?: unknown
-      dom?: unknown
-      capture_error?: unknown
+    evidenceIDs: {
+      [key: string]: string
     }
     diagnostics: Array<string>
   }

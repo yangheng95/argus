@@ -3,7 +3,7 @@ import z from "zod"
 import { ProjectRuntimePaths } from "@/project/runtime-paths"
 import type { RuntimeCaptureInput, RuntimeCaptureResult } from "@/runtime/page-capture"
 import { Identifier } from "@/id/id"
-import { runBrowserPreviewEvidenceJob, type BrowserEvidenceManifestSummary } from "./evidence-runner"
+import { runBrowserPreviewEvidenceJob, writeBrowserEvidenceManifest, type BrowserEvidenceManifestSummary } from "./evidence-runner"
 import { persistBrowserPreviewEvidence } from "./persist"
 import { BrowserPreviewTarget } from "./target"
 import { browserPreviewViewportByID, BrowserPreviewViewport, BrowserPreviewViewportID } from "./viewport"
@@ -30,13 +30,15 @@ export const BrowserPreviewCaptureSummary = z.object({
   dom: z.unknown().optional(),
   capture_error: z.unknown().optional(),
 })
+export type BrowserPreviewCaptureSummary = z.infer<typeof BrowserPreviewCaptureSummary>
 
 export const BrowserPreviewVerification = z.object({
   status: z.enum(["passed", "failed"]),
   projectRoot: z.string(),
   target: BrowserPreviewTarget,
-  viewport: BrowserPreviewViewport,
-  capture: BrowserPreviewCaptureSummary.optional(),
+  viewports: BrowserPreviewViewport.array(),
+  captures: z.record(z.string(), BrowserPreviewCaptureSummary),
+  evidenceIDs: z.record(z.string(), z.string()),
   diagnostics: z.string().array(),
 })
 export type BrowserPreviewVerification = z.infer<typeof BrowserPreviewVerification>
@@ -46,7 +48,7 @@ type CaptureRuntimePage = (input: RuntimeCaptureInput) => Promise<RuntimeCapture
 export async function verifyBrowserPreview(input: {
   projectRoot: string
   target: BrowserPreviewTarget
-  viewportID: BrowserPreviewViewportID
+  viewportIDs: BrowserPreviewViewportID[]
   taskID: string
   targetID: string
   signal?: AbortSignal
@@ -54,13 +56,27 @@ export async function verifyBrowserPreview(input: {
   captureForTest?: CaptureRuntimePage
 }): Promise<BrowserPreviewVerification> {
   const projectRoot = path.resolve(input.projectRoot)
-  const viewport = browserPreviewViewportByID(input.viewportID)
+  const viewportIDs = dedupeViewportIDs(input.viewportIDs)
+  const viewports = viewportIDs.map((id) => browserPreviewViewportByID(id))
+  if (viewports.length === 0) {
+    return {
+      status: "failed",
+      projectRoot,
+      target: input.target,
+      viewports,
+      captures: {},
+      evidenceIDs: {},
+      diagnostics: ["Preview verification requires at least one browser preview viewport.", ...input.target.diagnostics],
+    }
+  }
   if (!input.taskID || !input.targetID) {
     return {
       status: "failed",
       projectRoot,
       target: input.target,
-      viewport,
+      viewports,
+      captures: {},
+      evidenceIDs: {},
       diagnostics: [
         "Preview verification requires a task ID and persisted browser preview target ID.",
         ...input.target.diagnostics,
@@ -72,53 +88,65 @@ export async function verifyBrowserPreview(input: {
       status: "failed",
       projectRoot,
       target: input.target,
-      viewport,
+      viewports,
+      captures: {},
+      evidenceIDs: {},
       diagnostics: ["Preview verification requires a resolved http(s) URL.", ...input.target.diagnostics],
     }
   }
 
   const captureID = Identifier.ascending("artifact")
-  const outDir =
-    input.outDir ??
-    ProjectRuntimePaths.taskAbsolute(projectRoot, input.taskID, "browser-preview", captureID, viewport.id)
-  const { result, manifest } = input.captureForTest
-    ? {
-        result: await input.captureForTest({
-          url: input.target.url,
-          outDir,
-          viewport_width: viewport.width,
-          viewport_height: viewport.height,
-          fileLabel: viewport.id,
-          signal: input.signal,
-        }),
-        manifest: undefined,
-      }
+  const outDir = input.outDir ?? ProjectRuntimePaths.taskAbsolute(projectRoot, input.taskID, "browser-preview", captureID)
+  const { captures, manifest } = input.captureForTest
+    ? await captureWithTestHarness({
+        taskID: input.taskID,
+        targetID: input.targetID,
+        url: input.target.url,
+        outDir,
+        viewports,
+        signal: input.signal,
+        captureForTest: input.captureForTest,
+      })
     : await captureWithBrowserEvidenceRunner({
         taskID: input.taskID,
         targetID: input.targetID,
         url: input.target.url,
         outDir,
-        viewportID: viewport.id,
+        viewportIDs,
         signal: input.signal,
       })
-  const status = result.captured && result.passed ? "passed" : "failed"
-  const diagnostics = [result.summary]
-  const evidenceID = persistBrowserPreviewEvidence({
-    taskID: input.taskID,
-    targetID: input.targetID,
-    viewportID: viewport.id,
-    status,
-    summary: result.summary,
-    capture: manifest ? { ...result, manifest } : result,
-    diagnostics,
+  const diagnostics = viewports.map((viewport) => captures[viewport.id]?.summary ?? `missing capture for ${viewport.id}`)
+  const evidenceIDs: Record<string, string> = {}
+  const responseCaptures: Record<string, BrowserPreviewCaptureSummary> = {}
+  for (const viewport of viewports) {
+    const result = captures[viewport.id]
+    if (!result) continue
+    responseCaptures[viewport.id] = { ...result, manifest }
+    const status = result.captured && result.passed ? "passed" : "failed"
+    evidenceIDs[viewport.id] = persistBrowserPreviewEvidence({
+      taskID: input.taskID,
+      targetID: input.targetID,
+      viewportID: viewport.id,
+      status,
+      summary: result.summary,
+      capture: responseCaptures[viewport.id],
+      diagnostics: [result.summary],
+    })
+  }
+  const status = viewports.every((viewport) => {
+    const result = captures[viewport.id]
+    return result?.captured && result.passed
   })
+    ? "passed"
+    : "failed"
 
   return {
     status,
     projectRoot,
-    target: { ...input.target, latestEvidenceID: evidenceID },
-    viewport,
-    capture: manifest ? { ...result, manifest } : result,
+    target: { ...input.target, latestEvidenceID: evidenceIDs[viewports[0]?.id ?? ""] },
+    viewports,
+    captures: responseCaptures,
+    evidenceIDs,
     diagnostics,
   }
 }
@@ -128,21 +156,69 @@ async function captureWithBrowserEvidenceRunner(input: {
   targetID: string
   url: string
   outDir: string
-  viewportID: BrowserPreviewViewportID
+  viewportIDs: BrowserPreviewViewportID[]
   signal?: AbortSignal
-}): Promise<{ result: RuntimeCaptureResult; manifest?: BrowserEvidenceManifestSummary }> {
+}): Promise<{ captures: Record<string, RuntimeCaptureResult>; manifest: BrowserEvidenceManifestSummary }> {
   const job = await runBrowserPreviewEvidenceJob({
     jobID: Identifier.ascending("artifact"),
     taskID: input.taskID,
     targetID: input.targetID,
     url: input.url,
     outDir: input.outDir,
-    viewportIDs: [input.viewportID],
+    viewportIDs: input.viewportIDs,
     signal: input.signal,
   })
-  const result = job.captures[input.viewportID]
-  if (!result) {
-    throw new Error(`Browser preview evidence runner did not return viewport ${input.viewportID}`)
+  for (const viewportID of input.viewportIDs) {
+    if (!job.captures[viewportID]) {
+      throw new Error(`Browser preview evidence runner did not return viewport ${viewportID}`)
+    }
   }
-  return { result, manifest: job.manifest }
+  return { captures: job.captures, manifest: job.manifest }
+}
+
+async function captureWithTestHarness(input: {
+  taskID: string
+  targetID: string
+  url: string
+  outDir: string
+  viewports: BrowserPreviewViewport[]
+  signal?: AbortSignal
+  captureForTest: CaptureRuntimePage
+}): Promise<{ captures: Record<string, RuntimeCaptureResult>; manifest: BrowserEvidenceManifestSummary }> {
+  const captures: Record<string, RuntimeCaptureResult> = {}
+  const artifactPaths: string[] = []
+  const diagnostics: string[] = []
+  for (const viewport of input.viewports) {
+    const result = await input.captureForTest({
+      url: input.url,
+      outDir: input.outDir,
+      viewport_width: viewport.width,
+      viewport_height: viewport.height,
+      fileLabel: viewport.id,
+      signal: input.signal,
+    })
+    captures[viewport.id] = result
+    if (result.captured && result.path) artifactPaths.push(result.path)
+    diagnostics.push(result.summary)
+  }
+  const manifest = await writeBrowserEvidenceManifest({
+    outDir: input.outDir,
+    jobID: Identifier.ascending("artifact"),
+    taskID: input.taskID,
+    targetID: input.targetID,
+    url: input.url,
+    viewportIDs: input.viewports.map((viewport) => viewport.id),
+    artifactPaths,
+    captures,
+    diagnostics,
+  })
+  return { captures, manifest }
+}
+
+function dedupeViewportIDs(ids: BrowserPreviewViewportID[]): BrowserPreviewViewportID[] {
+  const out: BrowserPreviewViewportID[] = []
+  for (const id of ids) {
+    if (!out.includes(id)) out.push(id)
+  }
+  return out
 }

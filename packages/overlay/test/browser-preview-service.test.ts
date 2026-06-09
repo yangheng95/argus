@@ -142,13 +142,16 @@ test("browser preview service asks the backend to persist Playwright evidence", 
             ],
             source: "task-artifact",
           },
-          viewport: { id: "mobile", labelKey: "browser_preview.viewport.mobile", width: 390, height: 844 },
-          capture: {
-            captured: true,
-            passed: true,
-            url: "http://127.0.0.1:5173/",
-            summary: "all runtime capture layers passed",
+          viewports: [{ id: "mobile", labelKey: "browser_preview.viewport.mobile", width: 390, height: 844 }],
+          captures: {
+            mobile: {
+              captured: true,
+              passed: true,
+              url: "http://127.0.0.1:5173/",
+              summary: "all runtime capture layers passed",
+            },
           },
+          evidenceIDs: { mobile: "art_previewevidence00000001" },
           diagnostics: ["all runtime capture layers passed"],
         } as T,
       }
@@ -158,7 +161,7 @@ test("browser preview service asks the backend to persist Playwright evidence", 
   const result = await captureTaskBrowserPreviewEvidence({
     taskID: TASK_ID,
     targetID: "art_previewtarget000000000001",
-    viewportID: "mobile",
+    viewportIDs: ["mobile"],
   })
 
   expect(result.status).toBe("passed")
@@ -169,7 +172,7 @@ test("browser preview service asks the backend to persist Playwright evidence", 
     kind: "json",
     value: {
       targetID: "art_previewtarget000000000001",
-      viewportID: "mobile",
+      viewportIDs: ["mobile"],
     },
   })
 })

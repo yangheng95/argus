@@ -37,14 +37,15 @@ export interface BrowserPreviewVerification {
   status: "passed" | "failed"
   projectRoot: string
   target: BrowserPreviewTarget
-  viewport: BrowserPreviewViewport
-  capture?: {
+  viewports: BrowserPreviewViewport[]
+  captures: Partial<Record<BrowserPreviewViewportID, {
     captured: boolean
     passed: boolean
     url: string
     summary: string
     path?: string
-  }
+  }>>
+  evidenceIDs: Partial<Record<BrowserPreviewViewportID, string>>
   diagnostics: string[]
 }
 
@@ -94,7 +95,7 @@ export async function selectTaskBrowserPreviewTarget(input: {
 export async function captureTaskBrowserPreviewEvidence(input: {
   taskID: string
   targetID: string
-  viewportID: BrowserPreviewViewportID
+  viewportIDs: BrowserPreviewViewportID[]
   signal?: AbortSignal
 }): Promise<BrowserPreviewVerification> {
   return (await apiJson(`task/${encodeURIComponent(input.taskID)}/browser-preview/capture`, {
@@ -102,7 +103,7 @@ export async function captureTaskBrowserPreviewEvidence(input: {
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({
       targetID: input.targetID,
-      viewportID: input.viewportID,
+      viewportIDs: input.viewportIDs,
     }),
     signal: input.signal,
   })) as BrowserPreviewVerification

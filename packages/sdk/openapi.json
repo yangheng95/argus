@@ -12948,109 +12948,127 @@
                         "source"
                       ]
                     },
-                    "viewport": {
-                      "type": "object",
-                      "properties": {
-                        "id": {
-                          "type": "string",
-                          "enum": [
-                            "desktop",
-                            "tablet",
-                            "mobile"
-                          ]
+                    "viewports": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "id": {
+                            "type": "string",
+                            "enum": [
+                              "desktop",
+                              "tablet",
+                              "mobile"
+                            ]
+                          },
+                          "labelKey": {
+                            "type": "string"
+                          },
+                          "width": {
+                            "type": "integer",
+                            "exclusiveMinimum": 0,
+                            "maximum": 9007199254740991
+                          },
+                          "height": {
+                            "type": "integer",
+                            "exclusiveMinimum": 0,
+                            "maximum": 9007199254740991
+                          }
                         },
-                        "labelKey": {
-                          "type": "string"
-                        },
-                        "width": {
-                          "type": "integer",
-                          "exclusiveMinimum": 0,
-                          "maximum": 9007199254740991
-                        },
-                        "height": {
-                          "type": "integer",
-                          "exclusiveMinimum": 0,
-                          "maximum": 9007199254740991
-                        }
-                      },
-                      "required": [
-                        "id",
-                        "labelKey",
-                        "width",
-                        "height"
-                      ]
+                        "required": [
+                          "id",
+                          "labelKey",
+                          "width",
+                          "height"
+                        ]
+                      }
                     },
-                    "capture": {
+                    "captures": {
                       "type": "object",
-                      "properties": {
-                        "captured": {
-                          "type": "boolean"
-                        },
-                        "passed": {
-                          "type": "boolean"
-                        },
-                        "url": {
-                          "type": "string"
-                        },
-                        "requested_viewport": {
-                          "type": "object",
-                          "properties": {
-                            "width": {
-                              "type": "number"
-                            },
-                            "height": {
-                              "type": "number"
-                            }
-                          },
-                          "required": [
-                            "width",
-                            "height"
-                          ]
-                        },
-                        "viewport": {
-                          "type": "object",
-                          "properties": {
-                            "width": {
-                              "type": "number"
-                            },
-                            "height": {
-                              "type": "number"
-                            },
-                            "capped": {
-                              "type": "boolean"
-                            }
-                          },
-                          "required": [
-                            "width",
-                            "height",
-                            "capped"
-                          ]
-                        },
-                        "summary": {
-                          "type": "string"
-                        },
-                        "path": {
-                          "type": "string"
-                        },
-                        "sha": {
-                          "type": "string"
-                        },
-                        "bytes": {
-                          "type": "number"
-                        },
-                        "manifest": {},
-                        "layers": {},
-                        "dom": {},
-                        "capture_error": {}
+                      "propertyNames": {
+                        "type": "string"
                       },
-                      "required": [
-                        "captured",
-                        "passed",
-                        "url",
-                        "requested_viewport",
-                        "viewport",
-                        "summary"
-                      ]
+                      "additionalProperties": {
+                        "type": "object",
+                        "properties": {
+                          "captured": {
+                            "type": "boolean"
+                          },
+                          "passed": {
+                            "type": "boolean"
+                          },
+                          "url": {
+                            "type": "string"
+                          },
+                          "requested_viewport": {
+                            "type": "object",
+                            "properties": {
+                              "width": {
+                                "type": "number"
+                              },
+                              "height": {
+                                "type": "number"
+                              }
+                            },
+                            "required": [
+                              "width",
+                              "height"
+                            ]
+                          },
+                          "viewport": {
+                            "type": "object",
+                            "properties": {
+                              "width": {
+                                "type": "number"
+                              },
+                              "height": {
+                                "type": "number"
+                              },
+                              "capped": {
+                                "type": "boolean"
+                              }
+                            },
+                            "required": [
+                              "width",
+                              "height",
+                              "capped"
+                            ]
+                          },
+                          "summary": {
+                            "type": "string"
+                          },
+                          "path": {
+                            "type": "string"
+                          },
+                          "sha": {
+                            "type": "string"
+                          },
+                          "bytes": {
+                            "type": "number"
+                          },
+                          "manifest": {},
+                          "layers": {},
+                          "dom": {},
+                          "capture_error": {}
+                        },
+                        "required": [
+                          "captured",
+                          "passed",
+                          "url",
+                          "requested_viewport",
+                          "viewport",
+                          "summary"
+                        ]
+                      }
+                    },
+                    "evidenceIDs": {
+                      "type": "object",
+                      "propertyNames": {
+                        "type": "string"
+                      },
+                      "additionalProperties": {
+                        "type": "string"
+                      }
                     },
                     "diagnostics": {
                       "type": "array",
@@ -13063,7 +13081,9 @@
                     "status",
                     "projectRoot",
                     "target",
-                    "viewport",
+                    "viewports",
+                    "captures",
+                    "evidenceIDs",
                     "diagnostics"
                   ]
                 }
@@ -13101,18 +13121,22 @@
                     "type": "string",
                     "minLength": 1
                   },
-                  "viewportID": {
-                    "default": "desktop",
-                    "type": "string",
-                    "enum": [
-                      "desktop",
-                      "tablet",
-                      "mobile"
-                    ]
+                  "viewportIDs": {
+                    "minItems": 1,
+                    "type": "array",
+                    "items": {
+                      "type": "string",
+                      "enum": [
+                        "desktop",
+                        "tablet",
+                        "mobile"
+                      ]
+                    }
                   }
                 },
                 "required": [
-                  "targetID"
+                  "targetID",
+                  "viewportIDs"
                 ]
               }
             }

@@ -29,7 +29,7 @@ export function BrowserPreviewPanel(props: BrowserPreviewPanelProps) {
   const [verificationRequest, setVerificationRequest] = createSignal<{
     taskID: string
     targetID: string
-    viewportID: BrowserPreviewViewportID
+    viewportIDs: BrowserPreviewViewportID[]
     token: number
   }>()
   const [target] = createResource(
@@ -45,7 +45,7 @@ export function BrowserPreviewPanel(props: BrowserPreviewPanelProps) {
     captureTaskBrowserPreviewEvidence({
       taskID: request.taskID,
       targetID: request.targetID,
-      viewportID: request.viewportID,
+      viewportIDs: request.viewportIDs,
     }),
   )
   const panelActive = createMemo(() => props.active())
@@ -74,7 +74,7 @@ export function BrowserPreviewPanel(props: BrowserPreviewPanelProps) {
   const frameUrl = createMemo(() => currentTarget()?.url)
   const renderedEvidence = createMemo<BrowserPreviewEvidence | undefined>(() => {
     const verified = verification()
-    if (verified) return evidenceFromVerification(verified)
+    if (verified) return evidenceFromVerification(verified, viewportID())
     return latestEvidence()
   })
 
@@ -113,7 +113,9 @@ export function BrowserPreviewPanel(props: BrowserPreviewPanelProps) {
     const taskID = props.taskID()
     const resolved = currentTarget()
     if (!taskID || !resolved?.url || !resolved.id) return
-    setVerificationRequest({ taskID, targetID: resolved.id, viewportID: viewportID(), token: Date.now() })
+    const viewportIDs = viewports().map((viewport) => viewport.id)
+    if (viewportIDs.length === 0) return
+    setVerificationRequest({ taskID, targetID: resolved.id, viewportIDs, token: Date.now() })
   }
 
   return (
@@ -250,7 +252,7 @@ export function BrowserPreviewPanel(props: BrowserPreviewPanelProps) {
                 {(resolved) => (
                   <>
                     <Icon name={resolved().status === "passed" ? "status-completed" : "status-failed"} size={14} />
-                    <span>{resolved().capture?.summary ?? resolved().diagnostics.join(" ")}</span>
+                    <span>{resolved().captures[viewportID()]?.summary ?? resolved().diagnostics.join(" ")}</span>
                   </>
                 )}
               </Match>
@@ -368,17 +370,21 @@ function emptyMessage(status: string): string {
   }
 }
 
-function evidenceFromVerification(input: ReturnType<typeof captureTaskBrowserPreviewEvidence> extends Promise<infer T>
-  ? T
-  : never): BrowserPreviewEvidence {
+function evidenceFromVerification(
+  input: ReturnType<typeof captureTaskBrowserPreviewEvidence> extends Promise<infer T> ? T : never,
+  viewportID: BrowserPreviewViewportID,
+): BrowserPreviewEvidence {
+  const capture = input.captures[viewportID]
+  const evidenceID = input.evidenceIDs[viewportID]
+  const summary = capture?.summary ?? input.diagnostics.join(" ")
   return {
-    id: input.target.latestEvidenceID ?? `${input.target.id ?? "target"}:${input.viewport.id}`,
+    id: evidenceID ?? `${input.target.id ?? "target"}:${viewportID}`,
     taskID: input.target.taskID ?? "",
     targetID: input.target.id ?? "",
-    viewportID: input.viewport.id,
-    status: input.status,
-    summary: input.capture?.summary ?? input.diagnostics.join(" "),
-    capture: input.capture,
+    viewportID,
+    status: capture?.captured && capture.passed ? "passed" : "failed",
+    summary,
+    capture,
     diagnostics: input.diagnostics,
     timeCompleted: Date.now(),
     timeCreated: Date.now(),

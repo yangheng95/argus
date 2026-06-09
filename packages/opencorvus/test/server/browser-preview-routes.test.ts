@@ -307,7 +307,7 @@ describe("browser preview routes", () => {
         "content-type": "application/json",
         "x-opencorvus-directory": tmp.path,
       },
-      body: JSON.stringify({ viewportID: "mobile" }),
+      body: JSON.stringify({ viewportIDs: ["mobile"] }),
     })
 
     expect(response.status).toBe(400)
@@ -327,18 +327,20 @@ describe("browser preview routes", () => {
         "content-type": "application/json",
         "x-opencorvus-directory": tmp.path,
       },
-      body: JSON.stringify({ targetID: "art_previewtarget_missing", viewportID: "desktop" }),
+      body: JSON.stringify({ targetID: "art_previewtarget_missing", viewportIDs: ["desktop"] }),
     })
 
     expect(response.status).toBe(200)
     const body = (await response.json()) as {
       status: string
-      capture?: unknown
+      captures?: Record<string, unknown>
+      evidenceIDs?: Record<string, string>
       target?: { status: string; url?: string; diagnostics?: string[] }
       diagnostics?: string[]
     }
     expect(body.status).toBe("failed")
-    expect(body.capture).toBeUndefined()
+    expect(body.captures).toEqual({})
+    expect(body.evidenceIDs).toEqual({})
     expect(body.target?.status).toBe("failed")
     expect(body.target?.url).toBeUndefined()
     expect(body.target?.diagnostics?.join("\n")).toContain(
