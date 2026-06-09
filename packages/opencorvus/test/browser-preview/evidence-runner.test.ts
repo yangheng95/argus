@@ -2,11 +2,56 @@ import { describe, expect, test } from "bun:test"
 import fs from "node:fs/promises"
 import path from "node:path"
 import { PNG } from "pngjs"
-import { finalizeBrowserPreviewSidecarCapture } from "../../src/browser-preview/evidence-runner"
+import { finalizeBrowserPreviewSidecarCapture, writeBrowserEvidenceManifest } from "../../src/browser-preview/evidence-runner"
 import type { RuntimeCaptureSuccess } from "../../src/runtime/page-capture"
 import { tmpdir } from "../fixture/fixture"
 
 describe("browser preview evidence runner contract", () => {
+  test("manifest records viewport IDs and diagnostics path as runner evidence metadata", async () => {
+    await using tmp = await tmpdir()
+    const desktopPath = path.join(tmp.path, "desktop.png")
+    const mobilePath = path.join(tmp.path, "mobile.png")
+    const captures = {
+      desktop: passedCapture("desktop", desktopPath),
+      mobile: failedCapture("mobile"),
+    }
+
+    const manifest = await writeBrowserEvidenceManifest({
+      outDir: tmp.path,
+      jobID: "art_preview_job",
+      taskID: "tsk_preview",
+      targetID: "art_preview_target",
+      url: "http://127.0.0.1:5173/",
+      viewportIDs: ["desktop", "mobile"],
+      artifactPaths: [desktopPath, mobilePath],
+      captures,
+      diagnostics: ["desktop passed", "mobile failed"],
+    })
+
+    expect(manifest.operations).toEqual([
+      {
+        kind: "preview-capture",
+        status: "failed",
+        viewportIDs: ["desktop", "mobile"],
+        artifactPaths: [desktopPath, mobilePath],
+        diagnosticsPath: path.join(tmp.path, "diagnostics.json"),
+      },
+    ])
+    const manifestJSON = JSON.parse(await fs.readFile(manifest.manifestPath, "utf8"))
+    expect(manifestJSON.operations[0].viewportIDs).toEqual(["desktop", "mobile"])
+    expect(manifestJSON.operations[0].diagnosticsPath).toBe(path.join(tmp.path, "diagnostics.json"))
+    expect(manifestJSON.captures.desktop.summary).toBe("desktop passed")
+    const diagnosticsJSON = JSON.parse(await fs.readFile(path.join(tmp.path, "diagnostics.json"), "utf8"))
+    expect(diagnosticsJSON).toMatchObject({
+      jobID: "art_preview_job",
+      taskID: "tsk_preview",
+      targetID: "art_preview_target",
+      url: "http://127.0.0.1:5173/",
+      viewportIDs: ["desktop", "mobile"],
+      diagnostics: ["desktop passed", "mobile failed"],
+    })
+  })
+
   test("does not synthesize passed layers when the sidecar omits structured evidence", async () => {
     await using tmp = await tmpdir()
     const screenshotPath = path.join(tmp.path, "desktop.png")
@@ -70,6 +115,36 @@ function sidecarCapture(input: {
     layers: input.layers,
     dom: input.dom,
     summary: "sidecar claimed pass",
+  } as const
+}
+
+function passedCapture(id: "desktop" | "mobile", screenshotPath: string) {
+  return {
+    captured: true,
+    passed: true,
+    url: "http://127.0.0.1:5173/",
+    target_url: "http://127.0.0.1:5173/",
+    path: screenshotPath,
+    sha: "abc123",
+    bytes: 128,
+    size: { width: 1280, height: 800 },
+    requested_viewport: { width: 1280, height: 800 },
+    viewport: { width: 1280, height: 800, capped: false },
+    layers: passedLayers(screenshotPath),
+    dom: populatedDom(),
+    summary: `${id} passed`,
+  } as const
+}
+
+function failedCapture(id: "desktop" | "mobile") {
+  return {
+    captured: false,
+    passed: false,
+    url: "http://127.0.0.1:5173/",
+    requested_viewport: { width: 390, height: 844 },
+    viewport: { width: 390, height: 844, capped: false },
+    capture_error: { kind: "capture_failed", message: `${id} failed` },
+    summary: `${id} failed`,
   } as const
 }
 
