@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, mock, test } from "bun:test"
 import { and, eq } from "drizzle-orm"
+import crypto from "node:crypto"
 import fs from "node:fs/promises"
 import path from "node:path"
 import { EngineArtifactTable, EngineTaskTable } from "../../src/engine/engine.sql"
@@ -183,13 +184,16 @@ describe("browser preview routes", () => {
     await using tmp = await tmpdir()
     const taskID = await seedTask(tmp.path)
     const target = await persistBrowserPreviewTarget({ taskID, url: "http://127.0.0.1:5174/task" })
+    const screenshotPath = path.join(tmp.path, "desktop.png")
+    await fs.writeFile(screenshotPath, "browser-preview-screenshot")
+    const sha = sha16("browser-preview-screenshot")
     const evidenceID = persistBrowserPreviewEvidence({
       taskID,
       targetID: target.id,
       viewportID: "desktop",
       status: "passed",
       summary: "all runtime capture layers passed",
-      capture: { captured: true, passed: true, path: "D:/workspace/app/.opencorvus/browser-preview/desktop.png" },
+      capture: { captured: true, passed: true, path: screenshotPath, sha },
       diagnostics: ["all runtime capture layers passed"],
       now: 1000,
     })
@@ -208,7 +212,7 @@ describe("browser preview routes", () => {
       targetID: string
       viewportID: string
       status: string
-      capture?: { path?: string }
+      capture?: { path?: string; sha?: string }
       diagnostics?: string[]
     }
     expect(body.id).toBe(evidenceID)
@@ -217,6 +221,7 @@ describe("browser preview routes", () => {
     expect(body.viewportID).toBe("desktop")
     expect(body.status).toBe("passed")
     expect(body.capture?.path).toContain("desktop.png")
+    expect(body.capture?.sha).toBe(sha)
     expect(body.diagnostics).toEqual(["all runtime capture layers passed"])
 
     const missing = await app.request(`/task/${taskID}/browser-preview/evidence/art_missing`, {
@@ -225,6 +230,47 @@ describe("browser preview routes", () => {
       },
     })
     expect(missing.status).toBe(404)
+  }, { timeout: ROUTE_TEST_TIMEOUT_MILLISECONDS })
+
+  test("GET /task/:taskID/browser-preview/evidence/:evidenceID rejects missing or mismatched screenshot artifacts", async () => {
+    await using tmp = await tmpdir()
+    const taskID = await seedTask(tmp.path)
+    const target = await persistBrowserPreviewTarget({ taskID, url: "http://127.0.0.1:5174/task" })
+    const missingEvidenceID = persistBrowserPreviewEvidence({
+      taskID,
+      targetID: target.id,
+      viewportID: "desktop",
+      status: "passed",
+      summary: "all runtime capture layers passed",
+      capture: { captured: true, passed: true, path: path.join(tmp.path, "missing.png"), sha: "missing" },
+      diagnostics: ["all runtime capture layers passed"],
+    })
+    const screenshotPath = path.join(tmp.path, "mismatch.png")
+    await fs.writeFile(screenshotPath, "actual-screenshot")
+    const mismatchEvidenceID = persistBrowserPreviewEvidence({
+      taskID,
+      targetID: target.id,
+      viewportID: "desktop",
+      status: "passed",
+      summary: "all runtime capture layers passed",
+      capture: { captured: true, passed: true, path: screenshotPath, sha: sha16("different-screenshot") },
+      diagnostics: ["all runtime capture layers passed"],
+    })
+    const app = Server.App()
+
+    const missing = await app.request(`/task/${taskID}/browser-preview/evidence/${missingEvidenceID}`, {
+      headers: {
+        "x-opencorvus-directory": tmp.path,
+      },
+    })
+    expect(missing.status).toBe(404)
+
+    const mismatch = await app.request(`/task/${taskID}/browser-preview/evidence/${mismatchEvidenceID}`, {
+      headers: {
+        "x-opencorvus-directory": tmp.path,
+      },
+    })
+    expect(mismatch.status).toBe(404)
   }, { timeout: ROUTE_TEST_TIMEOUT_MILLISECONDS })
 
   test("old project-scoped browser preview target route is removed", async () => {
@@ -301,3 +347,7 @@ describe("browser preview routes", () => {
     expect(body.diagnostics?.join("\n")).toContain("requires a resolved http(s) URL")
   }, { timeout: ROUTE_TEST_TIMEOUT_MILLISECONDS })
 })
+
+function sha16(text: string): string {
+  return crypto.createHash("sha256").update(text).digest("hex").slice(0, 16)
+}

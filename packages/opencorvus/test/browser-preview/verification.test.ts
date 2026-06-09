@@ -2,7 +2,7 @@ import { afterEach, describe, expect, test } from "bun:test"
 import { eq } from "drizzle-orm"
 import { EngineArtifactTable, EngineTaskTable } from "../../src/engine/engine.sql"
 import { Instance } from "../../src/project/instance"
-import { findBrowserPreviewEvidenceByID, persistBrowserPreviewTarget } from "../../src/browser-preview/persist"
+import { findReadableBrowserPreviewEvidenceByID, persistBrowserPreviewTarget } from "../../src/browser-preview/persist"
 import { resolveBrowserPreviewTarget } from "../../src/browser-preview/target"
 import { verifyBrowserPreview } from "../../src/browser-preview/verification"
 import { Database } from "../../src/storage/db"
@@ -141,7 +141,7 @@ describe("browser preview verification", () => {
     expect(artifact?.task_id).toBe(taskID)
     expect(artifact?.payload?.target_id).toBe(persisted.id)
     expect(artifact?.payload?.status).toBe("failed")
-    const evidence = findBrowserPreviewEvidenceByID({ taskID, evidenceID: result.target.latestEvidenceID! })
+    const evidence = await findReadableBrowserPreviewEvidenceByID({ taskID, evidenceID: result.target.latestEvidenceID! })
     expect(evidence?.taskID).toBe(taskID)
     expect(evidence?.targetID).toBe(persisted.id)
     expect(evidence?.viewportID).toBe("desktop")
