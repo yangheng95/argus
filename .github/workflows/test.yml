@@ -148,7 +148,7 @@ jobs:
         working-directory: packages/overlay
         env:
           OPENCORVUS_BROWSER_EXECUTABLE: /usr/bin/chromium
-        run: bun run test:browser
+        run: node test/browser-runner.mjs
 
   overlay-check:
     name: overlay-check (${{ matrix.settings.name }})
