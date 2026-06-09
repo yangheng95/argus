@@ -51,7 +51,7 @@ describe("browser preview verification", () => {
       taskID,
       targetID: target.id!,
       target,
-      viewportID: "tablet",
+      viewportIDs: ["tablet"],
       outDir: tmp.path,
       async captureForTest(input) {
         capturedInput = input
@@ -80,11 +80,63 @@ describe("browser preview verification", () => {
     })
 
     expect(result.status).toBe("passed")
-    expect(result.viewport.id).toBe("tablet")
+    expect(result.viewports.map((viewport) => viewport.id)).toEqual(["tablet"])
+    expect(result.captures.tablet?.summary).toBe("all runtime capture layers passed on http://127.0.0.1:5173/")
+    expect(result.evidenceIDs.tablet).toBeTruthy()
     expect(capturedInput?.url).toBe("http://127.0.0.1:5173/")
     expect(capturedInput?.viewport_width).toBe(834)
     expect(capturedInput?.viewport_height).toBe(1112)
     expect(capturedInput?.fileLabel).toBe("tablet")
+  })
+
+  test("captures every requested viewport in one verification job", async () => {
+    await using tmp = await tmpdir()
+    const taskID = await seedTask(tmp.path)
+    await persistBrowserPreviewTarget({ taskID, url: "http://127.0.0.1:5173/" })
+    const target = await resolveBrowserPreviewTarget({ projectRoot: tmp.path, taskID, isVisible: async () => true })
+    const capturedInputs: RuntimeCaptureInput[] = []
+
+    const result = await verifyBrowserPreview({
+      projectRoot: tmp.path,
+      taskID,
+      targetID: target.id!,
+      target,
+      viewportIDs: ["desktop", "mobile"],
+      outDir: tmp.path,
+      async captureForTest(input) {
+        capturedInputs.push(input)
+        return {
+          captured: true,
+          passed: input.fileLabel !== "mobile",
+          url: input.url,
+          target_url: input.url,
+          path: `${tmp.path}/${input.fileLabel}.png`,
+          sha: `${input.fileLabel}-sha`,
+          bytes: 128,
+          size: { width: input.viewport_width ?? 0, height: input.viewport_height ?? 0 },
+          requested_viewport: { width: input.viewport_width ?? 0, height: input.viewport_height ?? 0 },
+          viewport: { width: input.viewport_width ?? 0, height: input.viewport_height ?? 0, capped: false },
+          layers: passedLayers(`${tmp.path}/${input.fileLabel}.png`),
+          dom: {
+            textLength: 12,
+            nodeCount: 8,
+            bodyDescendantCount: 6,
+            hasBodyChildren: true,
+            isEmptyRootShell: false,
+          },
+          summary: `${input.fileLabel} capture ${input.fileLabel === "mobile" ? "failed" : "passed"}`,
+        } as RuntimeCaptureResult
+      },
+    })
+
+    expect(result.status).toBe("failed")
+    expect(result.viewports.map((viewport) => viewport.id)).toEqual(["desktop", "mobile"])
+    expect(capturedInputs.map((input) => input.fileLabel)).toEqual(["desktop", "mobile"])
+    expect(result.captures.desktop?.summary).toBe("desktop capture passed")
+    expect(result.captures.mobile?.summary).toBe("mobile capture failed")
+    expect(Object.keys(result.evidenceIDs).sort()).toEqual(["desktop", "mobile"])
+    expect((result.captures.desktop as any).manifest.operations[0].viewportIDs).toEqual(["desktop", "mobile"])
+    expect((result.captures.mobile as any).manifest.operations[0].viewportIDs).toEqual(["desktop", "mobile"])
   })
 
   test("fails visibly when the target has no URL", async () => {
@@ -97,14 +149,15 @@ describe("browser preview verification", () => {
       taskID,
       targetID: "art_missing_browser_preview_target",
       target,
-      viewportID: "desktop",
+      viewportIDs: ["desktop"],
       async captureForTest() {
         throw new Error("capture should not run")
       },
     })
 
     expect(result.status).toBe("failed")
-    expect(result.capture).toBeUndefined()
+    expect(result.captures).toEqual({})
+    expect(result.evidenceIDs).toEqual({})
     expect(result.diagnostics.join("\n")).toContain("requires a resolved http(s) URL")
   })
 
@@ -120,7 +173,7 @@ describe("browser preview verification", () => {
       taskID,
       targetID: "",
       target,
-      viewportID: "desktop",
+      viewportIDs: ["desktop"],
       async captureForTest() {
         captureRan = true
         throw new Error("capture should not run")
@@ -128,8 +181,36 @@ describe("browser preview verification", () => {
     })
 
     expect(result.status).toBe("failed")
-    expect(result.capture).toBeUndefined()
+    expect(result.captures).toEqual({})
+    expect(result.evidenceIDs).toEqual({})
     expect(result.diagnostics.join("\n")).toContain("requires a task ID and persisted browser preview target ID")
+    expect(captureRan).toBe(false)
+  })
+
+  test("fails before capture when no viewport is requested", async () => {
+    await using tmp = await tmpdir()
+    const taskID = await seedTask(tmp.path)
+    await persistBrowserPreviewTarget({ taskID, url: "http://127.0.0.1:5173/" })
+    const target = await resolveBrowserPreviewTarget({ projectRoot: tmp.path, taskID, isVisible: async () => true })
+    let captureRan = false
+
+    const result = await verifyBrowserPreview({
+      projectRoot: tmp.path,
+      taskID,
+      targetID: target.id!,
+      target,
+      viewportIDs: [],
+      async captureForTest() {
+        captureRan = true
+        throw new Error("capture should not run")
+      },
+    })
+
+    expect(result.status).toBe("failed")
+    expect(result.viewports).toEqual([])
+    expect(result.captures).toEqual({})
+    expect(result.evidenceIDs).toEqual({})
+    expect(result.diagnostics.join("\n")).toContain("requires at least one browser preview viewport")
     expect(captureRan).toBe(false)
   })
 
@@ -144,7 +225,7 @@ describe("browser preview verification", () => {
       taskID,
       targetID: persisted.id,
       target,
-      viewportID: "desktop",
+      viewportIDs: ["desktop"],
       outDir: tmp.path,
       async captureForTest(input) {
         return {
@@ -161,6 +242,7 @@ describe("browser preview verification", () => {
 
     expect(result.status).toBe("failed")
     expect(result.target.latestEvidenceID).toBeTruthy()
+    expect(result.evidenceIDs.desktop).toBe(result.target.latestEvidenceID)
     const artifact = Database.use((db) =>
       db
         .select()

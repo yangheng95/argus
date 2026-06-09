@@ -75,8 +75,17 @@ describe("SDK OpenCorvus client contract", () => {
     const sdk = readRepoFile("packages", "sdk", "js", "src", "gen", "sdk.gen.ts")
     const types = readRepoFile("packages", "sdk", "js", "src", "gen", "types.gen.ts")
     const openapi = JSON.parse(readRepoFile("packages", "sdk", "openapi.json")) as {
-      paths: Record<string, Record<string, { requestBody?: { required?: boolean } }>>
+      paths: Record<
+        string,
+        Record<
+          string,
+          { requestBody?: { required?: boolean; content?: { "application/json"?: { schema?: { required?: string[] } } } } }
+        >
+      >
     }
+    const captureSchema =
+      openapi.paths["/task/{taskID}/browser-preview/capture"]?.post?.requestBody?.content?.["application/json"]
+        ?.schema
 
     expect(
       openapi.paths["/task/{taskID}/browser-preview/target"]?.put?.requestBody?.required,
@@ -84,9 +93,15 @@ describe("SDK OpenCorvus client contract", () => {
     expect(
       openapi.paths["/task/{taskID}/browser-preview/capture"]?.post?.requestBody?.required,
     ).toBe(true)
+    expect(captureSchema?.required).toContain("targetID")
+    expect(captureSchema?.required).toContain("viewportIDs")
     expect(sdk).not.toContain("targetID?: string")
+    expect(sdk).not.toContain('viewportID?: "desktop" | "tablet" | "mobile"')
+    expect(sdk).not.toContain('viewportID: "desktop" | "tablet" | "mobile"')
     expect(sdk).toContain("targetID: string")
+    expect(sdk).toContain('viewportIDs: Array<"desktop" | "tablet" | "mobile">')
     expect(types).toContain("export type BrowserPreviewSelectTaskTargetData = {\n  body: {")
     expect(types).toContain("export type BrowserPreviewCaptureTaskTargetData = {\n  body: {")
+    expect(types).toContain('viewportIDs: Array<"desktop" | "tablet" | "mobile">')
   })
 })

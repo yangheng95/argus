@@ -5061,7 +5061,7 @@ export class BrowserPreview extends HeyApiClient {
       taskID: string
       directory?: string
       targetID: string
-      viewportID?: "desktop" | "tablet" | "mobile"
+      viewportIDs: Array<"desktop" | "tablet" | "mobile">
     },
     options?: Options<never, ThrowOnError>,
   ) {
@@ -5073,7 +5073,7 @@ export class BrowserPreview extends HeyApiClient {
             { in: "path", key: "taskID" },
             { in: "query", key: "directory" },
             { in: "body", key: "targetID" },
-            { in: "body", key: "viewportID" },
+            { in: "body", key: "viewportIDs" },
           ],
         },
       ],

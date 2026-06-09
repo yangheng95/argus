@@ -149,7 +149,7 @@ export const BrowserPreviewRoutes = lazy(() =>
         "json",
         z.object({
           targetID: z.string().min(1),
-          viewportID: BrowserPreviewViewportID.default("desktop"),
+          viewportIDs: BrowserPreviewViewportID.array().min(1),
         }),
       ),
       async (c) => {
@@ -175,7 +175,7 @@ export const BrowserPreviewRoutes = lazy(() =>
           target,
           taskID,
           targetID: body.targetID,
-          viewportID: body.viewportID,
+          viewportIDs: body.viewportIDs,
           signal: c.req.raw.signal,
         })
         return c.json(verification)
