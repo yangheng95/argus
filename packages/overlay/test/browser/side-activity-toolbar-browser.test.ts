@@ -1,6 +1,9 @@
-import { expect, test } from "bun:test"
-import { launchBrowser } from "./launch"
-import { ensureOverlayDist, overlayStaticResponse } from "./overlay-dist"
+import assert from "node:assert/strict"
+import test from "node:test"
+
+import { launchBrowser } from "../launch.ts"
+import { ensureOverlayDist, overlayStaticResponse } from "../overlay-dist.ts"
+import { startBrowserFixture } from "./http-fixture.ts"
 
 await ensureOverlayDist()
 
@@ -37,17 +40,23 @@ function conversationPayload(sessionID: string) {
   }
 }
 
+function assertMatchObject(actual: Record<string, unknown>, expected: Record<string, unknown>) {
+  for (const [key, value] of Object.entries(expected)) {
+    assert.deepEqual(actual[key], value, key)
+  }
+}
+
 test(
   "side activity toolbars open equal-width workbench panels while workflow keeps its header",
   async () => {
+    assert.equal(process.env.OPENCORVUS_OVERLAY_BROWSER_TEST_NODE_RUNNER, "1")
+    assert.equal(typeof globalThis.Bun, "undefined")
+
     const requestLog: Array<{ method: string; path: string }> = []
-    const server = Bun.serve({
-      idleTimeout: 255,
-      port: 0,
-      async fetch(req) {
-        const url = new URL(req.url)
-        const path = route(url)
-        requestLog.push({ method: req.method, path })
+    const server = await startBrowserFixture(async (req) => {
+      const url = new URL(req.url)
+      const path = route(url)
+      requestLog.push({ method: req.method, path })
         if (path === "/" || path === "/ui") return Response.redirect(`${url.origin}/ui/index.html`, 302)
         const staticResponse = await overlayStaticResponse(path)
         if (staticResponse) return staticResponse
@@ -154,26 +163,31 @@ test(
               builtin: true,
             },
           ])
-        if (path === "/mcp") return send({})
+        if (path === "/mcp")
+          return send({
+            docs: {
+              status: "connected",
+            },
+          })
         if (path === "/panel/knowledge/memory") return send([])
         if (path === "/panel/knowledge/preference") return send([])
         if (path === "/file") return send({ entries: [{ path: "src/main.tsx", name: "main.tsx", type: "file" }] })
         if (path === "/find/file") return send({ entries: [] })
-        return send({})
-      },
+      return send({})
     })
 
     const browser = await launchBrowser(["--disable-dev-shm-usage"])
     try {
       const page = await browser.newPage()
       await page.setViewport({ width: 1440, height: 900 })
-      await page.evaluateOnNewDocument((portValue) => {
+      await page.evaluateOnNewDocument((serverUrl) => {
+        ;(window as any).__OPENCORVUS_LOCALE__ = "en-US"
         localStorage.setItem("oc_directory", "D:/overlay/workspace/app")
-        localStorage.setItem("oc_server_url", `http://127.0.0.1:${portValue}`)
+        localStorage.setItem("oc_server_url", serverUrl)
         localStorage.setItem("oc_right_panel_collapsed", "false")
-      }, server.port)
+      }, server.origin)
 
-      await page.goto(`http://127.0.0.1:${server.port}/ui/index.html`, { waitUntil: "domcontentloaded" })
+      await page.goto(`${server.origin}/ui/index.html`, { waitUntil: "domcontentloaded" })
       await page.waitForSelector("#solidRightActivityToolbar")
       await page.waitForSelector('[data-ui="side-activity-button"][data-side="left"][data-activity="assistant"]')
 
@@ -275,7 +289,7 @@ test(
           }
         })
 
-      expect(await activeState()).toMatchObject({
+      assertMatchObject(await activeState(), {
         leftTasks: "true",
         rightInspector: "false",
         centerOpen: "true",
@@ -319,11 +333,13 @@ test(
         const panel = document.querySelector<HTMLElement>("#leftPanelSkills")!
         const toolbar = panel.querySelector<HTMLElement>(".tool-panel-toolbar")
         const internalHeader = panel.querySelector<HTMLElement>('.oc-surface-header[data-surface="settings-group"]')
-        const buttons = Array.from(panel.querySelectorAll<HTMLElement>('[data-ui="tool-panel-action"]')).map((node) => ({
-          text: (node.textContent || "").trim(),
-          title: node.getAttribute("title") || "",
-          width: Math.round(node.getBoundingClientRect().width),
-        }))
+        const buttons = Array.from(panel.querySelectorAll<HTMLElement>('[data-ui="tool-panel-action"]')).map(
+          (node) => ({
+            text: (node.textContent || "").trim(),
+            title: node.getAttribute("title") || "",
+            width: Math.round(node.getBoundingClientRect().width),
+          }),
+        )
         const row = panel.querySelector<HTMLElement>(".extension-row")!
         const desc = row.querySelector<HTMLElement>(".extension-row-main > span")!
         const path = row.querySelector<HTMLElement>(".extension-row-main > small")
@@ -347,7 +363,7 @@ test(
           dropHeight: Math.round(drop.getBoundingClientRect().height),
         }
       })
-      expect(skillPanelState).toMatchObject({
+      assertMatchObject(skillPanelState, {
         active: "true",
         hasToolbar: true,
         hasInternalHeader: false,
@@ -358,17 +374,43 @@ test(
         titleWhiteSpace: "nowrap",
         pathWhiteSpace: "nowrap",
       })
-      expect(skillPanelState.buttonTitles).toEqual(["Reload", "Open Dir", "Add Skill", "Delete All"])
-      expect(skillPanelState.buttonWidths.every((width) => width <= 32)).toBe(true)
-      expect(skillPanelState.rowColumns).toContain("px")
-      expect(skillPanelState.actionsWidth).toBeLessThan(140)
-      expect(skillPanelState.dropHeight).toBeLessThan(58)
+      assert.deepEqual(skillPanelState.buttonTitles, ["Reload", "Open Dir", "Add Skill", "Delete All"])
+      assert.equal(skillPanelState.buttonWidths.every((width) => width <= 32), true)
+      assert.ok(skillPanelState.rowColumns.includes("px"))
+      assert.ok(skillPanelState.actionsWidth < 140)
+      assert.ok(skillPanelState.dropHeight < 58)
 
       await clickButton('[data-ui="side-activity-button"][data-side="left"][data-activity="tasks"]')
-      await page.waitForFunction(() => document.querySelector<HTMLElement>("#leftPanelTasks")?.dataset.active === "true")
+      await page.waitForFunction(
+        () => document.querySelector<HTMLElement>("#leftPanelTasks")?.dataset.active === "true",
+      )
+
+      await clickButton('[data-ui="side-activity-button"][data-side="left"][data-activity="mcp"]')
+      await page.waitForSelector("#leftPanelMcp[data-active='true'] .extension-row")
+      const mcpPanelState = await page.evaluate(() => {
+        const panel = document.querySelector<HTMLElement>("#leftPanelMcp")!
+        const row = panel.querySelector<HTMLElement>(".extension-row")!
+        return {
+          active: panel.dataset.active,
+          name: row.querySelector<HTMLElement>(".extension-row-main > strong")?.textContent || "",
+          detail: row.querySelector<HTMLElement>(".extension-row-main > span")?.textContent || "",
+          status: row.querySelector<HTMLElement>(".extension-status")?.textContent || "",
+        }
+      })
+      assert.deepEqual(mcpPanelState, {
+        active: "true",
+        name: "docs",
+        detail: "Connected",
+        status: "Connected",
+      })
+
+      await clickButton('[data-ui="side-activity-button"][data-side="left"][data-activity="tasks"]')
+      await page.waitForFunction(
+        () => document.querySelector<HTMLElement>("#leftPanelTasks")?.dataset.active === "true",
+      )
 
       await clickButton('[data-ui="side-activity-button"][data-side="right"][data-activity="workflow"]')
-      expect(await activeState()).toMatchObject({
+      assertMatchObject(await activeState(), {
         centerOpen: "false",
         centerWorkflow: "false",
         rightWorkflowButton: "false",
@@ -376,7 +418,7 @@ test(
       })
 
       await clickButton('[data-ui="side-activity-button"][data-side="right"][data-activity="workflow"]')
-      expect(await activeState()).toMatchObject({
+      assertMatchObject(await activeState(), {
         centerOpen: "true",
         centerWorkflow: "true",
         rightWorkflowButton: "true",
@@ -385,14 +427,14 @@ test(
 
       await clickButton('[data-ui="side-activity-button"][data-side="right"][data-activity="inspector"]')
       const twoPanelState = await activeState()
-      expect(twoPanelState).toMatchObject({
+      assertMatchObject(twoPanelState, {
         centerWorkflow: "true",
         centerInspector: "true",
         rightInspectorButton: "true",
         workflowResizableNext: "true",
       })
-      expect(twoPanelState.openPanels).toEqual(["workflow", "inspector"])
-      expect(Math.abs(twoPanelState.openPanelWidths[0]! - twoPanelState.openPanelWidths[1]!)).toBeLessThanOrEqual(2)
+      assert.deepEqual(twoPanelState.openPanels, ["workflow", "inspector"])
+      assert.ok(Math.abs(twoPanelState.openPanelWidths[0]! - twoPanelState.openPanelWidths[1]!) <= 2)
 
       const workflowEdge = await page.evaluate(() => {
         const rect = document.querySelector<HTMLElement>("#centerWorkbenchWorkflow")!.getBoundingClientRect()
@@ -403,17 +445,17 @@ test(
       await page.mouse.move(workflowEdge.x + 120, workflowEdge.y, { steps: 8 })
       await page.mouse.up()
       const resizedTwoPanelState = await activeState()
-      expect(resizedTwoPanelState.openPanels).toEqual(["workflow", "inspector"])
-      expect(resizedTwoPanelState.openPanelWidths[0]! - resizedTwoPanelState.openPanelWidths[1]!).toBeGreaterThan(80)
+      assert.deepEqual(resizedTwoPanelState.openPanels, ["workflow", "inspector"])
+      assert.ok(resizedTwoPanelState.openPanelWidths[0]! - resizedTwoPanelState.openPanelWidths[1]! > 80)
 
       await clickButton('[data-ui="side-activity-button"][data-side="right"][data-activity="inspector"]')
-      expect(await activeState()).toMatchObject({
+      assertMatchObject(await activeState(), {
         centerInspector: "false",
         rightInspectorButton: "false",
       })
 
       await page.evaluate(() => window.dispatchEvent(new CustomEvent("acceptance:focus-changes")))
-      expect(await activeState()).toMatchObject({
+      assertMatchObject(await activeState(), {
         centerOpen: "true",
         centerDiff: "true",
         centerWorkflow: "true",
@@ -421,7 +463,7 @@ test(
       })
 
       await clickButton('[data-ui="side-activity-button"][data-side="right"][data-activity="explorer"]')
-      expect(await activeState()).toMatchObject({
+      assertMatchObject(await activeState(), {
         centerOpen: "true",
         centerExplorer: "true",
         centerDiff: "true",
@@ -430,7 +472,7 @@ test(
       })
 
       await clickButton('[data-ui="side-activity-button"][data-side="right"][data-activity="browser"]')
-      expect(await activeState()).toMatchObject({
+      assertMatchObject(await activeState(), {
         centerPreview: "true",
         centerExplorer: "true",
         rightPreviewButton: "true",
@@ -453,17 +495,17 @@ test(
       await page.mouse.move(previewEdge.x - 80, previewEdge.y, { steps: 8 })
       await page.mouse.up()
       const previewWidthAfterWiden = await previewWidth()
-      expect(previewWidthAfterWiden - previewWidthBeforeDrag).toBeGreaterThan(50)
+      assert.ok(previewWidthAfterWiden - previewWidthBeforeDrag > 50)
       previewEdge = await previewLeftEdge()
       await page.mouse.move(previewEdge.x, previewEdge.y)
       await page.mouse.down()
       await page.mouse.move(previewEdge.x + 80, previewEdge.y, { steps: 8 })
       await page.mouse.up()
       const previewWidthAfterNarrow = await previewWidth()
-      expect(previewWidthAfterWiden - previewWidthAfterNarrow).toBeGreaterThan(50)
+      assert.ok(previewWidthAfterWiden - previewWidthAfterNarrow > 50)
 
       await clickButton('[data-ui="side-activity-button"][data-side="right"][data-activity="notifications"]')
-      expect(await activeState()).toMatchObject({
+      assertMatchObject(await activeState(), {
         centerNotifications: "true",
         centerPreview: "true",
         rightNotificationsButton: "true",
@@ -475,7 +517,7 @@ test(
 
       await clickButton('[data-ui="side-activity-button"][data-side="right"][data-activity="inspector"]')
       const inspectorOpenState = await activeState()
-      expect(inspectorOpenState).toMatchObject({
+      assertMatchObject(inspectorOpenState, {
         centerInspector: "true",
         centerNotifications: "true",
         rightInspectorButton: "true",
@@ -484,8 +526,8 @@ test(
         rightNotifications: "true",
         rightTitle: "Inspector",
       })
-      expect(inspectorOpenState.tabCount).toBe(0)
-      expect(inspectorOpenState.openPanels).toEqual([
+      assert.equal(inspectorOpenState.tabCount, 0)
+      assert.deepEqual(inspectorOpenState.openPanels, [
         "workflow",
         "explorer",
         "diff",
@@ -493,8 +535,8 @@ test(
         "inspector",
         "notifications",
       ])
-      expect(inspectorOpenState.openPanelWidths.every((width) => width > 0)).toBe(true)
-      expect(inspectorOpenState.workflowResizableNext).toBe("true")
+      assert.equal(inspectorOpenState.openPanelWidths.every((width) => width > 0), true)
+      assert.equal(inspectorOpenState.workflowResizableNext, "true")
 
       await clickButton('[data-ui="side-activity-button"][data-side="left"][data-activity="assistant"]')
       await page.waitForFunction(
@@ -503,7 +545,7 @@ test(
             '[data-ui="side-activity-button"][data-side="left"][data-activity="assistant"]',
           )?.dataset.active === "true",
       )
-      expect(await activeState()).toMatchObject({
+      assertMatchObject(await activeState(), {
         centerPreview: "true",
         centerWorkflow: "true",
         leftAssistantButton: "true",
@@ -511,7 +553,7 @@ test(
         chatTitle: "Assistant",
       })
 
-      expect((await activeState()).tabCount).toBe(0)
+      assert.equal((await activeState()).tabCount, 0)
 
       await page.$eval("#chatTextarea", (node) => {
         const textarea = node as HTMLTextAreaElement
@@ -534,27 +576,31 @@ test(
           break
         await new Promise((resolve) => setTimeout(resolve, 100))
       }
-      expect(requestLog).toContainEqual({
+      assert.ok(
+        requestLog.some((entry) => entry.method === "POST" && entry.path === "/session/ses_right_sidebar_assistant/prompt_async"),
+      )
+      assert.deepEqual(requestLog.find((entry) => entry.method === "POST" && entry.path === "/session/ses_right_sidebar_assistant/prompt_async"), {
         method: "POST",
         path: "/session/ses_right_sidebar_assistant/prompt_async",
       })
-      expect(requestLog.some((entry) => /^\/task\/[^/]+\/message$/.test(entry.path))).toBe(false)
-      expect(
+      assert.equal(requestLog.some((entry) => /^\/task\/[^/]+\/message$/.test(entry.path)), false)
+      assert.equal(
         requestLog.some((entry) => entry.path.includes("coding-agent-tui") || entry.path.startsWith("/tui/")),
-      ).toBe(false)
+        false,
+      )
 
-      expect(await page.$('[data-ui="right-panel-header-collapse-toggle"]')).toBeNull()
-      expect(await page.$("#rightPaneResizer")).toBeNull()
+      assert.equal(await page.$('[data-ui="right-panel-header-collapse-toggle"]'), null)
+      assert.equal(await page.$("#rightPaneResizer"), null)
 
       await clickButton('[data-ui="side-activity-button"][data-side="right"][data-activity="browser"]')
-      expect(await activeState()).toMatchObject({
+      assertMatchObject(await activeState(), {
         centerOpen: "true",
         centerPreview: "false",
         rightPreviewButton: "false",
       })
     } finally {
       await browser.close()
-      server.stop(true)
+      await server.close()
     }
   },
   { timeout: 180_000 },
