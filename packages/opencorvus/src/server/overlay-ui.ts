@@ -2,6 +2,7 @@ import { Hono, type Context } from "hono"
 import path from "path"
 import fs from "fs"
 import fsp from "fs/promises"
+import { EMBEDDED_OVERLAY_UI, type EmbeddedOverlayUiFile } from "./overlay-ui-embedded.generated"
 
 const MIME: Record<string, string> = {
   ".html": "text/html; charset=utf-8",
@@ -27,6 +28,21 @@ function resolveOverlayDir(): string | undefined {
   if (fs.existsSync(path.join(viteUi, "index.html"))) return viteUi
 
   return undefined
+}
+
+const EMBEDDED_OVERLAY_UI_BY_PATH = new Map<string, EmbeddedOverlayUiFile>(
+  EMBEDDED_OVERLAY_UI.map((file) => [file.path, file]),
+)
+
+function hasEmbeddedOverlayUi(): boolean {
+  return EMBEDDED_OVERLAY_UI_BY_PATH.has("/index.html")
+}
+
+function normalizeOverlayReqPath(reqPath: string): string | null {
+  if (reqPath.includes("\0")) return null
+  const normalized = reqPath === "/" ? "/index.html" : reqPath
+  if (normalized.split("/").includes("..")) return null
+  return normalized
 }
 
 export namespace OverlayUI {
@@ -94,7 +110,34 @@ export namespace OverlayUI {
     // them so links resolve under the overlay route.
     const rewriteHtmlAssets = (html: string): string => html.replace(/(src|href)="\/(assets|i18n)\//g, '$1="/ui/$2/')
 
+    const serveEmbedded = async (c: Context) => {
+      const requested = normalizeOverlayReqPath(c.req.path.replace(/^\/ui/, "") || "/")
+      if (requested === null) return c.text("Forbidden", 403)
+
+      const entry = EMBEDDED_OVERLAY_UI_BY_PATH.get(requested) ?? EMBEDDED_OVERLAY_UI_BY_PATH.get("/index.html")
+      if (!entry) return c.text("Not Found", 404)
+
+      const ext = path.extname(entry.path)
+      const contentType = MIME[ext] || "application/octet-stream"
+      const file = Bun.file(entry.file)
+      if (ext === ".html") {
+        const html = await file.text()
+        return c.body(rewriteHtmlAssets(html), 200, {
+          "Content-Type": contentType,
+          "Cache-Control": "no-cache",
+        })
+      }
+      return c.body(await file.arrayBuffer(), 200, {
+        "Content-Type": contentType,
+        "Cache-Control": "no-cache",
+      })
+    }
+
     const handle = async (c: Context) => {
+      if (!dirOverride && hasEmbeddedOverlayUi()) {
+        return serveEmbedded(c)
+      }
+
       const dir = dirOverride ?? resolveOverlayDir()
       if (!dir) {
         return c.text(
