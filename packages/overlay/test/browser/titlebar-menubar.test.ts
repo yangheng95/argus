@@ -369,14 +369,12 @@ test(
           await page.click('[data-testid="titlebar-help-about"]')
           await page.waitForFunction(
             () =>
-              (document.querySelector("#configDialog") as HTMLDialogElement | null)?.open === true &&
+              document.querySelector("#configDialog") !== null &&
               document.querySelector('[data-config-panel="about"]')?.classList.contains("active") === true &&
               document.querySelector("#aboutRuntimeGrid")?.textContent?.includes("12345") === true,
           )
           await page.click("#btnCloseConfigDialog")
-          await page.waitForFunction(
-            () => (document.querySelector("#configDialog") as HTMLDialogElement | null)?.open !== true,
-          )
+          await page.waitForFunction(() => document.querySelector("#configDialog") === null)
           const openedUrls = await page.evaluate(() => (window as any).__helpOpenUrls as string[])
           const localePrefix = locale === "zh-CN" ? "/docs/zh-cn/" : "/docs/"
           assert.deepEqual(openedUrls, [

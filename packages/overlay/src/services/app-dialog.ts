@@ -140,7 +140,7 @@ export function settleAppDialog(confirmed: boolean, epoch?: number, valueOverrid
   }
 }
 
-export function dismissAppDialog(dialog?: HTMLDialogElement): void {
+export function dismissAppDialog(dialog?: HTMLElement): void {
   if (ignoreNextDismiss) {
     ignoreNextDismiss = false
     return

@@ -106,7 +106,7 @@ export interface DomRefs {
   memorySearch: HTMLInputElement | null
   btnMemorySearch: HTMLButtonElement | null
   btnMemoryRefresh: HTMLButtonElement | null
-  memoryDialog: HTMLDialogElement | null
+  memoryDialog: HTMLElement | null
   memoryDialogTitle: HTMLElement | null
   memoryDialogMeta: HTMLElement | null
   memoryDialogContent: HTMLElement | null
@@ -114,7 +114,7 @@ export interface DomRefs {
   btnCloseMemory: HTMLButtonElement | null
 
   // Log viewer
-  logDialog: HTMLDialogElement | null
+  logDialog: HTMLElement | null
   logViewerBody: HTMLElement | null
   logLevelFilter: HTMLSelectElement | null
   btnLog: HTMLButtonElement | null
@@ -241,7 +241,7 @@ export function getDomRefs(): DomRefs {
     memorySearch: $<HTMLInputElement>("#memorySearch"),
     btnMemorySearch: $<HTMLButtonElement>("#btnMemorySearch"),
     btnMemoryRefresh: $<HTMLButtonElement>("#btnMemoryRefresh"),
-    memoryDialog: $<HTMLDialogElement>("#memoryDialog"),
+    memoryDialog: $<HTMLElement>("#memoryDialog"),
     memoryDialogTitle: $<HTMLElement>("#memoryDialogTitle"),
     memoryDialogMeta: $<HTMLElement>("#memoryDialogMeta"),
     memoryDialogContent: $<HTMLElement>("#memoryDialogContent"),
@@ -249,7 +249,7 @@ export function getDomRefs(): DomRefs {
     btnCloseMemory: $<HTMLButtonElement>("#btnCloseMemory"),
 
     // Log viewer
-    logDialog: $<HTMLDialogElement>("#logDialog"),
+    logDialog: $<HTMLElement>("#logDialog"),
     logViewerBody: $<HTMLElement>("#logViewerBody"),
     logLevelFilter: $<HTMLSelectElement>("#logLevelFilter"),
     btnLog: $<HTMLButtonElement>("#btnLog"),

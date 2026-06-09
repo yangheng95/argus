@@ -9,11 +9,6 @@
   max-height: 100%;
   width: 100%;
   height: 100%;
-  /* The top-layer dialog escapes its parent stacking context, which
-     means Chrome resets `color-scheme` on it. Without `inherit`, native
-     form controls inside the dialog (selects, inputs, scrollbars) flip
-     to the OS default scheme even when the surrounding overlay is in
-     dark mode. */
   color-scheme: inherit;
 }
 
@@ -21,13 +16,10 @@
   z-index: var(--ui-z-overlay);
 }
 
-/* Single canonical for `.dialog::backdrop`: the legacy God CSS
- * carried two cascade-stacked declarations (a 3-layer artwork
- * gradient the second flat overlay shadow-stomped); the merged
- * canonical lives here at the dialog surface and reads a token-
- * only flat overlay. Theme-driven dim contrast comes from the
- * black/transparent mix rather than per-theme overrides. */
-.dialog::backdrop {
+.dialog-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: var(--ui-z-overlay);
   background: var(--ui-scrim);
 }
 
@@ -42,9 +34,8 @@
   max-width: var(--ui-dialog-width);
   max-height: calc(100vh - calc(80px * var(--ui-scale)));
   /* `height: fit-content` shrinks the modal to the natural sum of its
-   * flex children. Without this Chromium gives a `<dialog>:modal` in
-   * the top layer enough vertical space to fill the max-height even
-   * when the children only need a fraction.
+   * flex children. Without this Chromium gives modal dialog content enough
+   * vertical space to fill the max-height even when the children only need a fraction.
    * Audited 2026-05-06 against goal / app / session dialogs — they
    * already declared their own children's heights, so shrinking the
    * frame to fit-content does not clip anything. */

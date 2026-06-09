@@ -34,8 +34,8 @@
   /* `appearance: none` strips the UA control chrome so our `background`
    * actually wins. Without this, Chromium renders inputs with the
    * platform light-scheme widget on top of our `var(--surface-inset)`
-   * — the symptom showing up most clearly inside `<dialog showModal>`,
-   * because top-layer form controls sometimes drop the body's
+   * — the symptom showing up most clearly inside portaled modal dialogs,
+   * because modal form controls sometimes drop the body's
    * inherited `color-scheme: dark` and fall back to a bright
    * UA widget that the page CSS cannot recolour.
    *
@@ -387,8 +387,8 @@ select.field-input option {
    ───────────────────────────────────────────────────────────── */
 .composer-textarea {
   /* `appearance: none` strips the UA widget so our background wins inside the
-     top-layer <dialog> (same reason as `.field-input` — Chromium drops the
-     inherited dark color-scheme on modal form controls). */
+     portaled modal dialog (same reason as `.field-input` — Chromium can drop
+     the inherited dark color-scheme on modal form controls). */
   appearance: none;
   -webkit-appearance: none;
   width: 100%;

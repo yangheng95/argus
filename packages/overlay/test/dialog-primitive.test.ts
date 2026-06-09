@@ -38,10 +38,19 @@ describe("Dialog primitive", () => {
     expect(source).toContain("export function Dialog(")
   })
 
-  test("controls the native dialog via showModal and close", () => {
-    expect(source).toContain("dialog.showModal()")
-    expect(source).toContain("dialog.close()")
-    expect(source).toContain("if (local.open)")
+  test("delegates dialog semantics to Kobalte", () => {
+    expect(source).toContain('@kobalte/core/dialog"')
+    expect(source).toContain("KobalteDialogRoot")
+    expect(source).toContain("KobalteDialogPortal")
+    expect(source).toContain("KobalteDialogOverlay")
+    expect(source).toContain("KobalteDialogContent")
+    expect(source).toContain("KobalteDialogTitle")
+    expect(source).toContain("open={local.open}")
+    expect(source).toContain("onOpenChange={closeFromKobalte}")
+    expect(source).not.toContain("<dialog")
+    expect(source).not.toContain("showModal()")
+    expect(source).not.toContain(".close()")
+    expect(source).not.toContain("HTMLDialogElement")
   })
 
   test("renders canonical dialog shell classes", () => {
@@ -64,8 +73,10 @@ describe("Dialog primitive", () => {
   })
 
   test("supports built-in backdrop close handling", () => {
-    expect(source).toContain("event.target === event.currentTarget")
-    expect(source).toContain("dialogRef?.close()")
+    expect(source).toContain("onInteractOutside={handleInteractOutside}")
+    expect(source).toContain("local.backdropClose === false")
+    expect(source).toContain("event.preventDefault()")
+    expect(source).not.toContain("event.target === event.currentTarget")
   })
 
   test("makes the header the single dialog drag handle", () => {
@@ -79,8 +90,10 @@ describe("Dialog primitive", () => {
     expect(source).toContain("clampDialogOffset")
     expect(css).toContain("--dialog-drag-x")
     expect(css).toContain("--dialog-drag-y")
+    expect(css).toContain(".dialog-overlay")
     expect(css).toContain('data-dialog-drag-handle="true"')
     expect(css).toContain('data-dialog-dragging="true"')
+    expect(css).not.toContain("::backdrop")
   })
 })
 

@@ -1,5 +1,11 @@
+import {
+  Content as KobalteDialogContent,
+  Overlay as KobalteDialogOverlay,
+  Portal as KobalteDialogPortal,
+  Root as KobalteDialogRoot,
+  Title as KobalteDialogTitle,
+} from "@kobalte/core/dialog"
 import { createEffect, createSignal, mergeProps, onCleanup, Show, splitProps, type JSX } from "solid-js"
-import { Dynamic } from "solid-js/web"
 
 const DIALOG_VIEWPORT_MARGIN = 8
 const DIALOG_DRAG_IGNORE_SELECTOR =
@@ -24,7 +30,7 @@ function clampDialogOffset(form: HTMLElement, x: number, y: number): { x: number
 }
 
 export interface DialogProps {
-  /** Controlled open state for the native dialog element. */
+  /** Controlled open state for the Kobalte dialog root. */
   open: boolean
   /** Dialog title rendered in the header bar. */
   title: JSX.Element
@@ -40,18 +46,18 @@ export interface DialogProps {
   wider?: boolean
   /** Render title as `h2` by default, override only when semantics require it. */
   titleAs?: "div" | "h1" | "h2" | "span"
-  /** Whether clicking the native backdrop closes the dialog. */
+  /** Whether clicking outside the content closes the dialog. */
   backdropClose?: boolean
   /** Whether the header bar can drag the dialog inside the viewport. */
   draggable?: boolean
-  /** Extra class names applied to the native dialog element. */
+  /** Extra class names applied to the dialog content element. */
   class?: string
   /** Extra class names applied to .dialog-form. */
   formClass?: string
   /** Forwarded ref for imperative focus or metrics. */
-  ref?: ((el: HTMLDialogElement) => void) | HTMLDialogElement
-  /** Close callback fired after the native dialog closes. */
-  onClose?: (dialog: HTMLDialogElement) => void
+  ref?: ((el: HTMLElement) => void) | HTMLElement
+  /** Close callback fired after Kobalte requests the controlled dialog to close. */
+  onClose?: (dialog: HTMLElement) => void
   /** Dialog body content. */
   children: JSX.Element
   /** Optional DOM id for the dialog root. */
@@ -82,7 +88,7 @@ export function Dialog(rawProps: DialogProps) {
     "children",
   ])
 
-  let dialogRef: HTMLDialogElement | undefined
+  let dialogRef: HTMLElement | undefined
   let formRef: HTMLDivElement | undefined
   let removeDragListeners: (() => void) | undefined
   const [dialogOffset, setDialogOffset] = createSignal({ x: 0, y: 0 })
@@ -130,65 +136,68 @@ export function Dialog(rawProps: DialogProps) {
     }) as JSX.CSSProperties
 
   createEffect(() => {
-    const dialog = dialogRef
-    if (!dialog) return
     if (local.open) {
       setDialogOffset({ x: 0, y: 0 })
-      if (!dialog.open) dialog.showModal()
       return
     }
     stopDragging()
-    if (dialog.open) dialog.close()
   })
+
+  function closeFromKobalte(nextOpen: boolean) {
+    if (nextOpen) return
+    stopDragging()
+    if (dialogRef) local.onClose?.(dialogRef)
+  }
+
+  function handleInteractOutside(event: Event) {
+    if (local.backdropClose === false) event.preventDefault()
+  }
 
   onCleanup(stopDragging)
 
   return (
-    <dialog
-      {...rest}
-      class={["dialog", local.wide ? "dialog-wide" : "", local.wider ? "dialog-wider" : "", local.class]
-        .filter(Boolean)
-        .join(" ")}
-      ref={(el) => {
-        dialogRef = el
-        if (typeof local.ref === "function") local.ref(el)
-      }}
-      onClick={(event) => {
-        if (local.backdropClose !== false && event.target === event.currentTarget) {
-          dialogRef?.close()
-        }
-      }}
-      onClose={() => {
-        stopDragging()
-        if (dialogRef) local.onClose?.(dialogRef)
-      }}
-    >
-      <div
-        class={["dialog-form", local.formClass].filter(Boolean).join(" ")}
-        data-dialog-draggable={local.draggable !== false}
-        data-dialog-dragging={dragging()}
-        ref={(el) => {
-          formRef = el
-        }}
-        style={dialogFormStyle()}
-      >
-        <div
-          class={["dialog-header", local.headerClass].filter(Boolean).join(" ")}
-          data-dialog-drag-handle={local.draggable !== false}
-          onPointerDown={startDialogDrag}
+    <KobalteDialogRoot open={local.open} onOpenChange={closeFromKobalte} modal>
+      <KobalteDialogPortal>
+        <KobalteDialogOverlay class="dialog-overlay" />
+        <KobalteDialogContent
+          {...rest}
+          class={["dialog", local.wide ? "dialog-wide" : "", local.wider ? "dialog-wider" : "", local.class]
+            .filter(Boolean)
+            .join(" ")}
+          ref={(el) => {
+            dialogRef = el
+            if (typeof local.ref === "function") local.ref(el)
+          }}
+          onInteractOutside={handleInteractOutside}
         >
-          <Dynamic component={local.titleAs} class="dialog-title">
-            {local.title}
-          </Dynamic>
-          <Show when={local.headerActions}>
-            <div class="dialog-header-actions">{local.headerActions}</div>
-          </Show>
-        </div>
-        {local.children}
-        <Show when={local.footer}>
-          <div class="dialog-actions">{local.footer}</div>
-        </Show>
-      </div>
-    </dialog>
+          <div
+            class={["dialog-form", local.formClass].filter(Boolean).join(" ")}
+            data-dialog-draggable={local.draggable !== false}
+            data-dialog-dragging={dragging()}
+            ref={(el) => {
+              formRef = el
+            }}
+            style={dialogFormStyle()}
+          >
+            <div
+              class={["dialog-header", local.headerClass].filter(Boolean).join(" ")}
+              data-dialog-drag-handle={local.draggable !== false}
+              onPointerDown={startDialogDrag}
+            >
+              <KobalteDialogTitle as={local.titleAs} class="dialog-title">
+                {local.title}
+              </KobalteDialogTitle>
+              <Show when={local.headerActions}>
+                <div class="dialog-header-actions">{local.headerActions}</div>
+              </Show>
+            </div>
+            {local.children}
+            <Show when={local.footer}>
+              <div class="dialog-actions">{local.footer}</div>
+            </Show>
+          </div>
+        </KobalteDialogContent>
+      </KobalteDialogPortal>
+    </KobalteDialogRoot>
   )
 }

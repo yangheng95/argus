@@ -1018,20 +1018,12 @@ test(
       const open = async (trigger: string, dialog: string) => {
         seen.push(trigger)
         await tap(trigger)
-        await page.waitForFunction(
-          (id) => (document.querySelector(id) as HTMLDialogElement | null)?.open === true,
-          {},
-          dialog,
-        )
+        await page.waitForFunction((id) => document.querySelector(id) !== null, {}, dialog)
       }
       const close = async (trigger: string, dialog: string) => {
         seen.push(trigger)
         await tap(trigger)
-        await page.waitForFunction(
-          (id) => (document.querySelector(id) as HTMLDialogElement | null)?.open !== true,
-          {},
-          dialog,
-        )
+        await page.waitForFunction((id) => document.querySelector(id) === null, {}, dialog)
       }
       const details = async (selector: string, value: boolean) => {
         const exists = await page.evaluate((target) => !!document.querySelector(target), selector)
@@ -1065,9 +1057,7 @@ test(
         }
         seen.push("#btnAppDialogOk")
         await tap("#btnAppDialogOk")
-        await page.waitForFunction(
-          () => (document.querySelector("#appDialog") as HTMLDialogElement | null)?.open !== true,
-        )
+        await page.waitForFunction(() => document.querySelector("#appDialog") === null)
       }
       const waitIdle = () => new Promise((resolve) => setTimeout(resolve, 100))
       const hover = async (selector: string) => {
@@ -1161,15 +1151,13 @@ test(
       await tap('[data-testid="titlebar-settings-skill"]')
       await page.waitForFunction(
         () =>
-          (document.querySelector("#configDialog") as HTMLDialogElement | null)?.open === true &&
+          document.querySelector("#configDialog") !== null &&
           document.querySelector('[data-config-panel="skill"]')?.classList.contains("active") === true,
       )
       await page.waitForFunction(() => document.body.textContent?.includes("alpha-skill"))
       seen.push("#btnCloseConfigDialog")
       await tap("#btnCloseConfigDialog")
-      await page.waitForFunction(
-        () => (document.querySelector("#configDialog") as HTMLDialogElement | null)?.open !== true,
-      )
+      await page.waitForFunction(() => document.querySelector("#configDialog") === null)
 
       await ensureMenuOpen("settings")
       await page.waitForSelector('[data-testid="titlebar-settings-mcp"]')
@@ -1177,15 +1165,13 @@ test(
       await tap('[data-testid="titlebar-settings-mcp"]')
       await page.waitForFunction(
         () =>
-          (document.querySelector("#configDialog") as HTMLDialogElement | null)?.open === true &&
+          document.querySelector("#configDialog") !== null &&
           document.querySelector('[data-config-panel="mcp"]')?.classList.contains("active") === true,
       )
       await page.waitForFunction(() => document.body.textContent?.includes("docs"))
       seen.push("#btnCloseConfigDialog")
       await tap("#btnCloseConfigDialog")
-      await page.waitForFunction(
-        () => (document.querySelector("#configDialog") as HTMLDialogElement | null)?.open !== true,
-      )
+      await page.waitForFunction(() => document.querySelector("#configDialog") === null)
 
       await ensureMenuOpen("settings")
       await page.waitForSelector('[data-testid="titlebar-settings-skill-market"]')
@@ -1193,15 +1179,13 @@ test(
       await tap('[data-testid="titlebar-settings-skill-market"]')
       await page.waitForFunction(
         () =>
-          (document.querySelector("#configDialog") as HTMLDialogElement | null)?.open === true &&
+          document.querySelector("#configDialog") !== null &&
           document.querySelector('[data-config-panel="skill-market"]')?.classList.contains("active") === true,
       )
       await page.waitForFunction(() => document.body.textContent?.includes("market-install"))
       seen.push("#btnCloseConfigDialog")
       await tap("#btnCloseConfigDialog")
-      await page.waitForFunction(
-        () => (document.querySelector("#configDialog") as HTMLDialogElement | null)?.open !== true,
-      )
+      await page.waitForFunction(() => document.querySelector("#configDialog") === null)
 
       const stub = await page.evaluate(
         () => (window as typeof window & { __overlayTest: Record<string, unknown> }).__overlayTest,
