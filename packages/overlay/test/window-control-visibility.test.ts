@@ -18,15 +18,18 @@ function soloRuleBody(source: string, selector: string): string {
   return source.slice(open + 1, close);
 }
 
-describe("window controls keep a visible resting shell", () => {
-  test("primitive defines a readable neutral and danger contract", () => {
+describe("window controls use native-style quiet chrome", () => {
+  test("primitive keeps window controls quiet at rest and explicit on hover", () => {
     const css = read("src/styles/primitives/button.css");
     expect(css).toContain('[data-chrome="window-control"]');
-    expect(css).toContain("--oc-button-color: var(--text-strong);");
+    expect(css).toContain("--oc-button-color: var(--text-soft);");
+    expect(css).toContain("--oc-button-bg: transparent;");
+    expect(css).toContain("--oc-button-shadow: none;");
     expect(css).toContain('data-chrome="window-control"][data-tone="danger"]');
-    expect(css).toContain("color-mix(in srgb, var(--bad) 74%, var(--text-strong))");
-    expect(css).not.toContain('--oc-button-bg: color-mix(in srgb, var(--bad) 22%, var(--surface-strong));');
+    expect(css).not.toContain("color-mix(in srgb, var(--bad) 74%, var(--text-strong))");
+    expect(css).not.toContain("color-mix(in srgb, var(--border-strong) 58%, transparent)");
     expect(css).toContain('--oc-button-color: var(--surface);');
+    expect(css).toContain('--oc-button-bg: color-mix(in srgb, var(--bad) 88%, var(--surface));');
   });
 
   test("titlebar surface no longer owns close button contrast directly", () => {
@@ -34,5 +37,15 @@ describe("window controls keep a visible resting shell", () => {
     const body = soloRuleBody(css, ".titlebar-window-controls .oc-button");
     expect(body).not.toContain("--oc-button-bg:");
     expect(css).not.toContain('.titlebar-window-controls .oc-button[data-tone="danger"]');
+  });
+
+  test("window control icon names map to window semantics, not fullscreen arrows", () => {
+    const icon = read("src/components/Icon.tsx");
+    expect(icon).toContain("minimize: { component: Minus");
+    expect(icon).toContain("maximize: { component: Square");
+    expect(icon).toContain("restore: { component: Copy");
+    expect(icon).not.toContain("minimize: { component: Minimize");
+    expect(icon).not.toContain("maximize: { component: Maximize");
+    expect(icon).not.toContain("restore: { component: Maximize2");
   });
 });
