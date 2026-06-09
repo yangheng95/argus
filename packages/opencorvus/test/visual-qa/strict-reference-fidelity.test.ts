@@ -18,6 +18,14 @@ describe("visual-qa strict reference image fidelity", () => {
     expect(normalized).toContain("not a loose similarity target")
   })
 
+  test("core prompt requires random preview ports", () => {
+    const normalized = VISUAL_QA_CORE.replace(/\s+/g, " ")
+
+    expect(normalized).toContain("use a random or dynamically discovered free high port")
+    expect(normalized).toContain("Do not bind default shared ports such as 3000, 5173, or 4173")
+    expect(normalized).toContain("unless the task explicitly assigns that exact port")
+  })
+
   test("runtime delegation requires one-to-one reference-image acceptance evidence", () => {
     const prompt = VisualQaTestHooks.buildVisualQaUserPrompt({
       taskTitle: "Clone reference",
