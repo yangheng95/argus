@@ -82,6 +82,8 @@ test(
       </html>
     `)
 
+      await page.mouse.move(1, 1)
+      await sleep(260)
       const rest = await page.evaluate(() => {
         const taskActions = document.querySelector<HTMLElement>(".task-row-actions")!
         const recentRemove = document.querySelector<HTMLElement>(".recent-dir-remove")!
@@ -125,7 +127,8 @@ test(
         return {
           itemRight: item.right,
           removeLeft: remove.left,
-          removePointerEvents: getComputedStyle(document.querySelector<HTMLElement>(".recent-dir-remove")!).pointerEvents,
+          removePointerEvents: getComputedStyle(document.querySelector<HTMLElement>(".recent-dir-remove")!)
+            .pointerEvents,
         }
       })
       assert.ok(
