@@ -14,9 +14,13 @@ test("overlay browser tests have a Node-owned Playwright runner", () => {
   const smoke = readText("test/browser/node-playwright-smoke.test.mjs")
 
   expect(pkg).toMatchObject({ type: "module" })
+  expect(pkg.scripts["test"]).toBe("bun run test:unit")
+  expect(pkg.scripts["test:unit"]).toBe("bun test --timeout 120000 test/*.test.ts")
   expect(pkg.scripts["test:browser"]).toBe("node test/browser-runner.mjs")
+  expect(pkg.scripts["test:unit"]).not.toContain("test/browser")
   expect(runner).toContain("process.execPath")
   expect(runner).toContain('"--test"')
+  expect(runner).toContain("--test-concurrency=1")
   expect(runner).toContain(".test.ts")
   expect(runner).toContain("OPENCORVUS_OVERLAY_BROWSER_TEST_NODE_RUNNER")
   expect(runner).not.toContain("--experimental-transform-types")
