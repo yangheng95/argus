@@ -16,7 +16,7 @@ OpenCorvus wraps one-shot code generation into a **repeatable, evaluator-driven,
 | **Goal decomposition**      | Architect analyzes boundaries, then breaks the spec into at least two modest, independently verifiable implementation goals            |
 | **Multi-executor dispatch** | Built-in OpenCorvus; auto-discovers and dispatches to Codex / Claude Code                                                              |
 | **Evaluator-driven retry**  | build/test/lint/startup/artifact/visual/Playwright/LLM review plus default-on `spec check` acceptance gate                             |
-| **Multi-channel reach**     | Local TUI, HTTP API, Overlay desktop app, 14 IM channels (Slack/Telegram/Feishu/Discord/…)                                             |
+| **Multi-channel reach**     | HTTP API, Overlay desktop app, 14 IM channels (Slack/Telegram/Feishu/Discord/…)                                                        |
 | **Durable state**           | All tasks, plans, runs, interactions, deliveries, and evaluations persist to SQLite; session and project memory reused across sessions |
 | **Human-in-the-loop**       | `ask/allow/deny` permissions, follow-up messages, manual feedback, all embeddable in unattended pipelines                              |
 
@@ -30,7 +30,7 @@ OpenCorvus wraps one-shot code generation into a **repeatable, evaluator-driven,
 
 ```
 ┌─ Channel layer ──────────────────────────────────────────┐
-│  Local TUI / Overlay UI / HTTP API / 14 IM channels     │
+│  Overlay UI / HTTP API / 14 IM channels                 │
 ├─ Orchestrator layer ─────────────────────────────────────┤
 │  Task Agent → GoalPool → Planner → Executor → Evaluator │
 │  (SQLite persistence + permissions + budget + retries)  │

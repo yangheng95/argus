@@ -21,7 +21,7 @@ Without a harness, you get a single attempt with no structured verification. Wit
 - **Acceptance review** — runs `build`, `test`, `lint`, `startup`, `artifact`, `visual`, `Playwright`, LLM review checks and the default-on `spec check` acceptance gate; classifies failures and generates replan guidance
 - **Acceptance review** — performs end-to-end verification before publishing
 
-The result is **delegated development**: durable task orchestration with SQLite state persistence, scoped project memory shared across sessions, human-in-the-loop permission handling, and evaluator-driven retry loops — accessible from a local TUI, headless HTTP API, overlay UI, Slack, or any of the 14 channel adapters in `packages/channel-runtime`.
+The result is **delegated development**: durable task orchestration with SQLite state persistence, scoped project memory shared across sessions, human-in-the-loop permission handling, and evaluator-driven retry loops — accessible from the headless HTTP API, overlay UI, Slack, or any of the 14 channel adapters in `packages/channel-runtime`.
 
 ### How It Works
 
@@ -127,7 +127,6 @@ If `codex` or `claude-code` are not discovered, task creation with that executor
 
 | Surface                        | Status    | Notes                                                                                                                                                               |
 | ------------------------------ | --------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Local TUI and sessions         | Available | Default `opencorvus` command, session continue/fork/export flows                                                                                                    |
 | Headless HTTP API              | Available | `opencorvus serve`, task lifecycle routes, SSE event stream                                                                                                         |
 | Overlay UI                     | Available | Served from `/ui/` by the headless server                                                                                                                           |
 | Slack gateway                  | Available | First integrated remote channel for the orchestrator                                                                                                                |
@@ -159,7 +158,7 @@ A coding agent is a single-turn tool. OpenCorvus is the harness around it — sp
 
 #### Is OpenCorvus only a Slack bot?
 
-No. The repo includes a local TUI, headless API server, overlay UI, GitHub Action, and a broader multi-channel runtime package in `packages/channel-runtime`. Slack is simply the first channel promoted into the headless task orchestration flow.
+No. The repo includes a headless API server, overlay UI, GitHub Action, and a broader multi-channel runtime package in `packages/channel-runtime`. Slack is simply the first channel promoted into the headless task orchestration flow.
 
 #### Does it keep state between runs?
 

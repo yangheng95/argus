@@ -17,7 +17,7 @@ OpenCorvus wraps one-shot code generation into a **repeatable, evidence-driven, 
 | **Architecture decomposition** | The Architect agent turns requirements into independently buildable goals with acceptance specs and dependency contracts |
 | **Multi-executor dispatch**    | Built-in OpenCorvus; auto-discovers and dispatches to Codex / Claude Code                                                |
 | **Integrity-driven review**    | Build evidence, specialist checks, visual/runtime evidence, and LLM review are consolidated by the integrity stage       |
-| **Multi-channel reach**        | Local TUI, HTTP API, Overlay desktop app, 14 IM channels (Slack/Telegram/Feishu/Discord/…)                               |
+| **Multi-channel reach**        | HTTP API, Overlay desktop app, 14 IM channels (Slack/Telegram/Feishu/Discord/…)                                          |
 | **Durable state**              | Tasks, requirements, plans, goals, runs, artifacts, interactions, acceptance rows, and evaluations persist to SQLite     |
 | **Human-in-the-loop**          | `ask/allow/deny` permissions, follow-up messages, manual feedback, all embeddable in unattended pipelines                |
 
@@ -25,7 +25,7 @@ OpenCorvus wraps one-shot code generation into a **repeatable, evidence-driven, 
 
 ```
 ┌─ Channel layer ──────────────────────────────────────────┐
-│  Local TUI / Overlay UI / HTTP API / 14 IM channels      │
+│  Overlay UI / HTTP API / 14 IM channels                  │
 ├─ Orchestrator layer ─────────────────────────────────────┤
 │  Orchestrator → workflow tools → per-goal build → review │
 │  (SQLite persistence + permissions + budgets + artifacts)│

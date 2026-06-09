@@ -1640,7 +1640,7 @@ export namespace SessionLoop {
       .trim()
     // Live session-state blocks. These change between turns (memory hits depend
     // on query, scratchpad mutates, taskplan tracks progress). Until 2026-04
-    // they were pushed onto `system` after the cached entries (env, TUI), but
+    // they were pushed onto `system` after the cached entries (env, runtime context), but
     // applyCaching only puts cache_control on the first 2 system messages —
     // anything after lives inside the second cache breakpoint, which spans
     // the rest of system + all messages. These blocks stay as runtime context

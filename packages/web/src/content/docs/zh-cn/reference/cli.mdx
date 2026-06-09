@@ -16,14 +16,6 @@ description: opencorvus 是统一的 CLI 入口，所有子命令在 packages/op
 
 ## 子命令
 
-### `opencorvus`（默认）
-
-进入本地 TUI。交互式输入任务，实时看到 spec / plan / run / eval。
-
-```bash
-opencorvus
-```
-
 ### `opencorvus serve`
 
 启动 headless HTTP API 服务器。
@@ -160,7 +152,6 @@ opencorvus db --query "SELECT id, status FROM task ORDER BY id DESC LIMIT 20"
 | `opencorvus github`     | GitHub Action runtime 入口（通常由 Action 内部调用）                        |
 | `opencorvus pr`         | PR 相关辅助                                                                 |
 | `opencorvus attach`     | attach 到现有 session                                                       |
-| `opencorvus tui-thread` | TUI thread 模式                                                             |
 | `opencorvus mcp`        | MCP 子命令族（`mcp serve` / `mcp auth` / `mcp status` / `mcp remove-auth`） |
 | `opencorvus session`    | session 管理                                                                |
 

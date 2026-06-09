@@ -42,7 +42,10 @@ describe("build-artifact", () => {
     for (const source of [buildSource, localBuildSource]) {
       expect(source).not.toContain("artifactTuiSiblingExecutableName")
       expect(source).not.toContain("opencorvus-tui.exe")
-      expect(source).toContain("entrypoints: artifactEntrypoints(buildFlavor, parserWorker, workerPath)")
+      expect(source).toContain("entrypoints: artifactEntrypoints(buildFlavor)")
+      expect(source).not.toContain("@opentui")
+      expect(source).not.toContain("parser.worker")
+      expect(source).not.toContain("src/cli/cmd/tui/worker.ts")
     }
   })
 
@@ -59,7 +62,7 @@ describe("build-artifact", () => {
       expect(source).not.toContain("coding-agent-tui-worker")
       expect(source).not.toContain("@opencorvus-ai/coding-agent-tui")
       expect(source).not.toContain("@opencorvus-ai/tui-app")
-      expect(source).not.toContain('src/cli/cmd/tui/embedded-worker.tsx')
+      expect(source).not.toContain("src/cli/cmd/tui/embedded-worker.tsx")
     }
 
     expect(tauriBuildSource).toContain("collect_plugin_resource_files")
@@ -73,18 +76,12 @@ describe("build-artifact", () => {
     expect(source).not.toContain("bun run build --all")
   })
 
-  test("overlay-server flavor compiles only the launcher entrypoint", () => {
-    expect(artifactEntrypoints("overlay-server", "parser.worker.js", "./src/cli/cmd/tui/worker.ts")).toEqual([
-      "./src/overlay-launcher.ts",
-    ])
+  test("overlay-server flavor compiles only the overlay launcher entrypoint", () => {
+    expect(artifactEntrypoints("overlay-server")).toEqual(["./src/overlay-launcher.ts"])
   })
 
-  test("default flavor compiles through the binary launcher", () => {
-    expect(artifactEntrypoints("cli", "parser.worker.js", "./src/cli/cmd/tui/worker.ts")).toEqual([
-      "./src/launcher.ts",
-      "parser.worker.js",
-      "./src/cli/cmd/tui/worker.ts",
-    ])
+  test("default flavor compiles only through the binary launcher", () => {
+    expect(artifactEntrypoints("cli")).toEqual(["./src/launcher.ts"])
   })
 
   test("release artifacts never emit sourcemaps", () => {
@@ -104,6 +101,11 @@ describe("build-artifact", () => {
     expect(artifactBrowserMcpNodeExternalModules()).toContain("chromium-bidi")
   })
 
+  test("packaged runtime keeps AWS credential providers as packaged node modules", () => {
+    expect(artifactExternalModules()).toContain("@aws-sdk/credential-providers")
+    expect(artifactRuntimeNodeModuleNames(currentRuntimeTarget())).toContain("@aws-sdk/credential-providers")
+  })
+
   test("packaged runtime keeps native Node packages as packaged node modules", () => {
     expect(artifactExternalModules()).toContain("sharp")
     expect(artifactExternalModules()).toContain("@parcel/watcher")
@@ -117,7 +119,7 @@ describe("build-artifact", () => {
     const screenshotSource = readFileSync(resolve(import.meta.dir, "../../src/gui/screenshot.ts"), "utf8")
     const buildScreenshotSource = readFileSync(resolve(import.meta.dir, "../../src/build/screenshot-tool.ts"), "utf8")
     const capabilitySource = readFileSync(resolve(import.meta.dir, "../../src/platform/capability.ts"), "utf8")
-    const tuiHostSource = readFileSync(resolve(import.meta.dir, "../../src/tui/host.ts"), "utf8")
+    const ptyHostSource = readFileSync(resolve(import.meta.dir, "../../src/pty/host.ts"), "utf8")
 
     expect(watcherSource).not.toContain('from "@parcel/watcher/wrapper"')
     expect(watcherSource).not.toContain("@parcel/watcher-${process.platform}")
@@ -128,8 +130,8 @@ describe("build-artifact", () => {
     expect(buildScreenshotSource).toContain('requireRuntimePackage<typeof import("sharp")>')
     expect(capabilitySource).toContain('requireRuntimePackage("node-screenshots")')
     expect(capabilitySource).toContain('requireRuntimePackage("@parcel/watcher")')
-    expect(tuiHostSource).not.toContain('from "@lydell/node-pty"')
-    expect(tuiHostSource).toContain('requireRuntimePackage<typeof import("@lydell/node-pty")>')
+    expect(ptyHostSource).not.toContain('from "@lydell/node-pty"')
+    expect(ptyHostSource).toContain('requireRuntimePackage<typeof import("@lydell/node-pty")>')
   })
 
   test("runtime node module set includes win32 x64 native packages only for win32 x64", () => {

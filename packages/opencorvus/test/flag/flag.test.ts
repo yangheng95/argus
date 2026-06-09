@@ -7,7 +7,6 @@ const { Flag } = await import("../../src/flag/flag")
 
 // Keys that tests manipulate — clean up after each test
 const TEMP_KEYS = [
-  "OPENCORVUS_TUI_CONFIG",
   "OPENCORVUS_CONFIG_DIR",
   "OPENCORVUS_CLIENT",
   "OPENCORVUS_DISABLE_CLAUDE_CODE",
@@ -33,17 +32,6 @@ afterEach(() => {
   for (const key of TEMP_KEYS) delete process.env[key]
 })
 
-describe("Flag — dynamic getter: OPENCORVUS_TUI_CONFIG", () => {
-  test("returns undefined when env var is not set", () => {
-    expect(Flag.OPENCORVUS_TUI_CONFIG).toBeUndefined()
-  })
-
-  test("returns value when env var is set", () => {
-    process.env["OPENCORVUS_TUI_CONFIG"] = "/some/path/config.json"
-    expect(Flag.OPENCORVUS_TUI_CONFIG).toBe("/some/path/config.json")
-  })
-})
-
 describe("Flag — dynamic getter: OPENCORVUS_CONFIG_DIR", () => {
   test("returns undefined when not set", () => {
     expect(Flag.OPENCORVUS_CONFIG_DIR).toBeUndefined()
@@ -61,8 +49,8 @@ describe("Flag — dynamic getter: OPENCORVUS_CLIENT", () => {
   })
 
   test("returns set value when overridden", () => {
-    process.env["OPENCORVUS_CLIENT"] = "tui"
-    expect(Flag.OPENCORVUS_CLIENT).toBe("tui")
+    process.env["OPENCORVUS_CLIENT"] = "overlay"
+    expect(Flag.OPENCORVUS_CLIENT).toBe("overlay")
   })
 })
 

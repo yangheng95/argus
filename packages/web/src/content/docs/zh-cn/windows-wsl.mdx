@@ -13,7 +13,7 @@ Bun 官方提供 Windows 构建，OpenCorvus 直接复用。
 
 - Bash 工具调用路由到配置的 shell（`opencorvus.jsonc` 中的 `shell` 字段）。Windows 上默认优先 `pwsh`，再 `cmd.exe`。
 - Bun 的 `Bun.spawn()` 同时接受正斜杠和反斜杠；OpenCorvus 在传给 LLM 前会做路径归一化。
-- TUI、overlay、`opencorvus serve` 均以原生 Windows 二进制运行。
+- overlay、`opencorvus serve` 均以原生 Windows 二进制运行。
 
 ### 已知坑
 
@@ -43,7 +43,7 @@ Overlay 开发仍然需要原生 Windows（Tauri 不在 WSL 下）；只有 head
 
 | 需求                                 | 推荐                                                         |
 | ------------------------------------ | ------------------------------------------------------------ |
-| 跑 TUI / Overlay 桌面 UI             | **原生 Windows**（Tauri 只在那）                             |
+| 跑 Overlay 桌面 UI                   | **原生 Windows**（Tauri 只在那）                             |
 | Headless server / CI 类环境          | **WSL2**（更接近 Linux runner）                              |
 | 大量 bash 任务由 agent 执行          | **WSL2** 优                                                  |
 | Windows 上编辑、WSL 跑 server 的混合 | 可以，但同一个仓库目录只在一边操作；不要跨 `\\wsl$` 双向操作 |

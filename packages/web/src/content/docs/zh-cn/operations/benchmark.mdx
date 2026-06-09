@@ -102,8 +102,7 @@ Env 必须在**进程启动前**就绪。`Env.state()` 在实例创建时快照 
 ```bash
 cd packages/opencorvus
 DASHSCOPE_API_KEY=sk-... OPENCORVUS_CHANNEL=local \
-  bun run --preload @opentui/solid/preload --conditions=browser \
-  src/index.ts serve --port 7878
+  bun src/index.ts serve --port 7878
 ```
 
 然后另开终端跑 `bun run script/eval-e2e.ts`。

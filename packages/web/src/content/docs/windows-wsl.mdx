@@ -13,7 +13,7 @@ Bun ships official Windows builds. OpenCorvus uses them directly.
 
 - Bash tool calls are routed through the configured shell (`shell` in [config](/docs/config/)). On Windows, the default discovery prefers `pwsh` then `cmd.exe`.
 - Bun's `Bun.spawn()` accepts both forward slashes and backslashes; OpenCorvus normalizes paths internally before passing to the LLM.
-- The TUI, overlay, and `opencorvus serve` all run as plain Windows binaries.
+- The overlay and `opencorvus serve` run as plain Windows binaries.
 
 ### Known gotchas
 
@@ -43,7 +43,7 @@ When developing the overlay, the Tauri build still requires native Windows — o
 
 | Need                                      | Recommendation                                                                      |
 | ----------------------------------------- | ----------------------------------------------------------------------------------- |
-| Run TUI / Overlay desktop UI              | **Native Windows** — Tauri runs there                                               |
+| Run Overlay desktop UI                    | **Native Windows** — Tauri runs there                                               |
 | Headless server in CI-like environment    | **WSL2** — closer to Linux runners                                                  |
 | Bash-heavy tasks the agent will execute   | **WSL2** preferred                                                                  |
 | Mixed: edit on Windows, run server in WSL | OK, but pin a single repo path; do not cross-mount over `\\wsl$` from Windows tools |

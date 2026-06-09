@@ -7,7 +7,6 @@ export namespace Flag {
   export const OPENCORVUS_AUTO_SHARE = truthy("OPENCORVUS_AUTO_SHARE")
   export const OPENCORVUS_GIT_BASH_PATH = process.env["OPENCORVUS_GIT_BASH_PATH"]
   export const OPENCORVUS_CONFIG = process.env["OPENCORVUS_CONFIG"]
-  export declare const OPENCORVUS_TUI_CONFIG: string | undefined
   export declare const OPENCORVUS_CONFIG_DIR: string | undefined
   export const OPENCORVUS_CONFIG_CONTENT = process.env["OPENCORVUS_CONFIG_CONTENT"]
   export const OPENCORVUS_DISABLE_AUTOUPDATE = truthy("OPENCORVUS_DISABLE_AUTOUPDATE")
@@ -41,9 +40,6 @@ export namespace Flag {
     "OPENCORVUS_EXPERIMENTAL_BASH_DEFAULT_TIMEOUT_MS",
   )
   export const OPENCORVUS_EXPERIMENTAL_OUTPUT_TOKEN_MAX = number("OPENCORVUS_EXPERIMENTAL_OUTPUT_TOKEN_MAX")
-  // Dynamic getter — value read on every access so tests can mutate the env
-  // between calls without forcing a module reload.
-  export declare const OPENCORVUS_TUI_CONTROL_TIMEOUT_MS: number
   export declare const OPENCORVUS_EXPERIMENTAL_OXFMT: boolean
   export const OPENCORVUS_EXPERIMENTAL_LSP_TY = truthy("OPENCORVUS_EXPERIMENTAL_LSP_TY")
   export declare const OPENCORVUS_EXPERIMENTAL_LSP_TOOL: boolean
@@ -66,17 +62,6 @@ export namespace Flag {
 Object.defineProperty(Flag, "OPENCORVUS_DISABLE_PROJECT_CONFIG", {
   get() {
     return truthy("OPENCORVUS_DISABLE_PROJECT_CONFIG")
-  },
-  enumerable: true,
-  configurable: false,
-})
-
-// Dynamic getter for OPENCORVUS_TUI_CONFIG
-// This must be evaluated at access time, not module load time,
-// because tests and external tooling may set this env var at runtime
-Object.defineProperty(Flag, "OPENCORVUS_TUI_CONFIG", {
-  get() {
-    return process.env["OPENCORVUS_TUI_CONFIG"]
   },
   enumerable: true,
   configurable: false,
@@ -166,19 +151,6 @@ Object.defineProperty(Flag, "OPENCORVUS_EXPERIMENTAL_OXFMT", {
 Object.defineProperty(Flag, "OPENCORVUS_EXPERIMENTAL_LSP_TOOL", {
   get() {
     return Flag.OPENCORVUS_EXPERIMENTAL || truthy("OPENCORVUS_EXPERIMENTAL_LSP_TOOL")
-  },
-  enumerable: true,
-  configurable: false,
-})
-
-Object.defineProperty(Flag, "OPENCORVUS_TUI_CONTROL_TIMEOUT_MS", {
-  get() {
-    const raw = process.env["OPENCORVUS_TUI_CONTROL_TIMEOUT_MS"]
-    if (!raw) return 60_000
-    const value = Number(raw)
-    if (!Number.isFinite(value)) return 60_000
-    if (value < 1000) return 1000
-    return Math.floor(value)
   },
   enumerable: true,
   configurable: false,

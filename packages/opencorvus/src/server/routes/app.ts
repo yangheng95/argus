@@ -25,7 +25,6 @@ import { ProviderRoutes } from "./provider"
 import { FileRoutes } from "./file"
 import { McpRoutes } from "./mcp"
 import { SkillRoutes } from "./skill"
-import { TuiRoutes } from "./tui"
 import { PtyRoutes } from "./pty"
 import { ExportRoutes } from "./export"
 import { EngineRoutes } from "./orchestrator"
@@ -165,7 +164,6 @@ export function AppRoutes(root: Hono) {
     .route("/mcp", McpRoutes())
     .route("/pty", PtyRoutes())
     .route("/plugin", PluginRoutes())
-    .route("/tui", TuiRoutes())
     .post(
       "/instance/dispose",
       describeRoute({

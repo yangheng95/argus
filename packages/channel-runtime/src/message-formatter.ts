@@ -157,11 +157,6 @@ export function formatToolStatus(tool: string, input: unknown, env: Env = proces
       if (action === "move") return `\`input.move: (${data.x ?? "?"}, ${data.y ?? "?"})\``
       return "`input`"
     }
-    case "tui": {
-      const action = data.action
-      if (!action) return "`tui`"
-      return `\`tui.${action}\``
-    }
     default:
       return null
   }

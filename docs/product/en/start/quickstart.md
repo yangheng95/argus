@@ -62,15 +62,7 @@ On failure, `replan.triggered` or `retry.triggered` fire, then execution resumes
 | `POST /task/<id>/replan`  | discard plan and re-plan |
 | `POST /task/<id>/cancel`  | cancel                   |
 
-## 6. Local TUI
-
-Skip HTTP and go straight to:
-
-```bash
-opencorvus
-```
-
-## 7. Via Slack
+## 6. Via Slack
 
 ```bash
 export SLACK_BOT_TOKEN=xoxb-...

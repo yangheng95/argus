@@ -1,11 +1,10 @@
-// Copied from OpenCode `packages/opencode/src/pty/index.ts` API shape and adapted to the project-bound TUI host.
+// Copied from OpenCode `packages/opencode/src/pty/index.ts` API shape and adapted to the project-bound PTY host.
 import z from "zod"
 import { Bus } from "@/bus"
 import { BusEvent } from "@/bus/bus-event"
 import { Identifier } from "@/id/id"
 import { Instance } from "@/project/instance"
-import { Tui } from "@/tui"
-import { TuiHost } from "@/tui/host"
+import { PtyHost, type PtyPreparedCommand } from "@/pty/host"
 import { Filesystem } from "@/util/filesystem"
 import { NamedError } from "@opencorvus-ai/util/error"
 
@@ -25,12 +24,11 @@ export namespace Pty {
   export type Info = z.infer<typeof Info>
 
   export const CreateInput = z.object({
-    command: z.string().optional(),
+    command: z.string().min(1),
     args: z.array(z.string()).optional(),
     cwd: z.string().optional(),
     title: z.string().optional(),
     env: z.record(z.string(), z.string()).optional(),
-    agent: z.string().optional(),
   })
 
   export type CreateInput = z.infer<typeof CreateInput>
@@ -64,11 +62,11 @@ export namespace Pty {
     Deleted: BusEvent.define("pty.deleted", z.object({ id: Identifier.schema("pty") })),
   }
 
-  function fromHost(info: TuiHost.Info): Info | undefined {
+  function fromHost(info: PtyHost.Info): Info | undefined {
     if (!info.id) return
     return {
       id: info.id,
-      title: info.title ?? "OpenCorvus TUI",
+      title: info.title ?? "Pseudo Terminal",
       command: info.command ?? "",
       args: info.args ?? [],
       cwd: info.directory ?? Instance.directory,
@@ -85,41 +83,39 @@ export namespace Pty {
   }
 
   export function list() {
-    return TuiHost.list().flatMap((info) => {
+    return PtyHost.list().flatMap((info) => {
       const mapped = fromHost(info)
       return mapped ? [mapped] : []
     })
   }
 
   export function get(id: string) {
-    const info = fromHost(TuiHost.get(id))
+    const info = fromHost(PtyHost.get(id))
     if (!info || info.id !== id) return
     return info
   }
 
   export async function create(input: CreateInput) {
     const cwd = projectCwd(input.cwd)
-    let command: Tui.EmbeddedCommand | undefined
+    let command: PtyPreparedCommand | undefined
     try {
-      command = input.command
-        ? {
-            command: input.command,
-            args: input.args ?? [],
-            cwd,
-            directory: cwd,
-            env: input.env,
-            url: "",
-            port: 0,
-            hostname: "",
-          }
-        : await Tui.resolveEmbeddedCommand({ directory: cwd, agent: input.agent })
-      const info = await TuiHost.startPrepared({
+      if (!input.command) {
+        throw new Error("PTY command is required")
+      }
+      command = {
+        command: input.command,
+        args: input.args ?? [],
+        cwd,
+        directory: cwd,
+        env: input.env,
+      }
+      const info = await PtyHost.startPrepared({
         command,
-        title: input.title ?? "OpenCorvus TUI",
+        title: input.title ?? "Pseudo Terminal",
       })
       const mapped = fromHost(info)
       if (!mapped) throw new Error("PTY session was not created")
-      TuiHost.onExit(mapped.id, (event) => {
+      PtyHost.onExit(mapped.id, (event) => {
         void Bus.publish(Event.Exited, { id: mapped.id, exitCode: event.exitCode })
       })
       void Bus.publish(Event.Created, { info: mapped })
@@ -137,17 +133,17 @@ export namespace Pty {
 
   export async function update(id: string, input: UpdateInput) {
     if (!get(id)) return
-    let info: TuiHost.Info | undefined
-    if (input.title) info = TuiHost.rename({ id, title: input.title })
-    if (input.size) info = TuiHost.resizePty({ id, ...input.size })
-    const mapped = fromHost(info ?? TuiHost.get(id))
+    let info: PtyHost.Info | undefined
+    if (input.title) info = PtyHost.rename({ id, title: input.title })
+    if (input.size) info = PtyHost.resizePty({ id, ...input.size })
+    const mapped = fromHost(info ?? PtyHost.get(id))
     if (mapped) void Bus.publish(Event.Updated, { info: mapped })
     return mapped
   }
 
   export async function remove(id: string) {
     if (!get(id)) return
-    await TuiHost.remove({ id })
+    await PtyHost.remove({ id })
     void Bus.publish(Event.Deleted, { id })
   }
 
@@ -160,7 +156,7 @@ export namespace Pty {
     cursor?: number,
   ) {
     try {
-      const prepared = TuiHost.preparePtyConnect({ id, cursor })
+      const prepared = PtyHost.preparePtyConnect({ id, cursor })
       return prepared.attach({
         send: (data) => ws.send(data),
         close: (code, reason) => ws.close(code, reason),

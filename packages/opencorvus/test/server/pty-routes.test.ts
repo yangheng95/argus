@@ -1,15 +1,14 @@
 import { afterEach, describe, expect, test } from "bun:test"
 import path from "node:path"
-import { Tui } from "../../src/tui"
-import { TuiHost } from "../../src/tui/host"
 import { Bus } from "../../src/bus"
 import { Pty } from "../../src/pty"
+import { PtyHost, type PtyPreparedCommand } from "../../src/pty/host"
 import { PtyRoutes } from "../../src/server/routes/pty"
 import { Server } from "../../src/server/server"
 import { Instance } from "../../src/project/instance"
 import { tmpdir } from "../fixture/fixture"
 
-function inputEchoCommand(cwd: string): Tui.EmbeddedCommand {
+function inputEchoCommand(cwd: string): PtyPreparedCommand {
   if (process.platform === "win32") {
     return {
       command: "powershell.exe",
@@ -23,9 +22,6 @@ function inputEchoCommand(cwd: string): Tui.EmbeddedCommand {
       ],
       cwd,
       directory: cwd,
-      url: "",
-      port: 0,
-      hostname: "",
     }
   }
   return {
@@ -33,22 +29,16 @@ function inputEchoCommand(cwd: string): Tui.EmbeddedCommand {
     args: ["-c", 'read line; printf "%s" "$line"; sleep 30'],
     cwd,
     directory: cwd,
-    url: "",
-    port: 0,
-    hostname: "",
   }
 }
 
-function exitCommand(cwd: string): Tui.EmbeddedCommand {
+function exitCommand(cwd: string): PtyPreparedCommand {
   if (process.platform === "win32") {
     return {
       command: "cmd.exe",
       args: ["/d", "/s", "/c", "echo pty-exit"],
       cwd,
       directory: cwd,
-      url: "",
-      port: 0,
-      hostname: "",
     }
   }
   return {
@@ -56,13 +46,10 @@ function exitCommand(cwd: string): Tui.EmbeddedCommand {
     args: ["-lc", "printf pty-exit"],
     cwd,
     directory: cwd,
-    url: "",
-    port: 0,
-    hostname: "",
   }
 }
 
-function ptyCreateBody(command: Tui.EmbeddedCommand, title: string) {
+function ptyCreateBody(command: PtyPreparedCommand, title: string) {
   return JSON.stringify({
     command: command.command,
     args: command.args,
@@ -135,10 +122,20 @@ describe("server.pty-routes", () => {
     await Instance.disposeAll()
   })
 
-  test("accepts an explicit embedded TUI agent in the PTY create contract", () => {
-    expect(Pty.CreateInput.parse({ title: "OpenCorvus TUI", agent: "tui-coding" })).toMatchObject({
-      title: "OpenCorvus TUI",
-      agent: "tui-coding",
+  test("requires an explicit command instead of defaulting to a TUI process", async () => {
+    await using tmp = await tmpdir()
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const app = PtyRoutes()
+        const response = await app.request("/", {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({ cwd: tmp.path, title: "Implicit UI" }),
+        })
+        expect(response.status).toBe(400)
+        expect(PtyHost.status().id).toBeNull()
+      },
     })
   })
 
@@ -156,12 +153,12 @@ describe("server.pty-routes", () => {
           body: JSON.stringify({ cwd: path.join(tmp.path, "not-current-project") }),
         })
         expect(wrongCwd.status).toBe(400)
-        expect(TuiHost.status().id).toBeNull()
+        expect(PtyHost.status().id).toBeNull()
 
         const first = await app.request("/", {
           method: "POST",
           headers: { "content-type": "application/json" },
-          body: ptyCreateBody(inputEchoCommand(tmp.path), "Initial TUI"),
+          body: ptyCreateBody(inputEchoCommand(tmp.path), "Initial PTY"),
         })
         expect(first.status).toBe(200)
         const active = (await first.json()) as {
@@ -178,14 +175,14 @@ describe("server.pty-routes", () => {
         const second = await app.request("/", {
           method: "POST",
           headers: { "content-type": "application/json" },
-          body: ptyCreateBody(inputEchoCommand(tmp.path), "Second TUI"),
+          body: ptyCreateBody(inputEchoCommand(tmp.path), "Second PTY"),
         })
         expect(second.status).toBe(200)
         const secondActive = (await second.json()) as { id: string; title: string }
         expect(secondActive.id).not.toBe(active.id)
 
         const list = (await (await app.request("/")).json()) as Array<{ id: string; title: string }>
-        expect(list.map((item) => item.title)).toEqual(["Initial TUI", "Second TUI"])
+        expect(list.map((item) => item.title)).toEqual(["Initial PTY", "Second PTY"])
 
         const get = await app.request(`/${active.id}`)
         expect(get.status).toBe(200)
@@ -194,12 +191,12 @@ describe("server.pty-routes", () => {
         const update = await app.request(`/${active.id}`, {
           method: "PUT",
           headers: { "content-type": "application/json" },
-          body: JSON.stringify({ title: "Renamed TUI", size: { cols: 120, rows: 40 } }),
+          body: JSON.stringify({ title: "Renamed PTY", size: { cols: 120, rows: 40 } }),
         })
         expect(update.status).toBe(200)
-        expect(await update.json()).toMatchObject({ id: active.id, title: "Renamed TUI" })
-        expect(TuiHost.get(active.id)).toMatchObject({ cols: 120, rows: 40, title: "Renamed TUI" })
-        expect(TuiHost.get(secondActive.id)).toMatchObject({ title: "Second TUI" })
+        expect(await update.json()).toMatchObject({ id: active.id, title: "Renamed PTY" })
+        expect(PtyHost.get(active.id)).toMatchObject({ cols: 120, rows: 40, title: "Renamed PTY" })
+        expect(PtyHost.get(secondActive.id)).toMatchObject({ title: "Second PTY" })
 
         const remove = await app.request(`/${active.id}`, { method: "DELETE" })
         expect(remove.status).toBe(200)
@@ -221,8 +218,8 @@ describe("server.pty-routes", () => {
     await Instance.provide({
       directory: tmp.path,
       fn: async () => {
-        await TuiHost.startPrepared({ command: inputEchoCommand(tmp.path), cols: 80, rows: 24 })
-        id = TuiHost.status().id!
+        await PtyHost.startPrepared({ command: inputEchoCommand(tmp.path), cols: 80, rows: 24 })
+        id = PtyHost.status().id!
       },
     })
     const listener = Server.listen({ hostname: "127.0.0.1", port: 0, randomPort: true })
@@ -249,7 +246,7 @@ describe("server.pty-routes", () => {
         const create = await app.request("/", {
           method: "POST",
           headers: { "content-type": "application/json" },
-          body: ptyCreateBody(exitCommand(tmp.path), "Short TUI"),
+          body: ptyCreateBody(exitCommand(tmp.path), "Short PTY"),
         })
         expect(create.status).toBe(200)
         await waitForCheck(
@@ -300,19 +297,19 @@ describe("server.pty-routes", () => {
           const create = await app.request("/", {
             method: "POST",
             headers: { "content-type": "application/json" },
-            body: ptyCreateBody(inputEchoCommand(tmp.path), "Event TUI"),
+            body: ptyCreateBody(inputEchoCommand(tmp.path), "Event PTY"),
           })
           expect(create.status).toBe(200)
           const active = (await create.json()) as { id: string }
-          expect(events).toContain("pty.created:Event TUI")
+          expect(events).toContain("pty.created:Event PTY")
 
           const update = await app.request(`/${active.id}`, {
             method: "PUT",
             headers: { "content-type": "application/json" },
-            body: JSON.stringify({ title: "Event TUI Renamed" }),
+            body: JSON.stringify({ title: "Event PTY Renamed" }),
           })
           expect(update.status).toBe(200)
-          expect(events).toContain("pty.updated:Event TUI Renamed")
+          expect(events).toContain("pty.updated:Event PTY Renamed")
 
           const remove = await app.request(`/${active.id}`, { method: "DELETE" })
           expect(remove.status).toBe(200)
@@ -321,7 +318,7 @@ describe("server.pty-routes", () => {
           const exiting = await app.request("/", {
             method: "POST",
             headers: { "content-type": "application/json" },
-            body: ptyCreateBody(exitCommand(tmp.path), "Event Exit TUI"),
+            body: ptyCreateBody(exitCommand(tmp.path), "Event Exit PTY"),
           })
           expect(exiting.status).toBe(200)
           const exitingInfo = (await exiting.json()) as { id: string }

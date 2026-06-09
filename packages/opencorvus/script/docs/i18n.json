@@ -45,7 +45,6 @@
     "pty": { "title_en": "PTY", "title_zh": "PTY", "order": 80 },
     "find": { "title_en": "File / Search", "title_zh": "File / Search", "order": 85 },
     "file": { "title_en": "File / Search", "title_zh": "File / Search", "merge_into": "find" },
-    "tui": { "title_en": "TUI", "title_zh": "TUI", "order": 90 },
     "experimental": { "title_en": "Experimental", "title_zh": "Experimental", "order": 95 },
     "event": { "title_en": "Global", "title_zh": "Global", "merge_into": "global" },
     "log": { "title_en": "Global", "title_zh": "Global", "merge_into": "global" },

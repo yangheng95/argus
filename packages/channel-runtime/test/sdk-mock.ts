@@ -27,6 +27,22 @@ function createNoopClient() {
       get: async () => ({ data: undefined, error: undefined }),
       message: async () => ({ data: { parts: [] }, error: undefined }),
       promptAsync: async () => ({ data: { taskID: "task_mock" }, error: undefined }),
+      promptAsyncStatus: async () => ({
+        data: {
+          taskID: "task_mock",
+          sessionID: "session_mock",
+          status: "completed" as const,
+          retryCount: 0,
+          maxRetries: 0,
+          source: "test",
+          prompt: "",
+          error: null,
+          startedAt: 1,
+          completedAt: 2,
+          updatedAt: 2,
+        },
+        error: undefined,
+      }),
     },
   }
 }
@@ -34,12 +50,6 @@ function createNoopClient() {
 function createNoopServer() {
   return {
     url: "http://127.0.0.1:0",
-    close() {},
-  }
-}
-
-function createNoopTui() {
-  return {
     close() {},
   }
 }
@@ -67,8 +77,6 @@ export const sdkMock = {
   createOpencodeClient: () => createNoopClient(),
   createOpenCorvusServer: async () => createNoopServer(),
   createOpencodeServer: async () => createNoopServer(),
-  createOpenCorvusTui: () => createNoopTui(),
-  createOpencodeTui: () => createNoopTui(),
   OpenCorvusClient: OpenCorvusClientMock,
   OpencodeClient: OpencodeClientMock,
 }

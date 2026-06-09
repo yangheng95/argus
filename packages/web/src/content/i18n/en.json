@@ -6,8 +6,8 @@
   "app.footer.discordLink": "Join the discussion",
   "app.lander.hero.title": "The AI coding agent built for the terminal.",
   "app.lander.cta.getStarted": "Get Started",
-  "app.lander.features.native_tui.title": "Native TUI",
-  "app.lander.features.native_tui.description": "A responsive, native, themeable terminal UI.",
+  "app.lander.features.overlay.title": "Overlay UI",
+  "app.lander.features.overlay.description": "A responsive desktop and browser UI for task orchestration.",
   "app.lander.features.lsp_enabled.title": "LSP enabled",
   "app.lander.features.lsp_enabled.description": "Automatically loads the right LSPs for the LLM.",
   "app.lander.features.multi_session.title": "Multi-session",
@@ -15,6 +15,6 @@
   "app.lander.features.use_any_model.title": "Use any model",
   "app.lander.features.use_any_model.prefix": "Supports 75+ LLM providers through",
   "app.lander.features.use_any_model.suffix": "including local models.",
-  "app.lander.images.tui.caption": "OpenCorvus TUI",
-  "app.lander.images.tui.alt": "OpenCorvus TUI"
+  "app.lander.images.overlay.caption": "OpenCorvus Overlay",
+  "app.lander.images.overlay.alt": "OpenCorvus Overlay"
 }

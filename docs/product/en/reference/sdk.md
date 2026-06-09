@@ -61,7 +61,6 @@ Mirror REST API modules (see [API reference](./api.md)):
 | `client.permission.*`            | `/permission/*`                  |
 | `client.skill.*`                 | `/skill/*`                       |
 | `client.executor.*`              | `/executor/*`                    |
-| `client.tui.runtime.*`           | `/tui/runtime/*`                 |
 
 ## Event subscription
 

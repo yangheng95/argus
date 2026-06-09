@@ -170,17 +170,19 @@ describe("plugin service routes", () => {
     expect(source).not.toContain("coding_agent_tui_target")
   })
 
-  test("does not keep the retired core tui embed route", async () => {
+  test("does not keep retired core tui routes", async () => {
     await using tmp = await tmpdir()
     await Instance.provide({
       directory: tmp.path,
       fn: async () => {
-        const response = await Server.App().request("/tui/embed/status", {
-          headers: {
-            "x-opencorvus-directory": tmp.path,
-          },
-        })
-        expect(response.status).toBe(404)
+        for (const path of ["/tui/embed/status", "/tui/status", "/tui/runtime/start"]) {
+          const response = await Server.App().request(path, {
+            headers: {
+              "x-opencorvus-directory": tmp.path,
+            },
+          })
+          expect(response.status).toBe(404)
+        }
       },
     })
   }, 30_000)

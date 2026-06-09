@@ -224,7 +224,7 @@ export namespace Question {
    * Ask the user and return both the formatted LLM-facing summary and the raw
    * answers. Shared by the executor-side QuestionTool and the orchestrator's
    * `question` tool so both code paths render the same final string; the raw
-   * `answers` are used by the TUI/overlay to re-render the tool card.
+   * `answers` are used by clients such as overlay to re-render the tool card.
    *
    * When the user dismisses the dialog, `answers` is null and `output` carries
    * a user-dismissed message the LLM can act on.

@@ -5,7 +5,6 @@ import fs from "fs"
 import path from "path"
 import os from "os"
 import { fileURLToPath } from "url"
-import solidPlugin from "../node_modules/@opentui/solid/scripts/solid-plugin"
 
 const __filename = fileURLToPath(import.meta.url)
 const __dirname = path.dirname(__filename)
@@ -329,12 +328,6 @@ for (const item of targets) {
   console.log(`building ${name}`)
   await $`mkdir -p dist/${name}`
 
-  const parserWorker = fs.realpathSync(path.resolve(dir, "./node_modules/@opentui/core/parser.worker.js"))
-  const workerPath = "./src/cli/cmd/tui/worker.ts"
-
-  // Use platform-specific bunfs root path based on target OS
-  const bunfsRoot = item.os === "win32" ? "B:/~BUN/root/" : "/$bunfs/root/"
-  const workerRelativePath = path.relative(dir, parserWorker).replaceAll("\\", "/")
   const executablePath = runtimeDir
     ? path.resolve(runtimeDir, runtimeName(item), item.os === "win32" ? "bun.exe" : "bun")
     : undefined
@@ -357,15 +350,12 @@ for (const item of targets) {
   await Bun.build({
     conditions: ["browser"],
     tsconfig: "./tsconfig.json",
-    plugins: [solidPlugin],
     sourcemap: artifactSourcemap(),
     external: artifactExternalModules(),
     compile: compile as any,
-    entrypoints: artifactEntrypoints(buildFlavor, parserWorker, workerPath),
+    entrypoints: artifactEntrypoints(buildFlavor),
     define: {
       OPENCORVUS_VERSION: `'${Script.version}'`,
-      OTUI_TREE_SITTER_WORKER_PATH: bunfsRoot + workerRelativePath,
-      OPENCORVUS_WORKER_PATH: workerPath,
       OPENCORVUS_CHANNEL: `'${Script.channel}'`,
       OPENCORVUS_LIBC: item.os === "linux" ? `'${item.abi ?? "glibc"}'` : "",
       OPENCORVUS_EMBEDDED_ENV: embeddedEnvDefine,
@@ -386,7 +376,6 @@ for (const item of targets) {
     await fs.promises.copyFile(helper, path.join(dir, "dist", name, "opencorvus-process-supervisor.exe"))
   }
 
-  await $`rm -rf ./dist/${name}/tui`
   if (binaryOnly) {
     const files = await fs.promises.readdir(path.join(dir, "dist", name))
     await Promise.all(

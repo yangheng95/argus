@@ -22,7 +22,6 @@ import { McpAuth } from "./auth"
 import { BrowserMCPBuiltin } from "./browser/builtin"
 import { BusEvent } from "../bus/bus-event"
 import { Bus } from "@/bus"
-import { TuiEvent } from "@/cli/cmd/tui/event"
 import open from "open"
 import { entries, values as objectValues } from "@/util/object"
 
@@ -54,6 +53,16 @@ export namespace MCP {
       mcpName: z.string(),
       url: z.string(),
     }),
+  )
+
+  export const AuthRequired = BusEvent.define(
+    "mcp.auth.required",
+    z.object({
+      name: z.string(),
+      message: z.string(),
+      reason: z.enum(["needs_auth", "needs_client_registration"]),
+    }),
+    { tier: 2, badge: true },
   )
 
   export const Failed = NamedError.create(
@@ -450,24 +459,20 @@ export namespace MCP {
                 status: "needs_client_registration" as const,
                 error: "Server does not support dynamic client registration. Please provide clientId in config.",
               }
-              // Show toast for needs_client_registration
-              Bus.publish(TuiEvent.ToastShow, {
-                title: "MCP Authentication Required",
+              Bus.publish(AuthRequired, {
+                name: key,
                 message: `Server "${key}" requires a pre-registered client ID. Add clientId to your config.`,
-                variant: "warning",
-                duration: 8000,
-              }).catch((e) => log.debug("failed to show toast", { error: e }))
+                reason: "needs_client_registration",
+              }).catch((e) => log.debug("failed to publish MCP auth notice", { error: e }))
             } else {
               // Store transport for later finishAuth call
               pendingOAuthTransports.set(key, transport)
               status = { status: "needs_auth" as const }
-              // Show toast for needs_auth
-              Bus.publish(TuiEvent.ToastShow, {
-                title: "MCP Authentication Required",
+              Bus.publish(AuthRequired, {
+                name: key,
                 message: `Server "${key}" requires authentication. Run: opencorvus mcp auth ${key}`,
-                variant: "warning",
-                duration: 8000,
-              }).catch((e) => log.debug("failed to show toast", { error: e }))
+                reason: "needs_auth",
+              }).catch((e) => log.debug("failed to publish MCP auth notice", { error: e }))
             }
             break
           }

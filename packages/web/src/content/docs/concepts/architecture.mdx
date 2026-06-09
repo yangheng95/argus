@@ -10,7 +10,7 @@ OpenCorvus's job is to turn a natural-language request into verified code change
 The HTTP server (`packages/opencorvus/src/server/server.ts`) splits routes into two real layers:
 
 - **Control plane** — `/global/*`, `/auth/*`, `/ui/*`, plus `/log`, `/shutdown`, `/restart` are mounted before the `Instance.provide` middleware. They work even when no project directory is open.
-- **Instance-scoped** — every other route (`/session`, `/task`, `/run`, `/mcp`, `/tui`, `/experimental`, `/panel`, ...) runs inside `Instance.provide({ directory, init: InstanceBootstrap })`. They require a project directory from `?directory=` or `x-opencorvus-directory`.
+- **Instance-scoped** — every other route (`/session`, `/task`, `/run`, `/mcp`, `/experimental`, `/panel`, `/pty`, ...) runs inside `Instance.provide({ directory, init: InstanceBootstrap })`. They require a project directory from `?directory=` or `x-opencorvus-directory`.
 
 Route handlers do not read `process.env`, open SQL tables directly, or use `z.any()`. `bun run api:routes-check` protects that boundary, and `bun run docs:api` regenerates the web API reference from OpenAPI.
 

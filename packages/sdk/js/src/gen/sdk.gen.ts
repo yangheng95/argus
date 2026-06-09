@@ -42,10 +42,6 @@ import type {
   ConfigUpdateResponses,
   ControlTimelineResponses,
   EventSubscribeResponses,
-  EventTuiCommandExecute,
-  EventTuiPromptAppend,
-  EventTuiSessionSelect,
-  EventTuiToastShow,
   ExecutorGetModelResponses,
   ExecutorListResponses,
   ExecutorSetModelErrors,
@@ -331,30 +327,6 @@ import type {
   ToolIdsResponses,
   ToolListErrors,
   ToolListResponses,
-  TuiControlNextResponses,
-  TuiControlResponseResponses,
-  TuiExecuteCommandErrors,
-  TuiExecuteCommandResponses,
-  TuiOpenHelpResponses,
-  TuiOpenModelsResponses,
-  TuiOpenSessionsResponses,
-  TuiOpenThemesResponses,
-  TuiPublishErrors,
-  TuiPublishResponses,
-  TuiRuntimeProxyErrors,
-  TuiRuntimeProxyResponses,
-  TuiRuntimeStartErrors,
-  TuiRuntimeStartResponses,
-  TuiRuntimeStatusResponses,
-  TuiRuntimeStopResponses,
-  TuiRuntimeSubmitTaskErrors,
-  TuiRuntimeSubmitTaskResponses,
-  TuiRuntimeTaskStatusErrors,
-  TuiRuntimeTaskStatusResponses,
-  TuiSelectSessionErrors,
-  TuiSelectSessionResponses,
-  TuiShowToastResponses,
-  TuiStatusResponses,
   VcsDiffResponses,
   VcsGetResponses,
   WorktreeCreateErrors,
@@ -5156,6 +5128,7 @@ export class Global extends HeyApiClient {
       status?: string
       limit?: number
       cursor?: number
+      cursorTaskID?: string
     },
     options?: Options<never, ThrowOnError>,
   ) {
@@ -5169,6 +5142,7 @@ export class Global extends HeyApiClient {
             { in: "query", key: "status" },
             { in: "query", key: "limit" },
             { in: "query", key: "cursor" },
+            { in: "query", key: "cursorTaskID" },
           ],
         },
       ],
@@ -7844,7 +7818,7 @@ export class Pty extends HeyApiClient {
   /**
    * Create PTY session
    *
-   * Create a project-bound Pseudo Terminal (PTY) session for the embedded TUI.
+   * Create a project-bound Pseudo Terminal (PTY) session for an explicit command.
    */
   public create<ThrowOnError extends boolean = false>(
     parameters?: {
@@ -7856,7 +7830,6 @@ export class Pty extends HeyApiClient {
       env?: {
         [key: string]: string
       }
-      agent?: string
     },
     options?: Options<never, ThrowOnError>,
   ) {
@@ -7871,7 +7844,6 @@ export class Pty extends HeyApiClient {
             { in: "body", key: "cwd" },
             { in: "body", key: "title" },
             { in: "body", key: "env" },
-            { in: "body", key: "agent" },
           ],
         },
       ],
@@ -8018,537 +7990,6 @@ export class Pty extends HeyApiClient {
       ...options,
       ...params,
     })
-  }
-}
-
-export class Runtime2 extends HeyApiClient {
-  /**
-   * Start or connect TUI runtime
-   *
-   * Start a managed TUI subprocess or connect to an existing TUI server for internal API control.
-   */
-  public start<ThrowOnError extends boolean = false>(
-    parameters?: {
-      directory?: string
-      mode?: "spawn" | "connect"
-      url?: string
-      sessionID?: string
-      model?: string
-      agent?: string
-      prompt?: string
-      continue?: boolean
-      fork?: boolean
-      port?: number
-      hostname?: string
-      bin?: string
-    },
-    options?: Options<never, ThrowOnError>,
-  ) {
-    const params = buildClientParams(
-      [parameters],
-      [
-        {
-          args: [
-            { in: "query", key: "directory" },
-            { in: "body", key: "mode" },
-            { in: "body", key: "url" },
-            { in: "body", key: "sessionID" },
-            { in: "body", key: "model" },
-            { in: "body", key: "agent" },
-            { in: "body", key: "prompt" },
-            { in: "body", key: "continue" },
-            { in: "body", key: "fork" },
-            { in: "body", key: "port" },
-            { in: "body", key: "hostname" },
-            { in: "body", key: "bin" },
-          ],
-        },
-      ],
-    )
-    return (options?.client ?? this.client).post<TuiRuntimeStartResponses, TuiRuntimeStartErrors, ThrowOnError>({
-      url: "/tui/runtime/start",
-      ...options,
-      ...params,
-      headers: {
-        "Content-Type": "application/json",
-        ...options?.headers,
-        ...params.headers,
-      },
-    })
-  }
-
-  /**
-   * Get TUI runtime status
-   *
-   * Get status of the managed TUI runtime used by internal API control.
-   */
-  public status<ThrowOnError extends boolean = false>(
-    parameters?: {
-      directory?: string
-    },
-    options?: Options<never, ThrowOnError>,
-  ) {
-    const params = buildClientParams([parameters], [{ args: [{ in: "query", key: "directory" }] }])
-    return (options?.client ?? this.client).get<TuiRuntimeStatusResponses, unknown, ThrowOnError>({
-      url: "/tui/runtime/status",
-      ...options,
-      ...params,
-    })
-  }
-
-  /**
-   * Stop TUI runtime
-   *
-   * Stop the managed TUI runtime process if it was started by internal API.
-   */
-  public stop<ThrowOnError extends boolean = false>(
-    parameters?: {
-      directory?: string
-    },
-    options?: Options<never, ThrowOnError>,
-  ) {
-    const params = buildClientParams([parameters], [{ args: [{ in: "query", key: "directory" }] }])
-    return (options?.client ?? this.client).post<TuiRuntimeStopResponses, unknown, ThrowOnError>({
-      url: "/tui/runtime/stop",
-      ...options,
-      ...params,
-    })
-  }
-
-  /**
-   * Submit task to managed TUI and optionally wait
-   *
-   * Submit a task through Session API and optionally wait until completion. TUI runtime is only for UI lifecycle, not task execution truth.
-   */
-  public submitTask<ThrowOnError extends boolean = false>(
-    parameters?: {
-      directory?: string
-      text?: string
-      sessionID?: string
-      agent?: string
-      wait?: boolean
-      timeoutMs?: number
-    },
-    options?: Options<never, ThrowOnError>,
-  ) {
-    const params = buildClientParams(
-      [parameters],
-      [
-        {
-          args: [
-            { in: "query", key: "directory" },
-            { in: "body", key: "text" },
-            { in: "body", key: "sessionID" },
-            { in: "body", key: "agent" },
-            { in: "body", key: "wait" },
-            { in: "body", key: "timeoutMs" },
-          ],
-        },
-      ],
-    )
-    return (options?.client ?? this.client).post<
-      TuiRuntimeSubmitTaskResponses,
-      TuiRuntimeSubmitTaskErrors,
-      ThrowOnError
-    >({
-      url: "/tui/runtime/submit-task",
-      ...options,
-      ...params,
-      headers: {
-        "Content-Type": "application/json",
-        ...options?.headers,
-        ...params.headers,
-      },
-    })
-  }
-
-  /**
-   * Proxy control to managed TUI
-   *
-   * Proxy a POST request to the managed TUI instance (e.g. /tui/append-prompt, /tui/submit-prompt).
-   */
-  public proxy<ThrowOnError extends boolean = false>(
-    parameters?: {
-      directory?: string
-      path?: string
-      body?: unknown
-    },
-    options?: Options<never, ThrowOnError>,
-  ) {
-    const params = buildClientParams(
-      [parameters],
-      [
-        {
-          args: [
-            { in: "query", key: "directory" },
-            { in: "body", key: "path" },
-            { in: "body", key: "body" },
-          ],
-        },
-      ],
-    )
-    return (options?.client ?? this.client).post<TuiRuntimeProxyResponses, TuiRuntimeProxyErrors, ThrowOnError>({
-      url: "/tui/runtime/proxy",
-      ...options,
-      ...params,
-      headers: {
-        "Content-Type": "application/json",
-        ...options?.headers,
-        ...params.headers,
-      },
-    })
-  }
-
-  /**
-   * Get runtime task status
-   *
-   * Resolve queued task status by taskID for watchdogs and recovery.
-   */
-  public taskStatus<ThrowOnError extends boolean = false>(
-    parameters?: {
-      directory?: string
-      taskID?: string
-    },
-    options?: Options<never, ThrowOnError>,
-  ) {
-    const params = buildClientParams(
-      [parameters],
-      [
-        {
-          args: [
-            { in: "query", key: "directory" },
-            { in: "body", key: "taskID" },
-          ],
-        },
-      ],
-    )
-    return (options?.client ?? this.client).post<
-      TuiRuntimeTaskStatusResponses,
-      TuiRuntimeTaskStatusErrors,
-      ThrowOnError
-    >({
-      url: "/tui/runtime/task-status",
-      ...options,
-      ...params,
-      headers: {
-        "Content-Type": "application/json",
-        ...options?.headers,
-        ...params.headers,
-      },
-    })
-  }
-}
-
-export class Control3 extends HeyApiClient {
-  /**
-   * Get next TUI request
-   *
-   * Retrieve the next TUI (Terminal User Interface) request from the queue for processing.
-   */
-  public next<ThrowOnError extends boolean = false>(
-    parameters?: {
-      directory?: string
-    },
-    options?: Options<never, ThrowOnError>,
-  ) {
-    const params = buildClientParams([parameters], [{ args: [{ in: "query", key: "directory" }] }])
-    return (options?.client ?? this.client).get<TuiControlNextResponses, unknown, ThrowOnError>({
-      url: "/tui/control/next",
-      ...options,
-      ...params,
-    })
-  }
-
-  /**
-   * Submit TUI response
-   *
-   * Submit a response to the TUI request queue to complete a pending request.
-   */
-  public response<ThrowOnError extends boolean = false>(
-    parameters?: {
-      directory?: string
-      id?: string
-      body?: unknown
-      error?: string
-    },
-    options?: Options<never, ThrowOnError>,
-  ) {
-    const params = buildClientParams(
-      [parameters],
-      [
-        {
-          args: [
-            { in: "query", key: "directory" },
-            { in: "body", key: "id" },
-            { in: "body", key: "body" },
-            { in: "body", key: "error" },
-          ],
-        },
-      ],
-    )
-    return (options?.client ?? this.client).post<TuiControlResponseResponses, unknown, ThrowOnError>({
-      url: "/tui/control/response",
-      ...options,
-      ...params,
-      headers: {
-        "Content-Type": "application/json",
-        ...options?.headers,
-        ...params.headers,
-      },
-    })
-  }
-}
-
-export class Tui extends HeyApiClient {
-  /**
-   * Get TUI status
-   *
-   * Get TUI runtime state, session execution status, and command aliases.
-   */
-  public status<ThrowOnError extends boolean = false>(
-    parameters?: {
-      directory?: string
-    },
-    options?: Options<never, ThrowOnError>,
-  ) {
-    const params = buildClientParams([parameters], [{ args: [{ in: "query", key: "directory" }] }])
-    return (options?.client ?? this.client).get<TuiStatusResponses, unknown, ThrowOnError>({
-      url: "/tui/status",
-      ...options,
-      ...params,
-    })
-  }
-
-  /**
-   * Open help dialog
-   *
-   * Open the help dialog in the TUI to display user assistance information.
-   */
-  public openHelp<ThrowOnError extends boolean = false>(
-    parameters?: {
-      directory?: string
-    },
-    options?: Options<never, ThrowOnError>,
-  ) {
-    const params = buildClientParams([parameters], [{ args: [{ in: "query", key: "directory" }] }])
-    return (options?.client ?? this.client).post<TuiOpenHelpResponses, unknown, ThrowOnError>({
-      url: "/tui/open-help",
-      ...options,
-      ...params,
-    })
-  }
-
-  /**
-   * Open sessions dialog
-   *
-   * Open the session dialog
-   */
-  public openSessions<ThrowOnError extends boolean = false>(
-    parameters?: {
-      directory?: string
-    },
-    options?: Options<never, ThrowOnError>,
-  ) {
-    const params = buildClientParams([parameters], [{ args: [{ in: "query", key: "directory" }] }])
-    return (options?.client ?? this.client).post<TuiOpenSessionsResponses, unknown, ThrowOnError>({
-      url: "/tui/open-sessions",
-      ...options,
-      ...params,
-    })
-  }
-
-  /**
-   * Open themes dialog
-   *
-   * Open the theme dialog
-   */
-  public openThemes<ThrowOnError extends boolean = false>(
-    parameters?: {
-      directory?: string
-    },
-    options?: Options<never, ThrowOnError>,
-  ) {
-    const params = buildClientParams([parameters], [{ args: [{ in: "query", key: "directory" }] }])
-    return (options?.client ?? this.client).post<TuiOpenThemesResponses, unknown, ThrowOnError>({
-      url: "/tui/open-themes",
-      ...options,
-      ...params,
-    })
-  }
-
-  /**
-   * Open models dialog
-   *
-   * Open the model dialog
-   */
-  public openModels<ThrowOnError extends boolean = false>(
-    parameters?: {
-      directory?: string
-    },
-    options?: Options<never, ThrowOnError>,
-  ) {
-    const params = buildClientParams([parameters], [{ args: [{ in: "query", key: "directory" }] }])
-    return (options?.client ?? this.client).post<TuiOpenModelsResponses, unknown, ThrowOnError>({
-      url: "/tui/open-models",
-      ...options,
-      ...params,
-    })
-  }
-
-  /**
-   * Execute TUI command
-   *
-   * Execute a TUI command (e.g. agent_cycle)
-   */
-  public executeCommand<ThrowOnError extends boolean = false>(
-    parameters?: {
-      directory?: string
-      command?: string
-    },
-    options?: Options<never, ThrowOnError>,
-  ) {
-    const params = buildClientParams(
-      [parameters],
-      [
-        {
-          args: [
-            { in: "query", key: "directory" },
-            { in: "body", key: "command" },
-          ],
-        },
-      ],
-    )
-    return (options?.client ?? this.client).post<TuiExecuteCommandResponses, TuiExecuteCommandErrors, ThrowOnError>({
-      url: "/tui/execute-command",
-      ...options,
-      ...params,
-      headers: {
-        "Content-Type": "application/json",
-        ...options?.headers,
-        ...params.headers,
-      },
-    })
-  }
-
-  /**
-   * Show TUI toast
-   *
-   * Show a toast notification in the TUI
-   */
-  public showToast<ThrowOnError extends boolean = false>(
-    parameters?: {
-      directory?: string
-      title?: string
-      message?: string
-      variant?: "info" | "success" | "warning" | "error"
-      duration?: number
-    },
-    options?: Options<never, ThrowOnError>,
-  ) {
-    const params = buildClientParams(
-      [parameters],
-      [
-        {
-          args: [
-            { in: "query", key: "directory" },
-            { in: "body", key: "title" },
-            { in: "body", key: "message" },
-            { in: "body", key: "variant" },
-            { in: "body", key: "duration" },
-          ],
-        },
-      ],
-    )
-    return (options?.client ?? this.client).post<TuiShowToastResponses, unknown, ThrowOnError>({
-      url: "/tui/show-toast",
-      ...options,
-      ...params,
-      headers: {
-        "Content-Type": "application/json",
-        ...options?.headers,
-        ...params.headers,
-      },
-    })
-  }
-
-  /**
-   * Publish TUI event
-   *
-   * Publish a TUI event
-   */
-  public publish<ThrowOnError extends boolean = false>(
-    parameters?: {
-      directory?: string
-      body?: EventTuiPromptAppend | EventTuiCommandExecute | EventTuiToastShow | EventTuiSessionSelect
-    },
-    options?: Options<never, ThrowOnError>,
-  ) {
-    const params = buildClientParams(
-      [parameters],
-      [
-        {
-          args: [
-            { in: "query", key: "directory" },
-            { key: "body", map: "body" },
-          ],
-        },
-      ],
-    )
-    return (options?.client ?? this.client).post<TuiPublishResponses, TuiPublishErrors, ThrowOnError>({
-      url: "/tui/publish",
-      ...options,
-      ...params,
-      headers: {
-        "Content-Type": "application/json",
-        ...options?.headers,
-        ...params.headers,
-      },
-    })
-  }
-
-  /**
-   * Select session
-   *
-   * Navigate the TUI to display the specified session.
-   */
-  public selectSession<ThrowOnError extends boolean = false>(
-    parameters?: {
-      directory?: string
-      sessionID?: string
-    },
-    options?: Options<never, ThrowOnError>,
-  ) {
-    const params = buildClientParams(
-      [parameters],
-      [
-        {
-          args: [
-            { in: "query", key: "directory" },
-            { in: "body", key: "sessionID" },
-          ],
-        },
-      ],
-    )
-    return (options?.client ?? this.client).post<TuiSelectSessionResponses, TuiSelectSessionErrors, ThrowOnError>({
-      url: "/tui/select-session",
-      ...options,
-      ...params,
-      headers: {
-        "Content-Type": "application/json",
-        ...options?.headers,
-        ...params.headers,
-      },
-    })
-  }
-
-  private _runtime?: Runtime2
-  get runtime(): Runtime2 {
-    return (this._runtime ??= new Runtime2({ client: this.client }))
-  }
-
-  private _control?: Control3
-  get control(): Control3 {
-    return (this._control ??= new Control3({ client: this.client }))
   }
 }
 
@@ -9144,11 +8585,6 @@ export class OpenCorvusClient extends HeyApiClient {
   private _pty?: Pty
   get pty(): Pty {
     return (this._pty ??= new Pty({ client: this.client }))
-  }
-
-  private _tui?: Tui
-  get tui(): Tui {
-    return (this._tui ??= new Tui({ client: this.client }))
   }
 
   private _instance?: Instance

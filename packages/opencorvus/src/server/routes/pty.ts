@@ -34,7 +34,7 @@ export const PtyRoutes = lazy(() =>
       "/",
       describeRoute({
         summary: "Create PTY session",
-        description: "Create a project-bound Pseudo Terminal (PTY) session for the embedded TUI.",
+        description: "Create a project-bound Pseudo Terminal (PTY) session for an explicit command.",
         operationId: "pty.create",
         responses: {
           200: {

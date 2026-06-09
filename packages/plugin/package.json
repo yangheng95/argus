@@ -10,17 +10,13 @@
   },
   "exports": {
     ".": "./src/index.ts",
-    "./tool": "./src/tool.ts",
-    "./tui": "./src/tui.ts"
+    "./tool": "./src/tool.ts"
   },
   "files": [
     "dist"
   ],
   "dependencies": {
     "@opencorvus-ai/sdk": "workspace:*",
-    "@opentui/core": "catalog:",
-    "@opentui/keymap": "catalog:",
-    "@opentui/solid": "catalog:",
     "hono": "catalog:",
     "zod": "catalog:"
   },
