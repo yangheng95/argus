@@ -1,7 +1,18 @@
 import path from "node:path"
 import z from "zod"
-import { latestBrowserPreviewEvidenceID, findLatestBrowserPreviewTarget } from "./persist"
+import { isBrowserPreviewTargetVisible } from "./liveness"
+import { latestBrowserPreviewEvidenceID, findRecentBrowserPreviewTargets, type PersistedBrowserPreviewTarget } from "./persist"
 import { BROWSER_PREVIEW_VIEWPORTS, BrowserPreviewViewport } from "./viewport"
+
+export const BrowserPreviewCandidate = z.object({
+  id: z.string(),
+  url: z.string(),
+  source: z.literal("task-artifact"),
+  selected: z.boolean(),
+  timeUpdated: z.number(),
+})
+
+export type BrowserPreviewCandidate = z.infer<typeof BrowserPreviewCandidate>
 
 export const BrowserPreviewTarget = z.object({
   id: z.string().optional(),
@@ -13,6 +24,7 @@ export const BrowserPreviewTarget = z.object({
   url: z.string().optional(),
   viewports: BrowserPreviewViewport.array(),
   diagnostics: z.string().array(),
+  candidates: BrowserPreviewCandidate.array(),
   source: z.enum(["task-artifact", "none"]),
 })
 
@@ -21,16 +33,20 @@ export type BrowserPreviewTarget = z.infer<typeof BrowserPreviewTarget>
 export async function resolveBrowserPreviewTarget(input: {
   projectRoot: string
   taskID: string
+  isVisible?: (url: string) => Promise<boolean>
 }): Promise<BrowserPreviewTarget> {
   const projectRoot = path.resolve(input.projectRoot)
   const taskID = input.taskID.trim()
-  const persisted = findLatestBrowserPreviewTarget(taskID)
+  const persistedTargets = findRecentBrowserPreviewTargets(taskID)
+  const candidates = await visibleBrowserPreviewTargets(persistedTargets, input.isVisible)
+  const persisted = candidates[0]
   if (!persisted) return missingBrowserPreviewTarget({ projectRoot, taskID })
   return taskBrowserPreviewTarget({
     projectRoot,
     taskID,
     id: persisted.id,
     url: persisted.url,
+    candidates: browserPreviewCandidates(candidates, persisted.id),
     diagnostics: [`Using task browser preview target ${persisted.id}.`],
     latestEvidenceID: latestBrowserPreviewEvidenceID({ taskID, targetID: persisted.id }),
   })
@@ -43,6 +59,7 @@ export function taskBrowserPreviewTarget(input: {
   url: string
   latestEvidenceID?: string
   diagnostics: string[]
+  candidates?: BrowserPreviewCandidate[]
 }): BrowserPreviewTarget {
   return {
     id: input.id,
@@ -54,6 +71,7 @@ export function taskBrowserPreviewTarget(input: {
     url: input.url,
     viewports: [...BROWSER_PREVIEW_VIEWPORTS],
     diagnostics: input.diagnostics,
+    candidates: input.candidates ?? [],
     source: "task-artifact",
   }
 }
@@ -70,6 +88,7 @@ export function missingBrowserPreviewTarget(input: {
     taskID: input.taskID,
     viewports: [...BROWSER_PREVIEW_VIEWPORTS],
     diagnostics: input.diagnostics ?? ["No browser preview target saved for this task."],
+    candidates: [],
     source: "none",
   }
 }
@@ -86,6 +105,7 @@ export function failedBrowserPreviewTarget(input: {
     taskID: input.taskID,
     viewports: [...BROWSER_PREVIEW_VIEWPORTS],
     diagnostics: input.diagnostics,
+    candidates: [],
     source: "none",
   }
 }
@@ -111,4 +131,34 @@ function normalizeSchemeLessLoopbackUrl(text: string): string | undefined {
   const port = Number(match[2])
   if (!Number.isInteger(port) || port < 1 || port > 65535) return undefined
   return `http://${match[1]}:${port}${match[3] ?? "/"}`
+}
+
+async function visibleBrowserPreviewTargets(
+  targets: PersistedBrowserPreviewTarget[],
+  isVisible: ((url: string) => Promise<boolean>) | undefined,
+): Promise<PersistedBrowserPreviewTarget[]> {
+  const probe = isVisible ?? ((url: string) => isBrowserPreviewTargetVisible({ url }))
+  const result: PersistedBrowserPreviewTarget[] = []
+  const concurrency = 4
+  for (let index = 0; index < targets.length; index += concurrency) {
+    const batch = targets.slice(index, index + concurrency)
+    const visible = await Promise.all(batch.map((target) => probe(target.url)))
+    for (let offset = 0; offset < batch.length; offset++) {
+      if (visible[offset]) result.push(batch[offset])
+    }
+  }
+  return result
+}
+
+function browserPreviewCandidates(
+  targets: PersistedBrowserPreviewTarget[],
+  selectedID: string,
+): BrowserPreviewCandidate[] {
+  return targets.map((target) => ({
+    id: target.id,
+    url: target.url,
+    source: target.source,
+    selected: target.id === selectedID,
+    timeUpdated: target.timeUpdated,
+  }))
 }

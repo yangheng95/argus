@@ -39,7 +39,7 @@ describe("browser preview verification", () => {
     await using tmp = await tmpdir()
     const taskID = await seedTask(tmp.path)
     await persistBrowserPreviewTarget({ taskID, url: "http://127.0.0.1:5173/" })
-    const target = await resolveBrowserPreviewTarget({ projectRoot: tmp.path, taskID })
+    const target = await resolveBrowserPreviewTarget({ projectRoot: tmp.path, taskID, isVisible: async () => true })
     let capturedInput: RuntimeCaptureInput | undefined
 
     const result = await verifyBrowserPreview({
@@ -84,7 +84,7 @@ describe("browser preview verification", () => {
   test("fails visibly when the target has no URL", async () => {
     await using tmp = await tmpdir()
     const taskID = await seedTask(tmp.path)
-    const target = await resolveBrowserPreviewTarget({ projectRoot: tmp.path, taskID })
+    const target = await resolveBrowserPreviewTarget({ projectRoot: tmp.path, taskID, isVisible: async () => true })
 
     const result = await verifyBrowserPreview({
       projectRoot: tmp.path,
@@ -104,7 +104,7 @@ describe("browser preview verification", () => {
     await using tmp = await tmpdir()
     const taskID = await seedTask(tmp.path)
     const persisted = await persistBrowserPreviewTarget({ taskID, url: "http://127.0.0.1:5173/" })
-    const target = await resolveBrowserPreviewTarget({ projectRoot: tmp.path, taskID })
+    const target = await resolveBrowserPreviewTarget({ projectRoot: tmp.path, taskID, isVisible: async () => true })
 
     const result = await verifyBrowserPreview({
       projectRoot: tmp.path,

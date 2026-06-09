@@ -98,6 +98,22 @@ describe("core prompt hygiene", () => {
     }
   })
 
+  test("visual verification prompts use task-scoped backend browser evidence instead of MCP Playwright shell paths", async () => {
+    const build = await readPrompt("build")
+    const visualQa = await readPrompt("visualQa")
+    const taskClonePrompt = await Bun.file(path.join(repoRoot, "specs/tc_clone_prompt.md")).text()
+    const combined = [build, visualQa, taskClonePrompt].join("\n")
+
+    expect(combined).not.toContain("MCP和Playwright")
+    expect(combined).not.toContain("用 MCP 启动 Playwright")
+    expect(combined).not.toContain("npx playwright")
+    expect(combined).not.toContain("Model Context Protocol (MCP) browser/render/preview tooling")
+    expect(combined).not.toContain("Playwright/browser-style interaction")
+    expect(build).toContain("task-scoped backend browser evidence runner")
+    expect(visualQa).toContain("task-scoped backend browser evidence")
+    expect(taskClonePrompt).toContain("task-scoped backend browser evidence runner")
+  })
+
   test("shared file-mutation ownership principle appears exactly once per core prompt", async () => {
     const principle =
       "Every agent owns its file mutations: if you modify project files, commit your own changes before finishing; if your role is read-only or only emits structured records, do not claim file changes."

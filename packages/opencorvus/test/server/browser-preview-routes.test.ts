@@ -38,48 +38,85 @@ describe("browser preview routes", () => {
     return taskID
   }
 
+  function servePreview() {
+    return Bun.serve({
+      hostname: "127.0.0.1",
+      port: 0,
+      fetch() {
+        return new Response("<!doctype html><title>Preview</title>", {
+          headers: { "content-type": "text/html" },
+        })
+      },
+    })
+  }
+
   test("GET /task/:taskID/browser-preview is task scoped and reads only saved targets", async () => {
     await using tmp = await tmpdir()
+    const preview = servePreview()
     const taskID = await seedTask(tmp.path)
-    await fs.writeFile(
-      path.join(tmp.path, "package.json"),
-      JSON.stringify({
-        packageManager: "npm@10.9.0",
-        opencorvus: { browserPreview: { url: "http://127.0.0.1:5173/" } },
-      }),
-    )
-    const app = Server.App()
+    try {
+      await fs.writeFile(
+        path.join(tmp.path, "package.json"),
+        JSON.stringify({
+          packageManager: "npm@10.9.0",
+          opencorvus: { browserPreview: { url: "http://127.0.0.1:5173/" } },
+        }),
+      )
+      const app = Server.App()
+      const liveUrl = `http://127.0.0.1:${preview.port}/task`
 
-    const save = await app.request(`/task/${taskID}/browser-preview/target`, {
-      method: "PUT",
-      headers: {
-        "content-type": "application/json",
-        "x-opencorvus-directory": tmp.path,
-      },
-      body: JSON.stringify({ url: "http://127.0.0.1:5174/task" }),
-    })
-    expect(save.status).toBe(200)
+      const dead = await app.request(`/task/${taskID}/browser-preview/target`, {
+        method: "PUT",
+        headers: {
+          "content-type": "application/json",
+          "x-opencorvus-directory": tmp.path,
+        },
+        body: JSON.stringify({ url: "http://127.0.0.1:9/dead" }),
+      })
+      expect(dead.status).toBe(200)
 
-    const response = await app.request(`/task/${taskID}/browser-preview`, {
-      headers: {
-        "x-opencorvus-directory": tmp.path,
-      },
-    })
+      const save = await app.request(`/task/${taskID}/browser-preview/target`, {
+        method: "PUT",
+        headers: {
+          "content-type": "application/json",
+          "x-opencorvus-directory": tmp.path,
+        },
+        body: JSON.stringify({ url: liveUrl }),
+      })
+      expect(save.status).toBe(200)
 
-    expect(response.status).toBe(200)
-    const body = await response.json() as { status: string; url?: string; source: string; viewports?: { id: string }[] }
-    expect(body.status).toBe("ready")
-    expect(body.url).toBe("http://127.0.0.1:5174/task")
-    expect(body.source).toBe("task-artifact")
-    expect(body.viewports?.map((viewport) => viewport.id)).toEqual(["desktop", "tablet", "mobile"])
+      const response = await app.request(`/task/${taskID}/browser-preview`, {
+        headers: {
+          "x-opencorvus-directory": tmp.path,
+        },
+      })
 
-    const artifact = Database.use((db) =>
-      db.select().from(EngineArtifactTable)
-        .where(and(eq(EngineArtifactTable.kind, "browser_preview_target"), eq(EngineArtifactTable.task_id, taskID)))
-        .limit(1)
-        .get(),
-    )
-    expect(artifact?.task_id).toBe(taskID)
+      expect(response.status).toBe(200)
+      const body = await response.json() as {
+        status: string
+        url?: string
+        source: string
+        viewports?: { id: string }[]
+        candidates?: { url: string; selected: boolean }[]
+      }
+      expect(body.status).toBe("ready")
+      expect(body.url).toBe(liveUrl)
+      expect(body.source).toBe("task-artifact")
+      expect(body.viewports?.map((viewport) => viewport.id)).toEqual(["desktop", "tablet", "mobile"])
+      expect(body.candidates?.map((candidate) => ({ url: candidate.url, selected: candidate.selected }))).toEqual([
+        { url: liveUrl, selected: true },
+      ])
+
+      const artifact = Database.use((db) =>
+        db.select().from(EngineArtifactTable)
+          .where(and(eq(EngineArtifactTable.kind, "browser_preview_target"), eq(EngineArtifactTable.task_id, taskID)))
+          .limit(1)
+          .get(),
+      )
+      expect(artifact?.task_id).toBe(taskID)
+    } finally {
+      preview.stop(true)
+    }
   })
 
   test("GET /task/:taskID/browser-preview does not use package metadata as a target source", async () => {
@@ -152,7 +189,7 @@ describe("browser preview routes", () => {
     expect(body.name).toBe("DirectoryRequiredError")
   })
 
-  test("POST /task/:taskID/browser-preview/capture surfaces missing target without launching capture", async () => {
+  test("POST /task/:taskID/browser-preview/capture requires an explicit targetID", async () => {
     await using tmp = await tmpdir()
     const taskID = await seedTask(tmp.path)
     const app = Server.App()
@@ -166,19 +203,9 @@ describe("browser preview routes", () => {
       body: JSON.stringify({ viewportID: "mobile" }),
     })
 
-    expect(response.status).toBe(200)
-    const body = await response.json() as {
-      status: string
-      viewport?: { id: string }
-      capture?: unknown
-      target?: { status: string }
-      diagnostics?: string[]
-    }
-    expect(body.status).toBe("failed")
-    expect(body.viewport?.id).toBe("mobile")
-    expect(body.capture).toBeUndefined()
-    expect(body.target?.status).toBe("missing")
-    expect(body.diagnostics?.join("\n")).toContain("requires a resolved http(s) URL")
+    expect(response.status).toBe(400)
+    const body = await response.json()
+    expect(JSON.stringify(body)).toContain("targetID")
   })
 
   test("POST /task/:taskID/browser-preview/capture does not replace an unknown targetID with the latest target", async () => {

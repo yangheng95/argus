@@ -31,7 +31,33 @@ export function persistBrowserPreviewTarget(input: {
   url: string
   now?: number
 }): Promise<PersistedBrowserPreviewTarget> {
-  const now = input.now ?? Date.now()
+  const existing = findBrowserPreviewTargetByUrl(input)
+  const now = Math.max(input.now ?? Date.now(), existing ? existing.timeUpdated + 1 : 0)
+  if (existing) {
+    Database.use((db) =>
+      db
+        .update(EngineArtifactTable)
+        .set({
+          time_updated: now,
+          label: "active",
+        })
+        .where(eq(EngineArtifactTable.id, existing.id))
+        .run(),
+    )
+    const persisted: PersistedBrowserPreviewTarget = {
+      ...existing,
+      timeUpdated: now,
+    }
+    return EngineProtocol.emit(
+      Event.TaskUpdated,
+      {
+        taskID: input.taskID,
+        status: deriveTaskStatus(requireTask(input.taskID)),
+        summary: "Browser preview target updated",
+      },
+      { source: "browser-preview.target" },
+    ).then(() => persisted)
+  }
   const id = Identifier.ascending("artifact")
   const payload = {
     url: input.url,
@@ -74,26 +100,38 @@ export function persistBrowserPreviewTarget(input: {
 }
 
 export function findLatestBrowserPreviewTarget(taskID: string): PersistedBrowserPreviewTarget | undefined {
-  const row = Database.use((db) =>
+  return findRecentBrowserPreviewTargets(taskID, 1)[0]
+}
+
+export function findRecentBrowserPreviewTargets(taskID: string, limit = 12): PersistedBrowserPreviewTarget[] {
+  const rows = Database.use((db) =>
     db
       .select()
       .from(EngineArtifactTable)
       .where(and(eq(EngineArtifactTable.task_id, taskID), eq(EngineArtifactTable.kind, BROWSER_PREVIEW_TARGET_KIND)))
-      .orderBy(desc(EngineArtifactTable.time_created), desc(EngineArtifactTable.id))
-      .limit(1)
-      .get(),
+      .orderBy(desc(EngineArtifactTable.time_updated), desc(EngineArtifactTable.time_created), desc(EngineArtifactTable.id))
+      .limit(Math.max(limit * 3, limit))
+      .all(),
   )
-  if (!row) return undefined
-  const payload = PersistedBrowserPreviewTargetPayload.safeParse(row.payload)
-  if (!payload.success) return undefined
-  return {
-    id: row.id,
-    taskID: row.task_id,
-    url: payload.data.url,
-    source: payload.data.source,
-    timeCreated: row.time_created,
-    timeUpdated: row.time_updated,
+  const seen = new Set<string>()
+  const targets: PersistedBrowserPreviewTarget[] = []
+  for (const row of rows) {
+    const payload = PersistedBrowserPreviewTargetPayload.safeParse(row.payload)
+    if (!payload.success) continue
+    const key = payload.data.url.toLowerCase()
+    if (seen.has(key)) continue
+    seen.add(key)
+    targets.push({
+      id: row.id,
+      taskID: row.task_id,
+      url: payload.data.url,
+      source: payload.data.source,
+      timeCreated: row.time_created,
+      timeUpdated: row.time_updated,
+    })
+    if (targets.length >= limit) break
   }
+  return targets
 }
 
 export function findBrowserPreviewTargetByID(input: {
@@ -127,9 +165,38 @@ export function findBrowserPreviewTargetByID(input: {
   }
 }
 
+function findBrowserPreviewTargetByUrl(input: {
+  taskID: string
+  url: string
+}): PersistedBrowserPreviewTarget | undefined {
+  const rows = Database.use((db) =>
+    db
+      .select()
+      .from(EngineArtifactTable)
+      .where(and(eq(EngineArtifactTable.task_id, input.taskID), eq(EngineArtifactTable.kind, BROWSER_PREVIEW_TARGET_KIND)))
+      .orderBy(desc(EngineArtifactTable.time_updated), desc(EngineArtifactTable.time_created), desc(EngineArtifactTable.id))
+      .limit(30)
+      .all(),
+  )
+  for (const row of rows) {
+    const payload = PersistedBrowserPreviewTargetPayload.safeParse(row.payload)
+    if (!payload.success) continue
+    if (payload.data.url !== input.url) continue
+    return {
+      id: row.id,
+      taskID: row.task_id,
+      url: payload.data.url,
+      source: payload.data.source,
+      timeCreated: row.time_created,
+      timeUpdated: row.time_updated,
+    }
+  }
+  return undefined
+}
+
 export function persistBrowserPreviewEvidence(input: {
   taskID: string
-  targetID?: string
+  targetID: string
   viewportID: string
   status: "passed" | "failed"
   summary: string
@@ -151,7 +218,7 @@ export function persistBrowserPreviewEvidence(input: {
         kind: BROWSER_PREVIEW_EVIDENCE_KIND,
         label: "capture",
         payload: {
-          target_id: input.targetID ?? null,
+          target_id: input.targetID,
           viewport_id: input.viewportID,
           status: input.status,
           summary: input.summary,

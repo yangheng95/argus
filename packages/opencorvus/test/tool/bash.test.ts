@@ -15,7 +15,7 @@ import { Agent } from "../../src/agent/agent"
 import { ProcessSupervisor } from "../../src/shell/process-supervisor"
 import { Database } from "../../src/storage/db"
 import { EngineTaskTable } from "../../src/engine/engine.sql"
-import { findLatestBrowserPreviewTarget } from "../../src/browser-preview/persist"
+import { findLatestBrowserPreviewTarget, findRecentBrowserPreviewTargets } from "../../src/browser-preview/persist"
 import { resetDatabase } from "../fixture/db"
 
 const ctx = {
@@ -325,6 +325,73 @@ describe("tool.bash", () => {
       })
     } finally {
       await preview.close()
+      await resetDatabase()
+    }
+  })
+
+  test("background process output persists multiple task browser preview candidates", async () => {
+    await resetDatabase()
+    const first = await startReachablePreviewServer()
+    const second = await startReachablePreviewServer()
+    try {
+      await using tmp = await tmpdir({ git: true })
+      const taskID = `tsk_bashpreviewmulti${Date.now()}`
+      await Instance.provide({
+        directory: tmp.path,
+        fn: async () => {
+          Database.use((db) =>
+            db.insert(EngineTaskTable).values({
+              id: taskID,
+              project_id: Instance.project.id,
+              title: "Preview task",
+              request: "Preview task",
+              source: "api",
+              time_created: Date.now(),
+              time_updated: Date.now(),
+            }).run(),
+          )
+
+          const restore = ProcessSupervisor.setFactoryForTest(async () => {
+            const stdout = new PassThrough()
+            queueMicrotask(() => {
+              stdout.write(`Local: ${first.url}\nAuxiliary: ${second.url}\nDocs: https://vite.dev/\n`)
+            })
+            return {
+              pid: 9012,
+              stdin: null,
+              stdout,
+              stderr: new PassThrough(),
+              exited: new Promise<number>(() => {}),
+              terminate: async () => {},
+              dispose: async () => {},
+              unref: () => {},
+            }
+          })
+          try {
+            const bash = await BashTool.init()
+            await bash.execute(
+              {
+                command: "npm run dev",
+                description: "Start frontend dev server",
+                background: true,
+                timeout: 20,
+                leaseTimeout: 200,
+              },
+              { ...ctx, extra: { taskID } },
+            )
+
+            expect(findRecentBrowserPreviewTargets(taskID).map((target) => target.url).sort()).toEqual([
+              first.url,
+              second.url,
+            ].sort())
+          } finally {
+            restore()
+          }
+        },
+      })
+    } finally {
+      await first.close()
+      await second.close()
       await resetDatabase()
     }
   })
