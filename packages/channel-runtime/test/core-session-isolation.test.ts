@@ -4,7 +4,6 @@ import { SessionCoordinator } from "../src/session-coordinator"
 import { sdkMock } from "./sdk-mock"
 
 mock.module("@opencorvus-ai/sdk", () => sdkMock)
-mock.module("@opencorvus-ai/sdk", () => sdkMock)
 
 const { ChannelRuntime } = await import("../src/core")
 
@@ -31,7 +30,6 @@ function incoming(thread: string, text: string): IncomingMessage {
 
 beforeEach(() => {
   process.env.OPENCORVUS_SHARED_SESSION_MODE = "0"
-  process.env.OPENCORVUS_CHANNEL_TASK_MODE = "session-async"
 })
 
 describe("channel runtime session isolation", () => {
@@ -54,7 +52,7 @@ describe("channel runtime session isolation", () => {
             sessionID: string
             parts: Array<{ type: "text"; text: string }>
             system: string
-          }): Promise<{ error?: unknown }>
+          }): Promise<{ error?: unknown; data: { taskID: string } }>
         }
       }
       handleMessage(msg: IncomingMessage): Promise<void>
@@ -74,7 +72,7 @@ describe("channel runtime session isolation", () => {
             sessionID: input.sessionID,
             text: input.parts[0]?.text ?? "",
           })
-          return {}
+          return { data: { taskID: `task_${input.sessionID}` } }
         },
       },
     }
