@@ -345,7 +345,11 @@ export function InlineToolPart(props: { part: any; mode?: "inline" | "block" | "
               <Show when={showPlainOutput()}>
                 {(_) => {
                   const text = output()
-                  return <div class="msg-tool-output">{text}</div>
+                  return (
+                    <div class="msg-tool-output">
+                      <StaticTextPart text={text} />
+                    </div>
+                  )
                 }}
               </Show>
             </>
@@ -354,7 +358,9 @@ export function InlineToolPart(props: { part: any; mode?: "inline" | "block" | "
           <TodoListPart todos={todoItems()!} variant={mode() === "body" ? "card" : "inline"} />
         </Show>
         <Show when={status() === "error" && error()}>
-          <div class="msg-tool-error">{error()}</div>
+          <div class="msg-tool-error">
+            <StaticTextPart text={error()} />
+          </div>
         </Show>
       </Show>
     </>

@@ -24,7 +24,24 @@ test("renderMarkdown drops javascript links", () => {
 test("renderMarkdown keeps safe http links", () => {
   const html = renderMarkdown("[docs](https://example.com)")
   expect(html).toContain('href="https://example.com"')
+  expect(html).toContain('data-browser-preview-url="https://example.com"')
   expect(html).toContain('rel="noopener noreferrer"')
+})
+
+test("renderMarkdown uses marked url matching for bare urls and routes them to browser preview", () => {
+  const html = renderMarkdown("open https://example.com/path?x=1 and www.example.org/docs")
+
+  expect(html).toContain('href="https://example.com/path?x=1"')
+  expect(html).toContain('data-browser-preview-url="https://example.com/path?x=1"')
+  expect(html).toContain('href="http://www.example.org/docs"')
+  expect(html).toContain('data-browser-preview-url="http://www.example.org/docs"')
+})
+
+test("renderMarkdown does not route mailto links to browser preview", () => {
+  const html = renderMarkdown("[mail](mailto:ops@example.com)")
+
+  expect(html).toContain('href="mailto:ops@example.com"')
+  expect(html).not.toContain("data-browser-preview-url")
 })
 
 test("renderMarkdown clips oversized static text before parsing", () => {
