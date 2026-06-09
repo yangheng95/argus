@@ -1,6 +1,7 @@
 import { describe, expect, test } from "bun:test"
 import { readFileSync } from "node:fs"
 import { join } from "node:path"
+import { calculateImagePreviewFitScale } from "../src/utils/image-preview-scale"
 import { renderMarkdown } from "../src/utils/markdown"
 
 const OVERLAY_ROOT = join(import.meta.dir, "..")
@@ -27,7 +28,7 @@ describe("message image preview", () => {
   test("file image parts use the shared previewable image component", () => {
     const source = read("src/components/FilePart.tsx")
 
-    expect(source).toContain('import { PreviewableImage } from "./ImagePreview";')
+    expect(source).toContain('import { PreviewableImage } from "./ImagePreview"')
     expect(source).toContain("<PreviewableImage src={resolveResourceUrl(url())} alt={name()} />")
     expect(source).toContain("<PreviewableImage src={resolved()} alt={props.alt} />")
   })
@@ -79,15 +80,37 @@ describe("message image preview", () => {
   test("modal preview owns zoom controls and does not cap the image to thumbnail size", () => {
     const component = read("src/components/ImagePreview.tsx")
     const css = read("src/styles/surfaces/messages.css")
+    const form = block(css, ".dialog .image-preview-dialog__form")
+    const body = block(css, ".image-preview-dialog__body")
+    const stage = block(css, ".image-preview-dialog__stage")
     const image = block(css, ".image-preview-dialog__image")
 
     expect(component).toContain("event.stopPropagation()")
-    expect(component).toContain("const MIN_SCALE = 0.25")
-    expect(component).toContain("const MAX_SCALE = 4")
+    const scaleHelper = read("src/utils/image-preview-scale.ts")
+    expect(scaleHelper).toContain("IMAGE_PREVIEW_MIN_SCALE = 0.02")
+    expect(scaleHelper).toContain("IMAGE_PREVIEW_MAX_SCALE = 8")
     expect(component).toContain('aria-label="Zoom in"')
     expect(component).toContain('aria-label="Zoom out"')
-    expect(component).toContain('aria-label="Reset zoom"')
+    expect(component).toContain('aria-label="Fit image"')
+    expect(component).toContain('aria-label="Original size"')
+    expect(component).toContain("calculateImagePreviewFitScale")
+    expect(component).toContain("onPointerDown={startPan}")
+    expect(component).toContain("onWheel={handleWheel}")
+    expect(form).toContain("width: min(calc(96vw")
+    expect(form).toContain("height: min(calc(92vh")
+    expect(body).toContain("overflow: auto;")
+    expect(body).toContain("cursor: grab;")
+    expect(stage).toContain("width: max(100%, var(--image-preview-rendered-width, 0px));")
+    expect(stage).toContain("height: max(100%, var(--image-preview-rendered-height, 0px));")
+    expect(image).toContain("width: var(--image-preview-rendered-width, auto);")
+    expect(image).toContain("height: var(--image-preview-rendered-height, auto);")
     expect(image).toContain("max-width: none;")
-    expect(image).toContain("transform: scale(var(--image-preview-scale, 1));")
+    expect(image).not.toContain("transform: scale")
+  })
+
+  test("modal preview fit scale opens tall screenshots inside the viewport", () => {
+    expect(calculateImagePreviewFitScale({ width: 600, height: 1800 }, { width: 900, height: 720 })).toBe(0.4)
+    expect(calculateImagePreviewFitScale({ width: 600, height: 400 }, { width: 900, height: 720 })).toBe(1)
+    expect(calculateImagePreviewFitScale({ width: 0, height: 400 }, { width: 900, height: 720 })).toBe(1)
   })
 })

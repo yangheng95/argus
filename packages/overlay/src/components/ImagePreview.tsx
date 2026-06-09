@@ -1,16 +1,15 @@
-import { createEffect, createSignal } from "solid-js"
+import { createEffect, createMemo, createSignal, onCleanup } from "solid-js"
 import { closeImagePreview, imagePreviewState, openImagePreview } from "../services/image-preview"
+import {
+  calculateImagePreviewFitScale,
+  clampImagePreviewScale,
+  type ImagePreviewSize,
+} from "../utils/image-preview-scale"
 import { Dialog } from "./primitives/Dialog"
 import { Button } from "./ui/Button"
 import { Icon } from "./Icon"
 
-const MIN_SCALE = 0.25
-const MAX_SCALE = 4
 const SCALE_STEP = 0.25
-
-function clampScale(value: number): number {
-  return Math.min(MAX_SCALE, Math.max(MIN_SCALE, Number.isFinite(value) ? value : 1))
-}
 
 export function PreviewableImage(props: { src: string; alt?: string; triggerClass?: string; imageClass?: string }) {
   const alt = () => props.alt || ""
@@ -37,13 +36,174 @@ export function PreviewableImage(props: { src: string; alt?: string; triggerClas
 
 export function ImagePreviewHost() {
   const [scale, setScale] = createSignal(1)
+  const [imageSize, setImageSize] = createSignal<ImagePreviewSize>({ width: 0, height: 0 })
+  const [panStart, setPanStart] = createSignal<{
+    pointerID: number
+    x: number
+    y: number
+    scrollLeft: number
+    scrollTop: number
+  } | null>(null)
+  let bodyRef: HTMLDivElement | undefined
+  let imageRef: HTMLImageElement | undefined
+  let resizeObserver: ResizeObserver | undefined
 
   createEffect(() => {
-    if (imagePreviewState().open) setScale(1)
+    const state = imagePreviewState()
+    if (!state.open) return
+    setScale(1)
+    setImageSize({ width: 0, height: 0 })
+    setPanStart(null)
+    queueMicrotask(() => {
+      if (imageRef?.complete) measureLoadedImage(imageRef)
+    })
   })
 
-  const updateScale = (delta: number) => setScale((current) => clampScale(current + delta))
+  createEffect(() => {
+    const body = bodyRef
+    if (!body) return
+    resizeObserver?.disconnect()
+    resizeObserver = new ResizeObserver(() => {
+      const fit = fitScale()
+      if (imagePreviewState().open && imageSize().width > 0 && scale() < fit) setScale(fit)
+    })
+    resizeObserver.observe(body)
+  })
+
+  onCleanup(() => resizeObserver?.disconnect())
+
+  const renderedSize = createMemo(() => {
+    const size = imageSize()
+    return {
+      width: size.width * scale(),
+      height: size.height * scale(),
+    }
+  })
+
+  const fitScale = () => calculateImagePreviewFitScale(imageSize(), viewportSize())
   const scaleLabel = () => `${Math.round(scale() * 100)}%`
+  const stageStyle = () => {
+    const rendered = renderedSize()
+    return rendered.width > 0 && rendered.height > 0
+      ? ({
+          "--image-preview-rendered-width": `${rendered.width}px`,
+          "--image-preview-rendered-height": `${rendered.height}px`,
+        } as Record<string, string>)
+      : undefined
+  }
+
+  function viewportSize(): ImagePreviewSize {
+    const body = bodyRef
+    if (!body) return { width: 0, height: 0 }
+    const styles = window.getComputedStyle(body)
+    const paddingX = Number.parseFloat(styles.paddingLeft) + Number.parseFloat(styles.paddingRight)
+    const paddingY = Number.parseFloat(styles.paddingTop) + Number.parseFloat(styles.paddingBottom)
+    return {
+      width: Math.max(0, body.clientWidth - paddingX),
+      height: Math.max(0, body.clientHeight - paddingY),
+    }
+  }
+
+  function measureLoadedImage(image: HTMLImageElement): void {
+    const nextSize = {
+      width: image.naturalWidth || image.width,
+      height: image.naturalHeight || image.height,
+    }
+    setImageSize(nextSize)
+    setScale(calculateImagePreviewFitScale(nextSize, viewportSize()))
+    requestAnimationFrame(() => {
+      if (!bodyRef) return
+      bodyRef.scrollLeft = 0
+      bodyRef.scrollTop = 0
+    })
+  }
+
+  function applyScale(nextScale: number, anchor?: { x: number; y: number }): void {
+    const body = bodyRef
+    const size = imageSize()
+    const previousScale = scale()
+    const resolvedScale = clampImagePreviewScale(nextScale)
+    if (!body || size.width <= 0 || size.height <= 0) {
+      setScale(resolvedScale)
+      return
+    }
+
+    const anchorX = anchor?.x ?? body.clientWidth / 2
+    const anchorY = anchor?.y ?? body.clientHeight / 2
+    const ratioX = (body.scrollLeft + anchorX) / Math.max(1, size.width * previousScale)
+    const ratioY = (body.scrollTop + anchorY) / Math.max(1, size.height * previousScale)
+
+    setScale(resolvedScale)
+    requestAnimationFrame(() => {
+      body.scrollLeft = ratioX * size.width * resolvedScale - anchorX
+      body.scrollTop = ratioY * size.height * resolvedScale - anchorY
+    })
+  }
+
+  function setFitScale(): void {
+    applyScale(fitScale(), { x: 0, y: 0 })
+    requestAnimationFrame(() => {
+      if (!bodyRef) return
+      bodyRef.scrollLeft = 0
+      bodyRef.scrollTop = 0
+    })
+  }
+
+  function setOriginalScale(): void {
+    applyScale(1, { x: 0, y: 0 })
+    requestAnimationFrame(() => {
+      if (!bodyRef) return
+      bodyRef.scrollLeft = 0
+      bodyRef.scrollTop = 0
+    })
+  }
+
+  function updateScale(delta: number): void {
+    applyScale(scale() + delta)
+  }
+
+  function handleWheel(event: WheelEvent): void {
+    if (!event.ctrlKey) return
+    const body = bodyRef
+    if (!body) return
+    event.preventDefault()
+    const rect = body.getBoundingClientRect()
+    const direction = event.deltaY > 0 ? -1 : 1
+    applyScale(scale() + direction * SCALE_STEP, {
+      x: event.clientX - rect.left,
+      y: event.clientY - rect.top,
+    })
+  }
+
+  function startPan(event: PointerEvent): void {
+    const body = bodyRef
+    if (!body || event.button !== 0 || event.isPrimary === false) return
+    event.preventDefault()
+    body.setPointerCapture(event.pointerId)
+    setPanStart({
+      pointerID: event.pointerId,
+      x: event.clientX,
+      y: event.clientY,
+      scrollLeft: body.scrollLeft,
+      scrollTop: body.scrollTop,
+    })
+  }
+
+  function movePan(event: PointerEvent): void {
+    const body = bodyRef
+    const start = panStart()
+    if (!body || !start || start.pointerID !== event.pointerId) return
+    body.scrollLeft = start.scrollLeft - (event.clientX - start.x)
+    body.scrollTop = start.scrollTop - (event.clientY - start.y)
+  }
+
+  function stopPan(event: PointerEvent): void {
+    const body = bodyRef
+    const start = panStart()
+    if (!body || !start || start.pointerID !== event.pointerId) return
+    body.releasePointerCapture(event.pointerId)
+    setPanStart(null)
+  }
 
   return (
     <Dialog
@@ -73,9 +233,20 @@ export function ImagePreviewHost() {
             variant="outline"
             size="sm"
             tone="neutral"
-            title="Reset zoom"
-            aria-label="Reset zoom"
-            onClick={() => setScale(1)}
+            title="Fit image"
+            aria-label="Fit image"
+            onClick={setFitScale}
+          >
+            Fit
+          </Button>
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            tone="neutral"
+            title="Original size"
+            aria-label="Original size"
+            onClick={setOriginalScale}
           >
             {scaleLabel()}
           </Button>
@@ -106,13 +277,29 @@ export function ImagePreviewHost() {
         </div>
       }
     >
-      <div class="image-preview-dialog__body">
-        <img
-          class="image-preview-dialog__image"
-          src={imagePreviewState().src}
-          alt={imagePreviewState().alt}
-          style={{ "--image-preview-scale": String(scale()) }}
-        />
+      <div
+        class="image-preview-dialog__body"
+        data-panning={panStart() ? "true" : "false"}
+        ref={(element) => {
+          bodyRef = element
+        }}
+        onWheel={handleWheel}
+        onPointerDown={startPan}
+        onPointerMove={movePan}
+        onPointerUp={stopPan}
+        onPointerCancel={stopPan}
+      >
+        <div class="image-preview-dialog__stage" style={stageStyle()}>
+          <img
+            class="image-preview-dialog__image"
+            src={imagePreviewState().src}
+            alt={imagePreviewState().alt}
+            ref={(element) => {
+              imageRef = element
+            }}
+            onLoad={(event) => measureLoadedImage(event.currentTarget)}
+          />
+        </div>
       </div>
     </Dialog>
   )
