@@ -80,11 +80,19 @@
   flex: 1 1 0;
   min-height: 0;
   flex-direction: column;
+  background: var(--surface-inset);
+}
+
+.browser-preview-command-surface {
+  flex: 0 0 auto;
+  display: grid;
   gap: calc(6px * var(--ui-scale));
+  padding: calc(6px * var(--ui-scale));
+  border-bottom: var(--oc-border-width) solid var(--border);
+  background: var(--surface);
 }
 
 .browser-preview-toolbar {
-  flex: 0 0 auto;
   display: grid;
   grid-template-columns: minmax(0, 1fr) auto auto;
   align-items: center;
@@ -121,6 +129,7 @@
 .browser-preview-candidate-select {
   min-width: 0;
   min-height: calc(30px * var(--ui-scale));
+  flex: 1 1 calc(220px * var(--ui-scale));
   display: flex;
   align-items: center;
   gap: calc(6px * var(--ui-scale));
@@ -150,51 +159,65 @@
   opacity: 1;
 }
 
-.browser-preview-viewport-layout {
-  flex: 1 1 0;
-  min-height: 0;
-  display: grid;
-  grid-template-columns: minmax(calc(84px * var(--ui-scale)), calc(108px * var(--ui-scale))) minmax(0, 1fr);
+.browser-preview-controls {
+  min-width: 0;
+  display: flex;
+  align-items: center;
   gap: calc(6px * var(--ui-scale));
+  flex-wrap: wrap;
 }
 
-.browser-preview-viewport-layout .oc-tabs {
-  width: 100%;
+.browser-preview-controls .oc-button[data-size="sm"] {
+  flex: 0 0 auto;
+}
+
+.browser-preview-viewport-controls {
+  min-width: 0;
+  flex: 0 1 auto;
+  display: inline-flex;
+  align-items: center;
+  gap: calc(6px * var(--ui-scale));
+  flex-wrap: wrap;
+}
+
+.browser-preview-viewport-controls .oc-tabs {
   height: auto;
   min-height: 0;
-  align-self: start;
-  flex-direction: column;
-  align-items: stretch;
-  gap: calc(3px * var(--ui-scale));
-  padding: calc(3px * var(--ui-scale));
+  flex: 0 0 auto;
+  align-items: center;
+  gap: calc(2px * var(--ui-scale));
+  padding: calc(2px * var(--ui-scale));
   background: var(--surface-inset);
 }
 
-.browser-preview-viewport-tab-row {
+.browser-preview-visibility-toggles {
   min-width: 0;
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) auto;
+  display: inline-flex;
   align-items: center;
   gap: calc(4px * var(--ui-scale));
-}
-
-.browser-preview-viewport-tab-row[data-visible="false"] {
-  opacity: 0.46;
-}
-
-.browser-preview-viewport-tab-row [data-ui="browser-preview-viewport"] {
-  min-width: 0;
-  justify-content: flex-start;
-  text-align: left;
+  flex-wrap: wrap;
 }
 
 .browser-preview-viewport-toggle {
-  width: calc(18px * var(--ui-scale));
-  height: calc(18px * var(--ui-scale));
+  min-height: calc(26px * var(--ui-scale));
   display: inline-flex;
   align-items: center;
-  justify-content: center;
+  gap: calc(4px * var(--ui-scale));
+  padding: 0 calc(6px * var(--ui-scale));
+  border: var(--oc-border-width) solid var(--border);
+  background: var(--surface-inset);
   color: var(--text-soft);
+  font-size: var(--ui-font-meta);
+  white-space: nowrap;
+}
+
+.browser-preview-viewport-toggle[data-visible="true"] {
+  color: var(--text);
+  border-color: color-mix(in srgb, var(--accent) 34%, var(--border));
+}
+
+.browser-preview-viewport-toggle[data-visible="false"] {
+  opacity: 0.58;
 }
 
 .browser-preview-viewport-toggle input {
@@ -202,14 +225,6 @@
   height: calc(13px * var(--ui-scale));
   margin: 0;
   accent-color: var(--accent);
-}
-
-.browser-preview-main {
-  min-width: 0;
-  min-height: 0;
-  display: flex;
-  flex-direction: column;
-  gap: calc(6px * var(--ui-scale));
 }
 
 .browser-preview-status {
@@ -238,13 +253,12 @@
 .browser-preview-stage {
   flex: 1 1 0;
   min-height: 0;
-  display: flex;
-  align-items: stretch;
-  justify-content: stretch;
+  display: grid;
+  place-items: center;
   overflow: auto;
   background:
-    linear-gradient(90deg, color-mix(in srgb, var(--border) 22%, transparent) 1px, transparent 1px),
-    linear-gradient(180deg, color-mix(in srgb, var(--border) 22%, transparent) 1px, transparent 1px),
+    linear-gradient(90deg, color-mix(in srgb, var(--border) 13%, transparent) 1px, transparent 1px),
+    linear-gradient(180deg, color-mix(in srgb, var(--border) 13%, transparent) 1px, transparent 1px),
     var(--surface-inset);
   background-size: calc(16px * var(--ui-scale)) calc(16px * var(--ui-scale));
 }
@@ -321,13 +335,13 @@
 }
 
 .browser-preview-empty {
-  align-self: center;
-  width: min(100%, calc(280px * var(--ui-scale)));
-  display: flex;
-  flex-direction: column;
-  align-items: center;
+  width: min(calc(420px * var(--ui-scale)), calc(100% - calc(32px * var(--ui-scale))));
+  display: grid;
+  justify-items: center;
   gap: calc(8px * var(--ui-scale));
-  padding: calc(14px * var(--ui-scale));
+  padding: calc(18px * var(--ui-scale));
+  border: var(--oc-border-width) solid color-mix(in srgb, var(--border) 72%, transparent);
+  background: color-mix(in srgb, var(--surface) 92%, transparent);
   color: var(--text-soft);
   text-align: center;
   font-size: var(--ui-font-control);
@@ -339,13 +353,11 @@
 }
 
 .browser-preview-empty[data-status="host-blocked"] {
-  width: min(100%, calc(360px * var(--ui-scale)));
   border: var(--oc-border-width) solid color-mix(in srgb, var(--warn) 36%, var(--border));
   background: color-mix(in srgb, var(--warn) 8%, var(--surface));
 }
 
-.browser-preview-empty code,
-.browser-preview-command code {
+.browser-preview-empty code {
   max-width: 100%;
   display: block;
   overflow-wrap: anywhere;
@@ -358,26 +370,10 @@
   text-align: left;
 }
 
-.browser-preview-command {
-  width: 100%;
-  display: flex;
-  flex-direction: column;
-  gap: calc(4px * var(--ui-scale));
-  color: var(--text-muted);
-  text-align: left;
-}
-
-.browser-preview-evidence {
-  flex: 0 0 auto;
-  display: grid;
-  grid-template-columns: auto minmax(0, 1fr);
-  align-items: center;
-  gap: calc(6px * var(--ui-scale));
-}
-
 .browser-preview-evidence-status {
   min-width: 0;
   min-height: calc(28px * var(--ui-scale));
+  flex: 1 1 calc(180px * var(--ui-scale));
   display: flex;
   align-items: center;
   gap: calc(6px * var(--ui-scale));
@@ -404,6 +400,19 @@
 .browser-preview-evidence-status[data-status="failed"] {
   color: var(--bad);
   border-color: color-mix(in srgb, var(--bad) 42%, var(--border));
+}
+
+@media (max-width: 720px) {
+  /* breakpoint: compact preview panel */
+  .browser-preview-controls {
+    align-items: stretch;
+  }
+
+  .browser-preview-candidate-select,
+  .browser-preview-viewport-controls,
+  .browser-preview-evidence-status {
+    flex-basis: 100%;
+  }
 }
 
 .file-explorer-panel {
