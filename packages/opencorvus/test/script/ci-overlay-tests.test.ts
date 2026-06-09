@@ -18,7 +18,8 @@ describe("required CI overlay test coverage", () => {
 
     expect(workflow).toContain("overlay-browser:")
     expect(workflow).toContain("OPENCORVUS_BROWSER_EXECUTABLE: /usr/bin/chromium")
-    expect(workflow).toContain("run: bun run test:browser")
+    expect(workflow).toContain("run: node test/browser-runner.mjs")
+    expect(workflow).not.toContain("run: bun run test:browser")
 
     const requiredBlock = /required:[\s\S]*?steps:/.exec(workflow)?.[0] ?? ""
     expect(requiredBlock).toContain("- overlay-unit")
