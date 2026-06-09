@@ -1,7 +1,10 @@
 import { afterEach, beforeEach, describe, expect, test } from "bun:test"
+import { readFileSync } from "node:fs"
+import path from "node:path"
 import { apiJson, apiRequest, apiUrl, configure } from "../src/services/api"
-import { __setHostTransportForTest } from "../src/services/host-transport"
+import { HOST_CAPABILITIES, __setHostTransportForTest } from "../src/services/host-transport"
 import type { HostTransport, TransportRequest, TransportResponse } from "../src/services/host-transport"
+import { routeRequiresProjectDirectory } from "@opencorvus-ai/transport-protocol"
 
 /**
  * 2026-04-30 W2-V31 — overlay api.ts must decide per-path whether to
@@ -12,22 +15,23 @@ import type { HostTransport, TransportRequest, TransportResponse } from "../src/
  * required injection, but the sidebar now uses it as the all-project task
  * ledger; sending `directory` would silently collapse it back to one project.
  *
- * The fix replaces prefix matching with an explicit whitelist of routes
- * that the server mounts pre-middleware. This test enumerates every
- * route the overlay calls and pins the inject/no-inject decision so
- * adding a new route to the overlay (or moving one between AppRoutes
- * and GlobalRoutes server-side) trips a failing test.
- *
- * If you add a new route here, also update the matching list in
- * `packages/overlay/src/services/api.ts` and the server bypass at
- * `packages/opencorvus/src/server/server.ts`.
+ * The fix now lives in @opencorvus-ai/transport-protocol so server
+ * middleware, server OpenAPI generation, and overlay query injection
+ * read one route policy function instead of synchronized local lists.
  */
 
 const SAVED_DIRECTORY = "/Users/alice/projects/demo"
+const OVERLAY_ROOT = path.resolve(import.meta.dir, "..")
+const REPO_ROOT = path.resolve(OVERLAY_ROOT, "../..")
+
+function readRepo(relativePath: string): string {
+  return readFileSync(path.join(REPO_ROOT, relativePath), "utf8")
+}
 
 function fakeTransport(capture: (req: TransportRequest) => void): HostTransport {
   return {
     kind: "tauri",
+    capabilities: HOST_CAPABILITIES.tauri,
     async request<T>(req: TransportRequest): Promise<TransportResponse<T>> {
       capture(req)
       return { status: 200, ok: true, headers: {}, body: {} as T }
@@ -62,6 +66,19 @@ describe("apiUrl directory injection (W2-V31)", () => {
   afterEach(() => {
     __setHostTransportForTest(undefined)
     configure({ directory: "" })
+  })
+
+  test("overlay and server consume the shared route directory policy artifact", () => {
+    const api = readRepo("packages/overlay/src/services/api.ts")
+    const server = readRepo("packages/opencorvus/src/server/server.ts")
+
+    expect(api).toContain('from "@opencorvus-ai/transport-protocol"')
+    expect(api).toContain("routeRequiresProjectDirectory(pathOnly)")
+    expect(api).not.toContain("NO_DIRECTORY_PATHS")
+    expect(api).not.toContain("NO_DIRECTORY_PREFIXES")
+    expect(server).toContain('from "@opencorvus-ai/transport-protocol"')
+    expect(server).not.toContain("PROJECT_DIRECTORY_BYPASS_PATHS")
+    expect(server).not.toContain("PROJECT_DIRECTORY_BYPASS_PREFIXES")
   })
 
   describe("control-plane routes (no-inject)", () => {
@@ -120,6 +137,41 @@ describe("apiUrl directory injection (W2-V31)", () => {
     test("coding assistant session list", () => expectInjects("coding/sessions"))
     test("coding assistant session create", () => expectInjects("coding/session"))
     test("coding assistant session claim", () => expectInjects("coding/session/ses_123"))
+  })
+
+  test("enumerated route expectations agree with the shared policy function", () => {
+    for (const path of [
+      "log",
+      "log/files",
+      "log/tail",
+      "shutdown",
+      "restart",
+      "global/health",
+      "global/event",
+      "global/config",
+      "global/dispose",
+      "global/db/reset",
+      "global/tasks",
+      "mission",
+      "auth",
+      "auth/login",
+      "auth/logout",
+    ]) {
+      expect(routeRequiresProjectDirectory(path)).toBe(false)
+    }
+    for (const path of [
+      "tasks",
+      "task",
+      "task/abc/followup",
+      "task/abc/operator-model-context",
+      "path",
+      "vcs",
+      "config",
+      "mission/wake",
+      "task/tsk_browserpreview0001/browser-preview",
+    ]) {
+      expect(routeRequiresProjectDirectory(path)).toBe(true)
+    }
   })
 
   describe("when no directory is configured, no path receives the query", () => {

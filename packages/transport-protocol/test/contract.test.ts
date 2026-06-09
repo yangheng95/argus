@@ -6,6 +6,7 @@ import {
   base64ToUint8,
   isExtensionMessage,
   isWebviewMessage,
+  routeRequiresProjectDirectory,
   uint8ToBase64,
   type ExtensionMessage,
   type WebviewMessage,
@@ -230,6 +231,45 @@ describe("schema snapshot (audit F8)", () => {
     ]
     for (const s of samples) {
       expect(JSON.parse(JSON.stringify(s))).toEqual(s)
+    }
+  })
+})
+
+describe("route directory policy", () => {
+  test("control-plane and global routes do not require a project directory", () => {
+    for (const path of [
+      "/doc",
+      "/shutdown",
+      "/restart",
+      "/log",
+      "/log/files",
+      "/global/health",
+      "/global/event",
+      "/global/config",
+      "/global/dispose",
+      "/global/db/reset",
+      "/global/tasks",
+      "/auth",
+      "/auth/login",
+      "/ui/index.html",
+      "/mission",
+      "/favicon.ico",
+    ]) {
+      expect(routeRequiresProjectDirectory(path)).toBe(false)
+    }
+  })
+
+  test("project routes require directory regardless of leading slash or query", () => {
+    for (const path of [
+      "tasks",
+      "/task/abc/followup",
+      "/path",
+      "/vcs",
+      "/config/providers",
+      "/mission/wake",
+      "/task/abc/browser-preview?targetID=art_1",
+    ]) {
+      expect(routeRequiresProjectDirectory(path)).toBe(true)
     }
   })
 })

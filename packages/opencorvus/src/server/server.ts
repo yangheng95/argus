@@ -4,6 +4,7 @@ import { Hono } from "hono"
 import { cors } from "hono/cors"
 import { basicAuth } from "hono/basic-auth"
 import { NamedError } from "@opencorvus-ai/util/error"
+import { routeRequiresProjectDirectory } from "@opencorvus-ai/transport-protocol"
 import { Flag } from "../flag/flag"
 import { lazy } from "../util/lazy"
 import { InstanceBootstrap } from "../project/bootstrap"
@@ -94,24 +95,7 @@ export namespace Server {
     },
   } as const
 
-  const PROJECT_DIRECTORY_BYPASS_PATHS = new Set([
-    "/doc",
-    "/shutdown",
-    "/restart",
-    "/log",
-    "/favicon.ico",
-    "/global/tasks",
-    "/mission",
-  ])
-  const PROJECT_DIRECTORY_BYPASS_PREFIXES = ["/global/", "/auth/", "/ui/", "/log/"] as const
   const OPENAPI_OPERATION_METHODS = ["get", "post", "put", "patch", "delete"] as const
-
-  function routeRequiresProjectDirectory(routePath: string) {
-    const pathOnly = routePath.replace(/\/$/, "") || "/"
-    if (PROJECT_DIRECTORY_BYPASS_PATHS.has(pathOnly)) return false
-    if (pathOnly === "/global" || pathOnly === "/auth" || pathOnly === "/ui") return false
-    return !PROJECT_DIRECTORY_BYPASS_PREFIXES.some((prefix) => pathOnly.startsWith(prefix))
-  }
 
   function addDirectoryQueryParameter<T extends OpenAPISpecWithPaths>(spec: T) {
     for (const [routePath, pathItem] of Object.entries(spec.paths ?? {})) {
