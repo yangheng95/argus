@@ -51,7 +51,7 @@ export namespace Capability {
   function watcher() {
     const pkg = watcherPkg()
     try {
-      requireRuntimePackage(pkg)
+      requireRuntimePackage("@parcel/watcher")
       return line("watcher", "File watcher binding", "ok", pkg)
     } catch (err) {
       return line(

@@ -16,8 +16,6 @@ import { requireRuntimePackage } from "@/runtime/package-require"
 
 const SUBSCRIBE_TIMEOUT_MS = 10_000
 
-declare const OPENCORVUS_LIBC: string | undefined
-
 export namespace FileWatcher {
   const log = Log.create({ service: "file.watcher" })
 
@@ -36,12 +34,7 @@ export namespace FileWatcher {
   }
 
   const parcel = lazy((): typeof import("@parcel/watcher") => {
-    const { createWrapper } =
-      requireRuntimePackage<typeof import("@parcel/watcher/wrapper")>("@parcel/watcher/wrapper")
-    const binding = requireRuntimePackage(
-      `@parcel/watcher-${process.platform}-${process.arch}${process.platform === "linux" ? `-${OPENCORVUS_LIBC || "glibc"}` : ""}`,
-    )
-    return createWrapper(binding) as typeof import("@parcel/watcher")
+    return requireRuntimePackage<typeof import("@parcel/watcher")>("@parcel/watcher")
   })
 
   function publish(evt: { type: string; path: string }) {
@@ -89,8 +82,7 @@ export namespace FileWatcher {
 
       const subs: Subscription[] = []
       const cfgIgnores = cfg.watcher?.ignore ?? []
-      const subscribe = (dir: string, ignore: string[]) =>
-        subscribeWithParcel(parcelWatcher, dir, ignore, backend)
+      const subscribe = (dir: string, ignore: string[]) => subscribeWithParcel(parcelWatcher, dir, ignore, backend)
 
       if (Flag.OPENCORVUS_EXPERIMENTAL_FILEWATCHER) {
         subs.push(await subscribe(Instance.directory, [...FileIgnore.PATTERNS, ...cfgIgnores]))
