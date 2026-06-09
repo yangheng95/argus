@@ -636,6 +636,7 @@
   "prompt.preview_empty": "This prompt is empty.",
   "prompt.reset": "Reset",
   "prompt.reset_done": "Reset",
+  "prompt.append_core_edit_error": "This agent uses a code-owned default prompt. Only add custom text after the default prompt.",
   "prompt.status.custom": "Custom",
   "prompt.status.default": "Default",
   "prompt.status.empty": "Unset",

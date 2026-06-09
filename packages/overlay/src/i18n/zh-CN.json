@@ -636,6 +636,7 @@
   "prompt.preview_empty": "当前提示词为空。",
   "prompt.reset": "重置",
   "prompt.reset_done": "已重置",
+  "prompt.append_core_edit_error": "此 Agent 使用代码内置默认 prompt。只能在默认 prompt 末尾追加自定义内容。",
   "prompt.status.custom": "已自定义",
   "prompt.status.default": "默认",
   "prompt.status.empty": "未设置",

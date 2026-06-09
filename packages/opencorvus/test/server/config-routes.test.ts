@@ -87,7 +87,7 @@ describe("config prompt routes", () => {
         ).toBe(true)
         const intent = body.find((item) => item.key === "intent-analysis" && item.scope === "agent")
         expect(intent?.prompt_mode).toBe("append")
-        expect(intent?.prompt).toBe("Custom intent append")
+        expect(intent?.prompt).toBe(intent?.effective_prompt)
         expect(intent?.configured_prompt).toBe("Custom intent append")
         expect(intent?.default_prompt && intent.default_prompt.length > 0).toBe(true)
         expect(intent?.effective_prompt).toContain(intent!.default_prompt!)
@@ -100,6 +100,9 @@ describe("config prompt routes", () => {
         expect(architect && architect.default_prompt && architect.default_prompt.length > 0).toBe(true)
         expect(requirements && requirements.default_prompt && requirements.default_prompt.length > 0).toBe(true)
         expect(frontendDesign && frontendDesign.default_prompt && frontendDesign.default_prompt.length > 0).toBe(true)
+        expect(architect?.prompt).toBe(architect?.effective_prompt)
+        expect(requirements?.prompt).toBe(requirements?.effective_prompt)
+        expect(frontendDesign?.prompt).toBe(frontendDesign?.effective_prompt)
         // Distinct defaults — the pre-fix bug made several agents collapse to
         // the same empty/inherits_core placeholder.
         expect(architect!.default_prompt).not.toBe(requirements!.default_prompt)
