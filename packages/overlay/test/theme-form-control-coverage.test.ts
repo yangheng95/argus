@@ -3,11 +3,11 @@
  * 2026-05-06 — settings dialog rendering input fields with a bright UA
  * widget on top of the dark surface tokens.
  *
- *   1. `.dialog` must declare `color-scheme: inherit`. Native
- *      `<dialog showModal()>` is hoisted to the top layer; Chromium
- *      historically dropped the body's `color-scheme` for top-layer
- *      form controls, leaving inputs / scrollbars / autofill with the
- *      light UA chrome regardless of theme.
+ *   1. `.dialog` must declare `color-scheme: inherit`. Kobalte portals
+ *      dialog content into the document body; Chromium has historically
+ *      dropped the body's `color-scheme` for modal form controls, leaving
+ *      inputs / scrollbars / autofill with the light UA chrome regardless
+ *      of theme.
  *
  *   2. `.field-input` must declare `appearance: none` (and the WebKit
  *      prefix). Without it the UA control widget paints over the

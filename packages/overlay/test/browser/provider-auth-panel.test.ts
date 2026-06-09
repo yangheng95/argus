@@ -220,7 +220,7 @@ async function openProviderSettings(tab: Page) {
   await tab.click('[data-menu-trigger="provider"]')
   await tab.waitForSelector('[data-testid="titlebar-open-providers"]')
   await tab.click('[data-testid="titlebar-open-providers"]')
-  await tab.waitForFunction(() => (document.querySelector("#configDialog") as HTMLDialogElement | null)?.open === true)
+  await tab.waitForFunction(() => document.querySelector("#configDialog") !== null)
   await tab.waitForSelector('[data-config-panel="providers"].active')
 }
 
@@ -243,7 +243,7 @@ async function clickVisible(tab: Page, selector: string) {
 }
 
 async function dialogState(tab: Page) {
-  await tab.waitForFunction(() => (document.querySelector("#appDialog") as HTMLDialogElement | null)?.open === true)
+  await tab.waitForFunction(() => document.querySelector("#appDialog") !== null)
   return tab.evaluate(() => ({
     inputVisible: document.querySelector("#appDialogInputField")?.classList.contains("hidden") === false,
     selectVisible: document.querySelector("#appDialogSelectField")?.classList.contains("hidden") === false,
@@ -253,18 +253,18 @@ async function dialogState(tab: Page) {
 async function acceptDialog(tab: Page) {
   await tab.waitForFunction(
     () =>
-      (document.querySelector("#appDialog") as HTMLDialogElement | null)?.open === true &&
+      document.querySelector("#appDialog") !== null &&
       document.querySelector("#appDialogInputField")?.classList.contains("hidden") === true &&
       document.querySelector("#appDialogSelectField")?.classList.contains("hidden") === true,
   )
   await tab.click("#btnAppDialogOk")
-  await tab.waitForFunction(() => (document.querySelector("#appDialog") as HTMLDialogElement | null)?.open !== true)
+  await tab.waitForFunction(() => document.querySelector("#appDialog") === null)
 }
 
 async function submitDialogInput(tab: Page, value: string) {
   await tab.waitForFunction(
     () =>
-      (document.querySelector("#appDialog") as HTMLDialogElement | null)?.open === true &&
+      document.querySelector("#appDialog") !== null &&
       document.querySelector("#appDialogInputField")?.classList.contains("hidden") === false,
   )
   const before = await tab.evaluate(() => ({
@@ -276,8 +276,8 @@ async function submitDialogInput(tab: Page, value: string) {
   await tab.click("#btnAppDialogOk")
   await tab.waitForFunction(
     (prev) => {
-      const dialog = document.querySelector("#appDialog") as HTMLDialogElement | null
-      if (dialog?.open !== true) return true
+      const dialog = document.querySelector("#appDialog")
+      if (!dialog) return true
       const inputVisible = document.querySelector("#appDialogInputField")?.classList.contains("hidden") === false
       const body = document.querySelector("#appDialogBody")?.textContent || ""
       const label = document.querySelector("#appDialogInputLabel")?.textContent || ""
@@ -291,7 +291,7 @@ async function submitDialogInput(tab: Page, value: string) {
 async function submitDialogSelect(tab: Page, value: string) {
   await tab.waitForFunction(
     () =>
-      (document.querySelector("#appDialog") as HTMLDialogElement | null)?.open === true &&
+      document.querySelector("#appDialog") !== null &&
       document.querySelector("#appDialogSelectField")?.classList.contains("hidden") === false,
   )
   const before = await tab.evaluate(() => ({
@@ -310,8 +310,8 @@ async function submitDialogSelect(tab: Page, value: string) {
   await tab.click("#btnAppDialogOk")
   await tab.waitForFunction(
     (prev) => {
-      const dialog = document.querySelector("#appDialog") as HTMLDialogElement | null
-      if (dialog?.open !== true) return true
+      const dialog = document.querySelector("#appDialog")
+      if (!dialog) return true
       const selectVisible = document.querySelector("#appDialogSelectField")?.classList.contains("hidden") === false
       const body = document.querySelector("#appDialogBody")?.textContent || ""
       const label = document.querySelector("#appDialogSelectLabel")?.textContent || ""

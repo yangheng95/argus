@@ -275,7 +275,7 @@ test(
       await tab.click(".task-row-main[data-task-id='task-1']")
 
       await tab.evaluate(() => window.dispatchEvent(new CustomEvent("oc:open-logs")))
-      await tab.waitForFunction(() => (document.querySelector("#logDialog") as HTMLDialogElement | null)?.open === true)
+      await tab.waitForFunction(() => document.querySelector("#logDialog") !== null)
       await tab.waitForFunction(() => {
         const button = document.querySelector("#btnLogCopy")
         return button instanceof HTMLButtonElement && !button.disabled
@@ -287,7 +287,7 @@ test(
         const state = (window as typeof window & { __copyTest: { writes: string[] } }).__copyTest
         return {
           writes: [...state.writes],
-          dialogOpen: (document.querySelector("#appDialog") as HTMLDialogElement | null)?.open === true,
+          dialogOpen: document.querySelector("#appDialog") !== null,
         }
       })
 

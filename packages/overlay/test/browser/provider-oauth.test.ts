@@ -230,13 +230,11 @@ test(
       await tab.click('[data-menu-trigger="provider"]')
       await tab.waitForSelector('[data-testid="titlebar-open-providers"]')
       await tab.click('[data-testid="titlebar-open-providers"]')
-      await tab.waitForFunction(
-        () => (document.querySelector("#configDialog") as HTMLDialogElement | null)?.open === true,
-      )
+      await tab.waitForFunction(() => document.querySelector("#configDialog") !== null)
 
       await tab.waitForSelector('[data-testid="provider-auth-openai"]')
       await clickVisible(tab, '[data-testid="provider-auth-openai"]')
-      await tab.waitForFunction(() => (document.querySelector("#appDialog") as HTMLDialogElement | null)?.open === true)
+      await tab.waitForFunction(() => document.querySelector("#appDialog") !== null)
       await tab.click("#btnAppDialogOk")
       for (let i = 0; i < 50 && callbackCalls === 0; i += 1) {
         await new Promise((resolve) => setTimeout(resolve, 100))
