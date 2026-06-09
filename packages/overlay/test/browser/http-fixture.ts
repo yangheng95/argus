@@ -56,6 +56,10 @@ export async function startBrowserFixture(
       await writeResponse(outgoing, response)
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error)
+      if (outgoing.headersSent || outgoing.writableEnded) {
+        if (!outgoing.writableEnded) outgoing.end()
+        return
+      }
       outgoing.writeHead(500, { "content-type": "text/plain; charset=utf-8" })
       outgoing.end(message)
     }
