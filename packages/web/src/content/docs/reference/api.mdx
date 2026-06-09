@@ -88,6 +88,7 @@ All endpoints are protected by `OPENCORVUS_SERVER_PASSWORD` when it is set. Clie
 | GET | `/task/{taskID}/brief` | Get task brief | `task.brief` |
 | GET | `/task/{taskID}/browser-preview` | Resolve task browser preview target | `browserPreview.taskTarget` |
 | POST | `/task/{taskID}/browser-preview/capture` | Capture browser preview verification evidence | `browserPreview.captureTaskTarget` |
+| GET | `/task/{taskID}/browser-preview/evidence/{evidenceID}` | Read browser preview verification evidence | `browserPreview.readTaskEvidence` |
 | PUT | `/task/{taskID}/browser-preview/target` | Save task browser preview target | `browserPreview.saveTaskTarget` |
 | PATCH | `/task/{taskID}/budget` | Update task budget | `task.updateBudget` |
 | POST | `/task/{taskID}/cancel` | Cancel task | `task.cancel` |
