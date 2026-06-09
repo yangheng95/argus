@@ -185,9 +185,11 @@ function StoreCard(props: { id: string; depth: number }) {
   const node = () => {
     return storeCardNode(props.id)
   }
-  return renderAsBubble(node())
-    ? <ChatBubble node={node()} depth={props.depth} />
-    : <Card node={node()} depth={props.depth} />
+  return renderAsBubble(node()) ? (
+    <ChatBubble node={node()} depth={props.depth} />
+  ) : (
+    <Card node={node()} depth={props.depth} />
+  )
 }
 ```
 

@@ -15,15 +15,15 @@ This split already caused a false fix: updating `docs/product/*/reference/sdk.md
 
 Full-repo grep before this plan:
 
-| Surface | Current evidence | Decision |
-|---|---|---|
-| Web docs source | `packages/web/src/content.config.ts` uses `docsLoader()`; `packages/web/astro.config.mjs` sidebar points at `packages/web/src/content/docs/**`. | Keep as canonical human-facing docs source. |
-| API docs generator | `packages/opencorvus/script/docs/render-api-md.ts` writes only `docs/product/{en,zh-CN}/reference/api.md`. | Move generated output to `packages/web/src/content/docs/{reference,zh-cn/reference}/api.mdx`. |
-| Root scripts | `package.json` `docs:api` / `docs:check` invoke `render-api-md.ts`. | Keep script names; change their target to canonical web docs. |
-| Existing generated web API pages | `packages/web/src/content/docs/reference/api.mdx` and `zh-cn/reference/api.mdx` exist and are displayed by the site. | Regenerate/check these files directly. |
-| Legacy product docs | `docs/product/**` is referenced by old specs and a small number of tests as path text, but not by the site. | Treat as legacy/non-authoritative; do not add new generated content there. |
-| SDK generator | `packages/sdk/js/script/build.ts` generates `packages/sdk/openapi.json` and SDK source from server routes. | Keep as SDK/OpenAPI single source. |
-| SDK docs pages | `packages/web/src/content/docs/sdk.mdx`, `reference/sdk.mdx`, and zh-cn counterparts contained stale `sdk/v2` references. | Keep docs in web tree, with `reference/sdk.mdx` as the complete SDK reference and `sdk.mdx` as overview. |
+| Surface                          | Current evidence                                                                                                                                | Decision                                                                                                 |
+| -------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------- |
+| Web docs source                  | `packages/web/src/content.config.ts` uses `docsLoader()`; `packages/web/astro.config.mjs` sidebar points at `packages/web/src/content/docs/**`. | Keep as canonical human-facing docs source.                                                              |
+| API docs generator               | `packages/opencorvus/script/docs/render-api-md.ts` writes only `docs/product/{en,zh-CN}/reference/api.md`.                                      | Move generated output to `packages/web/src/content/docs/{reference,zh-cn/reference}/api.mdx`.            |
+| Root scripts                     | `package.json` `docs:api` / `docs:check` invoke `render-api-md.ts`.                                                                             | Keep script names; change their target to canonical web docs.                                            |
+| Existing generated web API pages | `packages/web/src/content/docs/reference/api.mdx` and `zh-cn/reference/api.mdx` exist and are displayed by the site.                            | Regenerate/check these files directly.                                                                   |
+| Legacy product docs              | `docs/product/**` is referenced by old specs and a small number of tests as path text, but not by the site.                                     | Treat as legacy/non-authoritative; do not add new generated content there.                               |
+| SDK generator                    | `packages/sdk/js/script/build.ts` generates `packages/sdk/openapi.json` and SDK source from server routes.                                      | Keep as SDK/OpenAPI single source.                                                                       |
+| SDK docs pages                   | `packages/web/src/content/docs/sdk.mdx`, `reference/sdk.mdx`, and zh-cn counterparts contained stale `sdk/v2` references.                       | Keep docs in web tree, with `reference/sdk.mdx` as the complete SDK reference and `sdk.mdx` as overview. |
 
 ## Required end state
 

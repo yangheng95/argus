@@ -18,9 +18,7 @@ describe("executor runtime model env", () => {
   test("keeps claude-code model separate from OpenCorvus provider/model refs", () => {
     process.env[CLAUDE_KEY] = "alibaba-coding-plan-cn/kimi-k2.5"
 
-    expect(() => getModelOverride("claude-code")).toThrow(
-      "Claude Code expects the native Claude CLI --model value",
-    )
+    expect(() => getModelOverride("claude-code")).toThrow("Claude Code expects the native Claude CLI --model value")
   })
 
   test("accepts the native Claude CLI model string for claude-code", () => {

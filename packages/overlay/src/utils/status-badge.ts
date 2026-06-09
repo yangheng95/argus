@@ -11,43 +11,35 @@
 // one of six tones. The CSS for each tone lives in `styles/surfaces/card.css`
 // alongside the existing `card__badge--*` classes.
 
-import type { CardNode } from "../store/card-tree";
+import type { CardNode } from "../store/card-tree"
 
 export interface CardStatusBadge {
   /** Used by CSS as `card__badge--{tone}`. */
-  tone:
-    | "running"
-    | "done"
-    | "concerns"
-    | "cancelled"
-    | "error"
-    | "skipped"
-    | "pending"
-    | "neutral";
+  tone: "running" | "done" | "concerns" | "cancelled" | "error" | "skipped" | "pending" | "neutral"
   /** Single-character glyph rendered inside the badge circle.
    *  Empty for `running` (replaced by spinner) and `neutral` (hidden). */
-  glyph: string;
+  glyph: string
 }
 
 export function statusBadge(node: CardNode): CardStatusBadge {
-  const s = node.status;
-  if (s === "running") return { tone: "running", glyph: "" };
+  const s = node.status
+  if (s === "running") return { tone: "running", glyph: "" }
   if (s === "error") {
-    const reason = String((node as any).terminalReason || "").toLowerCase();
+    const reason = String((node as any).terminalReason || "").toLowerCase()
     if (reason === "cancelled" || reason === "aborted") {
-      return { tone: "cancelled", glyph: "⊘" }; // ⊘
+      return { tone: "cancelled", glyph: "⊘" } // ⊘
     }
-    return { tone: "error", glyph: "✗" }; // ✗
+    return { tone: "error", glyph: "✗" } // ✗
   }
-  if (s === "skipped") return { tone: "skipped", glyph: "—" }; // —
-  if (s === "pending") return { tone: "pending", glyph: "·" }; // ·
+  if (s === "skipped") return { tone: "skipped", glyph: "—" } // —
+  if (s === "pending") return { tone: "pending", glyph: "·" } // ·
   if (s === "completed") {
-    const verdict = node.integrity?.verdict;
+    const verdict = node.integrity?.verdict
     if (verdict === "concerns" || verdict === "needs_correction") {
-      return { tone: "concerns", glyph: "⚠" }; // ⚠
+      return { tone: "concerns", glyph: "⚠" } // ⚠
     }
-    return { tone: "done", glyph: "✓" }; // ✓
+    return { tone: "done", glyph: "✓" } // ✓
   }
-  if (node.kind === "message") return { tone: "neutral", glyph: "" };
-  return { tone: "done", glyph: "✓" };
+  if (node.kind === "message") return { tone: "neutral", glyph: "" }
+  return { tone: "done", glyph: "✓" }
 }

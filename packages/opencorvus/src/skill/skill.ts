@@ -33,17 +33,40 @@ export namespace Skill {
      *  OR the active task. File / deps scan the Instance directory; task_signals are
      *  derived from the current task's request, attachments, and scripts. Any single
      *  matching condition (across all three buckets) is sufficient. */
-    auto_detect: z.object({
-      files: z.array(z.string()).optional(),
-      deps: z.array(z.string()).optional(),
-      task_signals: z.object({
-        has_attachment_image: z.boolean().optional().describe("True when the task carries a reference image attachment."),
-        request_contains_url: z.boolean().optional().describe("True when the task request text contains an http(s) URL — explicitly EXCLUDING figma.com URLs (those drive `request_contains_figma_url`)."),
-        request_contains_figma_url: z.boolean().optional().describe("True when the task request text contains a figma.com URL (file / design / proto / board path). Mutually exclusive with `request_contains_url` by construction in deriveUrlSignals."),
-        package_has_script: z.array(z.string()).optional().describe("Any of the listed npm/bun scripts exists in the project's package.json."),
-        request_text_any: z.array(z.string()).optional().describe("Any listed case-insensitive substring must appear in the task request text."),
-      }).optional(),
-    }).optional(),
+    auto_detect: z
+      .object({
+        files: z.array(z.string()).optional(),
+        deps: z.array(z.string()).optional(),
+        task_signals: z
+          .object({
+            has_attachment_image: z
+              .boolean()
+              .optional()
+              .describe("True when the task carries a reference image attachment."),
+            request_contains_url: z
+              .boolean()
+              .optional()
+              .describe(
+                "True when the task request text contains an http(s) URL — explicitly EXCLUDING figma.com URLs (those drive `request_contains_figma_url`).",
+              ),
+            request_contains_figma_url: z
+              .boolean()
+              .optional()
+              .describe(
+                "True when the task request text contains a figma.com URL (file / design / proto / board path). Mutually exclusive with `request_contains_url` by construction in deriveUrlSignals.",
+              ),
+            package_has_script: z
+              .array(z.string())
+              .optional()
+              .describe("Any of the listed npm/bun scripts exists in the project's package.json."),
+            request_text_any: z
+              .array(z.string())
+              .optional()
+              .describe("Any listed case-insensitive substring must appear in the task request text."),
+          })
+          .optional(),
+      })
+      .optional(),
     /** Priority for ordering when multiple skills match (higher = first). */
     priority: z.number().optional().default(0),
     /** Descriptive tool hints for agents that load this skill. Empty or
@@ -81,9 +104,9 @@ export namespace Skill {
   type BuiltinFile =
     | string
     | {
-      encoding: "utf8" | "base64"
-      content: string
-    }
+        encoding: "utf8" | "base64"
+        content: string
+      }
 
   const builtins = [
     { skill: ainvestDesignSystemMd, files: ainvestDesignSystemFiles },
@@ -99,7 +122,11 @@ export namespace Skill {
   async function install(id: string, skill: string, files: Readonly<Record<string, BuiltinFile>>) {
     const dir = path.join(BUILTIN_PATH, id)
     await Filesystem.write(path.join(dir, "SKILL.md"), skill)
-    await Promise.all(Object.entries(files).map(([file, content]) => Filesystem.write(path.join(dir, file), decodeBuiltinFile(content))))
+    await Promise.all(
+      Object.entries(files).map(([file, content]) =>
+        Filesystem.write(path.join(dir, file), decodeBuiltinFile(content)),
+      ),
+    )
     return path.join(dir, "SKILL.md")
   }
 
@@ -110,7 +137,14 @@ export namespace Skill {
     // Register built-in skills (lowest priority — user skills with same name override)
     for (const raw of builtins) {
       const md = matter(raw.skill)
-      const parsed = Info.pick({ name: true, description: true, platforms: true, auto_detect: true, priority: true, required_tools: true }).safeParse(md.data)
+      const parsed = Info.pick({
+        name: true,
+        description: true,
+        platforms: true,
+        auto_detect: true,
+        priority: true,
+        required_tools: true,
+      }).safeParse(md.data)
       if (!parsed.success) continue
       const location =
         Object.keys(raw.files).length === 0 ? "builtin" : await install(parsed.data.name, raw.skill, raw.files)
@@ -139,7 +173,14 @@ export namespace Skill {
 
       if (!md) return
 
-      const parsed = Info.pick({ name: true, description: true, platforms: true, auto_detect: true, priority: true, required_tools: true }).safeParse(md.data)
+      const parsed = Info.pick({
+        name: true,
+        description: true,
+        platforms: true,
+        auto_detect: true,
+        priority: true,
+        required_tools: true,
+      }).safeParse(md.data)
       if (!parsed.success) return
 
       // Warn on duplicate skill names

@@ -59,10 +59,7 @@ export function resolveGitTimeoutMs(opts: Pick<GitOptions, "timeoutMs" | "timeou
  * sweep migrates risk-path callers to explicit profiles to make intent
  * legible; Phase-2 will lint-forbid the legacy default.
  */
-export async function git(
-  args: string[],
-  opts: GitOptions,
-): Promise<GitResult> {
+export async function git(args: string[], opts: GitOptions): Promise<GitResult> {
   const timeoutMs = resolveGitTimeoutMs(opts)
   const controller = new AbortController()
   const timer = setTimeout(() => controller.abort(), timeoutMs)
@@ -81,12 +78,14 @@ export async function git(
         stdout: result.stdout,
         stderr: result.stderr,
       }))
-      .catch((error): GitResult => ({
-        exitCode: 1,
-        text: () => "",
-        stdout: Buffer.alloc(0),
-        stderr: Buffer.from(error instanceof Error ? error.message : String(error)),
-      }))
+      .catch(
+        (error): GitResult => ({
+          exitCode: 1,
+          text: () => "",
+          stdout: Buffer.alloc(0),
+          stderr: Buffer.from(error instanceof Error ? error.message : String(error)),
+        }),
+      )
     if (controller.signal.aborted) {
       // Timeout/abort path: Process.run typically resolves (signal-killed
       // child still flushes a code) rather than rejects, so the timeout

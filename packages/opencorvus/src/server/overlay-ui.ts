@@ -92,14 +92,15 @@ export namespace OverlayUI {
     // vite builds HTML with absolute asset paths (e.g. `/assets/...`).
     // When served under `/ui/`, those paths miss the mount point. Rewrite
     // them so links resolve under the overlay route.
-    const rewriteHtmlAssets = (html: string): string =>
-      html
-        .replace(/(src|href)="\/(assets|i18n)\//g, '$1="/ui/$2/')
+    const rewriteHtmlAssets = (html: string): string => html.replace(/(src|href)="\/(assets|i18n)\//g, '$1="/ui/$2/')
 
     const handle = async (c: Context) => {
       const dir = dirOverride ?? resolveOverlayDir()
       if (!dir) {
-        return c.text("Overlay UI not found. Run `bun run --cwd packages/overlay build:vite` or package with bundled UI assets.", 404)
+        return c.text(
+          "Overlay UI not found. Run `bun run --cwd packages/overlay build:vite` or package with bundled UI assets.",
+          404,
+        )
       }
 
       let reqPath = c.req.path.replace(/^\/ui/, "") || "/"

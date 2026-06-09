@@ -13,9 +13,7 @@
 
 export type NormalizedInput = Record<string, unknown>
 
-export type NormalizeResult =
-  | { ok: true; value: NormalizedInput }
-  | { ok: false; reason: string; raw: unknown }
+export type NormalizeResult = { ok: true; value: NormalizedInput } | { ok: false; reason: string; raw: unknown }
 
 function isPlainObject(value: unknown): value is NormalizedInput {
   if (value === null || typeof value !== "object") return false
@@ -76,11 +74,12 @@ export function normalizeToolOutput(raw: unknown, fallbackTitle: string | undefi
   }
   if (isPlainObject(raw)) {
     const outputField = (raw as { output?: unknown }).output
-    const output = typeof outputField === "string"
-      ? outputField
-      : outputField !== undefined
-        ? JSON.stringify(outputField)
-        : JSON.stringify(raw)
+    const output =
+      typeof outputField === "string"
+        ? outputField
+        : outputField !== undefined
+          ? JSON.stringify(outputField)
+          : JSON.stringify(raw)
     const titleField = (raw as { title?: unknown }).title
     const title = typeof titleField === "string" ? titleField : fallbackTitle
     const metadataField = (raw as { metadata?: unknown }).metadata

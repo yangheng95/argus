@@ -160,7 +160,10 @@ export function renderSharedIntegrityPromptContext(input: SharedPromptCapInput):
       return
     }
 
-    const summary = clipText(sanitize(attempt.summary ?? "(no summary)", "generic", "block"), budget.oldAttemptSummaryCharCap)
+    const summary = clipText(
+      sanitize(attempt.summary ?? "(no summary)", "generic", "block"),
+      budget.oldAttemptSummaryCharCap,
+    )
     const before = renderedChars
     append(renderOldAttemptPointer(attempt, summary))
     if (renderedChars === before || renderedChars >= budget.totalCharCap) {
@@ -295,7 +298,10 @@ function renderFullAttemptMarkdown(
   ]
   if (attempt.summary) lines.push("", "Summary:", sanitize(attempt.summary, "generic", "block"))
   if (attempt.teamReportMarkdown) {
-    lines.push("", "Team report: omitted from replay prompt; structured summary, findings, repairs, and reviewer focus rows follow.")
+    lines.push(
+      "",
+      "Team report: omitted from replay prompt; structured summary, findings, repairs, and reviewer focus rows follow.",
+    )
   }
   if (attempt.reviewers.length > 0) {
     lines.push("", "Reviewer focuses:")

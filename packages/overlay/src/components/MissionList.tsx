@@ -124,7 +124,12 @@ function missionTaskStatusLabel(status: MissionTaskStatus): string {
 
 function MissionTaskProjectionRow(props: { task: MissionTaskProjection }) {
   return (
-    <li class="mission-task-projection-row" data-ui="mission-task-projection" data-task-id={props.task.id} data-status={props.task.status}>
+    <li
+      class="mission-task-projection-row"
+      data-ui="mission-task-projection"
+      data-task-id={props.task.id}
+      data-status={props.task.status}
+    >
       <span class="mission-task-projection-main">
         <span class="mission-task-projection-title">{props.task.title || props.task.id}</span>
         <span class="mission-task-projection-meta">
@@ -257,9 +262,7 @@ function MissionRow(props: {
       </div>
       <Show when={props.mission.tasks.length > 0}>
         <ul class="mission-task-projection-list" aria-label={t("mission.ledger.tasks_label")}>
-          <For each={props.mission.tasks}>
-            {(task) => <MissionTaskProjectionRow task={task} />}
-          </For>
+          <For each={props.mission.tasks}>{(task) => <MissionTaskProjectionRow task={task} />}</For>
         </ul>
       </Show>
     </div>
@@ -306,7 +309,11 @@ export function MissionList(props: MissionListProps) {
     <aside class="mission-ledger" data-ui="mission-ledger">
       <header class="mission-ledger-header oc-surface-header">
         <span class="mission-ledger-title oc-surface-header__title">{t("mission.ledger.title")}</span>
-        <div class="mission-ledger-header-actions oc-surface-header__actions" role="toolbar" aria-label={t("mission.ledger.title")}>
+        <div
+          class="mission-ledger-header-actions oc-surface-header__actions"
+          role="toolbar"
+          aria-label={t("mission.ledger.title")}
+        >
           <Button
             type="button"
             variant="ghost"
@@ -321,7 +328,7 @@ export function MissionList(props: MissionListProps) {
           </Button>
           <Button
             type="button"
-            variant="ghost"
+            variant="solid"
             size="md"
             tone="accent"
             data-ui="mission-new"
@@ -329,33 +336,40 @@ export function MissionList(props: MissionListProps) {
             aria-label={t("mission.new")}
             onClick={props.onCreateMission}
           >
-            <Icon name="plus" size={13} />
+            <span class="sidebar-btn-icon" aria-hidden="true">
+              <Icon name="plus" size={13} />
+            </span>
             <span>{t("mission.new")}</span>
           </Button>
         </div>
       </header>
 
-      <div class="mission-ledger-search">
-        <Icon name="search" size={12} class="mission-ledger-search-icon" />
+      <div class="mission-ledger-search search-field">
+        <Icon name="search" size={12} class="mission-ledger-search-icon search-field-icon" />
         <input
           type="search"
-          class="mission-ledger-search-input"
+          class="mission-ledger-search-input search-field-input"
           placeholder={t("mission.ledger.search_placeholder")}
           value={props.searchQuery}
           onInput={(e) => props.onSearchChange(e.currentTarget.value)}
           aria-label={t("mission.ledger.search_placeholder")}
           data-ui="mission-search"
         />
-        <button
-          type="button"
-          class="mission-ledger-search-clear"
-          aria-label={t("mission.ledger.search_clear")}
-          title={t("mission.ledger.search_clear")}
-          hidden={!props.searchQuery}
-          onClick={() => props.onSearchChange("")}
-        >
-          <Icon name="close" size={10} />
-        </button>
+        <Show when={props.searchQuery}>
+          <Button
+            type="button"
+            variant="ghost"
+            size="icon"
+            tone="neutral"
+            data-chrome="icon-action"
+            data-ui="mission-ledger-search-clear"
+            aria-label={t("mission.ledger.search_clear")}
+            title={t("mission.ledger.search_clear")}
+            onClick={() => props.onSearchChange("")}
+          >
+            <Icon name="close" />
+          </Button>
+        </Show>
       </div>
 
       <div class="mission-ledger-list">

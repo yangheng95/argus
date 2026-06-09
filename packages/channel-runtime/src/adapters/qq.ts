@@ -192,7 +192,7 @@ export class QQAdapter implements ChannelAdapter {
     const ok = await this.handler(msg).then(
       () => true,
       (error) => {
-      console.error("[QQ] handler error:", error)
+        console.error("[QQ] handler error:", error)
         return false
       },
     )
@@ -282,7 +282,8 @@ export class QQAdapter implements ChannelAdapter {
     })
     if (!res.ok) throw new Error(`QQ access token failed: ${res.status} ${await res.text()}`)
     const data = (await res.json()) as TokenData
-    if (data.code && data.code !== 0) throw new Error(`QQ access token failed: ${data.code} ${data.message ?? "unknown"}`)
+    if (data.code && data.code !== 0)
+      throw new Error(`QQ access token failed: ${data.code} ${data.message ?? "unknown"}`)
     if (!data.access_token) throw new Error("QQ access token failed: missing access_token")
     const ttl = Number(data.expires_in)
     this.token = data.access_token

@@ -1,7 +1,7 @@
-import { createResource, Show, Switch, Match } from "solid-js";
-import { fetchResourceAsObjectUrl, peekResourceObjectUrl, resolveResourceUrl } from "../services/api";
-import { t } from "../utils/i18n";
-import { PreviewableImage } from "./ImagePreview";
+import { createResource, Show, Switch, Match } from "solid-js"
+import { fetchResourceAsObjectUrl, peekResourceObjectUrl, resolveResourceUrl } from "../services/api"
+import { t } from "../utils/i18n"
+import { PreviewableImage } from "./ImagePreview"
 
 // Render a message "file" part: server-persisted attachments carry a URL that
 // is either a server-relative path (/attachment/<projectID>/<sha>.<ext>) or
@@ -26,26 +26,26 @@ import { PreviewableImage } from "./ImagePreview";
 // and replaces the media with a "Failed to load" chip. No fallback to the
 // raw URL, since that would mask the underlying origin/auth mistake.
 
-type MediaKind = "image" | "video" | "audio" | "pdf" | "other";
+type MediaKind = "image" | "video" | "audio" | "pdf" | "other"
 
 function mimeOf(part: { url?: string; mime?: string; mediaType?: string }): string {
-  return (part.mime || part.mediaType || "").toLowerCase();
+  return (part.mime || part.mediaType || "").toLowerCase()
 }
 
 function kindOf(part: { url?: string; mime?: string; mediaType?: string }): MediaKind {
-  const mime = mimeOf(part);
-  const url = part.url || "";
-  if (mime.startsWith("image/")) return "image";
-  if (mime.startsWith("video/")) return "video";
-  if (mime.startsWith("audio/")) return "audio";
-  if (mime === "application/pdf") return "pdf";
+  const mime = mimeOf(part)
+  const url = part.url || ""
+  if (mime.startsWith("image/")) return "image"
+  if (mime.startsWith("video/")) return "video"
+  if (mime.startsWith("audio/")) return "audio"
+  if (mime === "application/pdf") return "pdf"
   // MIME-less probes on file extension. Kept narrow — unknown extensions
   // fall through to "other" rather than guess wrong and break <video>.
-  if (/^data:image\//i.test(url) || /\.(png|jpe?g|gif|webp|svg|bmp|ico|avif)(\?|$)/i.test(url)) return "image";
-  if (/^data:video\//i.test(url) || /\.(mp4|webm|mov|m4v|ogv)(\?|$)/i.test(url)) return "video";
-  if (/^data:audio\//i.test(url) || /\.(mp3|wav|ogg|m4a|flac|aac)(\?|$)/i.test(url)) return "audio";
-  if (/\.pdf(\?|$)/i.test(url)) return "pdf";
-  return "other";
+  if (/^data:image\//i.test(url) || /\.(png|jpe?g|gif|webp|svg|bmp|ico|avif)(\?|$)/i.test(url)) return "image"
+  if (/^data:video\//i.test(url) || /\.(mp4|webm|mov|m4v|ogv)(\?|$)/i.test(url)) return "video"
+  if (/^data:audio\//i.test(url) || /\.(mp3|wav|ogg|m4a|flac|aac)(\?|$)/i.test(url)) return "audio"
+  if (/\.pdf(\?|$)/i.test(url)) return "pdf"
+  return "other"
 }
 
 function needsAuthedFetch(url: string): boolean {
@@ -53,28 +53,19 @@ function needsAuthedFetch(url: string): boolean {
   // third parties shouldn't receive our auth header. Only server-relative
   // paths (those `resolveResourceUrl` rewrites onto our serverUrl) need the
   // fetch → objectURL dance to carry Authorization / cross-origin.
-  return url.startsWith("/");
+  return url.startsWith("/")
 }
 
 export function FilePart(props: {
-  part: { type: "file"; url?: string; mime?: string; mediaType?: string; filename?: string };
+  part: { type: "file"; url?: string; mime?: string; mediaType?: string; filename?: string }
 }) {
-  const url = () => props.part.url || "";
-  const name = () => props.part.filename || url() || "file";
-  const kind = () => kindOf(props.part);
-  const authed = () => needsAuthedFetch(url());
+  const url = () => props.part.url || ""
+  const name = () => props.part.filename || url() || "file"
+  const kind = () => kindOf(props.part)
+  const authed = () => needsAuthedFetch(url())
 
   return (
-    <Switch
-      fallback={
-        <FallbackDownload
-          url={url()}
-          name={name()}
-          mime={mimeOf(props.part)}
-          authed={authed()}
-        />
-      }
-    >
+    <Switch fallback={<FallbackDownload url={url()} name={name()} mime={mimeOf(props.part)} authed={authed()} />}>
       <Match when={kind() === "image" && url() && authed()}>
         <AuthedImage url={url()} alt={name()} />
       </Match>
@@ -111,7 +102,7 @@ export function FilePart(props: {
         </div>
       </Match>
     </Switch>
-  );
+  )
 }
 
 // ── Auth-proxied media ──
@@ -123,7 +114,7 @@ export function FilePart(props: {
 function AuthedImage(props: { url: string; alt: string }) {
   const [objectUrl] = createResource(() => props.url, fetchResourceAsObjectUrl, {
     initialValue: peekResourceObjectUrl(props.url),
-  });
+  })
 
   return (
     <Show when={!objectUrl.error} fallback={<LoadError name={props.alt} />}>
@@ -135,13 +126,13 @@ function AuthedImage(props: { url: string; alt: string }) {
         )}
       </Show>
     </Show>
-  );
+  )
 }
 
 function AuthedVideo(props: { url: string; name: string; mime: string }) {
   const [objectUrl] = createResource(() => props.url, fetchResourceAsObjectUrl, {
     initialValue: peekResourceObjectUrl(props.url),
-  });
+  })
   return (
     <Show when={!objectUrl.error} fallback={<LoadError name={props.name} />}>
       <Show when={objectUrl()}>
@@ -155,13 +146,13 @@ function AuthedVideo(props: { url: string; name: string; mime: string }) {
         )}
       </Show>
     </Show>
-  );
+  )
 }
 
 function AuthedAudio(props: { url: string; name: string; mime: string }) {
   const [objectUrl] = createResource(() => props.url, fetchResourceAsObjectUrl, {
     initialValue: peekResourceObjectUrl(props.url),
-  });
+  })
   return (
     <Show when={!objectUrl.error} fallback={<LoadError name={props.name} />}>
       <Show when={objectUrl()}>
@@ -175,13 +166,13 @@ function AuthedAudio(props: { url: string; name: string; mime: string }) {
         )}
       </Show>
     </Show>
-  );
+  )
 }
 
 function AuthedPdf(props: { url: string; name: string }) {
   const [objectUrl] = createResource(() => props.url, fetchResourceAsObjectUrl, {
     initialValue: peekResourceObjectUrl(props.url),
-  });
+  })
   return (
     <Show when={!objectUrl.error} fallback={<LoadError name={props.name} />}>
       <Show when={objectUrl()}>
@@ -193,17 +184,12 @@ function AuthedPdf(props: { url: string; name: string }) {
         )}
       </Show>
     </Show>
-  );
+  )
 }
 
 // ── Fallback + helpers ──
 
-function FallbackDownload(props: {
-  url: string;
-  name: string;
-  mime: string;
-  authed: boolean;
-}) {
+function FallbackDownload(props: { url: string; name: string; mime: string; authed: boolean }) {
   // For server-relative URLs we can't put them on <a href> directly (auth
   // header won't propagate on the resulting navigation). Fetch through the
   // authed proxy so the download link points at a blob URL the browser can
@@ -212,12 +198,12 @@ function FallbackDownload(props: {
     () => (props.authed && props.url ? props.url : null),
     (u: string | null) => (u ? fetchResourceAsObjectUrl(u) : null),
     { initialValue: props.authed ? peekResourceObjectUrl(props.url) : null },
-  );
+  )
   const href = () => {
-    if (!props.url) return "";
-    if (props.authed) return objectUrl() || "";
-    return props.url;
-  };
+    if (!props.url) return ""
+    if (props.authed) return objectUrl() || ""
+    return props.url
+  }
 
   return (
     <div class="msg-file-chip">
@@ -229,7 +215,7 @@ function FallbackDownload(props: {
         <DownloadLink href={href()} name={props.name} />
       </Show>
     </div>
-  );
+  )
 }
 
 function DownloadLink(props: { href: string; name: string }) {
@@ -238,22 +224,12 @@ function DownloadLink(props: { href: string; name: string }) {
   // deployment with Basic Auth the blob URL was already fetched with auth
   // so no credentials are needed at click time.
   return (
-    <a
-      class="msg-file-download"
-      href={props.href}
-      download={props.name}
-      target="_blank"
-      rel="noopener noreferrer"
-    >
+    <a class="msg-file-download" href={props.href} download={props.name} target="_blank" rel="noopener noreferrer">
       {t("file.download")}
     </a>
-  );
+  )
 }
 
 function LoadError(props: { name: string }) {
-  return (
-    <div class="msg-file-error">
-      {t("file.load_failed", { name: props.name })}
-    </div>
-  );
+  return <div class="msg-file-error">{t("file.load_failed", { name: props.name })}</div>
 }

@@ -56,12 +56,14 @@ export namespace ToolAdapterRegistry {
   }
 
   export function toCodingTools(input: ToolContextInfo) {
-    return declareSync(input).map((item) => CodingTool.parse({
-      type: "function",
-      name: item.name,
-      description: item.description,
-      inputSchema: item.inputSchema,
-    })) satisfies CodingToolInfo[]
+    return declareSync(input).map((item) =>
+      CodingTool.parse({
+        type: "function",
+        name: item.name,
+        description: item.description,
+        inputSchema: item.inputSchema,
+      }),
+    ) satisfies CodingToolInfo[]
   }
 
   export function matchCall(call: ToolCallInfo) {
@@ -72,13 +74,15 @@ export namespace ToolAdapterRegistry {
     return adapters.find((adapter) => {
       if (result.metadata?.adapter === adapter.id) return true
       const hint = typeof result.metadata?.tool_name === "string" ? result.metadata.tool_name : ""
-      return hint ? adapter.accept({
-        id: result.id,
-        name: hint,
-        kind: adapter.kind,
-        refs: result.refs,
-        metadata: result.metadata,
-      }) : false
+      return hint
+        ? adapter.accept({
+            id: result.id,
+            name: hint,
+            kind: adapter.kind,
+            refs: result.refs,
+            metadata: result.metadata,
+          })
+        : false
     })
   }
 

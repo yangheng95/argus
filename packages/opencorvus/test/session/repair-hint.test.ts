@@ -46,7 +46,11 @@ describe("discriminatorRepairHint — invalid_union self-correction", () => {
   test("ir.kind illegal → enumerates type|function|enum (was: opaque infinite loop)", () => {
     const input = {
       ...baseContract,
-      ir: { kind: "interface", name: "X", fields: [{ name: "a", typeExpr: "string", valueDomain: { kind: "open", reason: "r" } }] },
+      ir: {
+        kind: "interface",
+        name: "X",
+        fields: [{ name: "a", typeExpr: "string", valueDomain: { kind: "open", reason: "r" } }],
+      },
     }
     const union = invalidUnionIssue(input)
     expect(union).toBeDefined()
@@ -60,14 +64,16 @@ describe("discriminatorRepairHint — invalid_union self-correction", () => {
   test("valueDomain.kind illegal (deep, behind ir anyOf + array) → enumerates all 5 domains", () => {
     const input = {
       ...baseContract,
-      ir: { kind: "type", name: "X", fields: [{ name: "a", typeExpr: "string", valueDomain: { kind: "primitive", reason: "r" } }] },
+      ir: {
+        kind: "type",
+        name: "X",
+        fields: [{ name: "a", typeExpr: "string", valueDomain: { kind: "primitive", reason: "r" } }],
+      },
     }
     const union = invalidUnionIssue(input)
     const hint = discriminatorRepairHint(registerContractJsonSchema(), union, input)
     expect(hint).toBeDefined()
-    expect(hint!.values).toEqual(
-      expect.arrayContaining(["open", "literal_union", "branded", "numeric_range", "ref"]),
-    )
+    expect(hint!.values).toEqual(expect.arrayContaining(["open", "literal_union", "branded", "numeric_range", "ref"]))
     expect(hint!.supplied).toBe("primitive")
     expect(hint!.at).toBe("ir.fields.0.valueDomain.kind")
   })
@@ -130,10 +136,7 @@ describe("schema describe is visible to the model (defense-in-depth, rule 6.1)",
 })
 
 describe("prompt ↔ schema single-source consistency (locks rule 8 drift)", () => {
-  const architectCore = readFileSync(
-    join(import.meta.dir, "../../src/prompt/core/architect-core.txt"),
-    "utf8",
-  )
+  const architectCore = readFileSync(join(import.meta.dir, "../../src/prompt/core/architect-core.txt"), "utf8")
   const kindsOf = (schema: unknown) =>
     ((z.toJSONSchema(schema as any) as any).anyOf as any[]).map((b) => b.properties.kind.const as string)
 
@@ -181,9 +184,7 @@ describe("createToolCallRepair — wrapper-level single source covers ALL stream
       { steps: [{ action: "navigate", path: "/x" }] },
       walkthroughToolSchema,
     )
-    await expect((repair as any)(failed)).rejects.toThrow(
-      /goto.*fill.*click.*assertPath.*assertSelector.*assertText/s,
-    )
+    await expect((repair as any)(failed)).rejects.toThrow(/goto.*fill.*click.*assertPath.*assertSelector.*assertText/s)
   })
 
   test("tool-name case normalization still works (the other legitimate repair)", async () => {

@@ -11,15 +11,15 @@ function emptyCollector(): VisualQaCollector {
 }
 
 function openBlockingFindings(report: VisualQaReport): VisualQaReport["findings"] {
-  return report.findings.filter((finding) =>
-    finding.status === "open" && (finding.severity === "critical" || finding.severity === "major"),
+  return report.findings.filter(
+    (finding) => finding.status === "open" && (finding.severity === "critical" || finding.severity === "major"),
   )
 }
 
 function validateVisualQaReport(report: VisualQaReport): string[] {
   const issues: string[] = []
   if (report.accepted && report.evidence.length === 0) {
-    issues.push("accepted=true requires at least one fresh visual/runtime evidence item.")
+    issues.push("accepted=true requires at least one fresh visual and functional evidence item.")
   }
   if (report.accepted && report.coverage.length === 0) {
     issues.push("accepted=true requires at least one coverage item naming checked regions/viewports/states.")
@@ -36,11 +36,12 @@ function validateVisualQaReport(report: VisualQaReport): string[] {
 export function buildVisualQaReport(collector: VisualQaCollector) {
   if (!collector.final) throw new Error("visual QA report is missing")
   const report = collector.final
-  const findingLines = report.findings.map((finding) =>
-    `${finding.id} [${finding.severity}/${finding.status}] ${finding.region}: ${finding.claim}`,
+  const findingLines = report.findings.map(
+    (finding) => `${finding.id} [${finding.severity}/${finding.status}] ${finding.region}: ${finding.claim}`,
   )
-  const coverageLines = report.coverage.map((coverage) =>
-    `${coverage.region}: ${coverage.viewports.length} viewport(s), ${coverage.states.length} state(s), evidence=${coverage.evidence_refs.join(", ") || "(none)"}`,
+  const coverageLines = report.coverage.map(
+    (coverage) =>
+      `${coverage.region}: ${coverage.viewports.length} viewport(s), ${coverage.states.length} state(s), evidence=${coverage.evidence_refs.join(", ") || "(none)"}`,
   )
   return {
     summary: limitSummary(report.summary),
@@ -63,11 +64,12 @@ export function createVisualQaOutputTools() {
   const tools = {
     submit_visual_qa_report: tool({
       description:
-        "Submit the final frontend UI/UX visual QA report. UI means User Interface; UX means User Experience. " +
-        "Use accepted=true only with fresh visual/runtime evidence and no open critical/major findings.",
+        "Submit the final frontend visual GUI fidelity and functional QA report. GUI means Graphical User Interface. " +
+        "Use accepted=true only with fresh visual and functional evidence and no open critical/major findings.",
       inputSchema: VisualQaReportSchema,
       execute: async (raw) => {
-        if (collector.final) return "Error: visual QA report already submitted; duplicate submit_visual_qa_report ignored."
+        if (collector.final)
+          return "Error: visual QA report already submitted; duplicate submit_visual_qa_report ignored."
         const report = VisualQaReportSchema.parse(raw)
         const issues = validateVisualQaReport(report)
         if (issues.length > 0) {

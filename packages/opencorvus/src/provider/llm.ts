@@ -56,11 +56,7 @@ export namespace ProviderLLM {
           specificationVersion: "v3",
           async transformParams(args: any) {
             if (args.type === "stream") {
-              args.params.prompt = await ProviderTransform.message(
-                args.params.prompt,
-                model,
-                options,
-              )
+              args.params.prompt = await ProviderTransform.message(args.params.prompt, model, options)
             }
             return args.params
           },

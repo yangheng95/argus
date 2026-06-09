@@ -13,12 +13,12 @@ There is no standalone PRD artifact. Requirements registered `REQ-1` for the PRD
 
 ## Grep Evidence
 
-| Surface | Call points | Decision |
-| --- | --- | --- |
-| `frontend_research_brief` | `src/research/prompt-section.ts`, `src/orchestrator/tools.ts`, `src/build/prompt-context.ts`, `src/prompt/core/frontend-research-core.txt`, research tests | Keep as advisory investigation packet input. Do not make frontend-research the PRD writer. |
-| Explicit PRD document requests | `src/prompt/core/requirements-core.txt`, `src/prompt/core/architect-core.txt`, `src/prompt/core/build-core.txt`, prompt hygiene tests | Requirements must preserve a PRD artifact requirement when the user asks for one; Architect must assign that artifact to a Build goal. Build already knows how to write PRDs. |
-| `PRD/frontend_design` weighting | `requirements-core.txt`, `architect-core.txt`, `build/agent.ts`, prompt tests | Keep weighting, but clarify it is implementation authority only, not proof that a requested PRD file exists. |
-| Demo evidence | `.opencorvus/runtime/tasks/tsk_e92e3bbeb001/frontend-research/.../research-bundle.md`, `decision-log.md`, `sessions/.../trace.jsonl` | Confirms the PRD collapsed to outline/coverage data plus implementation reports. |
+| Surface                         | Call points                                                                                                                                                | Decision                                                                                                                                                                      |
+| ------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `frontend_research_brief`       | `src/research/prompt-section.ts`, `src/orchestrator/tools.ts`, `src/build/prompt-context.ts`, `src/prompt/core/frontend-research-core.txt`, research tests | Keep as advisory investigation packet input. Do not make frontend-research the PRD writer.                                                                                    |
+| Explicit PRD document requests  | `src/prompt/core/requirements-core.txt`, `src/prompt/core/architect-core.txt`, `src/prompt/core/build-core.txt`, prompt hygiene tests                      | Requirements must preserve a PRD artifact requirement when the user asks for one; Architect must assign that artifact to a Build goal. Build already knows how to write PRDs. |
+| `PRD/frontend_design` weighting | `requirements-core.txt`, `architect-core.txt`, `build/agent.ts`, prompt tests                                                                              | Keep weighting, but clarify it is implementation authority only, not proof that a requested PRD file exists.                                                                  |
+| Demo evidence                   | `.opencorvus/runtime/tasks/tsk_e92e3bbeb001/frontend-research/.../research-bundle.md`, `decision-log.md`, `sessions/.../trace.jsonl`                       | Confirms the PRD collapsed to outline/coverage data plus implementation reports.                                                                                              |
 
 ## Fix
 

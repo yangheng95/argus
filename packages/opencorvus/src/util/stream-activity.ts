@@ -79,10 +79,7 @@ export interface StreamActivityOptions {
  * AbortError. Cleans up the upstream iterator via `iter.return?.()` so
  * provider-side resources (response body, fetch socket) get released.
  */
-export async function* abortableIterable<T>(
-  source: AsyncIterable<T>,
-  signal: AbortSignal,
-): AsyncGenerator<T> {
+export async function* abortableIterable<T>(source: AsyncIterable<T>, signal: AbortSignal): AsyncGenerator<T> {
   const iter = source[Symbol.asyncIterator]()
   try {
     while (true) {
@@ -101,7 +98,11 @@ export async function* abortableIterable<T>(
       }
     }
   } finally {
-    try { await iter.return?.() } catch { /* upstream already torn down */ }
+    try {
+      await iter.return?.()
+    } catch {
+      /* upstream already torn down */
+    }
   }
 }
 
@@ -127,9 +128,7 @@ export function withStreamActivity(options: StreamActivityOptions): StreamActivi
   const trip = () => {
     if (disposed) return
     if (inactivity.signal.aborted) return
-    inactivity.abort(
-      new DOMException(`stream idle > ${options.idleMs}ms (${label})`, "AbortError"),
-    )
+    inactivity.abort(new DOMException(`stream idle > ${options.idleMs}ms (${label})`, "AbortError"))
   }
 
   const clear = () => {

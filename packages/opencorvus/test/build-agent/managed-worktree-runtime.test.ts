@@ -14,18 +14,21 @@ import { tmpdir } from "../fixture/fixture"
 function seedTask(input: { projectID: string; taskID: string }) {
   const now = Date.now()
   Database.use((db) =>
-    db.insert(EngineTaskTable).values({
-      id: input.taskID,
-      project_id: input.projectID,
-      source: "test",
-      title: "build managed worktree runtime",
-      request: "verify managed worktree runtime materialization",
-      priority: "normal",
-      budget: { max_executor_groups: 1 },
-      time_created: now,
-      time_updated: now,
-      time_started: now,
-    }).run(),
+    db
+      .insert(EngineTaskTable)
+      .values({
+        id: input.taskID,
+        project_id: input.projectID,
+        source: "test",
+        title: "build managed worktree runtime",
+        request: "verify managed worktree runtime materialization",
+        priority: "normal",
+        budget: { max_executor_groups: 1 },
+        time_created: now,
+        time_updated: now,
+        time_started: now,
+      })
+      .run(),
   )
 }
 

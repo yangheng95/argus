@@ -16,6 +16,7 @@ import { ProcessSupervisor } from "../../src/shell/process-supervisor"
 import { Database } from "../../src/storage/db"
 import { EngineTaskTable } from "../../src/engine/engine.sql"
 import { findLatestBrowserPreviewTarget, findRecentBrowserPreviewTargets } from "../../src/browser-preview/persist"
+import { resolveBrowserPreviewTarget } from "../../src/browser-preview/target"
 import { resetDatabase } from "../fixture/db"
 
 const ctx = {
@@ -276,15 +277,18 @@ describe("tool.bash", () => {
         directory: tmp.path,
         fn: async () => {
           Database.use((db) =>
-            db.insert(EngineTaskTable).values({
-              id: taskID,
-              project_id: Instance.project.id,
-              title: "Preview task",
-              request: "Preview task",
-              source: "api",
-              time_created: Date.now(),
-              time_updated: Date.now(),
-            }).run(),
+            db
+              .insert(EngineTaskTable)
+              .values({
+                id: taskID,
+                project_id: Instance.project.id,
+                title: "Preview task",
+                request: "Preview task",
+                source: "api",
+                time_created: Date.now(),
+                time_updated: Date.now(),
+              })
+              .run(),
           )
 
           const restore = ProcessSupervisor.setFactoryForTest(async () => {
@@ -340,15 +344,18 @@ describe("tool.bash", () => {
         directory: tmp.path,
         fn: async () => {
           Database.use((db) =>
-            db.insert(EngineTaskTable).values({
-              id: taskID,
-              project_id: Instance.project.id,
-              title: "Preview task",
-              request: "Preview task",
-              source: "api",
-              time_created: Date.now(),
-              time_updated: Date.now(),
-            }).run(),
+            db
+              .insert(EngineTaskTable)
+              .values({
+                id: taskID,
+                project_id: Instance.project.id,
+                title: "Preview task",
+                request: "Preview task",
+                source: "api",
+                time_created: Date.now(),
+                time_updated: Date.now(),
+              })
+              .run(),
           )
 
           const restore = ProcessSupervisor.setFactoryForTest(async () => {
@@ -380,10 +387,11 @@ describe("tool.bash", () => {
               { ...ctx, extra: { taskID } },
             )
 
-            expect(findRecentBrowserPreviewTargets(taskID).map((target) => target.url).sort()).toEqual([
-              first.url,
-              second.url,
-            ].sort())
+            expect(
+              findRecentBrowserPreviewTargets(taskID)
+                .map((target) => target.url)
+                .sort(),
+            ).toEqual([first.url, second.url].sort())
           } finally {
             restore()
           }
@@ -396,7 +404,7 @@ describe("tool.bash", () => {
     }
   })
 
-  test("background process output does not persist unreachable browser preview target", async () => {
+  test("background process output candidate is hidden when the preview server is unreachable", async () => {
     await resetDatabase()
     try {
       await using tmp = await tmpdir({ git: true })
@@ -405,15 +413,18 @@ describe("tool.bash", () => {
         directory: tmp.path,
         fn: async () => {
           Database.use((db) =>
-            db.insert(EngineTaskTable).values({
-              id: taskID,
-              project_id: Instance.project.id,
-              title: "Preview task",
-              request: "Preview task",
-              source: "api",
-              time_created: Date.now(),
-              time_updated: Date.now(),
-            }).run(),
+            db
+              .insert(EngineTaskTable)
+              .values({
+                id: taskID,
+                project_id: Instance.project.id,
+                title: "Preview task",
+                request: "Preview task",
+                source: "api",
+                time_created: Date.now(),
+                time_updated: Date.now(),
+              })
+              .run(),
           )
 
           const restore = ProcessSupervisor.setFactoryForTest(async () => {
@@ -445,7 +456,10 @@ describe("tool.bash", () => {
               { ...ctx, extra: { taskID } },
             )
 
-            expect(findLatestBrowserPreviewTarget(taskID)).toBeUndefined()
+            expect(findLatestBrowserPreviewTarget(taskID)?.url).toBe("http://127.0.0.1:9/")
+            const target = await resolveBrowserPreviewTarget({ projectRoot: tmp.path, taskID })
+            expect(target.status).toBe("missing")
+            expect(target.candidates).toEqual([])
           } finally {
             restore()
           }

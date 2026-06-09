@@ -79,9 +79,11 @@ test(
           await page.setViewport({ width, height: 720 })
           await page.evaluateOnNewDocument((value) => {
             localStorage.setItem("oc_locale", value)
+            ;(window as any).__helpOpenUrls = []
+            ;(window as any).__devtoolsToggleCount = 0
             window.__TAURI__ = {
               core: {
-                invoke: async (command: string) => {
+                invoke: async (command: string, args: Record<string, unknown> = {}) => {
                   if (command === "overlay_settings_load") {
                     return {
                       serverUrl: location.origin,
@@ -92,6 +94,14 @@ test(
                   }
                   if (command === "overlay_server_info") {
                     return { url: location.origin, pid: 12345 }
+                  }
+                  if (command === "overlay_open_url") {
+                    ;(window as any).__helpOpenUrls.push(String(args.url || ""))
+                    return true
+                  }
+                  if (command === "overlay_toggle_devtools") {
+                    ;(window as any).__devtoolsToggleCount += 1
+                    return true
                   }
                   if (command === "overlay_settings_save") return true
                   if (command === "overlay_create_temp_dir") return "D:/overlay/temp"
@@ -196,9 +206,9 @@ test(
           expect(geometry.triggers).not.toContain("agent")
           expect(geometry.triggers).toContain("provider")
           expect(geometry.triggers).toContain("tools")
-          expect(geometry.triggers).toContain("skill")
-          expect(geometry.triggers).toContain("mcp")
-          expect(geometry.triggers).toContain("memory")
+          expect(geometry.triggers).not.toContain("skill")
+          expect(geometry.triggers).not.toContain("mcp")
+          expect(geometry.triggers).not.toContain("memory")
           expect(geometry.triggers).toContain("settings")
           expect(geometry.outOfBounds).toEqual([])
           expect(geometry.overlaps).toEqual([])
@@ -207,18 +217,7 @@ test(
           expect(geometry.badgeTitle).toContain(String(server.port))
           expect(geometry.badgeTitle).toContain("12345")
           expect(geometry.titlebarHeight).toBeGreaterThan(24)
-          for (const menu of [
-            "workspace",
-            "provider",
-            "run",
-            "tools",
-            "skill",
-            "mcp",
-            "memory",
-            "settings",
-            "view",
-            "help",
-          ]) {
+          for (const menu of ["workspace", "provider", "run", "tools", "settings", "view", "help"]) {
             await page.click(`[data-menu-trigger="${menu}"]`)
             await page.waitForSelector(`[data-testid="titlebar-menu-${menu}"]`, { visible: true })
             const panelBounds = await page.$eval(`[data-testid="titlebar-menu-${menu}"]`, (node) => {
@@ -248,8 +247,44 @@ test(
             )
           }
           await page.click('[data-menu-trigger="help"]')
-          await page.waitForSelector('[data-testid="titlebar-connection-diagnostics"]', { visible: true })
-          await page.click('[data-testid="titlebar-connection-diagnostics"]')
+          await page.waitForSelector('[data-testid="titlebar-help-about"]', { visible: true })
+          const helpContract = await page.$eval('[data-testid="titlebar-menu-help"]', (node) => {
+            const labels = Array.from(node.querySelectorAll<HTMLElement>('[role="menuitem"]')).map((item) => ({
+              testid: item.dataset.testid || "",
+              text: item.textContent || "",
+              title: item.getAttribute("title") || "",
+              ariaLabel: item.getAttribute("aria-label") || "",
+            }))
+            return {
+              labels,
+              hasRefresh: labels.some((item) => item.text.includes("Refresh") || item.text.includes("刷新")),
+              hasLogs: labels.some((item) => item.testid === "titlebar-help-logs"),
+              hasDiagnostics: labels.some((item) => item.testid === "titlebar-connection-diagnostics"),
+            }
+          })
+          expect(helpContract.hasRefresh).toBe(false)
+          expect(helpContract.hasLogs).toBe(false)
+          expect(helpContract.hasDiagnostics).toBe(false)
+          expect(helpContract.labels.map((item) => item.testid)).toEqual([
+            "titlebar-help-docs",
+            "titlebar-help-sdk",
+            "titlebar-help-devtools",
+            "titlebar-help-about",
+          ])
+          expect(helpContract.labels.every((item) => item.title && item.ariaLabel)).toBe(true)
+          await page.click('[data-testid="titlebar-help-docs"]')
+          await page.waitForFunction(() => (window as any).__helpOpenUrls.length === 1)
+          await page.click('[data-menu-trigger="help"]')
+          await page.waitForSelector('[data-testid="titlebar-help-sdk"]', { visible: true })
+          await page.click('[data-testid="titlebar-help-sdk"]')
+          await page.waitForFunction(() => (window as any).__helpOpenUrls.length === 2)
+          await page.click('[data-menu-trigger="help"]')
+          await page.waitForSelector('[data-testid="titlebar-help-devtools"]', { visible: true })
+          await page.click('[data-testid="titlebar-help-devtools"]')
+          await page.waitForFunction(() => (window as any).__devtoolsToggleCount === 1)
+          await page.click('[data-menu-trigger="help"]')
+          await page.waitForSelector('[data-testid="titlebar-help-about"]', { visible: true })
+          await page.click('[data-testid="titlebar-help-about"]')
           await page.waitForFunction(
             () =>
               (document.querySelector("#configDialog") as HTMLDialogElement | null)?.open === true &&
@@ -260,6 +295,12 @@ test(
           await page.waitForFunction(
             () => (document.querySelector("#configDialog") as HTMLDialogElement | null)?.open !== true,
           )
+          const openedUrls = await page.evaluate(() => (window as any).__helpOpenUrls as string[])
+          const localePrefix = locale === "zh-CN" ? "/docs/zh-cn/" : "/docs/"
+          expect(openedUrls).toEqual([
+            `https://opencorvus.ai${localePrefix}start/quickstart/`,
+            `https://opencorvus.ai${localePrefix}reference/sdk/`,
+          ])
           await page.close()
         }
       }
@@ -536,11 +577,15 @@ test(
       const intro = await page.evaluate(() => {
         const dialog = document.querySelector<HTMLElement>('[data-testid="workspace-onboarding-dialog"]')
         const openFolder = document.querySelector<HTMLElement>('[data-testid="workspace-onboarding-open-folder"]')
-        const createDirectory = document.querySelector<HTMLElement>('[data-testid="workspace-onboarding-create-directory"]')
         const title = document.querySelector<HTMLElement>(".workspace-onboarding-titleblock")
+        const removedCreateEntry = document.querySelector<HTMLElement>(
+          '[data-testid="workspace-onboarding-create-directory"]',
+        )
         const brandWordmark = document.querySelector<HTMLElement>(".brand-guide-wordmark")
         const brandLabel = document.querySelector<HTMLElement>(".brand-guide-label")
-        const rightActivities = Array.from(document.querySelectorAll<HTMLElement>('[data-ui="side-activity-button"][data-side="right"]')).map((node) => ({
+        const rightActivities = Array.from(
+          document.querySelectorAll<HTMLElement>('[data-ui="side-activity-button"][data-side="right"]'),
+        ).map((node) => ({
           activity: node.dataset.activity || "",
           active: node.dataset.active,
         }))
@@ -548,7 +593,7 @@ test(
         return {
           hasStartup: !!dialog,
           openFolderText: openFolder?.textContent || "",
-          createDirectoryText: createDirectory?.textContent || "",
+          hasCreateDirectory: !!removedCreateEntry,
           title: title?.textContent || "",
           brandWordmark: brandWordmark?.textContent || "",
           brandLabel: brandLabel?.textContent || "",
@@ -559,18 +604,17 @@ test(
       expect(intro.hasStartup).toBe(true)
       expect(intro.pickDirInvokes).toBe(0)
       expect(intro.openFolderText).toContain("Open Local Directory")
-      expect(intro.createDirectoryText).toContain("Create New Directory")
+      expect(intro.hasCreateDirectory).toBe(false)
       expect(intro.title).toContain("Open a workspace directory")
       expect(intro.brandWordmark).toBe("OpenCorvus")
       expect(intro.brandLabel).toBe("Workspace")
       expect(intro.rightActivities).toEqual([
         { activity: "workflow", active: "true" },
         { activity: "inspector", active: "false" },
-        { activity: "notifications", active: "false" },
         { activity: "explorer", active: "false" },
         { activity: "diff", active: "false" },
         { activity: "browser", active: "false" },
-        { activity: "assistant", active: "false" },
+        { activity: "notifications", active: "false" },
       ])
       await page.close()
     } finally {
@@ -948,7 +992,11 @@ test(
             props: ["rowGap", "paddingTop", "paddingRight", "paddingBottom", "paddingLeft"],
             max: 7,
           },
-          { selector: '[data-ui="side-activity-button"][data-side="right"]', props: ["height", "paddingLeft", "paddingRight"], max: 40 },
+          {
+            selector: '[data-ui="side-activity-button"][data-side="right"]',
+            props: ["height", "paddingLeft", "paddingRight"],
+            max: 40,
+          },
           {
             selector: ".board-intro",
             props: ["rowGap", "paddingTop", "paddingRight", "paddingBottom", "paddingLeft"],
@@ -1063,7 +1111,10 @@ test(
           rightDivider: toolbar.left - workbench.right,
           workbenchStartsAtWorkspace: Math.abs(workbench.left - workspace.left) <= 1,
           centerInspectorActive: document.querySelector<HTMLElement>("#centerWorkbenchInspector")?.dataset.active || "",
-          inspectorButtonActive: document.querySelector<HTMLElement>('[data-ui="side-activity-button"][data-side="right"][data-activity="inspector"]')?.dataset.active || "",
+          inspectorButtonActive:
+            document.querySelector<HTMLElement>(
+              '[data-ui="side-activity-button"][data-side="right"][data-activity="inspector"]',
+            )?.dataset.active || "",
           leftHandleWidth: left.width,
           rightPaneResizerExists: !!document.querySelector("#rightPaneResizer"),
         }

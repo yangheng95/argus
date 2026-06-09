@@ -1,55 +1,55 @@
-import { For, Show, createMemo, createSignal } from "solid-js";
-import { loadTasks } from "../store/board";
+import { For, Show, createMemo, createSignal } from "solid-js"
+import { loadTasks } from "../store/board"
 import {
   centerHistoryNotificationItems,
   dismissNotification,
   notificationTaskTitle,
   visibleNotificationItems,
   type AppNotificationItem,
-} from "../services/notify";
-import { selectTask } from "../services/task";
-import { t } from "../utils/i18n";
-import { Icon } from "./Icon";
-import { Button } from "./ui/Button";
+} from "../services/notify"
+import { selectTask } from "../services/task"
+import { t } from "../utils/i18n"
+import { Icon } from "./Icon"
+import { Button } from "./ui/Button"
 
-type NotificationSurface = "toast" | "panel";
+type NotificationSurface = "toast" | "panel"
 
 interface NotificationCenterProps {
-  surface?: NotificationSurface;
+  surface?: NotificationSurface
 }
 
 interface NotificationGroup {
-  key: string;
-  title: string;
-  items: AppNotificationItem[];
+  key: string
+  title: string
+  items: AppNotificationItem[]
 }
 
 function toneLabel(tone: string): string {
-  if (tone === "success") return "Success";
-  if (tone === "warning") return "Warning";
-  if (tone === "error") return "Error";
-  if (tone === "progress") return "Progress";
-  return "Info";
+  if (tone === "success") return "Success"
+  if (tone === "warning") return "Warning"
+  if (tone === "error") return "Error"
+  if (tone === "progress") return "Progress"
+  return "Info"
 }
 
 export async function activateTaskNotification(item: AppNotificationItem): Promise<void> {
-  if (!item.taskID) return;
-  await selectTask(item.taskID);
-  await loadTasks();
-  dismissNotification(item.id);
+  if (!item.taskID) return
+  await selectTask(item.taskID)
+  await loadTasks()
+  dismissNotification(item.id)
 }
 
 function NotificationDetails(props: { details: string }) {
-  const [expanded, setExpanded] = createSignal(false);
-  const [copied, setCopied] = createSignal(false);
+  const [expanded, setExpanded] = createSignal(false)
+  const [copied, setCopied] = createSignal(false)
   async function copyDetails(event: MouseEvent): Promise<void> {
-    event.stopPropagation();
+    event.stopPropagation()
     try {
-      await navigator.clipboard.writeText(props.details);
-      setCopied(true);
-      window.setTimeout(() => setCopied(false), 1500);
+      await navigator.clipboard.writeText(props.details)
+      setCopied(true)
+      window.setTimeout(() => setCopied(false), 1500)
     } catch (err) {
-      console.warn("[notify] copy details failed", err);
+      console.warn("[notify] copy details failed", err)
     }
   }
   return (
@@ -63,8 +63,8 @@ function NotificationDetails(props: { details: string }) {
           data-ui="app-notification-details-toggle"
           aria-expanded={expanded()}
           onClick={(event) => {
-            event.stopPropagation();
-            setExpanded(!expanded());
+            event.stopPropagation()
+            setExpanded(!expanded())
           }}
         >
           {expanded() ? t("notify.hide_details") : t("notify.show_details")}
@@ -84,27 +84,27 @@ function NotificationDetails(props: { details: string }) {
         <pre class="app-notification__details-body">{props.details}</pre>
       </Show>
     </div>
-  );
+  )
 }
 
 function groupByTask(items: AppNotificationItem[]): NotificationGroup[] {
-  const groups: NotificationGroup[] = [];
-  const indexByKey = new Map<string, number>();
+  const groups: NotificationGroup[] = []
+  const indexByKey = new Map<string, number>()
   for (const item of items) {
-    const key = item.taskID || "system";
-    let index = indexByKey.get(key);
+    const key = item.taskID || "system"
+    let index = indexByKey.get(key)
     if (index === undefined) {
-      index = groups.length;
-      indexByKey.set(key, index);
+      index = groups.length
+      indexByKey.set(key, index)
       groups.push({
         key,
         title: item.taskID ? notificationTaskTitle(item.taskID) : t("notify.system_group"),
         items: [],
-      });
+      })
     }
-    groups[index]!.items.push(item);
+    groups[index]!.items.push(item)
   }
-  return groups;
+  return groups
 }
 
 function NotificationItem(props: { item: AppNotificationItem; surface: NotificationSurface }) {
@@ -121,10 +121,10 @@ function NotificationItem(props: { item: AppNotificationItem; surface: Notificat
       tabIndex={props.item.taskID ? 0 : undefined}
       onClick={() => void activateTaskNotification(props.item)}
       onKeyDown={(event) => {
-        if (!props.item.taskID) return;
-        if (event.key !== "Enter" && event.key !== " ") return;
-        event.preventDefault();
-        void activateTaskNotification(props.item);
+        if (!props.item.taskID) return
+        if (event.key !== "Enter" && event.key !== " ") return
+        event.preventDefault()
+        void activateTaskNotification(props.item)
       }}
     >
       <div class="app-notification__mark" aria-hidden="true">
@@ -152,21 +152,23 @@ function NotificationItem(props: { item: AppNotificationItem; surface: Notificat
           title={t("notify.dismiss")}
           aria-label={t("notify.dismiss")}
           onClick={(event) => {
-            event.stopPropagation();
-            dismissNotification(props.item.id);
+            event.stopPropagation()
+            dismissNotification(props.item.id)
           }}
         >
           <Icon name="close" size={12} />
         </Button>
       </Show>
     </section>
-  );
+  )
 }
 
 export function NotificationCenter(props: NotificationCenterProps) {
-  const surface = () => props.surface ?? "toast";
-  const items = createMemo(() => surface() === "toast" ? visibleNotificationItems() : centerHistoryNotificationItems());
-  const groups = createMemo(() => groupByTask(items()));
+  const surface = () => props.surface ?? "toast"
+  const items = createMemo(() =>
+    surface() === "toast" ? visibleNotificationItems() : centerHistoryNotificationItems(),
+  )
+  const groups = createMemo(() => groupByTask(items()))
 
   return (
     <div
@@ -189,11 +191,7 @@ export function NotificationCenter(props: NotificationCenterProps) {
       >
         <Show
           when={surface() === "panel"}
-          fallback={
-            <For each={items()}>
-              {(item) => <NotificationItem item={item} surface={surface()} />}
-            </For>
-          }
+          fallback={<For each={items()}>{(item) => <NotificationItem item={item} surface={surface()} />}</For>}
         >
           <For each={groups()}>
             {(group) => (
@@ -203,9 +201,7 @@ export function NotificationCenter(props: NotificationCenterProps) {
                   <span class="app-notification-group__count">{group.items.length}</span>
                 </header>
                 <div class="app-notification-group__items">
-                  <For each={group.items}>
-                    {(item) => <NotificationItem item={item} surface={surface()} />}
-                  </For>
+                  <For each={group.items}>{(item) => <NotificationItem item={item} surface={surface()} />}</For>
                 </div>
               </section>
             )}
@@ -213,5 +209,5 @@ export function NotificationCenter(props: NotificationCenterProps) {
         </Show>
       </Show>
     </div>
-  );
+  )
 }

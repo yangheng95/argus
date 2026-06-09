@@ -4,10 +4,7 @@ import { join } from "node:path"
 
 import { stageAccent } from "../src/utils/card-color"
 
-const CARD_CSS = readFileSync(
-  join(import.meta.dir, "..", "src", "styles", "surfaces", "card.css"),
-  "utf8",
-)
+const CARD_CSS = readFileSync(join(import.meta.dir, "..", "src", "styles", "surfaces", "card.css"), "utf8")
 
 const KNOWN_STAGES = [
   "user",
@@ -52,9 +49,7 @@ describe("card stage tokens", () => {
     // alone and don't need fallbacks (they only run when the shorthand
     // already painted a rail).
     const railLines = CARD_CSS.split(/\r?\n/).filter(
-      (line) =>
-        /border-left\s*:/.test(line) &&
-        /var\(--card-stage[^-]/.test(line),
+      (line) => /border-left\s*:/.test(line) && /var\(--card-stage[^-]/.test(line),
     )
     expect(railLines.length).toBeGreaterThan(0)
     for (const line of railLines) {

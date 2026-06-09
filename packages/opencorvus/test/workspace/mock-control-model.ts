@@ -299,37 +299,31 @@ function structured(part: LanguageModelV3ToolResultPart) {
   const raw = part.output.type.endsWith("json")
     ? part.output.value
     : typeof part.output.value === "string"
-      ? parse(part.output.value) ?? {
+      ? (parse(part.output.value) ?? {
           kind: "panel_response",
           message: part.output.value,
-        }
+        })
       : {
           kind: "panel_response",
           message: String(part.output.value),
         }
-  return object(raw) ?? {
-    kind: "panel_response",
-    message: "Control action completed.",
-  }
+  return (
+    object(raw) ?? {
+      kind: "panel_response",
+      message: "Control action completed.",
+    }
+  )
 }
 
 function userInput(prompt: LanguageModelV3Prompt) {
-  const item = [...prompt]
-    .reverse()
-    .find((entry) => entry.role === "user")
-  const parts = !item
-    ? []
-    : item.content
-        .filter((part) => part.type === "text")
-        .map((part) => part.text)
-  const textValue = parts.length === 0
-    ? ""
-    : parts.join("\n")
-  const parsed = [...parts]
-    .reverse()
-    .map(parse)
-    .find((value) => !!object(value))
-    ?? parse(textValue)
+  const item = [...prompt].reverse().find((entry) => entry.role === "user")
+  const parts = !item ? [] : item.content.filter((part) => part.type === "text").map((part) => part.text)
+  const textValue = parts.length === 0 ? "" : parts.join("\n")
+  const parsed =
+    [...parts]
+      .reverse()
+      .map(parse)
+      .find((value) => !!object(value)) ?? parse(textValue)
   return object(parsed) ?? { text: textValue }
 }
 

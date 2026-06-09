@@ -27,8 +27,10 @@ function extractFileRefs(request: string): string[] {
 }
 
 function extractRequirements(request: string): string[] {
-  const CN_ACTION_PAT = /^(?:添加|修改|删除|创建|导出|导入|确保|实现|重构|优化|移除|更新|替换|支持|使用|配置|设置|检查|启用|禁用)/
-  const EN_ACTION_PAT = /^(?:add|create|modify|delete|remove|implement|ensure|replace|fix|refactor|export|import|enable|disable|configure|check|support)\s/i
+  const CN_ACTION_PAT =
+    /^(?:添加|修改|删除|创建|导出|导入|确保|实现|重构|优化|移除|更新|替换|支持|使用|配置|设置|检查|启用|禁用)/
+  const EN_ACTION_PAT =
+    /^(?:add|create|modify|delete|remove|implement|ensure|replace|fix|refactor|export|import|enable|disable|configure|check|support)\s/i
   const requirements: string[] = []
   for (const line of request.split("\n")) {
     const trimmed = line.trim()
@@ -51,12 +53,7 @@ function extractWorkDir(request: string): string | undefined {
   return cwdMatch ? cwdMatch[1].replace(/[/\\]+$/, "") : undefined
 }
 
-function buildSmartSteps(
-  analysis: {
-    files: Array<{ ref: string }>
-    requirements: string[]
-  },
-): string[] {
+function buildSmartSteps(analysis: { files: Array<{ ref: string }>; requirements: string[] }): string[] {
   if (analysis.files.length === 0 && analysis.requirements.length === 0) {
     return [
       "Explore the codebase to understand architecture, conventions, and affected areas.",

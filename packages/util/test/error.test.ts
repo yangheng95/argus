@@ -16,15 +16,9 @@ import { NamedError } from "../src/error"
  */
 
 describe("NamedError", () => {
-  const SampleError = NamedError.create(
-    "SampleError",
-    z.object({ message: z.string() }),
-  )
+  const SampleError = NamedError.create("SampleError", z.object({ message: z.string() }))
 
-  const MultiFieldError = NamedError.create(
-    "MultiFieldError",
-    z.object({ code: z.number(), reason: z.string() }),
-  )
+  const MultiFieldError = NamedError.create("MultiFieldError", z.object({ code: z.number(), reason: z.string() }))
 
   test("Error.message includes data.message when schema has a message field", () => {
     const err = new SampleError({ message: "head missing" })

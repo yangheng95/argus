@@ -121,5 +121,4 @@ body[data-theme="vscode-dark"] {
   --panel-fill-hover: var(--surface-hover);
   --card-fill: rgba(45, 45, 48, 0.72);
   --card-fill-hover: var(--surface-hover);
-
 }

@@ -31,14 +31,16 @@ async function seedRootSession(sessionID: string, text = "initial request") {
   }
   await Session.persistMessage({
     info,
-    parts: [{
-      id: Identifier.ascending("part"),
-      messageID: info.id,
-      sessionID,
-      type: "text",
-      text,
-      kind: "user_content",
-    }],
+    parts: [
+      {
+        id: Identifier.ascending("part"),
+        messageID: info.id,
+        sessionID,
+        type: "text",
+        text,
+        kind: "user_content",
+      },
+    ],
     touchSessionID: sessionID,
   })
 }
@@ -48,6 +50,75 @@ describe("task message routes", () => {
     mock.restore()
     ExecutorRegistry.reset()
     await resetDatabase()
+  })
+
+  test("GET /task/:taskID/operator-model-context mirrors task message agent model resolution", async () => {
+    await using tmp = await tmpdir({
+      git: true,
+      config: {
+        model: "test/base",
+        agent: {
+          orchestrator: {
+            model: "test/orchestrator",
+          },
+        },
+      },
+    })
+
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const app = Server.App()
+        const taskID = Identifier.ascending("task")
+        const now = Date.now()
+        const root = await Session.create({ kind: "root", title: "model context" })
+        await seedRootSession(root.id)
+
+        Database.use((db) =>
+          db
+            .insert(EngineTaskTable)
+            .values({
+              id: taskID,
+              project_id: Instance.project.id,
+              session_id: root.id,
+              source: "panel",
+              title: "model context",
+              request: "model context",
+              priority: "normal",
+              time_created: now,
+              time_updated: now,
+              time_started: now,
+            })
+            .run(),
+        )
+
+        const response = await app.request(`/task/${taskID}/operator-model-context`, {
+          headers: {
+            "x-opencorvus-directory": tmp.path,
+          },
+        })
+
+        expect(response.status).toBe(200)
+        const body = (await response.json()) as {
+          taskID: string
+          sessionID: string
+          agent: string
+          model: {
+            providerID: string
+            modelID: string
+          }
+        }
+        expect(body).toEqual({
+          taskID,
+          sessionID: root.id,
+          agent: "orchestrator",
+          model: {
+            providerID: "test",
+            modelID: "orchestrator",
+          },
+        })
+      },
+    })
   })
 
   test("POST /task/:taskID/message triggers scheduler with natural language", async () => {
@@ -64,18 +135,21 @@ describe("task message routes", () => {
         await seedRootSession(root.id)
 
         Database.use((db) =>
-          db.insert(EngineTaskTable).values({
-            id: taskID,
-            project_id: Instance.project.id,
-            session_id: root.id,
-            source: "panel",
-            title: "retry through message",
-            request: "retry through message",
-            priority: "normal",
-            time_created: now,
-            time_updated: now,
-            time_started: now,
-          }).run(),
+          db
+            .insert(EngineTaskTable)
+            .values({
+              id: taskID,
+              project_id: Instance.project.id,
+              session_id: root.id,
+              source: "panel",
+              title: "retry through message",
+              request: "retry through message",
+              priority: "normal",
+              time_created: now,
+              time_updated: now,
+              time_started: now,
+            })
+            .run(),
         )
 
         const response = await app.request(`/task/${taskID}/message`, {
@@ -91,7 +165,7 @@ describe("task message routes", () => {
         })
 
         expect(response.status).toBe(200)
-        const body = await response.json() as {
+        const body = (await response.json()) as {
           kind: string
           message: string
           should_resume: boolean
@@ -131,10 +205,14 @@ describe("task message routes", () => {
         // V35: row state is no longer "failed" (we seeded an active
         // task) — assertion on "row stays failed" is dropped.
         const row = Database.use((db) =>
-          db.select({
-            time_completed: EngineTaskTable.time_completed,
-            error: EngineTaskTable.error,
-          }).from(EngineTaskTable).where(eq(EngineTaskTable.id, taskID)).get(),
+          db
+            .select({
+              time_completed: EngineTaskTable.time_completed,
+              error: EngineTaskTable.error,
+            })
+            .from(EngineTaskTable)
+            .where(eq(EngineTaskTable.id, taskID))
+            .get(),
         )
         expect(row?.error).toBeNull()
         const persisted = await Session.messages({ sessionID: root.id })
@@ -149,7 +227,7 @@ describe("task message routes", () => {
     })
   })
 
-  test("POST /task/:taskID/message records on a failed task without reopening it", async () => {
+  test("POST /task/:taskID/message reopens a failed task and wakes the orchestrator", async () => {
     await using tmp = await tmpdir({ git: true, config: routeTestConfig })
 
     await Instance.provide({
@@ -164,21 +242,24 @@ describe("task message routes", () => {
         await seedRootSession(root.id)
 
         Database.use((db) =>
-          db.insert(EngineTaskTable).values({
-            id: taskID,
-            project_id: Instance.project.id,
-            session_id: root.id,
-            source: "panel",
-            title: "failed task",
-            request: "failed task",
-            priority: "normal",
-            time_created: now,
-            time_updated: now,
-            time_started: now,
-            time_completed: completedAt,
-            error: "previous failure",
-            metadata: { decision_log: ["keep-me"] },
-          }).run(),
+          db
+            .insert(EngineTaskTable)
+            .values({
+              id: taskID,
+              project_id: Instance.project.id,
+              session_id: root.id,
+              source: "panel",
+              title: "failed task",
+              request: "failed task",
+              priority: "normal",
+              time_created: now,
+              time_updated: now,
+              time_started: now,
+              time_completed: completedAt,
+              error: "previous failure",
+              metadata: { decision_log: ["keep-me"] },
+            })
+            .run(),
         )
 
         const response = await app.request(`/task/${taskID}/message`, {
@@ -194,19 +275,17 @@ describe("task message routes", () => {
         })
 
         expect(response.status).toBe(200)
-        const body = await response.json() as { kind: string; should_resume: boolean }
+        const body = (await response.json()) as { kind: string; should_resume: boolean }
         await new Promise((resolve) => setTimeout(resolve, 0))
         expect(body.kind).toBe("note")
-        expect(body.should_resume).toBe(false)
-        expect(dispatchTaskLoop).not.toHaveBeenCalled()
+        expect(body.should_resume).toBe(true)
+        expect(dispatchTaskLoop).toHaveBeenCalledTimes(1)
 
-        const row = Database.use((db) =>
-          db.select().from(EngineTaskTable).where(eq(EngineTaskTable.id, taskID)).get(),
-        )
+        const row = Database.use((db) => db.select().from(EngineTaskTable).where(eq(EngineTaskTable.id, taskID)).get())
         expect(row).toBeDefined()
-        expect(row ? deriveTaskStatus(row) : undefined).toBe("failed")
-        expect(row?.time_completed).toBe(completedAt)
-        expect(row?.error).toBe("previous failure")
+        expect(row ? deriveTaskStatus(row) : undefined).toBe("queued")
+        expect(row?.time_completed).toBeNull()
+        expect(row?.error).toBeNull()
         expect((row?.metadata as { decision_log?: string[] } | null)?.decision_log).toEqual(["keep-me"])
       },
     })
@@ -226,21 +305,24 @@ describe("task message routes", () => {
         await seedRootSession(root.id)
 
         Database.use((db) =>
-          db.insert(EngineTaskTable).values({
-            id: taskID,
-            project_id: Instance.project.id,
-            session_id: root.id,
-            source: "panel",
-            title: "resume envelope",
-            request: "resume envelope",
-            priority: "normal",
-            time_created: now,
-            time_updated: now,
-            time_started: now,
-            time_completed: now + 1,
-            error: "task cancelled",
-            metadata: { cancelled: true, decision_log: ["keep-me"] },
-          }).run(),
+          db
+            .insert(EngineTaskTable)
+            .values({
+              id: taskID,
+              project_id: Instance.project.id,
+              session_id: root.id,
+              source: "panel",
+              title: "resume envelope",
+              request: "resume envelope",
+              priority: "normal",
+              time_created: now,
+              time_updated: now,
+              time_started: now,
+              time_completed: now + 1,
+              error: "task cancelled",
+              metadata: { cancelled: true, decision_log: ["keep-me"] },
+            })
+            .run(),
         )
 
         const response = await app.request(`/task/${taskID}/message`, {
@@ -258,15 +340,13 @@ describe("task message routes", () => {
         })
 
         expect(response.status).toBe(200)
-        const body = await response.json() as { kind: string; should_resume: boolean }
+        const body = (await response.json()) as { kind: string; should_resume: boolean }
         await new Promise((resolve) => setTimeout(resolve, 0))
         expect(body.kind).toBe("note")
         expect(body.should_resume).toBe(false)
         expect(dispatchTaskLoop).not.toHaveBeenCalled()
 
-        const row = Database.use((db) =>
-          db.select().from(EngineTaskTable).where(eq(EngineTaskTable.id, taskID)).get(),
-        )
+        const row = Database.use((db) => db.select().from(EngineTaskTable).where(eq(EngineTaskTable.id, taskID)).get())
         expect(row ? deriveTaskStatus(row) : undefined).toBe("cancelled")
         expect((row?.metadata as { decision_log?: string[] } | null)?.decision_log).toEqual(["keep-me"])
         expect((row?.metadata as { cancelled?: boolean } | null)?.cancelled).toBe(true)
@@ -288,21 +368,24 @@ describe("task message routes", () => {
         await seedRootSession(root.id)
 
         Database.use((db) =>
-          db.insert(EngineTaskTable).values({
-            id: taskID,
-            project_id: Instance.project.id,
-            session_id: root.id,
-            source: "panel",
-            title: "cancelled task",
-            request: "cancelled task",
-            priority: "normal",
-            time_created: now,
-            time_updated: now,
-            time_started: now,
-            time_completed: now + 1,
-            error: "task cancelled",
-            metadata: { cancelled: true, decision_log: ["keep-me"] },
-          }).run(),
+          db
+            .insert(EngineTaskTable)
+            .values({
+              id: taskID,
+              project_id: Instance.project.id,
+              session_id: root.id,
+              source: "panel",
+              title: "cancelled task",
+              request: "cancelled task",
+              priority: "normal",
+              time_created: now,
+              time_updated: now,
+              time_started: now,
+              time_completed: now + 1,
+              error: "task cancelled",
+              metadata: { cancelled: true, decision_log: ["keep-me"] },
+            })
+            .run(),
         )
 
         const response = await app.request(`/task/${taskID}/message`, {
@@ -318,15 +401,13 @@ describe("task message routes", () => {
         })
 
         expect(response.status).toBe(200)
-        const body = await response.json() as { kind: string; should_resume: boolean }
+        const body = (await response.json()) as { kind: string; should_resume: boolean }
         await new Promise((resolve) => setTimeout(resolve, 0))
         expect(body.kind).toBe("note")
         expect(body.should_resume).toBe(false)
         expect(dispatchTaskLoop).not.toHaveBeenCalled()
 
-        const row = Database.use((db) =>
-          db.select().from(EngineTaskTable).where(eq(EngineTaskTable.id, taskID)).get(),
-        )
+        const row = Database.use((db) => db.select().from(EngineTaskTable).where(eq(EngineTaskTable.id, taskID)).get())
         expect(row ? deriveTaskStatus(row) : undefined).toBe("cancelled")
         expect(row?.time_completed).not.toBeNull()
         expect(row?.error).toBe("task cancelled")
@@ -336,7 +417,7 @@ describe("task message routes", () => {
     })
   })
 
-  test("POST /task/:taskID/message records on a completed task without reopening it", async () => {
+  test("POST /task/:taskID/message reopens a completed task and wakes the orchestrator", async () => {
     await using tmp = await tmpdir({ git: true, config: routeTestConfig })
 
     await Instance.provide({
@@ -350,20 +431,23 @@ describe("task message routes", () => {
         await seedRootSession(root.id)
 
         Database.use((db) =>
-          db.insert(EngineTaskTable).values({
-            id: taskID,
-            project_id: Instance.project.id,
-            session_id: root.id,
-            source: "panel",
-            title: "completed task",
-            request: "completed task",
-            priority: "normal",
-            time_created: now,
-            time_updated: now,
-            time_started: now,
-            time_completed: now + 1,
-            metadata: { decision_log: ["keep-me"] },
-          }).run(),
+          db
+            .insert(EngineTaskTable)
+            .values({
+              id: taskID,
+              project_id: Instance.project.id,
+              session_id: root.id,
+              source: "panel",
+              title: "completed task",
+              request: "completed task",
+              priority: "normal",
+              time_created: now,
+              time_updated: now,
+              time_started: now,
+              time_completed: now + 1,
+              metadata: { decision_log: ["keep-me"] },
+            })
+            .run(),
         )
 
         const response = await app.request(`/task/${taskID}/message`, {
@@ -379,17 +463,16 @@ describe("task message routes", () => {
         })
 
         expect(response.status).toBe(200)
-        const body = await response.json() as { kind: string; should_resume: boolean }
+        const body = (await response.json()) as { kind: string; should_resume: boolean }
         await new Promise((resolve) => setTimeout(resolve, 0))
         expect(body.kind).toBe("note")
-        expect(body.should_resume).toBe(false)
-        expect(dispatchTaskLoop).not.toHaveBeenCalled()
+        expect(body.should_resume).toBe(true)
+        expect(dispatchTaskLoop).toHaveBeenCalledTimes(1)
+        expect(dispatchTaskLoop.mock.calls[0]?.[0]?.event?.operatorMessage?.text).toBe("继续完善这个已完成任务。")
 
-        const row = Database.use((db) =>
-          db.select().from(EngineTaskTable).where(eq(EngineTaskTable.id, taskID)).get(),
-        )
-        expect(row ? deriveTaskStatus(row) : undefined).toBe("completed")
-        expect(row?.time_completed).not.toBeNull()
+        const row = Database.use((db) => db.select().from(EngineTaskTable).where(eq(EngineTaskTable.id, taskID)).get())
+        expect(row ? deriveTaskStatus(row) : undefined).toBe("active")
+        expect(row?.time_completed).toBeNull()
         expect((row?.metadata as { decision_log?: string[] } | null)?.decision_log).toEqual(["keep-me"])
       },
     })
@@ -409,18 +492,21 @@ describe("task message routes", () => {
         await seedRootSession(root.id)
 
         Database.use((db) =>
-          db.insert(EngineTaskTable).values({
-            id: taskID,
-            project_id: Instance.project.id,
-            session_id: root.id,
-            source: "panel",
-            title: "attachment message",
-            request: "attachment message",
-            priority: "normal",
-            time_created: now,
-            time_updated: now,
-            time_started: now,
-          }).run(),
+          db
+            .insert(EngineTaskTable)
+            .values({
+              id: taskID,
+              project_id: Instance.project.id,
+              session_id: root.id,
+              source: "panel",
+              title: "attachment message",
+              request: "attachment message",
+              priority: "normal",
+              time_created: now,
+              time_updated: now,
+              time_started: now,
+            })
+            .run(),
         )
 
         const response = await app.request(`/task/${taskID}/message`, {
@@ -432,31 +518,35 @@ describe("task message routes", () => {
           body: JSON.stringify({
             text: "参考我刚上传的规格，再决定下一步。",
             source: "panel",
-            attachments: [{
-              mime: "text/plain",
-              filename: "spec.txt",
-              data: Buffer.from("hello spec").toString("base64"),
-            }],
+            attachments: [
+              {
+                mime: "text/plain",
+                filename: "spec.txt",
+                data: Buffer.from("hello spec").toString("base64"),
+              },
+            ],
           }),
         })
 
         expect(response.status).toBe(200)
-        const body = await response.json() as { kind: string; message: string; should_resume: boolean }
+        const body = (await response.json()) as { kind: string; message: string; should_resume: boolean }
         await new Promise((resolve) => setTimeout(resolve, 0))
         expect(body.kind).toBe("note")
         expect(body.message).toBe("Operator note recorded. Scheduler notified.")
         expect(body.should_resume).toBe(true)
         expect(dispatchTaskLoop).toHaveBeenCalledTimes(1)
         // V35: trigger schema replaced with `event.operatorMessage`.
-        const event = (dispatchTaskLoop.mock.calls[0]?.[0] as {
-          event: {
-            note?: string
-            operatorMessage: {
-              text: string
-              attachmentSummary?: string
+        const event = (
+          dispatchTaskLoop.mock.calls[0]?.[0] as {
+            event: {
+              note?: string
+              operatorMessage: {
+                text: string
+                attachmentSummary?: string
+              }
             }
           }
-        })?.event
+        )?.event
         expect(event.operatorMessage.text).toBe("参考我刚上传的规格，再决定下一步。")
         expect(event.operatorMessage.attachmentSummary).toContain("Attachments:")
         expect(event.operatorMessage.attachmentSummary).toContain("spec.txt")
@@ -466,7 +556,7 @@ describe("task message routes", () => {
     })
   })
 
-  test("POST /task/:taskID/inject appends to terminal task without waking orchestrator", async () => {
+  test("POST /task/:taskID/inject reopens failed terminal task and wakes orchestrator", async () => {
     await using tmp = await tmpdir({ git: true, config: routeTestConfig })
 
     await Instance.provide({
@@ -480,21 +570,24 @@ describe("task message routes", () => {
         await seedRootSession(root.id)
 
         Database.use((db) =>
-          db.insert(EngineTaskTable).values({
-            id: taskID,
-            project_id: Instance.project.id,
-            session_id: root.id,
-            source: "panel",
-            title: "inject terminal",
-            request: "inject terminal",
-            priority: "normal",
-            time_created: now,
-            time_updated: now,
-            time_started: now,
-            time_completed: now + 1,
-            error: "previous failure",
-            metadata: { decision_log: ["keep-me"] },
-          }).run(),
+          db
+            .insert(EngineTaskTable)
+            .values({
+              id: taskID,
+              project_id: Instance.project.id,
+              session_id: root.id,
+              source: "panel",
+              title: "inject terminal",
+              request: "inject terminal",
+              priority: "normal",
+              time_created: now,
+              time_updated: now,
+              time_started: now,
+              time_completed: now + 1,
+              error: "previous failure",
+              metadata: { decision_log: ["keep-me"] },
+            })
+            .run(),
         )
 
         const response = await app.request(`/task/${taskID}/inject`, {
@@ -509,7 +602,7 @@ describe("task message routes", () => {
         })
 
         expect(response.status).toBe(200)
-        const body = await response.json() as {
+        const body = (await response.json()) as {
           appended: boolean
           orchestratorWoken: boolean
           executorResumed: boolean
@@ -519,17 +612,15 @@ describe("task message routes", () => {
         await new Promise((resolve) => setTimeout(resolve, 0))
         expect(body).toEqual({
           appended: true,
-          orchestratorWoken: false,
+          orchestratorWoken: true,
           executorResumed: false,
           resumed: false,
-          status: "failed",
+          status: "queued",
         })
-        expect(dispatchTaskLoop).not.toHaveBeenCalled()
+        expect(dispatchTaskLoop).toHaveBeenCalledTimes(1)
 
-        const row = Database.use((db) =>
-          db.select().from(EngineTaskTable).where(eq(EngineTaskTable.id, taskID)).get(),
-        )
-        expect(row ? deriveTaskStatus(row) : undefined).toBe("failed")
+        const row = Database.use((db) => db.select().from(EngineTaskTable).where(eq(EngineTaskTable.id, taskID)).get())
+        expect(row ? deriveTaskStatus(row) : undefined).toBe("queued")
         expect((row?.metadata as { decision_log?: string[] } | null)?.decision_log).toEqual(["keep-me"])
       },
     })
@@ -553,15 +644,25 @@ describe("task message routes", () => {
             resume: true,
             events: false,
           }),
-          submit: async () => { throw new Error("submit should not be called") },
-          status: async () => { throw new Error("status should not be called") },
-          abort: async () => { throw new Error("abort should not be called") },
-          acceptance: async () => { throw new Error("acceptance should not be called") },
+          submit: async () => {
+            throw new Error("submit should not be called")
+          },
+          status: async () => {
+            throw new Error("status should not be called")
+          },
+          abort: async () => {
+            throw new Error("abort should not be called")
+          },
+          acceptance: async () => {
+            throw new Error("acceptance should not be called")
+          },
           resume: async () => {
             resumeCalls += 1
             throw new Error("task inject must not resume the active executor")
           },
-          events: () => { throw new Error("events should not be called") },
+          events: () => {
+            throw new Error("events should not be called")
+          },
         } as unknown as ExecutorAdapter)
         const taskID = Identifier.ascending("task")
         const runID = Identifier.ascending("run")
@@ -570,44 +671,48 @@ describe("task message routes", () => {
         await seedRootSession(root.id)
 
         Database.use((db) => {
-          db.insert(EngineTaskTable).values({
-            id: taskID,
-            project_id: Instance.project.id,
-            session_id: root.id,
-            source: "panel",
-            title: "inject running",
-            request: "inject running",
-            priority: "normal",
-            time_created: now,
-            time_updated: now,
-            time_started: now,
-          }).run()
-          db.insert(EngineArtifactTable).values({
-            id: runID,
-            task_id: taskID,
-            run_id: runID,
-            kind: "run",
-            label: "run-running",
-            payload: {
-              plan_version_id: null,
+          db.insert(EngineTaskTable)
+            .values({
+              id: taskID,
+              project_id: Instance.project.id,
               session_id: root.id,
-              executor: "opencorvus",
-              status: "running",
-              phase: "dispatch",
-              retry_count: 0,
-              blocking_reason: null,
-              error: null,
-              executor_ref: {
-                session_id: root.id,
-                queue_task_id: "queue-root",
-              },
-              metadata: {},
+              source: "panel",
+              title: "inject running",
+              request: "inject running",
+              priority: "normal",
+              time_created: now,
+              time_updated: now,
               time_started: now,
-              time_completed: null,
-            },
-            time_created: now,
-            time_updated: now,
-          }).run()
+            })
+            .run()
+          db.insert(EngineArtifactTable)
+            .values({
+              id: runID,
+              task_id: taskID,
+              run_id: runID,
+              kind: "run",
+              label: "run-running",
+              payload: {
+                plan_version_id: null,
+                session_id: root.id,
+                executor: "opencorvus",
+                status: "running",
+                phase: "dispatch",
+                retry_count: 0,
+                blocking_reason: null,
+                error: null,
+                executor_ref: {
+                  session_id: root.id,
+                  queue_task_id: "queue-root",
+                },
+                metadata: {},
+                time_started: now,
+                time_completed: null,
+              },
+              time_created: now,
+              time_updated: now,
+            })
+            .run()
         })
 
         const response = await app.request(`/task/${taskID}/inject`, {
@@ -622,7 +727,7 @@ describe("task message routes", () => {
         })
 
         expect(response.status).toBe(200)
-        const body = await response.json() as {
+        const body = (await response.json()) as {
           appended: boolean
           orchestratorWoken: boolean
           executorResumed: boolean
@@ -639,23 +744,26 @@ describe("task message routes", () => {
         })
         expect(resumeCalls).toBe(0)
         expect(dispatchTaskLoop).toHaveBeenCalledTimes(1)
-        const event = (dispatchTaskLoop.mock.calls[0]?.[0] as {
+        const event = dispatchTaskLoop.mock.calls[0]?.[0] as {
           event: {
             operatorMessage: {
               text: string
             }
           }
           interrupt?: boolean
-        })
+        }
         expect(event.event.operatorMessage.text).toBe("继续完成G3")
         expect(event.interrupt).toBe(true)
 
         const messages = await Session.messages({ sessionID: root.id })
         expect(messages.filter((message) => message.info.role === "assistant")).toHaveLength(0)
-        expect(messages.some((message) =>
-          message.info.role === "user" &&
-          message.parts.some((part) => part.type === "text" && part.text === "继续完成G3"),
-        )).toBe(true)
+        expect(
+          messages.some(
+            (message) =>
+              message.info.role === "user" &&
+              message.parts.some((part) => part.type === "text" && part.text === "继续完成G3"),
+          ),
+        ).toBe(true)
       },
     })
   })

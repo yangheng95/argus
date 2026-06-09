@@ -6,15 +6,7 @@
 // these helpers; tests import them; both stay locked to one source of
 // truth.
 
-const FAMILY_ORDER = [
-  "command",
-  "runtime",
-  "artifact",
-  "review",
-  "acceptance",
-  "custom",
-  "other",
-] as const
+const FAMILY_ORDER = ["command", "runtime", "artifact", "review", "acceptance", "custom", "other"] as const
 
 export function familyOrder(family: string | undefined): number {
   const key = (family || "other").toLowerCase()
@@ -35,10 +27,6 @@ export function familyLabel(family: string | undefined): string {
   // capitalized ("ad-hoc" -> "Ad-hoc"), so we split on whitespace only.
   return raw
     .split(/(\s+)/)
-    .map((part) =>
-      /\s/.test(part)
-        ? part
-        : part.charAt(0).toUpperCase() + part.slice(1).toLowerCase(),
-    )
+    .map((part) => (/\s/.test(part) ? part : part.charAt(0).toUpperCase() + part.slice(1).toLowerCase()))
     .join("")
 }

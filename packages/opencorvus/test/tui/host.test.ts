@@ -297,15 +297,7 @@ describe("tui.host", () => {
       bin: "opencorvus-bin",
     })
 
-    expect(command.args).toEqual([
-      tmp.path,
-      "--port",
-      "7654",
-      "--hostname",
-      "127.0.0.1",
-      "--agent",
-      "tui-coding",
-    ])
+    expect(command.args).toEqual([tmp.path, "--port", "7654", "--hostname", "127.0.0.1", "--agent", "tui-coding"])
     expect(command.directory).toBe(tmp.path)
   })
 

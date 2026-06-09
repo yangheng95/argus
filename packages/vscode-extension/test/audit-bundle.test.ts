@@ -22,7 +22,9 @@ describe("audit-bundle", () => {
   })
 
   afterEach(() => {
-    try { fs.rmSync(extRoot, { recursive: true, force: true }) } catch {}
+    try {
+      fs.rmSync(extRoot, { recursive: true, force: true })
+    } catch {}
   })
 
   function withBundle(text: string): void {
@@ -50,7 +52,7 @@ describe("audit-bundle", () => {
     expect(result.violations.some((v) => v.pattern.includes("OPENCORVUS_DEV_"))).toBe(true)
   })
 
-  test("flags live process.env[\"OPENCORVUS_DEV_UI\"] read", () => {
+  test('flags live process.env["OPENCORVUS_DEV_UI"] read', () => {
     withBundle(`var v = process.env["OPENCORVUS_DEV_UI"];`)
     const result = runAudit({
       bundlePath: path.join(extRoot, "dist", "extension.cjs"),
@@ -112,10 +114,7 @@ describe("audit-bundle", () => {
 
   test("media/ui still flags live process.env.OPENCORVUS_DEV_* reads", () => {
     fs.mkdirSync(path.join(extRoot, "media", "ui", "assets"), { recursive: true })
-    fs.writeFileSync(
-      path.join(extRoot, "media", "ui", "assets", "x.js"),
-      `var v = process.env.OPENCORVUS_DEV_SIDECAR;`,
-    )
+    fs.writeFileSync(path.join(extRoot, "media", "ui", "assets", "x.js"), `var v = process.env.OPENCORVUS_DEV_SIDECAR;`)
     const result = runAudit({
       bundlePath: path.join(extRoot, "dist", "extension.cjs"),
       mediaUiDir: path.join(extRoot, "media", "ui"),

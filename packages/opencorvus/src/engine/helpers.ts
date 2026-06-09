@@ -3,11 +3,7 @@ import { Database, and, eq, desc } from "@/storage/db"
 import { WorkbenchTaskNoteTable } from "@/workbench/workbench.sql"
 import { Budget } from "./model"
 import { EngineConfig } from "./config"
-import {
-  EngineInteractionRequestTable,
-  type EngineBudget,
-  type EngineTaskStatus,
-} from "./engine.sql"
+import { EngineInteractionRequestTable, type EngineBudget, type EngineTaskStatus } from "./engine.sql"
 import type { TaskRow } from "./store"
 
 export const ORCHESTRATOR_POLL_INTERVAL_MS = 500
@@ -93,9 +89,11 @@ export function operatorNotesSection(taskID: string): string {
   const items = notes
     .reverse()
     .map((n) => {
-      const body = n.content.length > OPERATOR_NOTE_CHAR_CAP
-        ? n.content.slice(0, OPERATOR_NOTE_CHAR_CAP) + `… [${n.content.length - OPERATOR_NOTE_CHAR_CAP} chars omitted]`
-        : n.content
+      const body =
+        n.content.length > OPERATOR_NOTE_CHAR_CAP
+          ? n.content.slice(0, OPERATOR_NOTE_CHAR_CAP) +
+            `… [${n.content.length - OPERATOR_NOTE_CHAR_CAP} chars omitted]`
+          : n.content
       return `- [${new Date(n.time_created).toISOString()}] ${body}`
     })
     .join("\n")
@@ -168,7 +166,8 @@ export function clarificationTranscriptSection(taskID: string): string {
   // explicit count so the operator sees the cap is biting.
   const omitted = entries.length - CLARIFICATION_MAX_ENTRIES
   const shown = omitted > 0 ? entries.slice(-CLARIFICATION_MAX_ENTRIES) : entries
-  if (omitted > 0) shown.unshift(`- (${omitted} older Q&A entries omitted — they are superseded by the more recent ones below)`)
+  if (omitted > 0)
+    shown.unshift(`- (${omitted} older Q&A entries omitted — they are superseded by the more recent ones below)`)
   return [
     "",
     "",

@@ -17,13 +17,13 @@ The missing behavior is not a UI-side port guess. The backend should materialize
 
 ## Call Points
 
-| Symbol / route | Existing behavior | Change |
-| --- | --- | --- |
-| `normalizeBrowserPreviewUrl` | Accepts only explicit `http(s)` URLs. | Also normalize loopback `host:port/path` text to `http://host:port/path`. |
-| `PUT /task/:taskID/browser-preview/target` | Persists a normalized explicit URL or returns 400. | Reuses the broader normalizer, so `localhost:5173` persists as `http://localhost:5173/`. |
-| `resolveBrowserPreviewTarget` | Reads the latest task `browser_preview_target` artifact only. | Keep unchanged as the preview panel's single source. |
-| `BashTool` background branch | Returns PID and captured stdout/stderr metadata. | Extract a local HTTP URL from the captured output and persist `browser_preview_target` for `ctx.extra.taskID`. |
-| `BrowserPreviewPanel` | Loads target through HostTransport-backed service. | Keep unchanged. |
+| Symbol / route                             | Existing behavior                                             | Change                                                                                                         |
+| ------------------------------------------ | ------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------- |
+| `normalizeBrowserPreviewUrl`               | Accepts only explicit `http(s)` URLs.                         | Also normalize loopback `host:port/path` text to `http://host:port/path`.                                      |
+| `PUT /task/:taskID/browser-preview/target` | Persists a normalized explicit URL or returns 400.            | Reuses the broader normalizer, so `localhost:5173` persists as `http://localhost:5173/`.                       |
+| `resolveBrowserPreviewTarget`              | Reads the latest task `browser_preview_target` artifact only. | Keep unchanged as the preview panel's single source.                                                           |
+| `BashTool` background branch               | Returns PID and captured stdout/stderr metadata.              | Extract a local HTTP URL from the captured output and persist `browser_preview_target` for `ctx.extra.taskID`. |
+| `BrowserPreviewPanel`                      | Loads target through HostTransport-backed service.            | Keep unchanged.                                                                                                |
 
 ## Decision
 

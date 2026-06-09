@@ -99,7 +99,10 @@ function step(label: string) {
 }
 
 async function exists(file: string) {
-  return fs.access(file).then(() => true).catch(() => false)
+  return fs
+    .access(file)
+    .then(() => true)
+    .catch(() => false)
 }
 
 // fs.copyFile fails with EPERM on Windows when the destination already exists
@@ -113,9 +116,7 @@ async function copyFileForce(src: string, dst: string) {
 
 async function cargoPath() {
   if (!isWindows) return process.env.PATH
-  const cargoDir = process.env.USERPROFILE
-    ? path.join(process.env.USERPROFILE, ".cargo", "bin")
-    : ""
+  const cargoDir = process.env.USERPROFILE ? path.join(process.env.USERPROFILE, ".cargo", "bin") : ""
   if (!cargoDir) return process.env.PATH
   if (!(await exists(path.join(cargoDir, "cargo.exe")))) return process.env.PATH
   const list = (process.env.PATH ?? "").split(path.delimiter).filter(Boolean)
@@ -190,7 +191,9 @@ try {
     // Last resort: PowerShell force removal
     if (isWindows) {
       console.log("Binary locked, attempting PowerShell removal...")
-      await $`powershell.exe -NoProfile -ExecutionPolicy Bypass -Command "Remove-Item -Force -Path '${builtOverlay}' -ErrorAction SilentlyContinue"`.quiet().nothrow()
+      await $`powershell.exe -NoProfile -ExecutionPolicy Bypass -Command "Remove-Item -Force -Path '${builtOverlay}' -ErrorAction SilentlyContinue"`
+        .quiet()
+        .nothrow()
     }
   }
 }

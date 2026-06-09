@@ -175,8 +175,7 @@ test("quota-exhausted 429 does not retry", async () => {
           requestBodyValues: undefined,
           statusCode: 429,
           responseHeaders: {},
-          responseBody:
-            '{"error":{"message":"usage allocated quota exceeded. please try again later."}}',
+          responseBody: '{"error":{"message":"usage allocated quota exceeded. please try again later."}}',
         })
       },
       sink,
@@ -284,12 +283,14 @@ test("Alibaba input length overflow is classified as non-retryable context_overf
       async () => {
         calls++
         throw new APICallError({
-          message: "Provider alibaba-coding-plan-cn returned HTTP 400: InternalError.Algo.InvalidParameter: Range of input length should be [1, 258048]",
+          message:
+            "Provider alibaba-coding-plan-cn returned HTTP 400: InternalError.Algo.InvalidParameter: Range of input length should be [1, 258048]",
           url: "https://example",
           requestBodyValues: undefined,
           statusCode: 400,
           responseHeaders: {},
-          responseBody: '{"message":"InternalError.Algo.InvalidParameter: Range of input length should be [1, 258048]"}',
+          responseBody:
+            '{"message":"InternalError.Algo.InvalidParameter: Range of input length should be [1, 258048]"}',
         })
       },
       sink,
@@ -546,26 +547,49 @@ test("invariant: exactly one started + one terminal regardless of path", async (
   const paths: Array<() => Promise<unknown>> = [
     async () => {
       const { events, sink } = record()
-      await withLLMActivity(CTX, fastPolicy(), new AbortController().signal, async (r) => { r.bump("text-delta"); return 1 }, sink)
+      await withLLMActivity(
+        CTX,
+        fastPolicy(),
+        new AbortController().signal,
+        async (r) => {
+          r.bump("text-delta")
+          return 1
+        },
+        sink,
+      )
       return events
     },
     async () => {
       const { events, sink } = record()
       let n = 0
-      await withLLMActivity(CTX, fastPolicy({ maxRetries: { default: 5 } }), new AbortController().signal, async () => {
-        n++
-        if (n < 2) throw new Error("ECONNRESET")
-        return 1
-      }, sink)
+      await withLLMActivity(
+        CTX,
+        fastPolicy({ maxRetries: { default: 5 } }),
+        new AbortController().signal,
+        async () => {
+          n++
+          if (n < 2) throw new Error("ECONNRESET")
+          return 1
+        },
+        sink,
+      )
       return events
     },
     async () => {
       const { events, sink } = record()
       try {
-        await withLLMActivity(CTX, fastPolicy({ maxRetries: { default: 1 } }), new AbortController().signal, async () => {
-          throw new Error("ECONNRESET")
-        }, sink)
-      } catch { /* expected */ }
+        await withLLMActivity(
+          CTX,
+          fastPolicy({ maxRetries: { default: 1 } }),
+          new AbortController().signal,
+          async () => {
+            throw new Error("ECONNRESET")
+          },
+          sink,
+        )
+      } catch {
+        /* expected */
+      }
       return events
     },
   ]
@@ -593,7 +617,9 @@ test("retry attempt counter is monotonically increasing", async () => {
     })(),
     sink,
   )
-  const attempts = events.filter((e) => e.type === "retry").map((e) => (e as Extract<LLMActivityEvent, { type: "retry" }>).attempt)
+  const attempts = events
+    .filter((e) => e.type === "retry")
+    .map((e) => (e as Extract<LLMActivityEvent, { type: "retry" }>).attempt)
   expect(attempts).toEqual([1, 2, 3])
 })
 

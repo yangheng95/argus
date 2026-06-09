@@ -42,18 +42,18 @@ rg "\.catch\(\(\)\s*=>" packages/vscode-extension/src packages/overlay/src/servi
 
 Each match must fall into one of these legitimate categories:
 
-| Site | Justification |
-|---|---|
-| `vscode-extension/src/transport/bridge.ts:418` `res.text().catch(() => "")` | Recovering an HTTP error body that itself failed to read — the response status is already conveyed; an empty body is the best signal we have. NOT a fallback for a missing main path. |
-| `vscode-extension/src/sidecar/manager.ts:189` `fetch(/shutdown).catch(() => undefined)` | Pre-kill graceful nudge: even if the HTTP attempt fails (server unresponsive), we escalate to TerminateProcess in the next step. The catch silences a *redundant* attempt, not a primary code path. |
-| `overlay/src/services/connection.ts:119` `host.native({server.restart}).catch(() => undefined)` | Host-capability absent (vscode webview has no managed local server). Returning null is the documented "this host doesn't own a local server" signal — the caller already gates on `hostOwnsLocalServer()`. NOT a runtime-error fallback. |
-| `overlay/src/services/init.ts:211` `apiJson("config/prompt").catch(() => [])` | Pre-existing pre-M3 path. plan §5.4 lists this for cleanup; not introduced by this work. |
-| `overlay/src/services/mcp.ts:12, 19` `apiJson(disconnect).catch(() => undefined)` | Pre-existing. Same §5.4 followup. |
-| `overlay/src/services/workspace.ts:570` `host.native({createDir}).catch(() => undefined)` | Same as connection.ts — translates host-capability absence into a `null` that the caller surfaces as a clear i18n error message ("cwd.create_unavailable"). NOT swallowing a real error silently. |
-| `overlay/src/services/events.ts:468` `loadConfigInfo().catch(() => {})` | Pre-existing pre-M3 path. plan §5.4 followup. |
-| `overlay/src/services/extensions.ts:58` `apiJson("skill/installed").catch(() => apiJson("skill"))` | Pre-existing dual-route behaviour from before host capability negotiation. plan §5.4 cleanup item. |
+| Site                                                                                               | Justification                                                                                                                                                                                                                            |
+| -------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `vscode-extension/src/transport/bridge.ts:418` `res.text().catch(() => "")`                        | Recovering an HTTP error body that itself failed to read — the response status is already conveyed; an empty body is the best signal we have. NOT a fallback for a missing main path.                                                    |
+| `vscode-extension/src/sidecar/manager.ts:189` `fetch(/shutdown).catch(() => undefined)`            | Pre-kill graceful nudge: even if the HTTP attempt fails (server unresponsive), we escalate to TerminateProcess in the next step. The catch silences a _redundant_ attempt, not a primary code path.                                      |
+| `overlay/src/services/connection.ts:119` `host.native({server.restart}).catch(() => undefined)`    | Host-capability absent (vscode webview has no managed local server). Returning null is the documented "this host doesn't own a local server" signal — the caller already gates on `hostOwnsLocalServer()`. NOT a runtime-error fallback. |
+| `overlay/src/services/init.ts:211` `apiJson("config/prompt").catch(() => [])`                      | Pre-existing pre-M3 path. plan §5.4 lists this for cleanup; not introduced by this work.                                                                                                                                                 |
+| `overlay/src/services/mcp.ts:12, 19` `apiJson(disconnect).catch(() => undefined)`                  | Pre-existing. Same §5.4 followup.                                                                                                                                                                                                        |
+| `overlay/src/services/workspace.ts:570` `host.native({createDir}).catch(() => undefined)`          | Same as connection.ts — translates host-capability absence into a `null` that the caller surfaces as a clear i18n error message ("cwd.create_unavailable"). NOT swallowing a real error silently.                                        |
+| `overlay/src/services/events.ts:468` `loadConfigInfo().catch(() => {})`                            | Pre-existing pre-M3 path. plan §5.4 followup.                                                                                                                                                                                            |
+| `overlay/src/services/extensions.ts:58` `apiJson("skill/installed").catch(() => apiJson("skill"))` | Pre-existing dual-route behaviour from before host capability negotiation. plan §5.4 cleanup item.                                                                                                                                       |
 
-**Rule of thumb**: if the catch maps to "host doesn't support this capability" or "second redundant attempt failed", it is OK and must include a comment justifying it. Anything that catches a *primary* network / business error and substitutes a synthetic value is a §一-7 violation.
+**Rule of thumb**: if the catch maps to "host doesn't support this capability" or "second redundant attempt failed", it is OK and must include a comment justifying it. Anything that catches a _primary_ network / business error and substitutes a synthetic value is a §一-7 violation.
 
 ### 2.2 Default empty array bias (`?? []`)
 
@@ -83,7 +83,7 @@ Any new direct `fetch()` outside these three sites is a §二-8 violation; refac
 rg "\b(fallback|FALLBACK|Fallback)\b|兜底|降级|默认值" packages/vscode-extension/src packages/overlay/src
 ```
 
-Comments mentioning these words for *historical context* (e.g. "pre-M3 used to fall back to …, now goes through transport") are allowed. Code that *implements* a fallback is not.
+Comments mentioning these words for _historical context_ (e.g. "pre-M3 used to fall back to …, now goes through transport") are allowed. Code that _implements_ a fallback is not.
 
 ## 3. Releases
 

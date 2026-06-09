@@ -30,9 +30,9 @@ try {
     document.documentElement.setAttribute("data-theme", wantTheme)
     document.body.setAttribute("data-theme", wantTheme)
   }, theme)
-  await page.waitForSelector('[data-menu-trigger="workspace"]', { timeout: 8000 }).catch(() =>
-    console.error("titlebar never appeared"),
-  )
+  await page
+    .waitForSelector('[data-menu-trigger="workspace"]', { timeout: 8000 })
+    .catch(() => console.error("titlebar never appeared"))
 
   const triggers = await page.$$eval("[data-menu-trigger]", (nodes) =>
     nodes.map((n) => (n as HTMLElement).dataset.menuTrigger),
@@ -40,9 +40,9 @@ try {
   console.log("triggers:", JSON.stringify(triggers))
 
   await page.click(`[data-menu-trigger="${menu}"]`).catch((e) => console.error("click failed", e.message))
-  await page.waitForSelector(`[data-testid="titlebar-menu-${menu}"]`, { timeout: 4000 }).catch(() =>
-    console.error("menu panel never opened"),
-  )
+  await page
+    .waitForSelector(`[data-testid="titlebar-menu-${menu}"]`, { timeout: 4000 })
+    .catch(() => console.error("menu panel never opened"))
   await new Promise((r) => setTimeout(r, 300))
 
   const abs = path.resolve(out)

@@ -48,13 +48,13 @@ Overlay 当前已经具备单一 POJO 卡片树、单写入口、统一递归渲
 
 ### 2.2 当前的结构问题
 
-| 问题 | 现状 |
-| --- | --- |
-| 顶层协议不够收敛 | `stepPayload`、`fidelity`、`toolPart` 各自占一个专用字段 |
-| 壳层和业务语义耦合 | `kind` 同时承担“渲染壳层”和“业务语义”两种职责 |
-| 规则散落 | 排序、嵌套、默认展开、颜色分别散落在 writer / utils / 组件里 |
-| 扩展入口不统一 | 新卡片很容易通过局部分支接入，而不是走统一协议 |
-| 类型存在双源风险 | `store/card-tree.ts` 与 `utils/card-tree.ts` 各持有一份 `CardNode` 结构镜像 |
+| 问题               | 现状                                                                        |
+| ------------------ | --------------------------------------------------------------------------- |
+| 顶层协议不够收敛   | `stepPayload`、`fidelity`、`toolPart` 各自占一个专用字段                    |
+| 壳层和业务语义耦合 | `kind` 同时承担“渲染壳层”和“业务语义”两种职责                               |
+| 规则散落           | 排序、嵌套、默认展开、颜色分别散落在 writer / utils / 组件里                |
+| 扩展入口不统一     | 新卡片很容易通过局部分支接入，而不是走统一协议                              |
+| 类型存在双源风险   | `store/card-tree.ts` 与 `utils/card-tree.ts` 各持有一份 `CardNode` 结构镜像 |
 
 ### 2.3 本文档的结论
 
@@ -121,12 +121,12 @@ type CardShell = "message" | "session" | "process" | "tool"
 
 四种壳层的语义如下：
 
-| Shell | 用途 | 默认行为 |
-| --- | --- | --- |
-| `message` | 用户请求、系统消息、interaction 消息 | 默认展开；弱容器；通常不含复杂 child |
-| `session` | agent 会话卡、子 agent 会话卡 | 默认展开；统一标题栏；吸收本 session parts |
-| `process` | goal step、phase、fidelity、acceptance verdict 等过程节点 | 默认可折叠；强状态；允许嵌套子卡 |
-| `tool` | promoted tool card | 默认运行中展开；正文由 tool payload renderer 决定；展开后直接显示结果，禁止再套 `<details>` / summary 二次展开 |
+| Shell     | 用途                                                      | 默认行为                                                                                                       |
+| --------- | --------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------- |
+| `message` | 用户请求、系统消息、interaction 消息                      | 默认展开；弱容器；通常不含复杂 child                                                                           |
+| `session` | agent 会话卡、子 agent 会话卡                             | 默认展开；统一标题栏；吸收本 session parts                                                                     |
+| `process` | goal step、phase、fidelity、acceptance verdict 等过程节点 | 默认可折叠；强状态；允许嵌套子卡                                                                               |
+| `tool`    | promoted tool card                                        | 默认运行中展开；正文由 tool payload renderer 决定；展开后直接显示结果，禁止再套 `<details>` / summary 二次展开 |
 
 ### 4.2 CardVariant
 
@@ -244,15 +244,15 @@ interface CardUiHints {
 
 默认规则：
 
-| 条件 | 默认展开 |
-| --- | --- |
-| `status === "running"` | 是 |
-| `shell === "message"` | 是 |
-| `shell === "session"` | 是 |
-| `shell === "process" && status !== "completed"` | 是 |
-| `shell === "process" && status === "completed"` | 否 |
-| `shell === "tool" && status !== "completed"` | 是 |
-| `shell === "tool" && status === "completed"` | 否 |
+| 条件                                            | 默认展开 |
+| ----------------------------------------------- | -------- |
+| `status === "running"`                          | 是       |
+| `shell === "message"`                           | 是       |
+| `shell === "session"`                           | 是       |
+| `shell === "process" && status !== "completed"` | 是       |
+| `shell === "process" && status === "completed"` | 否       |
+| `shell === "tool" && status !== "completed"`    | 是       |
+| `shell === "tool" && status === "completed"`    | 否       |
 
 覆盖规则：
 

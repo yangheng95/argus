@@ -1,9 +1,5 @@
 import { describe, expect, test } from "bun:test"
-import {
-  extractArchiveHtml,
-  mergeExtractedLayoutIntoPageIr,
-  WebClonePageIrSchema,
-} from "../../src/web-clone"
+import { extractArchiveHtml, mergeExtractedLayoutIntoPageIr, WebClonePageIrSchema } from "../../src/web-clone"
 
 describe("web-clone layout merge", () => {
   test("attaches browser bounds and computed styles to canonical DOM nodes", () => {

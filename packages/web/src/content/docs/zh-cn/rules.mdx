@@ -7,22 +7,18 @@ OpenCorvus 从一组约定文件加载项目级指令：编码规范、架构决
 
 ## 来源
 
-| 文件 | 用途 |
-|---|---|
-| `AGENTS.md` | 通用 agent 指令；OpenCorvus 首要识别 |
-| `CLAUDE.md` | 兼容 Claude Code 约定 |
+| 文件                 | 用途                                       |
+| -------------------- | ------------------------------------------ |
+| `AGENTS.md`          | 通用 agent 指令；OpenCorvus 首要识别       |
+| `CLAUDE.md`          | 兼容 Claude Code 约定                      |
 | `.cursor/rules/*.md` | 通过 `instructions` 配置后兼容 Cursor 风格 |
-| `instructions` glob | 你在 `opencorvus.jsonc` 中列出的任何文件 |
+| `instructions` glob  | 你在 `opencorvus.jsonc` 中列出的任何文件   |
 
 ## 配置额外规则文件
 
 ```jsonc
 {
-  "instructions": [
-    "CONTRIBUTING.md",
-    "docs/guidelines.md",
-    ".cursor/rules/*.md"
-  ]
+  "instructions": ["CONTRIBUTING.md", "docs/guidelines.md", ".cursor/rules/*.md"],
 }
 ```
 

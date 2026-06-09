@@ -11,15 +11,21 @@ This is a same-worktree host repair tool. It reads the current project/worktree'
   parameters: z.object({
     webpageEvidenceDir: z
       .string()
-      .describe("Directory containing reference.png, source-skeleton/, source-ir/, and optional assets/. Defaults to <execution directory>/webpage-evidence.")
+      .describe(
+        "Directory containing reference.png, source-skeleton/, source-ir/, and optional assets/. Defaults to <execution directory>/webpage-evidence.",
+      )
       .optional(),
     outputDir: z
       .string()
-      .describe("Directory where the visible web-clone source package should be written. Defaults to <execution directory>/web-clone-source.")
+      .describe(
+        "Directory where the visible web-clone source package should be written. Defaults to <execution directory>/web-clone-source.",
+      )
       .optional(),
   }),
   async execute(params) {
-    const webpageEvidenceDir = resolveInputPath(params.webpageEvidenceDir ?? path.join(Instance.directory, "webpage-evidence"))
+    const webpageEvidenceDir = resolveInputPath(
+      params.webpageEvidenceDir ?? path.join(Instance.directory, "webpage-evidence"),
+    )
     const outputDir = params.outputDir
       ? resolveOutputPath(params.outputDir)
       : path.join(path.dirname(webpageEvidenceDir), "web-clone-source")

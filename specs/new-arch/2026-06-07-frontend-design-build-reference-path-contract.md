@@ -13,14 +13,14 @@ The build prompt overlay also repeats compact source-package refs such as `web-c
 
 `rg "renderBuildPromptOverlays\\(|buildUserPrompt\\(|buildRetryFeedbackPrompt\\(" packages/opencorvus/src packages/opencorvus/test -S`
 
-| Symbol | Call site | Decision |
-| --- | --- | --- |
-| `renderBuildPromptOverlays` | `packages/opencorvus/src/build/agent.ts` goal user prompt | Pass the active `taskID` so webpage-clone overlay can render concrete task-runtime paths. |
-| `renderBuildPromptOverlays` | `packages/opencorvus/src/build/agent.ts` direct request prompt | Pass the active `taskID` for the same reason. |
-| `renderBuildPromptOverlays` | `packages/opencorvus/src/build/agent.ts` retry prompt | Extend retry prompt signature with optional `taskID` and pass it from `BuildAgent.run`. |
-| `renderBuildPromptOverlays` | acceptance-feedback-only overlays | No path resolution needed; leave taskID optional. |
-| `buildUserPrompt` tests | `packages/opencorvus/test/build-agent/prompt-context.test.ts` | Add assertion for resolved task-runtime reference path. |
-| `buildRetryFeedbackPrompt` tests | `packages/opencorvus/test/build-agent/prompt-context.test.ts` | Existing calls remain valid because taskID is optional. |
+| Symbol                           | Call site                                                      | Decision                                                                                  |
+| -------------------------------- | -------------------------------------------------------------- | ----------------------------------------------------------------------------------------- |
+| `renderBuildPromptOverlays`      | `packages/opencorvus/src/build/agent.ts` goal user prompt      | Pass the active `taskID` so webpage-clone overlay can render concrete task-runtime paths. |
+| `renderBuildPromptOverlays`      | `packages/opencorvus/src/build/agent.ts` direct request prompt | Pass the active `taskID` for the same reason.                                             |
+| `renderBuildPromptOverlays`      | `packages/opencorvus/src/build/agent.ts` retry prompt          | Extend retry prompt signature with optional `taskID` and pass it from `BuildAgent.run`.   |
+| `renderBuildPromptOverlays`      | acceptance-feedback-only overlays                              | No path resolution needed; leave taskID optional.                                         |
+| `buildUserPrompt` tests          | `packages/opencorvus/test/build-agent/prompt-context.test.ts`  | Add assertion for resolved task-runtime reference path.                                   |
+| `buildRetryFeedbackPrompt` tests | `packages/opencorvus/test/build-agent/prompt-context.test.ts`  | Existing calls remain valid because taskID is optional.                                   |
 
 ## Design
 

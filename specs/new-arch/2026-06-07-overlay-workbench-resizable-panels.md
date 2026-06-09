@@ -18,15 +18,15 @@ Panel widths persist as `centerWorkbenchPanelWeights` in the existing settings s
 
 Toolbar icons are semantic:
 
-| Activity | Icon |
-| --- | --- |
-| Workflow | `workflow` |
-| Inspector | `panel-right` |
+| Activity      | Icon            |
+| ------------- | --------------- |
+| Workflow      | `workflow`      |
+| Inspector     | `panel-right`   |
 | Notifications | `notifications` |
-| Explorer | `folder` |
-| Files/Diff | `files` |
-| Browser | `web-search` |
-| Assistant | `message` |
+| Explorer      | `folder`        |
+| Files/Diff    | `files`         |
+| Browser       | `web-search`    |
+| Assistant     | `message`       |
 
 ## Tests
 

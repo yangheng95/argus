@@ -63,7 +63,9 @@ type SidecarCaptureResult = {
   summary: string
 }
 
-export async function runBrowserPreviewEvidenceJob(input: BrowserPreviewEvidenceRunnerInput): Promise<BrowserPreviewEvidenceRunnerResult> {
+export async function runBrowserPreviewEvidenceJob(
+  input: BrowserPreviewEvidenceRunnerInput,
+): Promise<BrowserPreviewEvidenceRunnerResult> {
   const executablePath = await BrowserRuntime.findBrowserExecutable()
   const launchTimeoutMs = BrowserRuntime.resolveBrowserLaunchTimeoutMs(undefined)
   const navigationTimeoutMs = RUNTIME_CAPTURE_DEFAULTS.wait_timeout_ms
@@ -83,8 +85,7 @@ export async function runBrowserPreviewEvidenceJob(input: BrowserPreviewEvidence
   })
 
   const sidecar = await runBrowserNodeSidecar<
-    | { ok: true; captures: SidecarCaptureResult[] }
-    | { ok: false; message: string; stack?: string }
+    { ok: true; captures: SidecarCaptureResult[] } | { ok: false; message: string; stack?: string }
   >({
     runtime,
     script: BROWSER_PREVIEW_BATCH_SCRIPT,
@@ -107,10 +108,14 @@ export async function runBrowserPreviewEvidenceJob(input: BrowserPreviewEvidence
   })
 
   if (!sidecar.result.ok) {
-    throw new Error(`Browser preview evidence runner failed: ${sidecar.result.message}${sidecar.result.stack ? `\n${sidecar.result.stack}` : ""}`)
+    throw new Error(
+      `Browser preview evidence runner failed: ${sidecar.result.message}${sidecar.result.stack ? `\n${sidecar.result.stack}` : ""}`,
+    )
   }
   if (sidecar.exitCode !== 0) {
-    throw new Error(`Browser preview evidence runner exited with ${sidecar.signal ?? sidecar.exitCode}. ${sidecar.stderr.trim()}`)
+    throw new Error(
+      `Browser preview evidence runner exited with ${sidecar.signal ?? sidecar.exitCode}. ${sidecar.stderr.trim()}`,
+    )
   }
 
   const captures: Record<string, RuntimeCaptureResult> = {}
@@ -171,12 +176,19 @@ export async function runBrowserPreviewEvidenceJob(input: BrowserPreviewEvidence
       },
     ],
   }
-  await fs.writeFile(manifest.manifestPath, JSON.stringify({
-    ...manifest,
-    url: input.url,
-    captures,
-    diagnostics,
-  }, null, 2))
+  await fs.writeFile(
+    manifest.manifestPath,
+    JSON.stringify(
+      {
+        ...manifest,
+        url: input.url,
+        captures,
+        diagnostics,
+      },
+      null,
+      2,
+    ),
+  )
   return { manifest, captures }
 }
 

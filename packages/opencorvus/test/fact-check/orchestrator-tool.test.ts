@@ -29,7 +29,9 @@ import { tmpdir } from "../fixture/fixture"
 // ---------------------------------------------------------------------------
 
 let factCheckAgentImpl:
-  | ((input: any) => Promise<{ sessionID: string; report: FactCheckReport; outcome: "completed" | "aborted" | "tool_error" }>)
+  | ((
+      input: any,
+    ) => Promise<{ sessionID: string; report: FactCheckReport; outcome: "completed" | "aborted" | "tool_error" }>)
   | undefined
 
 mock.module("@/fact-check", () => ({
@@ -62,27 +64,31 @@ const baseReport: FactCheckReport = {
 
 function seedTask(projectID: string, taskID: string, now: number) {
   Database.use((db) => {
-    db.insert(ProjectTable).values({
-      id: projectID,
-      worktree: "D:/tmp/fc-e2e",
-      name: "FC e2e",
-      sandboxes: "[]",
-      time_created: now,
-      time_updated: now,
-    }).run()
-    db.insert(EngineTaskTable).values({
-      id: taskID,
-      project_id: projectID,
-      session_id: null,
-      source: "test",
-      title: "FC e2e task",
-      request: "Build a thing",
-      kind: "workflow",
-      priority: "normal",
-      time_created: now,
-      time_updated: now,
-      time_started: now,
-    }).run()
+    db.insert(ProjectTable)
+      .values({
+        id: projectID,
+        worktree: "D:/tmp/fc-e2e",
+        name: "FC e2e",
+        sandboxes: "[]",
+        time_created: now,
+        time_updated: now,
+      })
+      .run()
+    db.insert(EngineTaskTable)
+      .values({
+        id: taskID,
+        project_id: projectID,
+        session_id: null,
+        source: "test",
+        title: "FC e2e task",
+        request: "Build a thing",
+        kind: "workflow",
+        priority: "normal",
+        time_created: now,
+        time_updated: now,
+        time_started: now,
+      })
+      .run()
   })
 }
 
@@ -149,8 +155,9 @@ describe("fact_check orchestrator tool (e2e A–G)", () => {
       directory: tmp.path,
       fn: async () => {
         seedTask("proj_fc_A", "tsk_fc_A", Date.now())
-        const { sessionID: targetSession, messageID: targetMsg } =
-          await createTerminalSessionWithAssistant("Built a component using react 19.")
+        const { sessionID: targetSession, messageID: targetMsg } = await createTerminalSessionWithAssistant(
+          "Built a component using react 19.",
+        )
 
         factCheckAgentImpl = async (i) => ({
           sessionID: "ses_fc_run_A",
@@ -289,7 +296,10 @@ describe("fact_check orchestrator tool (e2e A–G)", () => {
         expect(String(first)).not.toContain("cached")
 
         const secondTools = createOrchestratorTools({ taskID: "tsk_fc_C", agentSessionID: "ses_orch_C" }).tools
-        const second = await secondTools.fact_check.execute({ ...args, reason: "Second call — should hit cache." }, {} as any)
+        const second = await secondTools.fact_check.execute(
+          { ...args, reason: "Second call — should hit cache." },
+          {} as any,
+        )
         expect(runCallCount).toBe(1) // NOT incremented — agent did NOT re-run
         expect(String(second)).toContain("cached")
         expect(String(second)).toContain("verdict=`clean`")
@@ -454,7 +464,10 @@ describe("fact_check orchestrator tool (e2e A–G)", () => {
           throw new Error("simulated mid-run failure (no provider available)")
         }
 
-        const tools = createOrchestratorTools({ taskID: "tsk_fc_empty_err", agentSessionID: "ses_orch_empty_err" }).tools
+        const tools = createOrchestratorTools({
+          taskID: "tsk_fc_empty_err",
+          agentSessionID: "ses_orch_empty_err",
+        }).tools
         const result = await tools.fact_check.execute(
           {
             target_session_id: targetSession,
@@ -533,7 +546,9 @@ describe("fact_check orchestrator tool (e2e A–G)", () => {
       directory: tmp.path,
       fn: async () => {
         seedTask("proj_fc_G", "tsk_fc_G", Date.now())
-        const { sessionID: targetSession } = await createTerminalSessionWithAssistant("External-executor passed result.")
+        const { sessionID: targetSession } = await createTerminalSessionWithAssistant(
+          "External-executor passed result.",
+        )
 
         factCheckAgentImpl = async (i) => {
           expect(i.factCheckItems).toEqual([])

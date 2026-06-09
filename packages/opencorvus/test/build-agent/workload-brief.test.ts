@@ -30,35 +30,38 @@ const brief: WorkloadBrief = {
 
 describe("build prompt — goal workload brief injection", () => {
   test("renders the workload brief before broad upstream context and the goal contract", () => {
-    const prompt = buildUserPrompt(goalTarget as any, {
-      workloadBrief: brief,
-      requirements: [
-        {
-          id: "REQ-1",
-          type: "functional",
-          description: "Recreate the chart workspace shell.",
-          acceptance: "Workspace visually matches the reference.",
-          non_goals: "",
-        },
-      ],
-      collaborationGoals: [
-        {
-          ...goalTarget,
-          status: "pending",
-          kind: "feature",
-        },
-        {
-          kind: "feature",
-          id: "gol_sidebar",
-          title: "Right sidebar",
-          objective: "Build the watchlist sidebar.",
-          acceptance_specs: ["sidebar renders"],
-          owned_paths: ["src/sidebar"],
-          depends_on: [],
-          status: "pending",
-        },
-      ],
-    } as any)
+    const prompt = buildUserPrompt(
+      goalTarget as any,
+      {
+        workloadBrief: brief,
+        requirements: [
+          {
+            id: "REQ-1",
+            type: "functional",
+            description: "Recreate the chart workspace shell.",
+            acceptance: "Workspace visually matches the reference.",
+            non_goals: "",
+          },
+        ],
+        collaborationGoals: [
+          {
+            ...goalTarget,
+            status: "pending",
+            kind: "feature",
+          },
+          {
+            kind: "feature",
+            id: "gol_sidebar",
+            title: "Right sidebar",
+            objective: "Build the watchlist sidebar.",
+            acceptance_specs: ["sidebar renders"],
+            owned_paths: ["src/sidebar"],
+            depends_on: [],
+            status: "pending",
+          },
+        ],
+      } as any,
+    )
     expect(prompt).toContain("Goal Workload Brief")
     expect(prompt.match(/Goal Workload Brief/g)?.length).toBe(1)
     expect(prompt).toContain("touches 5 render surfaces") // why_not_smaller

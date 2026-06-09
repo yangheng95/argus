@@ -29,7 +29,7 @@ describe("executor routes", () => {
           },
         })
         expect(response.status).toBe(200)
-        const body = await response.json() as Array<{
+        const body = (await response.json()) as Array<{
           id: string
           protocol: string
           protocolVersion: string
@@ -41,7 +41,9 @@ describe("executor routes", () => {
         expect(body.find((item) => item.id === "claude-code")?.protocol).toBe("claude-agent-sdk")
         expect(body.find((item) => item.id === "claude-code")?.transport).toBe("inproc")
         expect(body.find((item) => item.id === "codex")?.tools.some((item) => item.name === "shell_command")).toBe(true)
-        expect(body.find((item) => item.id === "claude-code")?.tools.some((item) => item.name === "structured_output")).toBe(true)
+        expect(
+          body.find((item) => item.id === "claude-code")?.tools.some((item) => item.name === "structured_output"),
+        ).toBe(true)
       },
     })
   })

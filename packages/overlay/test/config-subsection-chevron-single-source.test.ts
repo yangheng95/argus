@@ -56,7 +56,9 @@ function stripCssComments(input: string): string {
   return input.replace(/\/\*[\s\S]*?\*\//g, "")
 }
 const STYLES = stripCssComments(
-  walkCss(STYLES_ROOT).map((f) => readFileSync(f, "utf8")).join("\n"),
+  walkCss(STYLES_ROOT)
+    .map((f) => readFileSync(f, "utf8"))
+    .join("\n"),
 )
 
 function countSoloTopLevelRules(selector: string): number {
@@ -83,9 +85,7 @@ describe(".config-subsection chevron pseudo-element is a single source", () => {
   })
 
   test("only one solo top-level `[open] > .config-subsection-head::before` rule", () => {
-    expect(
-      countSoloTopLevelRules(".config-subsection[open] > .config-subsection-head::before"),
-    ).toBe(1)
+    expect(countSoloTopLevelRules(".config-subsection[open] > .config-subsection-head::before")).toBe(1)
   })
 
   test("the surviving canonical uses the CSS-drawn chevron (not the Unicode ▸ glyph)", () => {

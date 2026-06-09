@@ -72,7 +72,7 @@ describe("session conversation routes", () => {
         })
 
         expect(response.status).toBe(200)
-        const body = await response.json() as any
+        const body = (await response.json()) as any
         expect(body.board).toMatchObject({
           kind: "session",
           sessionID: session.id,

@@ -32,7 +32,8 @@ describe("task config isolation", () => {
         })
         const taskID = "task-config-snapshot"
         Database.use((db) =>
-          db.insert(EngineTaskTable)
+          db
+            .insert(EngineTaskTable)
             .values({
               id: taskID,
               project_id: Instance.project.id,
@@ -72,7 +73,8 @@ describe("task config isolation", () => {
         })
         const taskID = "task-agent-config-snapshot"
         Database.use((db) =>
-          db.insert(EngineTaskTable)
+          db
+            .insert(EngineTaskTable)
             .values({
               id: taskID,
               project_id: Instance.project.id,

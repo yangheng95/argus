@@ -170,10 +170,7 @@ describe("flat-redesign Step 8a — motion token coverage", () => {
   })
 
   test("token source declares the canonical motion token set", () => {
-    const dl = readFileSync(
-      join(STYLES_ROOT, "tokens", "design-language.css"),
-      "utf8",
-    )
+    const dl = readFileSync(join(STYLES_ROOT, "tokens", "design-language.css"), "utf8")
     expect(dl).toContain("--ui-duration-fast: 80ms")
     expect(dl).toContain("--ui-duration-base: 120ms")
     expect(dl).toContain("--ui-duration-slow: 200ms")

@@ -17,11 +17,11 @@ There are two coupled defects.
 
 ## Grep Coverage
 
-| Target | Existing call sites / siblings | Change |
-| --- | --- | --- |
-| `firstByteMs` | `src/llm/activity.ts`, `src/session/processor.ts`, `src/frontend-design/tools/webpage-vision-judge.ts`, `test/llm/activity.test.ts`, `specs/new-arch/2026-04-30-llm-activity-redesign.md` | Remove the false ordering invariant; add tests that production defaults and `firstByteMs < idleMs` are accepted. |
+| Target                      | Existing call sites / siblings                                                                                                                                                                   | Change                                                                                                                               |
+| --------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------ |
+| `firstByteMs`               | `src/llm/activity.ts`, `src/session/processor.ts`, `src/frontend-design/tools/webpage-vision-judge.ts`, `test/llm/activity.test.ts`, `specs/new-arch/2026-04-30-llm-activity-redesign.md`        | Remove the false ordering invariant; add tests that production defaults and `firstByteMs < idleMs` are accepted.                     |
 | `orchestrator-stream-error` | `src/orchestrator/agent.ts`, `src/engine/persist.ts`, `src/engine/runtime.ts`, `src/engine/engine.sql.ts`, `src/engine/store.ts`, `src/storage/ddl.ts`, `test/engine/zombie-task-revive.test.ts` | Keep artifact as the single explicit stream-error fact; make zombie revive skip tasks with a stream-error recorded after task start. |
-| `reviveZombieTasks` | `src/engine/runtime.ts`, `test/engine/zombie-task-revive.test.ts` | Preserve crash/no-fact zombie recovery; stop automatic replay once an explicit stream-error exists. |
+| `reviveZombieTasks`         | `src/engine/runtime.ts`, `test/engine/zombie-task-revive.test.ts`                                                                                                                                | Preserve crash/no-fact zombie recovery; stop automatic replay once an explicit stream-error exists.                                  |
 
 ## Implementation
 

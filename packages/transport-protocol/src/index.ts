@@ -211,12 +211,7 @@ export const EXTENSION_MESSAGE_TYPES = [
 ] as const
 
 /** Whitelisted WebviewMessage `type` values. */
-export const WEBVIEW_MESSAGE_TYPES = [
-  "request",
-  "stream.open",
-  "stream.close",
-  "request.abort",
-] as const
+export const WEBVIEW_MESSAGE_TYPES = ["request", "stream.open", "stream.close", "request.abort"] as const
 
 /**
  * Type-narrowing predicate: does `m` look like a typed extension message?

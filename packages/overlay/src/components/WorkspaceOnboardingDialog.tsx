@@ -1,42 +1,47 @@
-import { createMemo, createSignal, For, Show } from "solid-js";
-import { Dialog } from "./primitives/Dialog";
-import { Button } from "./ui/Button";
-import { Icon } from "./Icon";
-import { settingsStore } from "../store/settings";
-import { useAsyncAction } from "../solid/async-action";
-import {
-  browseDirectory,
-  createDirectory,
-  loadRecentDirectories,
-  setDirectory,
-} from "../services/workspace";
-import { t } from "../utils/i18n";
+import { createMemo, createSignal, For, Show } from "solid-js"
+import { Dialog } from "./primitives/Dialog"
+import { Button } from "./ui/Button"
+import { Icon } from "./Icon"
+import { settingsStore } from "../store/settings"
+import { useAsyncAction } from "../solid/async-action"
+import { browseDirectory, loadRecentDirectories, setDirectory } from "../services/workspace"
+import { getHostTransport } from "../services/host-transport"
+import { t } from "../utils/i18n"
 
 function leafName(value: string): string {
-  const parts = value.split(/[\\/]/).filter(Boolean);
-  return parts.at(-1) || value;
+  const parts = value.split(/[\\/]/).filter(Boolean)
+  return parts.at(-1) || value
 }
 
 export function WorkspaceOnboardingDialog() {
-  const [activeAction, setActiveAction] = createSignal<string>("");
-  const open = createMemo(() => !settingsStore.directory);
+  const [activeAction, setActiveAction] = createSignal<string>("")
+  const [browserPathDraft, setBrowserPathDraft] = createSignal("")
+  const open = createMemo(() => !settingsStore.directory)
+  const browserHost = createMemo(() => getHostTransport().kind === "browser")
   const recentDirectories = createMemo(() => {
-    settingsStore.directoryEpoch;
-    settingsStore.savedDirectory;
-    return loadRecentDirectories();
-  });
+    settingsStore.directoryEpoch
+    settingsStore.savedDirectory
+    return loadRecentDirectories()
+  })
   const actionRunner = useAsyncAction(async (key: string, fn: () => Promise<void>) => {
-    setActiveAction(key);
+    setActiveAction(key)
     try {
-      await fn();
+      await fn()
     } finally {
-      setActiveAction("");
+      setActiveAction("")
     }
-  });
+  })
 
   async function runAction(key: string, fn: () => Promise<void>) {
-    if (actionRunner.pending()) return;
-    await actionRunner.run(key, fn);
+    if (actionRunner.pending()) return
+    await actionRunner.run(key, fn)
+  }
+
+  async function submitBrowserPath(event: Event) {
+    event.preventDefault()
+    const next = browserPathDraft().trim()
+    if (!next) return
+    await runAction("browser-path", () => setDirectory(next))
   }
 
   return (
@@ -81,48 +86,56 @@ export function WorkspaceOnboardingDialog() {
                 <p class="workspace-onboarding-action-text">{t("workspace_onboarding.open_body")}</p>
               </div>
             </div>
-            <Button
-              type="button"
-              variant="solid"
-              size="md"
-              tone="accent"
-              data-testid="workspace-onboarding-open-folder"
-              disabled={actionRunner.pending()}
-              aria-busy={activeAction() === "browse" ? "true" : "false"}
-              onClick={() => void runAction("browse", () => browseDirectory())}
+            <Show
+              when={browserHost()}
+              fallback={
+                <Button
+                  type="button"
+                  variant="solid"
+                  size="md"
+                  tone="accent"
+                  data-testid="workspace-onboarding-open-folder"
+                  disabled={actionRunner.pending()}
+                  aria-busy={activeAction() === "browse" ? "true" : "false"}
+                  onClick={() => void runAction("browse", () => browseDirectory())}
+                >
+                  <Icon name="folder-open" />
+                  <span>{t("workspace_onboarding.open_action")}</span>
+                </Button>
+              }
             >
-              <Icon name="folder-open" />
-              <span>{t("workspace_onboarding.open_action")}</span>
-            </Button>
-          </article>
-
-          <article
-            class="workspace-onboarding-action"
-            data-kind="create"
-            data-busy={activeAction() === "create" ? "true" : "false"}
-          >
-            <div class="workspace-onboarding-action-head">
-              <span class="workspace-onboarding-action-icon" aria-hidden="true">
-                <Icon name="plus" />
-              </span>
-              <div class="workspace-onboarding-action-copy">
-                <h3 class="workspace-onboarding-action-title">{t("workspace_onboarding.create_title")}</h3>
-                <p class="workspace-onboarding-action-text">{t("workspace_onboarding.create_body")}</p>
-              </div>
-            </div>
-            <Button
-              type="button"
-              variant="solid"
-              size="md"
-              tone="neutral"
-              data-testid="workspace-onboarding-create-directory"
-              disabled={actionRunner.pending()}
-              aria-busy={activeAction() === "create" ? "true" : "false"}
-              onClick={() => void runAction("create", () => createDirectory())}
-            >
-              <Icon name="plus" />
-              <span>{t("workspace_onboarding.create_action")}</span>
-            </Button>
+              <form
+                class="workspace-onboarding-browser-path-form"
+                data-testid="workspace-onboarding-browser-path-form"
+                onSubmit={submitBrowserPath}
+              >
+                <label class="workspace-onboarding-browser-path-label">
+                  <span>{t("workspace_onboarding.browser_path_label")}</span>
+                  <input
+                    value={browserPathDraft()}
+                    onInput={(event) => setBrowserPathDraft(event.currentTarget.value)}
+                    placeholder={t("workspace_onboarding.browser_path_placeholder")}
+                    data-testid="workspace-onboarding-browser-path-input"
+                    disabled={actionRunner.pending()}
+                    autocomplete="off"
+                    spellcheck={false}
+                  />
+                </label>
+                <Button
+                  type="submit"
+                  variant="solid"
+                  size="md"
+                  tone="accent"
+                  data-testid="workspace-onboarding-browser-path-submit"
+                  disabled={actionRunner.pending() || !browserPathDraft().trim()}
+                  aria-busy={activeAction() === "browser-path" ? "true" : "false"}
+                >
+                  <Icon name="folder-open" />
+                  <span>{t("workspace_onboarding.browser_path_submit")}</span>
+                </Button>
+                <p class="workspace-onboarding-browser-path-hint">{t("workspace_onboarding.browser_path_hint")}</p>
+              </form>
+            </Show>
           </article>
         </section>
 
@@ -164,5 +177,5 @@ export function WorkspaceOnboardingDialog() {
         <p class="workspace-onboarding-footnote">{t("workspace_onboarding.footnote")}</p>
       </div>
     </Dialog>
-  );
+  )
 }

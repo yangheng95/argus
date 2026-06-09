@@ -100,7 +100,10 @@ describe("panel.create_task actor provenance", () => {
   })
 
   test("mission agent stamps actor=mission + source=mission + metadata.mission.{id,session_id}", async () => {
-    const { metadata, source, missionID } = await runCreateTask("mission", { missionSession: true, source: "forged-source" })
+    const { metadata, source, missionID } = await runCreateTask("mission", {
+      missionSession: true,
+      source: "forged-source",
+    })
     expect(metadata.actor).toBe(PanelActor.enum.mission)
     expect(source).toBe("mission")
     const mission = metadata.mission as { id?: string; session_id?: string } | undefined

@@ -12,8 +12,7 @@ import fs from "node:fs/promises"
 import { launchBrowser } from "../../../overlay/test/launch"
 
 const TARGET = process.argv[2] ?? "http://localhost:3000"
-const OUT_DIR = process.argv[3]
-  ?? "C:/Users/hengu/AppData/Local/Temp/opencorvus-overlay-benchmark-project-w5RoTK"
+const OUT_DIR = process.argv[3] ?? "C:/Users/hengu/AppData/Local/Temp/opencorvus-overlay-benchmark-project-w5RoTK"
 const OUT = path.join(OUT_DIR, "review-rendered.png")
 
 const browser = await launchBrowser(["--no-sandbox", "--disable-setuid-sandbox"])
@@ -30,7 +29,9 @@ try {
 
   const errors: string[] = []
   page.on("pageerror", (e) => errors.push(`pageerror: ${e.message}`))
-  page.on("console", (m) => { if (m.type() === "error") errors.push(`console.error: ${m.text()}`) })
+  page.on("console", (m) => {
+    if (m.type() === "error") errors.push(`console.error: ${m.text()}`)
+  })
   await new Promise((r) => setTimeout(r, 1_500))
   if (errors.length > 0) console.log(`[review] ${errors.length} runtime error(s):\n${errors.slice(0, 10).join("\n")}`)
   else console.log(`[review] no runtime errors`)

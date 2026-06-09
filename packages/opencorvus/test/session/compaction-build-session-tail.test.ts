@@ -174,9 +174,7 @@ describe("build-session compaction tail selection", () => {
             durableInstructionSources: [],
             activeBuildContracts: [],
             todos: [],
-            workingContext: [
-              "Assistant step tails must not be replayed without a real user turn boundary.",
-            ],
+            workingContext: ["Assistant step tails must not be replayed without a real user turn boundary."],
             chronology: [
               {
                 event: "Rejected assistant tail_start_id marker during compacted history filtering",
@@ -229,9 +227,6 @@ describe("build-session compaction tail selection", () => {
 
     const result = await Message.filterCompacted(stream(newestFirst))
 
-    expect(result.map((message) => message.info.id)).toEqual([
-      compactionUser,
-      compactionSummary,
-    ])
+    expect(result.map((message) => message.info.id)).toEqual([compactionUser, compactionSummary])
   })
 })

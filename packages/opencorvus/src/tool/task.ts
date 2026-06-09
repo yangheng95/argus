@@ -31,7 +31,9 @@ export function sessionKindForSubagent(agentName: string) {
 }
 
 export const TaskTool = Tool.define("task", async (ctx) => {
-  const agents = await Agent.list(ctx?.config ? { config: ctx.config } : undefined).then((x) => x.filter((a) => a.mode !== "primary"))
+  const agents = await Agent.list(ctx?.config ? { config: ctx.config } : undefined).then((x) =>
+    x.filter((a) => a.mode !== "primary"),
+  )
 
   // Filter agents by permissions if agent provided
   const caller = ctx?.agent

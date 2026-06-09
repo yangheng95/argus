@@ -168,12 +168,10 @@ async function suite_gc_two_snapshots_both_survive(): Promise<SuiteResult> {
 
     // Both snapshots must remain restorable independently — no GC API by design.
     await Snapshot.restore(h2)
-    if ((await fs.readFile(path.join(dir, "x.txt"), "utf-8")) !== "v2")
-      throw new Error("h2 not restorable")
+    if ((await fs.readFile(path.join(dir, "x.txt"), "utf-8")) !== "v2") throw new Error("h2 not restorable")
 
     await Snapshot.restore(h1)
-    if ((await fs.readFile(path.join(dir, "x.txt"), "utf-8")) !== "v1")
-      throw new Error("h1 lost after second track")
+    if ((await fs.readFile(path.join(dir, "x.txt"), "utf-8")) !== "v1") throw new Error("h1 lost after second track")
   })
 }
 
@@ -348,8 +346,7 @@ async function suite_long_running_project(): Promise<SuiteResult> {
       await fs.writeFile(path.join(dir, "a.txt"), "scrambled-during-spotcheck")
       await Snapshot.restore(liveHashes[idx])
       const got = await fs.readFile(path.join(dir, "a.txt"), "utf-8")
-      if (got !== liveContents[idx])
-        throw new Error(`hash idx=${idx} not restorable: got "${got.slice(0, 32)}…"`)
+      if (got !== liveContents[idx]) throw new Error(`hash idx=${idx} not restorable: got "${got.slice(0, 32)}…"`)
     }
 
     return { sizeBytes, hashes: liveHashes.length }

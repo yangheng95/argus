@@ -283,10 +283,13 @@ describe("mainstream adapters", () => {
       appId: "bot-app",
       appSecret: "bot-secret",
     })
-    ;(adapter as unknown as { session: Map<string, { serviceUrl: string; conversationId: string }> }).session.set("conv-1", {
-      serviceUrl: "https://smba.trafficmanager.net/emea",
-      conversationId: "conv-1",
-    })
+    ;(adapter as unknown as { session: Map<string, { serviceUrl: string; conversationId: string }> }).session.set(
+      "conv-1",
+      {
+        serviceUrl: "https://smba.trafficmanager.net/emea",
+        conversationId: "conv-1",
+      },
+    )
     const calls: Array<{ url: string; body?: string }> = []
     globalThis.fetch = (async (input: RequestInfo | URL, init?: RequestInit) => {
       const url = String(input)

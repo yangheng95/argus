@@ -24,9 +24,7 @@ function score(win: WindowInstance, match?: string) {
   if (query) {
     const lower = query.toLowerCase()
     if ([title, app].some((item) => item.toLowerCase() === lower)) return 400 + (win.isFocused() ? 10 : 0)
-    return [title, app].some((item) => item.toLowerCase().includes(lower))
-      ? 320 + (win.isFocused() ? 10 : 0)
-      : -1
+    return [title, app].some((item) => item.toLowerCase().includes(lower)) ? 320 + (win.isFocused() ? 10 : 0) : -1
   }
 
   if (title === "OpenCorvus") return 300 + (win.isFocused() ? 10 : 0)

@@ -65,7 +65,9 @@ describe("opencorvus sidecar (managed mode)", () => {
           break
         }
       }
-      try { reader.releaseLock() } catch {}
+      try {
+        reader.releaseLock()
+      } catch {}
 
       expect(port).toBeDefined()
       expect(port).toBeGreaterThan(0)
@@ -99,10 +101,7 @@ describe("opencorvus sidecar (managed mode)", () => {
         }
       } catch {}
 
-      const exit = await Promise.race([
-        proc.exited,
-        new Promise<number>((r) => setTimeout(() => r(-1), 10_000)),
-      ])
+      const exit = await Promise.race([proc.exited, new Promise<number>((r) => setTimeout(() => r(-1), 10_000))])
       if (exit === -1) {
         // Last resort: brutal kill so the test runner does not hang.
         proc.kill()
@@ -113,14 +112,16 @@ describe("opencorvus sidecar (managed mode)", () => {
       // Graceful path released the lock.
       const stateDir = path.join(tempHome, "state")
       if (fs.existsSync(stateDir)) {
-        const remaining = fs
-          .readdirSync(stateDir)
-          .filter((f) => f.startsWith("sidecar.") && f.endsWith(".lock"))
+        const remaining = fs.readdirSync(stateDir).filter((f) => f.startsWith("sidecar.") && f.endsWith(".lock"))
         expect(remaining.length).toBe(0)
       }
 
-      try { fs.rmSync(tempHome, { recursive: true, force: true }) } catch {}
-      try { fs.rmSync(workspace, { recursive: true, force: true }) } catch {}
+      try {
+        fs.rmSync(tempHome, { recursive: true, force: true })
+      } catch {}
+      try {
+        fs.rmSync(workspace, { recursive: true, force: true })
+      } catch {}
     }
   }, 60_000)
 

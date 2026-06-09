@@ -6,11 +6,11 @@ Overlay runtime notifications currently show the runtime source label as the vis
 
 ## Call point audit
 
-| Surface | Evidence | Decision |
-| --- | --- | --- |
-| `packages/overlay/src/main.tsx` `reportOverlayRuntimeError(scope, error)` | Single runtime diagnostic entry point. Called by `window.error`, `window.unhandledrejection`, and `initApp`. | Change this entry point so toast `message` is the actual error summary. Keep `scope` in the details payload. |
-| `packages/overlay/src/services/notify.ts` `notifyError()` | Generic notification primitive used by task list, SSE, connection, runtime, and mission actions. | Do not change generic notification behavior. |
-| `packages/overlay/test/runtime-diagnostics-source.test.ts` | Existing static contract pins runtime failures route to notifications. | Extend it to assert the runtime source is no longer the user-visible message and remains in diagnostic details. |
+| Surface                                                                   | Evidence                                                                                                     | Decision                                                                                                        |
+| ------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------ | --------------------------------------------------------------------------------------------------------------- |
+| `packages/overlay/src/main.tsx` `reportOverlayRuntimeError(scope, error)` | Single runtime diagnostic entry point. Called by `window.error`, `window.unhandledrejection`, and `initApp`. | Change this entry point so toast `message` is the actual error summary. Keep `scope` in the details payload.    |
+| `packages/overlay/src/services/notify.ts` `notifyError()`                 | Generic notification primitive used by task list, SSE, connection, runtime, and mission actions.             | Do not change generic notification behavior.                                                                    |
+| `packages/overlay/test/runtime-diagnostics-source.test.ts`                | Existing static contract pins runtime failures route to notifications.                                       | Extend it to assert the runtime source is no longer the user-visible message and remains in diagnostic details. |
 
 ## Implementation
 

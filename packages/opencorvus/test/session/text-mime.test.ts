@@ -26,21 +26,15 @@ describe("decodeDataUrlBase64", () => {
   })
 
   test("throws on server-relative URL", () => {
-    expect(() =>
-      decodeDataUrlBase64("/attachment/proj/sha.png", "panel.create_task"),
-    ).toThrow(/data URL/)
+    expect(() => decodeDataUrlBase64("/attachment/proj/sha.png", "panel.create_task")).toThrow(/data URL/)
   })
 
   test("throws on http(s) URL", () => {
-    expect(() =>
-      decodeDataUrlBase64("https://example.com/files/a.png", "panel.create_task"),
-    ).toThrow(/data URL/)
+    expect(() => decodeDataUrlBase64("https://example.com/files/a.png", "panel.create_task")).toThrow(/data URL/)
   })
 
   test("throws on data URL without base64 marker (URL-encoded payload)", () => {
-    expect(() =>
-      decodeDataUrlBase64("data:text/plain,hello%20world", "ChannelIngress"),
-    ).toThrow(/data URL/)
+    expect(() => decodeDataUrlBase64("data:text/plain,hello%20world", "ChannelIngress")).toThrow(/data URL/)
   })
 
   test("throws on empty / non-string input", () => {

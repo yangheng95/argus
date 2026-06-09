@@ -34,7 +34,10 @@ describe("mcp serve command", () => {
       called++
     })
 
-    await yargs(["mcp", "browser"]).scriptName("opencorvus").command(McpCommand as any).parseAsync()
+    await yargs(["mcp", "browser"])
+      .scriptName("opencorvus")
+      .command(McpCommand as any)
+      .parseAsync()
 
     expect(called).toBe(1)
   })

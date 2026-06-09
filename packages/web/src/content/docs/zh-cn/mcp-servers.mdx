@@ -6,6 +6,7 @@ description: 接入本地或远程 MCP server；同时把 OpenCorvus 作为 MCP 
 MCP 是 Anthropic 主导、社区维护的开放协议，定义 LLM 应用与外部工具服务器的标准通信接口。协议规范：[modelcontextprotocol.io](https://modelcontextprotocol.io)。
 
 OpenCorvus 同时扮演：
+
 1. **MCP Client** — 连接外部 MCP Server，将其工具/提示词/资源暴露给内部 agent
 2. **MCP Server** — 运行中的 `opencorvus serve` 进程通过 Streamable HTTP 在 `/mcp/transport` 暴露自身工具给外部编码执行器
 
@@ -36,21 +37,21 @@ Agent 调用 MCP 工具时通过 `client.callTool()` 转发（`src/mcp/index.ts:
       "command": ["node", "/path/to/server/index.js"],
       "environment": { "API_KEY": "sk-..." },
       "enabled": true,
-      "timeout": 30000
-    }
-  }
+      "timeout": 30000,
+    },
+  },
 }
 ```
 
 字段（`src/config/config.ts:533-552`）：
 
-| 字段 | 说明 |
-|---|---|
-| `type` | `"local"` |
-| `command` | 命令 + 参数数组 |
+| 字段          | 说明                                 |
+| ------------- | ------------------------------------ |
+| `type`        | `"local"`                            |
+| `command`     | 命令 + 参数数组                      |
 | `environment` | 子进程额外 env（叠加 `process.env`） |
-| `enabled` | `false` 跳过连接 |
-| `timeout` | 请求超时 ms（默认 30000） |
+| `enabled`     | `false` 跳过连接                     |
+| `timeout`     | 请求超时 ms（默认 30000）            |
 
 ### 远程 HTTP Server
 
@@ -63,34 +64,34 @@ Agent 调用 MCP 工具时通过 `client.callTool()` 转发（`src/mcp/index.ts:
       "headers": { "Authorization": "Bearer sk-..." },
       "oauth": false,
       "enabled": true,
-      "timeout": 15000
-    }
-  }
+      "timeout": 15000,
+    },
+  },
 }
 ```
 
 字段（`src/config/config.ts:569-591`）：
 
-| 字段 | 说明 |
-|---|---|
-| `url` | MCP Server HTTP(S) 地址 |
-| `headers` | 请求头（Bearer Token 常用） |
-| `oauth` | `McpOAuth \| false`；`false` 禁用自动 OAuth 检测 |
-| `oauth.clientId` | 静态 client ID（跳过动态注册） |
-| `oauth.clientSecret` | client secret |
-| `oauth.scope` | OAuth scope |
+| 字段                 | 说明                                             |
+| -------------------- | ------------------------------------------------ |
+| `url`                | MCP Server HTTP(S) 地址                          |
+| `headers`            | 请求头（Bearer Token 常用）                      |
+| `oauth`              | `McpOAuth \| false`；`false` 禁用自动 OAuth 检测 |
+| `oauth.clientId`     | 静态 client ID（跳过动态注册）                   |
+| `oauth.clientSecret` | client secret                                    |
+| `oauth.scope`        | OAuth scope                                      |
 
 ## 3. 已支持的 MCP 能力
 
-| 能力 | 状态 |
-|---|---|
-| Tools (`listTools` + `callTool`) | 完整 |
-| Prompts (`listPrompts` + `getPrompt`) | 完整 |
-| Resources (`listResources` + `readResource`) | 完整 |
-| `ToolListChanged` 通知 | 支持 |
-| StreamableHTTP / SSE / stdio transports | 全支持 |
-| OAuth 2.0 + PKCE | 远程默认开启 |
-| 动态 client 注册 (RFC 7591) | 支持 |
+| 能力                                         | 状态         |
+| -------------------------------------------- | ------------ |
+| Tools (`listTools` + `callTool`)             | 完整         |
+| Prompts (`listPrompts` + `getPrompt`)        | 完整         |
+| Resources (`listResources` + `readResource`) | 完整         |
+| `ToolListChanged` 通知                       | 支持         |
+| StreamableHTTP / SSE / stdio transports      | 全支持       |
+| OAuth 2.0 + PKCE                             | 远程默认开启 |
+| 动态 client 注册 (RFC 7591)                  | 支持         |
 
 ## 4. OAuth 认证流程
 
@@ -117,26 +118,37 @@ opencorvus mcp remove-auth <server-name>
 ## 5. 典型配置示例
 
 **本地 Filesystem Server：**
+
 ```jsonc
-{ "mcp": { "filesystem": {
-  "type": "local",
-  "command": ["npx", "-y", "@modelcontextprotocol/server-filesystem", "/home/user/projects"]
-}}}
+{
+  "mcp": {
+    "filesystem": {
+      "type": "local",
+      "command": ["npx", "-y", "@modelcontextprotocol/server-filesystem", "/home/user/projects"],
+    },
+  },
+}
 ```
 
 **远程 GitHub（Bearer Token）：**
+
 ```jsonc
-{ "mcp": { "github": {
-  "type": "remote",
-  "url": "https://api.githubcopilot.com/mcp/",
-  "headers": { "Authorization": "Bearer ghp_xxx" },
-  "oauth": false
-}}}
+{
+  "mcp": {
+    "github": {
+      "type": "remote",
+      "url": "https://api.githubcopilot.com/mcp/",
+      "headers": { "Authorization": "Bearer ghp_xxx" },
+      "oauth": false,
+    },
+  },
+}
 ```
 
 **禁用某个已配置的 Server：**
+
 ```jsonc
-{ "mcp": { "github": { "type": "remote", "url": "...", "enabled": false }}}
+{ "mcp": { "github": { "type": "remote", "url": "...", "enabled": false } } }
 ```
 
 ## 6. OpenCorvus 作为 MCP Server
@@ -150,6 +162,7 @@ POST/GET/DELETE http://<host>:<port>/mcp/transport
 按 MCP 2025 规范走 Streamable HTTP。每个 MCP session 在 initialize 时通过 `X-Opencorvus-Directory` 请求头锁定一个工作目录；当配置了 `OPENCORVUS_SERVER_PASSWORD` 时，与其他 API 同一道 HTTP Basic 鉴权也保护此 transport。
 
 OpenCorvus 自动把这个 URL 注入到执行器配置里：
+
 - **Claude Code**：`MCPServe.url(...)` 返回 `McpHttpServerConfig`（`{ type: "http", url, headers }`），由 Anthropic Agent SDK 通过 `--mcp-config` 转发给 claude-code CLI。
 - **Codex**：opencorvus 给 `codex app-server` 注入 `-c mcp_servers.opencorvus.url=...`。
 
@@ -157,12 +170,12 @@ OpenCorvus 自动把这个 URL 注入到执行器配置里：
 
 ## 7. 连接状态
 
-| 状态 | 含义 |
-|---|---|
-| `connected` | 连接成功 |
-| `disabled` | `enabled: false` 或手动断开 |
-| `failed` | 连接失败（详见 `error`） |
-| `needs_auth` | 需要 OAuth |
+| 状态                        | 含义                                    |
+| --------------------------- | --------------------------------------- |
+| `connected`                 | 连接成功                                |
+| `disabled`                  | `enabled: false` 或手动断开             |
+| `failed`                    | 连接失败（详见 `error`）                |
+| `needs_auth`                | 需要 OAuth                              |
 | `needs_client_registration` | 服务器不支持动态注册，需提供 `clientId` |
 
 默认超时 30000ms（`src/mcp/index.ts:31`）；可由 `timeout` 字段或全局 `experimental.mcp_timeout` 调整。

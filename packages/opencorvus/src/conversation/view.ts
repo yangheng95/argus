@@ -133,8 +133,7 @@ export function projectConversationView(
   lifecycleEvents: ConversationLifecycleEvent[] = [],
 ): ConversationView {
   const sorted = [...(Array.isArray(transcript) ? transcript : [])].sort(
-    (left, right) =>
-      Number(left?.info?.time?.created || 0) - Number(right?.info?.time?.created || 0),
+    (left, right) => Number(left?.info?.time?.created || 0) - Number(right?.info?.time?.created || 0),
   )
 
   const bySession = new Map<string, ConversationSessionView>()
@@ -180,9 +179,7 @@ export function projectConversationView(
     upsertLifecycleEventSession(board, bySession, event)
   }
 
-  const sessions = [...bySession.values()].sort(
-    (left, right) => left.firstMessageTime - right.firstMessageTime,
-  )
+  const sessions = [...bySession.values()].sort((left, right) => left.firstMessageTime - right.firstMessageTime)
   const topLevelSessionIDs = sessions
     .filter((session) => session.placement === "top_level")
     .map((session) => session.sessionID)

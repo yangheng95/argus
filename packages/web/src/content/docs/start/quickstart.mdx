@@ -12,12 +12,12 @@ opencorvus serve
 
 Default: `127.0.0.1:7878`. Common flags:
 
-| flag | purpose |
-|---|---|
-| `--hostname 0.0.0.0` | Listen externally (requires `OPENCORVUS_SERVER_PASSWORD`) |
-| `--port 7878` | Change port |
-| `--project-dir <path>` | Target repo |
-| `--mdns` | Enable mDNS service discovery |
+| flag                   | purpose                                                   |
+| ---------------------- | --------------------------------------------------------- |
+| `--hostname 0.0.0.0`   | Listen externally (requires `OPENCORVUS_SERVER_PASSWORD`) |
+| `--port 7878`          | Change port                                               |
+| `--project-dir <path>` | Target repo                                               |
+| `--mdns`               | Enable mDNS service discovery                             |
 
 > If you expose beyond localhost, **always** set `OPENCORVUS_SERVER_PASSWORD` first.
 
@@ -53,15 +53,15 @@ On failure, `replan.triggered` or `retry.triggered` fire, then execution resumes
 
 ## 5. Task endpoints
 
-| endpoint | purpose |
-|---|---|
-| `GET /tasks` | list all tasks |
-| `GET /task/<id>` | task state |
-| `GET /task/<id>/board` | Kanban view |
-| `POST /task/<id>/message` | append follow-up |
-| `POST /task/<id>/retry` | retry with same plan |
-| `POST /task/<id>/replan` | discard plan and re-plan |
-| `POST /task/<id>/cancel` | cancel |
+| endpoint                  | purpose                  |
+| ------------------------- | ------------------------ |
+| `GET /tasks`              | list all tasks           |
+| `GET /task/<id>`          | task state               |
+| `GET /task/<id>/board`    | Kanban view              |
+| `POST /task/<id>/message` | append follow-up         |
+| `POST /task/<id>/retry`   | retry with same plan     |
+| `POST /task/<id>/replan`  | discard plan and re-plan |
+| `POST /task/<id>/cancel`  | cancel                   |
 
 ## 6. Local TUI
 

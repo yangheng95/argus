@@ -204,7 +204,10 @@ try {
     missionID,
     text: [
       `Reconcile mission ${missionID}.`,
-      `The dispatched task IDs are: ${terminal.map((item) => item.task?.id).filter(Boolean).join(", ")}.`,
+      `The dispatched task IDs are: ${terminal
+        .map((item) => item.task?.id)
+        .filter(Boolean)
+        .join(", ")}.`,
       "Use panel.query_task, update tasks.md/frontier.md/notes.md, then write handoff.md with the current acceptance status.",
     ].join("\n"),
     title,
@@ -348,7 +351,9 @@ async function waitFor<T>(label: string, fn: () => Promise<T | undefined>): Prom
     }
     await Bun.sleep(pollMs)
   }
-  throw new Error(`timed out waiting for ${label}${lastError ? `: ${lastError instanceof Error ? lastError.message : String(lastError)}` : ""}`)
+  throw new Error(
+    `timed out waiting for ${label}${lastError ? `: ${lastError instanceof Error ? lastError.message : String(lastError)}` : ""}`,
+  )
 }
 
 async function readMissionFile(id: string, file: string): Promise<string> {
@@ -378,10 +383,17 @@ async function scaffoldMissionProject(dir: string, configDir: string, model: str
   await fs.mkdir(path.join(dir, ".opencorvus"), { recursive: true })
   await fs.mkdir(configDir, { recursive: true })
   await gitInit(dir)
-  await writeIfMissing(path.join(dir, ".gitignore"), ["node_modules/", "dist/", ".opencorvus/runtime/", "*.log", ""].join("\n"))
+  await writeIfMissing(
+    path.join(dir, ".gitignore"),
+    ["node_modules/", "dist/", ".opencorvus/runtime/", "*.log", ""].join("\n"),
+  )
   await fs.writeFile(
     path.join(dir, "package.json"),
-    JSON.stringify({ name: "mission-benchmark-project", private: true, type: "module", scripts: { test: "bun test" } }, null, 2),
+    JSON.stringify(
+      { name: "mission-benchmark-project", private: true, type: "module", scripts: { test: "bun test" } },
+      null,
+      2,
+    ),
   )
   await fs.writeFile(
     path.join(dir, "tsconfig.json"),
@@ -435,9 +447,10 @@ async function writeIfMissing(file: string, content: string): Promise<void> {
 
 async function copyAuthIntoTempHome(home: string): Promise<void> {
   const appData = process.env.APPDATA || process.env.LOCALAPPDATA
-  const realDataDir = process.platform === "win32" && appData
-    ? path.join(appData, "opencorvus")
-    : path.join(os.homedir(), ".local", "share", "opencorvus")
+  const realDataDir =
+    process.platform === "win32" && appData
+      ? path.join(appData, "opencorvus")
+      : path.join(os.homedir(), ".local", "share", "opencorvus")
   const realAuth = path.join(realDataDir, "auth.json")
   const tempDataDir = path.join(home, "data")
   await fs.mkdir(tempDataDir, { recursive: true })
@@ -475,11 +488,13 @@ function skippedVerify(command: string) {
 }
 
 function summarizeMissionState(state: Record<string, string>) {
-  return Object.fromEntries(Object.entries(state).map(([file, content]) => [
-    file,
-    {
-      bytes: Buffer.byteLength(content),
-      preview: content.slice(0, 800),
-    },
-  ]))
+  return Object.fromEntries(
+    Object.entries(state).map(([file, content]) => [
+      file,
+      {
+        bytes: Buffer.byteLength(content),
+        preview: content.slice(0, 800),
+      },
+    ]),
+  )
 }

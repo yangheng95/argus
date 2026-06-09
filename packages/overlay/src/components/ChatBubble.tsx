@@ -2,9 +2,7 @@ import { For, Match, Show, Switch, createMemo, createSignal } from "solid-js"
 
 import type { CardNode } from "../store/card-tree"
 import { cardTreeStore, pruneCardsAfterCursor } from "../store/card-tree"
-import { boardStore, rootTaskSessionID,
-  activeTaskID,
-} from "../store/board"
+import { boardStore, rootTaskSessionID, activeTaskID } from "../store/board"
 import { cardExpanded, setCardExpanded } from "../store/conversation-ui"
 import {
   collapsedActivityPreviewText,
@@ -16,7 +14,6 @@ import {
 } from "../utils/card-tree"
 import { bubbleAlign } from "../utils/chat-bubble"
 import { normalizeAgentRole, roleLabel } from "../utils/message"
-import { canReceiveDirectAgentReply } from "../utils/direct-reply-kinds"
 import { stageAccent } from "../utils/card-color"
 import { formatDuration, fullStampWithRelative, stamp } from "../utils/time"
 import { useNowTick } from "../services/clock"
@@ -64,9 +61,7 @@ function ChatBubbleAgentChildBody(props: { child: CardNode; depth: number }) {
       <Show when={visibleChildIDs().length > 0}>
         <div class="chat-bubble__children">
           <For each={visibleChildIDs()}>
-            {(childID) => (
-              <ChatBubbleChild childID={childID} depth={props.depth + 1} parentID={props.child.id} />
-            )}
+            {(childID) => <ChatBubbleChild childID={childID} depth={props.depth + 1} parentID={props.child.id} />}
           </For>
         </div>
       </Show>
@@ -195,18 +190,11 @@ export function ChatBubble(props: { node: CardNode; depth: number }) {
     return Math.round((summary.completed / summary.total) * 100)
   }
 
-  const traceSessionID = createMemo(() =>
-    props.node.kind === "agent" ? props.node.sessionID || undefined : undefined,
-  )
+  const traceSessionID = createMemo(() => (props.node.kind === "agent" ? props.node.sessionID || undefined : undefined))
   const directAgentSessionID = createMemo(() => {
     if (props.node.kind !== "agent") return undefined
     const sessionID = traceSessionID()
     if (!sessionID || sessionID === rootTaskSessionID()) return undefined
-    // Filter by the agent card's stage (the session kind it represents);
-    // if it's not in the reply whitelist the backend route would 400 and
-    // showing the reply box would just bait the user into a wasted click.
-    // See utils/direct-reply-kinds.ts for the mirrored set.
-    if (!canReceiveDirectAgentReply(props.node.stage)) return undefined
     return sessionID
   })
 
@@ -288,6 +276,7 @@ export function ChatBubble(props: { node: CardNode; depth: number }) {
     if ((usage.costUSD ?? 0) > 0) parts.push(formatCostUSD(usage.costUSD!))
     return parts.join(" · ")
   }
+  const modelLabel = () => props.node.model?.display || ""
   const articleStyle = createMemo<Record<string, string> | undefined>(() => {
     const style: Record<string, string> = {}
     const accent = stageAccent(normalizedRole())
@@ -377,6 +366,16 @@ export function ChatBubble(props: { node: CardNode; depth: number }) {
                 </div>
               </div>
               <div class="chat-bubble__actions">
+                <Show when={modelLabel()}>
+                  <span
+                    class="card__model-hint"
+                    title={t("card.model_tooltip", { model: modelLabel() })}
+                    aria-label={t("card.model_tooltip", { model: modelLabel() })}
+                    onClick={(event) => event.stopPropagation()}
+                  >
+                    {modelLabel()}
+                  </span>
+                </Show>
                 <Show when={typeof props.node.contextTokens === "number" && (props.node.contextTokens as number) > 0}>
                   <span
                     class="card__token-hint"
@@ -455,7 +454,9 @@ export function ChatBubble(props: { node: CardNode; depth: number }) {
             </div>
             <Show when={collapsedPreview()}>
               <div class="card__preview-row">
-                <span class="card__collapsed-preview" title={collapsedPreview()}>{collapsedPreview()}</span>
+                <span class="card__collapsed-preview" title={collapsedPreview()}>
+                  {collapsedPreview()}
+                </span>
               </div>
             </Show>
             <Show when={todoSummary()}>
@@ -500,9 +501,7 @@ export function ChatBubble(props: { node: CardNode; depth: number }) {
                 <Show when={visibleChildIDs().length > 0}>
                   <div class="chat-bubble__children">
                     <For each={visibleChildIDs()}>
-                      {(childID) => (
-                        <ChatBubbleChild childID={childID} depth={props.depth} parentID={props.node.id} />
-                      )}
+                      {(childID) => <ChatBubbleChild childID={childID} depth={props.depth} parentID={props.node.id} />}
                     </For>
                   </div>
                 </Show>

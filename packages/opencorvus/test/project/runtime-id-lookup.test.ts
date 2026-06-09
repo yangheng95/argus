@@ -11,7 +11,8 @@ const now = 1700000000000
 
 function seedProject(projectID: string) {
   Database.use((db) =>
-    db.insert(ProjectTable)
+    db
+      .insert(ProjectTable)
       .values({
         id: projectID,
         worktree: "C:/repo",
@@ -26,7 +27,8 @@ function seedProject(projectID: string) {
 
 function seedTask(projectID: string, taskID: string) {
   Database.use((db) =>
-    db.insert(EngineTaskTable)
+    db
+      .insert(EngineTaskTable)
       .values({
         id: taskID,
         project_id: projectID,
@@ -43,7 +45,8 @@ function seedTask(projectID: string, taskID: string) {
 
 function seedGoal(taskID: string, goalID: string) {
   Database.use((db) =>
-    db.insert(EngineGoalTable)
+    db
+      .insert(EngineGoalTable)
       .values({
         id: goalID,
         task_id: taskID,
@@ -67,7 +70,8 @@ function seedGoal(taskID: string, goalID: string) {
 
 function seedRun(taskID: string, runID: string) {
   Database.use((db) =>
-    db.insert(EngineArtifactTable)
+    db
+      .insert(EngineArtifactTable)
       .values({
         id: runID,
         task_id: taskID,
@@ -84,7 +88,8 @@ function seedRun(taskID: string, runID: string) {
 
 function seedSession(projectID: string, sessionID: string) {
   Database.use((db) =>
-    db.insert(SessionTable)
+    db
+      .insert(SessionTable)
       .values({
         id: sessionID,
         project_id: projectID,

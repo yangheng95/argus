@@ -94,4 +94,23 @@ describe("Vcs.diff", () => {
       },
     })
   })
+
+  test("does not synthesize text patches for untracked binary files", async () => {
+    await using tmp = await tmpdir({ git: true })
+
+    await Bun.write(path.join(tmp.path, "asset.bin"), new Uint8Array([0, 255, 1, 2, 3, 4]))
+
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const diff = await Vcs.diff("git", { context: 2 })
+        const binary = diff.find((item) => item.file === "asset.bin")
+
+        expect(binary?.status).toBe("added")
+        expect(binary?.additions).toBe(0)
+        expect(binary?.deletions).toBe(0)
+        expect(binary?.patch).toBeUndefined()
+      },
+    })
+  })
 })

@@ -4,6 +4,7 @@
 **面向**: opencorvus engine（packages/opencorvus）
 
 > **修订记录**
+>
 > - **v1 → v2 (同日)**：经三路 subagent 自检发现 v1 存在 4 处致命缺陷与 8 处过度工程。本文档为 v2，**v1 已废止**，不再分两份保留以避免双源漂移。v2 关键变更见 §0.2。
 
 ---
@@ -14,35 +15,35 @@
 
 ## 0.2 v1 → v2 关键变更（防漂移核心）
 
-| # | v1 错误 | v2 修正 | 证据 |
-|---|--------|--------|------|
-| 1 | 在主 `Instance.worktree` 拍 `Snapshot.track()` 作为 `pre_run_snapshot`，期望它能恢复 goal worktree 内文件 | **完全放弃这条路径**。Goal worktree 是独立 git worktree（`worktree/index.ts:627-628` 在 `<primary>/.opencorvus/worktrees/` 下、各自分支），主 worktree 的 git tree 看不到 goal 分支的未 merge 修改。改为**直接利用 Worktree.reset() 到 `workspace_base_ref`**（字段已存在 `engine.sql.ts:392`） | subagent 2 发现 4 |
-| 2 | "earliest pre_run_snapshot" 整树 restore | **不再做整树 restore**。每个受影响 goal worktree 单独走 reset/remove，互不耦合 | subagent 1 发现 7 |
-| 3 | `engine_task_rewind_audit` 表 + `snapshot_before` 字段 | **删除**。审计走现有 `protocol_event` 的 `Event.TaskRewound`；redo 不实现（YAGNI） | subagent 1 发现 3、subagent 3 §3.1 |
-| 4 | `GET /rewind/preview` API | **删除**。client 用既有 `describe` 数据自算受影响范围 | subagent 1 发现 8、subagent 3 §3.2 |
-| 5 | abort grace period 5s 硬编码 | 入 `config.rewind.abortGracePeriodMs`（默认 5000） | subagent 1 发现 5 |
-| 6 | "整体事务回滚 abort" | **重新分层**：abort 视为不可逆 side effect，rewind 不试图回滚已发的 abort；只保证 DB 写入是原子的 | subagent 1 发现 4 |
-| 7 | session.revert 与 task.rewind "并存" 一笔带过 | **写明硬边界**（§12）：session.revert 只删 message 行，**禁止动文件**；task.rewind 独占文件回滚 | subagent 1 发现 2 |
-| 8 | 工作量 3 人日 | **5–6 人日**，UI 单独从零建 timeline component | subagent 3 §6 |
-| 9 | 步骤 1/2/3 各自独立合入（中间态 `pre_run_snapshot=null` 留 fallback 缺口） | v2 不依赖该字段，无中间态问题 | subagent 3 §5 |
-| 10 | 未提 LLM session context 失效 | §11 加 "session context 重置" 显式动作 | subagent 3 §2.1 |
+| #   | v1 错误                                                                                                   | v2 修正                                                                                                                                                                                                                                                                                         | 证据                               |
+| --- | --------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------- |
+| 1   | 在主 `Instance.worktree` 拍 `Snapshot.track()` 作为 `pre_run_snapshot`，期望它能恢复 goal worktree 内文件 | **完全放弃这条路径**。Goal worktree 是独立 git worktree（`worktree/index.ts:627-628` 在 `<primary>/.opencorvus/worktrees/` 下、各自分支），主 worktree 的 git tree 看不到 goal 分支的未 merge 修改。改为**直接利用 Worktree.reset() 到 `workspace_base_ref`**（字段已存在 `engine.sql.ts:392`） | subagent 2 发现 4                  |
+| 2   | "earliest pre_run_snapshot" 整树 restore                                                                  | **不再做整树 restore**。每个受影响 goal worktree 单独走 reset/remove，互不耦合                                                                                                                                                                                                                  | subagent 1 发现 7                  |
+| 3   | `engine_task_rewind_audit` 表 + `snapshot_before` 字段                                                    | **删除**。审计走现有 `protocol_event` 的 `Event.TaskRewound`；redo 不实现（YAGNI）                                                                                                                                                                                                              | subagent 1 发现 3、subagent 3 §3.1 |
+| 4   | `GET /rewind/preview` API                                                                                 | **删除**。client 用既有 `describe` 数据自算受影响范围                                                                                                                                                                                                                                           | subagent 1 发现 8、subagent 3 §3.2 |
+| 5   | abort grace period 5s 硬编码                                                                              | 入 `config.rewind.abortGracePeriodMs`（默认 5000）                                                                                                                                                                                                                                              | subagent 1 发现 5                  |
+| 6   | "整体事务回滚 abort"                                                                                      | **重新分层**：abort 视为不可逆 side effect，rewind 不试图回滚已发的 abort；只保证 DB 写入是原子的                                                                                                                                                                                               | subagent 1 发现 4                  |
+| 7   | session.revert 与 task.rewind "并存" 一笔带过                                                             | **写明硬边界**（§12）：session.revert 只删 message 行，**禁止动文件**；task.rewind 独占文件回滚                                                                                                                                                                                                 | subagent 1 发现 2                  |
+| 8   | 工作量 3 人日                                                                                             | **5–6 人日**，UI 单独从零建 timeline component                                                                                                                                                                                                                                                  | subagent 3 §6                      |
+| 9   | 步骤 1/2/3 各自独立合入（中间态 `pre_run_snapshot=null` 留 fallback 缺口）                                | v2 不依赖该字段，无中间态问题                                                                                                                                                                                                                                                                   | subagent 3 §5                      |
+| 10  | 未提 LLM session context 失效                                                                             | §11 加 "session context 重置" 显式动作                                                                                                                                                                                                                                                          | subagent 3 §2.1                    |
 
 ---
 
 ## 1. 现状（核实过的事实）
 
-| 维度 | 现状 | 文件:行 |
-|------|------|---------|
-| Task rewind | 只 UPDATE `engine_task.rewind_cursor_time`，describe 层过滤 | `engine/rewind.ts:52-108`、`engine/rewind.ts:13-19`（OUT-OF-SCOPE 注释） |
-| Goal worktree | 独立 `git worktree add` 到 `<primary>/.opencorvus/worktrees/<name>`，各自分支 | `worktree/index.ts:627-628` |
-| `engine_goal.workspace_base_ref` | **每个 goal 首次执行前的 git tree hash 已记录** | `engine.sql.ts:380-392` |
-| `Worktree.reset()` | 已存在，按 base_ref 还原 worktree 文件 | `worktree/index.ts` |
-| `Worktree.remove()` | 已存在，删除 worktree 目录与 git worktree 注册 | `worktree/index.ts` |
-| `applyRewindCursor` | describe 层过滤函数，独立于副作用 | `engine/rewind.ts:150-162` |
-| Task abort | `taskAborts: Map<taskID, AbortController>` | `orchestrator/loop.ts:41`（`interruptTaskLoop`） |
-| Run abort | `eventBridgeAborts: Map<runID|goalRunID, AbortController>` | `engine/runtime.ts` |
-| 跨进程 abort | **不自动传播**到 executor child process | bun child process 边界 |
-| Session.revert 文件回滚 | 走 `Snapshot.revert(patches)` | `session/revert.ts:60` |
+| 维度                             | 现状                                                                          | 文件:行                                                                  |
+| -------------------------------- | ----------------------------------------------------------------------------- | ------------------------------------------------------------------------ | ------------------- |
+| Task rewind                      | 只 UPDATE `engine_task.rewind_cursor_time`，describe 层过滤                   | `engine/rewind.ts:52-108`、`engine/rewind.ts:13-19`（OUT-OF-SCOPE 注释） |
+| Goal worktree                    | 独立 `git worktree add` 到 `<primary>/.opencorvus/worktrees/<name>`，各自分支 | `worktree/index.ts:627-628`                                              |
+| `engine_goal.workspace_base_ref` | **每个 goal 首次执行前的 git tree hash 已记录**                               | `engine.sql.ts:380-392`                                                  |
+| `Worktree.reset()`               | 已存在，按 base_ref 还原 worktree 文件                                        | `worktree/index.ts`                                                      |
+| `Worktree.remove()`              | 已存在，删除 worktree 目录与 git worktree 注册                                | `worktree/index.ts`                                                      |
+| `applyRewindCursor`              | describe 层过滤函数，独立于副作用                                             | `engine/rewind.ts:150-162`                                               |
+| Task abort                       | `taskAborts: Map<taskID, AbortController>`                                    | `orchestrator/loop.ts:41`（`interruptTaskLoop`）                         |
+| Run abort                        | `eventBridgeAborts: Map<runID                                                 | goalRunID, AbortController>`                                             | `engine/runtime.ts` |
+| 跨进程 abort                     | **不自动传播**到 executor child process                                       | bun child process 边界                                                   |
+| Session.revert 文件回滚          | 走 `Snapshot.revert(patches)`                                                 | `session/revert.ts:60`                                                   |
 
 ## 2. 设计原则
 
@@ -58,15 +59,17 @@
 **v2 不新增任何字段、不新增任何表。**
 
 复用：
+
 - `engine_task.rewind_cursor_time / rewind_cursor_event_id / rewind_count`（已存在）
 - `engine_goal.workspace_dir / workspace_branch / workspace_base_ref`（已存在）
 - `engine_goal_run.time_started / time_completed / status`（已存在）
 - `Event.TaskRewound`（schema 扩可选 nested 字段，向后兼容，见 §6）
 
 新增**配置**（`config/config.ts`）：
+
 ```ts
 rewind: {
-  abortGracePeriodMs: number  // default 5000
+  abortGracePeriodMs: number // default 5000
 }
 ```
 
@@ -137,6 +140,7 @@ RETURN { taskID, cursorTime, rewindCount,
 ```
 
 **不变量**：
+
 - 完成后，**任何 cursor 之前已完成 run 的代码状态保持不变**（它们的 worktree 已 reset 到 base_ref，意味着"该 goal 在 cursor 时刻还未开始任何 run"——这是与"完整 rewind 到 cursor 时刻"的差异，见 §10）。
 - **不试图保证**：cursor 在某 goal 的某 run 中途时，回滚到该 run 中途状态（无此粒度的存档点；要做需新增 per-step git commit，YAGNI）。
 - **取舍**：v2 把"cursor 落在 goal A 第二个 run 中途"近似为"goal A 整体回到 base_ref"。审视：这与用户对 rewind 的心理模型（"撤回到那条事件之前的世界"）一致——goal 还在，但代码退回 goal 起点。
@@ -149,6 +153,7 @@ RETURN { taskID, cursorTime, rewindCount,
 - 已有 `eventBridgeAborts: Map<id, AbortController>`（`engine/runtime.ts`）按 runID/goalRunID 索引。
 
 新增**单一查询函数**（`engine/runtime.ts` 内导出）：
+
 ```ts
 export function lookupRunAbort(runID: string): AbortController | undefined {
   return eventBridgeAborts.get(runID)
@@ -185,6 +190,7 @@ POST /task/:taskID/rewind/clear
 ### 6.2 事件 schema 扩展（向后兼容）
 
 `engine/model.ts` 的 `Event.TaskRewound` 加一个 **optional nested**：
+
 ```ts
 TaskRewound: {
   taskID, cursorTime, anchorEventID?, reason?, rewindCount,
@@ -202,13 +208,13 @@ TaskRewound: {
 
 **前置事实（subagent 3 §1.2 核实）**：Web 与 Overlay **当前没有 task event timeline 组件**。"加一个 rewind 按钮"不是 6h，是先建 timeline 再加按钮。
 
-| 端 | 改动 | 工作量 |
-|----|------|-------|
-| Web | 新建 timeline component（事件卡片列表、时间排序、anchor 高亮）+ 右键 "rewind to here" + client 端计算受影响范围 + 二次确认 dialog 显示影响 | ~6h |
-| Overlay | 同上（独立组件） | ~7h |
-| TUI | 新增 `/rewind <eventID>` 命令；现有 `/undo` 不动 | ~1h |
-| 二次确认必显字段 | 受影响 run 数、goal 数、被 abort 的 executor 数、**externalSideEffectsWarning 列表**（§6.2，subagent 3 §2.2） | 含在上面 |
-| **小计** | | **~14h** |
+| 端               | 改动                                                                                                                                       | 工作量   |
+| ---------------- | ------------------------------------------------------------------------------------------------------------------------------------------ | -------- |
+| Web              | 新建 timeline component（事件卡片列表、时间排序、anchor 高亮）+ 右键 "rewind to here" + client 端计算受影响范围 + 二次确认 dialog 显示影响 | ~6h      |
+| Overlay          | 同上（独立组件）                                                                                                                           | ~7h      |
+| TUI              | 新增 `/rewind <eventID>` 命令；现有 `/undo` 不动                                                                                           | ~1h      |
+| 二次确认必显字段 | 受影响 run 数、goal 数、被 abort 的 executor 数、**externalSideEffectsWarning 列表**（§6.2，subagent 3 §2.2）                              | 含在上面 |
+| **小计**         |                                                                                                                                            | **~14h** |
 
 ## 8. 测试清单
 
@@ -226,25 +232,26 @@ TaskRewound: {
 10. **集成测试**：seed task + 2 goals + 4 runs（真实 sqlite + 真实 git worktree） → rewindTask → 文件状态 + DB 状态 + 事件全验
 
 测试基础设施缺口（subagent 3 §1.3）：
+
 - 需新建 `test/fixture/task-builder.ts`（seed task / goal / run / artifact）— ~150 LoC，**先于** rewindTask 测试合入
 
 ## 9. 实施步骤（线性依赖，每步 commit + push）
 
-| # | 步骤 | 文件 | 估时 | 依赖 |
-|---|------|------|------|------|
-| 1 | 加 config `rewind.abortGracePeriodMs` | `config/config.ts` | 30min | — |
-| 2 | `lookupRunAbort` 导出 | `engine/runtime.ts` | 30min | — |
-| 3 | test fixture: task-builder | `test/fixture/task-builder.ts` | 4h | — |
-| 4 | `engine/rewind.ts` 重写（PHASE 0-5） | `engine/rewind.ts` | 6h | 1, 2 |
-| 5 | API 路由更新 | `server/routes/orchestrator.ts` | 1h | 4 |
-| 6 | Event.TaskRewound schema 扩 impacts | `engine/model.ts` | 30min | 4 |
-| 7 | 测试 1-9（单元） | `test/engine/rewind.test.ts` | 5h | 3, 4 |
-| 8 | 测试 10（集成） | `test/engine/rewind-integration.test.ts` | 4h | 3, 4 |
-| 9 | Web timeline + rewind UI | `packages/web/src/...` | 6h | 5, 6 |
-| 10 | Overlay timeline + rewind UI | `packages/opencorvus/overlay/...` | 7h | 5, 6 |
-| 11 | TUI `/rewind` 命令 | TUI 入口 | 1h | 5 |
-| 12 | 文档：zh-CN + en | `docs/product/{en,zh-CN}/concepts/agent-loop.md` | 1h | — |
-| 13 | 修改 `engine/rewind.ts:13-19` 注释（OUT-OF-SCOPE 改写为 IN-SCOPE） | `engine/rewind.ts` | — | 4 |
+| #   | 步骤                                                               | 文件                                             | 估时  | 依赖 |
+| --- | ------------------------------------------------------------------ | ------------------------------------------------ | ----- | ---- |
+| 1   | 加 config `rewind.abortGracePeriodMs`                              | `config/config.ts`                               | 30min | —    |
+| 2   | `lookupRunAbort` 导出                                              | `engine/runtime.ts`                              | 30min | —    |
+| 3   | test fixture: task-builder                                         | `test/fixture/task-builder.ts`                   | 4h    | —    |
+| 4   | `engine/rewind.ts` 重写（PHASE 0-5）                               | `engine/rewind.ts`                               | 6h    | 1, 2 |
+| 5   | API 路由更新                                                       | `server/routes/orchestrator.ts`                  | 1h    | 4    |
+| 6   | Event.TaskRewound schema 扩 impacts                                | `engine/model.ts`                                | 30min | 4    |
+| 7   | 测试 1-9（单元）                                                   | `test/engine/rewind.test.ts`                     | 5h    | 3, 4 |
+| 8   | 测试 10（集成）                                                    | `test/engine/rewind-integration.test.ts`         | 4h    | 3, 4 |
+| 9   | Web timeline + rewind UI                                           | `packages/web/src/...`                           | 6h    | 5, 6 |
+| 10  | Overlay timeline + rewind UI                                       | `packages/opencorvus/overlay/...`                | 7h    | 5, 6 |
+| 11  | TUI `/rewind` 命令                                                 | TUI 入口                                         | 1h    | 5    |
+| 12  | 文档：zh-CN + en                                                   | `docs/product/{en,zh-CN}/concepts/agent-loop.md` | 1h    | —    |
+| 13  | 修改 `engine/rewind.ts:13-19` 注释（OUT-OF-SCOPE 改写为 IN-SCOPE） | `engine/rewind.ts`                               | —     | 4    |
 
 **总工时**：~36h ≈ **5 工作日**（单人，含调试）。
 
@@ -268,10 +275,10 @@ rewind 后，下一次用户消息进来时，orchestrator 会重读 task → de
 
 ## 12. 与 SessionRevert 的硬边界（规则 22 不豁免，需立规矩）
 
-| 操作 | 允许动 | 禁止动 |
-|------|-------|-------|
-| `SessionRevert.revert` | session 表 / message 表 / part 表；**Snapshot.revert(patches)** 仅恢复**主 worktree** 文件 | goal worktree、engine_task / engine_goal* 表、跨 task 状态 |
-| `Task.rewindTask` | engine_task / engine_artifact 表；**Worktree.reset/remove** 仅作用于 goal worktree | message 表、part 表、Snapshot 子系统、主 worktree 文件 |
+| 操作                   | 允许动                                                                                     | 禁止动                                                      |
+| ---------------------- | ------------------------------------------------------------------------------------------ | ----------------------------------------------------------- |
+| `SessionRevert.revert` | session 表 / message 表 / part 表；**Snapshot.revert(patches)** 仅恢复**主 worktree** 文件 | goal worktree、engine_task / engine_goal\* 表、跨 task 状态 |
+| `Task.rewindTask`      | engine_task / engine_artifact 表；**Worktree.reset/remove** 仅作用于 goal worktree         | message 表、part 表、Snapshot 子系统、主 worktree 文件      |
 
 两者作用面**正交不重叠**：session 维度关心对话与主 worktree（session 是用户对话场，对话产物落到主树）；task 维度关心 goal worktree（goal 是 orchestrator 的并发执行单元，每个 goal 自己的 worktree）。
 
@@ -328,23 +335,27 @@ rewind 后，下一次用户消息进来时，orchestrator 会重读 task → de
 ## 17. 实施前开放问题（已决议，2026-04-27）
 
 **1. `Worktree.reset` 改造**
-   - **核实事实**（`worktree/index.ts:857-984`）：reset 已清 untracked（line 953 `sweep` + 968 `submodule foreach git clean -fdx` + 973-981 `git status --porcelain` 必须空）。**但** target 硬编码到默认分支 remote HEAD（line 935），**不接受任意 ref/hash**。
-   - **决议**：**扩展** `Worktree.reset` 接受可选 `baseRef`，**不**新建第二个函数。
-   - 落地：`ResetInput` 加 `baseRef: z.string().optional()`；line 935 改 `const target = input.baseRef ?? (remoteBranch ? ${remote}/${remoteBranch} : localBranch)`。`reset.ts` 测试补 baseRef case。
-   - 理由：rule 22（无双源）+ rule 24（单一原语）。
+
+- **核实事实**（`worktree/index.ts:857-984`）：reset 已清 untracked（line 953 `sweep` + 968 `submodule foreach git clean -fdx` + 973-981 `git status --porcelain` 必须空）。**但** target 硬编码到默认分支 remote HEAD（line 935），**不接受任意 ref/hash**。
+- **决议**：**扩展** `Worktree.reset` 接受可选 `baseRef`，**不**新建第二个函数。
+- 落地：`ResetInput` 加 `baseRef: z.string().optional()`；line 935 改 `const target = input.baseRef ?? (remoteBranch ? ${remote}/${remoteBranch} : localBranch)`。`reset.ts` 测试补 baseRef case。
+- 理由：rule 22（无双源）+ rule 24（单一原语）。
 
 **2. `lookupRunAbort` 防滥用**
-   - **决议**：命名 + JSDoc 约束，**不上 lint**。函数命名 `lookupRunAbort`（lookup 暗示只读），JSDoc 注 "intended caller: engine/rewind.ts only"。PR review 盯。
-   - 理由：rule 26（不为假想滥用过度工程）+ rule 29（review 比 lint 智能）。
+
+- **决议**：命名 + JSDoc 约束，**不上 lint**。函数命名 `lookupRunAbort`（lookup 暗示只读），JSDoc 注 "intended caller: engine/rewind.ts only"。PR review 盯。
+- 理由：rule 26（不为假想滥用过度工程）+ rule 29（review 比 lint 智能）。
 
 **3. `Event.TaskRewound.impacts` 兼容性**
-   - **决议**：step 6 先 grep `TaskRewound` zod schema 与所有消费者，**再决定**加法。
-   - 如果 schema `.strict()`：消费者必须同步升级到新版（rule 22 不准 v1/v2 schema 并存）。
-   - 如果默认或 `.passthrough()`：optional `impacts` 直接加，旧 client 自然忽略。
+
+- **决议**：step 6 先 grep `TaskRewound` zod schema 与所有消费者，**再决定**加法。
+- 如果 schema `.strict()`：消费者必须同步升级到新版（rule 22 不准 v1/v2 schema 并存）。
+- 如果默认或 `.passthrough()`：optional `impacts` 直接加，旧 client 自然忽略。
 
 **4. `abortGracePeriodMs` 粒度**
-   - **决议**：**instance 级**。`config.rewind.abortGracePeriodMs` 单一来源，default 5000。
-   - 理由：rule 26（当前需求无 per-task 差异化）+ rule 29（一刀切就够，复杂场景 LLM 决策）。task 级是未来 feature，YAGNI。
+
+- **决议**：**instance 级**。`config.rewind.abortGracePeriodMs` 单一来源，default 5000。
+- 理由：rule 26（当前需求无 per-task 差异化）+ rule 29（一刀切就够，复杂场景 LLM 决策）。task 级是未来 feature，YAGNI。
 
 ## 18. v2 文档内修正记录（基于 §17 决议）
 
@@ -353,22 +364,22 @@ rewind 后，下一次用户消息进来时，orchestrator 会重读 task → de
 
 ## 19. 实施步骤更新表（替代 §9）
 
-| # | 步骤 | 文件 | 估时 | 依赖 |
-|---|------|------|------|------|
-| **0** | **`Worktree.reset` 加 `baseRef` 参数 + 测试** | `worktree/index.ts` | **1h** | — |
-| 1 | 加 config `rewind.abortGracePeriodMs` | `config/config.ts` | 30min | — |
-| 2 | `lookupRunAbort` 导出 + JSDoc | `engine/runtime.ts` | 30min | — |
-| 3 | test fixture: task-builder | `test/fixture/task-builder.ts` | 4h | — |
-| 4 | `engine/rewind.ts` 重写（PHASE 0-5）+ 注释更新 | `engine/rewind.ts` | 6h | 0, 1, 2 |
-| 5 | API 路由更新 | `server/routes/orchestrator.ts` | 1h | 4 |
-| 6 | grep `TaskRewound` schema → 按 §17.3 决议扩 impacts | `engine/model.ts` + 消费者 | 30min~2h | 4 |
-| 7 | 测试 1-9（单元） | `test/engine/rewind.test.ts` | 5h | 3, 4 |
-| 8 | 测试 10（集成） | `test/engine/rewind-integration.test.ts` | 4h | 3, 4 |
-| 9 | Web timeline + rewind UI | `packages/web/src/...` | 6h | 5, 6 |
-| 10 | Overlay timeline + rewind UI | `packages/opencorvus/overlay/...` | 7h | 5, 6 |
-| 11 | TUI `/rewind` 命令 | TUI 入口 | 1h | 5 |
-| 12 | 文档：zh-CN + en | `docs/product/{en,zh-CN}/concepts/agent-loop.md` | 1h | — |
-| 13 | 修改 `engine/rewind.ts:13-19` 注释（OUT-OF-SCOPE → IN-SCOPE） | `engine/rewind.ts` | — | 4 |
+| #     | 步骤                                                          | 文件                                             | 估时     | 依赖    |
+| ----- | ------------------------------------------------------------- | ------------------------------------------------ | -------- | ------- |
+| **0** | **`Worktree.reset` 加 `baseRef` 参数 + 测试**                 | `worktree/index.ts`                              | **1h**   | —       |
+| 1     | 加 config `rewind.abortGracePeriodMs`                         | `config/config.ts`                               | 30min    | —       |
+| 2     | `lookupRunAbort` 导出 + JSDoc                                 | `engine/runtime.ts`                              | 30min    | —       |
+| 3     | test fixture: task-builder                                    | `test/fixture/task-builder.ts`                   | 4h       | —       |
+| 4     | `engine/rewind.ts` 重写（PHASE 0-5）+ 注释更新                | `engine/rewind.ts`                               | 6h       | 0, 1, 2 |
+| 5     | API 路由更新                                                  | `server/routes/orchestrator.ts`                  | 1h       | 4       |
+| 6     | grep `TaskRewound` schema → 按 §17.3 决议扩 impacts           | `engine/model.ts` + 消费者                       | 30min~2h | 4       |
+| 7     | 测试 1-9（单元）                                              | `test/engine/rewind.test.ts`                     | 5h       | 3, 4    |
+| 8     | 测试 10（集成）                                               | `test/engine/rewind-integration.test.ts`         | 4h       | 3, 4    |
+| 9     | Web timeline + rewind UI                                      | `packages/web/src/...`                           | 6h       | 5, 6    |
+| 10    | Overlay timeline + rewind UI                                  | `packages/opencorvus/overlay/...`                | 7h       | 5, 6    |
+| 11    | TUI `/rewind` 命令                                            | TUI 入口                                         | 1h       | 5       |
+| 12    | 文档：zh-CN + en                                              | `docs/product/{en,zh-CN}/concepts/agent-loop.md` | 1h       | —       |
+| 13    | 修改 `engine/rewind.ts:13-19` 注释（OUT-OF-SCOPE → IN-SCOPE） | `engine/rewind.ts`                               | —        | 4       |
 
 **总工时**：~37h ≈ **5 工作日**（单人）。
 

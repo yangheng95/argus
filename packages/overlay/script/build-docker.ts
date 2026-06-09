@@ -26,9 +26,7 @@ const IMAGE_NAME = "opencorvus-overlay-builder"
 
 type Target = "linux-x64" | "linux-arm64"
 
-const argTargets = process.argv
-  .filter((a) => a.startsWith("--target="))
-  .map((a) => a.split("=")[1] as Target)
+const argTargets = process.argv.filter((a) => a.startsWith("--target=")).map((a) => a.split("=")[1] as Target)
 const targets: Target[] = argTargets.length > 0 ? argTargets : ["linux-x64", "linux-arm64"]
 
 async function fileExists(p: string) {
@@ -60,9 +58,7 @@ function tauriArgs() {
 /** Convert Windows path to Docker-compatible path (for -v mounts in Git Bash/MINGW). */
 function toDockerPath(p: string): string {
   if (process.platform === "win32") {
-    return p
-      .replace(/^([A-Za-z]):[/\\]/, (_, d) => `/${d.toLowerCase()}/`)
-      .replaceAll("\\", "/")
+    return p.replace(/^([A-Za-z]):[/\\]/, (_, d) => `/${d.toLowerCase()}/`).replaceAll("\\", "/")
   }
   return p
 }

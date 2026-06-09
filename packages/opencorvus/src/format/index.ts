@@ -41,7 +41,9 @@ export namespace Format {
     for (const item of objectValues(Formatter as Record<string, Formatter.Info>)) {
       formatters[item.name] = item
     }
-    for (const [name, item] of entries((cfg.formatter ?? {}) as Exclude<NonNullable<Config.Info["formatter"]>, false>)) {
+    for (const [name, item] of entries(
+      (cfg.formatter ?? {}) as Exclude<NonNullable<Config.Info["formatter"]>, false>,
+    )) {
       if (item.disabled) {
         delete formatters[name]
         continue

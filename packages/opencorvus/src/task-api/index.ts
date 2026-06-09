@@ -436,14 +436,19 @@ async function appendAndWakeTaskOperatorMessage(input: {
   // orchestrator prompt both read session messages, so this is the single
   // task-level operator-message owner for /message and /inject.
   const userMessage = await appendTaskSessionMessage(task, input.text, input.attachments ?? [])
-  if (isTaskTerminal(task)) {
+  if (isTaskCancelled(task)) {
     return {
       task,
       userMessage,
       resumed: false,
     }
   }
-  await reopenActiveRunForOperatorWake(task)
+  const wakeTask = isTaskCompleted(task)
+    ? await reopenCompletedTaskFromOperatorMessage(task)
+    : isTaskFailed(task)
+      ? await reopenFailedTaskFromOperatorMessage(task)
+      : task
+  await reopenActiveRunForOperatorWake(wakeTask)
 
   void dispatchTaskLoop({
     taskID: input.taskID,
@@ -461,10 +466,23 @@ async function appendAndWakeTaskOperatorMessage(input: {
   })
 
   return {
-    task,
+    task: requireTask(input.taskID),
     userMessage,
     resumed: true,
   }
+}
+
+async function reopenFailedTaskFromOperatorMessage(task: TaskRow): Promise<TaskRow> {
+  const metadata =
+    task.metadata && typeof task.metadata === "object" && !Array.isArray(task.metadata)
+      ? { ...(task.metadata as Record<string, unknown>) }
+      : {}
+  delete metadata.cancelled
+  return updateTask(task, { status: "queued", error: null, metadata }, "Operator message reopened failed task")
+}
+
+async function reopenCompletedTaskFromOperatorMessage(task: TaskRow): Promise<TaskRow> {
+  return updateTask(task, { status: "active", error: null }, "Operator message reopened completed task")
 }
 
 function terminalTaskNotificationText(input: {
@@ -475,9 +493,7 @@ function terminalTaskNotificationText(input: {
   relation: "parent" | "mission"
 }) {
   const lines = [
-    input.relation === "parent"
-      ? "Child task terminal update."
-      : "Mission task terminal update.",
+    input.relation === "parent" ? "Child task terminal update." : "Mission task terminal update.",
     `task_id: ${input.task.id}`,
     `title: ${input.task.title}`,
     `status: ${input.status}`,
@@ -488,7 +504,9 @@ function terminalTaskNotificationText(input: {
   return lines.join("\n")
 }
 
-function missionProvenance(metadata: EngineMetadata | null | undefined): { id: string; session_id: string } | undefined {
+function missionProvenance(
+  metadata: EngineMetadata | null | undefined,
+): { id: string; session_id: string } | undefined {
   if (!metadata || typeof metadata !== "object" || Array.isArray(metadata)) return undefined
   const mission = metadata.mission
   if (!mission || typeof mission !== "object" || Array.isArray(mission)) return undefined
@@ -586,9 +604,7 @@ async function messageContext(sessionID: string, taskID: string) {
     (await latestSessionAgent(sessionID)) ??
     (await Agent.defaultAgent({ config }).catch(() => undefined))
   const agent = name ? await Agent.get(name, { config }).catch(() => undefined) : undefined
-  const model = name
-    ? await resolveAgentModelRef(name, { taskID })
-    : await resolveConfiguredModelRef({ taskID })
+  const model = name ? await resolveAgentModelRef(name, { taskID }) : await resolveConfiguredModelRef({ taskID })
   if (!agent || !model) return
   return {
     agent: agent.name,
@@ -923,9 +939,10 @@ export namespace EngineService {
     error?: string
   }) {
     const task = requireTask(input.taskID)
-    const metadata = task.metadata && typeof task.metadata === "object" && !Array.isArray(task.metadata)
-      ? task.metadata as Record<string, unknown>
-      : {}
+    const metadata =
+      task.metadata && typeof task.metadata === "object" && !Array.isArray(task.metadata)
+        ? (task.metadata as Record<string, unknown>)
+        : {}
     const parentTaskID = typeof metadata.parent_task_id === "string" ? metadata.parent_task_id : undefined
     if (parentTaskID && parentTaskID !== task.id) {
       await handleTaskMessage(parentTaskID, {
@@ -1670,9 +1687,10 @@ export namespace EngineService {
         : {}
     delete metadata.cancelled
     const liveRun = findActiveRunForTask(task.id)
-    const openedTask = isTaskTerminal(task) || !liveRun
-      ? await updateTask(task, { status: "queued", error: null, metadata }, "Retry requested by operator")
-      : await updateTask(task, { error: null, metadata }, "Retry requested by operator")
+    const openedTask =
+      isTaskTerminal(task) || !liveRun
+        ? await updateTask(task, { status: "queued", error: null, metadata }, "Retry requested by operator")
+        : await updateTask(task, { error: null, metadata }, "Retry requested by operator")
     await reopenActiveRunForOperatorWake(openedTask, "Retry reopened blocked run")
     void dispatchTaskLoop({ taskID, event: { note: OrchestratorEventNote.retry(task) } })
     return viewTask(requireTask(taskID))
@@ -1700,16 +1718,22 @@ export namespace EngineService {
         .run(),
     )
     if (!run) {
+      if (!isTaskFailed(task)) {
+        return { resumed: false, status: deriveTaskStatus(task) }
+      }
+      const reopenedTask = await reopenFailedTaskFromOperatorMessage(task)
+      void dispatchTaskLoop({ taskID: task.id, event: { note: OrchestratorEventNote.retry(task) } })
+      return { resumed: true, status: deriveTaskStatus(reopenedTask) as string }
+    }
+    if (isTaskCompleted(task) || isTaskCancelled(task)) {
       return { resumed: false, status: deriveTaskStatus(task) }
     }
-    if (isTaskTerminal(task)) {
-      return { resumed: false, status: deriveTaskStatus(task) }
-    }
-    const reopenedRun = await reopenActiveRunForOperatorWake(task, "Operator note reopened blocked run")
+    const wakeTask = isTaskFailed(task) ? await reopenFailedTaskFromOperatorMessage(task) : task
+    const reopenedRun = await reopenActiveRunForOperatorWake(wakeTask, "Operator note reopened blocked run")
     if (!reopenedRun || reopenedRun.status === run.status) {
       return { resumed: false, status: reopenedRun?.status ?? deriveTaskStatus(requireTask(taskID)) }
     }
-    void dispatchTaskLoop({ taskID: task.id, event: { note: OrchestratorEventNote.retry(task) } })
+    void dispatchTaskLoop({ taskID: wakeTask.id, event: { note: OrchestratorEventNote.retry(task) } })
     return { resumed: true, status: deriveTaskStatus(requireTask(taskID)) as string }
   }
 
@@ -1772,6 +1796,27 @@ export namespace EngineService {
       message,
       should_resume: note.resumed,
       user_message: note.user_message,
+    }
+  }
+
+  export async function getTaskOperatorModelContext(taskID: string) {
+    const task = requireTask(taskID)
+    if (!task.session_id) {
+      throw new Error(
+        `Task ${task.id} has no root session — cannot resolve operator model context; recreate the task or repair task.session_id`,
+      )
+    }
+    const ctx = await messageContext(task.session_id, task.id)
+    if (!ctx) {
+      throw new Error(
+        `Task ${task.id} session ${task.session_id} has no agent/model context — cannot resolve operator model context`,
+      )
+    }
+    return {
+      taskID: task.id,
+      sessionID: task.session_id,
+      agent: ctx.agent,
+      model: ctx.model,
     }
   }
 

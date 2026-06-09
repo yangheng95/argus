@@ -22,9 +22,7 @@ Returns the screenshot path + render time. This is a Build/Integrity runtime evi
     url: z
       .string()
       .url()
-      .describe(
-        "The exact browser URL to capture. Use http:// or https:// for the already running app.",
-      ),
+      .describe("The exact browser URL to capture. Use http:// or https:// for the already running app."),
     outputDir: z
       .string()
       .describe(
@@ -73,16 +71,20 @@ Returns the screenshot path + render time. This is a Build/Integrity runtime evi
     const renderResultPath = path.join(outputDir, "render-result.json")
     await fs.writeFile(
       renderResultPath,
-      JSON.stringify({
-        generatedAt: new Date().toISOString(),
-        url: params.url,
-        renderedPath: pngPath,
-        viewport,
-        fullPage: params.full_page ?? false,
-        renderTimeMs: render.renderTimeMs,
-        projectDirectory: process.cwd(),
-        consoleErrors: render.consoleErrors,
-      }, null, 2),
+      JSON.stringify(
+        {
+          generatedAt: new Date().toISOString(),
+          url: params.url,
+          renderedPath: pngPath,
+          viewport,
+          fullPage: params.full_page ?? false,
+          renderTimeMs: render.renderTimeMs,
+          projectDirectory: process.cwd(),
+          consoleErrors: render.consoleErrors,
+        },
+        null,
+        2,
+      ),
       "utf8",
     )
 
@@ -101,7 +103,9 @@ Returns the screenshot path + render time. This is a Build/Integrity runtime evi
           : "",
         "",
         "Next: call `webpage_evaluate` with `rendered` pointing at the screenshot above, then call `webpage_vision_judge` for qualitative differences.",
-      ].filter(Boolean).join("\n"),
+      ]
+        .filter(Boolean)
+        .join("\n"),
       metadata: {
         renderedPath: pngPath,
         renderResultPath,

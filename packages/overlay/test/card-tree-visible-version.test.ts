@@ -1,25 +1,25 @@
-import { expect, test } from "bun:test";
-import { readFileSync } from "node:fs";
-import { join } from "node:path";
+import { expect, test } from "bun:test"
+import { readFileSync } from "node:fs"
+import { join } from "node:path"
 
-(globalThis as typeof globalThis & { __OPENCORVUS_OVERLAY_VERSION__?: string }).__OPENCORVUS_OVERLAY_VERSION__ = "test";
+;(globalThis as typeof globalThis & { __OPENCORVUS_OVERLAY_VERSION__?: string }).__OPENCORVUS_OVERLAY_VERSION__ = "test"
 
-const { setBoardStore } = await import("../src/store/board");
-const { cardTreeStore } = await import("../src/store/card-tree");
-const { applyEvent, flushBufferedPartDeltas, resetWriter } = await import("../src/services/tree-writer");
+const { setBoardStore } = await import("../src/store/board")
+const { cardTreeStore } = await import("../src/store/card-tree")
+const { applyEvent, flushBufferedPartDeltas, resetWriter } = await import("../src/services/tree-writer")
 
 if (typeof globalThis.requestAnimationFrame === "undefined") {
-  (globalThis as any).requestAnimationFrame = (() => 1) as any;
-  (globalThis as any).cancelAnimationFrame = (() => {}) as any;
+  ;(globalThis as any).requestAnimationFrame = (() => 1) as any
+  ;(globalThis as any).cancelAnimationFrame = (() => {}) as any
 }
 
-const TASK_ID = "tsk_visible_version";
-const SESSION_ID = "ses_visible_version";
-const MESSAGE_ID = "msg_visible_version";
-const PART_ID = "part_visible_version";
+const TASK_ID = "tsk_visible_version"
+const SESSION_ID = "ses_visible_version"
+const MESSAGE_ID = "msg_visible_version"
+const PART_ID = "part_visible_version"
 
 function seedPart(): void {
-  setBoardStore("selectedTaskID", TASK_ID);
+  setBoardStore("selectedTaskID", TASK_ID)
   setBoardStore("board", {
     task: {
       id: TASK_ID,
@@ -31,8 +31,8 @@ function seedPart(): void {
     },
     goalWorkflows: [],
     interactions: [],
-  });
-  resetWriter();
+  })
+  resetWriter()
   applyEvent({
     type: "message.updated",
     properties: {
@@ -47,7 +47,7 @@ function seedPart(): void {
         time: { created: 1_776_000_000_010 },
       },
     },
-  });
+  })
   applyEvent({
     type: "message.part.updated",
     properties: {
@@ -62,13 +62,13 @@ function seedPart(): void {
         text: "",
       },
     },
-  });
+  })
 }
 
 test("streaming part deltas advance the card tree visible version", () => {
   try {
-    seedPart();
-    const before = cardTreeStore.visibleVersion;
+    seedPart()
+    const before = cardTreeStore.visibleVersion
 
     applyEvent({
       type: "message.part.delta",
@@ -80,30 +80,30 @@ test("streaming part deltas advance the card tree visible version", () => {
         field: "text",
         delta: "hello",
       },
-    });
-    flushBufferedPartDeltas();
+    })
+    flushBufferedPartDeltas()
 
-    expect(cardTreeStore.visibleVersion).toBeGreaterThan(before);
+    expect(cardTreeStore.visibleVersion).toBeGreaterThan(before)
   } finally {
-    resetWriter();
+    resetWriter()
   }
-});
+})
 
 test("resetWriter advances the card tree epoch for transcript replacement boundaries", () => {
   try {
-    const before = cardTreeStore.treeEpoch;
-    resetWriter();
-    expect(cardTreeStore.treeEpoch).toBe(before + 1);
+    const before = cardTreeStore.treeEpoch
+    resetWriter()
+    expect(cardTreeStore.treeEpoch).toBe(before + 1)
   } finally {
-    resetWriter();
+    resetWriter()
   }
-});
+})
 
 test("Conversation respects replacement scroll intent from the card tree epoch", () => {
-  const source = readFileSync(join(import.meta.dir, "../src/components/Conversation.tsx"), "utf8");
-  expect(source).toContain("() => cardTreeStore.treeEpoch");
-  expect(source).toContain('cardTreeStore.treeReplacementScrollIntent === "preserve"');
-  expect(source).toContain("scrollController?.contentChanged();");
-  expect(source).toContain("setTracking(true);");
-  expect(source).toContain("scrollController?.scrollToBottom();");
-});
+  const source = readFileSync(join(import.meta.dir, "../src/components/Conversation.tsx"), "utf8")
+  expect(source).toContain("() => cardTreeStore.treeEpoch")
+  expect(source).toContain('cardTreeStore.treeReplacementScrollIntent === "preserve"')
+  expect(source).toContain("scrollController?.contentChanged();")
+  expect(source).toContain("setTracking(true);")
+  expect(source).toContain("scrollController?.scrollToBottom();")
+})

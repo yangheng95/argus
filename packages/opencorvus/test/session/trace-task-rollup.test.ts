@@ -79,7 +79,11 @@ test("helper trace writes explicit non-session domain instead of fake session bu
       expect(events[0]?.sessionID).toBeUndefined()
 
       const indexPath = ProjectRuntimePaths.taskAbsoluteFromRuntimeRoot(tempDir, taskID, "trace", "_index.jsonl")
-      const index = fs.readFileSync(indexPath, "utf8").trim().split("\n").map((line) => JSON.parse(line))
+      const index = fs
+        .readFileSync(indexPath, "utf8")
+        .trim()
+        .split("\n")
+        .map((line) => JSON.parse(line))
       expect(index).toContainEqual(
         expect.objectContaining({
           kind: "domain_open",
@@ -231,14 +235,16 @@ test("task trace reader parses only the bounded tail of large trace files", asyn
           taskID,
           agentName: "old",
           payload: { text: "x".repeat(2 * 1024 * 1024 + 1000) },
-        }) + "\n" +
+        }) +
+          "\n" +
           JSON.stringify({
             ts: 2,
             kind: "agent_report",
             taskID,
             agentName: "tail",
             payload: { ok: true },
-          }) + "\n",
+          }) +
+          "\n",
         "utf8",
       )
 

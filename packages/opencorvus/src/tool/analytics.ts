@@ -61,33 +61,30 @@ export const AnalyticsTool = Tool.define("analytics", {
           .select({ payload: EngineArtifactTable.payload })
           .from(EngineArtifactTable)
           .innerJoin(EngineTaskTable, eq(EngineArtifactTable.task_id, EngineTaskTable.id))
-          .where(
-            and(
-              eq(EngineTaskTable.project_id, projectID),
-              eq(EngineArtifactTable.kind, "verification-evidence"),
-            ),
-          )
+          .where(and(eq(EngineTaskTable.project_id, projectID), eq(EngineArtifactTable.kind, "verification-evidence")))
           .all(),
       )
       const totalEvals = evals.length
-      const passedEvals = evals.filter(
-        (e) => (e.payload as { status?: string } | null)?.status === "passed",
-      ).length
+      const passedEvals = evals.filter((e) => (e.payload as { status?: string } | null)?.status === "passed").length
 
       return {
         title: "Project Analytics Summary",
         metadata: {},
-        output: JSON.stringify({
-          total_tasks: total,
-          completed,
-          failed,
-          running,
-          blocked,
-          pass_rate: total > 0 ? `${Math.round((completed / total) * 100)}%` : "N/A",
-          evaluation_pass_rate: totalEvals > 0 ? `${Math.round((passedEvals / totalEvals) * 100)}%` : "N/A",
-          median_completion_ms: median,
-          median_completion_readable: median ? `${Math.round(median / 1000)}s` : "N/A",
-        }, null, 2),
+        output: JSON.stringify(
+          {
+            total_tasks: total,
+            completed,
+            failed,
+            running,
+            blocked,
+            pass_rate: total > 0 ? `${Math.round((completed / total) * 100)}%` : "N/A",
+            evaluation_pass_rate: totalEvals > 0 ? `${Math.round((passedEvals / totalEvals) * 100)}%` : "N/A",
+            median_completion_ms: median,
+            median_completion_readable: median ? `${Math.round(median / 1000)}s` : "N/A",
+          },
+          null,
+          2,
+        ),
       }
     }
 
@@ -140,7 +137,7 @@ export const AnalyticsTool = Tool.define("analytics", {
         priority: t.priority,
         created: new Date(t.time_created).toISOString(),
         updated: new Date(t.time_updated).toISOString(),
-        duration_ms: t.time_started && t.time_completed ? (t.time_completed - t.time_started) : null,
+        duration_ms: t.time_started && t.time_completed ? t.time_completed - t.time_started : null,
       }))
 
       return {
@@ -169,15 +166,19 @@ export const AnalyticsTool = Tool.define("analytics", {
       return {
         title: "Goal Statistics",
         metadata: {},
-        output: JSON.stringify({
-          total_goals: total,
-          passed,
-          failed,
-          pending,
-          blocking,
-          advisory,
-          pass_rate: total > 0 ? `${Math.round((passed / total) * 100)}%` : "N/A",
-        }, null, 2),
+        output: JSON.stringify(
+          {
+            total_goals: total,
+            passed,
+            failed,
+            pending,
+            blocking,
+            advisory,
+            pass_rate: total > 0 ? `${Math.round((passed / total) * 100)}%` : "N/A",
+          },
+          null,
+          2,
+        ),
       }
     }
 

@@ -125,10 +125,7 @@ export namespace WorktreeGC {
     const cutoff = (opts?.now ?? Date.now()) - days * 24 * 60 * 60 * 1000
 
     const projects = Database.use((db) =>
-      db
-        .select({ id: ProjectTable.id, worktree: ProjectTable.worktree })
-        .from(ProjectTable)
-        .all(),
+      db.select({ id: ProjectTable.id, worktree: ProjectTable.worktree }).from(ProjectTable).all(),
     )
 
     const candidates: Candidate[] = []

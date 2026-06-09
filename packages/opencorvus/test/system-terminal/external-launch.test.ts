@@ -128,12 +128,7 @@ describe("system terminal external launch command", () => {
 
     expect(command).toEqual({
       command: "x-terminal-emulator",
-      args: [
-        "-e",
-        "sh",
-        "-lc",
-        "cd '/repo/app' && '/usr/local/bin/claude' '--version'; exec '/bin/zsh' '-l' '-i'",
-      ],
+      args: ["-e", "sh", "-lc", "cd '/repo/app' && '/usr/local/bin/claude' '--version'; exec '/bin/zsh' '-l' '-i'"],
     })
   })
 })

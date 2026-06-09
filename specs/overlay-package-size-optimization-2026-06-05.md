@@ -10,12 +10,12 @@ That sidecar directory contains the 123.77 MiB `opencorvus.exe`, the 88.00 MiB B
 
 ## Call Points
 
-| Surface | Current behavior | Change |
-| --- | --- | --- |
-| `packages/overlay/src-tauri/build.rs` `write_embed_module` | Emits every sidecar file as a raw `include_bytes!` item. | Emit one gzip-compressed tar archive plus a file manifest. |
-| `packages/overlay/src-tauri/src/main.rs` `ensure_embedded_server_path` | Copies every embedded byte slice to app-local-data. | Validate the manifest, unpack the embedded archive when the extracted payload is missing or incomplete. |
-| `packages/overlay/src-tauri/src/main.rs` embedded payload tests | Assert manifest entries and byte presence. | Assert manifest entries, sizes, archive presence, and compression on real payloads. |
-| `packages/overlay/src-tauri/Cargo.toml` | No archive decode dependency. | Add mature `flate2` and `tar` crates for archive creation and extraction. |
+| Surface                                                                | Current behavior                                         | Change                                                                                                  |
+| ---------------------------------------------------------------------- | -------------------------------------------------------- | ------------------------------------------------------------------------------------------------------- |
+| `packages/overlay/src-tauri/build.rs` `write_embed_module`             | Emits every sidecar file as a raw `include_bytes!` item. | Emit one gzip-compressed tar archive plus a file manifest.                                              |
+| `packages/overlay/src-tauri/src/main.rs` `ensure_embedded_server_path` | Copies every embedded byte slice to app-local-data.      | Validate the manifest, unpack the embedded archive when the extracted payload is missing or incomplete. |
+| `packages/overlay/src-tauri/src/main.rs` embedded payload tests        | Assert manifest entries and byte presence.               | Assert manifest entries, sizes, archive presence, and compression on real payloads.                     |
+| `packages/overlay/src-tauri/Cargo.toml`                                | No archive decode dependency.                            | Add mature `flate2` and `tar` crates for archive creation and extraction.                               |
 
 ## Non-goals
 

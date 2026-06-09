@@ -1,35 +1,35 @@
-import { createSignal, onCleanup, type Accessor } from "solid-js";
+import { createSignal, onCleanup, type Accessor } from "solid-js"
 
 export interface ArmedConfirm {
   /** Reactive armed flag for confirm affordance styling. */
-  armed: Accessor<boolean>;
+  armed: Accessor<boolean>
   /** Arm the action and start (or restart) the confirm window. */
-  arm: () => void;
+  arm: () => void
   /** Clear the armed state immediately. */
-  disarm: () => void;
+  disarm: () => void
   /** First call arms, second call within the window commits. */
-  confirm: (commit: () => void) => boolean;
+  confirm: (commit: () => void) => boolean
 }
 
 export function useArmedConfirm(windowMs = 3000): ArmedConfirm {
-  const [armed, setArmed] = createSignal(false);
-  let resetTimer: ReturnType<typeof setTimeout> | undefined;
+  const [armed, setArmed] = createSignal(false)
+  let resetTimer: ReturnType<typeof setTimeout> | undefined
 
   function disarm() {
     if (resetTimer) {
-      clearTimeout(resetTimer);
-      resetTimer = undefined;
+      clearTimeout(resetTimer)
+      resetTimer = undefined
     }
-    setArmed(false);
+    setArmed(false)
   }
 
   function arm() {
-    disarm();
-    setArmed(true);
-    resetTimer = setTimeout(disarm, windowMs);
+    disarm()
+    setArmed(true)
+    resetTimer = setTimeout(disarm, windowMs)
   }
 
-  onCleanup(disarm);
+  onCleanup(disarm)
 
   return {
     armed,
@@ -37,12 +37,12 @@ export function useArmedConfirm(windowMs = 3000): ArmedConfirm {
     disarm,
     confirm: (commit) => {
       if (armed()) {
-        disarm();
-        commit();
-        return true;
+        disarm()
+        commit()
+        return true
       }
-      arm();
-      return false;
+      arm()
+      return false
     },
-  };
+  }
 }

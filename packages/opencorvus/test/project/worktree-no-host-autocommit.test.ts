@@ -28,10 +28,7 @@ describe("Worktree merge publication", () => {
           (error) => error,
         )
         const headAfter = (await $`git rev-parse HEAD`.cwd(tmp.path).text()).trim()
-        const status = (await $`git status --porcelain`.cwd(tmp.path).text())
-          .split("\n")
-          .filter(Boolean)
-          .sort()
+        const status = (await $`git status --porcelain`.cwd(tmp.path).text()).split("\n").filter(Boolean).sort()
         return { err, headBefore, headAfter, status }
       },
     })

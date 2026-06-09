@@ -53,13 +53,17 @@ async function upsertPermission(request: PermissionNext.Request, hooks: RuntimeH
       })
       .run()
     Database.effect(() =>
-      EngineProtocol.emit(Event.InteractionRequested, {
-        taskID: owner.taskID,
-        ...(runID ? { runID } : {}),
-        interactionID,
-        requestType: "permission",
-        summary: `Permission requested: ${request.permission}`,
-      }, { taskID: owner.taskID, ...(runID ? { runID } : {}), interactionID, source: "interaction.permission" }),
+      EngineProtocol.emit(
+        Event.InteractionRequested,
+        {
+          taskID: owner.taskID,
+          ...(runID ? { runID } : {}),
+          interactionID,
+          requestType: "permission",
+          summary: `Permission requested: ${request.permission}`,
+        },
+        { taskID: owner.taskID, ...(runID ? { runID } : {}), interactionID, source: "interaction.permission" },
+      ),
     )
   })
   if (runID) await EngineRuntime.syncRun(runID, hooks)
@@ -111,13 +115,17 @@ async function upsertQuestion(request: Question.Request, hooks: RuntimeHooks) {
     // Always emit — overlay only filters by taskID, and a Task-Agent clarification
     // before any run has started still needs to surface in the InteractionPanel.
     Database.effect(() =>
-      EngineProtocol.emit(Event.InteractionRequested, {
-        taskID: owner.taskID,
-        ...(runID ? { runID } : {}),
-        interactionID,
-        requestType: "question",
-        summary: title,
-      }, { taskID: owner.taskID, ...(runID ? { runID } : {}), interactionID, source: "interaction.question" }),
+      EngineProtocol.emit(
+        Event.InteractionRequested,
+        {
+          taskID: owner.taskID,
+          ...(runID ? { runID } : {}),
+          interactionID,
+          requestType: "question",
+          summary: title,
+        },
+        { taskID: owner.taskID, ...(runID ? { runID } : {}), interactionID, source: "interaction.question" },
+      ),
     )
   })
   if (runID) await EngineRuntime.syncRun(runID, hooks)
@@ -166,13 +174,22 @@ async function resolveInteraction(
       .run()
     const runID = interaction.run_id ?? undefined
     Database.effect(() =>
-      EngineProtocol.emit(Event.InteractionResolved, {
-        taskID: interaction.task_id,
-        ...(runID ? { runID } : {}),
-        interactionID: interaction.id,
-        status,
-        summary: status === "answered" ? "Interaction answered" : "Interaction rejected",
-      }, { taskID: interaction.task_id, ...(runID ? { runID } : {}), interactionID: interaction.id, source: "interaction.resolve" }),
+      EngineProtocol.emit(
+        Event.InteractionResolved,
+        {
+          taskID: interaction.task_id,
+          ...(runID ? { runID } : {}),
+          interactionID: interaction.id,
+          status,
+          summary: status === "answered" ? "Interaction answered" : "Interaction rejected",
+        },
+        {
+          taskID: interaction.task_id,
+          ...(runID ? { runID } : {}),
+          interactionID: interaction.id,
+          source: "interaction.resolve",
+        },
+      ),
     )
   })
   if (interaction.run_id) await EngineRuntime.syncRun(interaction.run_id, hooks)

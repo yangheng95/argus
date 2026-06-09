@@ -7,6 +7,14 @@ export interface BrowserPreviewViewport {
   height: number
 }
 
+export interface BrowserPreviewCandidate {
+  id: string
+  url: string
+  source: "task-artifact"
+  selected: boolean
+  timeUpdated: number
+}
+
 export interface BrowserPreviewTarget {
   id?: string
   taskID?: string
@@ -21,6 +29,7 @@ export interface BrowserPreviewTarget {
   url?: string
   viewports: BrowserPreviewViewport[]
   diagnostics: string[]
+  candidates: BrowserPreviewCandidate[]
   source: "task-artifact" | "none"
 }
 
@@ -41,8 +50,11 @@ export interface BrowserPreviewVerification {
 
 export type BrowserPreviewViewportID = BrowserPreviewViewport["id"]
 
-export async function loadTaskBrowserPreviewTarget(taskID: string, signal?: AbortSignal): Promise<BrowserPreviewTarget> {
-  return await apiJson(`task/${encodeURIComponent(taskID)}/browser-preview`, { signal }) as BrowserPreviewTarget
+export async function loadTaskBrowserPreviewTarget(
+  taskID: string,
+  signal?: AbortSignal,
+): Promise<BrowserPreviewTarget> {
+  return (await apiJson(`task/${encodeURIComponent(taskID)}/browser-preview`, { signal })) as BrowserPreviewTarget
 }
 
 export async function saveTaskBrowserPreviewTarget(input: {
@@ -50,27 +62,27 @@ export async function saveTaskBrowserPreviewTarget(input: {
   url: string
   signal?: AbortSignal
 }): Promise<BrowserPreviewTarget> {
-  return await apiJson(`task/${encodeURIComponent(input.taskID)}/browser-preview/target`, {
+  return (await apiJson(`task/${encodeURIComponent(input.taskID)}/browser-preview/target`, {
     method: "PUT",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ url: input.url }),
     signal: input.signal,
-  }) as BrowserPreviewTarget
+  })) as BrowserPreviewTarget
 }
 
 export async function captureTaskBrowserPreviewEvidence(input: {
   taskID: string
-  targetID?: string
+  targetID: string
   viewportID: BrowserPreviewViewportID
   signal?: AbortSignal
 }): Promise<BrowserPreviewVerification> {
-  return await apiJson(`task/${encodeURIComponent(input.taskID)}/browser-preview/capture`, {
+  return (await apiJson(`task/${encodeURIComponent(input.taskID)}/browser-preview/capture`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({
-      ...(input.targetID ? { targetID: input.targetID } : {}),
+      targetID: input.targetID,
       viewportID: input.viewportID,
     }),
     signal: input.signal,
-  }) as BrowserPreviewVerification
+  })) as BrowserPreviewVerification
 }

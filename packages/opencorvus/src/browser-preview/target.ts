@@ -1,7 +1,11 @@
 import path from "node:path"
 import z from "zod"
 import { isBrowserPreviewTargetVisible } from "./liveness"
-import { latestBrowserPreviewEvidenceID, findRecentBrowserPreviewTargets, type PersistedBrowserPreviewTarget } from "./persist"
+import {
+  latestBrowserPreviewEvidenceID,
+  findRecentBrowserPreviewTargets,
+  type PersistedBrowserPreviewTarget,
+} from "./persist"
 import { BROWSER_PREVIEW_VIEWPORTS, BrowserPreviewViewport } from "./viewport"
 
 export const BrowserPreviewCandidate = z.object({

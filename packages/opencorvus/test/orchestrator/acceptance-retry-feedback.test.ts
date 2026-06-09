@@ -11,13 +11,15 @@ describe("acceptance retry feedback", () => {
         "[review] specialist:client_contract Specialist Review: client_contract status=failed: blocking:evidence_quality: missing client evidence",
         "[check] lint#1 lint status=failed: exit_code=1",
       ],
-      ownDetails: [{
-        category: "quality",
-        error: "lint regression introduced by calculator UI change",
-        goal_id: "gol_calc",
-        check_id: "lint#1",
-        suggestion: "Fix the lint regression before changing calculator UI.",
-      }],
+      ownDetails: [
+        {
+          category: "quality",
+          error: "lint regression introduced by calculator UI change",
+          goal_id: "gol_calc",
+          check_id: "lint#1",
+          suggestion: "Fix the lint regression before changing calculator UI.",
+        },
+      ],
       rawFeedbackPacket: {
         verdict_artifact_id: "artifact_verdict",
         manifest: {
@@ -34,8 +36,8 @@ describe("acceptance retry feedback", () => {
     expect(text).toContain("[quality] lint regression introduced")
     expect(text).toContain("check_id: lint#1")
     expect(text).toContain("Canonical acceptance feedback packet")
-    expect(text).toContain("\"verdict_artifact_id\": \"artifact_verdict\"")
-    expect(text).toContain("\"failedCheckIds\"")
+    expect(text).toContain('"verdict_artifact_id": "artifact_verdict"')
+    expect(text).toContain('"failedCheckIds"')
   })
 
   test("keeps task-scope rejection actionable for integrated-tree rework", () => {
@@ -61,6 +63,6 @@ describe("acceptance retry feedback", () => {
     expect(text).toContain("Issues the integrated-tree rework must address:")
     expect(text).toContain("task-scope integrated-tree blocker")
     expect(text).toContain("hardcoded secret-like value")
-    expect(text).toContain("\"specialist:security_data\"")
+    expect(text).toContain('"specialist:security_data"')
   })
 })

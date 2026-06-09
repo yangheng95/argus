@@ -4,12 +4,12 @@
 
 ## Global flags
 
-| flag | purpose |
-|---|---|
-| `--help`, `-h` | Help |
-| `--version` | Version |
-| `--verbose` | Verbose logging |
-| `--config PATH` | Config file |
+| flag            | purpose         |
+| --------------- | --------------- |
+| `--help`, `-h`  | Help            |
+| `--version`     | Version         |
+| `--verbose`     | Verbose logging |
+| `--config PATH` | Config file     |
 
 ## Subcommands
 
@@ -29,20 +29,21 @@ Starts the headless HTTP API server.
 opencorvus serve [flags]
 ```
 
-| flag | default | purpose |
-|---|---|---|
-| `--hostname` | `127.0.0.1` | Listen address (switched to `0.0.0.0` when `--mdns` is on) |
-| `--port` | `7878` | Listen port |
-| `--project-dir` | `cwd()` | Target repo |
-| `--mdns` | off | Enable mDNS discovery |
-| `--mdns-domain` | `opencorvus.local` | mDNS domain |
-| `--cors` | off | Enable CORS |
+| flag            | default            | purpose                                                    |
+| --------------- | ------------------ | ---------------------------------------------------------- |
+| `--hostname`    | `127.0.0.1`        | Listen address (switched to `0.0.0.0` when `--mdns` is on) |
+| `--port`        | `7878`             | Listen port                                                |
+| `--project-dir` | `cwd()`            | Target repo                                                |
+| `--mdns`        | off                | Enable mDNS discovery                                      |
+| `--mdns-domain` | `opencorvus.local` | mDNS domain                                                |
+| `--cors`        | off                | Enable CORS                                                |
 
 Set `OPENCORVUS_SERVER_PASSWORD` via environment variable (not a CLI flag).
 
 Verified against `packages/opencorvus/src/cli/network.ts:4-31`.
 
 Endpoints:
+
 - `POST /task` — create
 - `GET /tasks` — list
 - `GET /task/<id>` — detail
@@ -61,12 +62,12 @@ One-shot task (non-interactive).
 opencorvus run "Add unit tests for src/foo.ts" [flags]
 ```
 
-| flag | purpose |
-|---|---|
-| `--command CMD` | Use CMD as task text |
-| `--continue`, `-c` | Continue last session |
+| flag                    | purpose                   |
+| ----------------------- | ------------------------- |
+| `--command CMD`         | Use CMD as task text      |
+| `--continue`, `-c`      | Continue last session     |
 | `--session ID`, `-s ID` | Continue specific session |
-| `--share` | Produce a share link |
+| `--share`               | Produce a share link      |
 
 ### `opencorvus slack`
 
@@ -127,27 +128,27 @@ opencorvus db --query "SELECT id, status FROM task ORDER BY id DESC LIMIT 20"
 
 `packages/opencorvus/src/index.ts:106-127` also registers these. Flags vary by version; run with `--help`:
 
-| Command | Purpose |
-|---|---|
-| `opencorvus stats` | Statistics |
-| `opencorvus upgrade` | Self-upgrade |
-| `opencorvus uninstall` | Uninstall |
-| `opencorvus import` | Import sessions / tasks |
-| `opencorvus github` | GitHub Action runtime (typically invoked by the Action itself) |
-| `opencorvus pr` | PR helpers |
-| `opencorvus sidecar` | Headless managed sidecar for the VS Code extension (internal use) |
-| `opencorvus mcp` | MCP subcommand group (`mcp serve` / `mcp auth` / `mcp status` / `mcp remove-auth`) |
-| `opencorvus session` | Session management |
+| Command                | Purpose                                                                            |
+| ---------------------- | ---------------------------------------------------------------------------------- |
+| `opencorvus stats`     | Statistics                                                                         |
+| `opencorvus upgrade`   | Self-upgrade                                                                       |
+| `opencorvus uninstall` | Uninstall                                                                          |
+| `opencorvus import`    | Import sessions / tasks                                                            |
+| `opencorvus github`    | GitHub Action runtime (typically invoked by the Action itself)                     |
+| `opencorvus pr`        | PR helpers                                                                         |
+| `opencorvus sidecar`   | Headless managed sidecar for the VS Code extension (internal use)                  |
+| `opencorvus mcp`       | MCP subcommand group (`mcp serve` / `mcp auth` / `mcp status` / `mcp remove-auth`) |
+| `opencorvus session`   | Session management                                                                 |
 
 ## Exit codes
 
 The code calls `process.exit(1)` only on error paths (`packages/opencorvus/src/index.ts:144, 186, 192`):
 
-| code | meaning |
-|---|---|
-| 0 | Success (default) |
-| 1 | Any runtime error |
-| 130 | Interrupted via Ctrl+C (Bun default signal behavior) |
+| code | meaning                                              |
+| ---- | ---------------------------------------------------- |
+| 0    | Success (default)                                    |
+| 1    | Any runtime error                                    |
+| 130  | Interrupted via Ctrl+C (Bun default signal behavior) |
 
 > Earlier drafts planned `2` (config error) and `3` (task failure). **Not implemented today.**
 

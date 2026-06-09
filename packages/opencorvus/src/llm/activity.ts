@@ -93,10 +93,14 @@ export type HeartbeatKind =
  */
 export function chunkHeartbeatKind(chunk: { type?: string }): HeartbeatKind {
   switch (chunk?.type) {
-    case "start": return "manual"
-    case "start-step": return "step-start"
-    case "finish-step": return "step-finish"
-    case "finish": return "manual"
+    case "start":
+      return "manual"
+    case "start-step":
+      return "step-start"
+    case "finish-step":
+      return "step-finish"
+    case "finish":
+      return "manual"
     case "text-start":
     case "text-delta":
     case "text-end":
@@ -105,13 +109,20 @@ export function chunkHeartbeatKind(chunk: { type?: string }): HeartbeatKind {
     case "reasoning-delta":
     case "reasoning-end":
       return "reasoning-delta"
-    case "tool-input-start": return "tool-input-start"
-    case "tool-input-delta": return "tool-input-delta"
-    case "tool-input-end": return "tool-input-end"
-    case "tool-call": return "tool-call"
-    case "tool-result": return "tool-result"
-    case "tool-error": return "tool-error"
-    default: return "manual"
+    case "tool-input-start":
+      return "tool-input-start"
+    case "tool-input-delta":
+      return "tool-input-delta"
+    case "tool-input-end":
+      return "tool-input-end"
+    case "tool-call":
+      return "tool-call"
+    case "tool-result":
+      return "tool-result"
+    case "tool-error":
+      return "tool-error"
+    default:
+      return "manual"
   }
 }
 
@@ -246,12 +257,7 @@ function classify(err: unknown, ctx: ClassifyContext): ErrorClass {
   const reason = ctx.abortReason
   if (reason && typeof reason === "object" && "_activity_cause" in (reason as object)) {
     const cause = (reason as { _activity_cause: ErrorClass })._activity_cause
-    if (
-      cause === "external_abort" ||
-      cause === "total_timeout" ||
-      cause === "first_byte" ||
-      cause === "idle"
-    ) {
+    if (cause === "external_abort" || cause === "total_timeout" || cause === "first_byte" || cause === "idle") {
       return cause
     }
   }
@@ -263,9 +269,7 @@ function classify(err: unknown, ctx: ClassifyContext): ErrorClass {
   const message = err instanceof Error ? err.message : String(err)
   if (APICallError.isInstance(err)) {
     httpStatus = httpStatus ?? err.statusCode
-    bodyHead =
-      bodyHead ??
-      (typeof err.responseBody === "string" ? err.responseBody.slice(0, 1024) : undefined)
+    bodyHead = bodyHead ?? (typeof err.responseBody === "string" ? err.responseBody.slice(0, 1024) : undefined)
   }
   if (typeof httpStatus === "number") {
     if (httpStatus === 408) return "request_timeout"
@@ -286,7 +290,12 @@ function classify(err: unknown, ctx: ClassifyContext): ErrorClass {
     if (httpStatus >= 400 && httpStatus < 500) {
       // 422 with context-overflow body wording is provider-specific;
       // prefer context_overflow when the body shouts about token limits.
-      if (bodyHead && /context.{0,12}overflow|maximum context|context.{0,8}length|too many tokens|prompt is too long|exceeds.*context|range of input length should be/i.test(bodyHead)) {
+      if (
+        bodyHead &&
+        /context.{0,12}overflow|maximum context|context.{0,8}length|too many tokens|prompt is too long|exceeds.*context|range of input length should be/i.test(
+          bodyHead,
+        )
+      ) {
         return "context_overflow"
       }
       return "client_4xx"
@@ -301,11 +310,7 @@ function classify(err: unknown, ctx: ClassifyContext): ErrorClass {
     return "context_overflow"
   }
   if (/certificate|TLS|SSL|self.signed|handshake/i.test(message)) return "tls"
-  if (
-    /Unexpected end|Unterminated|invalid SSE|tool_use missing|malformed stream|invalid frame/i.test(
-      message,
-    )
-  ) {
+  if (/Unexpected end|Unterminated|invalid SSE|tool_use missing|malformed stream|invalid frame/i.test(message)) {
     return "stream_protocol"
   }
   if (/ECONNRESET|ETIMEDOUT|EAI_AGAIN|fetch failed|ENOTFOUND|ECONNREFUSED|getaddrinfo/i.test(message)) {
@@ -374,11 +379,7 @@ function readAbortCause(reason: unknown): ErrorClass | undefined {
   return undefined
 }
 
-function sleepRace(
-  ms: number,
-  externalProxy: AbortSignal,
-  total: AbortSignal,
-): Promise<void> {
+function sleepRace(ms: number, externalProxy: AbortSignal, total: AbortSignal): Promise<void> {
   if (ms <= 0) return Promise.resolve()
   return new Promise<void>((resolve) => {
     const cleanup = () => {
@@ -450,11 +451,7 @@ export async function withLLMActivity<T>(
     })
   }
 
-  const emitTerminal = (
-    outcome: "done" | "failed" | "aborted",
-    cls?: ErrorClass,
-    err?: unknown,
-  ) => {
+  const emitTerminal = (outcome: "done" | "failed" | "aborted", cls?: ErrorClass, err?: unknown) => {
     if (terminalEmitted) return
     terminalEmitted = true
     sink({
@@ -490,15 +487,11 @@ export async function withLLMActivity<T>(
     if (totalCtrl.signal.aborted || pauseDepth > 0) return
     const remain = remainingTotalMs()
     if (remain <= 0) {
-      totalCtrl.abort(
-        makeAbortReason("total_timeout", `LLMActivity total deadline ${policy.totalMs}ms exceeded`),
-      )
+      totalCtrl.abort(makeAbortReason("total_timeout", `LLMActivity total deadline ${policy.totalMs}ms exceeded`))
       return
     }
     totalTimer = setTimeout(() => {
-      totalCtrl.abort(
-        makeAbortReason("total_timeout", `LLMActivity total deadline ${policy.totalMs}ms exceeded`),
-      )
+      totalCtrl.abort(makeAbortReason("total_timeout", `LLMActivity total deadline ${policy.totalMs}ms exceeded`))
     }, remain)
   }
   const beginPause = () => {
@@ -555,9 +548,7 @@ export async function withLLMActivity<T>(
       // Per-attempt: first-byte gate + lazy idle gate.
       const firstByteCtrl = new AbortController()
       const firstByteTimer = setTimeout(() => {
-        firstByteCtrl.abort(
-          makeAbortReason("first_byte", `LLMActivity first byte > ${policy.firstByteMs}ms`),
-        )
+        firstByteCtrl.abort(makeAbortReason("first_byte", `LLMActivity first byte > ${policy.firstByteMs}ms`))
       }, policy.firstByteMs)
       let firstByteSeen = false
 
@@ -570,12 +561,7 @@ export async function withLLMActivity<T>(
       let unregisterActivityGate: (() => void) | undefined
       const idleCtrl = new AbortController()
 
-      const composed = AbortSignal.any([
-        externalProxy.signal,
-        totalCtrl.signal,
-        firstByteCtrl.signal,
-        idleCtrl.signal,
-      ])
+      const composed = AbortSignal.any([externalProxy.signal, totalCtrl.signal, firstByteCtrl.signal, idleCtrl.signal])
 
       const startIdleGate = () => {
         if (idleHolder.gate) return
@@ -636,7 +622,8 @@ export async function withLLMActivity<T>(
           throw new LLMActivityAbortedError(attempt, externalProxy.signal.reason)
         }
         if (totalCtrl.signal.aborted || remainingTotalMs() <= 0) {
-          const reason = totalCtrl.signal.reason ??
+          const reason =
+            totalCtrl.signal.reason ??
             makeAbortReason("total_timeout", `LLMActivity total deadline ${policy.totalMs}ms exceeded`)
           if (!totalCtrl.signal.aborted) totalCtrl.abort(reason)
           emitTerminal("failed", "total_timeout", reason)
@@ -663,10 +650,7 @@ export async function withLLMActivity<T>(
         const apiErr = APICallError.isInstance(err) ? err : undefined
         const cls = policy.classify(err, {
           httpStatus: apiErr?.statusCode,
-          bodyHead:
-            typeof apiErr?.responseBody === "string"
-              ? apiErr.responseBody.slice(0, 1024)
-              : undefined,
+          bodyHead: typeof apiErr?.responseBody === "string" ? apiErr.responseBody.slice(0, 1024) : undefined,
           abortReason: composedReason,
         })
 

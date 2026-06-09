@@ -8,19 +8,19 @@
 // payload becomes a pending attachment in the composer; the user
 // must press send for it to leave the client.
 
-import { messageStore, setChatAttachments } from "../store/messages";
-import { getHostTransport } from "./host-transport";
-import { isComposerAttachPayload } from "./composer-attach-validate";
+import { messageStore, setChatAttachments } from "../store/messages"
+import { getHostTransport } from "./host-transport"
+import { isComposerAttachPayload } from "./composer-attach-validate"
 
-let installed = false;
+let installed = false
 
 export function installComposerAttachSubscription(): void {
-  if (installed) return;
-  installed = true;
+  if (installed) return
+  installed = true
   getHostTransport().subscribeUiCommand("composer.attach", (raw) => {
     if (!isComposerAttachPayload(raw)) {
-      console.warn("[composer.attach] invalid payload, ignoring", raw);
-      return;
+      console.warn("[composer.attach] invalid payload, ignoring", raw)
+      return
     }
     // Reuse the existing attachment shape used by services/chat.ts —
     // adding sourcePath / selection as optional metadata so the host
@@ -34,7 +34,7 @@ export function installComposerAttachSubscription(): void {
         sourcePath: raw.sourcePath,
         selection: raw.selection,
       },
-    ];
-    setChatAttachments(next);
-  });
+    ]
+    setChatAttachments(next)
+  })
 }

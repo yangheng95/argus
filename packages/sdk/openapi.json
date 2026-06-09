@@ -137,6 +137,136 @@
         ]
       }
     },
+    "/project/current/worktrees": {
+      "get": {
+        "operationId": "project.current.worktrees",
+        "summary": "List current project worktrees",
+        "description": "List git worktrees registered for the current project and their live goal binding, if any.",
+        "responses": {
+          "200": {
+            "description": "Project worktrees",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/ProjectWorktree"
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BadRequestError"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/NotFoundError"
+                }
+              }
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "directory",
+            "in": "query",
+            "required": false,
+            "description": "Project directory for project-scoped routes. Equivalent to the x-opencorvus-directory request header.",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "x-codeSamples": [
+          {
+            "lang": "js",
+            "source": "import { createOpenCorvusClient } from \"@opencorvus-ai/sdk\"\n\nconst client = createOpenCorvusClient()\nawait client.project.current.worktrees({\n  ...\n})"
+          }
+        ]
+      },
+      "delete": {
+        "operationId": "project.current.worktrees.delete",
+        "summary": "Delete a current project worktree",
+        "description": "Remove a git worktree registered for the current project.",
+        "responses": {
+          "200": {
+            "description": "Worktree removed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "ok": {
+                      "type": "boolean"
+                    }
+                  },
+                  "required": [
+                    "ok"
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BadRequestError"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/NotFoundError"
+                }
+              }
+            }
+          }
+        },
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/WorktreeRemoveInput"
+              }
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "directory",
+            "in": "query",
+            "required": false,
+            "description": "Project directory for project-scoped routes. Equivalent to the x-opencorvus-directory request header.",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "x-codeSamples": [
+          {
+            "lang": "js",
+            "source": "import { createOpenCorvusClient } from \"@opencorvus-ai/sdk\"\n\nconst client = createOpenCorvusClient()\nawait client.project.current.worktrees.delete({\n  ...\n})"
+          }
+        ]
+      }
+    },
     "/project/{projectID}": {
       "patch": {
         "operationId": "project.update",
@@ -2801,6 +2931,7 @@
                       "explore",
                       "deep-research",
                       "frontend-research",
+                      "visual-qa",
                       "evaluator",
                       "system"
                     ]
@@ -7509,6 +7640,120 @@
         ]
       }
     },
+    "/skill/import-file": {
+      "post": {
+        "operationId": "skill.importFile",
+        "summary": "Import a dropped skill source",
+        "description": "Write a dropped SKILL.md file, skill directory, or zip archive into the current project's .opencorvus skill directory.",
+        "responses": {
+          "200": {
+            "description": "Imported project skill file",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "name": {
+                      "type": "string"
+                    },
+                    "source": {
+                      "type": "string"
+                    },
+                    "kind": {
+                      "type": "string",
+                      "const": "path"
+                    },
+                    "names": {
+                      "type": "array",
+                      "items": {
+                        "type": "string"
+                      }
+                    },
+                    "sources": {
+                      "type": "array",
+                      "items": {
+                        "type": "string"
+                      }
+                    }
+                  },
+                  "required": [
+                    "name",
+                    "source",
+                    "kind"
+                  ]
+                }
+              }
+            }
+          }
+        },
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "filename": {
+                    "type": "string",
+                    "minLength": 1
+                  },
+                  "content": {
+                    "type": "string"
+                  },
+                  "sourceName": {
+                    "type": "string",
+                    "minLength": 1
+                  },
+                  "files": {
+                    "type": "array",
+                    "items": {
+                      "type": "object",
+                      "properties": {
+                        "path": {
+                          "type": "string",
+                          "minLength": 1
+                        },
+                        "content": {
+                          "type": "string"
+                        },
+                        "contentBase64": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "path"
+                      ]
+                    }
+                  },
+                  "archiveBase64": {
+                    "type": "string"
+                  },
+                  "policy": {
+                    "$ref": "#/components/schemas/PermissionAction"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "directory",
+            "in": "query",
+            "required": false,
+            "description": "Project directory for project-scoped routes. Equivalent to the x-opencorvus-directory request header.",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "x-codeSamples": [
+          {
+            "lang": "js",
+            "source": "import { createOpenCorvusClient } from \"@opencorvus-ai/sdk\"\n\nconst client = createOpenCorvusClient()\nawait client.skill.importFile({\n  ...\n})"
+          }
+        ]
+      }
+    },
     "/skill/remove": {
       "post": {
         "operationId": "skill.remove",
@@ -12156,6 +12401,37 @@
                         "type": "string"
                       }
                     },
+                    "candidates": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "id": {
+                            "type": "string"
+                          },
+                          "url": {
+                            "type": "string"
+                          },
+                          "source": {
+                            "type": "string",
+                            "const": "task-artifact"
+                          },
+                          "selected": {
+                            "type": "boolean"
+                          },
+                          "timeUpdated": {
+                            "type": "number"
+                          }
+                        },
+                        "required": [
+                          "id",
+                          "url",
+                          "source",
+                          "selected",
+                          "timeUpdated"
+                        ]
+                      }
+                    },
                     "source": {
                       "type": "string",
                       "enum": [
@@ -12170,6 +12446,7 @@
                     "projectRoot",
                     "viewports",
                     "diagnostics",
+                    "candidates",
                     "source"
                   ]
                 }
@@ -12290,6 +12567,37 @@
                         "type": "string"
                       }
                     },
+                    "candidates": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "id": {
+                            "type": "string"
+                          },
+                          "url": {
+                            "type": "string"
+                          },
+                          "source": {
+                            "type": "string",
+                            "const": "task-artifact"
+                          },
+                          "selected": {
+                            "type": "boolean"
+                          },
+                          "timeUpdated": {
+                            "type": "number"
+                          }
+                        },
+                        "required": [
+                          "id",
+                          "url",
+                          "source",
+                          "selected",
+                          "timeUpdated"
+                        ]
+                      }
+                    },
                     "source": {
                       "type": "string",
                       "enum": [
@@ -12304,6 +12612,7 @@
                     "projectRoot",
                     "viewports",
                     "diagnostics",
+                    "candidates",
                     "source"
                   ]
                 }
@@ -12455,6 +12764,37 @@
                             "type": "string"
                           }
                         },
+                        "candidates": {
+                          "type": "array",
+                          "items": {
+                            "type": "object",
+                            "properties": {
+                              "id": {
+                                "type": "string"
+                              },
+                              "url": {
+                                "type": "string"
+                              },
+                              "source": {
+                                "type": "string",
+                                "const": "task-artifact"
+                              },
+                              "selected": {
+                                "type": "boolean"
+                              },
+                              "timeUpdated": {
+                                "type": "number"
+                              }
+                            },
+                            "required": [
+                              "id",
+                              "url",
+                              "source",
+                              "selected",
+                              "timeUpdated"
+                            ]
+                          }
+                        },
                         "source": {
                           "type": "string",
                           "enum": [
@@ -12469,6 +12809,7 @@
                         "projectRoot",
                         "viewports",
                         "diagnostics",
+                        "candidates",
                         "source"
                       ]
                     },
@@ -12562,6 +12903,7 @@
                         "bytes": {
                           "type": "number"
                         },
+                        "manifest": {},
                         "layers": {},
                         "dom": {},
                         "capture_error": {}
@@ -12621,7 +12963,8 @@
                 "type": "object",
                 "properties": {
                   "targetID": {
-                    "type": "string"
+                    "type": "string",
+                    "minLength": 1
                   },
                   "viewportID": {
                     "default": "desktop",
@@ -12632,7 +12975,10 @@
                       "mobile"
                     ]
                   }
-                }
+                },
+                "required": [
+                  "targetID"
+                ]
               }
             }
           }
@@ -13561,7 +13907,8 @@
                                             "enum": [
                                               "acceptance_summary",
                                               "changed_files",
-                                              "requirement_text"
+                                              "requirement_text",
+                                              "visual_evidence"
                                             ]
                                           }
                                         }
@@ -13588,7 +13935,8 @@
                                             "contains",
                                             "exact_match",
                                             "length_within",
-                                            "json_schema"
+                                            "json_schema",
+                                            "visual-evidence-bundle"
                                           ]
                                         },
                                         "config": {
@@ -13598,6 +13946,36 @@
                                             "type": "string"
                                           },
                                           "additionalProperties": {}
+                                        },
+                                        "spec": {
+                                          "description": "For name=visual-evidence-bundle, identifies the required visual evidence bundle shape.",
+                                          "type": "object",
+                                          "properties": {
+                                            "kind": {
+                                              "type": "string",
+                                              "const": "visual_evidence_bundle"
+                                            },
+                                            "viewport": {
+                                              "type": "string",
+                                              "minLength": 1
+                                            }
+                                          },
+                                          "required": [
+                                            "kind"
+                                          ]
+                                        },
+                                        "expect": {
+                                          "description": "For name=visual-evidence-bundle, requires a passing current bundle.",
+                                          "type": "object",
+                                          "properties": {
+                                            "status": {
+                                              "type": "string",
+                                              "const": "passed"
+                                            }
+                                          },
+                                          "required": [
+                                            "status"
+                                          ]
                                         }
                                       },
                                       "required": [
@@ -13982,7 +14360,8 @@
                                                   "enum": [
                                                     "acceptance_summary",
                                                     "changed_files",
-                                                    "requirement_text"
+                                                    "requirement_text",
+                                                    "visual_evidence"
                                                   ]
                                                 }
                                               }
@@ -14009,7 +14388,8 @@
                                                   "contains",
                                                   "exact_match",
                                                   "length_within",
-                                                  "json_schema"
+                                                  "json_schema",
+                                                  "visual-evidence-bundle"
                                                 ]
                                               },
                                               "config": {
@@ -14019,6 +14399,36 @@
                                                   "type": "string"
                                                 },
                                                 "additionalProperties": {}
+                                              },
+                                              "spec": {
+                                                "description": "For name=visual-evidence-bundle, identifies the required visual evidence bundle shape.",
+                                                "type": "object",
+                                                "properties": {
+                                                  "kind": {
+                                                    "type": "string",
+                                                    "const": "visual_evidence_bundle"
+                                                  },
+                                                  "viewport": {
+                                                    "type": "string",
+                                                    "minLength": 1
+                                                  }
+                                                },
+                                                "required": [
+                                                  "kind"
+                                                ]
+                                              },
+                                              "expect": {
+                                                "description": "For name=visual-evidence-bundle, requires a passing current bundle.",
+                                                "type": "object",
+                                                "properties": {
+                                                  "status": {
+                                                    "type": "string",
+                                                    "const": "passed"
+                                                  }
+                                                },
+                                                "required": [
+                                                  "status"
+                                                ]
                                               }
                                             },
                                             "required": [
@@ -22915,6 +23325,105 @@
         ]
       }
     },
+    "/task/{taskID}/operator-model-context": {
+      "get": {
+        "operationId": "task.operatorModelContext",
+        "summary": "Get task operator model context",
+        "description": "Return the agent and effective model that a task-level operator message will use. This mirrors the task message append path so overlay model controls do not guess from raw config.",
+        "responses": {
+          "200": {
+            "description": "Task operator model context",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "taskID": {
+                      "type": "string",
+                      "pattern": "^tsk.*"
+                    },
+                    "sessionID": {
+                      "type": "string",
+                      "pattern": "^ses.*"
+                    },
+                    "agent": {
+                      "type": "string"
+                    },
+                    "model": {
+                      "type": "object",
+                      "properties": {
+                        "providerID": {
+                          "type": "string"
+                        },
+                        "modelID": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "providerID",
+                        "modelID"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "taskID",
+                    "sessionID",
+                    "agent",
+                    "model"
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BadRequestError"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/NotFoundError"
+                }
+              }
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "directory",
+            "in": "query",
+            "required": false,
+            "description": "Project directory for project-scoped routes. Equivalent to the x-opencorvus-directory request header.",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "taskID",
+            "schema": {
+              "type": "string",
+              "pattern": "^tsk.*"
+            },
+            "required": true
+          }
+        ],
+        "x-codeSamples": [
+          {
+            "lang": "js",
+            "source": "import { createOpenCorvusClient } from \"@opencorvus-ai/sdk\"\n\nconst client = createOpenCorvusClient()\nawait client.task.operatorModelContext({\n  ...\n})"
+          }
+        ]
+      }
+    },
     "/task/{taskID}/runs": {
       "get": {
         "operationId": "task.runs",
@@ -26286,7 +26795,8 @@
                                       "enum": [
                                         "acceptance_summary",
                                         "changed_files",
-                                        "requirement_text"
+                                        "requirement_text",
+                                        "visual_evidence"
                                       ]
                                     }
                                   }
@@ -26313,7 +26823,8 @@
                                       "contains",
                                       "exact_match",
                                       "length_within",
-                                      "json_schema"
+                                      "json_schema",
+                                      "visual-evidence-bundle"
                                     ]
                                   },
                                   "config": {
@@ -26323,6 +26834,36 @@
                                       "type": "string"
                                     },
                                     "additionalProperties": {}
+                                  },
+                                  "spec": {
+                                    "description": "For name=visual-evidence-bundle, identifies the required visual evidence bundle shape.",
+                                    "type": "object",
+                                    "properties": {
+                                      "kind": {
+                                        "type": "string",
+                                        "const": "visual_evidence_bundle"
+                                      },
+                                      "viewport": {
+                                        "type": "string",
+                                        "minLength": 1
+                                      }
+                                    },
+                                    "required": [
+                                      "kind"
+                                    ]
+                                  },
+                                  "expect": {
+                                    "description": "For name=visual-evidence-bundle, requires a passing current bundle.",
+                                    "type": "object",
+                                    "properties": {
+                                      "status": {
+                                        "type": "string",
+                                        "const": "passed"
+                                      }
+                                    },
+                                    "required": [
+                                      "status"
+                                    ]
                                   }
                                 },
                                 "required": [
@@ -30343,6 +30884,51 @@
           "data"
         ]
       },
+      "ProjectWorktree": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string"
+          },
+          "branch": {
+            "type": "string"
+          },
+          "directory": {
+            "type": "string"
+          },
+          "goalID": {
+            "type": "string"
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "primary",
+              "active",
+              "expired"
+            ]
+          },
+          "removable": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "name",
+          "directory",
+          "status",
+          "removable"
+        ]
+      },
+      "WorktreeRemoveInput": {
+        "type": "object",
+        "properties": {
+          "directory": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "directory"
+        ]
+      },
       "TerminalProfile": {
         "type": "object",
         "properties": {
@@ -32741,17 +33327,6 @@
           "config"
         ]
       },
-      "WorktreeRemoveInput": {
-        "type": "object",
-        "properties": {
-          "directory": {
-            "type": "string"
-          }
-        },
-        "required": [
-          "directory"
-        ]
-      },
       "WorktreeResetInput": {
         "type": "object",
         "properties": {
@@ -32898,6 +33473,7 @@
               "explore",
               "deep-research",
               "frontend-research",
+              "visual-qa",
               "evaluator",
               "system"
             ]
@@ -33044,6 +33620,7 @@
               "explore",
               "deep-research",
               "frontend-research",
+              "visual-qa",
               "evaluator",
               "system"
             ]

@@ -107,7 +107,7 @@ missing, treat that as an input-quality fact and choose the next action from the
 full task context instead of expecting frontend_research to materialize it. For
 generic market/API facts around the same task, use `deep_research` separately. For webpage clone or frontend implementation requests from a live URL, if no frontend_design public report / evidence_source_manifest / prepared evidence is present, dispatch `frontend_design` before `frontend_research` unless you only need a source-URL-level risk brief. Do not let `frontend_research` replace missing frontend_design evidence with assumptions or placeholder visual evidence.
 
-`visual_qa` is the dedicated frontend UI/UX test and repair agent (UI means User Interface; UX means User Experience). It consumes frontend_design/build evidence, tests the real rendered product, may repair in-scope visual/runtime defects, and submits a structured visual QA report; it does not acquire webpage evidence and is not the final gate because integrity remains final acceptance.
+`visual_qa` is the dedicated frontend visual GUI fidelity and functional test/repair agent (GUI means Graphical User Interface). It consumes frontend_design/build evidence, tests the real rendered product, may repair in-scope visual or functional defects, and submits a structured visual QA report; it does not acquire webpage evidence and is not the final gate because integrity remains final acceptance.
 
 Deep research output is a `research_brief` artifact plus bundle paths. It is not
 REQ-N, not acceptance specs, not a goal graph, not an implementation plan, not a
@@ -307,6 +307,7 @@ durable corrections:
 - Missing dependency or wrong goal contract -> try the smallest same-graph
   repair. Use `modify_goal` instead of reopening the entire graph when a point
   correction is enough.
+- Latest operator message adds one concrete in-scope capability/surface no current goal owns -> use `add_goal` with a complete goal contract, then dispatch it when dependencies pass. Do not claim it exists before the tool result proves it.
 - Re-enter Architect only when the evidence shows a genuinely new prerequisite
   goal or graph boundary that cannot be represented as a point correction.
 
@@ -384,7 +385,7 @@ contract.
   implementation, UI replication, or visual parity work; it owns the binding
   visual frontend template for implementation. Whether to call it is your
   decision from the current task context.
-- `visual_qa`: dedicated frontend UI/UX testing and in-scope visual repair from
+- `visual_qa`: dedicated frontend visual GUI fidelity and functional testing plus in-scope repair from
   task-scoped evidence. Use Node, not bun, for Playwright/browser automation on Windows. It can read, run commands, repair files, use skills, and use webpage_render/evaluate/text_diff/vision_judge; it cannot reopen extraction.
 - `frontend_research`: webpage/UI investigation publisher. With source URLs, the
   host prepares rendered webpage evidence before the agent session; the agent
@@ -419,6 +420,7 @@ contract.
 - `read_context`: refresh task/goals/runs/decisions/integrity evidence before
   consequential decisions.
 - `query_failed_goals`: inspect failed goal evidence before retry/modify/fail.
+- `add_goal`: append one new executable goal when a real operator message or task evidence adds a concrete in-scope surface not covered by existing goals; requires full acceptance_specs and owned_paths. Use `modify_goal` for point fixes, `architect` for graph re-decomposition, and `propose_task` for separate follow-up scope.
 - `modify_goal`: correct a goal contract without rebuilding the whole graph.
   When `updates.acceptance_specs` is included, each scorer `type` is exactly one
   of `heuristic`/`llm_judge`/`prebuilt`/`contract_audit` (shell/script go under

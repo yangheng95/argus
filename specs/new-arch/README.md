@@ -11,41 +11,41 @@
 
 ### 总览（SVG 框图）
 
-| 文件 | 展示内容 |
-| --- | --- |
-| [01-agents.svg](01-agents.svg) | 图 1 — Agent 家族调用链（Gateway → Loop → sub-agents → Executor） |
-| [02-data.svg](02-data.svg) | 图 2 — 数据面（orchestrator 18 表 + Trace/Bus 横切） |
-| [03-control.svg](03-control.svg) | 图 3 — 控制面与扩展入口 |
+| 文件                             | 展示内容                                                          |
+| -------------------------------- | ----------------------------------------------------------------- |
+| [01-agents.svg](01-agents.svg)   | 图 1 — Agent 家族调用链（Gateway → Loop → sub-agents → Executor） |
+| [02-data.svg](02-data.svg)       | 图 2 — 数据面（orchestrator 18 表 + Trace/Bus 横切）              |
+| [03-control.svg](03-control.svg) | 图 3 — 控制面与扩展入口                                           |
 
 ### 详细文档（MD）
 
-| 文件 | 主题 | 对应旧 SVG Section |
-| --- | --- | --- |
-| [01-agents.md](01-agents.md) | Agent 家族、Task Control Loop、MiniWorkflow（direct/pipeline）、task kind | A · C · H · I |
-| [02-data.md](02-data.md) | `engine_*` 18 表、session 域、Trace/Bus 横切、Decision Log | C · D · K |
-| [03-control.md](03-control.md) | ChannelIngress · ControlMessage · Panel Capability 路由 | L + 新 |
-| [04-extensions.md](04-extensions.md) | Executor / Plugin / MCP / ACP 四条扩展入口 | G（扩展） |
-| [05-config.md](05-config.md) | Unified Config 三层分离 + PATCH 流程 | F |
-| [06-provider.md](06-provider.md) | LLM Provider 六层适配 | G |
-| [07-panel.md](07-panel.md) | Workbench / Panel 重设计 + SSE 事件 | J |
-| [08-agent-tool-adapter.md](08-agent-tool-adapter.md) | Agent ↔ Tool include/exclude 适配协议 | 新 |
-| [09-verification-evidence.md](09-verification-evidence.md) | Verification Evidence（已迁移至 `engine_artifact` kind="verification-evidence"） | 新 |
-| [10-worktree-lifecycle.md](10-worktree-lifecycle.md) | Goal worktree 生命周期与 ff-only merge-back | 新 |
-| [11-agent-oop-protocol.md](11-agent-oop-protocol.md) | Agent OOP 协议：BaseAgent / CapabilityContract / Mailbox / Registry / Whitelist（草稿，未实施） | 新 |
-| [12-overlay-card-system.md](12-overlay-card-system.md) | Overlay 统一卡片系统：Shell / Payload / Policy / Writer（目标设计，未完全实施） | 新 |
-| [13-agent-communication-matrix.md](13-agent-communication-matrix.md) | Agent 通信矩阵：预期 whitelist vs 当前实现的 direct/indirect 路径 | 新 |
-| [14-agent-runtime-mode.md](14-agent-runtime-mode.md) | Agent 抽象修正：AgentSpec / RuntimeMode / ContextStrategy / BudgetPolicy | 新 |
-| [15-no-fsm.md](15-no-fsm.md) | 状态机全砍计划（DEPRECATED，并入 16） | 新 |
-| [16-unified-teardown.md](16-unified-teardown.md) | 统一拆除：向 Claude Code / Codex 极简模型看齐 | 新 |
-| [2026-04-27-task-rewind-code-resource.md](2026-04-27-task-rewind-code-resource.md) | Task rewind 与代码 worktree 资源协同 | 新 |
-| [spec-vscode-extension.md](spec-vscode-extension.md) | VSCode 扩展规格 | 新 |
-| [99-principles.md](99-principles.md) | 核心原则、anti-patterns、非协商约束 | B · E |
+| 文件                                                                               | 主题                                                                                            | 对应旧 SVG Section |
+| ---------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------- | ------------------ |
+| [01-agents.md](01-agents.md)                                                       | Agent 家族、Task Control Loop、MiniWorkflow（direct/pipeline）、task kind                       | A · C · H · I      |
+| [02-data.md](02-data.md)                                                           | `engine_*` 18 表、session 域、Trace/Bus 横切、Decision Log                                      | C · D · K          |
+| [03-control.md](03-control.md)                                                     | ChannelIngress · ControlMessage · Panel Capability 路由                                         | L + 新             |
+| [04-extensions.md](04-extensions.md)                                               | Executor / Plugin / MCP / ACP 四条扩展入口                                                      | G（扩展）          |
+| [05-config.md](05-config.md)                                                       | Unified Config 三层分离 + PATCH 流程                                                            | F                  |
+| [06-provider.md](06-provider.md)                                                   | LLM Provider 六层适配                                                                           | G                  |
+| [07-panel.md](07-panel.md)                                                         | Workbench / Panel 重设计 + SSE 事件                                                             | J                  |
+| [08-agent-tool-adapter.md](08-agent-tool-adapter.md)                               | Agent ↔ Tool include/exclude 适配协议                                                          | 新                 |
+| [09-verification-evidence.md](09-verification-evidence.md)                         | Verification Evidence（已迁移至 `engine_artifact` kind="verification-evidence"）                | 新                 |
+| [10-worktree-lifecycle.md](10-worktree-lifecycle.md)                               | Goal worktree 生命周期与 ff-only merge-back                                                     | 新                 |
+| [11-agent-oop-protocol.md](11-agent-oop-protocol.md)                               | Agent OOP 协议：BaseAgent / CapabilityContract / Mailbox / Registry / Whitelist（草稿，未实施） | 新                 |
+| [12-overlay-card-system.md](12-overlay-card-system.md)                             | Overlay 统一卡片系统：Shell / Payload / Policy / Writer（目标设计，未完全实施）                 | 新                 |
+| [13-agent-communication-matrix.md](13-agent-communication-matrix.md)               | Agent 通信矩阵：预期 whitelist vs 当前实现的 direct/indirect 路径                               | 新                 |
+| [14-agent-runtime-mode.md](14-agent-runtime-mode.md)                               | Agent 抽象修正：AgentSpec / RuntimeMode / ContextStrategy / BudgetPolicy                        | 新                 |
+| [15-no-fsm.md](15-no-fsm.md)                                                       | 状态机全砍计划（DEPRECATED，并入 16）                                                           | 新                 |
+| [16-unified-teardown.md](16-unified-teardown.md)                                   | 统一拆除：向 Claude Code / Codex 极简模型看齐                                                   | 新                 |
+| [2026-04-27-task-rewind-code-resource.md](2026-04-27-task-rewind-code-resource.md) | Task rewind 与代码 worktree 资源协同                                                            | 新                 |
+| [spec-vscode-extension.md](spec-vscode-extension.md)                               | VSCode 扩展规格                                                                                 | 新                 |
+| [99-principles.md](99-principles.md)                                               | 核心原则、anti-patterns、非协商约束                                                             | B · E              |
 
 ### 归档与工作笔记
 
-| 文件 | 说明 |
-| --- | --- |
-| [_archive-old-arch.svg](_archive-old-arch.svg) | 原 `specs/new-arch.svg`（1336 行）归档 |
+| 文件                                            | 说明                                   |
+| ----------------------------------------------- | -------------------------------------- |
+| [\_archive-old-arch.svg](_archive-old-arch.svg) | 原 `specs/new-arch.svg`（1336 行）归档 |
 
 ## 三张总览框图（SVG 瘦身目标）
 
@@ -55,7 +55,7 @@
 2. **数据面**（图 2）—— `engine_*` 18 表 + 横切 Trace/Bus
 3. **控制面 + 扩展入口**（图 3）—— channel/control/panel-capability + executor/plugin/mcp/acp
 
-> SVG 框图（01/02/03-*.svg）尚未根据本轮重构更新；以 MD 为准。
+> SVG 框图（01/02/03-\*.svg）尚未根据本轮重构更新；以 MD 为准。
 
 详细文字全部迁到上表的 MD。SVG 不再承载大段描述。
 
@@ -81,7 +81,7 @@
 - [x] 02-data.md 填充
 - [x] 03-control.md 填充
 - [x] 04-extensions.md 填充
-- [x] 新 SVG 三张总览图（01/02/03-*.svg）
+- [x] 新 SVG 三张总览图（01/02/03-\*.svg）
 - [x] 旧 new-arch.svg 归档为 `_archive-old-arch.svg`
 - [x] 工作笔记已归档（原 `00-sync-notes.md` 已移除）
 - [x] 05-config.md · 06-provider.md · 07-panel.md · 99-principles.md 全部填充
@@ -146,19 +146,19 @@
   - **05-config.md** — 删除已不存在的 `assistant.spec / goal / planner / evaluator / adaptive`
     字段；删除 `experimental.unattended / auto_permission`（仅余 `auto_question`）；
     补齐当前 `assistant` 子项（`architect / acceptance / acceptance_visual / frontend_design /
-    intent_analysis / build / activity / debug / default_workflow / workflows`）
+intent_analysis / build / activity / debug / default_workflow / workflows`）
   - **06-provider.md** — 数量改为 **20 bundled provider**（`provider/bundled.ts:27-48`）；
     Agent ↔ Model 示例替换 `planner / evaluator` 为 `orchestrator / requirements /
-    architect / build / acceptance`
+architect / build / acceptance`
   - **07-panel.md** — Config Panel agent 列删除 `Planner / Evaluator`，补 `Frontend Design /
-    Intent-Analysis / Build`；Behavior 区只保留 `auto_question`；SSE 事件改为实际注册的
+Intent-Analysis / Build`；Behavior 区只保留 `auto_question`；SSE 事件改为实际注册的
     `workflow.selected / workflow.step.updated / goal.workflow.progress`
   - **07-panel-reactivity.md** — 顶部加 **P0-P2 已落地、P3 清理未完成** 状态条；列出
     `store/messages.ts` (923 行) 仍存活的 `FLUSH_INTERVAL / enqueueEvent / coalesceDeltas /
-    flushEvents / messagesBySession`，与 `partitionInteractions` / `goal-group:<gid>` 残留
+flushEvents / messagesBySession`，与 `partitionInteractions` / `goal-group:<gid>` 残留
   - **08-agent-tool-adapter.md** — 顶部加 **8 条关键修正**：`tools` schema 是
     `{ include?, exclude? }` 同对象而非 union；`spec_enter / spec_exit / plan_enter /
-    plan_exit` 这些 tool **从未存在**；build / general / explore / acceptance 真实工具集已对齐
+plan_exit` 这些 tool **从未存在**；build / general / explore / acceptance 真实工具集已对齐
     `agent.ts:125/140/157/233`；`requirements / architect / frontend-design / intent-analysis`
     实际走 ToolRegistry（之前列为"不走"是错的）；`src/session/tool-resolver.ts` 不存在，
     `resolveTools` 在 `session/loop.ts:1732`
@@ -186,7 +186,7 @@
   - **99-principles.md** — Principle 2 sub-agent 列表删除 `Planner`，补
     `Frontend Design / Intent-Analysis / Integrity / Prosecutor`
   - **README + 01 + 13** — 修正 build 包描述：`build/` 实际只有 `agent.ts / index.ts /
-    report.ts / types.ts` 4 个文件，没有 `runner.ts` / `sub-agent-protocol.ts` / `prompt/`；
+report.ts / types.ts` 4 个文件，没有 `runner.ts` / `sub-agent-protocol.ts` / `prompt/`；
     runner 在 `goal/runner.ts`，sub-agent 协议在 `agent/sub-agent-protocol.ts`
   - **README + 03 + 13** — 修正 SSE 端点真源：分散在 5 个 route 文件（主线
     `routes/orchestrator.ts`），`src/server/event.ts` 只是 7 行 BusEvent 声明，不是 SSE 端点
@@ -210,8 +210,8 @@
   - **04-extensions.md** — 调用链描述更正：worktree 创建是 `Worktree.create`，
     实际从 `build/agent.ts` + `orchestrator/tools.ts` 调用；`goal/runner.ts` 只承担清理
   - **05-config.md** — 顶层字段补 `disabled_providers / small_model / default_agent /
-    preview / terminal / locale`；移除"每个 agent 都有 `max_steps · timeout_ms · quality_threshold
-    · max_attempts · skills[]`"的谬误（`config.ts:1259-1365` 实际每个 agent 字段集
+preview / terminal / locale`；移除"每个 agent 都有 `max_steps · timeout_ms · quality_threshold
+· max_attempts · skills[]`"的谬误（`config.ts:1259-1365` 实际每个 agent 字段集
     不一样：build = max_steps+skills，acceptance = +max_retries，acceptance_visual = numeric
     thresholds，activity = idle/timeout ms gates）；标注 2026-05-11 新增 `locale` 与
     Overlay UI locale 的区分
@@ -222,7 +222,7 @@
   - **07-panel.md** — Appearance > Locale 区分 Layer 1 vs Layer 2；Workflow 区移除
     speculative `Auto-select Workflow` toggle，补真实 builtin IDs（`direct` / `pipeline`，
     `engine/workflow.ts:262-265`）；Agent Config 区移除虚构 `max_steps:30 timeout:5min
-    quality:0.5` 默认值（真实默认 `max_steps: 1000`，无 timeout / quality 字段，
+quality:0.5` 默认值（真实默认 `max_steps: 1000`，无 timeout / quality 字段，
     见 `engine/config.ts:170-212`）
   - **07-panel-reactivity.md** — `pipeline.build` workflow 修正为 1 个 phase
     `{id:"build", sessionKind:"build"}`（`engine/workflow.ts:232-234`），不是

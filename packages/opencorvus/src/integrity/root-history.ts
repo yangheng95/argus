@@ -265,7 +265,11 @@ export function renderIntegrityRootHistoryBlock(history: IntegrityRootHistory): 
           ? attempt.blockingRootLabels.map((label) => `{${cleanInline(label)}}`).join(", ")
           : "(none)"
       } | ${
-        previous ? (newLabels.length > 0 ? newLabels.map((label) => `{${cleanInline(label)}}`).join(", ") : "(none)") : "first round"
+        previous
+          ? newLabels.length > 0
+            ? newLabels.map((label) => `{${cleanInline(label)}}`).join(", ")
+            : "(none)"
+          : "first round"
       } |`,
     )
   }
@@ -280,7 +284,9 @@ export function renderIntegrityRootHistoryBlock(history: IntegrityRootHistory): 
       )
       lines.push(`  first seen: R${root.firstSeenAttempt}.`)
       lines.push(`  latest seen: R${root.latestSeenAttempt}.`)
-      lines.push(`  reviewer ids: ${root.reviewerIDs.length > 0 ? root.reviewerIDs.map(cleanInline).join(", ") : "(none)"}.`)
+      lines.push(
+        `  reviewer ids: ${root.reviewerIDs.length > 0 ? root.reviewerIDs.map(cleanInline).join(", ") : "(none)"}.`,
+      )
       const symptoms = root.symptomVariations
         .map((variation) => `R${variation.attemptNumber} ${cleanInline(variation.findingID)}`)
         .join("; ")
@@ -288,10 +294,7 @@ export function renderIntegrityRootHistoryBlock(history: IntegrityRootHistory): 
     }
   }
 
-  lines.push(
-    "",
-    "Each round's full team_report_markdown is stored in engine_artifact kind=integrity_attempt.",
-  )
+  lines.push("", "Each round's full team_report_markdown is stored in engine_artifact kind=integrity_attempt.")
   return capSharedPromptText(lines.join("\n"))
 }
 
@@ -307,7 +310,9 @@ function rootGroupingKey(finding: FindingSummary): string {
   const files = finding.filePaths.map(normalizePathForKey).filter(Boolean).sort()
   const symbol = symbolToken(`${finding.canonicalSymptom}\n${finding.title}\n${finding.description}\n${finding.repair}`)
   if (files.length > 0 && symbol) return `file-symbol:${files.join("|")}:${symbol}`
-  const tokens = semanticTokens(`${finding.canonicalSymptom}\n${finding.title}\n${finding.description}\n${finding.repair}`)
+  const tokens = semanticTokens(
+    `${finding.canonicalSymptom}\n${finding.title}\n${finding.description}\n${finding.repair}`,
+  )
   if (files.length > 0) return `file-text:${files.join("|")}:${tokens.slice(0, 8).join("-")}`
   return `text:${tokens.slice(0, 10).join("-")}`
 }
@@ -432,7 +437,9 @@ function cleanInline(value: string): string {
     text: value,
     field: "generic",
     markdownContext: "inline",
-  }).text.replace(/\s+/g, " ").trim()
+  })
+    .text.replace(/\s+/g, " ")
+    .trim()
 }
 
 function asRecord(value: unknown): Record<string, unknown> {
@@ -493,7 +500,8 @@ function findingSummaries(value: unknown): FindingSummary[] {
       {
         ...withSymptom,
         fingerprint: stringFrom(finding.fingerprint) ?? integrityFindingFingerprint(withSymptom),
-        verify: stringArray(finding.verify).length > 0 ? stringArray(finding.verify) : defaultIntegrityVerify(withSymptom),
+        verify:
+          stringArray(finding.verify).length > 0 ? stringArray(finding.verify) : defaultIntegrityVerify(withSymptom),
       },
     ]
   })
@@ -538,7 +546,8 @@ function requiredRepairSummaries(value: unknown): IntegrityPriorAttemptSummary["
       {
         ...withSymptom,
         fingerprint: stringFrom(repair.fingerprint) ?? integrityFindingFingerprint(withSymptom),
-        verify: stringArray(repair.verify).length > 0 ? stringArray(repair.verify) : defaultIntegrityVerify(withSymptom),
+        verify:
+          stringArray(repair.verify).length > 0 ? stringArray(repair.verify) : defaultIntegrityVerify(withSymptom),
       },
     ]
   })

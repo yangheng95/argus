@@ -1,12 +1,7 @@
 import { expect, test } from "bun:test"
 import { readFileSync } from "node:fs"
 import path from "node:path"
-import {
-  closeFileEditor,
-  fileWorkbenchOpen,
-  openFileEditor,
-  selectedFilePath,
-} from "../src/services/file-workbench"
+import { closeFileEditor, fileWorkbenchOpen, openFileEditor, selectedFilePath } from "../src/services/file-workbench"
 
 const ROOT = path.resolve(import.meta.dir, "..")
 
@@ -26,7 +21,7 @@ test("file explorer, diff, and editor are wired through center workbench panels"
   const activityCss = readText("src/styles/surfaces/activity.css")
   const workspaceCss = readText("src/styles/surfaces/workspace.css")
 
-  expect(html).not.toContain('id="solidLeftActivityToolbar"')
+  expect(html).toContain('id="solidLeftActivityToolbar"')
   expect(html).not.toContain('id="leftPanelExplorer"')
   expect(html).not.toContain('id="leftPanelChanges"')
   expect(html).not.toContain('data-left-activity="tasks"')
@@ -50,7 +45,9 @@ test("file explorer, diff, and editor are wired through center workbench panels"
   expect(html).not.toContain('id="solidRightFilesMount"')
   expect(html).not.toContain('id="solidFileEditorToggleMount"')
   expect(html).not.toContain('id="solidFileEditorMount" class="sections-files-tab"')
-  expect(main).toContain('<FileExplorerPanel active={() => isCenterWorkbenchPanelOpen("explorer")} directory={activeDirectory}')
+  expect(main).toContain(
+    '<FileExplorerPanel active={() => isCenterWorkbenchPanelOpen("explorer")} directory={activeDirectory}',
+  )
   expect(main).toContain("<FileEditorPane")
   expect(main).toContain("<FileChangesPanel")
   expect(main).toContain('workflow: document.getElementById("centerWorkbenchWorkflow")')
@@ -74,11 +71,11 @@ test("file explorer, diff, and editor are wired through center workbench panels"
   expect(main).not.toContain("frame.dataset.editorOpen = fileWorkbenchOpen() || workspaceOpen()")
   expect(main).not.toContain("frame.dataset.editorOpen = activeTaskID() || selectedFilePath() || workspaceOpen()")
 
-  expect(explorer).toContain('apiJson(`file?path=')
-  expect(explorer).toContain('apiJson(`find/file?')
+  expect(explorer).toContain("apiJson(`file?path=")
+  expect(explorer).toContain("apiJson(`find/file?")
   expect(explorer).toContain("INITIAL_DIRECTORY_LOAD_DELAY_MS")
   expect(explorer).toContain("ACTIVE_DIRECTORY_REFRESH_INTERVAL_MS")
-  expect(explorer).toContain('props.active?.() ?? true')
+  expect(explorer).toContain("props.active?.() ?? true")
   expect(explorer).toContain('props.directory ? props.directory().trim() : "unscoped"')
   expect(explorer).toContain("setChildrenByPath(new Map())")
   expect(explorer).toContain("!active() || !currentDirectory")
@@ -98,9 +95,9 @@ test("file explorer, diff, and editor are wired through center workbench panels"
   expect(explorer).toContain('<span class="file-explorer-chevron" />')
   expect(explorer).toContain("openFileEditor")
 
-  expect(editor).toContain('apiJson(`file/content?path=')
+  expect(editor).toContain("apiJson(`file/content?path=")
   expect(editor).toContain('method: "PATCH"')
-  expect(editor).toContain('body: JSON.stringify({ path, content })')
+  expect(editor).toContain("body: JSON.stringify({ path, content })")
   expect(editor).toContain('import { CodeEditor } from "./primitives/CodeEditor"')
   expect(editor).toContain("<CodeEditor")
   expect(editor).not.toContain("<textarea")
@@ -118,11 +115,14 @@ test("file explorer, diff, and editor are wired through center workbench panels"
   expect(filesPanel).toContain("<ChangesPanel hasSelectedTask />")
   expect(filesPanel).toContain("<DiffPreviewPanel")
   expect(filesPanel).not.toContain("<FileEditorPane")
-  expect(filesPanel).toContain('data-active-view={activeView()}')
-  expect(filesPanel).toContain('setActiveView("diff")')
+  expect(filesPanel).toContain("data-active-view={activeView()}")
+  expect(filesPanel).toContain('props.onActiveViewChange("diff")')
+  expect(main).toContain("fileChangesActiveView")
+  expect(main).toContain("activeView={fileChangesActiveView()}")
+  expect(main).toContain("onActiveViewChange={setFileChangesActiveView}")
 
   expect(inspectorCss).toContain(".file-explorer-panel")
-  expect(inspectorCss).toContain(".file-explorer-list[data-virtualized=\"true\"]")
+  expect(inspectorCss).toContain('.file-explorer-list[data-virtualized="true"]')
   expect(inspectorCss).toContain(".file-explorer-retry")
   expect(activityCss).toContain(".sidebar-file-changes-panel")
   expect(activityCss).toContain("container: side-activity / inline-size")

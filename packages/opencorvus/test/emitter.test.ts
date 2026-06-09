@@ -3,10 +3,10 @@ import { TypedEventEmitter } from "../src/util/emitter"
 
 // Define test event types for type safety
 type TestEvents = {
-  "simple": []
-  "data": [string, number]
-  "error": [Error]
-  "complex": [string, number, boolean]
+  simple: []
+  data: [string, number]
+  error: [Error]
+  complex: [string, number, boolean]
 }
 
 describe("TypedEventEmitter.on()", () => {
@@ -363,10 +363,10 @@ describe("TypedEventEmitter.listenerCount()", () => {
 describe("TypedEventEmitter type safety", () => {
   test("rejects invalid event names at compile time", () => {
     const emitter = new TypedEventEmitter<TestEvents>()
-    
+
     // This would cause a TypeScript error if uncommented:
     // emitter.on("invalid-event" as any, () => {})
-    
+
     // Valid event names should work
     emitter.on("simple", () => {})
     emitter.on("data", () => {})
@@ -375,7 +375,7 @@ describe("TypedEventEmitter type safety", () => {
 
   test("enforces correct callback parameter types", () => {
     const emitter = new TypedEventEmitter<TestEvents>()
-    
+
     // Valid callbacks with correct parameter types
     emitter.on("data", (str: string, num: number) => {
       // Type checking ensures str is string and num is number
@@ -392,7 +392,7 @@ describe("TypedEventEmitter type safety", () => {
 
   test("enforces correct emit parameter types", () => {
     const emitter = new TypedEventEmitter<TestEvents>()
-    
+
     emitter.on("data", (str, num) => {
       expect(str).toBe("test")
       expect(num).toBe(42)
@@ -425,10 +425,10 @@ describe("TypedEventEmitter edge cases", () => {
     const emitter = new TypedEventEmitter<TestEvents>()
     const callbacks = Array.from({ length: 10 }, () => () => {})
 
-    callbacks.forEach(cb => emitter.on("simple", cb))
+    callbacks.forEach((cb) => emitter.on("simple", cb))
     expect(emitter.listenerCount("simple")).toBe(10)
 
-    callbacks.forEach(cb => emitter.off("simple", cb))
+    callbacks.forEach((cb) => emitter.off("simple", cb))
     expect(emitter.listenerCount("simple")).toBe(0)
   })
 

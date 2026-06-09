@@ -1,9 +1,5 @@
 import { afterEach, beforeEach, describe, expect, test } from "bun:test"
-import {
-  PROTOCOL_VERSION,
-  type ExtensionMessage,
-  type WebviewMessage,
-} from "@opencorvus-ai/transport-protocol"
+import { PROTOCOL_VERSION, type ExtensionMessage, type WebviewMessage } from "@opencorvus-ai/transport-protocol"
 import { TransportBridge } from "../src/transport/bridge"
 
 /**
@@ -40,7 +36,9 @@ function mockWebview(): MockWebview {
     cspSource: "vscode-test",
     options: {} as any,
     html: "",
-    onDidDispose() { return { dispose() {} } },
+    onDidDispose() {
+      return { dispose() {} }
+    },
     onDidReceiveMessage(fn) {
       receiveHandler = fn
       return { dispose() {} }
@@ -49,7 +47,9 @@ function mockWebview(): MockWebview {
       posted.push(m)
       return Promise.resolve(true) as any
     },
-    asWebviewUri(uri) { return uri },
+    asWebviewUri(uri) {
+      return uri
+    },
     async receive(message) {
       if (!receiveHandler) throw new Error("no message handler attached")
       receiveHandler(message)
@@ -82,7 +82,12 @@ function installFetchSpy(): { captured: CapturedFetch[]; restore: () => void } {
     captured.push({ url: input.toString(), init: init ?? {} })
     return new Response("{}", { status: 200, headers: { "content-type": "application/json" } })
   }) as typeof fetch
-  return { captured, restore: () => { globalThis.fetch = original } }
+  return {
+    captured,
+    restore: () => {
+      globalThis.fetch = original
+    },
+  }
 }
 
 function expectedAuthHeader(token: string): string {
@@ -105,7 +110,11 @@ describe("TransportBridge buildRequestInit auth + body (audit G2)", () => {
     bridge.dispose()
   })
 
-  async function send(body: WebviewMessage["body"], extraHeaders: Record<string, string> = {}, method: "GET" | "POST" = "POST") {
+  async function send(
+    body: WebviewMessage["body"],
+    extraHeaders: Record<string, string> = {},
+    method: "GET" | "POST" = "POST",
+  ) {
     await webview.receive({
       protocol: PROTOCOL_VERSION,
       type: "request",
@@ -147,7 +156,10 @@ describe("TransportBridge buildRequestInit auth + body (audit G2)", () => {
   test("body kind=form encodes URL-encoded form data", async () => {
     await send({
       kind: "form",
-      entries: [["k1", "v1"], ["k2", "value with spaces"]],
+      entries: [
+        ["k1", "v1"],
+        ["k2", "value with spaces"],
+      ],
     })
     const cap = spy.captured[0]!.init
     const headers = cap.headers as Record<string, string>
@@ -177,10 +189,7 @@ describe("TransportBridge buildRequestInit auth + body (audit G2)", () => {
   })
 
   test("user-supplied headers are preserved alongside auth/content-type", async () => {
-    await send(
-      { kind: "json", value: { x: 1 } },
-      { "X-Custom-Trace": "abc-123" },
-    )
+    await send({ kind: "json", value: { x: 1 } }, { "X-Custom-Trace": "abc-123" })
     const headers = spy.captured[0]!.init.headers as Record<string, string>
     expect(headers["X-Custom-Trace"]).toBe("abc-123")
     expect(headers.Authorization).toBe(expectedAuthHeader("secret-token"))

@@ -35,17 +35,10 @@ const LOGGED_TYPES = new Set([
 ])
 
 /** run.progress type values that are pure noise */
-const DROP_PROGRESS_TYPES = new Set([
-  "reasoning.delta",
-])
+const DROP_PROGRESS_TYPES = new Set(["reasoning.delta"])
 
 /** executor.progress summaries that are protocol bookkeeping */
-const DROP_EXEC_SUMMARIES = new Set([
-  "message_start",
-  "message_delta",
-  "content_block_stop",
-  "rate_limit_event",
-])
+const DROP_EXEC_SUMMARIES = new Set(["message_start", "message_delta", "content_block_stop", "rate_limit_event"])
 
 // ---------------------------------------------------------------------------
 
@@ -90,13 +83,17 @@ export namespace EngineEventLog {
   }
 
   function tl(ctx: TaskCtx, line: string) {
-    try { appendFileSync(ctx.timeline, line + "\n", "utf-8") } catch (err) {
+    try {
+      appendFileSync(ctx.timeline, line + "\n", "utf-8")
+    } catch (err) {
       log.warn("timeline append failed", { path: ctx.timeline, error: String(err) })
     }
   }
 
   function nd(ctx: TaskCtx, entry: Record<string, unknown>) {
-    try { appendFileSync(ctx.ndjson, JSON.stringify(entry) + "\n", "utf-8") } catch (err) {
+    try {
+      appendFileSync(ctx.ndjson, JSON.stringify(entry) + "\n", "utf-8")
+    } catch (err) {
       log.warn("ndjson append failed", { path: ctx.ndjson, error: String(err) })
     }
   }
@@ -115,26 +112,36 @@ export namespace EngineEventLog {
       const dur = ((b.lastAt - b.firstAt) / 1000).toFixed(1)
       tl(ctx, `[${elapsed(ctx)}]   ${name} ×${b.count}  (${dur}s)`)
       nd(ctx, {
-        at: new Date().toISOString(), elapsed_ms: Date.now() - ctx.t0,
-        type: "agent.tool_calls", stage: acc.stage, tool: name,
-        count: b.count, duration_ms: b.lastAt - b.firstAt,
+        at: new Date().toISOString(),
+        elapsed_ms: Date.now() - ctx.t0,
+        type: "agent.tool_calls",
+        stage: acc.stage,
+        tool: name,
+        count: b.count,
+        duration_ms: b.lastAt - b.firstAt,
       })
     }
   }
 
   function flushTurn(ctx: TaskCtx) {
     const t = ctx.turn
-    if (!t || t.toolOrder.length === 0) { ctx.turn = null; return }
-    const parts = t.toolOrder.map(n => {
+    if (!t || t.toolOrder.length === 0) {
+      ctx.turn = null
+      return
+    }
+    const parts = t.toolOrder.map((n) => {
       const c = t.tools.get(n)!
       return c > 1 ? `${n} ×${c}` : n
     })
     const dur = ((Date.now() - t.startAt) / 1000).toFixed(1)
     tl(ctx, `[${elapsed(ctx)}]   Turn ${t.num}: ${parts.join(", ")}  (${dur}s)`)
     nd(ctx, {
-      at: new Date().toISOString(), elapsed_ms: Date.now() - ctx.t0,
-      type: "exec.turn", turn: t.num,
-      tools: Object.fromEntries(t.tools), duration_ms: Date.now() - t.startAt,
+      at: new Date().toISOString(),
+      elapsed_ms: Date.now() - ctx.t0,
+      type: "exec.turn",
+      turn: t.num,
+      tools: Object.fromEntries(t.tools),
+      duration_ms: Date.now() - t.startAt,
     })
     ctx.turn = null
   }
@@ -149,16 +156,28 @@ export namespace EngineEventLog {
 
     if (pt === "executor.progress") {
       if (DROP_EXEC_SUMMARIES.has(summary)) return
-      if (summary === "message_stop") { flushTurn(ctx); return }
+      if (summary === "message_stop") {
+        flushTurn(ctx)
+        return
+      }
       // meaningful: queued, running, init, done
       tl(ctx, `[${elapsed(ctx)}] EXEC ▸ ${summary}`)
-      nd(ctx, { at: new Date().toISOString(), elapsed_ms: Date.now() - ctx.t0, type: "engine.run.progress", progressType: pt, summary })
+      nd(ctx, {
+        at: new Date().toISOString(),
+        elapsed_ms: Date.now() - ctx.t0,
+        type: "engine.run.progress",
+        progressType: pt,
+        summary,
+      })
       return
     }
 
     if (pt === "tool.call") {
       const tool = summary.replace(/^Tool call:\s*/i, "").trim() || "unknown"
-      if (!ctx.turn) { ctx.turnSeq++; ctx.turn = { num: ctx.turnSeq, startAt: Date.now(), tools: new Map(), toolOrder: [] } }
+      if (!ctx.turn) {
+        ctx.turnSeq++
+        ctx.turn = { num: ctx.turnSeq, startAt: Date.now(), tools: new Map(), toolOrder: [] }
+      }
       ctx.turn.tools.set(tool, (ctx.turn.tools.get(tool) ?? 0) + 1)
       if (!ctx.turn.toolOrder.includes(tool)) ctx.turn.toolOrder.push(tool)
       return
@@ -181,7 +200,9 @@ export namespace EngineEventLog {
         nd(ctx, { at: now, elapsed_ms: ms, type, taskID, status, summary })
         break
       case "engine.task.updated":
-        flushStage(ctx); ctx.stage = null; flushTurn(ctx)
+        flushStage(ctx)
+        ctx.stage = null
+        flushTurn(ctx)
         tl(ctx, `[${elapsed(ctx)}] TASK → ${status}  ${summary}`)
         nd(ctx, { at: now, elapsed_ms: ms, type, taskID, status, summary })
         break
@@ -255,7 +276,10 @@ export namespace EngineEventLog {
           tasks.set(taskID, {
             ndjson: paths.ndjson,
             timeline: paths.timeline,
-            t0: Date.now(), stage: null, turn: null, turnSeq: 0,
+            t0: Date.now(),
+            stage: null,
+            turn: null,
+            turnSeq: 0,
           })
           log.info("task log started", { taskID })
         } catch (e) {

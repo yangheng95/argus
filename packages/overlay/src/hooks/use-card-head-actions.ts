@@ -56,17 +56,9 @@ export function useCardHeadActions(input: UseCardHeadActionsInput): UseCardHeadA
   const canCopy = () => !!collectCardText(input.node())
   const canRewind = () => {
     const node = input.node()
-    return (
-      !!input.onRewind &&
-      isStageCard(node) &&
-      typeof node.time === "number" &&
-      node.time > 0
-    )
+    return !!input.onRewind && isStageCard(node) && typeof node.time === "number" && node.time > 0
   }
-  const canCancel = () =>
-    input.node().status === "running" &&
-    !!input.onAgentCancel &&
-    !!input.agentSessionID?.()
+  const canCancel = () => input.node().status === "running" && !!input.onAgentCancel && !!input.agentSessionID?.()
 
   const onCopy = (event: Event) => {
     event.stopPropagation()

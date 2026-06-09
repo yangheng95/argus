@@ -426,7 +426,8 @@
    directly here so the surface canonical does not lie. */
 .knowledge-item {
   display: flex;
-  align-items: flex-start;
+  flex-direction: column;
+  align-items: stretch;
   gap: calc(8px * var(--ui-scale));
   padding: calc(8px * var(--ui-scale)) calc(10px * var(--ui-scale));
   border-bottom: none;
@@ -462,6 +463,26 @@
 .knowledge-item-meta {
   font-size: var(--ui-font-control);
   color: var(--text-muted);
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.knowledge-item-meta-row {
+  display: flex;
+  align-items: center;
+  gap: calc(8px * var(--ui-scale));
+  min-width: 0;
+}
+
+.knowledge-item-meta-row .knowledge-item-meta {
+  flex: 1 1 auto;
+}
+
+.knowledge-item-meta-row .knowledge-scope,
+.knowledge-item-meta-row .oc-button[data-action="delete-memory"] {
+  flex: 0 0 auto;
 }
 
 .knowledge-item-actions {
@@ -505,7 +526,17 @@
   color: var(--text-muted);
 }
 
-/* Memory detail dialog — opened when the operator clicks an item. */
+/* Memory inline detail — expanded inside the selected list row. */
+.memory-inline-detail {
+  display: flex;
+  flex-direction: column;
+  gap: calc(6px * var(--ui-scale));
+  margin-top: calc(6px * var(--ui-scale));
+  padding-top: calc(8px * var(--ui-scale));
+  border-top: var(--oc-border-width) solid color-mix(in srgb, var(--divider-soft) 72%, transparent);
+  cursor: text;
+}
+
 .memory-detail-meta {
   display: flex;
   gap: calc(8px * var(--ui-scale));
@@ -768,6 +799,60 @@
   flex-shrink: 0;
 }
 
+.skill-drop-zone {
+  min-height: calc(54px * var(--ui-scale));
+  display: flex;
+  align-items: center;
+  gap: calc(10px * var(--ui-scale));
+  padding: calc(8px * var(--ui-scale)) calc(10px * var(--ui-scale));
+  border: var(--oc-border-width) dashed color-mix(in srgb, var(--border) 82%, transparent);
+  border-radius: var(--oc-radius-soft);
+  background: color-mix(in srgb, var(--surface-inset) 72%, transparent);
+  color: var(--text-soft);
+}
+
+.skill-drop-zone[data-active="true"] {
+  border-color: color-mix(in srgb, var(--accent) 72%, var(--border));
+  background: color-mix(in srgb, var(--accent) 9%, var(--surface-inset));
+  color: var(--text-strong);
+}
+
+.ext-group[data-skill-drop-active="true"] .skill-drop-zone {
+  border-color: color-mix(in srgb, var(--accent) 76%, var(--border));
+  background: color-mix(in srgb, var(--accent) 10%, var(--surface-inset));
+  color: var(--text-strong);
+}
+
+.skill-drop-zone__icon {
+  width: calc(30px * var(--ui-scale));
+  height: calc(30px * var(--ui-scale));
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: 0 0 auto;
+  border-radius: var(--oc-radius-soft);
+  background: color-mix(in srgb, var(--accent) 12%, transparent);
+  color: var(--accent);
+}
+
+.skill-drop-zone__copy {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: calc(2px * var(--ui-scale));
+}
+
+.skill-drop-zone__copy strong {
+  font-size: var(--ui-font-control);
+  color: var(--text-strong);
+}
+
+.skill-drop-zone__copy span {
+  font-size: var(--ui-font-small);
+  line-height: 1.35;
+  color: var(--text-muted);
+}
+
 /* ── LogViewer.tsx (Diagnostics tab) ─────────────────────── */
 
 /* Log level selector — small monospace dropdown above the viewer
@@ -975,7 +1060,9 @@
    * tabs with long lists still scroll inside instead of overflowing
    * the modal. The 120px reservation covers the header + close button
    * row plus the dialog's own padding. */
-  max-height: calc(min(calc(100vh - calc(80px * var(--ui-scale))), calc(620px * var(--ui-scale))) - calc(120px * var(--ui-scale)));
+  max-height: calc(
+    min(calc(100vh - calc(80px * var(--ui-scale))), calc(620px * var(--ui-scale))) - calc(120px * var(--ui-scale))
+  );
 }
 
 #configDialog .dialog-form {
@@ -1105,8 +1192,7 @@
    * 12-16 / 14-18. The dialog already gives us a 16px frame; keeping
    * 28px on the inner panel meant card content sat ~50px from the
    * dialog edge with no payoff. */
-  padding:
-    clamp(calc(12px * var(--ui-scale)), calc(14px * var(--ui-scale)), calc(16px * var(--ui-scale)))
+  padding: clamp(calc(12px * var(--ui-scale)), calc(14px * var(--ui-scale)), calc(16px * var(--ui-scale)))
     clamp(calc(14px * var(--ui-scale)), calc(16px * var(--ui-scale)), calc(18px * var(--ui-scale)));
 }
 
@@ -1953,7 +2039,10 @@
 }
 .provider-flat-row {
   display: grid;
-  grid-template-columns: minmax(calc(260px * var(--ui-scale)), 1fr) minmax(calc(160px * var(--ui-scale)), max-content) max-content;
+  grid-template-columns: minmax(calc(260px * var(--ui-scale)), 1fr) minmax(
+      calc(160px * var(--ui-scale)),
+      max-content
+    ) max-content;
   grid-template-areas:
     "main summary actions"
     "key key key"
@@ -2198,7 +2287,8 @@
 .provider-catalog-row {
   align-items: start;
 }
-@media (max-width: 900px) { /* breakpoint: --ui-breakpoint-lg */
+@media (max-width: 900px) {
+  /* breakpoint: --ui-breakpoint-lg */
   .provider-command,
   .provider-flat-row {
     grid-template-columns: 1fr;
@@ -2623,7 +2713,6 @@
   cursor: pointer;
 }
 
-
 /* ─────────────────────────────────────────────────────────────
    Extracted from styles.css 2026-05-04 (continuation slice).
    Settings / channel-config / acceptance / detail / opacity / llm
@@ -2682,7 +2771,8 @@
   max-height: calc(220px * var(--ui-scale));
 }
 
-@media (max-width: 760px) { /* breakpoint: --ui-breakpoint-md */
+@media (max-width: 760px) {
+  /* breakpoint: --ui-breakpoint-md */
   .detail-grid-row {
     grid-template-columns: 1fr;
   }
@@ -2824,7 +2914,8 @@
   color: var(--bad);
 }
 
-@media (max-width: 760px) { /* breakpoint: --ui-breakpoint-md */
+@media (max-width: 760px) {
+  /* breakpoint: --ui-breakpoint-md */
   .config-field-row {
     grid-template-columns: 1fr;
   }

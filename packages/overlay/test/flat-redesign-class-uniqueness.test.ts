@@ -10,9 +10,7 @@ const OVERLAY_ROOT = join(import.meta.dir, "..")
  * specific overrides). Within surfaces/ itself a class root selector
  * must live in exactly one file — that's where rule 8 single-source
  * applies. */
-const STYLE_ROOTS = [
-  join(OVERLAY_ROOT, "src", "styles", "surfaces"),
-]
+const STYLE_ROOTS = [join(OVERLAY_ROOT, "src", "styles", "surfaces")]
 
 type RootClassDefinition = {
   file: string

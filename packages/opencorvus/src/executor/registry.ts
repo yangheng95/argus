@@ -3,10 +3,7 @@ import { ManagedCodingExecutor } from "./managed"
 import type { CodingProvider, CodingProviderOptions, ExecutorAdapter, ExecutorNameInfo } from "./contract"
 import { ExecutorNotConfiguredError } from "./contract"
 
-const base = () =>
-  new Map<ExecutorNameInfo, ExecutorAdapter>([
-    ["opencorvus", OpencorvusExecutor],
-  ])
+const base = () => new Map<ExecutorNameInfo, ExecutorAdapter>([["opencorvus", OpencorvusExecutor]])
 
 const state = {
   items: base(),

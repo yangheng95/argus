@@ -121,7 +121,12 @@ test("collectAgentFileChanges follows renderer child precedence and completed to
     id: "store-child",
     kind: "agent",
     title: "Rendered child",
-    parts: [{ type: "patch", files: [{ file: "C:\\repo\\src\\rendered.ts", before: "a", after: "b", additions: 1, deletions: 1 }] }],
+    parts: [
+      {
+        type: "patch",
+        files: [{ file: "C:\\repo\\src\\rendered.ts", before: "a", after: "b", additions: 1, deletions: 1 }],
+      },
+    ],
   })
   setCardTreeStore("cards", { "store-child": storeChild })
 
@@ -351,6 +356,11 @@ test("agent file changes render only through the right-panel Files workbench", (
   expect(sharedView).toContain("changes-status-strip")
   expect(sharedView).toContain("CHANGE_STATUS_FILTERS")
   expect(sharedView).toContain("files.status_filter_label")
+  expect(sharedView).toContain("files.hide_non_text")
+  expect(sharedView).toContain('type="checkbox"')
+  expect(sharedView).toContain("hideNonTextFiles()")
+  expect(sharedView).toContain("<InlineDiffPanel")
+  expect(sharedView).toContain("<DiffView")
   expect(sharedView).toContain("statusFilter()")
   expect(sharedView).toContain("selectedRowPosition")
   expect(sharedView).toContain("onListKeyDown")
@@ -383,11 +393,13 @@ test("agent file changes render only through the right-panel Files workbench", (
   expect(changesCss).toContain(".changes-filter-input.field-input")
   expect(changesCss).toContain(".changes-status-strip")
   expect(changesCss).toContain(".changes-status-chip")
+  expect(changesCss).toContain(".changes-non-text-filter")
+  expect(changesCss).toContain(".change-inline-diff")
   expect(changesCss).toContain(".changes-list:focus-visible")
   expect(changesCss).toContain(".change-row")
   expect(changesCss).toContain(".change-file-name")
   expect(changesCss).toContain(".change-directory")
-  expect(changesCss).toContain(".changes-list[data-virtualized=\"true\"]")
+  expect(changesCss).toContain('.changes-list[data-virtualized="true"]')
   expect(changesCss).toContain(".changes-list-virtual-window")
   expect(changesCss).toContain(".changes-list-virtual-item")
   expect(changesCss).toContain(".changes-list-group")

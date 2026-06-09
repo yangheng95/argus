@@ -133,56 +133,60 @@ describe("Gateway e2e — channel ingress routing (template §10)", () => {
     })
   })
 
-  test("permission interaction reply skips the LLM hop entirely", async () => {
-    await using tmp = await tmpdir({ git: true })
-    await Instance.provide({
-      directory: tmp.path,
-      fn: async () => {
-        spyOn(TaskLoop, "runTaskLoop").mockResolvedValue(undefined)
-        const handleSpy = spyOn(ControlMessage, "handle").mockResolvedValue({
-          kind: "panel_response",
-          message: "should never run",
-        })
-        const replySpy = spyOn(EngineService, "replyInteraction").mockResolvedValue({
-          id: "int_1",
-          status: "answered",
-        } as any)
-        spyOn(EngineService, "listTaskInteractions").mockResolvedValue([
-          { id: "int_1", type: "permission", status: "pending" } as any,
-        ])
+  test(
+    "permission interaction reply skips the LLM hop entirely",
+    async () => {
+      await using tmp = await tmpdir({ git: true })
+      await Instance.provide({
+        directory: tmp.path,
+        fn: async () => {
+          spyOn(TaskLoop, "runTaskLoop").mockResolvedValue(undefined)
+          const handleSpy = spyOn(ControlMessage, "handle").mockResolvedValue({
+            kind: "panel_response",
+            message: "should never run",
+          })
+          const replySpy = spyOn(EngineService, "replyInteraction").mockResolvedValue({
+            id: "int_1",
+            status: "answered",
+          } as any)
+          spyOn(EngineService, "listTaskInteractions").mockResolvedValue([
+            { id: "int_1", type: "permission", status: "pending" } as any,
+          ])
 
-        const taskID = await EngineService.createTask({
-          request: "Requires permission",
-          kind: "workflow",
-          queue: false,
-          executor: "opencorvus",
-          metadata: { source: "test" },
-        })
-        await waitForTaskStatus(taskID, "active")
-        ChannelIngress.bindThread({
-          platform: "slack",
-          channel: "C-perm",
-          thread: "T-perm",
-          taskID,
-        })
+          const taskID = await EngineService.createTask({
+            request: "Requires permission",
+            kind: "workflow",
+            queue: false,
+            executor: "opencorvus",
+            metadata: { source: "test" },
+          })
+          await waitForTaskStatus(taskID, "active")
+          ChannelIngress.bindThread({
+            platform: "slack",
+            channel: "C-perm",
+            thread: "T-perm",
+            taskID,
+          })
 
-        const result = await ChannelIngress.message({
-          platform: "slack",
-          channel: "C-perm",
-          thread: "T-perm",
-          text: "allow",
-          allow_create: true,
-        })
+          const result = await ChannelIngress.message({
+            platform: "slack",
+            channel: "C-perm",
+            thread: "T-perm",
+            text: "allow",
+            allow_create: true,
+          })
 
-        expect(result.kind).toBe("interaction")
-        expect(replySpy).toHaveBeenCalledTimes(1)
-        // Critical template §10 invariant — the channel command "allow" resolves
-        // the pending permission deterministically, never falling through to
-        // the LLM control plane.
-        expect(handleSpy).not.toHaveBeenCalled()
-      },
-    })
-  }, { timeout: 10_000 })
+          expect(result.kind).toBe("interaction")
+          expect(replySpy).toHaveBeenCalledTimes(1)
+          // Critical template §10 invariant — the channel command "allow" resolves
+          // the pending permission deterministically, never falling through to
+          // the LLM control plane.
+          expect(handleSpy).not.toHaveBeenCalled()
+        },
+      })
+    },
+    { timeout: 10_000 },
+  )
 
   test("question interaction passes the message text into the reply (no LLM)", async () => {
     await using tmp = await tmpdir({ git: true })
@@ -347,85 +351,93 @@ describe("Gateway e2e — task lifecycle through EngineService (template §9)", 
 // ── 3. Channel binding round-trip + reverse lookup ──────────────────
 
 describe("Gateway e2e — channel bindings + reverse lookup (template §17.14)", () => {
-  test("bindThread + bindingsByTaskID round-trip returns the same rows", async () => {
-    await using tmp = await tmpdir({ git: true })
-    await Instance.provide({
-      directory: tmp.path,
-      fn: async () => {
-        spyOn(TaskLoop, "runTaskLoop").mockResolvedValue(undefined)
+  test(
+    "bindThread + bindingsByTaskID round-trip returns the same rows",
+    async () => {
+      await using tmp = await tmpdir({ git: true })
+      await Instance.provide({
+        directory: tmp.path,
+        fn: async () => {
+          spyOn(TaskLoop, "runTaskLoop").mockResolvedValue(undefined)
 
-        const taskID = await EngineService.createTask({
-          request: "binding round-trip",
-          executor: "opencorvus",
-          kind: "workflow",
-          queue: false,
-          metadata: { source: "gateway:test" },
-        })
-        await waitForTaskStatus(taskID, "active")
-        ChannelIngress.bindThread({
-          platform: "slack",
-          channel: "C-bind",
-          thread: "T1",
-          taskID,
-          payload: { user: "u-1" },
-        })
-        ChannelIngress.bindThread({
-          platform: "telegram",
-          channel: "@bind",
-          thread: "T2",
-          taskID,
-        })
+          const taskID = await EngineService.createTask({
+            request: "binding round-trip",
+            executor: "opencorvus",
+            kind: "workflow",
+            queue: false,
+            metadata: { source: "gateway:test" },
+          })
+          await waitForTaskStatus(taskID, "active")
+          ChannelIngress.bindThread({
+            platform: "slack",
+            channel: "C-bind",
+            thread: "T1",
+            taskID,
+            payload: { user: "u-1" },
+          })
+          ChannelIngress.bindThread({
+            platform: "telegram",
+            channel: "@bind",
+            thread: "T2",
+            taskID,
+          })
 
-        const rows = ChannelIngress.bindingsByTaskID(taskID)
-        const platforms = rows.map((r) => r.platform).sort()
-        expect(platforms).toEqual(["slack", "telegram"])
-        for (const row of rows) {
-          expect(row.task_id).toBe(taskID)
-        }
+          const rows = ChannelIngress.bindingsByTaskID(taskID)
+          const platforms = rows.map((r) => r.platform).sort()
+          expect(platforms).toEqual(["slack", "telegram"])
+          for (const row of rows) {
+            expect(row.task_id).toBe(taskID)
+          }
 
-        await EngineService.deleteTask(taskID).catch(() => undefined)
-      },
-    })
-  }, { timeout: 10_000 })
+          await EngineService.deleteTask(taskID).catch(() => undefined)
+        },
+      })
+    },
+    { timeout: 10_000 },
+  )
 
-  test("HTTP GET /task/:taskID/bindings returns the bindings for the task only", async () => {
-    await using tmp = await tmpdir({ git: true })
-    await Instance.provide({
-      directory: tmp.path,
-      fn: async () => {
-        spyOn(TaskLoop, "runTaskLoop").mockResolvedValue(undefined)
+  test(
+    "HTTP GET /task/:taskID/bindings returns the bindings for the task only",
+    async () => {
+      await using tmp = await tmpdir({ git: true })
+      await Instance.provide({
+        directory: tmp.path,
+        fn: async () => {
+          spyOn(TaskLoop, "runTaskLoop").mockResolvedValue(undefined)
 
-        const targetID = await EngineService.createTask({
-          request: "target",
-          executor: "opencorvus",
-          kind: "workflow",
-          queue: false,
-          metadata: { source: "gateway:test" },
-        })
-        const otherID = await EngineService.createTask({
-          request: "other",
-          executor: "opencorvus",
-          kind: "workflow",
-          queue: false,
-          metadata: { source: "gateway:test" },
-        })
-        ChannelIngress.bindThread({ platform: "slack", channel: "C", thread: "T-target", taskID: targetID })
-        ChannelIngress.bindThread({ platform: "slack", channel: "C", thread: "T-other", taskID: otherID })
+          const targetID = await EngineService.createTask({
+            request: "target",
+            executor: "opencorvus",
+            kind: "workflow",
+            queue: false,
+            metadata: { source: "gateway:test" },
+          })
+          const otherID = await EngineService.createTask({
+            request: "other",
+            executor: "opencorvus",
+            kind: "workflow",
+            queue: false,
+            metadata: { source: "gateway:test" },
+          })
+          ChannelIngress.bindThread({ platform: "slack", channel: "C", thread: "T-target", taskID: targetID })
+          ChannelIngress.bindThread({ platform: "slack", channel: "C", thread: "T-other", taskID: otherID })
 
-        const response = await Server.App().request(`/task/${encodeURIComponent(targetID)}/bindings`, {
-          headers: { "x-opencorvus-directory": tmp.path },
-        })
-        expect(response.status).toBe(200)
-        const rows = (await response.json()) as Array<{ task_id: string; thread: string }>
-        expect(rows.length).toBe(1)
-        expect(rows[0]!.task_id).toBe(targetID)
-        expect(rows[0]!.thread).toBe("T-target")
+          const response = await Server.App().request(`/task/${encodeURIComponent(targetID)}/bindings`, {
+            headers: { "x-opencorvus-directory": tmp.path },
+          })
+          expect(response.status).toBe(200)
+          const rows = (await response.json()) as Array<{ task_id: string; thread: string }>
+          expect(rows.length).toBe(1)
+          expect(rows[0]!.task_id).toBe(targetID)
+          expect(rows[0]!.thread).toBe("T-target")
 
-        await EngineService.deleteTask(targetID).catch(() => undefined)
-        await EngineService.deleteTask(otherID).catch(() => undefined)
-      },
-    })
-  }, { timeout: 10_000 })
+          await EngineService.deleteTask(targetID).catch(() => undefined)
+          await EngineService.deleteTask(otherID).catch(() => undefined)
+        },
+      })
+    },
+    { timeout: 10_000 },
+  )
 })
 
 // ── 4. HTTP transport coverage for gateway routes ───────────────────
@@ -549,58 +561,54 @@ describe("Gateway e2e — HTTP routes via Server.App().request (template §11)",
     })
   })
 
-  test(
-    "GET /task/:taskID/bindings returns the documented row shape (id, task_id, platform, channel, thread)",
-    async () => {
-      await using tmp = await tmpdir({ git: true })
-      await Instance.provide({
-        directory: tmp.path,
-        fn: async () => {
-          spyOn(TaskLoop, "runTaskLoop").mockResolvedValue(undefined)
+  test("GET /task/:taskID/bindings returns the documented row shape (id, task_id, platform, channel, thread)", async () => {
+    await using tmp = await tmpdir({ git: true })
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        spyOn(TaskLoop, "runTaskLoop").mockResolvedValue(undefined)
 
-          const taskID = await EngineService.createTask({
-            request: "shape check",
-            executor: "opencorvus",
-            kind: "workflow",
-            queue: false,
-            metadata: { source: "gateway:test" },
-          })
-          await waitForTaskStatus(taskID, "active")
-          ChannelIngress.bindThread({
-            platform: "slack",
-            channel: "C-shape",
-            thread: "T-shape",
-            taskID,
-            payload: { user: "u-shape" },
-          })
+        const taskID = await EngineService.createTask({
+          request: "shape check",
+          executor: "opencorvus",
+          kind: "workflow",
+          queue: false,
+          metadata: { source: "gateway:test" },
+        })
+        await waitForTaskStatus(taskID, "active")
+        ChannelIngress.bindThread({
+          platform: "slack",
+          channel: "C-shape",
+          thread: "T-shape",
+          taskID,
+          payload: { user: "u-shape" },
+        })
 
-          const response = await Server.App().request(`/task/${encodeURIComponent(taskID)}/bindings`, {
-            headers: { "x-opencorvus-directory": tmp.path },
-          })
-          expect(response.status).toBe(200)
-          const rows = (await response.json()) as Array<{
-            id: string
-            task_id: string
-            platform: string
-            channel: string
-            thread: string
-            payload?: Record<string, unknown>
-            time_created?: number
-            time_updated?: number
-          }>
-          expect(rows.length).toBe(1)
-          const row = rows[0]!
-          expect(typeof row.id).toBe("string")
-          expect(row.id.length).toBeGreaterThan(0)
-          expect(row.task_id).toBe(taskID)
-          expect(row.platform).toBe("slack")
-          expect(row.channel).toBe("C-shape")
-          expect(row.thread).toBe("T-shape")
+        const response = await Server.App().request(`/task/${encodeURIComponent(taskID)}/bindings`, {
+          headers: { "x-opencorvus-directory": tmp.path },
+        })
+        expect(response.status).toBe(200)
+        const rows = (await response.json()) as Array<{
+          id: string
+          task_id: string
+          platform: string
+          channel: string
+          thread: string
+          payload?: Record<string, unknown>
+          time_created?: number
+          time_updated?: number
+        }>
+        expect(rows.length).toBe(1)
+        const row = rows[0]!
+        expect(typeof row.id).toBe("string")
+        expect(row.id.length).toBeGreaterThan(0)
+        expect(row.task_id).toBe(taskID)
+        expect(row.platform).toBe("slack")
+        expect(row.channel).toBe("C-shape")
+        expect(row.thread).toBe("T-shape")
 
-          await EngineService.deleteTask(taskID).catch(() => undefined)
-        },
-      })
-    },
-  )
-
+        await EngineService.deleteTask(taskID).catch(() => undefined)
+      },
+    })
+  })
 })

@@ -75,7 +75,10 @@ describe("icon affordances stay visible at rest", () => {
     const fieldCss = read("src/styles/surfaces/field.css")
     const providerCss = read("src/styles/surfaces/settings.css")
     const sharedClear = soloRuleBody(fieldCss, '.search-field .oc-button[data-ui$="-search-clear"]')
-    const providerClear = soloRuleBody(providerCss, '.provider-search-field .oc-button[data-ui="provider-search-clear"]')
+    const providerClear = soloRuleBody(
+      providerCss,
+      '.provider-search-field .oc-button[data-ui="provider-search-clear"]',
+    )
     for (const body of [sharedClear, providerClear]) {
       expect(body).not.toContain("--oc-button-color: var(--text-muted);")
       expect(body).not.toContain("--oc-button-shadow:")

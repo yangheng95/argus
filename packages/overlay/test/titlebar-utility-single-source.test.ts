@@ -26,7 +26,9 @@ function walkCss(dir: string): string[] {
 // styles.css was dissolved 2026-05-04. The "no .titlebar-utility in
 // styles.css" guard is now "no .titlebar-utility in cascade layer" — the
 // cascade owns cross-cutting rules; surface-specific chrome lives in titlebar.css.
-const CASCADE_CSS = walkCss(CASCADE_DIR).map((f) => readFileSync(f, "utf8")).join("\n")
+const CASCADE_CSS = walkCss(CASCADE_DIR)
+  .map((f) => readFileSync(f, "utf8"))
+  .join("\n")
 
 const TITLEBAR_SURFACE = readFileSync(
   path.resolve(import.meta.dir, "..", "src", "styles", "surfaces", "titlebar.css"),

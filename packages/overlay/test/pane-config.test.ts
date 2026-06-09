@@ -35,9 +35,7 @@ test("MISSION_PANE_CONFIG targets the mission page's elements + variables", () =
 })
 
 test("the two configs share NO element id or CSS variable (independent layouts)", () => {
-  const fields: (keyof PaneConfig)[] = [
-    "bodyId", "leftHandleId", "rightHandleId", "sidebarVar", "sectionsVar",
-  ]
+  const fields: (keyof PaneConfig)[] = ["bodyId", "leftHandleId", "rightHandleId", "sidebarVar", "sectionsVar"]
   for (const field of fields) {
     expect(MISSION_PANE_CONFIG[field]).not.toBe(PANEL_PANE_CONFIG[field])
   }
@@ -45,7 +43,9 @@ test("the two configs share NO element id or CSS variable (independent layouts)"
 
 test("Mission wires the drag service with MISSION_PANE_CONFIG and its own width settings", () => {
   const mission = readSrc("components/Mission.tsx")
-  expect(mission).toContain('import { initPaneResizers, renderPaneLayout, MISSION_PANE_CONFIG } from "../services/pane"')
+  expect(mission).toContain(
+    'import { initPaneResizers, renderPaneLayout, MISSION_PANE_CONFIG } from "../services/pane"',
+  )
   expect(mission).toContain("initPaneResizers(missionPaneCallbacks, MISSION_PANE_CONFIG)")
   expect(mission).toContain("settingsStore.missionLedgerWidth")
   expect(mission).toContain("settingsStore.missionChannelsWidth")
@@ -62,7 +62,7 @@ test("Mission wires the drag service with MISSION_PANE_CONFIG and its own width 
 
 test("right pane drag measures from the whole pane body, not the center column edge", () => {
   const pane = readSrc("services/pane.ts")
-  expect(pane).toContain('const panelBody = document.getElementById(config.bodyId);')
+  expect(pane).toContain("const panelBody = document.getElementById(config.bodyId);")
   expect(pane).toContain("clampNumber(rect.right - clientX, railMin, max)")
   expect(pane).toContain("export function defaultSectionsWidth")
   expect(pane).toContain("state.sectionsWidth ?? defaultSectionsWidth(config)")

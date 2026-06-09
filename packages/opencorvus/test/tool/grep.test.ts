@@ -47,10 +47,7 @@ describe("tool.search_code", () => {
     await Bun.write(path.join(sibling, "secret.txt"), "outside")
 
     const readFile = createCodebaseTools(root).read_file
-    const result = await readFile.execute!(
-      { path: "../repo2/secret.txt" },
-      {} as any,
-    )
+    const result = await readFile.execute!({ path: "../repo2/secret.txt" }, {} as any)
 
     expect(result).toBe("Error: path is outside the project boundary.")
   })
@@ -66,10 +63,7 @@ describe("tool.search_code", () => {
       fn: async () => {
         const sessionID = "frontend-design-read-file-session"
         const readFile = createCodebaseTools(tmp.path).read_file
-        const result = await readFile.execute!(
-          { path: "src/component.tsx" },
-          { opencorvus: { sessionID } } as any,
-        )
+        const result = await readFile.execute!({ path: "src/component.tsx" }, { opencorvus: { sessionID } } as any)
 
         expect(String(result)).toContain("export function Component")
         expect(FileTime.get(sessionID, filePath)).toBeInstanceOf(Date)
@@ -99,11 +93,10 @@ describe("tool.search_code", () => {
     }
 
     const searchCode = createCodebaseTools(tmp.path).search_code as any
-    const result = await searchCode.execute(
-      { pattern: "needle", path: "src", max_results: 5 },
-      {} as any,
-    )
-    const resultLines = String(result).split(/\r?\n/).filter((line) => line.includes("needle_"))
+    const result = await searchCode.execute({ pattern: "needle", path: "src", max_results: 5 }, {} as any)
+    const resultLines = String(result)
+      .split(/\r?\n/)
+      .filter((line) => line.includes("needle_"))
 
     expect(resultLines).toHaveLength(5)
     expect(result).toContain("(limited to 5 results)")

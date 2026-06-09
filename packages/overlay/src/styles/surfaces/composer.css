@@ -435,7 +435,8 @@
 
 /* Viewport reflow: at narrow viewports the send button drops onto its
    own row, so the textarea takes the entire first row. */
-@media (max-width: 760px) { /* breakpoint: --ui-breakpoint-md */
+@media (max-width: 760px) {
+  /* breakpoint: --ui-breakpoint-md */
   .chat-compose-row {
     grid-template-columns: minmax(0, 1fr) auto;
   }
@@ -728,12 +729,11 @@
 }
 
 .executor-popover-model[data-active="true"] {
-  background:
-    linear-gradient(
-      135deg,
-      color-mix(in srgb, var(--accent) 18%, transparent),
-      color-mix(in srgb, var(--accent) 15%, transparent)
-    );
+  background: linear-gradient(
+    135deg,
+    color-mix(in srgb, var(--accent) 18%, transparent),
+    color-mix(in srgb, var(--accent) 15%, transparent)
+  );
   border-color: color-mix(in srgb, var(--accent) 25%, transparent);
   color: var(--text-strong);
   font-weight: var(--ui-font-weight-strong);

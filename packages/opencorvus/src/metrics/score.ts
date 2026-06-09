@@ -14,12 +14,7 @@
  *   - Global contribution: weighted mean over all global metrics.
  *   - S_k = α * per_goal_overall + β * global_overall, with α=β=0.5 default.
  */
-import type {
-  Counterexample,
-  IterationSnapshot,
-  MetricResult,
-  MetricSpec,
-} from "./types"
+import type { Counterexample, IterationSnapshot, MetricResult, MetricSpec } from "./types"
 
 export interface ScoreWeights {
   /** Weight of per-goal aggregate in S_k. Default 0.5. */
@@ -70,14 +65,10 @@ export function computeIterationSnapshot(input: SnapshotInput): IterationSnapsho
     perGoalScore[goalID] = weightedMean(goalSpecs, currentBySpec)
   }
   const perGoalOverall =
-    goalIDs.length === 0
-      ? 0
-      : goalIDs.reduce((sum, g) => sum + perGoalScore[g], 0) / goalIDs.length
+    goalIDs.length === 0 ? 0 : goalIDs.reduce((sum, g) => sum + perGoalScore[g], 0) / goalIDs.length
 
   // Global contribution: weighted mean over global specs.
-  const globalSpecs = input.specs.filter(
-    (s) => s.scope === "global" && s.gate_class !== "efficiency",
-  )
+  const globalSpecs = input.specs.filter((s) => s.scope === "global" && s.gate_class !== "efficiency")
   const globalOverall = weightedMean(globalSpecs, currentBySpec)
 
   const aggregate = weights.alpha * perGoalOverall + weights.beta * globalOverall
@@ -140,10 +131,7 @@ function uniqueGoalIDs(specs: readonly MetricSpec[]): string[] {
   return [...set]
 }
 
-function weightedMean(
-  specs: readonly MetricSpec[],
-  results: Map<string, MetricResult>,
-): number {
+function weightedMean(specs: readonly MetricSpec[], results: Map<string, MetricResult>): number {
   if (specs.length === 0) return 0
   let weightSum = 0
   let weightedSum = 0

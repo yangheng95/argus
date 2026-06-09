@@ -53,11 +53,11 @@ Key implementation at `check/policy.ts:45`:
 
 Verdicts are persisted as `engine_artifact[kind="verdict"]`:
 
-| verdict        | Next action                                                                                                                                                           |
-| -------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| verdict        | Next action                                                                                                                                                               |
+| -------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `accepted`     | `deliver` completes the task directly; if additional artifacts (patch / git preview) are needed, call `publish_acceptance` explicitly for post-acceptance artifact export |
 | `rejected`     | Remediation via `acceptance-retry-feedback.ts`; once `acceptance.max_retries` is exceeded, the Orchestrator decides whether to retry / replan / fail                      |
-| `inconclusive` | Treated as rejected, but prefers replan (an inability to decide usually means incomplete information or a doom-loop)                                                  |
+| `inconclusive` | Treated as rejected, but prefers replan (an inability to decide usually means incomplete information or a doom-loop)                                                      |
 
 The Acceptance review is responsible only for verdicts and evidence. Starting / stopping / retrying / cancelling / failing the current task, and publishing new follow-up tasks, are Orchestrator lifecycle authority. If Acceptance determines the work should be split into a new task, it can only recommend this in verdict evidence — it cannot create the task directly.
 

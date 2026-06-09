@@ -54,7 +54,9 @@ describe("tool.web_clone_generate_source_project", () => {
         expect(await Bun.file(path.join(outputDir, "src", "data", "sourceDomIterationState.ts")).exists()).toBe(true)
         expect(await Bun.file(path.join(outputDir, "src", "data", "sourceSvgAssetGroups.ts")).exists()).toBe(true)
         expect(await Bun.file(path.join(outputDir, "src", "data", "sourceFaqGroups.ts")).exists()).toBe(true)
-        expect(await Bun.file(path.join(outputDir, "src", "components", "SourceAssetPathGroup.tsx")).exists()).toBe(true)
+        expect(await Bun.file(path.join(outputDir, "src", "components", "SourceAssetPathGroup.tsx")).exists()).toBe(
+          true,
+        )
         expect(await Bun.file(path.join(outputDir, "src", "components", "SourceFaqList.tsx")).exists()).toBe(true)
         expect(await Bun.file(path.join(outputDir, "src", "styles", "source-critical.css")).exists()).toBe(true)
         expect(await Bun.file(path.join(outputDir, "src", "vite-env.d.ts")).exists()).toBe(true)
@@ -77,11 +79,19 @@ describe("tool.web_clone_generate_source_project", () => {
         const sourceClonePage = await Bun.file(path.join(outputDir, "src", "components", "SourceClonePage.tsx")).text()
         const sourceDomPage = await Bun.file(path.join(outputDir, "src", "components", "SourceDomPage.tsx")).text()
         const sourceDomRegions = await Bun.file(path.join(outputDir, "src", "data", "sourceDomRegions.ts")).text()
-        const sourceDomReplacementPlan = await Bun.file(path.join(outputDir, "src", "data", "sourceDomReplacementPlan.ts")).text()
-        const sourceDomIterationState = await Bun.file(path.join(outputDir, "src", "data", "sourceDomIterationState.ts")).text()
-        const sourceSvgAssetGroups = await Bun.file(path.join(outputDir, "src", "data", "sourceSvgAssetGroups.ts")).text()
+        const sourceDomReplacementPlan = await Bun.file(
+          path.join(outputDir, "src", "data", "sourceDomReplacementPlan.ts"),
+        ).text()
+        const sourceDomIterationState = await Bun.file(
+          path.join(outputDir, "src", "data", "sourceDomIterationState.ts"),
+        ).text()
+        const sourceSvgAssetGroups = await Bun.file(
+          path.join(outputDir, "src", "data", "sourceSvgAssetGroups.ts"),
+        ).text()
         const sourceFaqGroups = await Bun.file(path.join(outputDir, "src", "data", "sourceFaqGroups.ts")).text()
-        const sourceProjectManifest = JSON.parse(await Bun.file(path.join(outputDir, "src", "data", "sourceProjectManifest.json")).text())
+        const sourceProjectManifest = JSON.parse(
+          await Bun.file(path.join(outputDir, "src", "data", "sourceProjectManifest.json")).text(),
+        )
         const readme = await Bun.file(path.join(outputDir, "README.md")).text()
         expect(sourceClonePage).toContain("SourceDomPage")
         expect(sourceDomPage).toStartWith("// @ts-nocheck")
@@ -110,17 +120,17 @@ describe("tool.web_clone_generate_source_project", () => {
           height: 768,
           evidenceSource: "capture_viewport",
         })
-        expect(sourceProjectManifest.visualIteration.viewportMatrix.map((item: { name: string }) => item.name)).toEqual([
-          "desktop-reference",
-          "mobile-review",
-          "wide-review",
-        ])
+        expect(sourceProjectManifest.visualIteration.viewportMatrix.map((item: { name: string }) => item.name)).toEqual(
+          ["desktop-reference", "mobile-review", "wide-review"],
+        )
         expect(readme).toContain("Visual iteration viewport matrix")
         expect(readme).toContain("desktop-reference 1366x768")
         expect(readme).toContain("source-ir/style-profile.json")
         expect(sourceSvgAssetGroups).toContain("sourceSvgAssetGroups")
         expect(sourceFaqGroups).toContain("sourceFaqGroups")
-        expect(await Bun.file(path.join(outputDir, "public", "assets", "images", "asset_000002.webp")).exists()).toBe(true)
+        expect(await Bun.file(path.join(outputDir, "public", "assets", "images", "asset_000002.webp")).exists()).toBe(
+          true,
+        )
         const projectSource = await readGeneratedSource(outputDir)
         const generatedComponentSource = await readGeneratedSourceDirectory(path.join(outputDir, "src", "components"))
         expect(projectSource.indexOf("Overview")).toBeGreaterThan(-1)
@@ -128,7 +138,9 @@ describe("tool.web_clone_generate_source_project", () => {
         expect(projectSource.indexOf("Overview")).toBeLessThan(projectSource.indexOf('className={"arrowWrap-fixture"}'))
         expect(projectSource.indexOf('className={"divider-fixture"}')).toBeGreaterThan(-1)
         expect(projectSource.indexOf("Crumb target")).toBeGreaterThan(-1)
-        expect(projectSource.indexOf('className={"divider-fixture"}')).toBeLessThan(projectSource.indexOf("Crumb target"))
+        expect(projectSource.indexOf('className={"divider-fixture"}')).toBeLessThan(
+          projectSource.indexOf("Crumb target"),
+        )
         const sourceCriticalCss = await Bun.file(path.join(outputDir, "src", "styles", "source-critical.css")).text()
         const sourceFullCss = await Bun.file(path.join(outputDir, "src", "styles", "source-full.css")).text()
         expect(projectSource).toContain("GDP Growth Rate")
@@ -165,25 +177,41 @@ describe("tool.web_clone_generate_source_project", () => {
     await using tmp = await tmpdir()
     const webpageEvidenceDir = await writeFixtureEvidence(tmp.path)
     const outputDir = path.join(tmp.path, "generated-react")
-    await Bun.write(path.join(webpageEvidenceDir, "web-clone-source-manifest.json"), JSON.stringify({
-      version: 1,
-      purpose: "web-clone-visible-source-package",
-      provenance: {
-        captureViewport: { width: 1024, height: 700 },
-        reference: { path: "reference.png", width: 1440, height: 2400 },
-      },
-    }, null, 2))
-    await Bun.write(path.join(webpageEvidenceDir, "extracted-page.json"), JSON.stringify({
-      url: "https://example.com/markets",
-      viewport: { width: 1280, height: 720 },
-    }, null, 2))
+    await Bun.write(
+      path.join(webpageEvidenceDir, "web-clone-source-manifest.json"),
+      JSON.stringify(
+        {
+          version: 1,
+          purpose: "web-clone-visible-source-package",
+          provenance: {
+            captureViewport: { width: 1024, height: 700 },
+            reference: { path: "reference.png", width: 1440, height: 2400 },
+          },
+        },
+        null,
+        2,
+      ),
+    )
+    await Bun.write(
+      path.join(webpageEvidenceDir, "extracted-page.json"),
+      JSON.stringify(
+        {
+          url: "https://example.com/markets",
+          viewport: { width: 1280, height: 720 },
+        },
+        null,
+        2,
+      ),
+    )
 
     await Instance.provide({
       directory: tmp.path,
       fn: async () => {
         const tool = await WebCloneGenerateSourceProjectTool.init()
         await tool.execute({ webpageEvidenceDir, outputDir }, ctx)
-        const sourceProjectManifest = JSON.parse(await Bun.file(path.join(outputDir, "src", "data", "sourceProjectManifest.json")).text())
+        const sourceProjectManifest = JSON.parse(
+          await Bun.file(path.join(outputDir, "src", "data", "sourceProjectManifest.json")).text(),
+        )
 
         expect(sourceProjectManifest.visualIteration.viewportMatrix[0]).toMatchObject({
           name: "desktop-reference",
@@ -205,7 +233,9 @@ describe("tool.web_clone_generate_source_project", () => {
       directory: tmp.path,
       fn: async () => {
         const tool = await WebCloneGenerateSourceProjectTool.init()
-        await expect(tool.execute({ webpageEvidenceDir, outputDir }, ctx)).rejects.toThrow("Output directory is not empty")
+        await expect(tool.execute({ webpageEvidenceDir, outputDir }, ctx)).rejects.toThrow(
+          "Output directory is not empty",
+        )
 
         const result = await tool.execute({ webpageEvidenceDir, outputDir, overwrite: true }, ctx)
         expect(result.title).toBe("Web clone source project generated")
@@ -227,18 +257,26 @@ describe("tool.web_clone_generate_source_project", () => {
 
         const sourceDomPage = await Bun.file(path.join(outputDir, "src", "components", "SourceDomPage.tsx")).text()
         const sourceDomRegions = await Bun.file(path.join(outputDir, "src", "data", "sourceDomRegions.ts")).text()
-        const sourceDomReplacementPlan = await Bun.file(path.join(outputDir, "src", "data", "sourceDomReplacementPlan.ts")).text()
-        const sourceDomIterationState = await Bun.file(path.join(outputDir, "src", "data", "sourceDomIterationState.ts")).text()
-        const sourceSvgAssetGroups = await Bun.file(path.join(outputDir, "src", "data", "sourceSvgAssetGroups.ts")).text()
+        const sourceDomReplacementPlan = await Bun.file(
+          path.join(outputDir, "src", "data", "sourceDomReplacementPlan.ts"),
+        ).text()
+        const sourceDomIterationState = await Bun.file(
+          path.join(outputDir, "src", "data", "sourceDomIterationState.ts"),
+        ).text()
+        const sourceSvgAssetGroups = await Bun.file(
+          path.join(outputDir, "src", "data", "sourceSvgAssetGroups.ts"),
+        ).text()
         const sourceFaqGroups = await Bun.file(path.join(outputDir, "src", "data", "sourceFaqGroups.ts")).text()
-        const sourceProjectManifest = JSON.parse(await Bun.file(path.join(outputDir, "src", "data", "sourceProjectManifest.json")).text())
+        const sourceProjectManifest = JSON.parse(
+          await Bun.file(path.join(outputDir, "src", "data", "sourceProjectManifest.json")).text(),
+        )
         const regionDir = path.join(outputDir, "src", "components", "source-dom")
         const semanticDir = path.join(outputDir, "src", "components", "semantic")
         const regionFiles = (await fs.readdir(regionDir)).filter((file) => file.endsWith(".tsx"))
         const semanticFiles = (await fs.readdir(semanticDir)).filter((file) => file.endsWith(".tsx")).sort()
-        const largestRegionBytes = Math.max(...await Promise.all(regionFiles.map(async (file) =>
-          (await fs.stat(path.join(regionDir, file))).size
-        )))
+        const largestRegionBytes = Math.max(
+          ...(await Promise.all(regionFiles.map(async (file) => (await fs.stat(path.join(regionDir, file))).size))),
+        )
 
         expect(sourceDomPage).not.toContain('from "./source-dom/MainContentRegion"')
         expect(sourceDomPage).toContain('className={"dashboard"}')
@@ -258,7 +296,9 @@ describe("tool.web_clone_generate_source_project", () => {
         expect(mapSurface).toContain("AssetPath")
         expect(mapSurface).not.toContain("SourceAssetPathGroup")
         expect(mapSurface).not.toContain("data-source-node-id")
-        expect(await Bun.file(path.join(semanticDir, "FrequentlyAskedQuestionsFAQ.tsx")).text()).toContain("SourceFaqList")
+        expect(await Bun.file(path.join(semanticDir, "FrequentlyAskedQuestionsFAQ.tsx")).text()).toContain(
+          "SourceFaqList",
+        )
         expect(sourceSvgAssetGroups).toContain("sourceSvgAssetGroups")
         expect(sourceFaqGroups).toContain("What is GDP?")
         expect(sourceFaqGroups).toContain("How is GDP calculated?")
@@ -285,7 +325,9 @@ describe("tool.web_clone_generate_source_project", () => {
         expect(sourceProjectManifest.visualIteration.viewportMatrix[0].evidenceSource).toBe("default")
         expect(sourceProjectManifest.sourceDomRegions.count).toBe(regionFiles.length)
         expect(sourceProjectManifest.sourceDomRegions.metricsModule).toBe("src/data/sourceDomRegions.ts")
-        expect(sourceProjectManifest.sourceDomRegions.replacementPlanModule).toBe("src/data/sourceDomReplacementPlan.ts")
+        expect(sourceProjectManifest.sourceDomRegions.replacementPlanModule).toBe(
+          "src/data/sourceDomReplacementPlan.ts",
+        )
         expect(sourceProjectManifest.sourceDomRegions.iterationStateModule).toBe("src/data/sourceDomIterationState.ts")
         expect(sourceProjectManifest.sourceDomRegions.replacementPlanCount).toBeGreaterThan(0)
         expect(sourceProjectManifest.sourceDomRegions.semanticReplacementCount).toBe(2)
@@ -315,8 +357,12 @@ describe("tool.web_clone_generate_source_project", () => {
         expect(sourceDomPage).toContain('from "./semantic/')
 
         const semanticComponent = await Bun.file(path.join(semanticDir, semanticFiles[0]!)).text()
-        const sourceDomIterationState = await Bun.file(path.join(outputDir, "src", "data", "sourceDomIterationState.ts")).text()
-        const sourceProjectManifest = JSON.parse(await Bun.file(path.join(outputDir, "src", "data", "sourceProjectManifest.json")).text())
+        const sourceDomIterationState = await Bun.file(
+          path.join(outputDir, "src", "data", "sourceDomIterationState.ts"),
+        ).text()
+        const sourceProjectManifest = JSON.parse(
+          await Bun.file(path.join(outputDir, "src", "data", "sourceProjectManifest.json")).text(),
+        )
         expect(semanticComponent).toContain("semantic-source-replacement")
         expect(semanticComponent).toContain(".map((item)")
         expect(semanticComponent).toContain('data-qa-id={"news-content"}')
@@ -333,11 +379,14 @@ describe("tool.web_clone_generate_source_project", () => {
         expect(sourceProjectManifest.semanticReplacements.count).toBe(1)
 
         const auditTool = await WebCloneSourceAuditTool.init()
-        const audit = await auditTool.execute({
-          projectDir: outputDir,
-          sourcePackageDir: webpageEvidenceDir,
-          finalAcceptanceMode: "visual_baseline_allowed",
-        }, ctx)
+        const audit = await auditTool.execute(
+          {
+            projectDir: outputDir,
+            sourcePackageDir: webpageEvidenceDir,
+            finalAcceptanceMode: "visual_baseline_allowed",
+          },
+          ctx,
+        )
         expect(audit.title).toBe("Source-skeleton consumption audit passed")
         expect(audit.metadata.audit.risk.generatedBaselineDetected).toBe(false)
         expect(audit.metadata.audit.projectStats.sourceDomRegionFileCount).toBe(0)
@@ -367,7 +416,9 @@ describe("tool.web_clone_generate_source_project", () => {
         expect(sourceDomDirExists).toBe(false)
 
         const semanticComponent = await Bun.file(path.join(semanticDir, semanticFiles[0]!)).text()
-        const sourceDomIterationState = await Bun.file(path.join(outputDir, "src", "data", "sourceDomIterationState.ts")).text()
+        const sourceDomIterationState = await Bun.file(
+          path.join(outputDir, "src", "data", "sourceDomIterationState.ts"),
+        ).text()
         expect(semanticComponent).toContain("semantic-source-replacement")
         expect(semanticComponent).toContain("promo_item")
         expect(semanticComponent).toContain(".map((item)")
@@ -397,7 +448,9 @@ describe("tool.web_clone_generate_source_project", () => {
         const semanticDir = path.join(outputDir, "src", "components", "semantic")
         const semanticFiles = (await fs.readdir(semanticDir)).filter((file) => file.endsWith(".tsx"))
         const sourceDomDirExists = await Bun.file(path.join(outputDir, "src", "components", "source-dom")).exists()
-        const sourceDomIterationState = await Bun.file(path.join(outputDir, "src", "data", "sourceDomIterationState.ts")).text()
+        const sourceDomIterationState = await Bun.file(
+          path.join(outputDir, "src", "data", "sourceDomIterationState.ts"),
+        ).text()
 
         expect(semanticFiles).toHaveLength(1)
         expect(semanticFiles[0]).toBe("EconomicIndicatorsHeatmapTable.tsx")
@@ -416,11 +469,14 @@ describe("tool.web_clone_generate_source_project", () => {
         expect(sourceDomIterationState).toContain('"replacementKind": "data_table_or_heatmap_component"')
 
         const auditTool = await WebCloneSourceAuditTool.init()
-        const audit = await auditTool.execute({
-          projectDir: outputDir,
-          sourcePackageDir: webpageEvidenceDir,
-          finalAcceptanceMode: "visual_baseline_allowed",
-        }, ctx)
+        const audit = await auditTool.execute(
+          {
+            projectDir: outputDir,
+            sourcePackageDir: webpageEvidenceDir,
+            finalAcceptanceMode: "visual_baseline_allowed",
+          },
+          ctx,
+        )
         expect(audit.title).toBe("Source-skeleton consumption audit passed")
         expect(audit.metadata.audit.risk.generatedBaselineDetected).toBe(false)
         expect(audit.metadata.audit.projectStats.sourceDomRegionFileCount).toBe(0)
@@ -443,7 +499,9 @@ describe("tool.web_clone_generate_source_project", () => {
         const sourceDomPage = await Bun.file(path.join(outputDir, "src", "components", "SourceDomPage.tsx")).text()
         const semanticDir = path.join(outputDir, "src", "components", "semantic")
         const semanticFiles = (await fs.readdir(semanticDir)).filter((file) => file.endsWith(".tsx")).sort()
-        const sourceDomIterationState = await Bun.file(path.join(outputDir, "src", "data", "sourceDomIterationState.ts")).text()
+        const sourceDomIterationState = await Bun.file(
+          path.join(outputDir, "src", "data", "sourceDomIterationState.ts"),
+        ).text()
         const generatedSource = await readGeneratedSource(outputDir)
 
         expect(semanticFiles).toContain("PlanComparisonTable.tsx")
@@ -481,7 +539,9 @@ describe("tool.web_clone_generate_source_project", () => {
         const semanticDir = path.join(outputDir, "src", "components", "semantic")
         const semanticFiles = (await fs.readdir(semanticDir)).filter((file) => file.endsWith(".tsx"))
         const sourceDomDirExists = await Bun.file(path.join(outputDir, "src", "components", "source-dom")).exists()
-        const sourceDomIterationState = await Bun.file(path.join(outputDir, "src", "data", "sourceDomIterationState.ts")).text()
+        const sourceDomIterationState = await Bun.file(
+          path.join(outputDir, "src", "data", "sourceDomIterationState.ts"),
+        ).text()
 
         expect(semanticFiles).toHaveLength(1)
         expect(semanticFiles[0]).toBe("EconomicCalendarList.tsx")
@@ -499,11 +559,14 @@ describe("tool.web_clone_generate_source_project", () => {
         expect(sourceDomIterationState).toContain('"replacementKind": "event_or_news_list_component"')
 
         const auditTool = await WebCloneSourceAuditTool.init()
-        const audit = await auditTool.execute({
-          projectDir: outputDir,
-          sourcePackageDir: webpageEvidenceDir,
-          finalAcceptanceMode: "visual_baseline_allowed",
-        }, ctx)
+        const audit = await auditTool.execute(
+          {
+            projectDir: outputDir,
+            sourcePackageDir: webpageEvidenceDir,
+            finalAcceptanceMode: "visual_baseline_allowed",
+          },
+          ctx,
+        )
         expect(audit.title).toBe("Source-skeleton consumption audit passed")
         expect(audit.metadata.audit.risk.generatedBaselineDetected).toBe(false)
         expect(audit.metadata.audit.projectStats.sourceDomRegionFileCount).toBe(0)
@@ -527,7 +590,9 @@ describe("tool.web_clone_generate_source_project", () => {
         const semanticDir = path.join(outputDir, "src", "components", "semantic")
         const semanticFiles = (await fs.readdir(semanticDir)).filter((file) => file.endsWith(".tsx"))
         const sourceDomDirExists = await Bun.file(path.join(outputDir, "src", "components", "source-dom")).exists()
-        const sourceDomIterationState = await Bun.file(path.join(outputDir, "src", "data", "sourceDomIterationState.ts")).text()
+        const sourceDomIterationState = await Bun.file(
+          path.join(outputDir, "src", "data", "sourceDomIterationState.ts"),
+        ).text()
 
         expect(semanticFiles).toContain("IdeasCards.tsx")
         expect(sourceDomPage).toContain('from "./semantic/IdeasCards"')
@@ -545,11 +610,14 @@ describe("tool.web_clone_generate_source_project", () => {
         expect(sourceDomIterationState).toContain('"replacementKind": "card_collection_component"')
 
         const auditTool = await WebCloneSourceAuditTool.init()
-        const audit = await auditTool.execute({
-          projectDir: outputDir,
-          sourcePackageDir: webpageEvidenceDir,
-          finalAcceptanceMode: "visual_baseline_allowed",
-        }, ctx)
+        const audit = await auditTool.execute(
+          {
+            projectDir: outputDir,
+            sourcePackageDir: webpageEvidenceDir,
+            finalAcceptanceMode: "visual_baseline_allowed",
+          },
+          ctx,
+        )
         expect(audit.title).toBe("Source-skeleton consumption audit passed")
         expect(audit.metadata.audit.risk.generatedBaselineDetected).toBe(false)
         expect(audit.metadata.audit.projectStats.sourceDomRegionFileCount).toBe(0)
@@ -570,7 +638,9 @@ describe("tool.web_clone_generate_source_project", () => {
         await generateTool.execute({ webpageEvidenceDir, outputDir }, ctx)
 
         const sourceDomPage = await Bun.file(path.join(outputDir, "src", "components", "SourceDomPage.tsx")).text()
-        const sourceDomIterationState = await Bun.file(path.join(outputDir, "src", "data", "sourceDomIterationState.ts")).text()
+        const sourceDomIterationState = await Bun.file(
+          path.join(outputDir, "src", "data", "sourceDomIterationState.ts"),
+        ).text()
         const semanticDir = path.join(outputDir, "src", "components", "semantic")
         const semanticFiles = (await fs.readdir(semanticDir)).filter((file) => file.endsWith(".tsx"))
         const sourceDomDirExists = await Bun.file(path.join(outputDir, "src", "components", "source-dom")).exists()
@@ -604,7 +674,9 @@ describe("tool.web_clone_generate_source_project", () => {
         await generateTool.execute({ webpageEvidenceDir, outputDir }, ctx)
 
         const sourceDomPage = await Bun.file(path.join(outputDir, "src", "components", "SourceDomPage.tsx")).text()
-        const sourceDomIterationState = await Bun.file(path.join(outputDir, "src", "data", "sourceDomIterationState.ts")).text()
+        const sourceDomIterationState = await Bun.file(
+          path.join(outputDir, "src", "data", "sourceDomIterationState.ts"),
+        ).text()
         const semanticDir = path.join(outputDir, "src", "components", "semantic")
         const semanticFiles = (await fs.readdir(semanticDir)).filter((file) => file.endsWith(".tsx")).sort()
 
@@ -632,7 +704,9 @@ describe("tool.web_clone_generate_source_project", () => {
         const semanticDir = path.join(outputDir, "src", "components", "semantic")
         const semanticFiles = (await fs.readdir(semanticDir)).filter((file) => file.endsWith(".tsx")).sort()
         const sourceDomDirExists = await Bun.file(path.join(outputDir, "src", "components", "source-dom")).exists()
-        const sourceDomIterationState = await Bun.file(path.join(outputDir, "src", "data", "sourceDomIterationState.ts")).text()
+        const sourceDomIterationState = await Bun.file(
+          path.join(outputDir, "src", "data", "sourceDomIterationState.ts"),
+        ).text()
 
         expect(semanticFiles).toContain("FooterNavigation.tsx")
         expect(sourceDomPage).toContain('from "./semantic/FooterNavigation"')
@@ -656,11 +730,14 @@ describe("tool.web_clone_generate_source_project", () => {
         expect(sourceDomIterationState).toContain('"replacementKind": "navigation_or_footer_component"')
 
         const auditTool = await WebCloneSourceAuditTool.init()
-        const audit = await auditTool.execute({
-          projectDir: outputDir,
-          sourcePackageDir: webpageEvidenceDir,
-          finalAcceptanceMode: "visual_baseline_allowed",
-        }, ctx)
+        const audit = await auditTool.execute(
+          {
+            projectDir: outputDir,
+            sourcePackageDir: webpageEvidenceDir,
+            finalAcceptanceMode: "visual_baseline_allowed",
+          },
+          ctx,
+        )
         expect(audit.title).toBe("Source-skeleton consumption audit passed")
         expect(audit.metadata.audit.risk.generatedBaselineDetected).toBe(false)
         expect(audit.metadata.audit.projectStats.sourceDomRegionFileCount).toBe(0)
@@ -684,7 +761,9 @@ describe("tool.web_clone_generate_source_project", () => {
         const semanticDir = path.join(outputDir, "src", "components", "semantic")
         const semanticFiles = (await fs.readdir(semanticDir)).filter((file) => file.endsWith(".tsx")).sort()
         const sourceDomDirExists = await Bun.file(path.join(outputDir, "src", "components", "source-dom")).exists()
-        const sourceDomIterationState = await Bun.file(path.join(outputDir, "src", "data", "sourceDomIterationState.ts")).text()
+        const sourceDomIterationState = await Bun.file(
+          path.join(outputDir, "src", "data", "sourceDomIterationState.ts"),
+        ).text()
 
         expect(semanticFiles).toContain("GlobalIndustrialMapSurface.tsx")
         expect(sourceDomPage).toContain('from "./semantic/GlobalIndustrialMapSurface"')
@@ -716,11 +795,14 @@ describe("tool.web_clone_generate_source_project", () => {
         expect(sourceDomIterationState).toContain('"replacementKind": "map_or_chart_asset_component"')
 
         const auditTool = await WebCloneSourceAuditTool.init()
-        const audit = await auditTool.execute({
-          projectDir: outputDir,
-          sourcePackageDir: webpageEvidenceDir,
-          finalAcceptanceMode: "visual_baseline_allowed",
-        }, ctx)
+        const audit = await auditTool.execute(
+          {
+            projectDir: outputDir,
+            sourcePackageDir: webpageEvidenceDir,
+            finalAcceptanceMode: "visual_baseline_allowed",
+          },
+          ctx,
+        )
         expect(audit.title).toBe("Source-skeleton consumption audit passed")
         expect(audit.metadata.audit.risk.generatedBaselineDetected).toBe(false)
         expect(audit.metadata.audit.projectStats.sourceDomRegionFileCount).toBe(0)
@@ -781,7 +863,9 @@ describe("tool.web_clone_generate_source_project", () => {
         const semanticDir = path.join(outputDir, "src", "components", "semantic")
         const semanticFiles = (await fs.readdir(semanticDir)).filter((file) => file.endsWith(".tsx")).sort()
         const sourceDomDirExists = await Bun.file(path.join(outputDir, "src", "components", "source-dom")).exists()
-        const sourceDomIterationState = await Bun.file(path.join(outputDir, "src", "data", "sourceDomIterationState.ts")).text()
+        const sourceDomIterationState = await Bun.file(
+          path.join(outputDir, "src", "data", "sourceDomIterationState.ts"),
+        ).text()
 
         expect(semanticFiles).toContain("GDPGrowthYoYRanking.tsx")
         expect(sourceDomPage).toContain('from "./semantic/GDPGrowthYoYRanking"')
@@ -801,11 +885,14 @@ describe("tool.web_clone_generate_source_project", () => {
         expect(sourceDomIterationState).toContain('"replacementKind": "data_table_or_heatmap_component"')
 
         const auditTool = await WebCloneSourceAuditTool.init()
-        const audit = await auditTool.execute({
-          projectDir: outputDir,
-          sourcePackageDir: webpageEvidenceDir,
-          finalAcceptanceMode: "visual_baseline_allowed",
-        }, ctx)
+        const audit = await auditTool.execute(
+          {
+            projectDir: outputDir,
+            sourcePackageDir: webpageEvidenceDir,
+            finalAcceptanceMode: "visual_baseline_allowed",
+          },
+          ctx,
+        )
         expect(audit.title).toBe("Source-skeleton consumption audit passed")
         expect(audit.metadata.audit.risk.generatedBaselineDetected).toBe(false)
         expect(audit.metadata.audit.projectStats.sourceDomRegionFileCount).toBe(0)
@@ -829,7 +916,9 @@ describe("tool.web_clone_generate_source_project", () => {
         const semanticDir = path.join(outputDir, "src", "components", "semantic")
         const semanticFiles = (await fs.readdir(semanticDir)).filter((file) => file.endsWith(".tsx")).sort()
         const sourceDomDirExists = await Bun.file(path.join(outputDir, "src", "components", "source-dom")).exists()
-        const sourceDomIterationState = await Bun.file(path.join(outputDir, "src", "data", "sourceDomIterationState.ts")).text()
+        const sourceDomIterationState = await Bun.file(
+          path.join(outputDir, "src", "data", "sourceDomIterationState.ts"),
+        ).text()
 
         expect(semanticFiles).toContain("CountriesLinks.tsx")
         expect(sourceDomPage).toContain('from "./semantic/CountriesLinks"')
@@ -846,11 +935,14 @@ describe("tool.web_clone_generate_source_project", () => {
         expect(sourceDomIterationState).toContain('"replacementKind": "navigation_or_footer_component"')
 
         const auditTool = await WebCloneSourceAuditTool.init()
-        const audit = await auditTool.execute({
-          projectDir: outputDir,
-          sourcePackageDir: webpageEvidenceDir,
-          finalAcceptanceMode: "visual_baseline_allowed",
-        }, ctx)
+        const audit = await auditTool.execute(
+          {
+            projectDir: outputDir,
+            sourcePackageDir: webpageEvidenceDir,
+            finalAcceptanceMode: "visual_baseline_allowed",
+          },
+          ctx,
+        )
         expect(audit.title).toBe("Source-skeleton consumption audit passed")
         expect(audit.metadata.audit.risk.generatedBaselineDetected).toBe(false)
         expect(audit.metadata.audit.projectStats.sourceDomRegionFileCount).toBe(0)
@@ -874,7 +966,9 @@ describe("tool.web_clone_generate_source_project", () => {
         const semanticDir = path.join(outputDir, "src", "components", "semantic")
         const semanticFiles = (await fs.readdir(semanticDir)).filter((file) => file.endsWith(".tsx")).sort()
         const sourceDomDirExists = await Bun.file(path.join(outputDir, "src", "components", "source-dom")).exists()
-        const sourceDomIterationState = await Bun.file(path.join(outputDir, "src", "data", "sourceDomIterationState.ts")).text()
+        const sourceDomIterationState = await Bun.file(
+          path.join(outputDir, "src", "data", "sourceDomIterationState.ts"),
+        ).text()
 
         expect(semanticFiles).toContain("HeaderNavigation.tsx")
         expect(sourceDomPage).toContain('from "./semantic/HeaderNavigation"')
@@ -886,7 +980,9 @@ describe("tool.web_clone_generate_source_project", () => {
         expect(headerComponent).toContain('import { AssetPath } from "../AssetPath"')
         expect(headerComponent).toContain("Products")
         expect(headerComponent).toContain("{item.label}")
-        expect(headerComponent.indexOf("{item.label}")).toBeLessThan(headerComponent.indexOf("<span className={item.chevronClassName}"))
+        expect(headerComponent.indexOf("{item.label}")).toBeLessThan(
+          headerComponent.indexOf("<span className={item.chevronClassName}"),
+        )
         expect(headerComponent).toContain('"logoTextFallback": "TradingView"')
         expect(headerComponent).toContain("semantic-source-header-logo-text")
         expect(headerComponent).toContain('"ariaLabel": "Open user menu"')
@@ -897,11 +993,14 @@ describe("tool.web_clone_generate_source_project", () => {
         expect(sourceDomIterationState).toContain('"remainingRegionCount": 0')
 
         const auditTool = await WebCloneSourceAuditTool.init()
-        const audit = await auditTool.execute({
-          projectDir: outputDir,
-          sourcePackageDir: webpageEvidenceDir,
-          finalAcceptanceMode: "visual_baseline_allowed",
-        }, ctx)
+        const audit = await auditTool.execute(
+          {
+            projectDir: outputDir,
+            sourcePackageDir: webpageEvidenceDir,
+            finalAcceptanceMode: "visual_baseline_allowed",
+          },
+          ctx,
+        )
         expect(audit.title).toBe("Source-skeleton consumption audit passed")
         expect(audit.metadata.audit.risk.generatedBaselineDetected).toBe(false)
         expect(audit.metadata.audit.projectStats.sourceDomRegionFileCount).toBe(0)
@@ -925,7 +1024,9 @@ describe("tool.web_clone_generate_source_project", () => {
         const semanticDir = path.join(outputDir, "src", "components", "semantic")
         const semanticFiles = (await fs.readdir(semanticDir)).filter((file) => file.endsWith(".tsx")).sort()
         const sourceDomDirExists = await Bun.file(path.join(outputDir, "src", "components", "source-dom")).exists()
-        const sourceDomIterationState = await Bun.file(path.join(outputDir, "src", "data", "sourceDomIterationState.ts")).text()
+        const sourceDomIterationState = await Bun.file(
+          path.join(outputDir, "src", "data", "sourceDomIterationState.ts"),
+        ).text()
 
         expect(semanticFiles).toContain("IdeasSection.tsx")
         expect(sourceDomPage).toContain('from "./semantic/IdeasSection"')
@@ -934,7 +1035,7 @@ describe("tool.web_clone_generate_source_project", () => {
         const sectionComponent = await Bun.file(path.join(semanticDir, "IdeasSection.tsx")).text()
         expect(sectionComponent).toContain("semantic-source-replacement")
         expect(sectionComponent).toContain(".tabs.map((tab)")
-        expect(sectionComponent).toContain('import {')
+        expect(sectionComponent).toContain("import {")
         expect(sectionComponent).toContain("Popular")
         expect(sectionComponent).toContain("See more ideas")
         expect(sectionComponent).not.toContain("data-source-node-id")
@@ -942,11 +1043,14 @@ describe("tool.web_clone_generate_source_project", () => {
         expect(sourceDomIterationState).toContain('"remainingRegionCount": 0')
 
         const auditTool = await WebCloneSourceAuditTool.init()
-        const audit = await auditTool.execute({
-          projectDir: outputDir,
-          sourcePackageDir: webpageEvidenceDir,
-          finalAcceptanceMode: "visual_baseline_allowed",
-        }, ctx)
+        const audit = await auditTool.execute(
+          {
+            projectDir: outputDir,
+            sourcePackageDir: webpageEvidenceDir,
+            finalAcceptanceMode: "visual_baseline_allowed",
+          },
+          ctx,
+        )
         expect(audit.title).toBe("Source-skeleton consumption audit passed")
         expect(audit.metadata.audit.risk.generatedBaselineDetected).toBe(false)
         expect(audit.metadata.audit.projectStats.sourceDomRegionFileCount).toBe(0)
@@ -967,22 +1071,33 @@ async function readGeneratedSourceDirectory(dir: string): Promise<string> {
 
 async function generatedSourceFiles(dir: string): Promise<string[]> {
   const entries = await fs.readdir(dir, { withFileTypes: true })
-  const files = await Promise.all(entries.map(async (entry) => {
-    const fullPath = path.join(dir, entry.name)
-    if (entry.isDirectory()) return generatedSourceFiles(fullPath)
-    return /\.(?:css|ts|tsx)$/.test(entry.name) ? [fullPath] : []
-  }))
+  const files = await Promise.all(
+    entries.map(async (entry) => {
+      const fullPath = path.join(dir, entry.name)
+      if (entry.isDirectory()) return generatedSourceFiles(fullPath)
+      return /\.(?:css|ts|tsx)$/.test(entry.name) ? [fullPath] : []
+    }),
+  )
   return files.flat().sort()
 }
 
 async function writeFixtureEvidence(root: string): Promise<string> {
   const webpageEvidenceDir = path.join(root, "webpage-evidence")
   await Bun.write(path.join(webpageEvidenceDir, "reference.png"), minimalPngBytes())
-  await Bun.write(path.join(webpageEvidenceDir, "extracted-page.json"), JSON.stringify({
-    url: "https://example.com/markets",
-    viewport: { width: 1366, height: 768 },
-  }, null, 2))
-  await Bun.write(path.join(webpageEvidenceDir, "source-skeleton", "index.html"), `
+  await Bun.write(
+    path.join(webpageEvidenceDir, "extracted-page.json"),
+    JSON.stringify(
+      {
+        url: "https://example.com/markets",
+        viewport: { width: 1366, height: 768 },
+      },
+      null,
+      2,
+    ),
+  )
+  await Bun.write(
+    path.join(webpageEvidenceDir, "source-skeleton", "index.html"),
+    `
     <main class="economic-calendar">
       <nav><a href="/markets">Markets</a></nav>
       <h1>Economic calendar</h1>
@@ -1012,111 +1127,165 @@ async function writeFixtureEvidence(root: string): Promise<string> {
         </tbody>
       </table>
     </main>
-  `)
-  await Bun.write(path.join(webpageEvidenceDir, "source-skeleton", "critical.css"), ".economic-calendar { display: grid; background-image: url(data:image/png;base64,AAAA); } [data-source-node-id=\"style-1\"] { outline: 1px solid red; } [data-theme=dark] .background-test {background-position: 100% 100%,100%0}&:dir(rtl):after{background: red;};}")
-  await Bun.write(path.join(webpageEvidenceDir, "source-skeleton", "full-source.css"), ".economic-calendar table { width: 100%; } [data-theme=dark] .background-test{&:dir(rtl):before{background: blue}&:dir(rtl):after{background: red}} .fade-test:after:dir(rtl){transform: rotate(-180deg);}")
-  await Bun.write(path.join(webpageEvidenceDir, "page.ir.json"), JSON.stringify({
-    root: {
-      id: "root",
-      tag: "body",
-      attrs: [],
-      children: [
-        {
-          id: "crumb-current",
-          type: "element",
-          tag: "li",
+  `,
+  )
+  await Bun.write(
+    path.join(webpageEvidenceDir, "source-skeleton", "critical.css"),
+    '.economic-calendar { display: grid; background-image: url(data:image/png;base64,AAAA); } [data-source-node-id="style-1"] { outline: 1px solid red; } [data-theme=dark] .background-test {background-position: 100% 100%,100%0}&:dir(rtl):after{background: red;};}',
+  )
+  await Bun.write(
+    path.join(webpageEvidenceDir, "source-skeleton", "full-source.css"),
+    ".economic-calendar table { width: 100%; } [data-theme=dark] .background-test{&:dir(rtl):before{background: blue}&:dir(rtl):after{background: red}} .fade-test:after:dir(rtl){transform: rotate(-180deg);}",
+  )
+  await Bun.write(
+    path.join(webpageEvidenceDir, "page.ir.json"),
+    JSON.stringify(
+      {
+        root: {
+          id: "root",
+          tag: "body",
           attrs: [],
           children: [
             {
-              id: "crumb-divider",
+              id: "crumb-current",
               type: "element",
-              tag: "span",
-              attrs: [
-                { name: "class", value: "divider-fixture" },
-                { name: "aria-hidden", value: "true" },
+              tag: "li",
+              attrs: [],
+              children: [
+                {
+                  id: "crumb-divider",
+                  type: "element",
+                  tag: "span",
+                  attrs: [
+                    { name: "class", value: "divider-fixture" },
+                    { name: "aria-hidden", value: "true" },
+                  ],
+                  children: [{ id: "crumb-divider-text", type: "text", text: "/" }],
+                },
+                {
+                  id: "crumb-link",
+                  type: "element",
+                  tag: "a",
+                  attrs: [{ name: "href", value: "/markets/economy" }],
+                  children: [{ id: "crumb-link-text", type: "text", text: "Crumb target" }],
+                },
               ],
-              children: [{ id: "crumb-divider-text", type: "text", text: "/" }],
             },
             {
-              id: "crumb-link",
-              type: "element",
-              tag: "a",
-              attrs: [{ name: "href", value: "/markets/economy" }],
-              children: [{ id: "crumb-link-text", type: "text", text: "Crumb target" }],
-            },
-          ],
-        },
-        {
-          id: "mixed-wrap",
-          type: "element",
-          tag: "span",
-          attrs: [],
-          children: [
-            {
-              id: "mixed-arrow",
+              id: "mixed-wrap",
               type: "element",
               tag: "span",
-              attrs: [{ name: "class", value: "arrowWrap-fixture" }],
+              attrs: [],
+              children: [
+                {
+                  id: "mixed-arrow",
+                  type: "element",
+                  tag: "span",
+                  attrs: [{ name: "class", value: "arrowWrap-fixture" }],
+                  children: [],
+                },
+              ],
+            },
+            {
+              id: "style-1",
+              type: "element",
+              tag: "section",
+              attrs: [{ name: "style", value: "--ui-card-bg: blue; color: green; display: block" }],
               children: [],
             },
           ],
         },
-        {
-          id: "style-1",
-          type: "element",
-          tag: "section",
-          attrs: [{ name: "style", value: "--ui-card-bg: blue; color: green; display: block" }],
-          children: [],
-        },
-      ],
-    },
-  }, null, 2))
-  await Bun.write(path.join(webpageEvidenceDir, "assets", "images", "asset_000002.webp.txt"), "data:image/webp;base64,UklGRiIAAABXRUJQVlA4IBYAAAAwAQCdASoBAAEADsD+JaQAA3AAAAAA")
-  await Bun.write(path.join(webpageEvidenceDir, "assets", "manifest.json"), JSON.stringify({
-    version: 1,
-    assets: [
-      {
-        id: "asset_000001",
-        kind: "svg-path-data",
-        path: "assets/svg/asset_000001.path.txt",
-        sha256: "0".repeat(64),
-        bytes: 12,
-        chars: 12,
-        semanticRole: "svg-geometry",
-        preview: "M0 0H1V1",
-        usedBy: [],
       },
+      null,
+      2,
+    ),
+  )
+  await Bun.write(
+    path.join(webpageEvidenceDir, "assets", "images", "asset_000002.webp.txt"),
+    "data:image/webp;base64,UklGRiIAAABXRUJQVlA4IBYAAAAwAQCdASoBAAEADsD+JaQAA3AAAAAA",
+  )
+  await Bun.write(
+    path.join(webpageEvidenceDir, "assets", "manifest.json"),
+    JSON.stringify(
       {
-        id: "asset_000002",
-        kind: "image-data-uri",
-        mime: "image/webp",
-        path: "assets/images/asset_000002.webp.txt",
-        sha256: "1".repeat(64),
-        bytes: 44,
-        chars: 82,
-        semanticRole: "preview-image",
-        usedBy: [],
+        version: 1,
+        assets: [
+          {
+            id: "asset_000001",
+            kind: "svg-path-data",
+            path: "assets/svg/asset_000001.path.txt",
+            sha256: "0".repeat(64),
+            bytes: 12,
+            chars: 12,
+            semanticRole: "svg-geometry",
+            preview: "M0 0H1V1",
+            usedBy: [],
+          },
+          {
+            id: "asset_000002",
+            kind: "image-data-uri",
+            mime: "image/webp",
+            path: "assets/images/asset_000002.webp.txt",
+            sha256: "1".repeat(64),
+            bytes: 44,
+            chars: 82,
+            semanticRole: "preview-image",
+            usedBy: [],
+          },
+        ],
       },
-    ],
-  }, null, 2))
-  await Bun.write(path.join(webpageEvidenceDir, "source-ir", "component-tree.json"), JSON.stringify({
-    components: [
-      { name: "EconomicCalendarShell", kind: "navigation", tag: "main", classNames: ["economic-calendar"], textPreview: ["Markets", "Economic calendar"] },
-      { name: "EconomicCalendarTable", kind: "table", tag: "table", classNames: ["calendar-table"], textPreview: ["08:30", "GDP Growth Rate"] },
-    ],
-  }, null, 2))
-  await Bun.write(path.join(webpageEvidenceDir, "source-ir", "content-model.json"), JSON.stringify({
-    tables: [{
-      title: "Economic data",
-      headers: ["Time", "Country", "Event", "Actual"],
-      rows: [
-        ["08:30", "US", "GDP Growth Rate", "2.1%"],
-        ["09:45", "US", "Manufacturing PMI", "51.3"],
-      ],
-    }],
-    repeatedGroups: [{ title: "Calendar rows", sampleTexts: ["08:30 US GDP Growth Rate 2.1%", "09:45 US Manufacturing PMI 51.3"] }],
-    stats: { totalTables: 1, totalLists: 0, totalCards: 0, totalRepeatedGroups: 1 },
-  }, null, 2))
+      null,
+      2,
+    ),
+  )
+  await Bun.write(
+    path.join(webpageEvidenceDir, "source-ir", "component-tree.json"),
+    JSON.stringify(
+      {
+        components: [
+          {
+            name: "EconomicCalendarShell",
+            kind: "navigation",
+            tag: "main",
+            classNames: ["economic-calendar"],
+            textPreview: ["Markets", "Economic calendar"],
+          },
+          {
+            name: "EconomicCalendarTable",
+            kind: "table",
+            tag: "table",
+            classNames: ["calendar-table"],
+            textPreview: ["08:30", "GDP Growth Rate"],
+          },
+        ],
+      },
+      null,
+      2,
+    ),
+  )
+  await Bun.write(
+    path.join(webpageEvidenceDir, "source-ir", "content-model.json"),
+    JSON.stringify(
+      {
+        tables: [
+          {
+            title: "Economic data",
+            headers: ["Time", "Country", "Event", "Actual"],
+            rows: [
+              ["08:30", "US", "GDP Growth Rate", "2.1%"],
+              ["09:45", "US", "Manufacturing PMI", "51.3"],
+            ],
+          },
+        ],
+        repeatedGroups: [
+          { title: "Calendar rows", sampleTexts: ["08:30 US GDP Growth Rate 2.1%", "09:45 US Manufacturing PMI 51.3"] },
+        ],
+        stats: { totalTables: 1, totalLists: 0, totalCards: 0, totalRepeatedGroups: 1 },
+      },
+      null,
+      2,
+    ),
+  )
   return webpageEvidenceDir
 }
 
@@ -1128,20 +1297,28 @@ async function writeRegionizedFixtureEvidence(root: string): Promise<string> {
     return `<path data-source-node-id="map-${index + 1}" data-asset-d="../assets/svg/${assetId}.path.txt" id="land-${index + 1}" class="positive-s"></path>`
   }).join("")
   const sections = ["Overview", "Markets", "Ideas", "Indicators", "News", "Calendar"]
-    .map((title, sectionIndex) => `
+    .map(
+      (title, sectionIndex) => `
       <section class="dashboard-section section-${sectionIndex}" data-source-node-id="${title.toLowerCase()}-region">
         <h2>${title}</h2>
         <div class="cards">
-          ${Array.from({ length: 18 }, (_, itemIndex) => `
+          ${Array.from(
+            { length: 18 },
+            (_, itemIndex) => `
             <article class="card">
               <h3>${title} item ${itemIndex + 1}</h3>
               <p>${title} row ${itemIndex + 1} GDP Growth Rate Manufacturing PMI Economic calendar</p>
             </article>
-          `).join("")}
+          `,
+          ).join("")}
         </div>
       </section>
-    `).join("")
-  await Bun.write(path.join(webpageEvidenceDir, "source-skeleton", "index.html"), `
+    `,
+    )
+    .join("")
+  await Bun.write(
+    path.join(webpageEvidenceDir, "source-skeleton", "index.html"),
+    `
     <main class="dashboard">
       ${sections}
       <section class="dashboard-section map-section">
@@ -1170,48 +1347,85 @@ async function writeRegionizedFixtureEvidence(root: string): Promise<string> {
         </div>
       </section>
     </main>
-  `)
-  await Bun.write(path.join(webpageEvidenceDir, "source-skeleton", "critical.css"), ".dashboard { display: grid; gap: 24px; } .cards { display: grid; grid-template-columns: repeat(3, 1fr); }")
-  await Bun.write(path.join(webpageEvidenceDir, "source-skeleton", "full-source.css"), ".card { border: 1px solid #ddd; padding: 12px; }")
-  await Bun.write(path.join(webpageEvidenceDir, "page.ir.json"), JSON.stringify({
-    root: {
-      id: "root",
-      type: "element",
-      tag: "body",
-      children: ["Overview", "Markets", "Ideas", "Indicators", "News", "Calendar"].map((title, index) => ({
-        id: `${title.toLowerCase()}-region`,
-        type: "element",
-        tag: "section",
-        layout: { bounds: { x: 0, y: index * 220, w: 1180, h: 180 } },
-        children: [],
-      })),
-    },
-  }, null, 2))
-  await Bun.write(path.join(webpageEvidenceDir, "source-ir", "component-tree.json"), JSON.stringify({
-    components: [
-      { name: "DashboardShell", kind: "page", tag: "main", classNames: ["dashboard"], textPreview: ["Overview", "Markets"] },
-      ...["Overview", "Markets", "Ideas", "Indicators", "News", "Calendar"].map((name) => ({
-        name: `${name}Region`,
-        kind: "section",
-        tag: "section",
-        classNames: ["dashboard-section"],
-        textPreview: [name, `${name} item 1`],
-      })),
-    ],
-  }, null, 2))
-  await Bun.write(path.join(webpageEvidenceDir, "source-ir", "content-model.json"), JSON.stringify({
-    lists: ["Overview", "Markets", "Ideas", "Indicators", "News", "Calendar"].map((title) => ({
-      title,
-      items: Array.from({ length: 18 }, (_, index) => `${title} item ${index + 1}`),
-    })),
-    repeatedGroups: [{ title: "Dashboard cards", sampleTexts: ["Overview item 1", "Markets item 1"] }],
-    stats: { totalTables: 0, totalLists: 6, totalCards: 108, totalRepeatedGroups: 1 },
-  }, null, 2))
+  `,
+  )
+  await Bun.write(
+    path.join(webpageEvidenceDir, "source-skeleton", "critical.css"),
+    ".dashboard { display: grid; gap: 24px; } .cards { display: grid; grid-template-columns: repeat(3, 1fr); }",
+  )
+  await Bun.write(
+    path.join(webpageEvidenceDir, "source-skeleton", "full-source.css"),
+    ".card { border: 1px solid #ddd; padding: 12px; }",
+  )
+  await Bun.write(
+    path.join(webpageEvidenceDir, "page.ir.json"),
+    JSON.stringify(
+      {
+        root: {
+          id: "root",
+          type: "element",
+          tag: "body",
+          children: ["Overview", "Markets", "Ideas", "Indicators", "News", "Calendar"].map((title, index) => ({
+            id: `${title.toLowerCase()}-region`,
+            type: "element",
+            tag: "section",
+            layout: { bounds: { x: 0, y: index * 220, w: 1180, h: 180 } },
+            children: [],
+          })),
+        },
+      },
+      null,
+      2,
+    ),
+  )
+  await Bun.write(
+    path.join(webpageEvidenceDir, "source-ir", "component-tree.json"),
+    JSON.stringify(
+      {
+        components: [
+          {
+            name: "DashboardShell",
+            kind: "page",
+            tag: "main",
+            classNames: ["dashboard"],
+            textPreview: ["Overview", "Markets"],
+          },
+          ...["Overview", "Markets", "Ideas", "Indicators", "News", "Calendar"].map((name) => ({
+            name: `${name}Region`,
+            kind: "section",
+            tag: "section",
+            classNames: ["dashboard-section"],
+            textPreview: [name, `${name} item 1`],
+          })),
+        ],
+      },
+      null,
+      2,
+    ),
+  )
+  await Bun.write(
+    path.join(webpageEvidenceDir, "source-ir", "content-model.json"),
+    JSON.stringify(
+      {
+        lists: ["Overview", "Markets", "Ideas", "Indicators", "News", "Calendar"].map((title) => ({
+          title,
+          items: Array.from({ length: 18 }, (_, index) => `${title} item ${index + 1}`),
+        })),
+        repeatedGroups: [{ title: "Dashboard cards", sampleTexts: ["Overview item 1", "Markets item 1"] }],
+        stats: { totalTables: 0, totalLists: 6, totalCards: 108, totalRepeatedGroups: 1 },
+      },
+      null,
+      2,
+    ),
+  )
   for (let index = 0; index < 36; index += 1) {
     const assetId = `asset_${String(index + 1).padStart(6, "0")}`
     await Bun.write(path.join(webpageEvidenceDir, "assets", "svg", `${assetId}.path.txt`), `M${index} ${index}h1v1z`)
   }
-  await Bun.write(path.join(webpageEvidenceDir, "assets", "manifest.json"), JSON.stringify({ version: 1, assets: [] }, null, 2))
+  await Bun.write(
+    path.join(webpageEvidenceDir, "assets", "manifest.json"),
+    JSON.stringify({ version: 1, assets: [] }, null, 2),
+  )
   return webpageEvidenceDir
 }
 
@@ -1223,7 +1437,9 @@ async function writeSemanticNewsFixtureEvidence(root: string, options: { pageShe
     ["dpa-AFX", "U.S. Construction Spending Increases", "https://example.com/news/2"],
     ["Reuters", "World Cup data dollars and drama", "https://example.com/news/3"],
     ["Mace News", "Manufacturing Index Rises", "https://example.com/news/4"],
-  ].map(([source, title, href], index) => `
+  ]
+    .map(
+      ([source, title, href], index) => `
     <a data-source-role="card" href="${href}" target="_blank" class="card-news card-${index}">
       <article class="article-news" data-qa-id="news-headline-card">
         <div class="container-news">
@@ -1237,7 +1453,9 @@ async function writeSemanticNewsFixtureEvidence(root: string, options: { pageShe
         </div>
       </article>
     </a>
-  `).join("")
+  `,
+    )
+    .join("")
   const mainHtml = `
     <main class="news-page" data-qa-id="news-page">
       <section class="ideas-region">
@@ -1252,10 +1470,13 @@ async function writeSemanticNewsFixtureEvidence(root: string, options: { pageShe
       </section>
     </main>
   `
-  await Bun.write(path.join(webpageEvidenceDir, "source-skeleton", "index.html"), options.pageShell
-    ? `<div class="tv-main" data-source-node-id="page-shell">${mainHtml}</div>`
-    : mainHtml)
-  await Bun.write(path.join(webpageEvidenceDir, "source-skeleton", "critical.css"), `
+  await Bun.write(
+    path.join(webpageEvidenceDir, "source-skeleton", "index.html"),
+    options.pageShell ? `<div class="tv-main" data-source-node-id="page-shell">${mainHtml}</div>` : mainHtml,
+  )
+  await Bun.write(
+    path.join(webpageEvidenceDir, "source-skeleton", "critical.css"),
+    `
     .news-page { display: block; }
     .content-news { color: #111827; }
     .grid-news { display: grid; gap: 8px; }
@@ -1263,26 +1484,57 @@ async function writeSemanticNewsFixtureEvidence(root: string, options: { pageShe
     .article-news { border-bottom: 1px solid #e5e7eb; padding: 8px 0; }
     .header-news { display: flex; gap: 8px; font-size: 12px; color: #6b7280; }
     .title-news { font-size: 14px; font-weight: 600; }
-  `)
-  await Bun.write(path.join(webpageEvidenceDir, "source-ir", "component-tree.json"), JSON.stringify({
-    components: [
-      { name: "NewsPage", kind: "page", tag: "main", classNames: ["news-page"], textPreview: ["Factory Activity Expands in May"] },
-      { name: "NewsList", kind: "list", tag: "section", classNames: ["content-news"], textPreview: ["Dow Jones Newswires", "Construction Spending Increases"] },
-    ],
-  }, null, 2))
-  await Bun.write(path.join(webpageEvidenceDir, "source-ir", "content-model.json"), JSON.stringify({
-    lists: [{
-      title: "News",
-      items: [
-        "Dow Jones Newswires Factory Activity Expands in May",
-        "dpa-AFX U.S. Construction Spending Increases",
-        "Reuters World Cup data dollars and drama",
-        "Mace News Manufacturing Index Rises",
-      ],
-    }],
-    repeatedGroups: [{ title: "News cards", sampleTexts: ["Factory Activity Expands in May", "Construction Spending Increases"] }],
-    stats: { totalTables: 0, totalLists: 1, totalCards: 4, totalRepeatedGroups: 1 },
-  }, null, 2))
+  `,
+  )
+  await Bun.write(
+    path.join(webpageEvidenceDir, "source-ir", "component-tree.json"),
+    JSON.stringify(
+      {
+        components: [
+          {
+            name: "NewsPage",
+            kind: "page",
+            tag: "main",
+            classNames: ["news-page"],
+            textPreview: ["Factory Activity Expands in May"],
+          },
+          {
+            name: "NewsList",
+            kind: "list",
+            tag: "section",
+            classNames: ["content-news"],
+            textPreview: ["Dow Jones Newswires", "Construction Spending Increases"],
+          },
+        ],
+      },
+      null,
+      2,
+    ),
+  )
+  await Bun.write(
+    path.join(webpageEvidenceDir, "source-ir", "content-model.json"),
+    JSON.stringify(
+      {
+        lists: [
+          {
+            title: "News",
+            items: [
+              "Dow Jones Newswires Factory Activity Expands in May",
+              "dpa-AFX U.S. Construction Spending Increases",
+              "Reuters World Cup data dollars and drama",
+              "Mace News Manufacturing Index Rises",
+            ],
+          },
+        ],
+        repeatedGroups: [
+          { title: "News cards", sampleTexts: ["Factory Activity Expands in May", "Construction Spending Increases"] },
+        ],
+        stats: { totalTables: 0, totalLists: 1, totalCards: 4, totalRepeatedGroups: 1 },
+      },
+      null,
+      2,
+    ),
+  )
   return webpageEvidenceDir
 }
 
@@ -1290,12 +1542,38 @@ async function writeBbcPromoFixtureEvidence(root: string): Promise<string> {
   const webpageEvidenceDir = path.join(root, "webpage-evidence-bbc-promo")
   await Bun.write(path.join(webpageEvidenceDir, "reference.png"), minimalPngBytes())
   const rows = [
-    ["Massive Russian attack on cities across Ukraine kills at least 13 people", "https://www.bbc.co.uk/news/articles/cx20p1", "asset_000001.webp", "People walk past a damaged building", "Europe"],
-    ["Prepare for El Nino - it could be the strongest in decades, UN warns", "https://www.bbc.co.uk/news/articles/cx20p2", "asset_000002.webp", "Firefighters stand in front of smoke", "Climate"],
-    ["Live Released Mandelson messages embarrassing, says minister", "https://www.bbc.co.uk/news/articles/cx20p3", "asset_000003.webp", "A minister speaks to camera", "Politics"],
-    ["Clashes continue in Lebanon despite Israel-Hezbollah ceasefire", "https://www.bbc.co.uk/news/articles/cx20p4", "asset_000004.webp", "A street scene in Lebanon", "World"],
+    [
+      "Massive Russian attack on cities across Ukraine kills at least 13 people",
+      "https://www.bbc.co.uk/news/articles/cx20p1",
+      "asset_000001.webp",
+      "People walk past a damaged building",
+      "Europe",
+    ],
+    [
+      "Prepare for El Nino - it could be the strongest in decades, UN warns",
+      "https://www.bbc.co.uk/news/articles/cx20p2",
+      "asset_000002.webp",
+      "Firefighters stand in front of smoke",
+      "Climate",
+    ],
+    [
+      "Live Released Mandelson messages embarrassing, says minister",
+      "https://www.bbc.co.uk/news/articles/cx20p3",
+      "asset_000003.webp",
+      "A minister speaks to camera",
+      "Politics",
+    ],
+    [
+      "Clashes continue in Lebanon despite Israel-Hezbollah ceasefire",
+      "https://www.bbc.co.uk/news/articles/cx20p4",
+      "asset_000004.webp",
+      "A street scene in Lebanon",
+      "World",
+    ],
   ]
-  const cards = rows.map(([title, href, image, alt, source], index) => `
+  const cards = rows
+    .map(
+      ([title, href, image, alt, source], index) => `
     <li data-source-node-id="promo-${index}" class="ssrcss-1dr5icq-ListItem e1gp961v0">
       <div data-testid="promo" type="article" class="ssrcss-ccqz3i-Promo e1vyq2e80">
         <div class="ssrcss-1je5cnc-PromoSwitchLayoutAtBreakpoints et5qctl0">
@@ -1329,15 +1607,22 @@ async function writeBbcPromoFixtureEvidence(root: string): Promise<string> {
         </div>
       </div>
     </li>
-  `).join("")
-  await Bun.write(path.join(webpageEvidenceDir, "source-skeleton", "index.html"), `
+  `,
+    )
+    .join("")
+  await Bun.write(
+    path.join(webpageEvidenceDir, "source-skeleton", "index.html"),
+    `
     <main class="bbc-page">
       <ul data-source-node-id="bbc-promo-list" data-source-role="list" role="list" class="ssrcss-60rlar-Grid e12imr580">
         ${cards}
       </ul>
     </main>
-  `)
-  await Bun.write(path.join(webpageEvidenceDir, "source-skeleton", "critical.css"), `
+  `,
+  )
+  await Bun.write(
+    path.join(webpageEvidenceDir, "source-skeleton", "critical.css"),
+    `
     .bbc-page { display: block; }
     .ssrcss-60rlar-Grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; }
     .ssrcss-1dr5icq-ListItem { list-style: none; }
@@ -1346,29 +1631,61 @@ async function writeBbcPromoFixtureEvidence(root: string): Promise<string> {
     .ssrcss-6bmydz-PromoHeadline { font-size: 16px; font-weight: 700; margin: 0; }
     .ssrcss-z60stg-PromoImageContainer { order: -1; }
     .ssrcss-egie1y-Image { display: block; width: 100%; height: auto; }
-  `)
-  await Bun.write(path.join(webpageEvidenceDir, "source-ir", "component-tree.json"), JSON.stringify({
-    components: [
-      { name: "BbcPage", kind: "page", tag: "main", classNames: ["bbc-page"], textPreview: ["Massive Russian attack"] },
-      { name: "BbcPromoList", kind: "list", tag: "ul", classNames: ["ssrcss-60rlar-Grid"], textPreview: rows.map((row) => row[0]) },
-    ],
-  }, null, 2))
-  await Bun.write(path.join(webpageEvidenceDir, "source-ir", "content-model.json"), JSON.stringify({
-    lists: [{ title: "BBC promos", items: rows.map((row) => `${row[4]} ${row[0]}`) }],
-    repeatedGroups: [{ title: "BBC promo cards", sampleTexts: rows.slice(0, 2).map((row) => row[0]) }],
-    stats: { totalTables: 0, totalLists: 1, totalCards: rows.length, totalRepeatedGroups: 1 },
-  }, null, 2))
+  `,
+  )
+  await Bun.write(
+    path.join(webpageEvidenceDir, "source-ir", "component-tree.json"),
+    JSON.stringify(
+      {
+        components: [
+          {
+            name: "BbcPage",
+            kind: "page",
+            tag: "main",
+            classNames: ["bbc-page"],
+            textPreview: ["Massive Russian attack"],
+          },
+          {
+            name: "BbcPromoList",
+            kind: "list",
+            tag: "ul",
+            classNames: ["ssrcss-60rlar-Grid"],
+            textPreview: rows.map((row) => row[0]),
+          },
+        ],
+      },
+      null,
+      2,
+    ),
+  )
+  await Bun.write(
+    path.join(webpageEvidenceDir, "source-ir", "content-model.json"),
+    JSON.stringify(
+      {
+        lists: [{ title: "BBC promos", items: rows.map((row) => `${row[4]} ${row[0]}`) }],
+        repeatedGroups: [{ title: "BBC promo cards", sampleTexts: rows.slice(0, 2).map((row) => row[0]) }],
+        stats: { totalTables: 0, totalLists: 1, totalCards: rows.length, totalRepeatedGroups: 1 },
+      },
+      null,
+      2,
+    ),
+  )
   for (const [, , image] of rows) {
     await Bun.write(path.join(webpageEvidenceDir, "assets", "images", image), minimalPngBytes())
   }
-  await Bun.write(path.join(webpageEvidenceDir, "assets", "manifest.json"), JSON.stringify({ version: 1, assets: [] }, null, 2))
+  await Bun.write(
+    path.join(webpageEvidenceDir, "assets", "manifest.json"),
+    JSON.stringify({ version: 1, assets: [] }, null, 2),
+  )
   return webpageEvidenceDir
 }
 
 async function writeSemanticTableFixtureEvidence(root: string): Promise<string> {
   const webpageEvidenceDir = path.join(root, "webpage-evidence-table")
   await Bun.write(path.join(webpageEvidenceDir, "reference.png"), minimalPngBytes())
-  await Bun.write(path.join(webpageEvidenceDir, "source-skeleton", "index.html"), `
+  await Bun.write(
+    path.join(webpageEvidenceDir, "source-skeleton", "index.html"),
+    `
     <main class="economy-page">
       <section data-source-node-id="heatmap-region" data-base-widget="true" data-container-name="economic-indicators-heatmap" data-an-widget-id="economic-indicators-heatmap" class="container-Gvxnai7n">
         <div data-source-node-id="heatmap-header" data-source-role="header" class="header-Gvxnai7n header-m-Gvxnai7n">
@@ -1412,31 +1729,66 @@ async function writeSemanticTableFixtureEvidence(root: string): Promise<string> 
         </div>
       </section>
     </main>
-  `)
-  await Bun.write(path.join(webpageEvidenceDir, "source-skeleton", "critical.css"), `
+  `,
+  )
+  await Bun.write(
+    path.join(webpageEvidenceDir, "source-skeleton", "critical.css"),
+    `
     .economy-page { display: block; }
     .table-ae3EQWDL { border-collapse: collapse; width: 100%; }
     .table-ae3EQWDL th, .table-ae3EQWDL td { padding: 6px; }
-  `)
-  await Bun.write(path.join(webpageEvidenceDir, "source-ir", "component-tree.json"), JSON.stringify({
-    components: [
-      { name: "EconomyPage", kind: "page", tag: "main", classNames: ["economy-page"], textPreview: ["Economic indicators heatmap"] },
-      { name: "EconomicIndicatorsHeatmap", kind: "table", tag: "section", classNames: ["container-Gvxnai7n"], textPreview: ["GDP", "Government Debt to GDP"] },
-    ],
-  }, null, 2))
-  await Bun.write(path.join(webpageEvidenceDir, "source-ir", "content-model.json"), JSON.stringify({
-    tables: [{
-      title: "Economic indicators heatmap",
-      headers: ["Country", "GDP", "Government Debt to GDP", "Inflation Rate"],
-      rows: [
-        ["USA", "29.18 T USD", "123.3 % of GDP", "3.8 %"],
-        ["India", "3.91 T USD", "81.92 % of GDP", "3.48 %"],
-      ],
-    }],
-    repeatedGroups: [{ title: "Heatmap rows", sampleTexts: ["USA 29.18 T USD", "India 3.91 T USD"] }],
-    stats: { totalTables: 1, totalLists: 0, totalCards: 0, totalRepeatedGroups: 1 },
-  }, null, 2))
-  await Bun.write(path.join(webpageEvidenceDir, "assets", "manifest.json"), JSON.stringify({ version: 1, assets: [] }, null, 2))
+  `,
+  )
+  await Bun.write(
+    path.join(webpageEvidenceDir, "source-ir", "component-tree.json"),
+    JSON.stringify(
+      {
+        components: [
+          {
+            name: "EconomyPage",
+            kind: "page",
+            tag: "main",
+            classNames: ["economy-page"],
+            textPreview: ["Economic indicators heatmap"],
+          },
+          {
+            name: "EconomicIndicatorsHeatmap",
+            kind: "table",
+            tag: "section",
+            classNames: ["container-Gvxnai7n"],
+            textPreview: ["GDP", "Government Debt to GDP"],
+          },
+        ],
+      },
+      null,
+      2,
+    ),
+  )
+  await Bun.write(
+    path.join(webpageEvidenceDir, "source-ir", "content-model.json"),
+    JSON.stringify(
+      {
+        tables: [
+          {
+            title: "Economic indicators heatmap",
+            headers: ["Country", "GDP", "Government Debt to GDP", "Inflation Rate"],
+            rows: [
+              ["USA", "29.18 T USD", "123.3 % of GDP", "3.8 %"],
+              ["India", "3.91 T USD", "81.92 % of GDP", "3.48 %"],
+            ],
+          },
+        ],
+        repeatedGroups: [{ title: "Heatmap rows", sampleTexts: ["USA 29.18 T USD", "India 3.91 T USD"] }],
+        stats: { totalTables: 1, totalLists: 0, totalCards: 0, totalRepeatedGroups: 1 },
+      },
+      null,
+      2,
+    ),
+  )
+  await Bun.write(
+    path.join(webpageEvidenceDir, "assets", "manifest.json"),
+    JSON.stringify({ version: 1, assets: [] }, null, 2),
+  )
   return webpageEvidenceDir
 }
 
@@ -1447,7 +1799,9 @@ async function writeSemanticEventFixtureEvidence(root: string): Promise<string> 
     ["Today", "Jun 1, 2026, 23:30 GMT+8", "USA", "3-Month Bill Auction", "18:59", "—", "3.595", "%"],
     ["Today", "Jun 1, 2026, 23:30 GMT+8", "USA", "6-Month Bill Auction", "18:59", "—", "3.65", "%"],
     ["Tomorrow", "Jun 2, 2026, 10:00 GMT+8", "AR", "Tax Revenue", "—", "—", "17,400.8 B", "ARS"],
-  ].map(([day, timestamp, country, title, actual, forecast, prior, unit], index) => `
+  ]
+    .map(
+      ([day, timestamp, country, title, actual, forecast, prior, unit], index) => `
     <a data-source-node-id="event-${index}" href="https://example.com/calendar/${index}" class="wrap-nj94V3ds">
       <div class="top-nj94V3ds">
         <div class="date-nj94V3ds">
@@ -1472,8 +1826,12 @@ async function writeSemanticEventFixtureEvidence(root: string): Promise<string> 
         <div class="wrap-jgbZPXpo"><div class="title-jgbZPXpo">Prior</div><div class="valueWrap-jgbZPXpo percent-jgbZPXpo"><div class="value-jgbZPXpo">${prior}</div><div class="unit-jgbZPXpo">${unit}</div></div></div>
       </div>
     </a>
-  `).join("")
-  await Bun.write(path.join(webpageEvidenceDir, "source-skeleton", "index.html"), `
+  `,
+    )
+    .join("")
+  await Bun.write(
+    path.join(webpageEvidenceDir, "source-skeleton", "index.html"),
+    `
     <main class="events-page">
       <section data-source-node-id="calendar-region" data-base-widget="true" data-container-name="economic-calendar" data-an-widget-id="economic-calendar" class="container-Gvxnai7n">
         <div data-source-role="header" class="header-Gvxnai7n header-m-Gvxnai7n">
@@ -1499,31 +1857,68 @@ async function writeSemanticEventFixtureEvidence(root: string): Promise<string> 
         </div>
       </section>
     </main>
-  `)
-  await Bun.write(path.join(webpageEvidenceDir, "source-skeleton", "critical.css"), `
+  `,
+  )
+  await Bun.write(
+    path.join(webpageEvidenceDir, "source-skeleton", "critical.css"),
+    `
     .events-page { display: block; }
     .items-VfuW0jXu { display: flex; gap: 8px; }
     .wrap-nj94V3ds { display: block; min-width: 160px; }
-  `)
-  await Bun.write(path.join(webpageEvidenceDir, "source-ir", "component-tree.json"), JSON.stringify({
-    components: [
-      { name: "EventsPage", kind: "page", tag: "main", classNames: ["events-page"], textPreview: ["Economic Calendar"] },
-      { name: "EconomicCalendar", kind: "list", tag: "section", classNames: ["container-Gvxnai7n"], textPreview: ["3-Month Bill Auction", "6-Month Bill Auction"] },
-    ],
-  }, null, 2))
-  await Bun.write(path.join(webpageEvidenceDir, "source-ir", "content-model.json"), JSON.stringify({
-    lists: [{ title: "Economic Calendar", items: ["3-Month Bill Auction", "6-Month Bill Auction", "Tax Revenue"] }],
-    repeatedGroups: [{ title: "Calendar cards", sampleTexts: ["Today 3-Month Bill Auction", "Today 6-Month Bill Auction"] }],
-    stats: { totalTables: 0, totalLists: 1, totalCards: 3, totalRepeatedGroups: 1 },
-  }, null, 2))
-  await Bun.write(path.join(webpageEvidenceDir, "assets", "manifest.json"), JSON.stringify({ version: 1, assets: [] }, null, 2))
+  `,
+  )
+  await Bun.write(
+    path.join(webpageEvidenceDir, "source-ir", "component-tree.json"),
+    JSON.stringify(
+      {
+        components: [
+          {
+            name: "EventsPage",
+            kind: "page",
+            tag: "main",
+            classNames: ["events-page"],
+            textPreview: ["Economic Calendar"],
+          },
+          {
+            name: "EconomicCalendar",
+            kind: "list",
+            tag: "section",
+            classNames: ["container-Gvxnai7n"],
+            textPreview: ["3-Month Bill Auction", "6-Month Bill Auction"],
+          },
+        ],
+      },
+      null,
+      2,
+    ),
+  )
+  await Bun.write(
+    path.join(webpageEvidenceDir, "source-ir", "content-model.json"),
+    JSON.stringify(
+      {
+        lists: [{ title: "Economic Calendar", items: ["3-Month Bill Auction", "6-Month Bill Auction", "Tax Revenue"] }],
+        repeatedGroups: [
+          { title: "Calendar cards", sampleTexts: ["Today 3-Month Bill Auction", "Today 6-Month Bill Auction"] },
+        ],
+        stats: { totalTables: 0, totalLists: 1, totalCards: 3, totalRepeatedGroups: 1 },
+      },
+      null,
+      2,
+    ),
+  )
+  await Bun.write(
+    path.join(webpageEvidenceDir, "assets", "manifest.json"),
+    JSON.stringify({ version: 1, assets: [] }, null, 2),
+  )
   return webpageEvidenceDir
 }
 
 async function writeSemanticIdeaCardsFixtureEvidence(root: string): Promise<string> {
   const webpageEvidenceDir = path.join(root, "webpage-evidence-ideas")
   await Bun.write(path.join(webpageEvidenceDir, "reference.png"), minimalPngBytes())
-  await Bun.write(path.join(webpageEvidenceDir, "source-skeleton", "index.html"), `
+  await Bun.write(
+    path.join(webpageEvidenceDir, "source-skeleton", "index.html"),
+    `
     <main class="ideas-page">
       <section data-source-node-id="ideas-region" data-base-widget="true" data-container-name="ideas" data-an-widget-id="ideas" class="container-Gvxnai7n">
         <div data-source-role="header" class="header-Gvxnai7n header-m-Gvxnai7n">
@@ -1554,7 +1949,8 @@ async function writeSemanticIdeaCardsFixtureEvidence(root: string): Promise<stri
                 ${renderFixtureIdeaCard({
                   order: 1,
                   title: "US Savings Rate Collapsing!",
-                  paragraph: "Personal savings are collapsing back toward crisis-level territory while households lean on credit.",
+                  paragraph:
+                    "Personal savings are collapsing back toward crisis-level territory while households lean on credit.",
                   symbol: "FRED:PSAVERT",
                   logoAsset: "asset_000001.svg.txt",
                   author: "by RealMacro",
@@ -1564,7 +1960,8 @@ async function writeSemanticIdeaCardsFixtureEvidence(root: string): Promise<stri
                 ${renderFixtureIdeaCard({
                   order: 2,
                   title: "$USGDPQQ - U.S GDP (Q1/2026)",
-                  paragraph: "The US economy expanded an annualized 1.6% in Q1 2026 with revisions to investment and spending.",
+                  paragraph:
+                    "The US economy expanded an annualized 1.6% in Q1 2026 with revisions to investment and spending.",
                   symbol: "ECONOMICS:USGDPQQ",
                   logoAsset: "asset_000003.svg.txt",
                   author: "by Mr_J__fx",
@@ -1599,36 +1996,81 @@ async function writeSemanticIdeaCardsFixtureEvidence(root: string): Promise<stri
         </div>
       </section>
     </main>
-  `)
-  await Bun.write(path.join(webpageEvidenceDir, "source-skeleton", "critical.css"), [
-    ".container-Gvxnai7n { display: block; }",
-    ".items-VfuW0jXu { display: flex; gap: 12px; }",
-    ".ideaCard-KRH6UCDh { width: 260px; }",
-    ".preview-fSver7BK { position: relative; }",
-  ].join("\n"))
-  await Bun.write(path.join(webpageEvidenceDir, "source-ir", "component-tree.json"), JSON.stringify({
-    components: [
-      { name: "IdeasPage", kind: "page", tag: "main", classNames: ["ideas-page"], textPreview: ["Ideas"] },
-      { name: "Ideas", kind: "section", tag: "section", classNames: ["container-Gvxnai7n"], textPreview: ["Popular", "US Savings Rate Collapsing!"] },
-    ],
-  }, null, 2))
-  await Bun.write(path.join(webpageEvidenceDir, "source-ir", "content-model.json"), JSON.stringify({
-    cards: [
-      { title: "US Savings Rate Collapsing!", text: ["Personal savings are collapsing"], fields: [{ label: "author", value: "by RealMacro" }] },
-      { title: "$USGDPQQ - U.S GDP (Q1/2026)", text: ["The US economy expanded"], fields: [{ label: "author", value: "by Mr_J__fx" }] },
-      { title: "Gasoline futures hit one-month low", text: ["Energy prices continue"], fields: [{ label: "author", value: "by MarketWatcher" }] },
-    ],
-    lists: [{ title: "Idea tabs", items: ["Popular", "Recent", "Video"] }],
-    stats: { totalTables: 0, totalLists: 1, totalCards: 3, totalRepeatedGroups: 1 },
-  }, null, 2))
+  `,
+  )
+  await Bun.write(
+    path.join(webpageEvidenceDir, "source-skeleton", "critical.css"),
+    [
+      ".container-Gvxnai7n { display: block; }",
+      ".items-VfuW0jXu { display: flex; gap: 12px; }",
+      ".ideaCard-KRH6UCDh { width: 260px; }",
+      ".preview-fSver7BK { position: relative; }",
+    ].join("\n"),
+  )
+  await Bun.write(
+    path.join(webpageEvidenceDir, "source-ir", "component-tree.json"),
+    JSON.stringify(
+      {
+        components: [
+          { name: "IdeasPage", kind: "page", tag: "main", classNames: ["ideas-page"], textPreview: ["Ideas"] },
+          {
+            name: "Ideas",
+            kind: "section",
+            tag: "section",
+            classNames: ["container-Gvxnai7n"],
+            textPreview: ["Popular", "US Savings Rate Collapsing!"],
+          },
+        ],
+      },
+      null,
+      2,
+    ),
+  )
+  await Bun.write(
+    path.join(webpageEvidenceDir, "source-ir", "content-model.json"),
+    JSON.stringify(
+      {
+        cards: [
+          {
+            title: "US Savings Rate Collapsing!",
+            text: ["Personal savings are collapsing"],
+            fields: [{ label: "author", value: "by RealMacro" }],
+          },
+          {
+            title: "$USGDPQQ - U.S GDP (Q1/2026)",
+            text: ["The US economy expanded"],
+            fields: [{ label: "author", value: "by Mr_J__fx" }],
+          },
+          {
+            title: "Gasoline futures hit one-month low",
+            text: ["Energy prices continue"],
+            fields: [{ label: "author", value: "by MarketWatcher" }],
+          },
+        ],
+        lists: [{ title: "Idea tabs", items: ["Popular", "Recent", "Video"] }],
+        stats: { totalTables: 0, totalLists: 1, totalCards: 3, totalRepeatedGroups: 1 },
+      },
+      null,
+      2,
+    ),
+  )
   for (const name of ["asset_000001.svg.txt", "asset_000003.svg.txt", "asset_000005.svg.txt"]) {
-    await Bun.write(path.join(webpageEvidenceDir, "assets", "images", name), "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Ccircle cx='8' cy='8' r='8' fill='%230680ff'/%3E%3C/svg%3E")
+    await Bun.write(
+      path.join(webpageEvidenceDir, "assets", "images", name),
+      "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Ccircle cx='8' cy='8' r='8' fill='%230680ff'/%3E%3C/svg%3E",
+    )
   }
   for (const name of ["asset_000002.webp.txt", "asset_000004.webp.txt", "asset_000006.webp.txt"]) {
-    await Bun.write(path.join(webpageEvidenceDir, "assets", "images", name), "data:image/webp;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAACklEQVR4nGMAAQAABQABDQottAAAAABJRU5ErkJggg==")
+    await Bun.write(
+      path.join(webpageEvidenceDir, "assets", "images", name),
+      "data:image/webp;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAACklEQVR4nGMAAQAABQABDQottAAAAABJRU5ErkJggg==",
+    )
   }
   await Bun.write(path.join(webpageEvidenceDir, "assets", "svg", "asset_000101.path.txt"), "M0 0l6 5.5L0 11z")
-  await Bun.write(path.join(webpageEvidenceDir, "assets", "manifest.json"), JSON.stringify({ version: 1, assets: [] }, null, 2))
+  await Bun.write(
+    path.join(webpageEvidenceDir, "assets", "manifest.json"),
+    JSON.stringify({ version: 1, assets: [] }, null, 2),
+  )
   return webpageEvidenceDir
 }
 
@@ -1694,7 +2136,9 @@ function renderFixtureIdeaCard(input: {
 async function writeCompositeWidgetFixtureEvidence(root: string): Promise<string> {
   const webpageEvidenceDir = path.join(root, "webpage-evidence-composite")
   await Bun.write(path.join(webpageEvidenceDir, "reference.png"), minimalPngBytes())
-  await Bun.write(path.join(webpageEvidenceDir, "source-skeleton", "index.html"), `
+  await Bun.write(
+    path.join(webpageEvidenceDir, "source-skeleton", "index.html"),
+    `
     <main class="composite-page">
       <section data-source-node-id="composite-widget" data-base-widget="true" data-container-name="composite-widget" class="container-Gvxnai7n">
         <div data-source-role="header" class="header-Gvxnai7n header-m-Gvxnai7n">
@@ -1716,21 +2160,63 @@ async function writeCompositeWidgetFixtureEvidence(root: string): Promise<string
         </div>
       </section>
     </main>
-  `)
-  await Bun.write(path.join(webpageEvidenceDir, "source-skeleton", "critical.css"), ".container-KqgCoGM1 { display: grid; gap: 12px; } .manual-card { padding: 8px; }")
-  await Bun.write(path.join(webpageEvidenceDir, "source-ir", "component-tree.json"), JSON.stringify({
-    components: [
-      { name: "CompositePage", kind: "page", tag: "main", classNames: ["composite-page"], textPreview: ["Composite widget"] },
-      { name: "CompositeWidget", kind: "section", tag: "section", classNames: ["container-Gvxnai7n"], textPreview: ["Composite widget"] },
-    ],
-  }, null, 2))
-  await Bun.write(path.join(webpageEvidenceDir, "source-ir", "content-model.json"), JSON.stringify({
-    tables: [{ title: "Composite heatmap", headers: ["Country", "GDP", "Inflation"], rows: [["USA", "29.18 T USD", "3.8 %"], ["India", "3.91 T USD", "3.48 %"]] }],
-    lists: [{ title: "Composite events", items: ["3-Month Bill Auction", "6-Month Bill Auction", "Tax Revenue"] }],
-    repeatedGroups: [{ title: "Composite surfaces", sampleTexts: ["Composite heatmap", "Composite events"] }],
-    stats: { totalTables: 1, totalLists: 1, totalCards: 4, totalRepeatedGroups: 1 },
-  }, null, 2))
-  await Bun.write(path.join(webpageEvidenceDir, "assets", "manifest.json"), JSON.stringify({ version: 1, assets: [] }, null, 2))
+  `,
+  )
+  await Bun.write(
+    path.join(webpageEvidenceDir, "source-skeleton", "critical.css"),
+    ".container-KqgCoGM1 { display: grid; gap: 12px; } .manual-card { padding: 8px; }",
+  )
+  await Bun.write(
+    path.join(webpageEvidenceDir, "source-ir", "component-tree.json"),
+    JSON.stringify(
+      {
+        components: [
+          {
+            name: "CompositePage",
+            kind: "page",
+            tag: "main",
+            classNames: ["composite-page"],
+            textPreview: ["Composite widget"],
+          },
+          {
+            name: "CompositeWidget",
+            kind: "section",
+            tag: "section",
+            classNames: ["container-Gvxnai7n"],
+            textPreview: ["Composite widget"],
+          },
+        ],
+      },
+      null,
+      2,
+    ),
+  )
+  await Bun.write(
+    path.join(webpageEvidenceDir, "source-ir", "content-model.json"),
+    JSON.stringify(
+      {
+        tables: [
+          {
+            title: "Composite heatmap",
+            headers: ["Country", "GDP", "Inflation"],
+            rows: [
+              ["USA", "29.18 T USD", "3.8 %"],
+              ["India", "3.91 T USD", "3.48 %"],
+            ],
+          },
+        ],
+        lists: [{ title: "Composite events", items: ["3-Month Bill Auction", "6-Month Bill Auction", "Tax Revenue"] }],
+        repeatedGroups: [{ title: "Composite surfaces", sampleTexts: ["Composite heatmap", "Composite events"] }],
+        stats: { totalTables: 1, totalLists: 1, totalCards: 4, totalRepeatedGroups: 1 },
+      },
+      null,
+      2,
+    ),
+  )
+  await Bun.write(
+    path.join(webpageEvidenceDir, "assets", "manifest.json"),
+    JSON.stringify({ version: 1, assets: [] }, null, 2),
+  )
   return webpageEvidenceDir
 }
 
@@ -1748,13 +2234,17 @@ function renderCompositeFixtureTable(): string {
 }
 
 function renderCompositeFixtureEvents(): string {
-  const cards = ["3-Month Bill Auction", "6-Month Bill Auction", "Tax Revenue"].map((title, index) => `
+  const cards = ["3-Month Bill Auction", "6-Month Bill Auction", "Tax Revenue"]
+    .map(
+      (title, index) => `
     <a href="https://example.com/event/${index}" class="wrap-nj94V3ds">
       <div class="top-nj94V3ds"><div class="date-nj94V3ds"><div class="day-nj94V3ds">${index < 2 ? "Today" : "Tomorrow"}</div><div class="dot-RLEuHy6G">•</div><div class="wrap-upK7dZLp" title="Jun ${index + 1}, 2026, 23:30 GMT+8"><span class="badge-upK7dZLp"><span class="content-SzX7mZwu"></span></span></div></div></div>
       <div class="titleBlock-nj94V3ds"><div class="column-nj94V3ds"><span class="title-nj94V3ds">${title}</span></div></div>
       <div class="stats-nj94V3ds"><div class="wrap-WQHPH4QV"><div class="title-WQHPH4QV">Actual</div><div class="valueWrap-jgbZPXpo"><div class="value-WQHPH4QV">${index}</div></div></div><div class="wrap-jgbZPXpo"><div class="title-jgbZPXpo">Forecast</div><div class="valueWrap-jgbZPXpo"><div class="value-jgbZPXpo">—</div></div></div><div class="wrap-jgbZPXpo"><div class="title-jgbZPXpo">Prior</div><div class="valueWrap-jgbZPXpo"><div class="value-jgbZPXpo">${index + 1}</div><div class="unit-jgbZPXpo">%</div></div></div></div>
     </a>
-  `).join("")
+  `,
+    )
+    .join("")
   return `
     <section data-source-node-id="composite-events" data-base-widget="true" data-container-name="composite-events" class="container-Gvxnai7n">
       <div data-source-role="header" class="header-Gvxnai7n"><div class="wrapper-BQZK4DnU"><span class="titleAndHintWrapper-BQZK4DnU"><div class="container-BQZK4DnU"><h2 class="title-BQZK4DnU" id="composite-events">Composite events</h2></div></span></div></div>
@@ -1766,7 +2256,9 @@ function renderCompositeFixtureEvents(): string {
 async function writeSemanticFooterFixtureEvidence(root: string): Promise<string> {
   const webpageEvidenceDir = path.join(root, "webpage-evidence-footer")
   await Bun.write(path.join(webpageEvidenceDir, "reference.png"), minimalPngBytes())
-  await Bun.write(path.join(webpageEvidenceDir, "source-skeleton", "index.html"), `
+  await Bun.write(
+    path.join(webpageEvidenceDir, "source-skeleton", "index.html"),
+    `
     <footer data-source-node-id="footer-region" data-source-role="footer" class="tv-footer js-footer" data-nosnippet="">
       <div class="js-promo-footer-init-ssr">
         <div class="root-_gnlNXvh">
@@ -1827,19 +2319,46 @@ async function writeSemanticFooterFixtureEvidence(root: string): Promise<string>
         </div>
       </div>
     </footer>
-  `)
-  await Bun.write(path.join(webpageEvidenceDir, "source-skeleton", "critical.css"), ".tv-footer { padding: 24px; } .footerLinks-hezxxKBJ { display: flex; gap: 8px; }")
-  await Bun.write(path.join(webpageEvidenceDir, "source-ir", "component-tree.json"), JSON.stringify({
-    components: [
-      { name: "Footer", kind: "footer", tag: "footer", classNames: ["tv-footer"], textPreview: ["TradingView", "Supercharts", "Select market data provided"] },
-    ],
-  }, null, 2))
-  await Bun.write(path.join(webpageEvidenceDir, "source-ir", "content-model.json"), JSON.stringify({
-    lists: [{ title: "Footer links", items: ["Supercharts", "Screener", "Pricing", "Widgets"] }],
-    repeatedGroups: [{ title: "Footer links", sampleTexts: ["Supercharts", "Screener"] }],
-    stats: { totalTables: 0, totalLists: 1, totalCards: 0, totalRepeatedGroups: 1 },
-  }, null, 2))
-  await Bun.write(path.join(webpageEvidenceDir, "assets", "manifest.json"), JSON.stringify({ version: 1, assets: [] }, null, 2))
+  `,
+  )
+  await Bun.write(
+    path.join(webpageEvidenceDir, "source-skeleton", "critical.css"),
+    ".tv-footer { padding: 24px; } .footerLinks-hezxxKBJ { display: flex; gap: 8px; }",
+  )
+  await Bun.write(
+    path.join(webpageEvidenceDir, "source-ir", "component-tree.json"),
+    JSON.stringify(
+      {
+        components: [
+          {
+            name: "Footer",
+            kind: "footer",
+            tag: "footer",
+            classNames: ["tv-footer"],
+            textPreview: ["TradingView", "Supercharts", "Select market data provided"],
+          },
+        ],
+      },
+      null,
+      2,
+    ),
+  )
+  await Bun.write(
+    path.join(webpageEvidenceDir, "source-ir", "content-model.json"),
+    JSON.stringify(
+      {
+        lists: [{ title: "Footer links", items: ["Supercharts", "Screener", "Pricing", "Widgets"] }],
+        repeatedGroups: [{ title: "Footer links", sampleTexts: ["Supercharts", "Screener"] }],
+        stats: { totalTables: 0, totalLists: 1, totalCards: 0, totalRepeatedGroups: 1 },
+      },
+      null,
+      2,
+    ),
+  )
+  await Bun.write(
+    path.join(webpageEvidenceDir, "assets", "manifest.json"),
+    JSON.stringify({ version: 1, assets: [] }, null, 2),
+  )
   return webpageEvidenceDir
 }
 
@@ -1855,7 +2374,9 @@ async function writeSemanticMapFixtureEvidence(root: string): Promise<string> {
     const assetId = `asset_${String(index + 101).padStart(6, "0")}`
     return `<path data-source-node-id="legend-path-${index + 1}" data-asset-d="../assets/svg/${assetId}.path.txt" class="legend-swatch" fill="currentColor"></path>`
   }).join("")
-  await Bun.write(path.join(webpageEvidenceDir, "source-skeleton", "index.html"), `
+  await Bun.write(
+    path.join(webpageEvidenceDir, "source-skeleton", "index.html"),
+    `
     <main class="map-page">
       <section data-source-node-id="global-map-region" data-base-widget="true" data-container-name="global-industrial-map" data-an-widget-id="global-industrial-map" class="container-Gvxnai7n">
         <div data-source-role="header" class="header-Gvxnai7n header-m-Gvxnai7n">
@@ -1900,25 +2421,55 @@ async function writeSemanticMapFixtureEvidence(root: string): Promise<string> {
         </div>
       </section>
     </main>
-  `)
-  await Bun.write(path.join(webpageEvidenceDir, "source-skeleton", "critical.css"), `
+  `,
+  )
+  await Bun.write(
+    path.join(webpageEvidenceDir, "source-skeleton", "critical.css"),
+    `
     .map-page { display: block; }
     .map-PucT6CA9 { display: block; }
     .world-map { width: 100%; }
     .country-positive { color: #22ab94; }
     .country-neutral { color: #9598a1; }
-  `)
-  await Bun.write(path.join(webpageEvidenceDir, "source-ir", "component-tree.json"), JSON.stringify({
-    components: [
-      { name: "MapPage", kind: "page", tag: "main", classNames: ["map-page"], textPreview: ["Global industrial map"] },
-      { name: "GlobalIndustrialMap", kind: "map", tag: "section", classNames: ["container-Gvxnai7n"], textPreview: ["Global industrial map", "See more global trends"] },
-    ],
-  }, null, 2))
-  await Bun.write(path.join(webpageEvidenceDir, "source-ir", "content-model.json"), JSON.stringify({
-    lists: [{ title: "Global industrial map", items: ["0 to 3%", "3 to 7%", "See more global trends"] }],
-    repeatedGroups: [{ title: "Map paths", sampleTexts: ["country-1", "country-2"] }],
-    stats: { totalTables: 0, totalLists: 1, totalCards: 0, totalRepeatedGroups: 1 },
-  }, null, 2))
+  `,
+  )
+  await Bun.write(
+    path.join(webpageEvidenceDir, "source-ir", "component-tree.json"),
+    JSON.stringify(
+      {
+        components: [
+          {
+            name: "MapPage",
+            kind: "page",
+            tag: "main",
+            classNames: ["map-page"],
+            textPreview: ["Global industrial map"],
+          },
+          {
+            name: "GlobalIndustrialMap",
+            kind: "map",
+            tag: "section",
+            classNames: ["container-Gvxnai7n"],
+            textPreview: ["Global industrial map", "See more global trends"],
+          },
+        ],
+      },
+      null,
+      2,
+    ),
+  )
+  await Bun.write(
+    path.join(webpageEvidenceDir, "source-ir", "content-model.json"),
+    JSON.stringify(
+      {
+        lists: [{ title: "Global industrial map", items: ["0 to 3%", "3 to 7%", "See more global trends"] }],
+        repeatedGroups: [{ title: "Map paths", sampleTexts: ["country-1", "country-2"] }],
+        stats: { totalTables: 0, totalLists: 1, totalCards: 0, totalRepeatedGroups: 1 },
+      },
+      null,
+      2,
+    ),
+  )
   for (let index = 0; index < 24; index += 1) {
     const assetId = `asset_${String(index + 1).padStart(6, "0")}`
     await Bun.write(path.join(webpageEvidenceDir, "assets", "svg", `${assetId}.path.txt`), `M${index} ${index}h4v4z`)
@@ -1927,7 +2478,10 @@ async function writeSemanticMapFixtureEvidence(root: string): Promise<string> {
     const assetId = `asset_${String(index + 101).padStart(6, "0")}`
     await Bun.write(path.join(webpageEvidenceDir, "assets", "svg", `${assetId}.path.txt`), `M${index} 0h2v2z`)
   }
-  await Bun.write(path.join(webpageEvidenceDir, "assets", "manifest.json"), JSON.stringify({ version: 1, assets: [] }, null, 2))
+  await Bun.write(
+    path.join(webpageEvidenceDir, "assets", "manifest.json"),
+    JSON.stringify({ version: 1, assets: [] }, null, 2),
+  )
   return webpageEvidenceDir
 }
 
@@ -1938,7 +2492,9 @@ async function writeSemanticMetricRankingFixtureEvidence(root: string): Promise<
     ["India", "india", "7.80%", "3.91 T", "USD", "asset_000449.svg.txt"],
     ["Indonesia", "indonesia", "5.61%", "1.40 T", "USD", "asset_000450.svg.txt"],
     ["Mainland China", "china", "5.00%", "18.74 T", "USD", "asset_000451.svg.txt"],
-  ].map(([label, slug, growth, nominal, unit, image], index) => `
+  ]
+    .map(
+      ([label, slug, growth, nominal, unit, image], index) => `
     <li data-source-node-id="ranking-row-${index}" class="item-LBIMiZWE">
       <div class="container-lLGceaUg containerWithHover-lLGceaUg">
         <div class="container-zBPPLXWm">
@@ -1953,8 +2509,12 @@ async function writeSemanticMetricRankingFixtureEvidence(root: string): Promise<
         </div>
       </div>
     </li>
-  `).join("")
-  await Bun.write(path.join(webpageEvidenceDir, "source-skeleton", "index.html"), `
+  `,
+    )
+    .join("")
+  await Bun.write(
+    path.join(webpageEvidenceDir, "source-skeleton", "index.html"),
+    `
     <main class="ranking-page">
       <div data-source-node-id="ranking-card" data-source-role="card" class="card-_bHcdE9E">
         <div class="wrapper-LBIMiZWE">
@@ -1970,27 +2530,63 @@ async function writeSemanticMetricRankingFixtureEvidence(root: string): Promise<
         </div>
       </div>
     </main>
-  `)
-  await Bun.write(path.join(webpageEvidenceDir, "source-skeleton", "critical.css"), `
+  `,
+  )
+  await Bun.write(
+    path.join(webpageEvidenceDir, "source-skeleton", "critical.css"),
+    `
     .ranking-page { display: block; }
     .card-_bHcdE9E { border: 1px solid #e0e3eb; border-radius: 8px; }
     .container-zBPPLXWm { display: grid; grid-template-columns: 40px 1fr 96px 110px; }
-  `)
-  await Bun.write(path.join(webpageEvidenceDir, "source-ir", "component-tree.json"), JSON.stringify({
-    components: [
-      { name: "RankingPage", kind: "page", tag: "main", classNames: ["ranking-page"], textPreview: ["GDP growth, YoY"] },
-      { name: "GdpGrowthYoy", kind: "ranking-card", tag: "div", classNames: ["card-_bHcdE9E"], textPreview: ["India", "Indonesia", "Nominal GDP"] },
-    ],
-  }, null, 2))
-  await Bun.write(path.join(webpageEvidenceDir, "source-ir", "content-model.json"), JSON.stringify({
-    lists: [{ title: "GDP growth, YoY", items: ["India", "Indonesia", "Mainland China"] }],
-    repeatedGroups: [{ title: "GDP growth rows", sampleTexts: ["India 7.80%", "Indonesia 5.61%"] }],
-    stats: { totalTables: 0, totalLists: 1, totalCards: 1, totalRepeatedGroups: 1 },
-  }, null, 2))
+  `,
+  )
+  await Bun.write(
+    path.join(webpageEvidenceDir, "source-ir", "component-tree.json"),
+    JSON.stringify(
+      {
+        components: [
+          {
+            name: "RankingPage",
+            kind: "page",
+            tag: "main",
+            classNames: ["ranking-page"],
+            textPreview: ["GDP growth, YoY"],
+          },
+          {
+            name: "GdpGrowthYoy",
+            kind: "ranking-card",
+            tag: "div",
+            classNames: ["card-_bHcdE9E"],
+            textPreview: ["India", "Indonesia", "Nominal GDP"],
+          },
+        ],
+      },
+      null,
+      2,
+    ),
+  )
+  await Bun.write(
+    path.join(webpageEvidenceDir, "source-ir", "content-model.json"),
+    JSON.stringify(
+      {
+        lists: [{ title: "GDP growth, YoY", items: ["India", "Indonesia", "Mainland China"] }],
+        repeatedGroups: [{ title: "GDP growth rows", sampleTexts: ["India 7.80%", "Indonesia 5.61%"] }],
+        stats: { totalTables: 0, totalLists: 1, totalCards: 1, totalRepeatedGroups: 1 },
+      },
+      null,
+      2,
+    ),
+  )
   for (const asset of ["asset_000449.svg.txt", "asset_000450.svg.txt", "asset_000451.svg.txt"]) {
-    await Bun.write(path.join(webpageEvidenceDir, "assets", "images", asset), `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32"><circle cx="16" cy="16" r="16" fill="#2962ff"/></svg>`)
+    await Bun.write(
+      path.join(webpageEvidenceDir, "assets", "images", asset),
+      `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32"><circle cx="16" cy="16" r="16" fill="#2962ff"/></svg>`,
+    )
   }
-  await Bun.write(path.join(webpageEvidenceDir, "assets", "manifest.json"), JSON.stringify({ version: 1, assets: [] }, null, 2))
+  await Bun.write(
+    path.join(webpageEvidenceDir, "assets", "manifest.json"),
+    JSON.stringify({ version: 1, assets: [] }, null, 2),
+  )
   return webpageEvidenceDir
 }
 
@@ -2001,7 +2597,9 @@ async function writeMixedEconomicTrendsFixtureEvidence(root: string): Promise<st
     const assetId = `asset_${String(index + 1).padStart(6, "0")}`
     return `<path data-source-node-id="map-path-${index}" data-asset-d="../assets/svg/${assetId}.path.txt" id="country-${index}" class="positive-s" fill="currentColor"></path>`
   }).join("")
-  const rows = ["India", "Indonesia", "Mainland China"].map((label, index) => `
+  const rows = ["India", "Indonesia", "Mainland China"]
+    .map(
+      (label, index) => `
     <li class="item-LBIMiZWE">
       <div class="container-lLGceaUg"><div class="container-zBPPLXWm">
         <a href="https://example.com/${index}" class="container-Nt5iBa6X"><span class="title-IIKn4NmC">${label}</span></a>
@@ -2009,8 +2607,12 @@ async function writeMixedEconomicTrendsFixtureEvidence(root: string): Promise<st
         <span class="container-ItI7saAL"><span class="value-ItI7saAL">${index + 1}.40 T</span><span class="unit-ItI7saAL">USD</span></span>
       </div></div>
     </li>
-  `).join("")
-  await Bun.write(path.join(webpageEvidenceDir, "source-skeleton", "index.html"), `
+  `,
+    )
+    .join("")
+  await Bun.write(
+    path.join(webpageEvidenceDir, "source-skeleton", "index.html"),
+    `
     <main class="mixed-page">
       <section data-source-node-id="economic-trends-region" data-base-widget="true" data-container-name="economy-market-summary" data-an-widget-id="economy-market-summary" class="container-Gvxnai7n">
         <div data-source-role="header" class="header-Gvxnai7n"><div class="wrapper-BQZK4DnU"><span class="titleAndHintWrapper-BQZK4DnU"><div class="container-BQZK4DnU"><h2 class="title-BQZK4DnU">Economic trends</h2></div></span></div></div>
@@ -2037,21 +2639,49 @@ async function writeMixedEconomicTrendsFixtureEvidence(root: string): Promise<st
         </div>
       </section>
     </main>
-  `)
-  await Bun.write(path.join(webpageEvidenceDir, "source-skeleton", "critical.css"), ".container-KqgCoGM1 { display: grid; grid-template-columns: 2fr 1fr; gap: 16px; } .card-_bHcdE9E { border: 1px solid #eee; }")
-  await Bun.write(path.join(webpageEvidenceDir, "source-ir", "component-tree.json"), JSON.stringify({
-    components: [{ name: "EconomicTrends", kind: "section", tag: "section", textPreview: ["Inflation map", "GDP growth, YoY", "US unemployment rate"] }],
-  }, null, 2))
-  await Bun.write(path.join(webpageEvidenceDir, "source-ir", "content-model.json"), JSON.stringify({
-    cards: [{ title: "Inflation map" }, { title: "GDP growth, YoY" }, { title: "US unemployment rate" }],
-    stats: { totalTables: 0, totalLists: 1, totalCards: 3, totalRepeatedGroups: 0 },
-  }, null, 2))
+  `,
+  )
+  await Bun.write(
+    path.join(webpageEvidenceDir, "source-skeleton", "critical.css"),
+    ".container-KqgCoGM1 { display: grid; grid-template-columns: 2fr 1fr; gap: 16px; } .card-_bHcdE9E { border: 1px solid #eee; }",
+  )
+  await Bun.write(
+    path.join(webpageEvidenceDir, "source-ir", "component-tree.json"),
+    JSON.stringify(
+      {
+        components: [
+          {
+            name: "EconomicTrends",
+            kind: "section",
+            tag: "section",
+            textPreview: ["Inflation map", "GDP growth, YoY", "US unemployment rate"],
+          },
+        ],
+      },
+      null,
+      2,
+    ),
+  )
+  await Bun.write(
+    path.join(webpageEvidenceDir, "source-ir", "content-model.json"),
+    JSON.stringify(
+      {
+        cards: [{ title: "Inflation map" }, { title: "GDP growth, YoY" }, { title: "US unemployment rate" }],
+        stats: { totalTables: 0, totalLists: 1, totalCards: 3, totalRepeatedGroups: 0 },
+      },
+      null,
+      2,
+    ),
+  )
   for (let index = 0; index < 20; index += 1) {
     const assetId = `asset_${String(index + 1).padStart(6, "0")}`
     await Bun.write(path.join(webpageEvidenceDir, "assets", "svg", `${assetId}.path.txt`), `M${index} ${index}h2v2z`)
   }
   await Bun.write(path.join(webpageEvidenceDir, "assets", "images", "asset_000100.png"), minimalPngBytes())
-  await Bun.write(path.join(webpageEvidenceDir, "assets", "manifest.json"), JSON.stringify({ version: 1, assets: [] }, null, 2))
+  await Bun.write(
+    path.join(webpageEvidenceDir, "assets", "manifest.json"),
+    JSON.stringify({ version: 1, assets: [] }, null, 2),
+  )
   return webpageEvidenceDir
 }
 
@@ -2069,12 +2699,18 @@ async function writeSemanticLinkGridFixtureEvidence(root: string): Promise<strin
     ["India", "india"],
     ["United States", "united-states"],
   ]
-  const links = countries.map(([label, slug]) => `
+  const links = countries
+    .map(
+      ([label, slug]) => `
     <a href="https://example.com/countries/${slug}/" class="button-A2DTx07J roundButton-wc15_bxY link-A2GavdUb">
       <span class="content-wc15_bxY">${label}</span>
     </a>
-  `).join("")
-  await Bun.write(path.join(webpageEvidenceDir, "source-skeleton", "index.html"), `
+  `,
+    )
+    .join("")
+  await Bun.write(
+    path.join(webpageEvidenceDir, "source-skeleton", "index.html"),
+    `
     <main class="countries-page">
       <section data-source-node-id="countries-region" data-base-widget="true" data-container-name="countries" data-an-widget-id="countries" class="container-Gvxnai7n">
         <div data-source-role="header" class="header-Gvxnai7n header-m-Gvxnai7n">
@@ -2095,20 +2731,53 @@ async function writeSemanticLinkGridFixtureEvidence(root: string): Promise<strin
         </div>
       </section>
     </main>
-  `)
-  await Bun.write(path.join(webpageEvidenceDir, "source-skeleton", "critical.css"), ".container-A2DTx07J { display: flex; flex-wrap: wrap; gap: 8px; }")
-  await Bun.write(path.join(webpageEvidenceDir, "source-ir", "component-tree.json"), JSON.stringify({
-    components: [
-      { name: "CountriesPage", kind: "page", tag: "main", classNames: ["countries-page"], textPreview: ["Countries"] },
-      { name: "Countries", kind: "navigation", tag: "section", classNames: ["container-Gvxnai7n"], textPreview: ["Argentina", "United States"] },
-    ],
-  }, null, 2))
-  await Bun.write(path.join(webpageEvidenceDir, "source-ir", "content-model.json"), JSON.stringify({
-    lists: [{ title: "Countries", items: countries.map(([label]) => label) }],
-    repeatedGroups: [{ title: "Country links", sampleTexts: ["Argentina", "Australia"] }],
-    stats: { totalTables: 0, totalLists: 1, totalCards: 0, totalRepeatedGroups: 1 },
-  }, null, 2))
-  await Bun.write(path.join(webpageEvidenceDir, "assets", "manifest.json"), JSON.stringify({ version: 1, assets: [] }, null, 2))
+  `,
+  )
+  await Bun.write(
+    path.join(webpageEvidenceDir, "source-skeleton", "critical.css"),
+    ".container-A2DTx07J { display: flex; flex-wrap: wrap; gap: 8px; }",
+  )
+  await Bun.write(
+    path.join(webpageEvidenceDir, "source-ir", "component-tree.json"),
+    JSON.stringify(
+      {
+        components: [
+          {
+            name: "CountriesPage",
+            kind: "page",
+            tag: "main",
+            classNames: ["countries-page"],
+            textPreview: ["Countries"],
+          },
+          {
+            name: "Countries",
+            kind: "navigation",
+            tag: "section",
+            classNames: ["container-Gvxnai7n"],
+            textPreview: ["Argentina", "United States"],
+          },
+        ],
+      },
+      null,
+      2,
+    ),
+  )
+  await Bun.write(
+    path.join(webpageEvidenceDir, "source-ir", "content-model.json"),
+    JSON.stringify(
+      {
+        lists: [{ title: "Countries", items: countries.map(([label]) => label) }],
+        repeatedGroups: [{ title: "Country links", sampleTexts: ["Argentina", "Australia"] }],
+        stats: { totalTables: 0, totalLists: 1, totalCards: 0, totalRepeatedGroups: 1 },
+      },
+      null,
+      2,
+    ),
+  )
+  await Bun.write(
+    path.join(webpageEvidenceDir, "assets", "manifest.json"),
+    JSON.stringify({ version: 1, assets: [] }, null, 2),
+  )
   return webpageEvidenceDir
 }
 
@@ -2119,7 +2788,9 @@ async function writeSemanticHeaderFixtureEvidence(root: string): Promise<string>
     const assetId = `asset_${String(index + 1).padStart(6, "0")}`
     return `<path data-source-node-id="header-icon-${index + 1}" data-asset-d="../assets/svg/${assetId}.path.txt" fill="currentColor"></path>`
   })
-  await Bun.write(path.join(webpageEvidenceDir, "source-skeleton", "index.html"), `
+  await Bun.write(
+    path.join(webpageEvidenceDir, "source-skeleton", "index.html"),
+    `
     <main class="header-page">
       <div data-source-node-id="header-region" data-source-role="header" class="tv-header tv-header__top js-site-header-container tv-header--sticky">
         <div data-source-node-id="header-backdrop" class="tv-header__backdrop sf-hidden"></div>
@@ -2150,14 +2821,18 @@ async function writeSemanticHeaderFixtureEvidence(root: string): Promise<string>
               </div>
               <nav data-source-node-id="nav" data-source-role="nav" class="tv-header__area tv-header__area--menu js-header-main-menu">
                 <ul data-source-node-id="menu-list" data-source-role="list" class="tv-header__main-menu">
-                  ${["Products", "Community", "Markets", "Brokers", "More"].map((label, index) => `
+                  ${["Products", "Community", "Markets", "Brokers", "More"]
+                    .map(
+                      (label, index) => `
                     <li data-source-node-id="menu-${index}" class="tv-header__main-menu-item" data-main-menu-dropdown-root-index="${index}">
                       <a data-source-node-id="menu-link-${index}" data-main-menu-root-track-id="${label.toLowerCase()}" href="https://example.com/${label.toLowerCase()}/">
                         <span data-source-node-id="menu-chevron-${index}" class="tv-header__main-menu-item__chevron" aria-haspopup="true" aria-expanded="false" aria-label="${label} menu" role="button"><svg width="18" height="18" viewBox="0 0 18 18">${iconPaths[5]}</svg></span>
                         ${label}
                       </a>
                     </li>
-                  `).join("")}
+                  `,
+                    )
+                    .join("")}
                 </ul>
               </nav>
             </div>
@@ -2181,24 +2856,57 @@ async function writeSemanticHeaderFixtureEvidence(root: string): Promise<string>
         </div>
       </div>
     </main>
-  `)
-  await Bun.write(path.join(webpageEvidenceDir, "source-skeleton", "critical.css"), ".tv-header__inner { display: flex; align-items: center; } .tv-header__main-menu { display: flex; gap: 12px; }")
-  await Bun.write(path.join(webpageEvidenceDir, "source-ir", "component-tree.json"), JSON.stringify({
-    components: [
-      { name: "HeaderPage", kind: "page", tag: "main", classNames: ["header-page"], textPreview: ["Products", "Get started"] },
-      { name: "Header", kind: "navigation", tag: "div", classNames: ["tv-header"], textPreview: ["Products", "Community", "Markets"] },
-    ],
-  }, null, 2))
-  await Bun.write(path.join(webpageEvidenceDir, "source-ir", "content-model.json"), JSON.stringify({
-    lists: [{ title: "Header menu", items: ["Products", "Community", "Markets", "Brokers", "More"] }],
-    repeatedGroups: [{ title: "Header links", sampleTexts: ["Products", "Community"] }],
-    stats: { totalTables: 0, totalLists: 1, totalCards: 0, totalRepeatedGroups: 1 },
-  }, null, 2))
+  `,
+  )
+  await Bun.write(
+    path.join(webpageEvidenceDir, "source-skeleton", "critical.css"),
+    ".tv-header__inner { display: flex; align-items: center; } .tv-header__main-menu { display: flex; gap: 12px; }",
+  )
+  await Bun.write(
+    path.join(webpageEvidenceDir, "source-ir", "component-tree.json"),
+    JSON.stringify(
+      {
+        components: [
+          {
+            name: "HeaderPage",
+            kind: "page",
+            tag: "main",
+            classNames: ["header-page"],
+            textPreview: ["Products", "Get started"],
+          },
+          {
+            name: "Header",
+            kind: "navigation",
+            tag: "div",
+            classNames: ["tv-header"],
+            textPreview: ["Products", "Community", "Markets"],
+          },
+        ],
+      },
+      null,
+      2,
+    ),
+  )
+  await Bun.write(
+    path.join(webpageEvidenceDir, "source-ir", "content-model.json"),
+    JSON.stringify(
+      {
+        lists: [{ title: "Header menu", items: ["Products", "Community", "Markets", "Brokers", "More"] }],
+        repeatedGroups: [{ title: "Header links", sampleTexts: ["Products", "Community"] }],
+        stats: { totalTables: 0, totalLists: 1, totalCards: 0, totalRepeatedGroups: 1 },
+      },
+      null,
+      2,
+    ),
+  )
   for (let index = 0; index < 8; index += 1) {
     const assetId = `asset_${String(index + 1).padStart(6, "0")}`
     await Bun.write(path.join(webpageEvidenceDir, "assets", "svg", `${assetId}.path.txt`), `M${index} ${index}h4v4z`)
   }
-  await Bun.write(path.join(webpageEvidenceDir, "assets", "manifest.json"), JSON.stringify({ version: 1, assets: [] }, null, 2))
+  await Bun.write(
+    path.join(webpageEvidenceDir, "assets", "manifest.json"),
+    JSON.stringify({ version: 1, assets: [] }, null, 2),
+  )
   return webpageEvidenceDir
 }
 
@@ -2209,7 +2917,9 @@ async function writeSemanticSectionShellFixtureEvidence(root: string): Promise<s
     const assetId = `asset_${String(index + 1).padStart(6, "0")}`
     return `<path data-source-node-id="idea-path-${index + 1}" data-asset-d="../assets/svg/${assetId}.path.txt" id="series-${index + 1}" class="series-path" fill="currentColor"></path>`
   }).join("")
-  await Bun.write(path.join(webpageEvidenceDir, "source-skeleton", "index.html"), `
+  await Bun.write(
+    path.join(webpageEvidenceDir, "source-skeleton", "index.html"),
+    `
     <main class="ideas-page">
       <div data-source-node-id="ideas-wrapper" style="--filmstrip-right-button-order: 11">
       <section data-source-node-id="ideas-region" data-base-widget="true" data-container-name="ideas" data-an-widget-id="ideas" class="container-Gvxnai7n">
@@ -2245,31 +2955,59 @@ async function writeSemanticSectionShellFixtureEvidence(root: string): Promise<s
       </section>
       </div>
     </main>
-  `)
-  await Bun.write(path.join(webpageEvidenceDir, "source-skeleton", "critical.css"), ".content-Gvxnai7n { display: grid; gap: 12px; } .squareTabs-h5ZKzylb { display: flex; gap: 8px; }")
-  await Bun.write(path.join(webpageEvidenceDir, "source-ir", "component-tree.json"), JSON.stringify({
-    components: [
-      { name: "IdeasPage", kind: "page", tag: "main", classNames: ["ideas-page"], textPreview: ["Ideas"] },
-      { name: "Ideas", kind: "section", tag: "section", classNames: ["container-Gvxnai7n"], textPreview: ["Popular", "US Savings Rate Collapsing"] },
-    ],
-  }, null, 2))
-  await Bun.write(path.join(webpageEvidenceDir, "source-ir", "content-model.json"), JSON.stringify({
-    lists: [{ title: "Idea tabs", items: ["Popular", "Recent", "Video"] }],
-    repeatedGroups: [{ title: "Chart paths", sampleTexts: ["series-1", "series-2"] }],
-    stats: { totalTables: 0, totalLists: 1, totalCards: 1, totalRepeatedGroups: 1 },
-  }, null, 2))
+  `,
+  )
+  await Bun.write(
+    path.join(webpageEvidenceDir, "source-skeleton", "critical.css"),
+    ".content-Gvxnai7n { display: grid; gap: 12px; } .squareTabs-h5ZKzylb { display: flex; gap: 8px; }",
+  )
+  await Bun.write(
+    path.join(webpageEvidenceDir, "source-ir", "component-tree.json"),
+    JSON.stringify(
+      {
+        components: [
+          { name: "IdeasPage", kind: "page", tag: "main", classNames: ["ideas-page"], textPreview: ["Ideas"] },
+          {
+            name: "Ideas",
+            kind: "section",
+            tag: "section",
+            classNames: ["container-Gvxnai7n"],
+            textPreview: ["Popular", "US Savings Rate Collapsing"],
+          },
+        ],
+      },
+      null,
+      2,
+    ),
+  )
+  await Bun.write(
+    path.join(webpageEvidenceDir, "source-ir", "content-model.json"),
+    JSON.stringify(
+      {
+        lists: [{ title: "Idea tabs", items: ["Popular", "Recent", "Video"] }],
+        repeatedGroups: [{ title: "Chart paths", sampleTexts: ["series-1", "series-2"] }],
+        stats: { totalTables: 0, totalLists: 1, totalCards: 1, totalRepeatedGroups: 1 },
+      },
+      null,
+      2,
+    ),
+  )
   for (let index = 0; index < 18; index += 1) {
     const assetId = `asset_${String(index + 1).padStart(6, "0")}`
     await Bun.write(path.join(webpageEvidenceDir, "assets", "svg", `${assetId}.path.txt`), `M${index} ${index}h5v5z`)
   }
-  await Bun.write(path.join(webpageEvidenceDir, "assets", "manifest.json"), JSON.stringify({ version: 1, assets: [] }, null, 2))
+  await Bun.write(
+    path.join(webpageEvidenceDir, "assets", "manifest.json"),
+    JSON.stringify({ version: 1, assets: [] }, null, 2),
+  )
   return webpageEvidenceDir
 }
 
 function renderFixtureFaqItems(startOrder: number, questions: string[]): string {
-  return questions.map((question, index) => {
-    const order = startOrder + index
-    return `
+  return questions
+    .map((question, index) => {
+      const order = startOrder + index
+      return `
       <div class="item-CB10Nqp7 medium-CB10Nqp7" style="order: ${order}">
         <button class="summary-CB10Nqp7" id="Accordion-summary::${order}" aria-expanded="false" aria-controls="Accordion-details::${order}">
           <div class="summaryLine-CB10Nqp7">
@@ -2291,13 +3029,16 @@ function renderFixtureFaqItems(startOrder: number, questions: string[]): string 
         </div>
       </div>
     `
-  }).join("")
+    })
+    .join("")
 }
 
 async function writeGenericStructureFixtureEvidence(root: string): Promise<string> {
   const webpageEvidenceDir = path.join(root, "webpage-evidence-generic-structure")
   await Bun.write(path.join(webpageEvidenceDir, "reference.png"), minimalPngBytes())
-  await Bun.write(path.join(webpageEvidenceDir, "source-skeleton", "index.html"), `
+  await Bun.write(
+    path.join(webpageEvidenceDir, "source-skeleton", "index.html"),
+    `
     <main class="operations-page">
       <section data-source-node-id="plan-table" class="surface alpha-table">
         <header class="surface-head"><h2>Plan comparison</h2></header>
@@ -2315,73 +3056,137 @@ async function writeGenericStructureFixtureEvidence(root: string): Promise<strin
       <section data-source-node-id="deployment-list" class="surface beta-list">
         <header class="surface-head"><h2>Deployment queue</h2></header>
         <div class="content-shell"><div class="lane-shell"><div class="items-lane">
-          ${["Package review", "Access rollout", "Design sync"].map((title, index) => `
+          ${["Package review", "Access rollout", "Design sync"]
+            .map(
+              (title, index) => `
             <a href="https://example.com/deploy/${index}" class="wrap-row">
               <div class="top-row"><div class="date-row"><div class="day-row">Batch ${index + 1}</div><div class="dot-row">•</div><div class="wrap-date" title="Jun ${index + 1}, 2026"><span class="badge-date"><span class="content-date"></span></span></div></div></div>
               <div class="titleBlock-row"><div class="column-row"><span class="title-row">${title}</span></div></div>
               <div class="stats-row"><div class="wrap-stat"><div class="title-stat">Status</div><div class="valueWrap-stat"><div class="value-stat">${index === 0 ? "Ready" : "Queued"}</div></div></div><div class="wrap-stat"><div class="title-stat">Owner</div><div class="valueWrap-stat"><div class="value-stat">Team ${index + 1}</div></div></div></div>
             </a>
-          `).join("")}
+          `,
+            )
+            .join("")}
         </div></div></div>
       </section>
       <section data-source-node-id="resource-links" class="surface gamma-links">
         <header class="surface-head"><h2>Resource hub</h2></header>
         <div class="links-grid">
-          ${["Docs", "Templates", "Changelog", "Status", "Examples", "Support"].map((label) => `
+          ${["Docs", "Templates", "Changelog", "Status", "Examples", "Support"]
+            .map(
+              (label) => `
             <a href="https://example.com/${label.toLowerCase()}" class="resource-link"><span>${label}</span></a>
-          `).join("")}
+          `,
+            )
+            .join("")}
         </div>
       </section>
     </main>
-  `)
-  await Bun.write(path.join(webpageEvidenceDir, "source-skeleton", "critical.css"), ".surface { padding: 16px; } .links-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; } .items-lane { display: grid; gap: 8px; }")
-  await Bun.write(path.join(webpageEvidenceDir, "source-ir", "component-tree.json"), JSON.stringify({
-    components: [
-      { name: "PlanComparison", kind: "section", tag: "section", classNames: ["surface"], textPreview: ["Plan comparison", "Starter", "Team"] },
-      { name: "DeploymentQueue", kind: "section", tag: "section", classNames: ["surface"], textPreview: ["Deployment queue", "Package review"] },
-      { name: "ResourceHub", kind: "navigation", tag: "section", classNames: ["surface"], textPreview: ["Resource hub", "Docs", "Support"] },
-    ],
-  }, null, 2))
-  await Bun.write(path.join(webpageEvidenceDir, "source-ir", "content-model.json"), JSON.stringify({
-    tables: [{ title: "Plan comparison", headers: ["Starter", "Pro", "Team"], rows: [["Storage", "20 GB", "100 GB", "500 GB"], ["Seats", "3", "12", "50"], ["Support", "Email", "Priority", "Dedicated"]] }],
-    lists: [{ title: "Deployment queue", items: ["Package review", "Access rollout", "Design sync"] }, { title: "Resource hub", items: ["Docs", "Templates", "Changelog", "Status", "Examples", "Support"] }],
-    repeatedGroups: [{ title: "Deployment rows", sampleTexts: ["Package review Ready", "Access rollout Queued"] }, { title: "Resource links", sampleTexts: ["Docs", "Templates"] }],
-    sourceComponentPatterns: [
+  `,
+  )
+  await Bun.write(
+    path.join(webpageEvidenceDir, "source-skeleton", "critical.css"),
+    ".surface { padding: 16px; } .links-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; } .items-lane { display: grid; gap: 8px; }",
+  )
+  await Bun.write(
+    path.join(webpageEvidenceDir, "source-ir", "component-tree.json"),
+    JSON.stringify(
       {
-        nodeId: "plan-table",
-        kind: "data_grid_surface",
-        recommendedReplacementKind: "data_table_or_heatmap_component",
-        signals: { tableRowCount: 4, maxRepeatedSiblingCount: 3 },
+        components: [
+          {
+            name: "PlanComparison",
+            kind: "section",
+            tag: "section",
+            classNames: ["surface"],
+            textPreview: ["Plan comparison", "Starter", "Team"],
+          },
+          {
+            name: "DeploymentQueue",
+            kind: "section",
+            tag: "section",
+            classNames: ["surface"],
+            textPreview: ["Deployment queue", "Package review"],
+          },
+          {
+            name: "ResourceHub",
+            kind: "navigation",
+            tag: "section",
+            classNames: ["surface"],
+            textPreview: ["Resource hub", "Docs", "Support"],
+          },
+        ],
       },
+      null,
+      2,
+    ),
+  )
+  await Bun.write(
+    path.join(webpageEvidenceDir, "source-ir", "content-model.json"),
+    JSON.stringify(
       {
-        nodeId: "deployment-list",
-        kind: "card_collection_surface",
-        recommendedReplacementKind: "event_or_news_list_component",
-        signals: { maxRepeatedSiblingCount: 3, linkCount: 3 },
+        tables: [
+          {
+            title: "Plan comparison",
+            headers: ["Starter", "Pro", "Team"],
+            rows: [
+              ["Storage", "20 GB", "100 GB", "500 GB"],
+              ["Seats", "3", "12", "50"],
+              ["Support", "Email", "Priority", "Dedicated"],
+            ],
+          },
+        ],
+        lists: [
+          { title: "Deployment queue", items: ["Package review", "Access rollout", "Design sync"] },
+          { title: "Resource hub", items: ["Docs", "Templates", "Changelog", "Status", "Examples", "Support"] },
+        ],
+        repeatedGroups: [
+          { title: "Deployment rows", sampleTexts: ["Package review Ready", "Access rollout Queued"] },
+          { title: "Resource links", sampleTexts: ["Docs", "Templates"] },
+        ],
+        sourceComponentPatterns: [
+          {
+            nodeId: "plan-table",
+            kind: "data_grid_surface",
+            recommendedReplacementKind: "data_table_or_heatmap_component",
+            signals: { tableRowCount: 4, maxRepeatedSiblingCount: 3 },
+          },
+          {
+            nodeId: "deployment-list",
+            kind: "card_collection_surface",
+            recommendedReplacementKind: "event_or_news_list_component",
+            signals: { maxRepeatedSiblingCount: 3, linkCount: 3 },
+          },
+          {
+            nodeId: "resource-links",
+            kind: "navigation_surface",
+            recommendedReplacementKind: "navigation_or_footer_component",
+            signals: { linkCount: 6, linkDensity: 0.5 },
+          },
+        ],
+        stats: {
+          totalTables: 1,
+          totalLists: 2,
+          totalCards: 0,
+          totalRepeatedGroups: 2,
+          totalSourceComponentPatterns: 3,
+        },
       },
-      {
-        nodeId: "resource-links",
-        kind: "navigation_surface",
-        recommendedReplacementKind: "navigation_or_footer_component",
-        signals: { linkCount: 6, linkDensity: 0.5 },
-      },
-    ],
-    stats: { totalTables: 1, totalLists: 2, totalCards: 0, totalRepeatedGroups: 2, totalSourceComponentPatterns: 3 },
-  }, null, 2))
-  await Bun.write(path.join(webpageEvidenceDir, "assets", "manifest.json"), JSON.stringify({ version: 1, assets: [] }, null, 2))
+      null,
+      2,
+    ),
+  )
+  await Bun.write(
+    path.join(webpageEvidenceDir, "assets", "manifest.json"),
+    JSON.stringify({ version: 1, assets: [] }, null, 2),
+  )
   return webpageEvidenceDir
 }
 
 function minimalPngBytes(): Uint8Array {
   return Uint8Array.from([
-    0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a,
-    0x00, 0x00, 0x00, 0x0d, 0x49, 0x48, 0x44, 0x52,
-    0x00, 0x00, 0x00, 0x01, 0x00, 0x00, 0x00, 0x01,
-    0x08, 0x06, 0x00, 0x00, 0x00, 0x1f, 0x15, 0xc4,
-    0x89, 0x00, 0x00, 0x00, 0x0a, 0x49, 0x44, 0x41,
-    0x54, 0x78, 0x9c, 0x63, 0x00, 0x01, 0x00, 0x00,
-    0x05, 0x00, 0x01, 0x0d, 0x0a, 0x2d, 0xb4, 0x00,
-    0x00, 0x00, 0x00, 0x49, 0x45, 0x4e, 0x44, 0xae,
-    0x42, 0x60, 0x82,
+    0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 0x00, 0x00, 0x00, 0x0d, 0x49, 0x48, 0x44, 0x52, 0x00, 0x00, 0x00,
+    0x01, 0x00, 0x00, 0x00, 0x01, 0x08, 0x06, 0x00, 0x00, 0x00, 0x1f, 0x15, 0xc4, 0x89, 0x00, 0x00, 0x00, 0x0a, 0x49,
+    0x44, 0x41, 0x54, 0x78, 0x9c, 0x63, 0x00, 0x01, 0x00, 0x00, 0x05, 0x00, 0x01, 0x0d, 0x0a, 0x2d, 0xb4, 0x00, 0x00,
+    0x00, 0x00, 0x49, 0x45, 0x4e, 0x44, 0xae, 0x42, 0x60, 0x82,
   ])
 }

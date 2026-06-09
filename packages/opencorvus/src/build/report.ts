@@ -9,14 +9,10 @@ export function buildBuildAgentReport(collector: BuildReportCollector) {
   const result = collector.result
   if (!result) throw new Error("agent report build result is missing")
   const summary = requireReportString(result.summary, "build result summary")
-  const changedFiles = result.files_changed.map(
-    (file) => `${file.path}: ${file.summary}`,
-  )
+  const changedFiles = result.files_changed.map((file) => `${file.path}: ${file.summary}`)
   const detail = [
     `## Summary\n${summary}`,
-    result.contract_restatement
-      ? `## Contract Restatement\n${result.contract_restatement}`
-      : undefined,
+    result.contract_restatement ? `## Contract Restatement\n${result.contract_restatement}` : undefined,
     result.followup_workload_guidance
       ? `## Follow-up Workload Guidance\n${result.followup_workload_guidance}`
       : undefined,

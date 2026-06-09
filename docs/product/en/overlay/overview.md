@@ -4,13 +4,13 @@ Overlay is OpenCorvus's **Tauri 2 desktop panel**: a translucent always-on-top w
 
 ## Stack
 
-| Layer | Choice |
-|---|---|
+| Layer         | Choice                                        |
+| ------------- | --------------------------------------------- |
 | Desktop shell | Tauri 2 (Rust + WebView2/WKWebView/WebKitGTK) |
-| Frontend | Solid.js 1.9 + Vite 7 |
-| State | Solid signals (`src/store/*`) |
-| Build | Bun + `tauri build` |
-| Backend comms | SSE (EventSource) + HTTP REST |
+| Frontend      | Solid.js 1.9 + Vite 7                         |
+| State         | Solid signals (`src/store/*`)                 |
+| Build         | Bun + `tauri build`                           |
+| Backend comms | SSE (EventSource) + HTTP REST                 |
 
 Sources: `packages/overlay/package.json`, `src-tauri/Cargo.toml`.
 
@@ -38,18 +38,18 @@ bun run build:overlay   # produces .msi / .dmg / .deb
 
 ## Core panels
 
-| Panel | Role | File |
-|---|---|---|
-| **Board** | Task overview: spec/plan/goals/eval/acceptance states | `src/components/Board.tsx` |
-| **TaskList** | Left-hand task list, live state | `src/components/TaskList.tsx` |
-| **Conversation** | Agent dialogue / tool calls / reasoning | `src/components/Conversation.tsx` |
-| **ChatComposer** | Input with attachments | `src/components/ChatComposer.tsx` |
-| **InteractionPanel** | Permission approvals and confirmation popovers | `src/components/InteractionPanel.tsx` |
-| **ChangesPanel** | Pending file diffs | `src/components/ChangesPanel.tsx` |
-| **MemoryPanel** | Agent memory / context | `src/components/MemoryPanel.tsx` |
-| **TracePanel** | Execution trace | `src/components/TracePanel.tsx` |
-| **LogViewer** | Raw logs | `src/components/LogViewer.tsx` |
-| **WorkflowProgressBar** | Per-goal parallel progress | `src/components/WorkflowProgressBar.tsx` |
+| Panel                   | Role                                                  | File                                     |
+| ----------------------- | ----------------------------------------------------- | ---------------------------------------- |
+| **Board**               | Task overview: spec/plan/goals/eval/acceptance states | `src/components/Board.tsx`               |
+| **TaskList**            | Left-hand task list, live state                       | `src/components/TaskList.tsx`            |
+| **Conversation**        | Agent dialogue / tool calls / reasoning               | `src/components/Conversation.tsx`        |
+| **ChatComposer**        | Input with attachments                                | `src/components/ChatComposer.tsx`        |
+| **InteractionPanel**    | Permission approvals and confirmation popovers        | `src/components/InteractionPanel.tsx`    |
+| **ChangesPanel**        | Pending file diffs                                    | `src/components/ChangesPanel.tsx`        |
+| **MemoryPanel**         | Agent memory / context                                | `src/components/MemoryPanel.tsx`         |
+| **TracePanel**          | Execution trace                                       | `src/components/TracePanel.tsx`          |
+| **LogViewer**           | Raw logs                                              | `src/components/LogViewer.tsx`           |
+| **WorkflowProgressBar** | Per-goal parallel progress                            | `src/components/WorkflowProgressBar.tsx` |
 
 Settings (sidebar): General / Providers / Channels / Orchestration / Permissions / SkillMarket.
 
@@ -68,9 +68,11 @@ Project groups are ordered by the latest created task in each group.
 ### SSE event streams
 
 1. **Task-detail stream** (per selected task)
+
    ```
    GET http://127.0.0.1:7878/task/{taskID}/events?after={sequence}
    ```
+
    Code: `src/services/sse.ts:21` `startSSE()`. Uses native `EventSource` to bypass WebView2's `fetch().body` buffering.
 
 2. **Global task-list stream** (app level)
@@ -83,26 +85,26 @@ Project groups are ordered by the latest created task in each group.
 
 `src/services/events.ts:261` `routeSSEEvent()`:
 
-| Event | Sink |
-|---|---|
-| `message.updated / part.updated / part.delta` | messageStore batch |
-| `run.progress / run.output` | lifted to message events |
-| `agent.updated` | agentEvents |
-| `config.changed` | reload config |
-| `task.* / goal.* / plan.*` | `handleEventStreamEvent` + debounced Board refresh |
+| Event                                         | Sink                                               |
+| --------------------------------------------- | -------------------------------------------------- |
+| `message.updated / part.updated / part.delta` | messageStore batch                                 |
+| `run.progress / run.output`                   | lifted to message events                           |
+| `agent.updated`                               | agentEvents                                        |
+| `config.changed`                              | reload config                                      |
+| `task.* / goal.* / plan.*`                    | `handleEventStreamEvent` + debounced Board refresh |
 
 ## Rust-side native capabilities
 
 `src-tauri/src/main.rs` is the sole Rust source, registering all Tauri commands:
 
-| Command | Role |
-|---|---|
-| `overlay_server_info` / `overlay_server_restart` | Embedded opencorvus process management |
+| Command                                           | Role                                   |
+| ------------------------------------------------- | -------------------------------------- |
+| `overlay_server_info` / `overlay_server_restart`  | Embedded opencorvus process management |
 | `overlay_settings_load` / `overlay_settings_save` | Persists to `.opencorvus/overlay.json` |
-| `overlay_pick_dir` / `overlay_pick_files` | File/dir dialogs |
-| `overlay_open_url` / `overlay_open_path` | External open |
-| `overlay_attention_set` | Tray blink |
-| `overlay_toggle_devtools` | DevTools toggle |
+| `overlay_pick_dir` / `overlay_pick_files`         | File/dir dialogs                       |
+| `overlay_open_url` / `overlay_open_path`          | External open                          |
+| `overlay_attention_set`                           | Tray blink                             |
+| `overlay_toggle_devtools`                         | DevTools toggle                        |
 
 Process cleanup: Windows uses a Job Object + `KILL_ON_JOB_CLOSE`; Unix uses SIGKILL on the process group — ensuring the backend (and its children) are reaped on overlay exit.
 

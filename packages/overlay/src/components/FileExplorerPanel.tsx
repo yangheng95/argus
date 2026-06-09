@@ -1,4 +1,14 @@
-import { createDeferred, createEffect, createMemo, createResource, createSignal, For, onCleanup, Show, type Accessor } from "solid-js"
+import {
+  createDeferred,
+  createEffect,
+  createMemo,
+  createResource,
+  createSignal,
+  For,
+  onCleanup,
+  Show,
+  type Accessor,
+} from "solid-js"
 import { Virtualizer, type CustomContainerComponentProps, type CustomItemComponentProps } from "virtua/solid"
 import { apiJson } from "../services/api"
 import { openFileEditor, selectedFilePath, type FileNode } from "../services/file-workbench"
@@ -59,7 +69,7 @@ function dirname(path: string): string {
 }
 
 async function listDirectory(path: string): Promise<FileNode[]> {
-  return await apiJson(`file?path=${encodeURIComponent(path)}`) as FileNode[]
+  return (await apiJson(`file?path=${encodeURIComponent(path)}`)) as FileNode[]
 }
 
 async function searchFiles(query: string): Promise<string[]> {
@@ -68,7 +78,7 @@ async function searchFiles(query: string): Promise<string[]> {
     type: "file",
     limit: String(SEARCH_LIMIT),
   })
-  return await apiJson(`find/file?${params.toString()}`) as string[]
+  return (await apiJson(`find/file?${params.toString()}`)) as string[]
 }
 
 export function FileExplorerPanel(props: FileExplorerPanelProps = {}) {
@@ -79,7 +89,7 @@ export function FileExplorerPanel(props: FileExplorerPanelProps = {}) {
   const [loadingPaths, setLoadingPaths] = createSignal(new Set<string>())
   const [directoryErrors, setDirectoryErrors] = createSignal(new Map<string, string>())
   const active = createMemo(() => props.active?.() ?? true)
-  const directory = createMemo(() => props.directory ? props.directory().trim() : "unscoped")
+  const directory = createMemo(() => (props.directory ? props.directory().trim() : "unscoped"))
 
   const loadDirectory = async (path: string, opts?: { force?: boolean }) => {
     if ((!opts?.force && childrenByPath().has(path)) || loadingPaths().has(path)) return
@@ -195,7 +205,7 @@ export function FileExplorerPanel(props: FileExplorerPanelProps = {}) {
   const shouldVirtualize = createMemo(() => rows().length > VIRTUAL_EXPLORER_ROW_THRESHOLD)
   const rootLoading = createMemo(() => !deferredQuery() && loadingPaths().has("") && !childrenByPath().has(""))
   const searchLoading = createMemo(() => !!deferredQuery() && searchResults.loading)
-  const rootError = createMemo(() => !deferredQuery() ? directoryErrors().get("") ?? "" : "")
+  const rootError = createMemo(() => (!deferredQuery() ? (directoryErrors().get("") ?? "") : ""))
 
   const toggleDirectory = (path: string) => {
     setExpandedPaths((prev) => {
@@ -248,7 +258,7 @@ export function FileExplorerPanel(props: FileExplorerPanelProps = {}) {
             <Icon name="chevron" size={11} />
           </Show>
         </span>
-        <Icon name={isDirectory ? row.expanded ? "folder-open" : "folder" : "file-document"} size={13} />
+        <Icon name={isDirectory ? (row.expanded ? "folder-open" : "folder") : "file-document"} size={13} />
         <span class="file-explorer-name">{node.name}</span>
         <Show when={row.loading}>
           <span class="file-explorer-meta">{t("common.loading")}</span>
@@ -320,10 +330,7 @@ export function FileExplorerPanel(props: FileExplorerPanelProps = {}) {
                 </p>
               }
             >
-              <Show
-                when={shouldVirtualize()}
-                fallback={<For each={rows()}>{renderRow}</For>}
-              >
+              <Show when={shouldVirtualize()} fallback={<For each={rows()}>{renderRow}</For>}>
                 <Virtualizer
                   data={rows()}
                   itemSize={EXPLORER_ROW_HEIGHT}

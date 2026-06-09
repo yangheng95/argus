@@ -85,7 +85,12 @@ describe("acceptance Last-Known-Good parallel safety", () => {
         directory: dir,
         fn: async () => {
           const task = seedTask({ id: uniqueID("task_lkg_missing_sha") })
-          insertGoalRunAttempt({ taskID: task.id, runID: uniqueID("run_lkg_missing"), goalRunID: "grun_active", status: "running" })
+          insertGoalRunAttempt({
+            taskID: task.id,
+            runID: uniqueID("run_lkg_missing"),
+            goalRunID: "grun_active",
+            status: "running",
+          })
           await commitFile(dir, "app.txt", "previous\n", "previous")
           const roundSha = await commitFile(dir, "app.txt", "regressed\n", "round")
           const inputTask = withLKG(task, "", 1.1)
@@ -143,7 +148,12 @@ function seedTask(input: { id: string }): TaskRow {
     time_updated: now,
     time_started: now,
   } as TaskRow
-  Database.use((db) => db.insert(EngineTaskTable).values(row as any).run())
+  Database.use((db) =>
+    db
+      .insert(EngineTaskTable)
+      .values(row as any)
+      .run(),
+  )
   return row
 }
 
@@ -171,36 +181,39 @@ function insertGoalRunAttempt(input: {
 }) {
   const now = Date.now()
   Database.use((db) =>
-    db.insert(EngineArtifactTable).values({
-      id: `${input.goalRunID}_${now}`,
-      task_id: input.taskID,
-      run_id: input.runID,
-      goal_run_id: input.goalRunID,
-      kind: "goal_run_attempt",
-      label: `attempt-${input.status}`,
-      payload: {
-        goal_id: `goal_${input.goalRunID}`,
-        plan_node_id: null,
-        session_id: null,
-        status: input.status,
-        retry_count: 0,
-        blocking_reason: null,
-        error: null,
-        workspace_dir: null,
-        workspace_branch: null,
-        workspace_base_ref: null,
-        base_ref: null,
-        merge_ref: null,
-        supersede_of: null,
-        superseded_reason: null,
-        superseded_at: null,
-        metadata: null,
-        time_started: now,
-        time_completed: input.status === "completed" ? now : null,
-      },
-      time_created: now,
-      time_updated: now,
-    }).run(),
+    db
+      .insert(EngineArtifactTable)
+      .values({
+        id: `${input.goalRunID}_${now}`,
+        task_id: input.taskID,
+        run_id: input.runID,
+        goal_run_id: input.goalRunID,
+        kind: "goal_run_attempt",
+        label: `attempt-${input.status}`,
+        payload: {
+          goal_id: `goal_${input.goalRunID}`,
+          plan_node_id: null,
+          session_id: null,
+          status: input.status,
+          retry_count: 0,
+          blocking_reason: null,
+          error: null,
+          workspace_dir: null,
+          workspace_branch: null,
+          workspace_base_ref: null,
+          base_ref: null,
+          merge_ref: null,
+          supersede_of: null,
+          superseded_reason: null,
+          superseded_at: null,
+          metadata: null,
+          time_started: now,
+          time_completed: input.status === "completed" ? now : null,
+        },
+        time_created: now,
+        time_updated: now,
+      })
+      .run(),
   )
 }
 

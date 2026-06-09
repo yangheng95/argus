@@ -78,19 +78,22 @@ describe("shutdown aborts active task-owned sessions", () => {
         })
 
         Database.use((db) =>
-          db.insert(EngineTaskTable).values({
-            id: taskID,
-            project_id: Instance.project.id,
-            session_id: root.id,
-            source: "panel",
-            title: "direct build shutdown",
-            request: "direct build shutdown",
-            kind: "workflow",
-            priority: "normal",
-            time_started: now,
-            time_created: now,
-            time_updated: now,
-          }).run(),
+          db
+            .insert(EngineTaskTable)
+            .values({
+              id: taskID,
+              project_id: Instance.project.id,
+              session_id: root.id,
+              source: "panel",
+              title: "direct build shutdown",
+              request: "direct build shutdown",
+              kind: "workflow",
+              priority: "normal",
+              time_started: now,
+              time_created: now,
+              time_updated: now,
+            })
+            .run(),
         )
         SessionStatus.set(root.id, { type: "streaming" })
         SessionStatus.set(orchestrator.id, { type: "streaming" })
@@ -107,9 +110,7 @@ describe("shutdown aborts active task-owned sessions", () => {
         expect(SessionStatus.get(orchestrator.id)).toEqual({ type: "terminal", reason: "aborted" })
         expect(SessionStatus.get(build.id)).toEqual({ type: "terminal", reason: "aborted" })
 
-        const task = Database.use((db) =>
-          db.select().from(EngineTaskTable).where(eq(EngineTaskTable.id, taskID)).get(),
-        )
+        const task = Database.use((db) => db.select().from(EngineTaskTable).where(eq(EngineTaskTable.id, taskID)).get())
         expect(task).toBeDefined()
         expect(deriveTaskStatus(task!)).toBe("failed")
         expect(task?.error).toBe(reason)

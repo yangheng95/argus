@@ -53,13 +53,15 @@ test("runAgentSession appends config.agent.build.prompt_append after build core"
         tokens: { input: 0, output: 0, reasoning: 0, cache: { read: 0, write: 0 } },
         path: { cwd: tmp.path, root: tmp.path },
       },
-      parts: [{
-        id: "prt_runner_prompt_assistant",
-        sessionID: input.sessionID,
-        messageID: "msg_runner_prompt_assistant",
-        type: "text",
-        text: "done",
-      }],
+      parts: [
+        {
+          id: "prt_runner_prompt_assistant",
+          sessionID: input.sessionID,
+          messageID: "msg_runner_prompt_assistant",
+          type: "text",
+          text: "done",
+        },
+      ],
     } as Awaited<ReturnType<typeof SessionPrompt.prompt>>
   })
 
@@ -133,13 +135,15 @@ test("runAgentSession rejects completion when terminal collector is still unsati
         tokens: { input: 0, output: 0, reasoning: 0, cache: { read: 0, write: 0 } },
         path: { cwd: tmp.path, root: tmp.path },
       },
-      parts: [{
-        id: "prt_runner_unsatisfied_terminal",
-        sessionID: input.sessionID,
-        messageID: "msg_runner_unsatisfied_terminal",
-        type: "text",
-        text: "done without terminal report",
-      }],
+      parts: [
+        {
+          id: "prt_runner_unsatisfied_terminal",
+          sessionID: input.sessionID,
+          messageID: "msg_runner_unsatisfied_terminal",
+          type: "text",
+          text: "done without terminal report",
+        },
+      ],
     } as Awaited<ReturnType<typeof SessionPrompt.prompt>>
   })
 
@@ -215,13 +219,15 @@ test("runAgentSession writes child agent report while called from parent session
         tokens: { input: 0, output: 0, reasoning: 0, cache: { read: 0, write: 0 } },
         path: { cwd: tmp.path, root: tmp.path },
       },
-      parts: [{
-        id: "prt_runner_context_assistant",
-        sessionID: input.sessionID,
-        messageID: "msg_runner_context_assistant",
-        type: "text",
-        text: "done",
-      }],
+      parts: [
+        {
+          id: "prt_runner_context_assistant",
+          sessionID: input.sessionID,
+          messageID: "msg_runner_context_assistant",
+          type: "text",
+          text: "done",
+        },
+      ],
     } as Awaited<ReturnType<typeof SessionPrompt.prompt>>
   })
 
@@ -241,18 +247,21 @@ test("runAgentSession writes child agent report while called from parent session
       })
       const now = Date.now()
       Database.use((db) =>
-        db.insert(EngineTaskTable).values({
-          id: "tsk_runner_context",
-          project_id: Instance.project.id,
-          session_id: parent.id,
-          source: "test",
-          title: "runner context",
-          request: "exercise child trace context",
-          priority: "normal",
-          time_created: now,
-          time_updated: now,
-          time_started: now,
-        }).run(),
+        db
+          .insert(EngineTaskTable)
+          .values({
+            id: "tsk_runner_context",
+            project_id: Instance.project.id,
+            session_id: parent.id,
+            source: "test",
+            title: "runner context",
+            request: "exercise child trace context",
+            priority: "normal",
+            time_created: now,
+            time_updated: now,
+            time_started: now,
+          })
+          .run(),
       )
       let childSessionID = ""
 

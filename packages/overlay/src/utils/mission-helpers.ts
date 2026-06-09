@@ -63,7 +63,9 @@ export function statusIconFor(status: string): MissionStatusIconName {
 }
 
 export function compactDirectory(value: string): string {
-  const normalized = String(value || "").replace(/\\/g, "/").replace(/\/+$/, "")
+  const normalized = String(value || "")
+    .replace(/\\/g, "/")
+    .replace(/\/+$/, "")
   if (!normalized) return ""
   const parts = normalized.split("/").filter(Boolean)
   if (parts.length <= 3) return normalized

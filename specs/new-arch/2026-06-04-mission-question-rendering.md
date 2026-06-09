@@ -15,14 +15,14 @@ rendering.
 
 Repository-wide search for `question.asked` shows:
 
-| Location | Role |
-| --- | --- |
-| `packages/opencorvus/src/question/index.ts` | Raw question lifecycle events: `question.asked`, `question.replied`, `question.rejected`. |
-| `packages/opencorvus/src/engine/interaction.ts` | Engine tasks normalize raw questions into `interaction.requested/resolved` when the session belongs to an engine task or run. |
-| `packages/overlay/src/services/tree-writer.ts` | Handles `interaction.requested/resolved`, but not `question.*`. |
-| `packages/overlay/src/components/InteractionCard.tsx` | Existing single user interface for pending permission and question interactions. |
-| `packages/overlay/src/services/interaction-reply.ts` | Sends all question answers to `interaction/:id/...`, which is wrong for raw Mission questions. |
-| `packages/opencorvus/src/server/routes/question.ts` | Correct reply endpoints for raw questions: `/question/:requestID/reply` and `/question/:requestID/reject`. |
+| Location                                              | Role                                                                                                                          |
+| ----------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------- |
+| `packages/opencorvus/src/question/index.ts`           | Raw question lifecycle events: `question.asked`, `question.replied`, `question.rejected`.                                     |
+| `packages/opencorvus/src/engine/interaction.ts`       | Engine tasks normalize raw questions into `interaction.requested/resolved` when the session belongs to an engine task or run. |
+| `packages/overlay/src/services/tree-writer.ts`        | Handles `interaction.requested/resolved`, but not `question.*`.                                                               |
+| `packages/overlay/src/components/InteractionCard.tsx` | Existing single user interface for pending permission and question interactions.                                              |
+| `packages/overlay/src/services/interaction-reply.ts`  | Sends all question answers to `interaction/:id/...`, which is wrong for raw Mission questions.                                |
+| `packages/opencorvus/src/server/routes/question.ts`   | Correct reply endpoints for raw questions: `/question/:requestID/reply` and `/question/:requestID/reject`.                    |
 
 ## Decision
 

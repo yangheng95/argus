@@ -43,6 +43,10 @@
   flex-shrink: 0;
 }
 
+.sidebar-header-actions[data-active="false"] {
+  display: none;
+}
+
 /* Sidebar body: scrollable region beneath the header that holds the
    task list panel + group clusters. The 8px padding + 6px gap values
    below fold the late overrides at the styles.css tail (canonical was
@@ -145,10 +149,7 @@
   width: 100%;
   min-width: 0;
   box-sizing: border-box;
-  padding:
-    calc(2px * var(--ui-scale))
-    calc(6px * var(--ui-scale))
-    calc(2px * var(--ui-scale))
+  padding: calc(2px * var(--ui-scale)) calc(6px * var(--ui-scale)) calc(2px * var(--ui-scale))
     calc(9px * var(--ui-scale));
   border: var(--oc-border-width) solid transparent;
   border-radius: 0;
@@ -172,7 +173,9 @@
 
 .task-row-mini[data-draggable="true"]:has(.task-row-actions):hover,
 .task-row-mini[data-draggable="true"]:has(.task-row-actions):focus-within {
-  grid-template-columns: calc(20px * var(--ui-scale)) calc(14px * var(--ui-scale)) minmax(0, 1fr) var(--task-row-actions-width);
+  grid-template-columns: calc(20px * var(--ui-scale)) calc(14px * var(--ui-scale)) minmax(0, 1fr) var(
+      --task-row-actions-width
+    );
 }
 
 .task-row-drag-handle {
@@ -481,7 +484,10 @@
   font-size: var(--ui-font-small);
   line-height: 1;
   cursor: pointer;
-  transition: background 0.12s ease, color 0.12s ease, border-color 0.12s ease;
+  transition:
+    background 0.12s ease,
+    color 0.12s ease,
+    border-color 0.12s ease;
 }
 
 .task-row-children-toggle:hover,
@@ -510,8 +516,15 @@
 }
 
 @keyframes task-row-children-pulse {
-  0%, 100% { opacity: 0.4; transform: scale(1); }
-  50%      { opacity: 1;   transform: scale(1.25); }
+  0%,
+  100% {
+    opacity: 0.4;
+    transform: scale(1);
+  }
+  50% {
+    opacity: 1;
+    transform: scale(1.25);
+  }
 }
 
 /* Failed beats active — if both are present, failed colour wins so
@@ -741,10 +754,16 @@
   border: var(--oc-border-width) solid color-mix(in srgb, var(--bad) 34%, var(--border));
   border-radius: var(--oc-radius-large);
   background:
-    linear-gradient(180deg, color-mix(in srgb, var(--bad) 10%, transparent), color-mix(in srgb, var(--bad) 3.4%, transparent) 72%, transparent),
+    linear-gradient(
+      180deg,
+      color-mix(in srgb, var(--bad) 10%, transparent),
+      color-mix(in srgb, var(--bad) 3.4%, transparent) 72%,
+      transparent
+    ),
     color-mix(in srgb, var(--surface-strong) 74%, transparent);
   box-shadow:
-    0 calc(10px * var(--ui-scale)) calc(18px * var(--ui-scale)) color-mix(in srgb, var(--ui-shadow-tone) 31%, transparent),
+    0 calc(10px * var(--ui-scale)) calc(18px * var(--ui-scale))
+      color-mix(in srgb, var(--ui-shadow-tone) 31%, transparent),
     inset 0 calc(1px * var(--ui-scale)) 0 var(--ui-highlight-tone);
   font-size: var(--ui-font-control);
   color: var(--text-soft);

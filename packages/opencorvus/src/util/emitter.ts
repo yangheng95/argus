@@ -1,6 +1,6 @@
 /**
  * TypedEventEmitter - A type-safe event emitter implementation
- * 
+ *
  * Design Intent:
  * - Provides full TypeScript type safety for event names and their parameter types
  * - Uses Map + Set for efficient listener storage and automatic deduplication
@@ -11,7 +11,7 @@
 /**
  * TypedEventEmitter class with full type safety
  * @template Events - A record type mapping event names to their parameter arrays
- * 
+ *
  * Example usage:
  * ```typescript
  * type MyEvents = {
@@ -33,7 +33,7 @@ export class TypedEventEmitter<Events extends Record<keyof Events, any[]>> {
    * @param event - The event name to listen to
    * @param callback - The callback function to invoke when event is emitted
    * @returns An unsubscribe function to remove this listener
-   * 
+   *
    * Type safety: Event name and callback parameters must match the Events type
    */
   on<K extends keyof Events>(event: K, callback: (...args: Events[K]) => void): () => void {
@@ -53,7 +53,7 @@ export class TypedEventEmitter<Events extends Record<keyof Events, any[]>> {
    * @param event - The event name to remove listener from
    * @param callback - The callback function to remove
    * @returns true if the listener was successfully removed, false otherwise
-   * 
+   *
    * Note: Uses Set.delete() which returns false if the callback was not found
    */
   off<K extends keyof Events>(event: K, callback: (...args: Events[K]) => void): boolean {
@@ -74,7 +74,7 @@ export class TypedEventEmitter<Events extends Record<keyof Events, any[]>> {
    * @param event - The event name to emit
    * @param args - The parameters to pass to all listeners
    * @returns true if the event has listeners, false otherwise
-   * 
+   *
    * Note: All listeners are invoked synchronously in registration order
    * Listener exceptions will propagate to the caller
    */
@@ -96,7 +96,7 @@ export class TypedEventEmitter<Events extends Record<keyof Events, any[]>> {
    * @param event - The event name to listen to
    * @param callback - The callback function to invoke on first event
    * @returns An unsubscribe function to remove this listener
-   * 
+   *
    * The listener is automatically removed after it is invoked once.
    * The unsubscribe function can be used to cancel before the event fires.
    */
@@ -113,7 +113,7 @@ export class TypedEventEmitter<Events extends Record<keyof Events, any[]>> {
    * Get the number of listeners for an event
    * @param event - Optional event name. If omitted, returns total count across all events
    * @returns Number of listeners for the specified event, or total count if no event specified
-   * 
+   *
    * Type safety: Event name must be a valid key from the Events type
    */
   listenerCount<K extends keyof Events>(event?: K): number {

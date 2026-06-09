@@ -8,35 +8,35 @@ From `packages/opencorvus/package.json:52-90`:
 
 Authority source: `BUNDLED_PROVIDERS` in `packages/opencorvus/src/provider/bundled.ts`.
 
-| Provider | Package |
-|---|---|
-| Anthropic | `@ai-sdk/anthropic` + `@anthropic-ai/claude-agent-sdk` |
-| OpenAI / compatible | `@ai-sdk/openai` + `@ai-sdk/openai-compatible` |
-| Google Generative AI | `@ai-sdk/google` |
+| Provider                         | Package                                                     |
+| -------------------------------- | ----------------------------------------------------------- |
+| Anthropic                        | `@ai-sdk/anthropic` + `@anthropic-ai/claude-agent-sdk`      |
+| OpenAI / compatible              | `@ai-sdk/openai` + `@ai-sdk/openai-compatible`              |
+| Google Generative AI             | `@ai-sdk/google`                                            |
 | Google Vertex / Vertex Anthropic | `@ai-sdk/google-vertex` + `@ai-sdk/google-vertex/anthropic` |
-| Amazon Bedrock | `@ai-sdk/amazon-bedrock` |
-| Azure OpenAI | `@ai-sdk/azure` |
-| xAI | `@ai-sdk/xai` |
-| Mistral | `@ai-sdk/mistral` |
-| Groq | `@ai-sdk/groq` |
-| DeepInfra | `@ai-sdk/deepinfra` |
-| Cerebras | `@ai-sdk/cerebras` |
-| Cohere | `@ai-sdk/cohere` |
-| TogetherAI | `@ai-sdk/togetherai` |
-| Perplexity | `@ai-sdk/perplexity` |
-| Vercel | `@ai-sdk/vercel` |
-| Vercel AI Gateway | `@ai-sdk/gateway` |
-| GitLab AI | `@gitlab/gitlab-ai-provider` |
-| OpenRouter | `@openrouter/ai-sdk-provider` |
+| Amazon Bedrock                   | `@ai-sdk/amazon-bedrock`                                    |
+| Azure OpenAI                     | `@ai-sdk/azure`                                             |
+| xAI                              | `@ai-sdk/xai`                                               |
+| Mistral                          | `@ai-sdk/mistral`                                           |
+| Groq                             | `@ai-sdk/groq`                                              |
+| DeepInfra                        | `@ai-sdk/deepinfra`                                         |
+| Cerebras                         | `@ai-sdk/cerebras`                                          |
+| Cohere                           | `@ai-sdk/cohere`                                            |
+| TogetherAI                       | `@ai-sdk/togetherai`                                        |
+| Perplexity                       | `@ai-sdk/perplexity`                                        |
+| Vercel                           | `@ai-sdk/vercel`                                            |
+| Vercel AI Gateway                | `@ai-sdk/gateway`                                           |
+| GitLab AI                        | `@gitlab/gitlab-ai-provider`                                |
+| OpenRouter                       | `@openrouter/ai-sdk-provider`                               |
 
 China-region aliases (declared in `channel-runtime/.env.example`):
 
-| Alias | Underlying |
-|---|---|
-| `alibaba-cn` | DashScope |
+| Alias                    | Underlying            |
+| ------------------------ | --------------------- |
+| `alibaba-cn`             | DashScope             |
 | `alibaba-coding-plan-cn` | DashScope Coding Plan |
-| `moonshotai-cn` | Moonshot |
-| `deepseek` | DeepSeek |
+| `moonshotai-cn`          | Moonshot              |
+| `deepseek`               | DeepSeek              |
 
 ## Configuration
 
@@ -67,11 +67,11 @@ In `opencorvus.jsonc`:
       "api": "https://your-gateway/v1",
       "env": ["MYHUB_API_KEY"],
       "models": {
-        "custom-1": { "name": "Custom 1", "tool_call": true }
-      }
-    }
+        "custom-1": { "name": "Custom 1", "tool_call": true },
+      },
+    },
   },
-  "model": "myhub/custom-1"
+  "model": "myhub/custom-1",
 }
 ```
 
@@ -79,12 +79,12 @@ In `opencorvus.jsonc`:
 
 ## Model selection
 
-| Scenario | Config |
-|---|---|
-| Default execution model | `model` field or `OPENCORVUS_DEFAULT_MODEL` |
-| Lightweight tasks (title / summary) | `small_model` |
-| Per-agent override | `assistant.<agent>.model` |
-| Vision / screenshot understanding | `OPENCORVUS_VISION_MODEL` |
+| Scenario                            | Config                                      |
+| ----------------------------------- | ------------------------------------------- |
+| Default execution model             | `model` field or `OPENCORVUS_DEFAULT_MODEL` |
+| Lightweight tasks (title / summary) | `small_model`                               |
+| Per-agent override                  | `assistant.<agent>.model`                   |
+| Vision / screenshot understanding   | `OPENCORVUS_VISION_MODEL`                   |
 
 Splitting per-agent models from the execution default lets you **plan with a strong/slow model and execute with a fast/cheaper one**:
 
@@ -94,8 +94,8 @@ Splitting per-agent models from the execution default lets you **plan with a str
   "small_model": "alibaba-cn/qwen2.5-7b",
   "assistant": {
     "requirements": { "model": "anthropic/claude-sonnet-4-6" },
-    "architect":    { "model": "anthropic/claude-sonnet-4-6" }
-  }
+    "architect": { "model": "anthropic/claude-sonnet-4-6" },
+  },
 }
 ```
 

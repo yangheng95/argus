@@ -11,11 +11,15 @@ Use this after a Build agent has written React/Vue/etc. source from web-clone-so
   parameters: z.object({
     projectDir: z
       .string()
-      .describe("Directory containing the implemented target app source. Defaults to the current OpenCorvus execution directory.")
+      .describe(
+        "Directory containing the implemented target app source. Defaults to the current OpenCorvus execution directory.",
+      )
       .optional(),
     sourcePackageDir: z
       .string()
-      .describe("Directory containing reference.png, source-skeleton/, and source-ir/. Use the task-runtime path from frontend_design; omitted keeps the legacy <execution directory>/web-clone-source default.")
+      .describe(
+        "Directory containing reference.png, source-skeleton/, and source-ir/. Use the task-runtime path from frontend_design; omitted keeps the legacy <execution directory>/web-clone-source default.",
+      )
       .optional(),
     outputPath: z
       .string()
@@ -24,11 +28,15 @@ Use this after a Build agent has written React/Vue/etc. source from web-clone-so
     finalAcceptanceMode: z
       .enum(["visual_baseline_allowed", "maintainable_replacement_required"])
       .default("visual_baseline_allowed")
-      .describe("Use maintainable_replacement_required for final deliveries where the user asked for maintainable/real/component-reuse replacement instead of a generated baseline."),
+      .describe(
+        "Use maintainable_replacement_required for final deliveries where the user asked for maintainable/real/component-reuse replacement instead of a generated baseline.",
+      ),
   }),
   async execute(params) {
     const projectDir = resolveInputPath(params.projectDir ?? Instance.directory)
-    const sourcePackageDir = resolveInputPath(params.sourcePackageDir ?? path.join(Instance.directory, "web-clone-source"))
+    const sourcePackageDir = resolveInputPath(
+      params.sourcePackageDir ?? path.join(Instance.directory, "web-clone-source"),
+    )
     const outputPath = params.outputPath ? resolveInputPath(params.outputPath) : undefined
     if (outputPath) assertInsideDirectory(outputPath, projectDir, "outputPath")
     const { audit, auditPath } = await writeWebCloneSourceSkeletonConsumptionAudit({

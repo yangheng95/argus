@@ -14,10 +14,7 @@ import { Instance } from "../../src/project/instance"
 import { Provider } from "../../src/provider/provider"
 import { Server } from "../../src/server/server"
 import { IntentAnalysisAgent } from "../../src/intent-analysis/agent"
-import {
-  INTENT_CLASSES,
-  COMPLEXITY_BANDS,
-} from "../../src/intent-analysis/output-tools"
+import { INTENT_CLASSES, COMPLEXITY_BANDS } from "../../src/intent-analysis/output-tools"
 import { loadBenchmarkEnv, resolveBenchmarkModel } from "../../script/benchmark/env"
 
 await loadBenchmarkEnv(import.meta.dir)

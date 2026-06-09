@@ -28,23 +28,23 @@ No hand-written browser, custom devtools, custom tab keyboard model, custom resi
 
 ## Codebase Evidence
 
-| Area | Evidence | Decision |
-| --- | --- | --- |
-| Right panel shell | `packages/overlay/src/index.html` owns `.sections` with Explorer, Files, and Inspector bodies. | Add any future preview as a first-class right-panel surface only after this spec, not by reviving retired markup. |
-| Tab primitive | `packages/overlay/src/components/ui/Tabs.tsx` wraps Kobalte Tabs. | Continue using Kobalte-backed primitives; do not hand-roll tab behavior. |
-| Right panel tab state | `packages/overlay/src/components/RightPanelTabs.tsx` and `packages/overlay/src/main.tsx` own tab values and activation. | Keep one tab state source. |
-| Files responsibility | `packages/overlay/src/components/RightFilesPanel.tsx` owns Changes/Diff only. | Do not mix frontend preview into Files/Diff. |
-| API transport | `packages/overlay/src/services/api.ts` routes requests through HostTransport. | New preview routes must use HostTransport/api helpers, not raw fetch. |
-| Browser evidence runtime | `packages/opencorvus/src/browser/webpage/render.ts`, `packages/opencorvus/src/runtime/page-capture.ts`, and browser runtime specs already cover Playwright evidence. | Reuse existing runtime direction for verification. |
-| Removed preview family | `packages/overlay/test/acceptance-panel-mount.test.ts` asserts retired preview mount names do not return. | Treat those assertions as guardrails, not as a TODO to reverse. |
+| Area                     | Evidence                                                                                                                                                             | Decision                                                                                                          |
+| ------------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------- |
+| Right panel shell        | `packages/overlay/src/index.html` owns `.sections` with Explorer, Files, and Inspector bodies.                                                                       | Add any future preview as a first-class right-panel surface only after this spec, not by reviving retired markup. |
+| Tab primitive            | `packages/overlay/src/components/ui/Tabs.tsx` wraps Kobalte Tabs.                                                                                                    | Continue using Kobalte-backed primitives; do not hand-roll tab behavior.                                          |
+| Right panel tab state    | `packages/overlay/src/components/RightPanelTabs.tsx` and `packages/overlay/src/main.tsx` own tab values and activation.                                              | Keep one tab state source.                                                                                        |
+| Files responsibility     | `packages/overlay/src/components/RightFilesPanel.tsx` owns Changes/Diff only.                                                                                        | Do not mix frontend preview into Files/Diff.                                                                      |
+| API transport            | `packages/overlay/src/services/api.ts` routes requests through HostTransport.                                                                                        | New preview routes must use HostTransport/api helpers, not raw fetch.                                             |
+| Browser evidence runtime | `packages/opencorvus/src/browser/webpage/render.ts`, `packages/opencorvus/src/runtime/page-capture.ts`, and browser runtime specs already cover Playwright evidence. | Reuse existing runtime direction for verification.                                                                |
+| Removed preview family   | `packages/overlay/test/acceptance-panel-mount.test.ts` asserts retired preview mount names do not return.                                                            | Treat those assertions as guardrails, not as a TODO to reverse.                                                   |
 
 ## Independent Agent Findings
 
-| Agent | Scope | Finding |
-| --- | --- | --- |
-| Codebase explorer | Overlay right panel wiring | Current right panel has Explorer, Files, and Inspector only; no accepted live frontend preview surface exists. |
-| Toolchain explorer | Mature frameworks | Best main path is Vite plus sandboxed iframe plus Playwright evidence; Storybook/Sandpack/WebContainers are scenario-specific, not the default. |
-| Risk reviewer | Architecture and acceptance | Do not restore retired preview mounts; all errors must be visible; visual validation needs real UI evidence, not schema-only tests. |
+| Agent              | Scope                       | Finding                                                                                                                                         |
+| ------------------ | --------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------- |
+| Codebase explorer  | Overlay right panel wiring  | Current right panel has Explorer, Files, and Inspector only; no accepted live frontend preview surface exists.                                  |
+| Toolchain explorer | Mature frameworks           | Best main path is Vite plus sandboxed iframe plus Playwright evidence; Storybook/Sandpack/WebContainers are scenario-specific, not the default. |
+| Risk reviewer      | Architecture and acceptance | Do not restore retired preview mounts; all errors must be visible; visual validation needs real UI evidence, not schema-only tests.             |
 
 ## Target Architecture
 
@@ -62,15 +62,15 @@ Automatic preview startup must feed this same artifact model. If a future Vite, 
 
 ## Toolchain Selection
 
-| Toolchain | Use | Rejection Boundary |
-| --- | --- | --- |
-| Vite | Local frontend dev/preview when the project declares Vite or generated source uses Vite. | Do not make OpenCorvus a Vite-only product; Vite is one supported runtime profile. |
-| Sandboxed iframe | Right-panel embedded preview viewport. | Do not promise cross-origin DOM/console access. |
-| Playwright | Screenshot, visible verification, console/pageerror/requestfailed evidence. | Do not replace it with custom screenshot or pixel logic in overlay UI. |
-| Kobalte | Tabs, segmented controls, toggle buttons, menus, tooltips. | Do not write custom keyboard/ARIA behavior. |
-| Storybook | Component-library or design-system preview. | Do not use it as the default for arbitrary app URLs. |
-| Sandpack/WebContainers | Explicit in-browser code sandbox tasks. | Do not use them for normal local worktree preview. |
-| Tauri Webview | Future stronger isolation if iframe cannot satisfy native constraints. | Do not start here; it complicates DOM layout and cross-platform diagnostics. |
+| Toolchain              | Use                                                                                      | Rejection Boundary                                                                 |
+| ---------------------- | ---------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------- |
+| Vite                   | Local frontend dev/preview when the project declares Vite or generated source uses Vite. | Do not make OpenCorvus a Vite-only product; Vite is one supported runtime profile. |
+| Sandboxed iframe       | Right-panel embedded preview viewport.                                                   | Do not promise cross-origin DOM/console access.                                    |
+| Playwright             | Screenshot, visible verification, console/pageerror/requestfailed evidence.              | Do not replace it with custom screenshot or pixel logic in overlay UI.             |
+| Kobalte                | Tabs, segmented controls, toggle buttons, menus, tooltips.                               | Do not write custom keyboard/ARIA behavior.                                        |
+| Storybook              | Component-library or design-system preview.                                              | Do not use it as the default for arbitrary app URLs.                               |
+| Sandpack/WebContainers | Explicit in-browser code sandbox tasks.                                                  | Do not use them for normal local worktree preview.                                 |
+| Tauri Webview          | Future stronger isolation if iframe cannot satisfy native constraints.                   | Do not start here; it complicates DOM layout and cross-platform diagnostics.       |
 
 ## Implementation Requirements
 
@@ -95,14 +95,14 @@ Automatic preview startup must feed this same artifact model. If a future Vite, 
 
 ## Rejected Designs
 
-| Design | Reason |
-| --- | --- |
-| Restore the retired right-panel preview component family | It was explicitly removed and is protected by tests. |
-| Build a custom browser/devtools UI | Violates mature-toolchain requirement and creates a second browser runtime. |
-| Guess repo root, port, package manager, or static server | Creates fallback and hides the real preview target failure. |
-| Put preview inside Files/Diff | Breaks RightFilesPanel's single responsibility. |
-| Use Storybook as universal app preview | Storybook is excellent for components, not arbitrary project URLs. |
-| Use WebContainers as default | It adds cross-origin isolation and browser-Node constraints that are unnecessary for local desktop preview. |
+| Design                                                   | Reason                                                                                                      |
+| -------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------- |
+| Restore the retired right-panel preview component family | It was explicitly removed and is protected by tests.                                                        |
+| Build a custom browser/devtools UI                       | Violates mature-toolchain requirement and creates a second browser runtime.                                 |
+| Guess repo root, port, package manager, or static server | Creates fallback and hides the real preview target failure.                                                 |
+| Put preview inside Files/Diff                            | Breaks RightFilesPanel's single responsibility.                                                             |
+| Use Storybook as universal app preview                   | Storybook is excellent for components, not arbitrary project URLs.                                          |
+| Use WebContainers as default                             | It adds cross-origin isolation and browser-Node constraints that are unnecessary for local desktop preview. |
 
 ## Acceptance Criteria
 

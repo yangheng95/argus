@@ -3,10 +3,7 @@ import fs from "node:fs/promises"
 import { mkdtemp } from "node:fs/promises"
 import os from "node:os"
 import path from "node:path"
-import {
-  runBackendApiReview,
-  runClientContractReview,
-} from "../../src/acceptance/specialists/backend-client"
+import { runBackendApiReview, runClientContractReview } from "../../src/acceptance/specialists/backend-client"
 import type { AcceptanceSurfaceManifest } from "../../src/acceptance/surface-detector"
 
 const tempDirs: string[] = []

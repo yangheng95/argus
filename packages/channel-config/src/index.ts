@@ -821,9 +821,7 @@ export function channelState(
 ) {
   const info = channelInfo(id)
   const resolved = resolveChannel(id, raw, env)
-  const required = info.fields
-    .filter((field) => field.required)
-    .map((field) => resolved.values[field.key])
+  const required = info.fields.filter((field) => field.required).map((field) => resolved.values[field.key])
   const configured = required.length > 0 && required.every(Boolean)
   const partial = Object.values(resolved.values).some(Boolean)
   const status = !resolved.enabled ? "disabled" : configured ? "configured" : partial ? "partial" : "missing"

@@ -68,7 +68,12 @@ describe("AttachmentStore.inlineFileParts — capability gate", () => {
       fn: async () => {
         const projectID = Instance.project.id
         const png = await AttachmentStore.write(projectID, Buffer.from([0x89, 0x50]), "image/png", "a.png")
-        const pdf = await AttachmentStore.write(projectID, Buffer.from([0x25, 0x50, 0x44, 0x46]), "application/pdf", "b.pdf")
+        const pdf = await AttachmentStore.write(
+          projectID,
+          Buffer.from([0x25, 0x50, 0x44, 0x46]),
+          "application/pdf",
+          "b.pdf",
+        )
         const parts = await AttachmentStore.inlineFileParts([png, pdf], {
           capabilities: { input: { text: true, image: true, pdf: false, audio: false, video: false } },
         })

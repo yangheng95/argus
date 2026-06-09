@@ -37,12 +37,7 @@ import { installControlModel } from "../workspace/mock-control-model"
  * These tests freeze the post-fix behaviour at the funnel boundary.
  */
 
-function insertActiveRun(input: {
-  taskID: string
-  runID: string
-  rootSessionID: string
-  now: number
-}) {
+function insertActiveRun(input: { taskID: string; runID: string; rootSessionID: string; now: number }) {
   Database.use((db) => {
     db.insert(EngineTaskTable)
       .values({
@@ -89,7 +84,8 @@ function insertActiveRun(input: {
 
 function streamErrorArtifacts(taskID: string) {
   return Database.use((db) =>
-    db.select()
+    db
+      .select()
       .from(EngineArtifactTable)
       .where(and(eq(EngineArtifactTable.task_id, taskID), eq(EngineArtifactTable.kind, "orchestrator-stream-error")))
       .all(),

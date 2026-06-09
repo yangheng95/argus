@@ -380,7 +380,6 @@ export const Run = z.object({
   }),
 })
 
-
 export const Interaction = z.object({
   id: Identifier.schema("interaction"),
   taskID: Identifier.schema("task"),
@@ -563,6 +562,16 @@ export const TaskMessageResult = z.object({
       parts: z.array(z.any()),
     })
     .optional(),
+})
+
+export const TaskOperatorModelContext = z.object({
+  taskID: Identifier.schema("task"),
+  sessionID: Identifier.schema("session"),
+  agent: z.string(),
+  model: z.object({
+    providerID: z.string(),
+    modelID: z.string(),
+  }),
 })
 
 export const TaskBrief = z.object({
@@ -1276,11 +1285,12 @@ export const Event = {
       verdict: Evaluation.shape.verdict,
       summary: z.string(),
     }),
-    (payload) => payload.verdict === "rejected"
-      ? { tier: 1, badge: true }
-      : payload.verdict === "accepted"
-        ? { tier: 2 }
-        : undefined,
+    (payload) =>
+      payload.verdict === "rejected"
+        ? { tier: 1, badge: true }
+        : payload.verdict === "accepted"
+          ? { tier: 2 }
+          : undefined,
   ),
   TaskMessageRecorded: BusEvent.define(
     "task.message",
@@ -1540,6 +1550,6 @@ export const Event = {
       attempts: z.number(),
     }),
     */
-    (payload) => payload.verdict === "pass" ? { tier: 2 } : { tier: 1, badge: true },
+    (payload) => (payload.verdict === "pass" ? { tier: 2 } : { tier: 1, badge: true }),
   ),
 }

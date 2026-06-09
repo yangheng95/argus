@@ -1,10 +1,7 @@
 import { spawn, type ChildProcess } from "node:child_process"
 import * as crypto from "node:crypto"
 import { HandshakeBuffer, type Handshake, startInactivityWatchdog } from "./handshake"
-import {
-  SidecarExistingInstanceError,
-  SidecarStartupError,
-} from "./errors"
+import { SidecarExistingInstanceError, SidecarStartupError } from "./errors"
 import type { ResolvedBinary } from "./binary-resolver"
 
 /**
@@ -66,13 +63,7 @@ export async function startSidecar(opts: SidecarStartOptions): Promise<SidecarHa
 
   const child: ChildProcess = spawn(
     opts.binary.binaryPath,
-    [
-      "sidecar",
-      "--project-dir",
-      opts.workspace,
-      "--parent-pid",
-      String(parentPid),
-    ],
+    ["sidecar", "--project-dir", opts.workspace, "--parent-pid", String(parentPid)],
     {
       cwd: opts.workspace,
       env: {
@@ -118,7 +109,9 @@ export async function startSidecar(opts: SidecarStartOptions): Promise<SidecarHa
       stderrTailRef: () => stderrTail,
       onTimeout: (err) => {
         settle(() => {
-          try { child.kill() } catch {}
+          try {
+            child.kill()
+          } catch {}
           reject(err)
         })
       },
@@ -166,7 +159,11 @@ export async function startSidecar(opts: SidecarStartOptions): Promise<SidecarHa
       watchdog.cancel()
       observedExit = { code, signal }
       for (const fn of exitListeners) {
-        try { fn(code, signal) } catch (e) { log(`[sidecar.onExit listener threw] ${String(e)}`) }
+        try {
+          fn(code, signal)
+        } catch (e) {
+          log(`[sidecar.onExit listener threw] ${String(e)}`)
+        }
       }
       settle(() => {
         // Exit code 3 is the sidecar's "existing instance" guard
@@ -222,7 +219,9 @@ export async function startSidecar(opts: SidecarStartOptions): Promise<SidecarHa
           const timer = setTimeout(() => {
             if (done) return
             done = true
-            try { child.kill() } catch {}
+            try {
+              child.kill()
+            } catch {}
             res()
           }, grace)
           if (typeof timer.unref === "function") timer.unref()
@@ -251,7 +250,9 @@ export async function startSidecar(opts: SidecarStartOptions): Promise<SidecarHa
             // `activeSidecar` set to a dead handle.
             if (observedExit) {
               const { code, signal } = observedExit
-              try { listener(code, signal) } catch (e) {
+              try {
+                listener(code, signal)
+              } catch (e) {
                 log(`[sidecar.onExit replay listener threw] ${String(e)}`)
               }
             }

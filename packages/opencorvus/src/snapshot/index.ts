@@ -83,14 +83,11 @@ export namespace Snapshot {
       await add(git, indexFile)
       const hash = (
         await gitText(
-          runGit(
-            ["--git-dir", git, "--work-tree", Instance.worktree, "write-tree"],
-            {
-              cwd: Instance.directory,
-              env: { GIT_INDEX_FILE: indexFile },
-              timeoutProfile: "default",
-            },
-          ),
+          runGit(["--git-dir", git, "--work-tree", Instance.worktree, "write-tree"], {
+            cwd: Instance.directory,
+            env: { GIT_INDEX_FILE: indexFile },
+            timeoutProfile: "default",
+          }),
           "snapshot write-tree",
         )
       ).trim()
@@ -145,14 +142,26 @@ export namespace Snapshot {
       const files = await gitText(
         runGit(
           [
-            "-c", `core.autocrlf=${coreAutocrlf}`,
-            "-c", `core.safecrlf=${coreSafecrlf}`,
-            "-c", "core.longpaths=true",
-            "-c", `core.symlinks=${coreSymlinks}`,
-            "-c", "core.quotepath=false",
-            "--git-dir", git,
-            "--work-tree", Instance.worktree,
-            "diff", "--no-ext-diff", "--name-only", hash, "--", ".",
+            "-c",
+            `core.autocrlf=${coreAutocrlf}`,
+            "-c",
+            `core.safecrlf=${coreSafecrlf}`,
+            "-c",
+            "core.longpaths=true",
+            "-c",
+            `core.symlinks=${coreSymlinks}`,
+            "-c",
+            "core.quotepath=false",
+            "--git-dir",
+            git,
+            "--work-tree",
+            Instance.worktree,
+            "diff",
+            "--no-ext-diff",
+            "--name-only",
+            hash,
+            "--",
+            ".",
           ],
           {
             cwd: Instance.directory,
@@ -229,14 +238,25 @@ export namespace Snapshot {
         await gitText(
           runGit(
             [
-              "-c", `core.autocrlf=${coreAutocrlf}`,
-              "-c", `core.safecrlf=${coreSafecrlf}`,
-              "-c", "core.longpaths=true",
-              "-c", `core.symlinks=${coreSymlinks}`,
-              "-c", "core.quotepath=false",
-              "--git-dir", git,
-              "--work-tree", Instance.worktree,
-              "diff", "--no-ext-diff", hash, "--", ".",
+              "-c",
+              `core.autocrlf=${coreAutocrlf}`,
+              "-c",
+              `core.safecrlf=${coreSafecrlf}`,
+              "-c",
+              "core.longpaths=true",
+              "-c",
+              `core.symlinks=${coreSymlinks}`,
+              "-c",
+              "core.quotepath=false",
+              "--git-dir",
+              git,
+              "--work-tree",
+              Instance.worktree,
+              "diff",
+              "--no-ext-diff",
+              hash,
+              "--",
+              ".",
             ],
             {
               cwd: Instance.worktree,
@@ -264,14 +284,28 @@ export namespace Snapshot {
     const statuses = await gitText(
       runGit(
         [
-          "-c", `core.autocrlf=${coreAutocrlf}`,
-          "-c", `core.safecrlf=${coreSafecrlf}`,
-          "-c", "core.longpaths=true",
-          "-c", `core.symlinks=${coreSymlinks}`,
-          "-c", "core.quotepath=false",
-          "--git-dir", git,
-          "--work-tree", Instance.worktree,
-          "diff", "--no-ext-diff", "--name-status", "--no-renames", from, to, "--", ".",
+          "-c",
+          `core.autocrlf=${coreAutocrlf}`,
+          "-c",
+          `core.safecrlf=${coreSafecrlf}`,
+          "-c",
+          "core.longpaths=true",
+          "-c",
+          `core.symlinks=${coreSymlinks}`,
+          "-c",
+          "core.quotepath=false",
+          "--git-dir",
+          git,
+          "--work-tree",
+          Instance.worktree,
+          "diff",
+          "--no-ext-diff",
+          "--name-status",
+          "--no-renames",
+          from,
+          to,
+          "--",
+          ".",
         ],
         { cwd: Instance.directory, timeoutProfile: "default" },
       ),
@@ -289,14 +323,28 @@ export namespace Snapshot {
     const numstat = await gitText(
       runGit(
         [
-          "-c", `core.autocrlf=${coreAutocrlf}`,
-          "-c", `core.safecrlf=${coreSafecrlf}`,
-          "-c", "core.longpaths=true",
-          "-c", `core.symlinks=${coreSymlinks}`,
-          "-c", "core.quotepath=false",
-          "--git-dir", git,
-          "--work-tree", Instance.worktree,
-          "diff", "--no-ext-diff", "--no-renames", "--numstat", from, to, "--", ".",
+          "-c",
+          `core.autocrlf=${coreAutocrlf}`,
+          "-c",
+          `core.safecrlf=${coreSafecrlf}`,
+          "-c",
+          "core.longpaths=true",
+          "-c",
+          `core.symlinks=${coreSymlinks}`,
+          "-c",
+          "core.quotepath=false",
+          "--git-dir",
+          git,
+          "--work-tree",
+          Instance.worktree,
+          "diff",
+          "--no-ext-diff",
+          "--no-renames",
+          "--numstat",
+          from,
+          to,
+          "--",
+          ".",
         ],
         { cwd: Instance.directory, timeoutProfile: "default" },
       ),
@@ -328,8 +376,8 @@ export namespace Snapshot {
     const objectText = await catFileBatch(git, [...objectIDs])
 
     for (const row of rows) {
-      const before = row.isBinaryFile ? "" : objectText.get(fromObjects.get(row.file) ?? "") ?? ""
-      const after = row.isBinaryFile ? "" : objectText.get(toObjects.get(row.file) ?? "") ?? ""
+      const before = row.isBinaryFile ? "" : (objectText.get(fromObjects.get(row.file) ?? "") ?? "")
+      const after = row.isBinaryFile ? "" : (objectText.get(toObjects.get(row.file) ?? "") ?? "")
       const added = row.isBinaryFile ? 0 : parseInt(row.additions)
       const deleted = row.isBinaryFile ? 0 : parseInt(row.deletions)
       result.push({
@@ -449,11 +497,21 @@ export namespace Snapshot {
     const text = await gitText(
       runGit(
         [
-          "-c", `core.safecrlf=${coreSafecrlf}`,
-          "-c", "core.quotepath=false",
-          "--git-dir", git,
-          "--work-tree", Instance.worktree,
-          "ls-files", "--cached", "--others", "--exclude-standard", "-z", "--", ".",
+          "-c",
+          `core.safecrlf=${coreSafecrlf}`,
+          "-c",
+          "core.quotepath=false",
+          "--git-dir",
+          git,
+          "--work-tree",
+          Instance.worktree,
+          "ls-files",
+          "--cached",
+          "--others",
+          "--exclude-standard",
+          "-z",
+          "--",
+          ".",
         ],
         {
           cwd: Instance.directory,
@@ -491,11 +549,18 @@ export namespace Snapshot {
       await gitText(
         runGit(
           [
-            "-c", "core.longpaths=true",
-            "-c", `core.symlinks=${coreSymlinks}`,
-            "--git-dir", git,
-            "--work-tree", Instance.worktree,
-            "checkout", hash, "--", ...chunk,
+            "-c",
+            "core.longpaths=true",
+            "-c",
+            `core.symlinks=${coreSymlinks}`,
+            "--git-dir",
+            git,
+            "--work-tree",
+            Instance.worktree,
+            "checkout",
+            hash,
+            "--",
+            ...chunk,
           ],
           { cwd: Instance.worktree, timeoutProfile: "default" },
         ),
@@ -520,12 +585,22 @@ export namespace Snapshot {
       const text = await gitText(
         runGit(
           [
-            "-c", "core.longpaths=true",
-            "-c", `core.symlinks=${coreSymlinks}`,
-            "-c", "core.quotepath=false",
-            "--git-dir", git,
-            "--work-tree", Instance.worktree,
-            "ls-tree", "-r", "-z", hash, "--", ...chunk,
+            "-c",
+            "core.longpaths=true",
+            "-c",
+            `core.symlinks=${coreSymlinks}`,
+            "-c",
+            "core.quotepath=false",
+            "--git-dir",
+            git,
+            "--work-tree",
+            Instance.worktree,
+            "ls-tree",
+            "-r",
+            "-z",
+            hash,
+            "--",
+            ...chunk,
           ],
           { cwd: Instance.worktree, timeoutProfile: "default" },
         ),
@@ -558,16 +633,13 @@ export namespace Snapshot {
     const timeoutMs = 90_000
     const timer = setTimeout(() => controller.abort(), timeoutMs)
     try {
-      const proc = Process.spawn(
-        ["git", "--git-dir", git, "cat-file", "--batch"],
-        {
-          cwd: Instance.worktree,
-          stdin: "pipe",
-          stdout: "pipe",
-          stderr: "pipe",
-          abort: controller.signal,
-        },
-      )
+      const proc = Process.spawn(["git", "--git-dir", git, "cat-file", "--batch"], {
+        cwd: Instance.worktree,
+        stdin: "pipe",
+        stdout: "pipe",
+        stderr: "pipe",
+        abort: controller.signal,
+      })
       if (!proc.stdin) throw new Error("snapshot cat-file: stdin not available")
       proc.stdin.write(`${objects.join("\n")}\n`)
       proc.stdin.end()
@@ -628,13 +700,20 @@ export namespace Snapshot {
     await gitText(
       runGit(
         [
-          "-c", `core.autocrlf=${coreAutocrlf}`,
-          "-c", `core.safecrlf=${coreSafecrlf}`,
-          "-c", "core.longpaths=true",
-          "-c", `core.symlinks=${coreSymlinks}`,
-          "--git-dir", git,
-          "--work-tree", Instance.worktree,
-          "add", ".",
+          "-c",
+          `core.autocrlf=${coreAutocrlf}`,
+          "-c",
+          `core.safecrlf=${coreSafecrlf}`,
+          "-c",
+          "core.longpaths=true",
+          "-c",
+          `core.symlinks=${coreSymlinks}`,
+          "--git-dir",
+          git,
+          "--work-tree",
+          Instance.worktree,
+          "add",
+          ".",
         ],
         opts,
       ),
@@ -699,10 +778,10 @@ export namespace Snapshot {
   }
 
   async function excludes() {
-    const result = await runGit(
-      ["rev-parse", "--path-format=absolute", "--git-path", "info/exclude"],
-      { cwd: Instance.worktree, timeoutProfile: "fast" },
-    )
+    const result = await runGit(["rev-parse", "--path-format=absolute", "--git-path", "info/exclude"], {
+      cwd: Instance.worktree,
+      timeoutProfile: "fast",
+    })
     if (result.exitCode !== 0) return
     const file = result.text()
     if (!file.trim()) return

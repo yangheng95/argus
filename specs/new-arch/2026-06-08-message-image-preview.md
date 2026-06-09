@@ -9,12 +9,12 @@ size.
 
 ## Call Points
 
-| Surface | Current source | Change |
-| --- | --- | --- |
-| File attachments | `packages/overlay/src/components/FilePart.tsx` | Replace raw attachment image markup with shared preview component. |
-| Markdown images | `packages/overlay/src/utils/markdown.ts` | Emit preview metadata attributes from the markdown renderer. |
-| Markdown clicks | `packages/overlay/src/main.tsx` | Delegate clicks on markdown image preview triggers to the shared preview service. |
-| Image styles | `packages/overlay/src/styles/surfaces/markdown.css`, `packages/overlay/src/styles/surfaces/messages.css` | Keep thumbnails intrinsic-size capped and style the modal viewer. |
+| Surface          | Current source                                                                                           | Change                                                                            |
+| ---------------- | -------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------- |
+| File attachments | `packages/overlay/src/components/FilePart.tsx`                                                           | Replace raw attachment image markup with shared preview component.                |
+| Markdown images  | `packages/overlay/src/utils/markdown.ts`                                                                 | Emit preview metadata attributes from the markdown renderer.                      |
+| Markdown clicks  | `packages/overlay/src/main.tsx`                                                                          | Delegate clicks on markdown image preview triggers to the shared preview service. |
+| Image styles     | `packages/overlay/src/styles/surfaces/markdown.css`, `packages/overlay/src/styles/surfaces/messages.css` | Keep thumbnails intrinsic-size capped and style the modal viewer.                 |
 
 ## Acceptance
 

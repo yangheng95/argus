@@ -92,11 +92,14 @@ describe("requirements maturity scope clarification", () => {
     runnerImpl = async (input: any) => {
       runnerCalls += 1
       input.onSessionCreated?.({ id: "ses_requirements_maturity_scope" })
-      await input.toolKit.tools.register_decision.execute({
-        key: "maturity_scope_pending",
-        value: "Treat mature as bounded error handling, persistence, and validation expectations.",
-        reason: "The user request contains 成熟 without a bounded maturity contract.",
-      }, {} as any)
+      await input.toolKit.tools.register_decision.execute(
+        {
+          key: "maturity_scope_pending",
+          value: "Treat mature as bounded error handling, persistence, and validation expectations.",
+          reason: "The user request contains 成熟 without a bounded maturity contract.",
+        },
+        {} as any,
+      )
       return {
         session: { id: "ses_requirements_maturity_scope" },
         streamErrors: [],

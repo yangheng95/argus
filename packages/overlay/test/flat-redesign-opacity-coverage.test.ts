@@ -51,10 +51,7 @@ describe("flat-redesign Step 8a — opacity token coverage", () => {
   })
 
   test("token source declares the canonical opacity token set", () => {
-    const dl = readFileSync(
-      join(STYLES_ROOT, "tokens", "design-language.css"),
-      "utf8",
-    )
+    const dl = readFileSync(join(STYLES_ROOT, "tokens", "design-language.css"), "utf8")
     const REQUIRED = [
       "--ui-opacity-hidden",
       "--ui-opacity-faint",
@@ -92,9 +89,7 @@ describe("flat-redesign Step 8a — opacity token coverage", () => {
       }
     }
     if (violations.length > 0) {
-      throw new Error(
-        `legacy --oc-disabled-opacity still in use:\n  ` + violations.join("\n  "),
-      )
+      throw new Error(`legacy --oc-disabled-opacity still in use:\n  ` + violations.join("\n  "))
     }
   })
 })

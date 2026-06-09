@@ -51,8 +51,7 @@ export namespace ProjectGC {
       scope: "global",
       run: async () => {
         const plan = await inspect()
-        const total =
-          plan.expiredProjects.length + plan.orphanSnapshots.length + plan.orphanSessionDiffs.length
+        const total = plan.expiredProjects.length + plan.orphanSnapshots.length + plan.orphanSessionDiffs.length
         if (total === 0) return
         await apply(plan)
       },
@@ -91,9 +90,7 @@ export namespace ProjectGC {
     const expiredIds = plan.expiredProjects.map((p) => p.id)
     let removedProjectRows = 0
     if (expiredIds.length > 0) {
-      Database.use((db) =>
-        db.delete(ProjectTable).where(inArray(ProjectTable.id, expiredIds)).run(),
-      )
+      Database.use((db) => db.delete(ProjectTable).where(inArray(ProjectTable.id, expiredIds)).run())
       removedProjectRows = expiredIds.length
       for (const p of plan.expiredProjects) {
         log.info("expired project removed", { id: p.id, worktree: p.worktree, lastUsed: p.lastUsed })

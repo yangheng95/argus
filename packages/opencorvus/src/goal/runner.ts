@@ -45,9 +45,7 @@ export async function cleanupGoalWorkspace(directory?: string) {
       return result
     } catch (err) {
       const code =
-        typeof (err as { code?: unknown })?.code === "string"
-          ? ((err as { code?: string }).code as string)
-          : undefined
+        typeof (err as { code?: unknown })?.code === "string" ? ((err as { code?: string }).code as string) : undefined
       steps.push({
         step: name,
         ok: false,

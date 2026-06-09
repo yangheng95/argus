@@ -10,9 +10,7 @@ const eventLocks = new Map<string, Promise<void>>()
 const log = Log.create({ service: "protocol.store" })
 
 type Payload = Record<string, unknown>
-export type TaskLiveReplayResult =
-  | { expired: false; events: EventView[] }
-  | { expired: true; event: EventView }
+export type TaskLiveReplayResult = { expired: false; events: EventView[] } | { expired: true; event: EventView }
 
 type EventInput = {
   kind: ProtocolKind
@@ -137,28 +135,24 @@ function eventLiveReplayKey(event: EventView): string {
   if (event.type === "message.part.delta") {
     const partID = typeof payload.partID === "string" ? payload.partID : ""
     const messageID = typeof payload.messageID === "string" ? payload.messageID : ""
-    const sessionID = typeof payload.sessionID === "string" ? payload.sessionID : event.sessionID ?? ""
+    const sessionID = typeof payload.sessionID === "string" ? payload.sessionID : (event.sessionID ?? "")
     const field = typeof payload.field === "string" ? payload.field : ""
     return `${event.taskID ?? ""}|${sessionID}|${messageID}|${partID}|${field}`
   }
-  const part = payload.part && typeof payload.part === "object"
-    ? payload.part as Record<string, unknown>
-    : undefined
-  const partID = typeof part?.id === "string"
-    ? part.id
-    : typeof payload.partID === "string"
-      ? payload.partID
-      : ""
-  const messageID = typeof part?.messageID === "string"
-    ? part.messageID
-    : typeof payload.messageID === "string"
-      ? payload.messageID
-      : ""
-  const sessionID = typeof part?.sessionID === "string"
-    ? part.sessionID
-    : typeof payload.sessionID === "string"
-      ? payload.sessionID
-      : event.sessionID ?? ""
+  const part = payload.part && typeof payload.part === "object" ? (payload.part as Record<string, unknown>) : undefined
+  const partID = typeof part?.id === "string" ? part.id : typeof payload.partID === "string" ? payload.partID : ""
+  const messageID =
+    typeof part?.messageID === "string"
+      ? part.messageID
+      : typeof payload.messageID === "string"
+        ? payload.messageID
+        : ""
+  const sessionID =
+    typeof part?.sessionID === "string"
+      ? part.sessionID
+      : typeof payload.sessionID === "string"
+        ? payload.sessionID
+        : (event.sessionID ?? "")
   return `${event.taskID ?? ""}|${sessionID}|${messageID}|${partID}|`
 }
 
@@ -192,9 +186,7 @@ function ensureTaskLiveReplaySweep() {
 }
 
 function partUpdatedClosed(payload: Payload | undefined): boolean {
-  const part = payload?.part && typeof payload.part === "object"
-    ? payload.part as Record<string, any>
-    : undefined
+  const part = payload?.part && typeof payload.part === "object" ? (payload.part as Record<string, any>) : undefined
   if (!part) return false
   if ((part.type === "text" || part.type === "reasoning") && typeof part.time?.end === "number") return true
   if (part.type === "tool" && part.state?.status && part.state.status !== "pending") return true
@@ -212,8 +204,9 @@ function pruneLiveReplayEvents(taskID: string, predicate: (event: EventView) => 
 function pruneClosedLiveDeltas(taskID: string, event: EventView) {
   if (event.type === "message.part.updated" && partUpdatedClosed(event.payload)) {
     const closedKey = eventLiveReplayKey(event)
-    pruneLiveReplayEvents(taskID, (candidate) =>
-      candidate.type === "message.part.delta" && eventLiveReplayKey(candidate).startsWith(closedKey),
+    pruneLiveReplayEvents(
+      taskID,
+      (candidate) => candidate.type === "message.part.delta" && eventLiveReplayKey(candidate).startsWith(closedKey),
     )
     return
   }
@@ -224,27 +217,33 @@ function pruneClosedLiveDeltas(taskID: string, event: EventView) {
   }
   if (event.type === "message.removed") {
     const payload = event.payload ?? {}
-    const messageID = typeof payload.messageID === "string"
-      ? payload.messageID
-      : typeof payload.info === "object" && payload.info && typeof (payload.info as Record<string, unknown>).id === "string"
-        ? String((payload.info as Record<string, unknown>).id)
-        : ""
-    const sessionID = typeof payload.sessionID === "string" ? payload.sessionID : event.sessionID ?? ""
+    const messageID =
+      typeof payload.messageID === "string"
+        ? payload.messageID
+        : typeof payload.info === "object" &&
+            payload.info &&
+            typeof (payload.info as Record<string, unknown>).id === "string"
+          ? String((payload.info as Record<string, unknown>).id)
+          : ""
+    const sessionID = typeof payload.sessionID === "string" ? payload.sessionID : (event.sessionID ?? "")
     pruneLiveReplayEvents(taskID, (candidate) => {
       const candidatePayload = candidate.payload ?? {}
-      const candidatePart = candidatePayload.part && typeof candidatePayload.part === "object"
-        ? candidatePayload.part as Record<string, unknown>
-        : undefined
-      const candidateMessageID = typeof candidatePart?.messageID === "string"
-        ? candidatePart.messageID
-        : typeof candidatePayload.messageID === "string"
-          ? candidatePayload.messageID
-          : ""
-      const candidateSessionID = typeof candidatePart?.sessionID === "string"
-        ? candidatePart.sessionID
-        : typeof candidatePayload.sessionID === "string"
-          ? candidatePayload.sessionID
-          : candidate.sessionID ?? ""
+      const candidatePart =
+        candidatePayload.part && typeof candidatePayload.part === "object"
+          ? (candidatePayload.part as Record<string, unknown>)
+          : undefined
+      const candidateMessageID =
+        typeof candidatePart?.messageID === "string"
+          ? candidatePart.messageID
+          : typeof candidatePayload.messageID === "string"
+            ? candidatePayload.messageID
+            : ""
+      const candidateSessionID =
+        typeof candidatePart?.sessionID === "string"
+          ? candidatePart.sessionID
+          : typeof candidatePayload.sessionID === "string"
+            ? candidatePayload.sessionID
+            : (candidate.sessionID ?? "")
       return candidateSessionID === sessionID && candidateMessageID === messageID
     })
   }
@@ -283,7 +282,6 @@ function taskLiveReplayExpiredEvent(taskID: string, reason: string): EventView {
     time: { emitted: now, created: now, updated: now },
   }
 }
-
 
 export namespace ProtocolStore {
   export async function appendEvent(input: EventInput) {
@@ -351,7 +349,9 @@ export namespace ProtocolStore {
       return insert(input.seq)
     }
 
-    return withKeyedLock(eventLocks, eventKey(input), async () => insert(nextAggregateSequence(input.aggregate, input.aggregate_id)))
+    return withKeyedLock(eventLocks, eventKey(input), async () =>
+      insert(nextAggregateSequence(input.aggregate, input.aggregate_id)),
+    )
   }
 
   export function listTaskEventsAfter(taskID: string, sequence: number, opts?: { until?: number; limit?: number }) {
@@ -525,7 +525,6 @@ export namespace ProtocolStore {
       subscriptions: globalSubscriptions.size,
     }
   }
-
 }
 
 function nextAggregateSequence(aggregate: ProtocolAggregate, aggregateID: string) {

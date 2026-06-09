@@ -12,7 +12,9 @@ const lineage: SpecSnapshotLineage = {
   reason: "integrity_correction_lineage",
 }
 
-function attempt(input: Partial<IntegrityPriorAttemptSummary> & { attemptNumber: number }): IntegrityPriorAttemptSummary {
+function attempt(
+  input: Partial<IntegrityPriorAttemptSummary> & { attemptNumber: number },
+): IntegrityPriorAttemptSummary {
   return {
     attemptNumber: input.attemptNumber,
     artifactID: input.artifactID ?? `artifact_${input.attemptNumber}`,
@@ -136,9 +138,10 @@ describe("shared integrity prompt cap", () => {
   })
 
   test("does not truncate user request quotes by default", () => {
-    const longRequest = ["# full user request", ...Array.from({ length: 2600 }, (_value, index) => `word${index}`)].join(
-      " ",
-    )
+    const longRequest = [
+      "# full user request",
+      ...Array.from({ length: 2600 }, (_value, index) => `word${index}`),
+    ].join(" ")
 
     const report = sanitizeIntegrityPromptText({
       text: longRequest,

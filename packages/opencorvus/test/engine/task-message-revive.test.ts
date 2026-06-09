@@ -300,6 +300,79 @@ describe("EngineService.recordOperatorNote — active blocked run reopen", () =>
       },
     })
   })
+
+  test("operator notes on failed tasks reopen the task before waking the active run", async () => {
+    await using tmp = await tmpdir({ git: true })
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const runTaskLoop = spyOn(TaskLoop, "runTaskLoop").mockResolvedValue(undefined)
+        const taskID = Identifier.ascending("task")
+        const runID = Identifier.ascending("run")
+        const now = Date.now()
+        const root = await Session.create({ kind: "root", title: "failed note wake" })
+        Database.use((db) => {
+          db.insert(EngineTaskTable)
+            .values({
+              id: taskID,
+              project_id: Instance.project.id,
+              session_id: root.id,
+              source: "test",
+              title: "Operator note failed task",
+              request: "continue",
+              priority: "normal",
+              time_created: now,
+              time_updated: now,
+              time_started: now,
+              time_completed: now + 1,
+              error: "previous failure",
+              metadata: { decision_log: ["keep-me"] },
+            } as any)
+            .run()
+          db.insert(EngineArtifactTable)
+            .values({
+              id: runID,
+              task_id: taskID,
+              run_id: runID,
+              kind: "run",
+              label: "run-blocked",
+              payload: {
+                plan_version_id: null,
+                session_id: root.id,
+                executor: "opencorvus",
+                status: "blocked",
+                phase: "dispatch",
+                blocking_reason: "orchestrator_stream_error",
+                error: "session prompt loop finished",
+                retry_count: 0,
+                executor_ref: null,
+                metadata: null,
+                time_started: now,
+                time_completed: null,
+              },
+              time_created: now,
+              time_updated: now,
+            })
+            .run()
+        })
+
+        const result = await EngineService.recordOperatorNote(taskID, "please continue this failed task")
+        await new Promise((resolve) => setTimeout(resolve, 0))
+
+        expect(result.resumed).toBe(true)
+        const task = findTask(taskID)!
+        expect(deriveTaskStatus(task)).toBe("active")
+        expect(task.error).toBeNull()
+        expect(task.time_completed).toBeNull()
+        expect((task.metadata as { decision_log?: string[] } | null)?.decision_log).toEqual(["keep-me"])
+        const reopened = findRun(runID)
+        expect(reopened?.status).toBe("running")
+        expect(reopened?.blocking_reason).toBeNull()
+        expect(reopened?.error).toBeNull()
+        expect(runTaskLoop).toHaveBeenCalledTimes(1)
+      },
+    })
+  })
 })
 
 describe("EngineService.handleTaskMessage — active blocked run wake", () => {
@@ -481,10 +554,7 @@ describe("EngineService.handleTaskMessage — active blocked run wake", () => {
  */
 describe("appendTaskSessionMessage — no silent no-op", () => {
   test("source throws when task.session_id or message context is missing", async () => {
-    const src = await fs.readFile(
-      path.join(import.meta.dir, "..", "..", "src", "task-api", "index.ts"),
-      "utf8",
-    )
+    const src = await fs.readFile(path.join(import.meta.dir, "..", "..", "src", "task-api", "index.ts"), "utf8")
     // The function signature must no longer admit `undefined` as a happy path.
     expect(src).toMatch(
       /async function appendTaskSessionMessage[\s\S]*?Promise<\{\s*info: Message\.User;\s*parts: Message\.Part\[\]\s*\}>/,
@@ -530,14 +600,16 @@ async function seedRootSession(sessionID: string, text = "initial request") {
   }
   await Session.persistMessage({
     info,
-    parts: [{
-      id: Identifier.ascending("part"),
-      messageID: info.id,
-      sessionID,
-      type: "text",
-      text,
-      kind: "user_content",
-    }],
+    parts: [
+      {
+        id: Identifier.ascending("part"),
+        messageID: info.id,
+        sessionID,
+        type: "text",
+        text,
+        kind: "user_content",
+      },
+    ],
     touchSessionID: sessionID,
   })
 }

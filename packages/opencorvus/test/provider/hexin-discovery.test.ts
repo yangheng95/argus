@@ -246,10 +246,7 @@ describe("hexin model discovery", () => {
 
   test("startup discovery falls back to cached ids when live fetch fails", async () => {
     await fs.mkdir(path.dirname(cacheFile), { recursive: true })
-    await fs.writeFile(
-      cacheFile,
-      JSON.stringify({ fetched: Date.now() - 60_000, ids: ["cached-hexin-model"] }),
-    )
+    await fs.writeFile(cacheFile, JSON.stringify({ fetched: Date.now() - 60_000, ids: ["cached-hexin-model"] }))
     globalThis.fetch = (async () =>
       new Response(JSON.stringify({ error: { message: "budget exceeded" } }), {
         status: 400,

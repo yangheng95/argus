@@ -34,10 +34,7 @@ export interface SelectTargetsOptions {
  * When `single` is false (release matrix), every target is returned
  * unchanged.
  */
-export function selectBuildTargets(
-  all: readonly BuildTarget[],
-  opts: SelectTargetsOptions,
-): BuildTarget[] {
+export function selectBuildTargets(all: readonly BuildTarget[], opts: SelectTargetsOptions): BuildTarget[] {
   if (!opts.single) return [...all]
   return all.filter((item) => {
     if (item.os !== opts.platform || item.arch !== opts.arch) return false

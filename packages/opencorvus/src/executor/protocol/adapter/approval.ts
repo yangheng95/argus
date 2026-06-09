@@ -1,6 +1,12 @@
 import type { ToolAdapter, ToolDefinitionInfo } from "../tool"
 
-const names = ["approval", "commandexecutionrequestapproval", "filechangerequestapproval", "applypatchapproval", "can_use_tool"]
+const names = [
+  "approval",
+  "commandexecutionrequestapproval",
+  "filechangerequestapproval",
+  "applypatchapproval",
+  "can_use_tool",
+]
 
 export const ApprovalToolAdapter: ToolAdapter = {
   id: "approval",
@@ -10,49 +16,55 @@ export const ApprovalToolAdapter: ToolAdapter = {
     return input.capabilities.approvals.length > 0
   },
   declare() {
-    return [{
-      name: "approval",
-      description: "Represents a provider-native approval or permission request.",
-      inputSchema: {
-        type: "object",
-        properties: {},
-        additionalProperties: true,
+    return [
+      {
+        name: "approval",
+        description: "Represents a provider-native approval or permission request.",
+        inputSchema: {
+          type: "object",
+          properties: {},
+          additionalProperties: true,
+        },
+        metadata: {
+          tool_kind: "approval",
+        },
       },
-      metadata: {
-        tool_kind: "approval",
-      },
-    }] satisfies ToolDefinitionInfo[]
+    ] satisfies ToolDefinitionInfo[]
   },
   accept(call) {
     const value = call.name.trim().toLowerCase()
     return (this.aliases || []).some((item) => value === item || value.includes(item))
   },
   projectCall(call) {
-    return [{
-      provider: call.metadata?.provider as "opencorvus" | "codex" | "claude-code",
-      kind: "approval_request",
-      summary: "Approval requested",
-      refs: call.refs,
-      payload: {
-        adapter: this.id,
-        tool_kind: this.kind,
-        input: call.input,
+    return [
+      {
+        provider: call.metadata?.provider as "opencorvus" | "codex" | "claude-code",
+        kind: "approval_request",
+        summary: "Approval requested",
+        refs: call.refs,
+        payload: {
+          adapter: this.id,
+          tool_kind: this.kind,
+          input: call.input,
+        },
+        raw: call.raw,
       },
-      raw: call.raw,
-    }]
+    ]
   },
   projectResult(result) {
-    return [{
-      provider: result.metadata?.provider as "opencorvus" | "codex" | "claude-code",
-      kind: "approval_response",
-      summary: result.summary ?? "Approval resolved",
-      refs: result.refs,
-      payload: {
-        adapter: this.id,
-        tool_kind: this.kind,
-        output: result.output,
+    return [
+      {
+        provider: result.metadata?.provider as "opencorvus" | "codex" | "claude-code",
+        kind: "approval_response",
+        summary: result.summary ?? "Approval resolved",
+        refs: result.refs,
+        payload: {
+          adapter: this.id,
+          tool_kind: this.kind,
+          output: result.output,
+        },
+        raw: result.raw,
       },
-      raw: result.raw,
-    }]
+    ]
   },
 }

@@ -38,8 +38,8 @@
 // so their cache is never populated. The public collectors in
 // `utils/card-tree.ts` keep the recursive walk as a fallback for that case.
 
-import { toolNameKey, displayToolIcon, displayToolDetail } from "../utils/tool";
-import { extractTodos } from "../utils/todos";
+import { toolNameKey, displayToolIcon, displayToolDetail } from "../utils/tool"
+import { extractTodos } from "../utils/todos"
 import {
   cardTreeStore,
   setCardTreeStore,
@@ -47,7 +47,7 @@ import {
   type CardNode,
   type LatestActivityHit,
   type TodoActivityHit,
-} from "./card-tree";
+} from "./card-tree"
 
 // ── Own-level computation (mirrors utils/card-tree.ts policy) ──
 //
@@ -57,124 +57,124 @@ import {
 // for transient cards, which the cache-invariant test enforces by comparing
 // cached output to a recursive recomputation on the same fixture.
 
-const AGENT_SPAWN_TOOLS = new Set(["task", "agent", "spawnagent", "subagent"]);
+const AGENT_SPAWN_TOOLS = new Set(["task", "agent", "spawnagent", "subagent"])
 
-const TODO_TOOLS = new Set(["todowrite", "todoread", "todoupdate", "updateplan"]);
+const TODO_TOOLS = new Set(["todowrite", "todoread", "todoupdate", "updateplan"])
 
-const PREVIEW_SUPPRESS_TOOLS = new Set(["structuredoutput", "structured_output"]);
+const PREVIEW_SUPPRESS_TOOLS = new Set(["structuredoutput", "structured_output"])
 
 function isSkillTool(key: string): boolean {
-  return key === "skill" || /skill/.test(key);
+  return key === "skill" || /skill/.test(key)
 }
 
 function bumpForPart(part: any, counts: ActivityCounts): void {
-  if (!part) return;
+  if (!part) return
   if (part.type === "text" || part.type === "reasoning") {
-    if (String(part.text || "").trim()) counts.messages += 1;
-    return;
+    if (String(part.text || "").trim()) counts.messages += 1
+    return
   }
-  if (part.type !== "tool") return;
-  const key = toolNameKey(part.tool || "");
-  if (!key) return;
+  if (part.type !== "tool") return
+  const key = toolNameKey(part.tool || "")
+  if (!key) return
   if (AGENT_SPAWN_TOOLS.has(key)) {
-    counts.agents += 1;
-    return;
+    counts.agents += 1
+    return
   }
   if (isSkillTool(key)) {
-    counts.skills += 1;
-    return;
+    counts.skills += 1
+    return
   }
-  counts.tools += 1;
+  counts.tools += 1
 }
 
 function partText(part: any): string {
-  if (!part) return "";
+  if (!part) return ""
   if (part.type === "text" || part.type === "reasoning") {
-    return String(part.text || "").trim();
+    return String(part.text || "").trim()
   }
-  return "";
+  return ""
 }
 
 function toolHitText(part: any): string {
-  if (!part || part.type !== "tool") return "";
-  const name = String(part.tool || "").trim();
-  if (!name) return "";
-  const key = toolNameKey(name);
-  if (TODO_TOOLS.has(key)) return "";
-  if (PREVIEW_SUPPRESS_TOOLS.has(key)) return "";
-  const state = part.state || {};
-  const icon = displayToolIcon(name);
-  const detail = displayToolDetail(name, state.input, state, "");
-  const head = icon ? `${icon} ${name}` : name;
-  return detail ? `${head}: ${detail}` : head;
+  if (!part || part.type !== "tool") return ""
+  const name = String(part.tool || "").trim()
+  if (!name) return ""
+  const key = toolNameKey(name)
+  if (TODO_TOOLS.has(key)) return ""
+  if (PREVIEW_SUPPRESS_TOOLS.has(key)) return ""
+  const state = part.state || {}
+  const icon = displayToolIcon(name)
+  const detail = displayToolDetail(name, state.input, state, "")
+  const head = icon ? `${icon} ${name}` : name
+  return detail ? `${head}: ${detail}` : head
 }
 
 function extractTodoList(part: any): any[] | null {
-  if (!part || part.type !== "tool") return null;
-  const key = toolNameKey(part.tool || "");
-  if (!TODO_TOOLS.has(key)) return null;
-  return extractTodos(part.state || {});
+  if (!part || part.type !== "tool") return null
+  const key = toolNameKey(part.tool || "")
+  if (!TODO_TOOLS.has(key)) return null
+  return extractTodos(part.state || {})
 }
 
 /** Newer hit wins by (time, index). Tied null + non-null returns non-null. */
-function pickLater<T extends { time: number; index: number }>(
-  a: T | undefined,
-  b: T | undefined,
-): T | undefined {
-  if (!a) return b;
-  if (!b) return a;
-  if (b.time > a.time || (b.time === a.time && b.index > a.index)) return b;
-  return a;
+function pickLater<T extends { time: number; index: number }>(a: T | undefined, b: T | undefined): T | undefined {
+  if (!a) return b
+  if (!b) return a
+  if (b.time > a.time || (b.time === a.time && b.index > a.index)) return b
+  return a
 }
 
 /** Compute a single card's OWN-LEVEL contributions (parts + toolPart only,
  *  no recursion). Returns a tuple ready to be combined with cached child
  *  aggregates. */
-function ownLevelStats(card: CardNode, suppressTools: boolean): {
-  counts: ActivityCounts;
-  latestHit: LatestActivityHit | undefined;
-  todoHit: TodoActivityHit | undefined;
+function ownLevelStats(
+  card: CardNode,
+  suppressTools: boolean,
+): {
+  counts: ActivityCounts
+  latestHit: LatestActivityHit | undefined
+  todoHit: TodoActivityHit | undefined
 } {
-  const counts: ActivityCounts = { messages: 0, tools: 0, agents: 0, skills: 0 };
-  let latestHit: LatestActivityHit | undefined;
-  let todoHit: TodoActivityHit | undefined;
-  const baseTime = typeof card.time === "number" ? card.time : 0;
+  const counts: ActivityCounts = { messages: 0, tools: 0, agents: 0, skills: 0 }
+  let latestHit: LatestActivityHit | undefined
+  let todoHit: TodoActivityHit | undefined
+  const baseTime = typeof card.time === "number" ? card.time : 0
 
   if (card.kind === "tool" && card.toolPart) {
-    bumpForPart(card.toolPart, counts);
+    bumpForPart(card.toolPart, counts)
     if (!suppressTools) {
-      const t = toolHitText(card.toolPart);
-      if (t) latestHit = pickLater(latestHit, { time: baseTime, index: 0, text: t });
+      const t = toolHitText(card.toolPart)
+      if (t) latestHit = pickLater(latestHit, { time: baseTime, index: 0, text: t })
     }
-    const todos = extractTodoList(card.toolPart);
+    const todos = extractTodoList(card.toolPart)
     if (todos && todos.length > 0) {
-      todoHit = pickLater(todoHit, { time: baseTime, index: 0, todos });
+      todoHit = pickLater(todoHit, { time: baseTime, index: 0, todos })
     }
   }
-  const parts = card.parts || [];
+  const parts = card.parts || []
   for (let i = 0; i < parts.length; i++) {
-    const part = parts[i];
-    bumpForPart(part, counts);
-    const text = partText(part);
+    const part = parts[i]
+    bumpForPart(part, counts)
+    const text = partText(part)
     if (text) {
-      latestHit = pickLater(latestHit, { time: baseTime, index: i, text });
+      latestHit = pickLater(latestHit, { time: baseTime, index: i, text })
     } else if (!suppressTools) {
-      const tt = toolHitText(part);
-      if (tt) latestHit = pickLater(latestHit, { time: baseTime, index: i, text: tt });
+      const tt = toolHitText(part)
+      if (tt) latestHit = pickLater(latestHit, { time: baseTime, index: i, text: tt })
     }
-    const todos = extractTodoList(part);
+    const todos = extractTodoList(part)
     if (todos && todos.length > 0) {
-      todoHit = pickLater(todoHit, { time: baseTime, index: i, todos });
+      todoHit = pickLater(todoHit, { time: baseTime, index: i, todos })
     }
   }
-  return { counts, latestHit, todoHit };
+  return { counts, latestHit, todoHit }
 }
 
 /** Goal step cards suppress tool-hits in the LATEST preview (operators want
  *  the goal objective / latest prose, not "Bash: rg --files"). Matches
  *  `collectLatestActivityText` policy in utils/card-tree.ts. */
 function suppressToolsForCard(card: CardNode): boolean {
-  return card.kind === "step";
+  return card.kind === "step"
 }
 
 function equalCounts(a: ActivityCounts | undefined, b: ActivityCounts): boolean {
@@ -184,57 +184,51 @@ function equalCounts(a: ActivityCounts | undefined, b: ActivityCounts): boolean 
     a.tools === b.tools &&
     a.agents === b.agents &&
     a.skills === b.skills
-  );
+  )
 }
 
-function equalLatestHit(
-  a: LatestActivityHit | undefined,
-  b: LatestActivityHit | undefined,
-): boolean {
-  if (a === b) return true;
-  if (!a || !b) return false;
-  return a.time === b.time && a.index === b.index && a.text === b.text;
+function equalLatestHit(a: LatestActivityHit | undefined, b: LatestActivityHit | undefined): boolean {
+  if (a === b) return true
+  if (!a || !b) return false
+  return a.time === b.time && a.index === b.index && a.text === b.text
 }
 
-function equalTodoHit(
-  a: TodoActivityHit | undefined,
-  b: TodoActivityHit | undefined,
-): boolean {
-  if (a === b) return true;
-  if (!a || !b) return false;
-  if (a.time !== b.time || a.index !== b.index) return false;
+function equalTodoHit(a: TodoActivityHit | undefined, b: TodoActivityHit | undefined): boolean {
+  if (a === b) return true
+  if (!a || !b) return false
+  if (a.time !== b.time || a.index !== b.index) return false
   // Object identity is enough: we only ever store the original tool-call's
   // todos array; a new hit means a new tool call with a fresh array.
-  return a.todos === b.todos;
+  return a.todos === b.todos
 }
 
 // ── Dirty queue + bubble-up ──
 
-const dirtyCardIDs = new Set<string>();
+const dirtyCardIDs = new Set<string>()
 
 /** Mark a card as needing a subtree-stats recompute. Cheap; safe to call
  *  many times per batch — recompute happens once in `flushCardStats`. */
 export function markCardStatsDirty(cardID: string): void {
-  if (cardID) dirtyCardIDs.add(cardID);
+  if (cardID) dirtyCardIDs.add(cardID)
 }
 
 /** Maintain the back-pointer used by `bubbleStatsFromCard`. Tree-writer
  *  calls this whenever a cardID is placed into a parent's childIDs. */
 export function linkChildToParent(parentID: string, childID: string): void {
-  if (!childID) return;
-  const card = cardTreeStore.cards[childID];
-  if (!card) return;
-  if (card.parentID === parentID) return;
-  setCardTreeStore("cards", childID, "parentID", parentID);
+  if (!childID) return
+  const card = cardTreeStore.cards[childID]
+  if (!card) return
+  if (card.parentID === parentID) return
+  setCardTreeStore("cards", childID, "parentID", parentID)
 }
 
 /** Clear the back-pointer when a card is detached from its parent (delete
  *  or move-without-new-parent). Called from `removeCardReferences`. */
 export function unlinkChildFromParent(childID: string): void {
-  if (!childID) return;
-  const card = cardTreeStore.cards[childID];
-  if (!card || card.parentID === undefined) return;
-  setCardTreeStore("cards", childID, "parentID", undefined);
+  if (!childID) return
+  const card = cardTreeStore.cards[childID]
+  if (!card || card.parentID === undefined) return
+  setCardTreeStore("cards", childID, "parentID", undefined)
 }
 
 /** Recompute one card's cached aggregates from its own parts/toolPart plus
@@ -243,62 +237,62 @@ export function unlinkChildFromParent(childID: string): void {
  *  — once an ancestor's aggregate is stable, ancestors further up cannot
  *  have changed either). */
 function recomputeNodeStats(cardID: string): boolean {
-  const card = cardTreeStore.cards[cardID];
-  if (!card) return false;
-  const suppress = suppressToolsForCard(card);
-  const own = ownLevelStats(card, suppress);
-  let counts = own.counts;
-  let latestHit = own.latestHit;
-  let todoHit = own.todoHit;
+  const card = cardTreeStore.cards[cardID]
+  if (!card) return false
+  const suppress = suppressToolsForCard(card)
+  const own = ownLevelStats(card, suppress)
+  let counts = own.counts
+  let latestHit = own.latestHit
+  let todoHit = own.todoHit
   for (const childID of card.childIDs ?? []) {
-    const child = cardTreeStore.cards[childID];
-    if (!child) continue;
-    const childCounts = child.subtreeCounts;
+    const child = cardTreeStore.cards[childID]
+    if (!child) continue
+    const childCounts = child.subtreeCounts
     if (childCounts) {
       counts = {
         messages: counts.messages + childCounts.messages,
         tools: counts.tools + childCounts.tools,
         agents: counts.agents + childCounts.agents,
         skills: counts.skills + childCounts.skills,
-      };
+      }
     }
     if (!suppress) {
-      latestHit = pickLater(latestHit, child.subtreeLatestHit);
+      latestHit = pickLater(latestHit, child.subtreeLatestHit)
     } else {
       // Goal-step suppression applies to OWN-LEVEL tool hits only; descendant
       // text contributions still flow up (operators want the latest prose from
       // any descendant agent). Children's caches already encode their own
       // policy, so we propagate them as-is.
-      latestHit = pickLater(latestHit, child.subtreeLatestHit);
+      latestHit = pickLater(latestHit, child.subtreeLatestHit)
     }
-    todoHit = pickLater(todoHit, child.subtreeTodoHit);
+    todoHit = pickLater(todoHit, child.subtreeTodoHit)
   }
-  let changed = false;
+  let changed = false
   if (!equalCounts(card.subtreeCounts, counts)) {
-    setCardTreeStore("cards", cardID, "subtreeCounts", counts);
-    changed = true;
+    setCardTreeStore("cards", cardID, "subtreeCounts", counts)
+    changed = true
   }
   if (!equalLatestHit(card.subtreeLatestHit, latestHit)) {
-    setCardTreeStore("cards", cardID, "subtreeLatestHit", latestHit);
-    changed = true;
+    setCardTreeStore("cards", cardID, "subtreeLatestHit", latestHit)
+    changed = true
   }
   if (!equalTodoHit(card.subtreeTodoHit, todoHit)) {
-    setCardTreeStore("cards", cardID, "subtreeTodoHit", todoHit);
-    changed = true;
+    setCardTreeStore("cards", cardID, "subtreeTodoHit", todoHit)
+    changed = true
   }
-  return changed;
+  return changed
 }
 
 /** Walk up the ancestor chain via `parentID`, recomputing each ancestor's
  *  cached aggregates. Stops early when an ancestor's aggregate doesn't
  *  change (transitively all further ancestors stay the same). */
 function bubbleStatsFromCard(cardID: string, seen: Set<string>): void {
-  let current: string | undefined = cardID;
+  let current: string | undefined = cardID
   while (current && !seen.has(current)) {
-    seen.add(current);
-    const changed = recomputeNodeStats(current);
-    if (!changed) return;
-    current = cardTreeStore.cards[current]?.parentID;
+    seen.add(current)
+    const changed = recomputeNodeStats(current)
+    if (!changed) return
+    current = cardTreeStore.cards[current]?.parentID
   }
 }
 
@@ -306,18 +300,18 @@ function bubbleStatsFromCard(cardID: string, seen: Set<string>): void {
  *  ancestors visited via a prior entry are skipped. Safe to call when the
  *  queue is empty (no-op). */
 export function flushCardStats(): void {
-  if (dirtyCardIDs.size === 0) return;
-  const toFlush = [...dirtyCardIDs];
-  dirtyCardIDs.clear();
-  const seen = new Set<string>();
+  if (dirtyCardIDs.size === 0) return
+  const toFlush = [...dirtyCardIDs]
+  dirtyCardIDs.clear()
+  const seen = new Set<string>()
   // Re-seeding seen from scratch each flush is correct: a card touched in
   // a prior flush has its cache already settled relative to its descendants;
   // a new flush only needs to revisit ancestors of cards dirtied THIS round.
-  for (const id of toFlush) bubbleStatsFromCard(id, seen);
+  for (const id of toFlush) bubbleStatsFromCard(id, seen)
 }
 
 /** Test-only escape hatch: clear queue without flushing. Production code
  *  should never need this — tree-writer always flushes at batch end. */
 export function __resetCardStatsForTests(): void {
-  dirtyCardIDs.clear();
+  dirtyCardIDs.clear()
 }

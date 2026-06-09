@@ -26,9 +26,7 @@ function readLegacyStylesCss(_path: string): string {
     "src/styles/cascade/vscode-dark.css",
     "src/styles/cascade/light.css",
   ]
-  return cascadeFiles
-    .map((file) => readFileSync(join(OVERLAY_ROOT, file), "utf8"))
-    .join("\n")
+  return cascadeFiles.map((file) => readFileSync(join(OVERLAY_ROOT, file), "utf8")).join("\n")
 }
 
 function walkFiles(dir: string, predicate: (path: string) => boolean): string[] {
@@ -193,16 +191,13 @@ describe("overlay architecture guards", () => {
     // that the browser actually evaluates.
     const styles = withoutComments(readLegacyStylesCss("src/styles.css"))
     const card = withoutComments(readText(join(OVERLAY_ROOT, "src/styles/surfaces/card.css")))
-    const surfaceThemeSelectors = walkFiles(
-      join(OVERLAY_ROOT, "src/styles/surfaces"),
-      (path) => path.endsWith(".css"),
+    const surfaceThemeSelectors = walkFiles(join(OVERLAY_ROOT, "src/styles/surfaces"), (path) =>
+      path.endsWith(".css"),
     ).flatMap((file) =>
       readText(file)
         .split(/\r?\n/)
         .flatMap((line, index) =>
-          /body(?:\[data-theme=|:is\([^)]*data-theme)/.test(line)
-            ? [`${file}:${index + 1}: ${line.trim()}`]
-            : [],
+          /body(?:\[data-theme=|:is\([^)]*data-theme)/.test(line) ? [`${file}:${index + 1}: ${line.trim()}`] : [],
         ),
     )
 
@@ -315,15 +310,9 @@ describe("overlay architecture guards", () => {
     // Theme palette blocks moved to styles/cascade/{dark,vscode-dark}.css 2026-05-04.
     const dark = readText(join(OVERLAY_ROOT, "src/styles/cascade/dark.css"))
     const vscodeDark = readText(join(OVERLAY_ROOT, "src/styles/cascade/vscode-dark.css"))
-    expect(dark).toMatch(
-      /body\[data-theme="dark"\][\s\S]*?--accent-gradient:\s*var\(--accent\)/,
-    )
-    expect(dark).toMatch(
-      /body\[data-theme="dark"\][\s\S]*?--accent-gradient-hover:\s*var\(--accent-hover\)/,
-    )
-    expect(vscodeDark).toMatch(
-      /body\[data-theme="vscode-dark"\][\s\S]*?--accent-gradient:\s*var\(--accent\)/,
-    )
+    expect(dark).toMatch(/body\[data-theme="dark"\][\s\S]*?--accent-gradient:\s*var\(--accent\)/)
+    expect(dark).toMatch(/body\[data-theme="dark"\][\s\S]*?--accent-gradient-hover:\s*var\(--accent-hover\)/)
+    expect(vscodeDark).toMatch(/body\[data-theme="vscode-dark"\][\s\S]*?--accent-gradient:\s*var\(--accent\)/)
     expect(vscodeDark).toMatch(
       /body\[data-theme="vscode-dark"\][\s\S]*?--accent-gradient-hover:\s*var\(--accent-hover\)/,
     )
@@ -369,9 +358,7 @@ describe("overlay architecture guards", () => {
     const workspace = readText(join(OVERLAY_ROOT, "src/styles/surfaces/workspace.css"))
     expect(base).toMatch(/^body\s*\{[^}]*background:\s*var\(--body-bg\)\s*;/m)
     expect(workspace).toMatch(/^\.panel-body\s*\{[^}]*background:\s*var\(--panel-body-bg\)/m)
-    expect(workspace).toMatch(
-      /^\.panel-body\s*\{[^}]*backdrop-filter:\s*var\(--panel-body-blur\)/m,
-    )
+    expect(workspace).toMatch(/^\.panel-body\s*\{[^}]*backdrop-filter:\s*var\(--panel-body-blur\)/m)
     for (const [theme, file] of [
       ['body\\[data-theme="dark"\\]', "dark.css"],
       ['body\\[data-theme="vscode-dark"\\]', "vscode-dark.css"],
@@ -499,9 +486,7 @@ describe("overlay architecture guards", () => {
 
     for (const match of styles.matchAll(/([^{}]+)\{([^{}]*)\}/g)) {
       const selector = match[1] ?? ""
-      const isThemeSelector = /body(?:\[[^\]]*data-theme[^\]]*\]|:is\([^)]*data-theme[^)]*\))/.test(
-        selector,
-      )
+      const isThemeSelector = /body(?:\[[^\]]*data-theme[^\]]*\]|:is\([^)]*data-theme[^)]*\))/.test(selector)
       if (!isThemeSelector) continue
 
       expect(selector).not.toMatch(/\.chat-icon-col(?=$|[\s:{.#\[,>+~])/)
@@ -532,9 +517,7 @@ describe("overlay architecture guards", () => {
     expect(sidebarSurface).toMatch(/\.task-row-badge\[data-status="queued"\]/)
     expect(sidebarSurface).toMatch(/\.task-row-badge\[data-status="completed"\]/)
     expect(sidebarSurface).toMatch(/\.task-row-badge\[data-status="failed"\]/)
-    expect(sidebarSurface).toMatch(
-      /\.task-row-mini\[data-draggable="true"\]:hover \.task-row-drag-handle/,
-    )
+    expect(sidebarSurface).toMatch(/\.task-row-mini\[data-draggable="true"\]:hover \.task-row-drag-handle/)
   })
 
   test("sidebar body + list family are owned by surfaces/sidebar.css", () => {
@@ -573,12 +556,7 @@ describe("overlay architecture guards", () => {
     const sidebarSurface = readText(join(OVERLAY_ROOT, "src/styles/surfaces/sidebar.css"))
     const html = readText(join(OVERLAY_ROOT, "src/index.html"))
 
-    for (const className of [
-      "sidebar",
-      "sidebar-title",
-      "sidebar-subtitle",
-      "sidebar-header-actions",
-    ]) {
+    for (const className of ["sidebar", "sidebar-title", "sidebar-subtitle", "sidebar-header-actions"]) {
       expect(styles).not.toMatch(new RegExp(`(^|\\n)\\.${className}\\s*\\{`))
       expect(sidebarSurface).toMatch(new RegExp(`(^|\\n)\\.${className}\\s*\\{`))
     }
@@ -602,12 +580,7 @@ describe("overlay architecture guards", () => {
     const inspectorSurface = readText(join(OVERLAY_ROOT, "src/styles/surfaces/inspector.css"))
     const html = readText(join(OVERLAY_ROOT, "src/index.html"))
 
-    for (const className of [
-      "sections",
-      "sections-title",
-      "sections-stack",
-      "sections-tab-body",
-    ]) {
+    for (const className of ["sections", "sections-title", "sections-stack", "sections-tab-body"]) {
       expect(styles).not.toMatch(new RegExp(`(^|\\n)\\.${className}\\s*\\{`))
       expect(inspectorSurface).toMatch(new RegExp(`(^|\\n)\\.${className}\\s*\\{`))
     }
@@ -656,12 +629,7 @@ describe("overlay architecture guards", () => {
     const sectionPrimitive = readText(join(OVERLAY_ROOT, "src/styles/primitives/section.css"))
 
     // Legacy names must not appear in cascade layer
-    for (const className of [
-      "section-icon",
-      "section-title",
-      "section-badge",
-      "section-body",
-    ]) {
+    for (const className of ["section-icon", "section-title", "section-badge", "section-body"]) {
       expect(styles).not.toMatch(new RegExp(`(^|\\n)\\.${className}\\s*\\{`))
     }
 
@@ -730,9 +698,7 @@ describe("overlay architecture guards", () => {
 
   test("task dir bar (TaskDirBar) is owned by surfaces/conversation.css", () => {
     const styles = withoutComments(readLegacyStylesCss("src/styles.css"))
-    const conversationSurface = readText(
-      join(OVERLAY_ROOT, "src/styles/surfaces/conversation.css"),
-    )
+    const conversationSurface = readText(join(OVERLAY_ROOT, "src/styles/surfaces/conversation.css"))
 
     for (const className of [
       "task-meta",
@@ -768,9 +734,7 @@ describe("overlay architecture guards", () => {
 
   test("task bar, task status, task flag, and recent dir panel are owned by surfaces/conversation.css", () => {
     const styles = withoutComments(readLegacyStylesCss("src/styles.css"))
-    const conversationSurface = readText(
-      join(OVERLAY_ROOT, "src/styles/surfaces/conversation.css"),
-    )
+    const conversationSurface = readText(join(OVERLAY_ROOT, "src/styles/surfaces/conversation.css"))
 
     for (const className of [
       "task-bar",
@@ -812,9 +776,7 @@ describe("overlay architecture guards", () => {
       /\.task-bar\s*\{[\s\S]*?border-bottom:\s*var\(--oc-border-width\)\s+solid\s+var\(--task-bar-border-color\)/,
     )
     expect(conversationSurface).toMatch(/\.task-bar\s*\{[\s\S]*?background:\s*var\(--task-bar-bg\)/)
-    expect(conversationSurface).toMatch(
-      /\.task-bar\s*\{[\s\S]*?backdrop-filter:\s*var\(--task-bar-backdrop-filter\)/,
-    )
+    expect(conversationSurface).toMatch(/\.task-bar\s*\{[\s\S]*?backdrop-filter:\s*var\(--task-bar-backdrop-filter\)/)
     expect(conversationSurface).not.toMatch(
       /body(?:\[[^\]]*data-theme[^\]]*\]|:is\([^)]*data-theme[^)]*\))[\s\S]*?\.task-bar\b/,
     )
@@ -853,12 +815,8 @@ describe("overlay architecture guards", () => {
     expect(composerSurface).toContain("var(--oc-radius-soft)")
     expect(composerSurface).not.toMatch(/border-radius:\s*999px/)
 
-    expect(composerSurface).toMatch(
-      /\.executor-chip-slot \.oc-button\[data-ui\^="executor-chip-"\]\s*\{/,
-    )
-    expect(composerSurface).toMatch(
-      /\.executor-chip-slot \.oc-button\[data-ui\^="executor-chip-"\]:hover\s*\{/,
-    )
+    expect(composerSurface).toMatch(/\.executor-chip-slot \.oc-button\[data-ui\^="executor-chip-"\]\s*\{/)
+    expect(composerSurface).toMatch(/\.executor-chip-slot \.oc-button\[data-ui\^="executor-chip-"\]:hover\s*\{/)
     expect(composerSurface).toMatch(
       /\.executor-chip-slot\[data-open="true"\] \.oc-button\[data-ui\^="executor-chip-"\]\s*\{/,
     )
@@ -932,9 +890,7 @@ describe("overlay architecture guards", () => {
     // ConnectionBanner.tsx, so it owns its own surface file.
     const styles = readText(join(OVERLAY_ROOT, "src/styles/surfaces/conn-banner.css"))
 
-    const block = styles.match(
-      /\.conn-banner\s*\{[\s\S]*?\.conn-banner__action:focus-visible\s*\{[^}]*\}/,
-    )?.[0]
+    const block = styles.match(/\.conn-banner\s*\{[\s\S]*?\.conn-banner__action:focus-visible\s*\{[^}]*\}/)?.[0]
     expect(block).toBeTruthy()
     const body = block ?? ""
 
@@ -973,15 +929,7 @@ describe("overlay architecture guards", () => {
     expect(block).not.toMatch(/#63a2ff/)
     expect(block).not.toMatch(/border-radius:\s*999px/)
 
-    for (const variant of [
-      "pass",
-      "accepted",
-      "concerns",
-      "needs_correction",
-      "rejected",
-      "inflight",
-      "empty",
-    ]) {
+    for (const variant of ["pass", "accepted", "concerns", "needs_correction", "rejected", "inflight", "empty"]) {
       expect(block).toContain(`data-verdict="${variant}"`)
     }
 
@@ -1081,9 +1029,7 @@ describe("overlay architecture guards", () => {
     expect(() => soloRuleBody(styles, ".config-status-box")).toThrow()
 
     for (const status of ["active", "warn", "error"]) {
-      expect(settingsSurface).toMatch(
-        new RegExp(`\\.config-status-box\\[data-status="${status}"\\]\\s*\\{`),
-      )
+      expect(settingsSurface).toMatch(new RegExp(`\\.config-status-box\\[data-status="${status}"\\]\\s*\\{`))
     }
     expect(settingsSurface).toMatch(/\.about-author-link:hover\s*\{/)
     expect(settingsSurface).toMatch(/\.about-link:hover\s*\{/)
@@ -1117,9 +1063,7 @@ describe("overlay architecture guards", () => {
     // The `.config-section-head::before` chevron must use the
     // CSS-drawn border-right/border-bottom approach, not the
     // legacy "▸" Unicode glyph. Probe the rule body specifically.
-    const sectionChevron = settingsSurface.match(
-      /\.config-section-head::before\s*\{([^}]*)\}/,
-    )?.[1] ?? ""
+    const sectionChevron = settingsSurface.match(/\.config-section-head::before\s*\{([^}]*)\}/)?.[1] ?? ""
     expect(sectionChevron).not.toMatch(/content:\s*"▸"/)
     expect(sectionChevron).toContain('content: ""')
 
@@ -1136,12 +1080,7 @@ describe("overlay architecture guards", () => {
     const styles = withoutComments(readLegacyStylesCss("src/styles.css"))
     const settingsSurface = readText(join(OVERLAY_ROOT, "src/styles/surfaces/settings.css"))
 
-    for (const className of [
-      "config-content",
-      "config-tab-panel",
-      "config-resizer",
-      "config-nav-spacer",
-    ]) {
+    for (const className of ["config-content", "config-tab-panel", "config-resizer", "config-nav-spacer"]) {
       expect(styles).not.toMatch(new RegExp(`(^|\\n)\\.${className}\\s*\\{`))
       expect(settingsSurface).toMatch(new RegExp(`(^|\\n)\\.${className}\\s*\\{`))
     }
@@ -1149,9 +1088,7 @@ describe("overlay architecture guards", () => {
     expect(settingsSurface).toMatch(/\.config-tab-panel\.active\s*\{/)
     expect(settingsSurface).toMatch(/\.config-tab-panel \> \.config-section-body\s*\{/)
     expect(settingsSurface).toMatch(/\.config-content \.config-subsection\s*\{/)
-    expect(settingsSurface).toMatch(
-      /\.config-content \.extension-head,\s*\.config-content \.knowledge-toolbar\s*\{/,
-    )
+    expect(settingsSurface).toMatch(/\.config-content \.extension-head,\s*\.config-content \.knowledge-toolbar\s*\{/)
     expect(settingsSurface).toMatch(/\.config-resizer::before\s*\{/)
     expect(settingsSurface).toMatch(
       /\.config-resizer:hover::before,\s*\.config-resizer\[data-active="true"\]::before\s*\{/,
@@ -1189,15 +1126,13 @@ describe("overlay architecture guards", () => {
     }
 
     expect(settingsSurface).toMatch(/(^|\n)\.config-dialog-layout\s*\{/)
-    const layoutBody =
-      settingsSurface.match(/(^|\n)\.config-dialog-layout\s*\{([^}]*)\}/)?.[2] ?? ""
+    const layoutBody = settingsSurface.match(/(^|\n)\.config-dialog-layout\s*\{([^}]*)\}/)?.[2] ?? ""
     expect(layoutBody).toContain("display: flex")
     expect(layoutBody).toContain("flex: 1")
     expect(layoutBody).toContain("overflow: hidden")
 
     expect(settingsSurface).toMatch(/\.config-close-btn:hover\s*\{/)
-    const sidebarBody =
-      settingsSurface.match(/(^|\n)\.config-sidebar\s*\{([^}]*)\}/)?.[2] ?? ""
+    const sidebarBody = settingsSurface.match(/(^|\n)\.config-sidebar\s*\{([^}]*)\}/)?.[2] ?? ""
     expect(sidebarBody).toContain("background: transparent")
     expect(settingsSurface).toMatch(/\.config-nav-item\.active\s*\{/)
     expect(settingsSurface).toMatch(/\.config-nav-item\.active::before\s*\{/)
@@ -1269,8 +1204,7 @@ describe("overlay architecture guards", () => {
     expect(settingsSurface).toMatch(/\.market-card-main strong\s*\{/)
     expect(settingsSurface).toMatch(/\.market-card-main span,\s*\.market-card-main small\s*\{/)
 
-    const channelDocBody =
-      settingsSurface.match(/(^|\n)\.channel-doc-card\s*\{([^}]*)\}/)?.[2] ?? ""
+    const channelDocBody = settingsSurface.match(/(^|\n)\.channel-doc-card\s*\{([^}]*)\}/)?.[2] ?? ""
     expect(channelDocBody).toContain("transition:")
     expect(channelDocBody).toContain("border: 0")
 
@@ -1316,9 +1250,11 @@ describe("overlay architecture guards", () => {
       "knowledge-item-main",
       "knowledge-item-title",
       "knowledge-item-meta",
+      "knowledge-item-meta-row",
       "knowledge-item-actions",
       "knowledge-delete",
       "knowledge-scope",
+      "memory-inline-detail",
       "memory-detail-meta",
       "memory-detail-content",
     ]) {
@@ -1331,9 +1267,7 @@ describe("overlay architecture guards", () => {
     expect(settingsSurface).toMatch(/\.knowledge-search::placeholder\s*\{/)
     expect(settingsSurface).toMatch(/\.knowledge-item\[data-mode="search"\]/)
     for (const variant of ["global", "session"]) {
-      expect(settingsSurface).toMatch(
-        new RegExp(`\\.knowledge-scope\\[data-scope="${variant}"\\]`),
-      )
+      expect(settingsSurface).toMatch(new RegExp(`\\.knowledge-scope\\[data-scope="${variant}"\\]`))
     }
     expect(settingsSurface).not.toMatch(/rgba\(255,\s*255,\s*255,\s*0\.04\)/)
   })
@@ -1383,12 +1317,7 @@ describe("overlay architecture guards", () => {
     ]) {
       expect(settingsSurface).toMatch(new RegExp(`(^|\\n)\\.${primitive}\\s*[\\[\\{,:+>~]`))
     }
-    for (const component of [
-      "SettingsPanel",
-      "SettingsGroup",
-      "SettingsRow",
-      "SettingsSegmented",
-    ]) {
+    for (const component of ["SettingsPanel", "SettingsGroup", "SettingsRow", "SettingsSegmented"]) {
       expect(panelSource).toContain(component)
     }
 
@@ -1465,15 +1394,11 @@ describe("overlay architecture guards", () => {
     }
 
     for (const verdict of ["pass", "concerns", "needs_correction"]) {
-      expect(inspectorSurface).toMatch(
-        new RegExp(`\\.integrity__dimension\\[data-verdict="${verdict}"\\]\\s*\\{`),
-      )
+      expect(inspectorSurface).toMatch(new RegExp(`\\.integrity__dimension\\[data-verdict="${verdict}"\\]\\s*\\{`))
     }
 
     for (const action of ["modify", "split", "remove"]) {
-      expect(inspectorSurface).toMatch(
-        new RegExp(`\\.integrity__tag\\[data-action="${action}"\\]\\s*\\{`),
-      )
+      expect(inspectorSurface).toMatch(new RegExp(`\\.integrity__tag\\[data-action="${action}"\\]\\s*\\{`))
     }
 
     expect(inspectorSurface).toMatch(/\.integrity__diff dt\s*\{/)
@@ -1508,9 +1433,7 @@ describe("overlay architecture guards", () => {
       expect(inspectorSurface).toMatch(new RegExp(`\\.req-type--${variant}\\s*\\{`))
     }
     for (const variant of ["passed", "failed", "pending"]) {
-      expect(inspectorSurface).toMatch(
-        new RegExp(`\\.req-status\\[data-req-status="${variant}"\\]\\s*\\{`),
-      )
+      expect(inspectorSurface).toMatch(new RegExp(`\\.req-status\\[data-req-status="${variant}"\\]\\s*\\{`))
     }
     expect(inspectorSurface).toMatch(/\.req-spec-detail \> summary\s*\{/)
   })
@@ -1519,21 +1442,13 @@ describe("overlay architecture guards", () => {
     const styles = withoutComments(readLegacyStylesCss("src/styles.css"))
     const inspectorSurface = readText(join(OVERLAY_ROOT, "src/styles/surfaces/inspector.css"))
 
-    for (const className of [
-      "gwg-checks",
-      "gwg-check",
-      "gwg-check-icon",
-      "gwg-check-name",
-      "gwg-check-evidence",
-    ]) {
+    for (const className of ["gwg-checks", "gwg-check", "gwg-check-icon", "gwg-check-name", "gwg-check-evidence"]) {
       expect(styles).not.toMatch(new RegExp(`(^|\\n)\\.${className}\\s*\\{`))
       expect(inspectorSurface).toMatch(new RegExp(`(^|\\n)\\.${className}\\s*\\{`))
     }
 
     for (const status of ["passed", "failed", "pending"]) {
-      expect(styles).not.toMatch(
-        new RegExp(`(^|\\n)\\.gwg-check--${status}(?:\\s+\\.gwg-check-(?:icon|name))?\\s*\\{`),
-      )
+      expect(styles).not.toMatch(new RegExp(`(^|\\n)\\.gwg-check--${status}(?:\\s+\\.gwg-check-(?:icon|name))?\\s*\\{`))
       expect(inspectorSurface).toMatch(
         new RegExp(`\\.gwg-check\\[data-check-status="${status}"\\](?:\\s+\\.gwg-check-(?:icon|name))?\\s*\\{`),
       )
@@ -1615,30 +1530,20 @@ describe("overlay architecture guards", () => {
     const styles = withoutComments(readLegacyStylesCss("src/styles.css"))
     const inspectorSurface = readText(join(OVERLAY_ROOT, "src/styles/surfaces/inspector.css"))
 
-    for (const className of [
-      "gwg-header",
-      "gwg-title-row",
-      "gwg-status-icon",
-      "gwg-title",
-      "gwg-revision",
-    ]) {
+    for (const className of ["gwg-header", "gwg-title-row", "gwg-status-icon", "gwg-title", "gwg-revision"]) {
       expect(styles).not.toMatch(new RegExp(`(^|\\n)\\.${className}\\s*\\{`))
       expect(inspectorSurface).toMatch(new RegExp(`(^|\\n)\\.${className}\\s*\\{`))
     }
 
     expect(inspectorSurface).toMatch(/\.gwg-header:focus-visible\s*\{/)
     for (const variant of ["passed", "failed", "running"]) {
-      expect(styles).not.toMatch(
-        new RegExp(`(^|\\n)\\.gwg--${variant} \\.gwg-status-icon\\s*\\{`),
-      )
+      expect(styles).not.toMatch(new RegExp(`(^|\\n)\\.gwg--${variant} \\.gwg-status-icon\\s*\\{`))
       expect(inspectorSurface).toMatch(
         new RegExp(`\\.gwg\\[data-goal-status="${variant}"\\] \\.gwg-status-icon\\s*\\{`),
       )
     }
     expect(inspectorSurface).not.toMatch(/clamp\(10px,/)
-    expect(inspectorSurface).toMatch(
-      /\.gwg-revision[\s\S]*?border-radius:\s*var\(--oc-radius-pill\)/,
-    )
+    expect(inspectorSurface).toMatch(/\.gwg-revision[\s\S]*?border-radius:\s*var\(--oc-radius-pill\)/)
   })
 
   test("gwg shell + status modifiers are owned by surfaces/inspector.css", () => {
@@ -1655,12 +1560,8 @@ describe("overlay architecture guards", () => {
     expect(styles).not.toMatch(/(^|\n)\.gwg--expanded\s*\{/)
     expect(inspectorSurface).toMatch(/\.gwg--expanded\s*\{/)
     for (const status of ["passed", "failed", "running"]) {
-      expect(styles).not.toMatch(
-        new RegExp(`(^|\\n)\\.gwg\\[data-goal-status="${status}"\\](?:::before)?\\s*\\{`),
-      )
-      expect(inspectorSurface).toMatch(
-        new RegExp(`\\.gwg\\[data-goal-status="${status}"\\] \\.gwg-status-icon\\s*\\{`),
-      )
+      expect(styles).not.toMatch(new RegExp(`(^|\\n)\\.gwg\\[data-goal-status="${status}"\\](?:::before)?\\s*\\{`))
+      expect(inspectorSurface).toMatch(new RegExp(`\\.gwg\\[data-goal-status="${status}"\\] \\.gwg-status-icon\\s*\\{`))
     }
 
     expect(inspectorSurface).not.toMatch(/#c3d2ee/)
@@ -1697,9 +1598,7 @@ describe("overlay architecture guards", () => {
     expect(inspectorSurface).toMatch(/\.acceptance-panel::before\s*\{/)
 
     for (const verdict of ["accepted", "rejected", "inflight", "empty"]) {
-      expect(inspectorSurface).toMatch(
-        new RegExp(`\\.acceptance-panel\\[data-verdict="${verdict}"\\]`),
-      )
+      expect(inspectorSurface).toMatch(new RegExp(`\\.acceptance-panel\\[data-verdict="${verdict}"\\]`))
     }
 
     expect(inspectorSurface).toMatch(/--acceptance-panel-accent: var\(--good\)/)
@@ -1711,13 +1610,7 @@ describe("overlay architecture guards", () => {
     const styles = withoutComments(readLegacyStylesCss("src/styles.css"))
     const inspectorSurface = readText(join(OVERLAY_ROOT, "src/styles/surfaces/inspector.css"))
 
-    for (const className of [
-      "eval-error",
-      "eval-error-name",
-      "eval-error-meta",
-      "eval-error-detail",
-      "eval-summary",
-    ]) {
+    for (const className of ["eval-error", "eval-error-name", "eval-error-meta", "eval-error-detail", "eval-summary"]) {
       expect(styles).not.toMatch(new RegExp(`(^|\\n)\\.${className}\\s*\\{`))
       expect(inspectorSurface).toMatch(new RegExp(`(^|\\n)\\.${className}\\s*\\{`))
     }
@@ -1734,9 +1627,7 @@ describe("overlay architecture guards", () => {
 
     for (const variant of ["related", "active"]) {
       expect(styles).not.toMatch(new RegExp(`\\.oc-section\\[data-phase-state="${variant}"\\]\\s*\\{`))
-      expect(inspectorSurface).toMatch(
-        new RegExp(`\\.oc-section\\[data-phase-state="${variant}"\\]\\s*\\{`),
-      )
+      expect(inspectorSurface).toMatch(new RegExp(`\\.oc-section\\[data-phase-state="${variant}"\\]\\s*\\{`))
     }
 
     expect(inspectorSurface).toMatch(
@@ -1744,18 +1635,14 @@ describe("overlay architecture guards", () => {
     )
     // Active phase-state uses only a background wash; the old vertical
     // `::after` rail made narrow panes look broken.
-    expect(inspectorSurface).not.toMatch(
-      /\.oc-section\[data-phase-state="active"\]::after\s*\{/,
-    )
+    expect(inspectorSurface).not.toMatch(/\.oc-section\[data-phase-state="active"\]::after\s*\{/)
     expect(inspectorSurface).not.toMatch(/rgba\(91,\s*141,\s*239/)
     expect(inspectorSurface).not.toMatch(/rgba\(10,\s*16,\s*24/)
   })
 
   test("conversation goals strip is owned by surfaces/conversation.css", () => {
     const styles = withoutComments(readLegacyStylesCss("src/styles.css"))
-    const conversationSurface = readText(
-      join(OVERLAY_ROOT, "src/styles/surfaces/conversation.css"),
-    )
+    const conversationSurface = readText(join(OVERLAY_ROOT, "src/styles/surfaces/conversation.css"))
 
     for (const className of ["chat-goals-strip", "goal-chip"]) {
       expect(styles).not.toMatch(new RegExp(`(^|\\n)\\.${className}\\s*\\{`))
@@ -1770,9 +1657,7 @@ describe("overlay architecture guards", () => {
 
   test("conversation header + task-switch progress are owned by surfaces/conversation.css", () => {
     const styles = withoutComments(readLegacyStylesCss("src/styles.css"))
-    const conversationSurface = readText(
-      join(OVERLAY_ROOT, "src/styles/surfaces/conversation.css"),
-    )
+    const conversationSurface = readText(join(OVERLAY_ROOT, "src/styles/surfaces/conversation.css"))
 
     for (const className of [
       "task-switch-progress",
@@ -1793,9 +1678,7 @@ describe("overlay architecture guards", () => {
 
   test("conversation chat-scroll is owned by surfaces/conversation.css", () => {
     const styles = withoutComments(readLegacyStylesCss("src/styles.css"))
-    const conversationSurface = readText(
-      join(OVERLAY_ROOT, "src/styles/surfaces/conversation.css"),
-    )
+    const conversationSurface = readText(join(OVERLAY_ROOT, "src/styles/surfaces/conversation.css"))
 
     expect(styles).not.toMatch(/(^|\n)\.chat-scroll\s*\{/)
     expect(conversationSurface).toMatch(/(^|\n)\.chat-scroll\s*\{/)
@@ -1805,9 +1688,7 @@ describe("overlay architecture guards", () => {
 
   test("conversation chat-empty task-children are owned by surfaces/conversation.css", () => {
     const styles = withoutComments(readLegacyStylesCss("src/styles.css"))
-    const conversationSurface = readText(
-      join(OVERLAY_ROOT, "src/styles/surfaces/conversation.css"),
-    )
+    const conversationSurface = readText(join(OVERLAY_ROOT, "src/styles/surfaces/conversation.css"))
 
     for (const className of [
       "chat-empty-marker",
@@ -1824,16 +1705,12 @@ describe("overlay architecture guards", () => {
 
     expect(conversationSurface).toMatch(/\.chat-empty-status::before\s*\{/)
     expect(conversationSurface).toMatch(/\.chat-empty-status\[data-status="queued"\]/)
-    expect(conversationSurface).toMatch(
-      /\.chat-empty--task \.chat-empty-marker \.chat-empty-icon\s*\{/,
-    )
+    expect(conversationSurface).toMatch(/\.chat-empty--task \.chat-empty-marker \.chat-empty-icon\s*\{/)
   })
 
   test("conversation chat-empty placeholder is owned by surfaces/conversation.css", () => {
     const styles = withoutComments(readLegacyStylesCss("src/styles.css"))
-    const conversationSurface = readText(
-      join(OVERLAY_ROOT, "src/styles/surfaces/conversation.css"),
-    )
+    const conversationSurface = readText(join(OVERLAY_ROOT, "src/styles/surfaces/conversation.css"))
     const html = readText(join(OVERLAY_ROOT, "src/index.html"))
 
     for (const className of ["chat-empty", "chat-empty-icon", "chat-empty-text", "chat-follow-label"]) {
@@ -1850,12 +1727,7 @@ describe("overlay architecture guards", () => {
     const styles = withoutComments(readLegacyStylesCss("src/styles.css"))
     const composerSurface = readText(join(OVERLAY_ROOT, "src/styles/surfaces/composer.css"))
 
-    for (const className of [
-      "chat-build",
-      "chat-version",
-      "chat-version-link",
-      "chat-version-sep",
-    ]) {
+    for (const className of ["chat-build", "chat-version", "chat-version-link", "chat-version-sep"]) {
       expect(styles).not.toMatch(new RegExp(`(^|\\n)\\.${className}\\s*\\{`))
       expect(composerSurface).toMatch(new RegExp(`(^|\\n)\\.${className}\\s*\\{`))
     }
@@ -1908,9 +1780,7 @@ describe("overlay architecture guards", () => {
     expect(styles).not.toMatch(/body:is\([^)]*\) \.chat-send\b/)
     for (const match of styles.matchAll(/([^{}]+)\{([^{}]*)\}/g)) {
       const selector = match[1] ?? ""
-      const isThemeSelector = /body(?:\[[^\]]*data-theme[^\]]*\]|:is\([^)]*data-theme[^)]*\))/.test(
-        selector,
-      )
+      const isThemeSelector = /body(?:\[[^\]]*data-theme[^\]]*\]|:is\([^)]*data-theme[^)]*\))/.test(selector)
       if (!isThemeSelector || !/\.chat-send\b/.test(selector)) continue
 
       expect(selector).not.toMatch(/\.chat-send\b/)
@@ -1957,9 +1827,7 @@ describe("overlay architecture guards", () => {
 
   test("dead static composer toolbar button classes stay retired", () => {
     const styles = withoutComments(readLegacyStylesCss("src/styles.css"))
-    const composerSurface = withoutComments(
-      readText(join(OVERLAY_ROOT, "src/styles/surfaces/composer.css")),
-    )
+    const composerSurface = withoutComments(readText(join(OVERLAY_ROOT, "src/styles/surfaces/composer.css")))
     const combined = `${styles}\n${composerSurface}`
 
     expect(combined).not.toMatch(/(^|\n)\.chat-toolbar-btn\b/)
@@ -1982,9 +1850,7 @@ describe("overlay architecture guards", () => {
     }
 
     for (const swatch of ["dark", "light", "vscode-dark", "system"]) {
-      expect(titlebarSurface).toMatch(
-        new RegExp(`\\.titlebar-theme-option-swatch\\[data-theme="${swatch}"\\]`),
-      )
+      expect(titlebarSurface).toMatch(new RegExp(`\\.titlebar-theme-option-swatch\\[data-theme="${swatch}"\\]`))
       expect(tokenText).toMatch(new RegExp(`--oc-theme-swatch-${swatch}\\s*:`))
     }
   })
@@ -2033,9 +1899,7 @@ describe("overlay architecture guards", () => {
 
   test("dead static titlebar window button classes stay retired", () => {
     const styles = withoutComments(readLegacyStylesCss("src/styles.css"))
-    const titlebarSurface = withoutComments(
-      readText(join(OVERLAY_ROOT, "src/styles/surfaces/titlebar.css")),
-    )
+    const titlebarSurface = withoutComments(readText(join(OVERLAY_ROOT, "src/styles/surfaces/titlebar.css")))
     const combined = `${styles}\n${titlebarSurface}`
 
     expect(combined).not.toMatch(/(^|\n)\.titlebar-btn\b/)
@@ -2046,13 +1910,7 @@ describe("overlay architecture guards", () => {
     const styles = readLegacyStylesCss("src/styles.css")
     const titlebarSurface = readText(join(OVERLAY_ROOT, "src/styles/surfaces/titlebar.css"))
 
-    for (const className of [
-      "titlebar",
-      "titlebar-left",
-      "titlebar-brand",
-      "titlebar-spacer",
-      "brand-logo",
-    ]) {
+    for (const className of ["titlebar", "titlebar-left", "titlebar-brand", "titlebar-spacer", "brand-logo"]) {
       expect(styles).not.toMatch(new RegExp(`(^|\\n)\\.${className}\\s*\\{`))
       expect(titlebarSurface).toMatch(new RegExp(`(^|\\n)\\.${className}\\s*\\{`))
     }
@@ -2077,15 +1935,11 @@ describe("overlay architecture guards", () => {
 
     for (const match of styles.matchAll(/([^{}]+)\{([^{}]*)\}/g)) {
       const selector = match[1] ?? ""
-      const isThemeSelector = /body(?:\[[^\]]*data-theme[^\]]*\]|:is\([^)]*data-theme[^)]*\))/.test(
-        selector,
-      )
+      const isThemeSelector = /body(?:\[[^\]]*data-theme[^\]]*\]|:is\([^)]*data-theme[^)]*\))/.test(selector)
       if (!isThemeSelector) continue
 
       for (const className of migratedTitlebarClasses) {
-        expect(selector).not.toMatch(
-          new RegExp(`\\.${className}(?=$|[\\s:{.#\\[,>+~])`),
-        )
+        expect(selector).not.toMatch(new RegExp(`\\.${className}(?=$|[\\s:{.#\\[,>+~])`))
       }
     }
   })
@@ -2118,12 +1972,8 @@ describe("overlay architecture guards", () => {
   test("bold font-weight declarations cannot increase across overlay stylesheets", () => {
     const sources = [
       readLegacyStylesCss("src/styles.css"),
-      ...walkFiles(join(OVERLAY_ROOT, "src/styles/primitives"), (path) =>
-        path.endsWith(".css"),
-      ).map(readText),
-      ...walkFiles(join(OVERLAY_ROOT, "src/styles/surfaces"), (path) =>
-        path.endsWith(".css"),
-      ).map(readText),
+      ...walkFiles(join(OVERLAY_ROOT, "src/styles/primitives"), (path) => path.endsWith(".css")).map(readText),
+      ...walkFiles(join(OVERLAY_ROOT, "src/styles/surfaces"), (path) => path.endsWith(".css")).map(readText),
     ]
     const text = sources.join("\n")
     const boldDecls = count(/font-weight\s*:\s*(?:700|720|750|760|780|800|900|bold)\b/g, text)
@@ -2217,8 +2067,7 @@ describe("overlay architecture guards", () => {
       }
     }
 
-    const channelDocBody =
-      settingsSurface.match(/\.channel-doc-card\s*\{([^}]*)\}/)?.[1] ?? ""
+    const channelDocBody = settingsSurface.match(/\.channel-doc-card\s*\{([^}]*)\}/)?.[1] ?? ""
     expect(channelDocBody).toContain("background: transparent")
     expect(channelDocBody).toContain("border: 0")
 
@@ -2238,11 +2087,10 @@ describe("overlay architecture guards", () => {
         const hasExtensionRow = /(?:^|\s|:is\([^)]*)\.extension-row(?:\b|[:.[#])/.test(selector)
         if (!hasExtensionRow) continue
 
-        const isThemeSelector = /body(?:\[[^\]]*data-theme[^\]]*\]|:is\([^)]*data-theme[^)]*\))/.test(
-          selector,
+        const isThemeSelector = /body(?:\[[^\]]*data-theme[^\]]*\]|:is\([^)]*data-theme[^)]*\))/.test(selector)
+        const usesChromeImportant = /(background|border|border-color|border-radius|box-shadow):\s*[^;]*!important/.test(
+          body,
         )
-        const usesChromeImportant =
-          /(background|border|border-color|border-radius|box-shadow):\s*[^;]*!important/.test(body)
 
         expect(isThemeSelector).toBe(false)
         expect(usesChromeImportant).toBe(false)
@@ -2262,15 +2110,13 @@ describe("overlay architecture guards", () => {
       for (const match of source.matchAll(/([^{}]+)\{([^{}]*)\}/g)) {
         const selector = match[1] ?? ""
         const body = match[2] ?? ""
-        const hasConfigContainer = /(?:^|\s|:is\([^)]*)\.config-(?:section|subsection)(?:\b|[:.[#])/.test(
-          selector,
-        )
+        const hasConfigContainer = /(?:^|\s|:is\([^)]*)\.config-(?:section|subsection)(?:\b|[:.[#])/.test(selector)
         if (!hasConfigContainer) continue
 
-        const isThemeSelector =
-          /body(?:\[[^\]]*data-theme[^\]]*\]|:is\([^)]*data-theme[^)]*\))/.test(selector)
-        const usesChromeImportant =
-          /(background|border|border-color|border-radius|box-shadow):\s*[^;]*!important/.test(body)
+        const isThemeSelector = /body(?:\[[^\]]*data-theme[^\]]*\]|:is\([^)]*data-theme[^)]*\))/.test(selector)
+        const usesChromeImportant = /(background|border|border-color|border-radius|box-shadow):\s*[^;]*!important/.test(
+          body,
+        )
 
         expect(isThemeSelector).toBe(false)
         expect(usesChromeImportant).toBe(false)
@@ -2293,21 +2139,15 @@ describe("overlay architecture guards", () => {
       const hasChatInput = /(?:^|\s|:is\([^)]*)\.chat-input(?:\b|[:.[#])/.test(selector)
       if (!hasChatInput) continue
 
-      const isThemeSelector = /body(?:\[[^\]]*data-theme[^\]]*\]|:is\([^)]*data-theme[^)]*\))/.test(
-        selector,
-      )
+      const isThemeSelector = /body(?:\[[^\]]*data-theme[^\]]*\]|:is\([^)]*data-theme[^)]*\))/.test(selector)
       const usesChromeImportant =
-        /(margin|padding|gap|background|border|border-color|border-radius|box-shadow):\s*[^;]*!important/.test(
-          body,
-        )
+        /(margin|padding|gap|background|border|border-color|border-radius|box-shadow):\s*[^;]*!important/.test(body)
 
       expect(isThemeSelector).toBe(false)
       expect(usesChromeImportant).toBe(false)
     }
 
-    const composerSurface = withoutComments(
-      readText(join(OVERLAY_ROOT, "src/styles/surfaces/composer.css")),
-    )
+    const composerSurface = withoutComments(readText(join(OVERLAY_ROOT, "src/styles/surfaces/composer.css")))
     const body = soloRuleBody(composerSurface, ".chat-input")
     expect(body).toContain("margin: 0")
     expect(body).toContain("padding: calc(4px * var(--ui-scale))")
@@ -2318,17 +2158,13 @@ describe("overlay architecture guards", () => {
   test("panel shell padding is canonical, not theme scoped", () => {
     // Canonical extracted to surfaces/workspace.css 2026-05-04.
     const styles = withoutComments(readLegacyStylesCss("src/styles.css"))
-    const workspace = withoutComments(
-      readText(join(OVERLAY_ROOT, "src/styles/surfaces/workspace.css")),
-    )
+    const workspace = withoutComments(readText(join(OVERLAY_ROOT, "src/styles/surfaces/workspace.css")))
 
     for (const source of [styles, workspace]) {
       for (const match of source.matchAll(/([^{}]+)\{([^{}]*)\}/g)) {
         const selector = match[1] ?? ""
         const body = match[2] ?? ""
-        const isThemeSelector = /body(?:\[[^\]]*data-theme[^\]]*\]|:is\([^)]*data-theme[^)]*\))/.test(
-          selector,
-        )
+        const isThemeSelector = /body(?:\[[^\]]*data-theme[^\]]*\]|:is\([^)]*data-theme[^)]*\))/.test(selector)
         if (!isThemeSelector || !/(?:^|[\s>+~,])\.panel(?:$|[\s:{.#\[,>+~])/.test(selector)) continue
         expect(body).not.toMatch(/\bpadding(?:-[a-z]+)?\s*:/)
       }
@@ -2345,9 +2181,7 @@ describe("overlay architecture guards", () => {
     for (const match of styles.matchAll(/([^{}]+)\{([^{}]*)\}/g)) {
       const selector = match[1] ?? ""
       const body = match[2] ?? ""
-      const isThemeSelector = /body(?:\[[^\]]*data-theme[^\]]*\]|:is\([^)]*data-theme[^)]*\))/.test(
-        selector,
-      )
+      const isThemeSelector = /body(?:\[[^\]]*data-theme[^\]]*\]|:is\([^)]*data-theme[^)]*\))/.test(selector)
       if (!isThemeSelector || !/(?:^|[\s>+~,])\.titlebar(?:$|[\s:{.#\[,>+~])/.test(selector)) continue
 
       expect(body).not.toMatch(
@@ -2386,26 +2220,22 @@ describe("overlay architecture guards", () => {
     for (const source of [styles, ...surfaceTexts]) {
       for (const match of source.matchAll(/([^{}]+)\{([^{}]*)\}/g)) {
         const selector = match[1] ?? ""
-        const isThemeSelector = /body(?:\[[^\]]*data-theme[^\]]*\]|:is\([^)]*data-theme[^)]*\))/.test(
-          selector,
-        )
+        const isThemeSelector = /body(?:\[[^\]]*data-theme[^\]]*\]|:is\([^)]*data-theme[^)]*\))/.test(selector)
         const hasHeaderControl =
           /\.(?:task-dir-shell|task-cwd-dropdown)\b/.test(selector) ||
           /\[data-ui="sidebar-new-task-button"\]/.test(selector)
         if (!isThemeSelector || !hasHeaderControl) continue
 
-        expect(selector).not.toMatch(
-          /\.(?:task-dir-shell|task-cwd-dropdown)\b|\[data-ui="sidebar-new-task-button"\]/,
-        )
+        expect(selector).not.toMatch(/\.(?:task-dir-shell|task-cwd-dropdown)\b|\[data-ui="sidebar-new-task-button"\]/)
       }
     }
 
-    const conversationSurface = readText(
-      join(OVERLAY_ROOT, "src/styles/surfaces/conversation.css"),
-    )
+    const conversationSurface = readText(join(OVERLAY_ROOT, "src/styles/surfaces/conversation.css"))
     expect(soloRuleBody(conversationSurface, ".task-dir-shell")).toContain("gap: calc(2px * var(--ui-scale))")
     expect(soloRuleBody(conversationSurface, ".task-dir-shell")).toContain("padding: calc(2px * var(--ui-scale))")
-    expect(soloRuleBody(conversationSurface, ".task-dir-shell")).toContain("border: var(--oc-border-width) solid var(--oc-control-border)")
+    expect(soloRuleBody(conversationSurface, ".task-dir-shell")).toContain(
+      "border: var(--oc-border-width) solid var(--oc-control-border)",
+    )
     expect(soloRuleBody(conversationSurface, ".task-dir-shell")).toContain("border-radius: var(--oc-radius-soft)")
     expect(soloRuleBody(conversationSurface, ".task-dir-shell")).toContain("background: var(--oc-control-bg)")
     expect(soloRuleBody(conversationSurface, ".task-dir-shell.task-cwd-dropdown")).toContain(
@@ -2414,9 +2244,7 @@ describe("overlay architecture guards", () => {
     expect(soloRuleBody(conversationSurface, ".task-dir-shell.task-cwd-dropdown")).toContain(
       "padding-block: calc(2px * var(--ui-scale))",
     )
-    const sidebarSurface = withoutComments(
-      readText(join(OVERLAY_ROOT, "src/styles/surfaces/sidebar.css")),
-    )
+    const sidebarSurface = withoutComments(readText(join(OVERLAY_ROOT, "src/styles/surfaces/sidebar.css")))
     expect(sidebarSurface).not.toContain("sidebar-toolset")
     expect(sidebarSurface).not.toContain('data-ui="sidebar-refresh-button"')
     expect(sidebarSurface).not.toContain('data-ui="sidebar-toggle-button"')
@@ -2427,28 +2255,20 @@ describe("overlay architecture guards", () => {
 
   test("right-panel empty hint density is canonical, not theme scoped", () => {
     // Canonical extracted to surfaces/empty-state.css 2026-05-04.
-    const styles = withoutComments(
-      readText(join(OVERLAY_ROOT, "src/styles/surfaces/empty-state.css")),
-    )
+    const styles = withoutComments(readText(join(OVERLAY_ROOT, "src/styles/surfaces/empty-state.css")))
 
     for (const match of styles.matchAll(/([^{}]+)\{([^{}]*)\}/g)) {
       const selector = match[1] ?? ""
       const body = match[2] ?? ""
-      const isThemeSelector = /body(?:\[[^\]]*data-theme[^\]]*\]|:is\([^)]*data-theme[^)]*\))/.test(
-        selector,
-      )
+      const isThemeSelector = /body(?:\[[^\]]*data-theme[^\]]*\]|:is\([^)]*data-theme[^)]*\))/.test(selector)
       const hasRightPanelEmptyHint =
-        /\.section-body\s*>\s*\.empty-hint\b/.test(selector) ||
-        /#solidChangesPanel\s*>\s*\.empty-hint\b/.test(selector)
+        /\.section-body\s*>\s*\.empty-hint\b/.test(selector) || /#solidChangesPanel\s*>\s*\.empty-hint\b/.test(selector)
       if (!isThemeSelector || !hasRightPanelEmptyHint) continue
 
       expect(body).not.toMatch(/\b(?:gap|padding(?:-[a-z]+)?|border(?:-[a-z]+)?|border-radius)\s*:/)
     }
 
-    const body = soloRuleBody(
-      styles,
-      ".section-body > .empty-hint,\n#solidChangesPanel > .empty-hint",
-    )
+    const body = soloRuleBody(styles, ".section-body > .empty-hint,\n#solidChangesPanel > .empty-hint")
     for (const declaration of [
       "gap: calc(4px * var(--ui-scale))",
       "padding: calc(6px * var(--ui-scale))",
@@ -2461,16 +2281,12 @@ describe("overlay architecture guards", () => {
 
   test("conversation agent rail is canonical, not theme scoped", () => {
     const styles = withoutComments(readLegacyStylesCss("src/styles.css"))
-    const surface = withoutComments(
-      readText(join(OVERLAY_ROOT, "src/styles/surfaces/conversation.css")),
-    )
+    const surface = withoutComments(readText(join(OVERLAY_ROOT, "src/styles/surfaces/conversation.css")))
 
     for (const match of styles.matchAll(/([^{}]+)\{([^{}]*)\}/g)) {
       const selector = match[1] ?? ""
       const body = match[2] ?? ""
-      const isThemeSelector = /body(?:\[[^\]]*data-theme[^\]]*\]|:is\([^)]*data-theme[^)]*\))/.test(
-        selector,
-      )
+      const isThemeSelector = /body(?:\[[^\]]*data-theme[^\]]*\]|:is\([^)]*data-theme[^)]*\))/.test(selector)
       const targetsRail = /\.conversation-agent-rail\b/.test(selector)
       if (!isThemeSelector || !targetsRail) continue
 
@@ -2513,16 +2329,12 @@ describe("overlay architecture guards", () => {
 
   test("panel body shell chrome is canonical, not theme scoped", () => {
     // .panel-body canonical moved to surfaces/workspace.css 2026-05-04.
-    const workspace = withoutComments(
-      readText(join(OVERLAY_ROOT, "src/styles/surfaces/workspace.css")),
-    )
+    const workspace = withoutComments(readText(join(OVERLAY_ROOT, "src/styles/surfaces/workspace.css")))
 
     for (const match of workspace.matchAll(/([^{}]+)\{([^{}]*)\}/g)) {
       const selector = match[1] ?? ""
       const body = match[2] ?? ""
-      const isThemeSelector = /body(?:\[[^\]]*data-theme[^\]]*\]|:is\([^)]*data-theme[^)]*\))/.test(
-        selector,
-      )
+      const isThemeSelector = /body(?:\[[^\]]*data-theme[^\]]*\]|:is\([^)]*data-theme[^)]*\))/.test(selector)
       if (!isThemeSelector || !/\.panel-body\b/.test(selector)) continue
 
       expect(body).not.toMatch(
@@ -2530,9 +2342,7 @@ describe("overlay architecture guards", () => {
       )
     }
 
-    const bodies = Array.from(workspace.matchAll(/(^|\n)\.panel-body\s*\{([^{}]*)\}/g)).map(
-      (match) => match[2] ?? "",
-    )
+    const bodies = Array.from(workspace.matchAll(/(^|\n)\.panel-body\s*\{([^{}]*)\}/g)).map((match) => match[2] ?? "")
     const body = bodies.at(-1) ?? ""
     for (const declaration of [
       "gap: 0",
@@ -2548,17 +2358,13 @@ describe("overlay architecture guards", () => {
 
   test("task bar shell layout is canonical, not theme scoped", () => {
     const styles = withoutComments(readLegacyStylesCss("src/styles.css"))
-    const conversationSurface = withoutComments(
-      readText(join(OVERLAY_ROOT, "src/styles/surfaces/conversation.css")),
-    )
+    const conversationSurface = withoutComments(readText(join(OVERLAY_ROOT, "src/styles/surfaces/conversation.css")))
 
     // No theme selector in styles.css may set layout/chrome on .task-bar
     for (const match of styles.matchAll(/([^{}]+)\{([^{}]*)\}/g)) {
       const selector = match[1] ?? ""
       const body = match[2] ?? ""
-      const isThemeSelector = /body(?:\[[^\]]*data-theme[^\]]*\]|:is\([^)]*data-theme[^)]*\))/.test(
-        selector,
-      )
+      const isThemeSelector = /body(?:\[[^\]]*data-theme[^\]]*\]|:is\([^)]*data-theme[^)]*\))/.test(selector)
       if (!isThemeSelector || !/(?:^|[\s>+~,])\.task-bar(?:$|[\s:{.#\[,>+~])/.test(selector)) continue
 
       expect(body).not.toMatch(
@@ -2586,9 +2392,7 @@ describe("overlay architecture guards", () => {
     for (const match of styles.matchAll(/([^{}]+)\{([^{}]*)\}/g)) {
       const selector = match[1] ?? ""
       const body = match[2] ?? ""
-      const isThemeSelector = /body(?:\[[^\]]*data-theme[^\]]*\]|:is\([^)]*data-theme[^)]*\))/.test(
-        selector,
-      )
+      const isThemeSelector = /body(?:\[[^\]]*data-theme[^\]]*\]|:is\([^)]*data-theme[^)]*\))/.test(selector)
       if (!isThemeSelector) continue
       if (!new RegExp(`(?:^|[\\s>+~,])\\.${columnClass}(?:$|[\\s:{.#\\[,>+~])`).test(selector)) {
         continue
@@ -2597,27 +2401,16 @@ describe("overlay architecture guards", () => {
       expect(body).not.toMatch(/\b(?:border(?:-[a-z]+)?|border-radius|box-shadow|backdrop-filter)\s*:/)
     }
 
-    const sidebarSurface = withoutComments(
-      readText(join(OVERLAY_ROOT, "src/styles/surfaces/sidebar.css")),
-    )
-    const inspectorSurface = withoutComments(
-      readText(join(OVERLAY_ROOT, "src/styles/surfaces/inspector.css")),
-    )
-    const conversationSurface = withoutComments(
-      readText(join(OVERLAY_ROOT, "src/styles/surfaces/conversation.css")),
-    )
+    const sidebarSurface = withoutComments(readText(join(OVERLAY_ROOT, "src/styles/surfaces/sidebar.css")))
+    const inspectorSurface = withoutComments(readText(join(OVERLAY_ROOT, "src/styles/surfaces/inspector.css")))
+    const conversationSurface = withoutComments(readText(join(OVERLAY_ROOT, "src/styles/surfaces/conversation.css")))
     for (const [selector, source] of [
       [".sidebar", sidebarSurface],
       [".chat", conversationSurface],
       [".sections", inspectorSurface],
     ] as const) {
       const body = soloRuleBody(source, selector)
-      for (const declaration of [
-        "border: 0",
-        "border-radius: 0",
-        "box-shadow: none",
-        "backdrop-filter: none",
-      ]) {
+      for (const declaration of ["border: 0", "border-radius: 0", "box-shadow: none", "backdrop-filter: none"]) {
         expect(body).toContain(declaration)
       }
     }
@@ -2625,20 +2418,14 @@ describe("overlay architecture guards", () => {
 
   test("workspace and inspector stack spacing are canonical, not theme scoped", () => {
     // .workspace-main canonical moved to surfaces/workspace.css 2026-05-04.
-    const workspace = withoutComments(
-      readText(join(OVERLAY_ROOT, "src/styles/surfaces/workspace.css")),
-    )
-    const inspectorSurface = withoutComments(
-      readText(join(OVERLAY_ROOT, "src/styles/surfaces/inspector.css")),
-    )
+    const workspace = withoutComments(readText(join(OVERLAY_ROOT, "src/styles/surfaces/workspace.css")))
+    const inspectorSurface = withoutComments(readText(join(OVERLAY_ROOT, "src/styles/surfaces/inspector.css")))
 
     for (const source of [workspace, inspectorSurface]) {
       for (const match of source.matchAll(/([^{}]+)\{([^{}]*)\}/g)) {
         const selector = match[1] ?? ""
         const body = match[2] ?? ""
-        const isThemeSelector = /body(?:\[[^\]]*data-theme[^\]]*\]|:is\([^)]*data-theme[^)]*\))/.test(
-          selector,
-        )
+        const isThemeSelector = /body(?:\[[^\]]*data-theme[^\]]*\]|:is\([^)]*data-theme[^)]*\))/.test(selector)
         if (!isThemeSelector || !/\.(?:workspace-main|sections-stack)\b/.test(selector)) continue
 
         expect(body).not.toMatch(/\b(?:gap|margin(?:-[a-z]+)?|padding(?:-[a-z]+)?)\s*:/)
@@ -2653,18 +2440,16 @@ describe("overlay architecture guards", () => {
       expect(workspaceBody).toContain(declaration)
     }
 
-    const sectionsBodies = Array.from(
-      inspectorSurface.matchAll(/(^|\n)\.sections-stack\s*\{([^{}]*)\}/g),
-    ).map((match) => match[2] ?? "")
+    const sectionsBodies = Array.from(inspectorSurface.matchAll(/(^|\n)\.sections-stack\s*\{([^{}]*)\}/g)).map(
+      (match) => match[2] ?? "",
+    )
     const sectionsBody = sectionsBodies.at(-1) ?? ""
     expect(sectionsBody).toContain("gap: var(--ui-gap-sm)")
     expect(sectionsBody).toContain("padding: var(--ui-gap-sm)")
   })
 
   test("narrow overlay layout keeps non-chat panes scrollable", () => {
-    const workspace = withoutComments(
-      readText(join(OVERLAY_ROOT, "src/styles/surfaces/workspace.css")),
-    )
+    const workspace = withoutComments(readText(join(OVERLAY_ROOT, "src/styles/surfaces/workspace.css")))
     const narrowStart = workspace.indexOf("@media (max-width: 1120px)")
     expect(narrowStart).toBeGreaterThan(-1)
     const narrow = workspace.slice(narrowStart)
@@ -2679,17 +2464,13 @@ describe("overlay architecture guards", () => {
   test("right panel card radius and body padding are canonical, not theme scoped", () => {
     // After Step 9.E migration, .section → .oc-section, .section-body → .oc-section__body.
     const styles = withoutComments(readLegacyStylesCss("src/styles.css"))
-    const inspectorSurface = withoutComments(
-      readText(join(OVERLAY_ROOT, "src/styles/surfaces/inspector.css")),
-    )
+    const inspectorSurface = withoutComments(readText(join(OVERLAY_ROOT, "src/styles/surfaces/inspector.css")))
 
     for (const source of [styles, inspectorSurface]) {
       for (const match of source.matchAll(/([^{}]+)\{([^{}]*)\}/g)) {
         const selector = match[1] ?? ""
         const body = match[2] ?? ""
-        const isThemeSelector = /body(?:\[[^\]]*data-theme[^\]]*\]|:is\([^)]*data-theme[^)]*\))/.test(
-          selector,
-        )
+        const isThemeSelector = /body(?:\[[^\]]*data-theme[^\]]*\]|:is\([^)]*data-theme[^)]*\))/.test(selector)
         if (
           !isThemeSelector ||
           !/(?:^|[\s>+~,])\.(?:oc-section|gwg|oc-section__body|gwg-body)(?:$|[\s:{.#\[,>+~])/.test(selector)
@@ -2701,12 +2482,8 @@ describe("overlay architecture guards", () => {
       }
     }
 
-    expect(soloRuleBody(inspectorSurface, ".oc-section")).toContain(
-      "border-radius: var(--oc-radius-soft)",
-    )
-    expect(soloRuleBody(inspectorSurface, ".gwg")).toContain(
-      "border-radius: var(--oc-radius-soft)",
-    )
+    expect(soloRuleBody(inspectorSurface, ".oc-section")).toContain("border-radius: var(--oc-radius-soft)")
+    expect(soloRuleBody(inspectorSurface, ".gwg")).toContain("border-radius: var(--oc-radius-soft)")
 
     expect(soloRuleBody(inspectorSurface, ".oc-section__body")).toContain(
       "padding: 0 var(--ui-gap-sm) var(--ui-gap-sm)",
@@ -2735,24 +2512,20 @@ describe("overlay architecture guards", () => {
 
   test("chat scroll layout is canonical, not theme scoped", () => {
     const styles = withoutComments(readLegacyStylesCss("src/styles.css"))
-    const conversationSurface = withoutComments(
-      readText(join(OVERLAY_ROOT, "src/styles/surfaces/conversation.css")),
-    )
+    const conversationSurface = withoutComments(readText(join(OVERLAY_ROOT, "src/styles/surfaces/conversation.css")))
 
     for (const match of styles.matchAll(/([^{}]+)\{([^{}]*)\}/g)) {
       const selector = match[1] ?? ""
       const body = match[2] ?? ""
-      const isThemeSelector = /body(?:\[[^\]]*data-theme[^\]]*\]|:is\([^)]*data-theme[^)]*\))/.test(
-        selector,
-      )
+      const isThemeSelector = /body(?:\[[^\]]*data-theme[^\]]*\]|:is\([^)]*data-theme[^)]*\))/.test(selector)
       if (!isThemeSelector || !/\.chat-scroll\b/.test(selector)) continue
 
       expect(body).not.toMatch(/\b(?:padding(?:-[a-z]+)?|background|border(?:-[a-z]+)?|box-shadow)\s*:/)
     }
 
-    const bodies = Array.from(
-      conversationSurface.matchAll(/(^|\n)\.chat-scroll\s*\{([^{}]*)\}/g),
-    ).map((match) => match[2] ?? "")
+    const bodies = Array.from(conversationSurface.matchAll(/(^|\n)\.chat-scroll\s*\{([^{}]*)\}/g)).map(
+      (match) => match[2] ?? "",
+    )
     const body = bodies.at(-1) ?? ""
     expect(body).toContain(
       "padding: calc(18px * var(--ui-scale)) calc(22px * var(--ui-scale)) calc(20px * var(--ui-scale))",
@@ -2761,17 +2534,13 @@ describe("overlay architecture guards", () => {
 
   test("conversation auxiliary surfaces keep chrome out of theme selectors", () => {
     const styles = withoutComments(readLegacyStylesCss("src/styles.css"))
-    const workspaceSurface = withoutComments(
-      readText(join(OVERLAY_ROOT, "src/styles/surfaces/workspace.css")),
-    )
+    const workspaceSurface = withoutComments(readText(join(OVERLAY_ROOT, "src/styles/surfaces/workspace.css")))
 
     for (const source of [styles, workspaceSurface]) {
       for (const match of source.matchAll(/([^{}]+)\{([^{}]*)\}/g)) {
         const selector = match[1] ?? ""
         const body = match[2] ?? ""
-        const isThemeSelector = /body(?:\[[^\]]*data-theme[^\]]*\]|:is\([^)]*data-theme[^)]*\))/.test(
-          selector,
-        )
+        const isThemeSelector = /body(?:\[[^\]]*data-theme[^\]]*\]|:is\([^)]*data-theme[^)]*\))/.test(selector)
         if (!isThemeSelector || !/\.(?:chat-goals-strip|workspace-mount)\b/.test(selector)) continue
 
         expect(body).not.toMatch(/\b(?:background|border(?:-[a-z]+)?|box-shadow)\s*:/)
@@ -2782,9 +2551,7 @@ describe("overlay architecture guards", () => {
   })
 
   test("chat task-switch progress overlays the header instead of creating a hidden gap", () => {
-    const conversationSurface = withoutComments(
-      readText(join(OVERLAY_ROOT, "src/styles/surfaces/conversation.css")),
-    )
+    const conversationSurface = withoutComments(readText(join(OVERLAY_ROOT, "src/styles/surfaces/conversation.css")))
     const chatBody = soloRuleBody(conversationSurface, ".chat")
     const progressBody = soloRuleBody(conversationSurface, ".task-switch-progress")
 
@@ -2957,24 +2724,16 @@ describe("overlay architecture guards", () => {
 
   test("icon button padding is canonical, not theme scoped", () => {
     const styles = withoutComments(readLegacyStylesCss("src/styles.css"))
-    const titlebarSurface = withoutComments(
-      readText(join(OVERLAY_ROOT, "src/styles/surfaces/titlebar.css")),
-    )
-    const composerSurface = withoutComments(
-      readText(join(OVERLAY_ROOT, "src/styles/surfaces/composer.css")),
-    )
+    const titlebarSurface = withoutComments(readText(join(OVERLAY_ROOT, "src/styles/surfaces/titlebar.css")))
+    const composerSurface = withoutComments(readText(join(OVERLAY_ROOT, "src/styles/surfaces/composer.css")))
     const combined = `${styles}\n${titlebarSurface}\n${composerSurface}`
     const iconButtonClasses = [".titlebar-status-icon"]
 
     for (const match of styles.matchAll(/([^{}]+)\{([^{}]*)\}/g)) {
       const selector = match[1] ?? ""
       const body = match[2] ?? ""
-      const isThemeSelector = /body(?:\[[^\]]*data-theme[^\]]*\]|:is\([^)]*data-theme[^)]*\))/.test(
-        selector,
-      )
-      const targetsIconButton = iconButtonClasses.some((cls) =>
-        new RegExp(`\\${cls}\\b`).test(selector),
-      )
+      const isThemeSelector = /body(?:\[[^\]]*data-theme[^\]]*\]|:is\([^)]*data-theme[^)]*\))/.test(selector)
+      const targetsIconButton = iconButtonClasses.some((cls) => new RegExp(`\\${cls}\\b`).test(selector))
       if (!isThemeSelector || !targetsIconButton) continue
 
       expect(body).not.toMatch(/\bpadding(?:-[a-z]+)?\s*:/)
@@ -2992,9 +2751,7 @@ describe("overlay architecture guards", () => {
 
   test("titlebar layout container gaps are canonical, not theme scoped", () => {
     const styles = withoutComments(readLegacyStylesCss("src/styles.css"))
-    const titlebarSurface = withoutComments(
-      readText(join(OVERLAY_ROOT, "src/styles/surfaces/titlebar.css")),
-    )
+    const titlebarSurface = withoutComments(readText(join(OVERLAY_ROOT, "src/styles/surfaces/titlebar.css")))
     const containerSelectors = [
       ".titlebar-left",
       ".titlebar-brand",
@@ -3008,12 +2765,8 @@ describe("overlay architecture guards", () => {
     for (const match of styles.matchAll(/([^{}]+)\{([^{}]*)\}/g)) {
       const selector = match[1] ?? ""
       const body = match[2] ?? ""
-      const isThemeSelector = /body(?:\[[^\]]*data-theme[^\]]*\]|:is\([^)]*data-theme[^)]*\))/.test(
-        selector,
-      )
-      const targetsTitlebarLayout = containerSelectors.some((cls) =>
-        new RegExp(`\\${cls}\\b`).test(selector),
-      )
+      const isThemeSelector = /body(?:\[[^\]]*data-theme[^\]]*\]|:is\([^)]*data-theme[^)]*\))/.test(selector)
+      const targetsTitlebarLayout = containerSelectors.some((cls) => new RegExp(`\\${cls}\\b`).test(selector))
       if (!isThemeSelector || !targetsTitlebarLayout) continue
 
       expect(body).not.toMatch(/\bgap\s*:/)
@@ -3213,7 +2966,9 @@ describe("overlay architecture guards", () => {
     const css = withoutComments(readText(join(OVERLAY_ROOT, "src/styles/surfaces/card.css")))
     expect(css).not.toMatch(/\[data-kind="tool"\][^{]*\{[^}]*border-left:\s*calc\(/)
     expect(css).not.toMatch(/\[data-kind="tool"\][^{]*\{[^}]*border-left-color:\s*var\(--card-stage-info\)/)
-    expect(css).toMatch(/\.card:not\(\[data-depth="0"\]\)\[data-kind="tool"\]\s*\{[^}]*border-left:\s*0 solid transparent/)
+    expect(css).toMatch(
+      /\.card:not\(\[data-depth="0"\]\)\[data-kind="tool"\]\s*\{[^}]*border-left:\s*0 solid transparent/,
+    )
   })
 
   test("ChatBubble.tsx does not introduce inline SVG", () => {

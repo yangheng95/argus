@@ -41,10 +41,10 @@
 
 ### 两个入站入口的分工
 
-| 入口 | 场景 | 是否过 LLM |
-|---|---|---|
+| 入口                       | 场景                                                         | 是否过 LLM                                                         |
+| -------------------------- | ------------------------------------------------------------ | ------------------------------------------------------------------ |
 | **ChannelIngress.message** | 外部 bot / HTTP webhook；消息已有明确语义（reply / 新 task） | 否（确定性路由）；若无 pending interaction 则委托给 ControlMessage |
-| **ControlMessage.handle** | 用户自然语言对话（panel / slack / local） | 是（一次 LLM 推理 → 若干 capability action） |
+| **ControlMessage.handle**  | 用户自然语言对话（panel / slack / local）                    | 是（一次 LLM 推理 → 若干 capability action）                       |
 
 两者最终都调 `EngineService.createTask` 或 `Session` / `Question` 等既有 API。
 
@@ -64,15 +64,15 @@
 
 **完整 Capability 列表**（来源：`panel/capability.ts`，2026-05-11 共 20 个 action，按文件顺序）：
 
-| 类别 | actions |
-|---|---|
-| 查询视图 | `view_plan` · `view_board` · `view_tasks` |
-| Task 生命周期 | `create_task` · `send_task_message` · `retry_task` · `replan_task` · `cancel_task` |
-| Interaction 回复 | `reply_interaction` · `reject_interaction` |
-| Goal / Checks | `update_checks` · `update_goal` · `delete_goal` |
-| 视觉证据 | `capture_overlay_screenshot` |
-| Executor / 选择 | `set_executor` · `select_task` · `select_session` |
-| Session 操作 | `create_session` · `fork_session` · `delete_session` |
+| 类别             | actions                                                                            |
+| ---------------- | ---------------------------------------------------------------------------------- |
+| 查询视图         | `view_plan` · `view_board` · `view_tasks`                                          |
+| Task 生命周期    | `create_task` · `send_task_message` · `retry_task` · `replan_task` · `cancel_task` |
+| Interaction 回复 | `reply_interaction` · `reject_interaction`                                         |
+| Goal / Checks    | `update_checks` · `update_goal` · `delete_goal`                                    |
+| 视觉证据         | `capture_overlay_screenshot`                                                       |
+| Executor / 选择  | `set_executor` · `select_task` · `select_session`                                  |
+| Session 操作     | `create_session` · `fork_session` · `delete_session`                               |
 
 > `PanelLocalActionType`（前端 only，不属于 capability registry）当前是 `set_executor` /
 > `select_task` / `select_session` / `invalidate_session` 四个；其中 `invalidate_session`
@@ -83,14 +83,14 @@
 
 **代码**：`src/channel/`
 
-| 文件 | 作用 |
-|---|---|
-| `ingress.ts` | `ChannelIngress.message()` 入口；绑定查找；`panel_response` 回复；委托 ControlMessage |
-| `catalog.ts` | `ChannelId` / `ChannelSurface` 枚举 |
-| `registry.ts` | channel 注册表 |
-| `supervisor.ts` | channel runtime 子进程生命周期管理 |
-| `slack.ts` + `slack-config.ts` | Slack 适配 |
-| `attachment.ts` | 附件处理 |
+| 文件                           | 作用                                                                                  |
+| ------------------------------ | ------------------------------------------------------------------------------------- |
+| `ingress.ts`                   | `ChannelIngress.message()` 入口；绑定查找；`panel_response` 回复；委托 ControlMessage |
+| `catalog.ts`                   | `ChannelId` / `ChannelSurface` 枚举                                                   |
+| `registry.ts`                  | channel 注册表                                                                        |
+| `supervisor.ts`                | channel runtime 子进程生命周期管理                                                    |
+| `slack.ts` + `slack-config.ts` | Slack 适配                                                                            |
+| `attachment.ts`                | 附件处理                                                                              |
 
 `engine_channel_binding` 表在 `engine/engine.sql.ts` 定义，记录 `(platform, channel, thread) ↔ task_id` 绑定关系。
 
@@ -98,12 +98,13 @@
 
 **代码**：`src/workspace/`
 
-| 文件 | 作用 |
-|---|---|
+| 文件                                | 作用                            |
+| ----------------------------------- | ------------------------------- |
 | `workspace.ts` + `workspace.sql.ts` | `workspace` 表 + 多工作区元数据 |
-| `config.ts` | workspace 配置读写 |
+| `config.ts`                         | workspace 配置读写              |
 
 **已删除的旧 control-plane 结构**（旧文档残留）：
+
 - ~~`control-plane/workspace-server/`~~
 - ~~`control-plane/session-proxy-middleware.ts`~~
 - ~~`control-plane/adaptors/`~~
@@ -117,12 +118,12 @@
 
 **代码**：`src/control/`
 
-| 文件 | 作用 |
-|---|---|
-| `control.sql.ts` | `control_account` + `control_message` 表 |
+| 文件                | 作用                                                          |
+| ------------------- | ------------------------------------------------------------- |
+| `control.sql.ts`    | `control_account` + `control_message` 表                      |
 | `message-schema.ts` | 入站消息 schema（ControlMessageInput / ControlMessageResult） |
-| `message.ts` | `ControlMessage.handle` / `handleStream` — 对话层入口 |
-| `timeline.ts` | timeline 视图 |
+| `message.ts`        | `ControlMessage.handle` / `handleStream` — 对话层入口         |
+| `timeline.ts`       | timeline 视图                                                 |
 
 `ChannelIngressResult = ControlMessageResult` — ingress 直接复用 control 的 result schema。
 

@@ -23,7 +23,7 @@ describe("inline tool output", () => {
     expect(source).toContain("fetchResourceAsObjectUrl")
     expect(source).toContain("peekResourceObjectUrl")
     expect(source).toContain("function BrowserEvidenceImage")
-    expect(source).toContain("<BrowserEvidenceImage url={evidence().screenshotUrl} alt=\"Browser observation\" />")
+    expect(source).toContain('<BrowserEvidenceImage url={evidence().screenshotUrl} alt="Browser observation" />')
     expect(source).not.toContain("src={resolveResourceUrl(evidence().screenshotUrl)}")
   })
 })

@@ -19,14 +19,11 @@ const STUB_PROVIDERS = {
 } as any
 
 test("explicit alibaba-coding-plan/<model> is rejected with rule-8 message", () => {
-  expect(() => explicitModel(STUB_PROVIDERS, "alibaba-coding-plan/glm-5")).toThrow(
-    /alibaba-coding-plan-cn/,
-  )
+  expect(() => explicitModel(STUB_PROVIDERS, "alibaba-coding-plan/glm-5")).toThrow(/alibaba-coding-plan-cn/)
 })
 
 test("explicit alibaba-coding-plan-cn/<model> passes through unchanged", () => {
-  expect(explicitModel(STUB_PROVIDERS, "alibaba-coding-plan-cn/glm-5"))
-    .toBe("alibaba-coding-plan-cn/glm-5")
+  expect(explicitModel(STUB_PROVIDERS, "alibaba-coding-plan-cn/glm-5")).toBe("alibaba-coding-plan-cn/glm-5")
 })
 
 test("bare model id resolves through preferredProviders to the -cn variant", () => {

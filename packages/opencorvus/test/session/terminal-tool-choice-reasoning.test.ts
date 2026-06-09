@@ -32,12 +32,13 @@ void SessionPrompt
  * Non-reasoning models keep the hard pin.
  */
 
-const contract = (overrides: Partial<Parameters<typeof SessionLoop.terminalToolChoice>[0] & object> = {}) => ({
-  toolName: "submit_architect",
-  isSatisfied: () => false,
-  shouldExposeOnlyTerminalTool: () => true,
-  ...overrides,
-}) as any
+const contract = (overrides: Partial<Parameters<typeof SessionLoop.terminalToolChoice>[0] & object> = {}) =>
+  ({
+    toolName: "submit_architect",
+    isSatisfied: () => false,
+    shouldExposeOnlyTerminalTool: () => true,
+    ...overrides,
+  }) as any
 
 const tools = { submit_architect: { description: "stub" } } as any
 
@@ -49,11 +50,9 @@ test("non-reasoning model keeps the object-form pin once ready", () => {
 })
 
 test("non-reasoning model with shouldExpose=false still requires a tool call", () => {
-  const choice = SessionLoop.terminalToolChoice(
-    contract({ shouldExposeOnlyTerminalTool: () => false }),
-    tools,
-    { capabilities: { reasoning: false } },
-  )
+  const choice = SessionLoop.terminalToolChoice(contract({ shouldExposeOnlyTerminalTool: () => false }), tools, {
+    capabilities: { reasoning: false },
+  })
   expect(choice).toBe("required")
 })
 
@@ -65,11 +64,9 @@ test("reasoning model drops the override and relies on prompt plus recovery", ()
 })
 
 test("reasoning model with shouldExpose=false also drops the override", () => {
-  const choice = SessionLoop.terminalToolChoice(
-    contract({ shouldExposeOnlyTerminalTool: () => false }),
-    tools,
-    { capabilities: { reasoning: true } },
-  )
+  const choice = SessionLoop.terminalToolChoice(contract({ shouldExposeOnlyTerminalTool: () => false }), tools, {
+    capabilities: { reasoning: true },
+  })
   expect(choice).toBeUndefined()
 })
 
@@ -79,16 +76,12 @@ test("model param is optional; absent model behaves like non-reasoning", () => {
 })
 
 test("isSatisfied=true short-circuits regardless of reasoning", () => {
-  const choiceA = SessionLoop.terminalToolChoice(
-    contract({ isSatisfied: () => true }),
-    tools,
-    { capabilities: { reasoning: true } },
-  )
-  const choiceB = SessionLoop.terminalToolChoice(
-    contract({ isSatisfied: () => true }),
-    tools,
-    { capabilities: { reasoning: false } },
-  )
+  const choiceA = SessionLoop.terminalToolChoice(contract({ isSatisfied: () => true }), tools, {
+    capabilities: { reasoning: true },
+  })
+  const choiceB = SessionLoop.terminalToolChoice(contract({ isSatisfied: () => true }), tools, {
+    capabilities: { reasoning: false },
+  })
   expect(choiceA).toBeUndefined()
   expect(choiceB).toBeUndefined()
 })
@@ -103,27 +96,33 @@ test("planner stage agents use exact runtime tools to avoid registry and browser
     "intent-analysis",
     "requirements",
   ]) {
-    expect(SessionLoop.usesExactRuntimeContractTools(agentName, {
-      identity: {
-        agentKind: agentName,
-        contractKind: "stage-attempt",
-      },
-    } as any)).toBe(true)
+    expect(
+      SessionLoop.usesExactRuntimeContractTools(agentName, {
+        identity: {
+          agentKind: agentName,
+          contractKind: "stage-attempt",
+        },
+      } as any),
+    ).toBe(true)
   }
 
   for (const agentName of ["build"]) {
-    expect(SessionLoop.usesExactRuntimeContractTools(agentName, {
-      identity: {
-        agentKind: agentName,
-        contractKind: "stage-attempt",
-      },
-    } as any)).toBe(false)
+    expect(
+      SessionLoop.usesExactRuntimeContractTools(agentName, {
+        identity: {
+          agentKind: agentName,
+          contractKind: "stage-attempt",
+        },
+      } as any),
+    ).toBe(false)
   }
 
-  expect(SessionLoop.usesExactRuntimeContractTools("requirements", {
-    identity: {
-      agentKind: "architect",
-      contractKind: "stage-attempt",
-    },
-  } as any)).toBe(false)
+  expect(
+    SessionLoop.usesExactRuntimeContractTools("requirements", {
+      identity: {
+        agentKind: "architect",
+        contractKind: "stage-attempt",
+      },
+    } as any),
+  ).toBe(false)
 })

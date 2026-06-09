@@ -64,7 +64,10 @@ describe("evaluateVisual", () => {
   })
 
   test("gradient differences produce a partial score and a diff image", async () => {
-    const result = await evaluateVisual({ originalImage: makeGradient(48, 48, 0), renderedImage: makeGradient(48, 48, 5) })
+    const result = await evaluateVisual({
+      originalImage: makeGradient(48, 48, 0),
+      renderedImage: makeGradient(48, 48, 5),
+    })
     expect(result.overallScore).toBeGreaterThan(0)
     expect(result.overallScore).toBeLessThanOrEqual(100)
     expect(result.diffImageDataUrl.startsWith("data:image/png;base64,")).toBe(true)
@@ -94,10 +97,7 @@ describe("evaluateVisual", () => {
   test("emit hook fires through all phases", async () => {
     const events: string[] = []
     const img = makePng(16, 16)
-    await evaluateVisual(
-      { originalImage: img, renderedImage: img },
-      { emit: (event) => events.push(event.phase) },
-    )
+    await evaluateVisual({ originalImage: img, renderedImage: img }, { emit: (event) => events.push(event.phase) })
     expect(events).toContain("decode")
     expect(events).toContain("pixelmatch")
     expect(events).toContain("ssim")

@@ -23,14 +23,14 @@ The correct algorithm is:
 
 ## Existing Sources And Call Points
 
-| Surface | Current call points | Decision |
-| --- | --- | --- |
-| `ResearchAgent.run` | `src/orchestrator/tools.ts` only | Extend this entry point so all research delegations get the same webpage PRD preparation. |
-| `createReadonlyRetrievalTools` | `src/research/agent.ts`, `src/fact-check/index.ts` | Keep retrieval surface unchanged except for already-added `webfetch`; do not add browser tools to research. |
-| `ensureLiveWebpageEvidence` | `src/orchestrator/tools.ts`, tests in `test/orchestrator/webpage-evidence.test.ts` | Reuse as the single source of webpage evidence generation; do not copy extraction logic. |
-| `primaryWebpageEvidenceArtifacts` | `src/orchestrator/tools.ts`, webpage evidence tests | Use artifact list for prompt references. |
-| `primaryWebpageSourcePackageArtifacts` | `src/orchestrator/webpage-evidence.ts` | Use source package paths as implementation/source evidence anchors. |
-| `ResearchBrief.document_outline` | schema-only today | Treat as the PRD major module list for downstream splitting. |
+| Surface                                | Current call points                                                                | Decision                                                                                                    |
+| -------------------------------------- | ---------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------- |
+| `ResearchAgent.run`                    | `src/orchestrator/tools.ts` only                                                   | Extend this entry point so all research delegations get the same webpage PRD preparation.                   |
+| `createReadonlyRetrievalTools`         | `src/research/agent.ts`, `src/fact-check/index.ts`                                 | Keep retrieval surface unchanged except for already-added `webfetch`; do not add browser tools to research. |
+| `ensureLiveWebpageEvidence`            | `src/orchestrator/tools.ts`, tests in `test/orchestrator/webpage-evidence.test.ts` | Reuse as the single source of webpage evidence generation; do not copy extraction logic.                    |
+| `primaryWebpageEvidenceArtifacts`      | `src/orchestrator/tools.ts`, webpage evidence tests                                | Use artifact list for prompt references.                                                                    |
+| `primaryWebpageSourcePackageArtifacts` | `src/orchestrator/webpage-evidence.ts`                                             | Use source package paths as implementation/source evidence anchors.                                         |
+| `ResearchBrief.document_outline`       | schema-only today                                                                  | Treat as the PRD major module list for downstream splitting.                                                |
 
 ## Evidence Model
 

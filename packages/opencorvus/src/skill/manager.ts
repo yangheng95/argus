@@ -12,6 +12,7 @@ import { Process } from "@/util/process"
 import { Discovery } from "./discovery"
 import { Skill } from "./skill"
 import { which } from "@/util/which"
+import { Uint8ArrayReader, Uint8ArrayWriter, ZipReader } from "@zip.js/zip.js"
 
 const MANIFEST = ".opencorvus-skill-source.json"
 const SkillInfo = z.object({
@@ -24,17 +25,21 @@ const SkillInfo = z.object({
   builtin: z.boolean().optional().default(false),
   location: z.string(),
   content: z.string(),
-  auto_detect: z.object({
-    files: z.array(z.string()).optional(),
-    deps: z.array(z.string()).optional(),
-    task_signals: z.object({
-      has_attachment_image: z.boolean().optional(),
-      request_contains_url: z.boolean().optional(),
-      request_contains_figma_url: z.boolean().optional(),
-      package_has_script: z.array(z.string()).optional(),
-      request_text_any: z.array(z.string()).optional(),
-    }).optional(),
-  }).optional(),
+  auto_detect: z
+    .object({
+      files: z.array(z.string()).optional(),
+      deps: z.array(z.string()).optional(),
+      task_signals: z
+        .object({
+          has_attachment_image: z.boolean().optional(),
+          request_contains_url: z.boolean().optional(),
+          request_contains_figma_url: z.boolean().optional(),
+          package_has_script: z.array(z.string()).optional(),
+          request_text_any: z.array(z.string()).optional(),
+        })
+        .optional(),
+    })
+    .optional(),
   priority: z.number().optional().default(0),
 })
 
@@ -86,6 +91,29 @@ export namespace SkillManager {
     value: z.string().min(1),
     policy: Policy.optional(),
   })
+
+  export const ImportBundleFile = z
+    .object({
+      path: z.string().min(1),
+      content: z.string().optional(),
+      contentBase64: z.string().optional(),
+    })
+    .refine((item) => item.content !== undefined || item.contentBase64 !== undefined, {
+      message: "Import file requires content or contentBase64",
+    })
+
+  export const ImportFileInput = z
+    .object({
+      filename: z.string().min(1).optional(),
+      content: z.string().optional(),
+      sourceName: z.string().min(1).optional(),
+      files: ImportBundleFile.array().optional(),
+      archiveBase64: z.string().optional(),
+      policy: Policy.optional(),
+    })
+    .refine((input) => input.content !== undefined || input.files?.length || input.archiveBase64, {
+      message: "Import requires a SKILL.md file, a directory file list, or a zip archive",
+    })
 
   export const RemoveInput = z.object({
     source: z.string().min(1),
@@ -218,23 +246,27 @@ export namespace SkillManager {
         (await Skill.all()).map(async (skill) => {
           const dir = skill.location === "builtin" ? undefined : path.dirname(skill.location)
           const manifest = dir ? await readManifest(dir, root, cache) : undefined
-          const sourceType = dir
-            ? sourceTypeFor(dir, configuredPaths, cache, manifest?.kind)
-            : "builtin"
+          const sourceType = dir ? sourceTypeFor(dir, configuredPaths, cache, manifest?.kind) : "builtin"
           const trust = trustFor(skill, manifest?.source)
-          const risk = dir ? await riskFor(dir, trust) : { level: "low" as const, has_scripts: false, has_agents: false, has_references: false, has_templates: false }
+          const risk = dir
+            ? await riskFor(dir, trust)
+            : {
+                level: "low" as const,
+                has_scripts: false,
+                has_agents: false,
+                has_references: false,
+                has_templates: false,
+              }
           return {
             ...skill,
             dir,
             source_type:
-              manifest?.kind === "git"
-                ? "managed_git"
-                : manifest?.kind === "url"
-                  ? "config_url"
-                  : sourceType,
+              manifest?.kind === "git" ? "managed_git" : manifest?.kind === "url" ? "config_url" : sourceType,
             source:
               manifest?.source ??
-              (sourceType === "config_path" ? configuredPaths.find((item) => Filesystem.contains(item, dir!)) : undefined) ??
+              (sourceType === "config_path"
+                ? configuredPaths.find((item) => Filesystem.contains(item, dir!))
+                : undefined) ??
               (sourceType === "config_url" && configuredUrls.length === 1 ? configuredUrls[0] : undefined),
             trust,
             risk,
@@ -308,6 +340,53 @@ export namespace SkillManager {
     return { source, path: target, kind: input.kind }
   }
 
+  export async function importFile(raw: z.input<typeof ImportFileInput>) {
+    const input = ImportFileInput.parse(raw)
+    const files = input.archiveBase64
+      ? await readZipSkillFiles(input.filename ?? input.sourceName ?? "skill.zip", input.archiveBase64)
+      : input.files?.length
+        ? input.files
+        : [
+            {
+              path: input.filename ?? "SKILL.md",
+              content: input.content ?? "",
+            },
+          ]
+
+    const projectConfigDir = Config.projectConfigDirectory()
+    const normalized = normalizeBundleFiles(files)
+    const skillRoots = parseSkillRoots(normalized)
+    const imported: Array<{ name: string; source: string }> = []
+
+    for (const root of skillRoots) {
+      const dirName = slug(root.info.name)
+      if (!dirName) throw new Error(`Invalid skill name: ${root.info.name}`)
+      const targetDir = path.join(projectConfigDir, "skill", dirName)
+
+      for (const file of root.files) {
+        const target = path.join(targetDir, ...file.relativePath.split("/"))
+        if (!Filesystem.contains(projectConfigDir, target)) {
+          throw new Error(`Refusing to write skill outside project config directory: ${file.sourcePath}`)
+        }
+        await Filesystem.write(target, file.bytes)
+      }
+      imported.push({ name: root.info.name, source: path.join(targetDir, "SKILL.md") })
+    }
+
+    await Config.state.reset()
+    await Skill.state.reset()
+    if (input.policy) {
+      await applyPolicyToNames(imported.map((item) => item.name), input.policy)
+    }
+    return {
+      name: imported[0]!.name,
+      source: imported[0]!.source,
+      kind: "path" as const,
+      names: imported.map((item) => item.name),
+      sources: imported.map((item) => item.source),
+    }
+  }
+
   export async function remove(raw: z.input<typeof RemoveInput>) {
     const input = RemoveInput.parse(raw)
     const source =
@@ -336,11 +415,7 @@ export namespace SkillManager {
       if (typeof next.permission !== "object" || !next.permission) next.permission = {}
       const current = next.permission.skill
       const table: Record<string, Config.PermissionAction> =
-        typeof current === "string"
-          ? { "*": current }
-          : current && typeof current === "object"
-            ? { ...current }
-            : {}
+        typeof current === "string" ? { "*": current } : current && typeof current === "object" ? { ...current } : {}
       table[input.name] = input.action
       next.permission.skill = table
     })
@@ -432,11 +507,7 @@ async function applyPolicyToNames(names: string[], policy: z.infer<typeof SkillM
     if (typeof next.permission !== "object" || !next.permission) next.permission = {}
     const current = next.permission.skill
     const table: Record<string, Config.PermissionAction> =
-      typeof current === "string"
-        ? { "*": current }
-        : current && typeof current === "object"
-          ? { ...current }
-          : {}
+      typeof current === "string" ? { "*": current } : current && typeof current === "object" ? { ...current } : {}
     for (const name of names) {
       table[name] = policy
     }
@@ -461,7 +532,10 @@ function trustFor(skill: z.infer<typeof SkillInfo>, source?: string) {
   if (source?.includes("skills.sh")) return "curated" as const
   if (source?.includes("skillstore.io")) return "curated" as const
   if (source?.includes("skills.pub")) return "community" as const
-  if (skill.location.includes(`${path.sep}.claude${path.sep}`) || skill.location.includes(`${path.sep}.agents${path.sep}`)) {
+  if (
+    skill.location.includes(`${path.sep}.claude${path.sep}`) ||
+    skill.location.includes(`${path.sep}.agents${path.sep}`)
+  ) {
     return "external" as const
   }
   if (skill.location !== "builtin") return "local" as const
@@ -470,23 +544,38 @@ function trustFor(skill: z.infer<typeof SkillInfo>, source?: string) {
 
 async function riskFor(dir: string, trust: z.infer<typeof SkillManager.Trust>) {
   const [scripts, agents, references, templates] = await Promise.all([
-    Glob.scan("{script,scripts}/**/*", { cwd: dir, absolute: true, include: "file", dot: true, symlink: true }).catch(() => []),
-    Glob.scan("{agent,agents}/**/*", { cwd: dir, absolute: true, include: "file", dot: true, symlink: true }).catch(() => []),
-    Glob.scan("{reference,references}/**/*", { cwd: dir, absolute: true, include: "file", dot: true, symlink: true }).catch(() => []),
-    Glob.scan("{template,templates,asset,assets}/**/*", { cwd: dir, absolute: true, include: "file", dot: true, symlink: true }).catch(() => []),
+    Glob.scan("{script,scripts}/**/*", { cwd: dir, absolute: true, include: "file", dot: true, symlink: true }).catch(
+      () => [],
+    ),
+    Glob.scan("{agent,agents}/**/*", { cwd: dir, absolute: true, include: "file", dot: true, symlink: true }).catch(
+      () => [],
+    ),
+    Glob.scan("{reference,references}/**/*", {
+      cwd: dir,
+      absolute: true,
+      include: "file",
+      dot: true,
+      symlink: true,
+    }).catch(() => []),
+    Glob.scan("{template,templates,asset,assets}/**/*", {
+      cwd: dir,
+      absolute: true,
+      include: "file",
+      dot: true,
+      symlink: true,
+    }).catch(() => []),
   ])
   const hasScripts = scripts.length > 0
   const hasAgents = agents.length > 0
   const hasReferences = references.length > 0
   const hasTemplates = templates.length > 0
-  const level =
-    hasScripts
-      ? "high"
-      : trust === "community" || trust === "unknown" || trust === "external"
+  const level = hasScripts
+    ? "high"
+    : trust === "community" || trust === "unknown" || trust === "external"
+      ? "medium"
+      : hasAgents || hasReferences
         ? "medium"
-        : hasAgents || hasReferences
-          ? "medium"
-          : "low"
+        : "low"
   return {
     level,
     has_scripts: hasScripts,
@@ -534,4 +623,100 @@ async function listSkillNamesInDir(dir: string) {
     }),
   )
   return dedupe(names.filter((item): item is string => !!item))
+}
+
+type SkillImportFileInput = z.infer<typeof SkillManager.ImportBundleFile>
+type NormalizedSkillFile = {
+  path: string
+  bytes: Uint8Array
+}
+type ParsedSkillRoot = {
+  info: Pick<z.infer<typeof Skill.Info>, "name" | "description">
+  files: Array<{
+    sourcePath: string
+    relativePath: string
+    bytes: Uint8Array
+  }>
+}
+
+async function readZipSkillFiles(filename: string, archiveBase64: string): Promise<SkillImportFileInput[]> {
+  const archive = Uint8Array.from(Buffer.from(archiveBase64, "base64"))
+  const reader = new ZipReader(new Uint8ArrayReader(archive))
+  try {
+    const entries = await reader.getEntries()
+    const files: SkillImportFileInput[] = []
+    for (const entry of entries) {
+      if (entry.directory) continue
+      const data = await entry.getData?.(new Uint8ArrayWriter())
+      if (!data) continue
+      files.push({
+        path: entry.filename,
+        contentBase64: Buffer.from(data).toString("base64"),
+      })
+    }
+    if (files.length === 0) throw new Error(`No files found in ${filename}`)
+    return files
+  } finally {
+    await reader.close()
+  }
+}
+
+function normalizeBundleFiles(files: SkillImportFileInput[]): NormalizedSkillFile[] {
+  return files.map((file) => {
+    const relativePath = normalizeImportPath(file.path)
+    return {
+      path: relativePath,
+      bytes:
+        file.contentBase64 !== undefined
+          ? Uint8Array.from(Buffer.from(file.contentBase64, "base64"))
+          : new TextEncoder().encode(file.content ?? ""),
+    }
+  })
+}
+
+function normalizeImportPath(value: string) {
+  const normalized = value.replace(/\\/g, "/").replace(/^\/+/, "").replace(/^\.\//, "")
+  const segments = normalized.split("/").filter(Boolean)
+  if (segments.length === 0) throw new Error(`Invalid empty skill import path: ${value}`)
+  if (segments.some((segment) => segment === "." || segment === "..")) {
+    throw new Error(`Refusing unsafe skill import path: ${value}`)
+  }
+  if (/^[a-zA-Z]:/.test(segments[0]!)) {
+    throw new Error(`Refusing absolute skill import path: ${value}`)
+  }
+  return segments.join("/")
+}
+
+function parseSkillRoots(files: NormalizedSkillFile[]): ParsedSkillRoot[] {
+  const skillFiles = files.filter((file) => path.posix.basename(file.path).toLowerCase() === "skill.md")
+  if (skillFiles.length === 0) {
+    throw new Error("No SKILL.md files found in dropped skill source")
+  }
+
+  return skillFiles.map((skillFile) => {
+    const rootPath = path.posix.dirname(skillFile.path)
+    const root = rootPath === "." ? "" : rootPath
+    const siblingSkillRoots = skillFiles
+      .filter((file) => file.path !== skillFile.path)
+      .map((file) => {
+        const dir = path.posix.dirname(file.path)
+        return dir === "." ? "" : dir
+      })
+      .filter(Boolean)
+    const parsed = matter(new TextDecoder().decode(skillFile.bytes))
+    const info = Skill.Info.pick({ name: true, description: true }).parse(parsed.data)
+    const rootFiles = files
+      .filter((file) => {
+        if (root) return file.path === root || file.path.startsWith(`${root}/`)
+        if (skillFiles.length === 1) return true
+        return !siblingSkillRoots.some((siblingRoot) => file.path.startsWith(`${siblingRoot}/`))
+      })
+      .map((file) => ({
+        sourcePath: file.path,
+        relativePath: root ? file.path.slice(root.length + 1) : file.path,
+        bytes: file.bytes,
+      }))
+      .filter((file) => file.relativePath)
+    return { info, files: rootFiles }
+  })
 }

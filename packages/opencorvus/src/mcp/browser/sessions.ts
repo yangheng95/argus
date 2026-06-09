@@ -122,16 +122,18 @@ const acquireBrowser = async (): Promise<Browser> => {
   if (!browserLaunch) {
     browserLaunch = BrowserRuntime.launchPlaywrightBrowserInNodeProcess({
       headless: HEADLESS,
-    }).then((launched) => {
-      browser = launched
-      launched.on("disconnected", () => {
-        if (browser === launched) browser = null
-        markAllSessionsTerminated("browser_disconnected", "Browser process disconnected")
-      })
-      return launched
-    }).finally(() => {
-      browserLaunch = null
     })
+      .then((launched) => {
+        browser = launched
+        launched.on("disconnected", () => {
+          if (browser === launched) browser = null
+          markAllSessionsTerminated("browser_disconnected", "Browser process disconnected")
+        })
+        return launched
+      })
+      .finally(() => {
+        browserLaunch = null
+      })
   }
   return browserLaunch
 }
@@ -421,7 +423,11 @@ export const adoptPage = async (profileId: string, page: Page, opts: PageSession
   attachDiagnostics(sessionId, page)
   page.on("close", () => {
     const intentional = intentionalSessionClose.delete(sessionId)
-    detachSession(sessionId, intentional ? "destroyed" : "page_closed", intentional ? "Session destroyed" : "Page closed unexpectedly")
+    detachSession(
+      sessionId,
+      intentional ? "destroyed" : "page_closed",
+      intentional ? "Session destroyed" : "Page closed unexpectedly",
+    )
   })
   creationLog.push(now)
   log(`page adopted     ${sessionId}  profile=${profileId}  url=${page.url()}  perf=${opts.perfMode}`)
@@ -474,7 +480,11 @@ const createSessionForProfile = async (
     attachDiagnostics(sessionId, page)
     page.on("close", () => {
       const intentional = intentionalSessionClose.delete(sessionId)
-      detachSession(sessionId, intentional ? "destroyed" : "page_closed", intentional ? "Session destroyed" : "Page closed unexpectedly")
+      detachSession(
+        sessionId,
+        intentional ? "destroyed" : "page_closed",
+        intentional ? "Session destroyed" : "Page closed unexpectedly",
+      )
     })
     creationLog.push(now)
     log(
@@ -519,7 +529,9 @@ const destroySessionLocked = async (sessionId: string, preserveProfile?: Preserv
   if (!profile) return { profileId: session.profileId, profilePreserved: false }
   profile.lastActive = Date.now()
   if (profile.sessionIds.size > 0) {
-    log(`session destroyed ${sessionId}  profile=${session.profileId}  url=${url}  remaining=${profile.sessionIds.size}`)
+    log(
+      `session destroyed ${sessionId}  profile=${session.profileId}  url=${url}  remaining=${profile.sessionIds.size}`,
+    )
     return { profileId: session.profileId, profilePreserved: true }
   }
   const ttl = parseDuration(preserveProfile)
@@ -731,7 +743,10 @@ export const getSessionStats = () => {
 export const getPerf = (sessionId: string) => {
   const session = sessions.get(sessionId)
   if (!session) throw new Error(`Session not found: ${sessionId}`)
-  if (!session.perf) throw new Error(`Perf tracking is disabled for this session. Pass perf: "silent" or "per_tool" when calling session_create.`)
+  if (!session.perf)
+    throw new Error(
+      `Perf tracking is disabled for this session. Pass perf: "silent" or "per_tool" when calling session_create.`,
+    )
   return buildPerf(session.perf, session.toolCalls, session.baseURL)
 }
 

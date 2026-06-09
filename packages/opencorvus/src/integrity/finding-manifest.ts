@@ -28,7 +28,13 @@ export function canonicalIntegritySymptom(input: IntegrityManifestSource): strin
   const title = normalizeDisplayText(input.title)
   const description = normalizeDisplayText(input.description)
   if (title && description && description !== title) return `${title}: ${description}`
-  return title || description || normalizeDisplayText(input.repair) || normalizeDisplayText(input.id) || "Unspecified finding"
+  return (
+    title ||
+    description ||
+    normalizeDisplayText(input.repair) ||
+    normalizeDisplayText(input.id) ||
+    "Unspecified finding"
+  )
 }
 
 export function integrityFindingFingerprint(input: IntegrityManifestSource): string {

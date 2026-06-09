@@ -117,7 +117,12 @@ function userMessage(id: string, parts: Message.Part[]): Message.WithParts {
   }
 }
 
-function assistantMessage(id: string, parentID: string, parts: Message.Part[], info?: Partial<Message.Assistant>): Message.WithParts {
+function assistantMessage(
+  id: string,
+  parentID: string,
+  parts: Message.Part[],
+  info?: Partial<Message.Assistant>,
+): Message.WithParts {
   return {
     info: {
       id,
@@ -163,7 +168,9 @@ function toolPart(messageID: string, id: string, output: string): Message.ToolPa
   }
 }
 
-function previousRetention(handoff: CompactionHandoff.Info): NonNullable<CompactionHandoff.EvidenceRequirements["previousHandoff"]> {
+function previousRetention(
+  handoff: CompactionHandoff.Info,
+): NonNullable<CompactionHandoff.EvidenceRequirements["previousHandoff"]> {
   return {
     acceptanceCriteria: handoff.acceptanceCriteria,
     workingContext: handoff.workingContext,
@@ -279,8 +286,12 @@ describe("CompactionHandoff", () => {
           )
           expect(episode).toBeDefined()
           if (!episode) return
-          const content = Memory.getChunks(episode.id).map((chunk) => chunk.content).join("\n")
-          expect(content).toContain("Rendered Markdown is display-only; assistant.structured is the resumable handoff source.")
+          const content = Memory.getChunks(episode.id)
+            .map((chunk) => chunk.content)
+            .join("\n")
+          expect(content).toContain(
+            "Rendered Markdown is display-only; assistant.structured is the resumable handoff source.",
+          )
           expect(content).not.toContain("DISPLAY MARKDOWN CONFLICT")
         } finally {
           configSpy.mockRestore()
@@ -699,7 +710,9 @@ describe("CompactionHandoff", () => {
     })
 
     expect(prompt).toContain("<previous-structured-handoff>")
-    expect(prompt).toContain('"objective": "Harden compaction handoff so session continuation keeps requirements intact"')
+    expect(prompt).toContain(
+      '"objective": "Harden compaction handoff so session continuation keeps requirements intact"',
+    )
     expect(prompt).toContain("rendered Markdown summaries are display-only")
     expect(prompt).not.toContain("<previous-summary>")
     expect(prompt).not.toContain("1. Primary Request and Intent:")
@@ -711,7 +724,14 @@ describe("CompactionHandoff", () => {
     expect(format.type).toBe("json_schema")
     expect(format.schema).toMatchObject({
       type: "object",
-      required: expect.arrayContaining(["objective", "currentState", "todos", "workingContext", "chronology", "nextActions"]),
+      required: expect.arrayContaining([
+        "objective",
+        "currentState",
+        "todos",
+        "workingContext",
+        "chronology",
+        "nextActions",
+      ]),
     })
     expect(format.retryCount).toBe(2)
     expect(JSON.stringify(format.schema)).toContain("activeBuildContracts")

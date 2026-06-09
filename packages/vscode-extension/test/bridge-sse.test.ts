@@ -1,9 +1,5 @@
 import { afterEach, beforeEach, describe, expect, test } from "bun:test"
-import {
-  PROTOCOL_VERSION,
-  type ExtensionMessage,
-  type WebviewMessage,
-} from "@opencorvus-ai/transport-protocol"
+import { PROTOCOL_VERSION, type ExtensionMessage, type WebviewMessage } from "@opencorvus-ai/transport-protocol"
 import { TransportBridge } from "../src/transport/bridge"
 
 /**
@@ -37,7 +33,9 @@ function mockWebview(): MockWebview {
     cspSource: "vscode-test",
     options: {} as any,
     html: "",
-    onDidDispose() { return { dispose() {} } },
+    onDidDispose() {
+      return { dispose() {} }
+    },
     onDidReceiveMessage(fn) {
       receiveHandler = fn
       return { dispose() {} }
@@ -46,7 +44,9 @@ function mockWebview(): MockWebview {
       posted.push(m)
       return Promise.resolve(true) as any
     },
-    asWebviewUri(uri) { return uri },
+    asWebviewUri(uri) {
+      return uri
+    },
     async receive(message) {
       if (!receiveHandler) throw new Error("no message handler attached")
       receiveHandler(message)
@@ -87,7 +87,11 @@ function chunkedSseResponse(chunks: string[]): Response {
 function installSseFetch(response: Response): { restore: () => void } {
   const original = globalThis.fetch
   globalThis.fetch = (async () => response) as typeof fetch
-  return { restore: () => { globalThis.fetch = original } }
+  return {
+    restore: () => {
+      globalThis.fetch = original
+    },
+  }
 }
 
 function streamEventsFor(id: string, posted: ExtensionMessage[]): string[] {
@@ -133,10 +137,7 @@ describe("TransportBridge SSE chunk parsing (audit G1)", () => {
   })
 
   test("parses standard SSE blocks (LF) into individual events", async () => {
-    const fetchSpy = installSseFetch(chunkedSseResponse([
-      "data: hello\n\n",
-      "data: world\n\n",
-    ]))
+    const fetchSpy = installSseFetch(chunkedSseResponse(["data: hello\n\n", "data: world\n\n"]))
     try {
       await openStream(webview, "g1-lf")
       await flush()
@@ -147,10 +148,7 @@ describe("TransportBridge SSE chunk parsing (audit G1)", () => {
   })
 
   test("parses CRLF SSE blocks (Windows-style)", async () => {
-    const fetchSpy = installSseFetch(chunkedSseResponse([
-      "data: a\r\n\r\n",
-      "data: b\r\n\r\n",
-    ]))
+    const fetchSpy = installSseFetch(chunkedSseResponse(["data: a\r\n\r\n", "data: b\r\n\r\n"]))
     try {
       await openStream(webview, "g1-crlf")
       await flush()
@@ -161,10 +159,7 @@ describe("TransportBridge SSE chunk parsing (audit G1)", () => {
   })
 
   test("reassembles a single event split across two chunks", async () => {
-    const fetchSpy = installSseFetch(chunkedSseResponse([
-      "data: hello-",
-      "world\n\n",
-    ]))
+    const fetchSpy = installSseFetch(chunkedSseResponse(["data: hello-", "world\n\n"]))
     try {
       await openStream(webview, "g1-split")
       await flush()
@@ -175,9 +170,7 @@ describe("TransportBridge SSE chunk parsing (audit G1)", () => {
   })
 
   test("multi-line data: blocks are joined with \\n (per SSE spec)", async () => {
-    const fetchSpy = installSseFetch(chunkedSseResponse([
-      "data: line1\ndata: line2\n\n",
-    ]))
+    const fetchSpy = installSseFetch(chunkedSseResponse(["data: line1\ndata: line2\n\n"]))
     try {
       await openStream(webview, "g1-multi")
       await flush()
@@ -188,9 +181,7 @@ describe("TransportBridge SSE chunk parsing (audit G1)", () => {
   })
 
   test("ignores comment / id / event lines that aren't `data:`", async () => {
-    const fetchSpy = installSseFetch(chunkedSseResponse([
-      ":heartbeat\nid: 42\nevent: ping\ndata: payload\n\n",
-    ]))
+    const fetchSpy = installSseFetch(chunkedSseResponse([":heartbeat\nid: 42\nevent: ping\ndata: payload\n\n"]))
     try {
       await openStream(webview, "g1-noise")
       await flush()
@@ -201,15 +192,11 @@ describe("TransportBridge SSE chunk parsing (audit G1)", () => {
   })
 
   test("emits a final stream.close after the upstream ends", async () => {
-    const fetchSpy = installSseFetch(chunkedSseResponse([
-      "data: only-event\n\n",
-    ]))
+    const fetchSpy = installSseFetch(chunkedSseResponse(["data: only-event\n\n"]))
     try {
       await openStream(webview, "g1-close")
       await flush()
-      const closes = webview.postedMessages.filter(
-        (m) => m.type === "stream.close" && (m as any).id === "g1-close",
-      )
+      const closes = webview.postedMessages.filter((m) => m.type === "stream.close" && (m as any).id === "g1-close")
       expect(closes.length).toBe(1)
       expect((closes[0] as any).reason).toBe("upstream-end")
     } finally {
@@ -221,9 +208,7 @@ describe("TransportBridge SSE chunk parsing (audit G1)", () => {
     // Single event > 64 KiB triggers the W2-P3 byte-cap immediate
     // flush path. Below ceiling: timer-based flush only.
     const big = "x".repeat(70 * 1024)
-    const fetchSpy = installSseFetch(chunkedSseResponse([
-      `data: ${big}\n\n`,
-    ]))
+    const fetchSpy = installSseFetch(chunkedSseResponse([`data: ${big}\n\n`]))
     try {
       await openStream(webview, "g1-bigbyte")
       // Don't wait for the timer — sleep ~5 ms; if the byte ceiling
@@ -247,9 +232,7 @@ describe("TransportBridge SSE chunk parsing (audit G1)", () => {
     // `\n\n` so this matters only for irregular servers / network
     // truncation. Accepting the tail is the lenient choice — drop
     // it would lose user-visible data on a clean disconnect.
-    const fetchSpy = installSseFetch(chunkedSseResponse([
-      "data: complete\n\ndata: half-",
-    ]))
+    const fetchSpy = installSseFetch(chunkedSseResponse(["data: complete\n\ndata: half-"]))
     try {
       await openStream(webview, "g1-trailing")
       await flush()

@@ -27,19 +27,19 @@ bun run script/benchmark/overlay-web-benchmark.ts \
 
 ## 关键 flag
 
-| flag | 说明 |
-|---|---|
-| `--request-file=PATH` | 任务描述文件（PRD） |
-| `--model=MODEL` | 指定模型（默认自动探测） |
-| `--executor=opencorvus\|codex\|claude-code` | 执行器：OpenCorvus / Codex / Claude Code |
-| `--title=TITLE` | 任务标题 |
-| `--report=PATH` | 输出报告 JSON |
-| `--max-runs=N` | 最大 Run 次数 |
-| `--stall-timeout-ms=MS` | 执行/评估阶段**无活动超时** |
-| `--planning-stall-timeout-ms=MS` | 规划阶段**无活动超时**（规划 agent 可能"静默思考"较久） |
-| `--tool-timeout-ms=MS` | 单个工具调用**无活动超时** |
-| `--no-keep` | 任务结束删除临时目录 |
-| `--skip-local-verify` | 跳过本地二次验证 |
+| flag                                        | 说明                                                    |
+| ------------------------------------------- | ------------------------------------------------------- |
+| `--request-file=PATH`                       | 任务描述文件（PRD）                                     |
+| `--model=MODEL`                             | 指定模型（默认自动探测）                                |
+| `--executor=opencorvus\|codex\|claude-code` | 执行器：OpenCorvus / Codex / Claude Code                |
+| `--title=TITLE`                             | 任务标题                                                |
+| `--report=PATH`                             | 输出报告 JSON                                           |
+| `--max-runs=N`                              | 最大 Run 次数                                           |
+| `--stall-timeout-ms=MS`                     | 执行/评估阶段**无活动超时**                             |
+| `--planning-stall-timeout-ms=MS`            | 规划阶段**无活动超时**（规划 agent 可能"静默思考"较久） |
+| `--tool-timeout-ms=MS`                      | 单个工具调用**无活动超时**                              |
+| `--no-keep`                                 | 任务结束删除临时目录                                    |
+| `--skip-local-verify`                       | 跳过本地二次验证                                        |
 
 ## Env 显式注入
 
@@ -48,6 +48,7 @@ Env 必须在**进程启动前**就绪。`Env.state()` 在实例创建时快照 
 ## 通过判据
 
 报告 JSON 中：
+
 ```json
 {
   "qualityVerdict": "accepted",
@@ -72,6 +73,7 @@ Env 必须在**进程启动前**就绪。`Env.state()` 在实例创建时快照 
 ## 报告结构
 
 `--report` 产出的 JSON 包含：
+
 - 任务元信息（title、model、executor）
 - orchestrator workflow steps、goal runs、review、本地验证与 quality gates 的耗时
 - 每个 Goal 的 check 结果

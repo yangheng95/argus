@@ -69,23 +69,15 @@ describe("explore subagent session split", () => {
   })
 
   test("orchestrator explore tool stamps kind:'explore' (not the generic assistant bucket)", () => {
-    const toolsSource = readFileSync(
-      join(__dirname, "..", "..", "src", "orchestrator", "tools.ts"),
-      "utf8",
-    )
+    const toolsSource = readFileSync(join(__dirname, "..", "..", "src", "orchestrator", "tools.ts"), "utf8")
     // The explore dispatch site must create an explore-kinded session.
-    const exploreCreate = /const exploreSession = await Session\.createNext\(\{\s*kind:\s*"([^"]+)"/m.exec(
-      toolsSource,
-    )
+    const exploreCreate = /const exploreSession = await Session\.createNext\(\{\s*kind:\s*"([^"]+)"/m.exec(toolsSource)
     expect(exploreCreate).not.toBeNull()
     expect(exploreCreate![1]).toBe("explore")
   })
 
   test("SESSION_KINDS single-source tuple declares the dedicated 'explore' member", () => {
-    const sqlSource = readFileSync(
-      join(__dirname, "..", "..", "src", "session", "session.sql.ts"),
-      "utf8",
-    )
+    const sqlSource = readFileSync(join(__dirname, "..", "..", "src", "session", "session.sql.ts"), "utf8")
     // Single source: SessionKind derives from SESSION_KINDS, and the Info.kind
     // z.enum derives from the same tuple — no re-listed duplicate (rule 8).
     expect(sqlSource).toMatch(/export const SESSION_KINDS = \[[\s\S]*"explore"[\s\S]*\] as const/)

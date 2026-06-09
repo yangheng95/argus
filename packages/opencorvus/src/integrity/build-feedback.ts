@@ -60,7 +60,14 @@ export function composeIntegrityFeedbackForBuild(input: {
   })
   const sourceSection = renderSourceSection(latestAttempt.artifactID)
   const reportContractSection = renderBuildRepairReportContract(history.latestBlockingFindings)
-  const directPrompt = [introSection, rootSection, blockingSection, advisorySection, reportContractSection, sourceSection]
+  const directPrompt = [
+    introSection,
+    rootSection,
+    blockingSection,
+    advisorySection,
+    reportContractSection,
+    sourceSection,
+  ]
     .filter((section) => section.trim().length > 0)
     .join("\n\n")
 
@@ -134,13 +141,19 @@ function renderFindingSection(input: {
     lines.push("Every blocking finding from the latest non-pass review is listed below; none may be skipped.")
     lines.push("")
   } else {
-    lines.push("Advisory findings rank below blockers. Fix them only when they do not pull scope away from blocking repairs.")
+    lines.push(
+      "Advisory findings rank below blockers. Fix them only when they do not pull scope away from blocking repairs.",
+    )
     lines.push("")
   }
   for (const finding of input.findings) {
-    lines.push(`- **${sanitizeInline(finding.findingID)}** (root: ${sanitizeInline(finding.rootID)}, R${finding.attemptNumber})`)
+    lines.push(
+      `- **${sanitizeInline(finding.findingID)}** (root: ${sanitizeInline(finding.rootID)}, R${finding.attemptNumber})`,
+    )
     lines.push(`  fingerprint: ${sanitizeInline(finding.fingerprint)}`)
-    lines.push(`  canonical symptom: ${sanitizeBlock(finding.canonicalSymptom, "generic", input.promptBudget.findingDescriptionCharCap)}`)
+    lines.push(
+      `  canonical symptom: ${sanitizeBlock(finding.canonicalSymptom, "generic", input.promptBudget.findingDescriptionCharCap)}`,
+    )
     lines.push(`  title: ${sanitizeBlock(finding.title, "generic")}`)
     if (finding.description) {
       lines.push(
@@ -154,7 +167,9 @@ function renderFindingSection(input: {
       }
     }
     if (finding.repair) {
-      lines.push(`  required repair: ${sanitizeBlock(finding.repair, "finding_repair", input.promptBudget.findingRepairCharCap)}`)
+      lines.push(
+        `  required repair: ${sanitizeBlock(finding.repair, "finding_repair", input.promptBudget.findingRepairCharCap)}`,
+      )
     }
     if (finding.verify.length > 0) {
       lines.push("  verify:")
@@ -167,7 +182,8 @@ function renderFindingSection(input: {
       lines.push(`  requirement ids: ${finding.requirementIDs.map(sanitizeInline).join(", ")}`)
     }
     if (finding.specIDs.length > 0) lines.push(`  spec ids: ${finding.specIDs.map(sanitizeInline).join(", ")}`)
-    if (finding.reviewerIDs.length > 0) lines.push(`  reviewer ids: ${finding.reviewerIDs.map(sanitizeInline).join(", ")}`)
+    if (finding.reviewerIDs.length > 0)
+      lines.push(`  reviewer ids: ${finding.reviewerIDs.map(sanitizeInline).join(", ")}`)
   }
   return lines.join("\n")
 }
@@ -180,12 +196,14 @@ function renderBuildRepairReportContract(findings: IntegrityRootSymptomVariation
     "When you finish, `report_build_result` must include:",
     "- `repair_report.repaired_findings[]` for each fingerprint you fixed, with `finding_id`, `fingerprint`, `changed_files[]`, and `verification_commands[]`.",
     "- `repair_report.unrepaired_findings[]` for each fingerprint still not fixed, with a concrete `reason`.",
-    "- `status=\"passed\"` is only valid when every blocking fingerprint below is in `repaired_findings[]` and verification passed.",
+    '- `status="passed"` is only valid when every blocking fingerprint below is in `repaired_findings[]` and verification passed.',
     "",
     "Blocking fingerprints:",
   ]
   for (const finding of findings) {
-    lines.push(`- ${sanitizeInline(finding.fingerprint)} (${sanitizeInline(finding.findingID)}): ${sanitizeInline(finding.canonicalLabel)}`)
+    lines.push(
+      `- ${sanitizeInline(finding.fingerprint)} (${sanitizeInline(finding.findingID)}): ${sanitizeInline(finding.canonicalLabel)}`,
+    )
   }
   return lines.join("\n")
 }

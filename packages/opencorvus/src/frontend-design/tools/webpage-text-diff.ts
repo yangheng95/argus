@@ -38,22 +38,18 @@ Reads extracted-page.json (from webpage_extract) and the explicit current render
         `Directory containing \`extracted-page.json\` (webpage_extract's output). Defaults to task-scoped \`${DEFAULT_WEBPAGE_EVIDENCE_SUBDIR}\`. Do not set this during task sessions; overrides are for benchmarks/tests and task-session overrides must stay under \`${DEFAULT_WEBPAGE_EVIDENCE_SUBDIR}\`.`,
       )
       .optional(),
-    limit: z
-      .number()
-      .int()
-      .positive()
-      .describe("Max number of missing tokens to return. Default 30.")
-      .optional(),
+    limit: z.number().int().positive().describe("Max number of missing tokens to return. Default 30.").optional(),
   }),
   async execute(params, ctx) {
-    const referenceDir = await resolveWebpageEvidenceOutputDir({ override: params.referenceDir, sessionID: ctx.sessionID })
+    const referenceDir = await resolveWebpageEvidenceOutputDir({
+      override: params.referenceDir,
+      sessionID: ctx.sessionID,
+    })
     const extractedPath = path.join(referenceDir, "extracted-page.json")
 
     const raw = JSON.parse(await fs.readFile(extractedPath, "utf8"))
     const refPage = ExtractedPageSchema.parse(raw)
-    const referenceText = extractTextFromTree(
-      refPage.tree as unknown as Parameters<typeof extractTextFromTree>[0],
-    )
+    const referenceText = extractTextFromTree(refPage.tree as unknown as Parameters<typeof extractTextFromTree>[0])
 
     const rendered = await extractPage({
       url: params.url,
@@ -61,9 +57,7 @@ Reads extracted-page.json (from webpage_extract) and the explicit current render
       waitMs: 3000,
       noScreenshots: true,
     })
-    const renderedText = extractTextFromTree(
-      rendered.tree as unknown as Parameters<typeof extractTextFromTree>[0],
-    )
+    const renderedText = extractTextFromTree(rendered.tree as unknown as Parameters<typeof extractTextFromTree>[0])
 
     const limit = params.limit ?? 30
 

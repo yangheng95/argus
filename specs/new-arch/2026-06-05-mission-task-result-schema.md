@@ -8,14 +8,14 @@ Mission dispatches squad work through `panel.create_task` and reconciles through
 
 ## Grep Coverage
 
-| Surface | Findings | Decision |
-| --- | --- | --- |
-| `packages/opencorvus/src/tool/panel.ts` | `query_task` hand-builds output JSON; `create_task` returns only `{ kind, task_id, message }`. | Add a shared query result formatter/schema used by `query_task`; keep create output unchanged except existing task id contract. |
-| `packages/opencorvus/src/panel/capability.ts` | `PanelActionSchema` validates query input only: `taskIDs`, `includeChildren`, `includeInteractions`. | No new input flags. `result` is always present so Mission does not have to know another mode. |
-| `packages/opencorvus/src/prompt/core/mission-core.txt` | Prompt documents old query shape: `evaluation`, `acceptance`, `children?`. | Update prompt to the new canonical `result` shape. |
-| `packages/opencorvus/test/panel/query-task.test.ts` | Existing unit tests cover schema limits, 1:1 row alignment, per-task errors, acceptance/evaluation, children IDs, interactions. | Extend tests to parse the new result schema and assert terminal completed/failed/cancelled plus child summaries. |
-| `packages/opencorvus/src/engine/store.ts` | `findChildrenOfTask(parentTaskID)` returns child task IDs from `metadata.parent_task_id`. | Reuse it as the single child lineage source; do not add another parent lookup. |
-| `packages/opencorvus/src/workbench/board.ts` | `compileBoard` already projects `task`, `overview.currentFailure`, `acceptance.result`, `evaluation`, `artifacts`. | Reuse board projection; no database schema or migration. |
+| Surface                                                | Findings                                                                                                                        | Decision                                                                                                                        |
+| ------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------- |
+| `packages/opencorvus/src/tool/panel.ts`                | `query_task` hand-builds output JSON; `create_task` returns only `{ kind, task_id, message }`.                                  | Add a shared query result formatter/schema used by `query_task`; keep create output unchanged except existing task id contract. |
+| `packages/opencorvus/src/panel/capability.ts`          | `PanelActionSchema` validates query input only: `taskIDs`, `includeChildren`, `includeInteractions`.                            | No new input flags. `result` is always present so Mission does not have to know another mode.                                   |
+| `packages/opencorvus/src/prompt/core/mission-core.txt` | Prompt documents old query shape: `evaluation`, `acceptance`, `children?`.                                                      | Update prompt to the new canonical `result` shape.                                                                              |
+| `packages/opencorvus/test/panel/query-task.test.ts`    | Existing unit tests cover schema limits, 1:1 row alignment, per-task errors, acceptance/evaluation, children IDs, interactions. | Extend tests to parse the new result schema and assert terminal completed/failed/cancelled plus child summaries.                |
+| `packages/opencorvus/src/engine/store.ts`              | `findChildrenOfTask(parentTaskID)` returns child task IDs from `metadata.parent_task_id`.                                       | Reuse it as the single child lineage source; do not add another parent lookup.                                                  |
+| `packages/opencorvus/src/workbench/board.ts`           | `compileBoard` already projects `task`, `overview.currentFailure`, `acceptance.result`, `evaluation`, `artifacts`.              | Reuse board projection; no database schema or migration.                                                                        |
 
 ## Contract
 
@@ -35,7 +35,12 @@ Mission dispatches squad work through `panel.create_task` and reconciles through
       "result": {
         "status": "completed",
         "summary": "...",
-        "acceptance": { "status": "delivered", "summary": "...", "changedFiles": ["..."], "artifacts": [{ "kind": "report", "label": "..." }] },
+        "acceptance": {
+          "status": "delivered",
+          "summary": "...",
+          "changedFiles": ["..."],
+          "artifacts": [{ "kind": "report", "label": "..." }]
+        },
         "evaluation": { "status": "passed", "verdict": "accepted", "summary": "..." }
       },
       "children": [

@@ -31,10 +31,7 @@ export const MemoryTool = Tool.define("memory", {
     z.object({
       action: z.literal("search"),
       query: z.string().describe("Search query — keywords, phrases, or a question about past knowledge"),
-      scope: z
-        .enum(["all", "global", "session"])
-        .optional()
-        .describe("Which memory scope to search"),
+      scope: z.enum(["all", "global", "session"]).optional().describe("Which memory scope to search"),
       maxResults: z
         .preprocess((v) => (typeof v === "string" ? Number(v) : v), z.number().int().min(1).max(50).optional())
         .describe("Max results"),
@@ -54,21 +51,17 @@ export const MemoryTool = Tool.define("memory", {
         .enum(MemoryKinds)
         .optional()
         .describe("Memory kind. Use lesson/fact/profile for atomic long-term memory and episode for summaries."),
-      scope: z
-        .enum(["global", "session"])
-        .optional()
-        .describe("Storage scope"),
+      scope: z.enum(["global", "session"]).optional().describe("Storage scope"),
       key: z
         .string()
         .optional()
-        .describe("Stable identifier for idempotent upserts (same key + scope + kind → overwrite existing entry). Use 'credential:<name>', 'tool:<name>', 'error:<short-id>' for the always-save categories."),
+        .describe(
+          "Stable identifier for idempotent upserts (same key + scope + kind → overwrite existing entry). Use 'credential:<name>', 'tool:<name>', 'error:<short-id>' for the always-save categories.",
+        ),
     }),
     z.object({
       action: z.literal("list"),
-      scope: z
-        .enum(["all", "global", "session"])
-        .optional()
-        .describe("Which memory scope to list"),
+      scope: z.enum(["all", "global", "session"]).optional().describe("Which memory scope to list"),
     }),
     z.object({
       action: z.literal("delete"),

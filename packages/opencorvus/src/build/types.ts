@@ -283,7 +283,7 @@ export function formatBuildResultSchemaError(error: z.ZodError): string {
     ? "status='passed' cannot include error. If any blocking verification failed, call report_build_result with status='failed' and put the reason in error; otherwise remove error and keep the caveat in summary."
     : hasFactCheckItemsIssue
       ? "fact_check_items must be an array when provided. Use fact_check_items: [] when you have no unverified factual claims, or omit the field."
-    : "Choose exactly one terminal shape: status='passed' without error, or status='failed' with a non-empty error."
+      : "Choose exactly one terminal shape: status='passed' without error, or status='failed' with a non-empty error."
   return `${guidance} Schema issues: ${issues.join("; ")}`
 }
 

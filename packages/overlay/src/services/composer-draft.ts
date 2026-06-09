@@ -39,7 +39,10 @@ export function parseComposerDraftRecords(raw: string | null | undefined): Compo
   return records
 }
 
-export function pruneComposerDraftRecords(records: ComposerDraftRecords, maxEntries = MAX_COMPOSER_DRAFTS): ComposerDraftRecords {
+export function pruneComposerDraftRecords(
+  records: ComposerDraftRecords,
+  maxEntries = MAX_COMPOSER_DRAFTS,
+): ComposerDraftRecords {
   const entries = Object.entries(records)
     .filter(([, entry]) => entry.text.length > 0)
     .sort((left, right) => right[1].updated - left[1].updated)
@@ -104,7 +107,7 @@ export const [composerDraftStore, setComposerDraftStore] = createStore({
 
 export function composerDraftText(key: string | null | undefined): string {
   const normalized = normalizeComposerDraftKey(key)
-  return normalized ? composerDraftStore.drafts[normalized]?.text ?? "" : ""
+  return normalized ? (composerDraftStore.drafts[normalized]?.text ?? "") : ""
 }
 
 export function setComposerDraft(key: string | null | undefined, text: string): void {

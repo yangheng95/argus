@@ -141,7 +141,5 @@ export const EngineIterationTable = sqliteTable(
     arbiter_verdict: text().notNull().$type<ArbiterVerdict>(),
     ...Timestamps,
   },
-  (table) => [
-    primaryKey({ columns: [table.task_id, table.iteration] }),
-  ],
+  (table) => [primaryKey({ columns: [table.task_id, table.iteration] })],
 )

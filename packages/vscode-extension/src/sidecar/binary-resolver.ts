@@ -59,10 +59,7 @@ export function resolveBundledBinary(opts: ResolveOptions): ResolvedBinary {
   if (!opts.ignoreEnvOverride && process.env.OPENCORVUS_DEV_BINARY) {
     const override = process.env.OPENCORVUS_DEV_BINARY
     if (!fs.existsSync(override)) {
-      throw new UnsupportedPlatformError(
-        `dev-override (OPENCORVUS_DEV_BINARY) does not exist`,
-        opts.extensionRoot,
-      )
+      throw new UnsupportedPlatformError(`dev-override (OPENCORVUS_DEV_BINARY) does not exist`, opts.extensionRoot)
     }
     return { target: opts.targetOverride ?? "dev-override", binaryPath: override }
   }
@@ -73,10 +70,7 @@ export function resolveBundledBinary(opts: ResolveOptions): ResolvedBinary {
 
   if (!fs.existsSync(binaryPath)) {
     const hostKind = detectExtensionHostHint()
-    throw new UnsupportedPlatformError(
-      `${target} (host=${hostKind})`,
-      opts.extensionRoot,
-    )
+    throw new UnsupportedPlatformError(`${target} (host=${hostKind})`, opts.extensionRoot)
   }
 
   // Best-effort: ensure executable bit on Unix. Tar extraction in some

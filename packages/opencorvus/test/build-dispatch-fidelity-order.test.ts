@@ -10,7 +10,9 @@ describe("orchestrator/tools.ts build dispatch ignores architect fidelity gaps",
   test("goal build branch does not block on validatePersistedArchitectFidelity before worktree creation", () => {
     const source = readFileSync(resolve(import.meta.dir, "../src/orchestrator/tools.ts"), "utf8")
 
-    const buildBranchAnchor = source.indexOf(`const { BuildAgent, collectGoalContributionDiffs } = await import("@/build/agent")`)
+    const buildBranchAnchor = source.indexOf(
+      `const { BuildAgent, collectGoalContributionDiffs } = await import("@/build/agent")`,
+    )
     expect(buildBranchAnchor).toBeGreaterThan(0)
 
     const worktreeCreateIdx = findIndex(source, "Worktree.create({", buildBranchAnchor)

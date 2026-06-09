@@ -3,10 +3,7 @@ import * as fs from "node:fs/promises"
 import * as path from "node:path"
 import { createDecisionLog } from "../../src/decision-log"
 import { DecisionLogBundle } from "../../src/decision-log/bundle"
-import {
-  renderFrontendDesignHandoffReference,
-  frontendDesignArtifactPaths,
-} from "../../src/frontend-design/handoff"
+import { renderFrontendDesignHandoffReference, frontendDesignArtifactPaths } from "../../src/frontend-design/handoff"
 import { Database } from "../../src/storage/db"
 import { Instance } from "../../src/project/instance"
 import { ProjectTable } from "../../src/project/project.sql"
@@ -28,27 +25,33 @@ describe("DecisionLog.toFullDocument()", () => {
   function seed() {
     const now = Date.now()
     Database.use((db) =>
-      db.insert(ProjectTable).values({
-        id: projectID,
-        worktree: process.cwd(),
-        name: "DecisionLog FullDoc Test",
-        sandboxes: "[]",
-        time_created: now,
-        time_updated: now,
-      }).run(),
+      db
+        .insert(ProjectTable)
+        .values({
+          id: projectID,
+          worktree: process.cwd(),
+          name: "DecisionLog FullDoc Test",
+          sandboxes: "[]",
+          time_created: now,
+          time_updated: now,
+        })
+        .run(),
     )
     Database.use((db) =>
-      db.insert(EngineTaskTable).values({
-        id: taskID,
-        project_id: projectID,
-        source: "test",
-        title: "fulldoc test",
-        request: "decision log full document",
-        priority: "normal",
-        time_created: now,
-        time_updated: now,
-        time_started: now,
-      }).run(),
+      db
+        .insert(EngineTaskTable)
+        .values({
+          id: taskID,
+          project_id: projectID,
+          source: "test",
+          title: "fulldoc test",
+          request: "decision log full document",
+          priority: "normal",
+          time_created: now,
+          time_updated: now,
+          time_started: now,
+        })
+        .run(),
     )
   }
 
@@ -120,17 +123,33 @@ describe("DecisionLogBundle", () => {
     taskID = `tsk_${stamp}dlbw`
     const now = Date.now()
     Database.use((db) =>
-      db.insert(ProjectTable).values({
-        id: projectID, worktree: process.cwd(), name: "Bundle Test",
-        sandboxes: "[]", time_created: now, time_updated: now,
-      }).run(),
+      db
+        .insert(ProjectTable)
+        .values({
+          id: projectID,
+          worktree: process.cwd(),
+          name: "Bundle Test",
+          sandboxes: "[]",
+          time_created: now,
+          time_updated: now,
+        })
+        .run(),
     )
     Database.use((db) =>
-      db.insert(EngineTaskTable).values({
-        id: taskID, project_id: projectID, source: "test", title: "bundle",
-        request: "bundle", priority: "normal",
-        time_created: now, time_updated: now, time_started: now,
-      }).run(),
+      db
+        .insert(EngineTaskTable)
+        .values({
+          id: taskID,
+          project_id: projectID,
+          source: "test",
+          title: "bundle",
+          request: "bundle",
+          priority: "normal",
+          time_created: now,
+          time_updated: now,
+          time_started: now,
+        })
+        .run(),
     )
   })
 
@@ -144,7 +163,10 @@ describe("DecisionLogBundle", () => {
       directory: tmp.path,
       fn: async () => {
         createDecisionLog(taskID).append({
-          phase: "requirements", key: "runtime", value: "Bun", reason: "template",
+          phase: "requirements",
+          key: "runtime",
+          value: "Bun",
+          reason: "template",
         })
         const abs = await DecisionLogBundle.write(tmp.path, taskID)
         expect(abs).toBe(ProjectRuntimePaths.decisionLogPaths(tmp.path, taskID).absolute)
@@ -201,13 +223,17 @@ describe("renderFrontendDesignHandoffReference pathMode (systemic absolute-path 
     })
     const expected = frontendDesignArtifactPaths("/abs/proj", "tsk_x").templateAbsolute
     expect(out).toContain(expected)
-    expect(out).toContain(path.join("/abs/proj", ".opencorvus", "runtime", "tasks", "tsk_x", "frontend-design", "frontend-template.md"))
+    expect(out).toContain(
+      path.join("/abs/proj", ".opencorvus", "runtime", "tasks", "tsk_x", "frontend-design", "frontend-template.md"),
+    )
   })
 
   test("frontendDesignArtifactPaths is single-source: relative consts feed the helper", () => {
     const p = frontendDesignArtifactPaths("/x", "tsk_x")
     expect(p.templateRelative).toBe(".opencorvus/runtime/tasks/tsk_x/frontend-design/frontend-template.md")
     expect(p.manifestRelative).toBe(".opencorvus/runtime/tasks/tsk_x/frontend-design/evidence-source-manifest.md")
-    expect(p.templateAbsolute).toBe(path.join("/x", ".opencorvus", "runtime", "tasks", "tsk_x", "frontend-design", "frontend-template.md"))
+    expect(p.templateAbsolute).toBe(
+      path.join("/x", ".opencorvus", "runtime", "tasks", "tsk_x", "frontend-design", "frontend-template.md"),
+    )
   })
 })

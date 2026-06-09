@@ -3,51 +3,45 @@
 // Uses direct imports.
 // imports as of Phase 4 cleanup.
 
-import { boardStore, loadBoard, activeTaskID } from "../store/board";
-import { appStore } from "../store/app";
-import { loadSettingsInfo } from "./init";
-import { apiJson } from "./api";
-import { selectedTaskDirectory } from "../store/board";
-import { t } from "../utils/i18n";
-import { renderMarkdown, escapeHtml } from "../utils/markdown";
-import { describeToolPart } from "../utils/tool";
-import { dialogStore, setDialogStore, CONFIG_SECTIONS, type ConfigDialogTab } from "../store/dialog";
-import { panelMessage } from "./chat";
-import { OPENCORVUS_VERSION_LABEL, OVERLAY_VERSION } from "../utils/version";
+import { boardStore, loadBoard, activeTaskID } from "../store/board"
+import { appStore } from "../store/app"
+import { loadSettingsInfo } from "./init"
+import { apiJson } from "./api"
+import { selectedTaskDirectory } from "../store/board"
+import { t } from "../utils/i18n"
+import { renderMarkdown, escapeHtml } from "../utils/markdown"
+import { describeToolPart } from "../utils/tool"
+import { dialogStore, setDialogStore, CONFIG_SECTIONS, type ConfigDialogTab } from "../store/dialog"
+import { panelMessage } from "./chat"
+import { OPENCORVUS_VERSION_LABEL, OVERLAY_VERSION } from "../utils/version"
 
-let sessionDialogSeq = 0;
-const CONFIG_DIALOG_TABS = new Set<ConfigDialogTab>(CONFIG_SECTIONS.map((section) => section.id));
+let sessionDialogSeq = 0
+const CONFIG_DIALOG_TABS = new Set<ConfigDialogTab>(CONFIG_SECTIONS.map((section) => section.id))
 
 const CONFIG_SECTION_TARGETS: Record<string, { tab: ConfigDialogTab; elementID?: string }> = {
   skill: { tab: "skill", elementID: "skillList" },
   "skill-market": { tab: "skill-market", elementID: "skillMarketList" },
   mcp: { tab: "mcp", elementID: "mcpList" },
-};
+}
 
 function normalizeConfigTab(tabName: string): ConfigDialogTab {
-  return CONFIG_DIALOG_TABS.has(tabName as ConfigDialogTab)
-    ? (tabName as ConfigDialogTab)
-    : "general";
+  return CONFIG_DIALOG_TABS.has(tabName as ConfigDialogTab) ? (tabName as ConfigDialogTab) : "general"
 }
 
 function renderSessionToolChip(part: any): string {
-  const display = describeToolPart(part, selectedTaskDirectory());
-  if (!display) return "";
-  const statusAttr = display.status
-    ? ` data-status="${escapeHtml(display.status)}"`
-    : "";
-  const detail = display.detail
-    ? `<span class="tool-detail">${escapeHtml(display.detail)}</span>`
-    : "";
+  const display = describeToolPart(part, selectedTaskDirectory())
+  if (!display) return ""
+  const statusAttr = display.status ? ` data-status="${escapeHtml(display.status)}"` : ""
+  const detail = display.detail ? `<span class="tool-detail">${escapeHtml(display.detail)}</span>` : ""
   const status = display.statusLabel
     ? `<span class="tool-status" data-status="${escapeHtml(display.status || "pending")}" title="${escapeHtml(display.statusLabel)}">${escapeHtml(display.statusLabel)}</span>`
-    : "";
+    : ""
   return `<div class="msg-tool"${statusAttr}>
     <span class="tool-icon">${escapeHtml(display.icon)}</span>
     <span class="tool-name">${escapeHtml(display.label)}</span>
     ${detail}
     ${status}
-  </div>`;
+  </div>`
 }
 
 // ── Public API ──
@@ -58,34 +52,34 @@ function renderSessionToolChip(part: any): string {
  * simply opens the config dialog and switches to the channel tab.
  */
 export async function openChannelSettings(_channelID?: string): Promise<void> {
-  openConfigDialog("channel");
+  openConfigDialog("channel")
 }
 
 /**
  * Switch the active tab in the config sidebar.
  */
 export function switchConfigTab(tabName: string): void {
-  setDialogStore("config", "activeTab", normalizeConfigTab(tabName));
+  setDialogStore("config", "activeTab", normalizeConfigTab(tabName))
 }
 
 /**
  * Focus a named config section inside the config dialog.
  */
 export function focusConfigSection(name: string): void {
-  if (!name) return;
-  const target = CONFIG_SECTION_TARGETS[name];
-  switchConfigTab(target?.tab ?? name);
+  if (!name) return
+  const target = CONFIG_SECTION_TARGETS[name]
+  switchConfigTab(target?.tab ?? name)
   if (name === "channel") {
     queueMicrotask(() => {
-      const channelList = document.getElementById("channelList") as HTMLElement | null;
-      channelList?.scrollTo?.({ top: 0 });
-    });
+      const channelList = document.getElementById("channelList") as HTMLElement | null
+      channelList?.scrollTo?.({ top: 0 })
+    })
   }
   if (target?.elementID) {
     queueMicrotask(() => {
-      const element = document.getElementById(target.elementID!) as HTMLElement | null;
-      element?.scrollIntoView?.({ block: "start" });
-    });
+      const element = document.getElementById(target.elementID!) as HTMLElement | null
+      element?.scrollIntoView?.({ block: "start" })
+    })
   }
 }
 
@@ -93,15 +87,15 @@ export function focusConfigSection(name: string): void {
  * Populate the About panel runtime grid with server/platform info.
  */
 export function renderAboutVersion(): void {
-  const config = appStore.config;
-  const chatVersion = document.getElementById("chatVersion");
+  const config = appStore.config
+  const chatVersion = document.getElementById("chatVersion")
   if (chatVersion) {
-    const connected = config !== null;
+    const connected = config !== null
     const text = connected
       ? t("version.overlay", { version: OVERLAY_VERSION })
-      : `${t("version.overlay", { version: OVERLAY_VERSION })} / ${t("version.core_unknown")}`;
-    chatVersion.textContent = OPENCORVUS_VERSION_LABEL;
-    chatVersion.title = text;
+      : `${t("version.overlay", { version: OVERLAY_VERSION })} / ${t("version.core_unknown")}`
+    chatVersion.textContent = OPENCORVUS_VERSION_LABEL
+    chatVersion.title = text
   }
 }
 
@@ -116,26 +110,26 @@ export function openConfigDialog(
   setDialogStore("config", {
     agentModelsScope: options.agentModelsScope ?? "project",
     agentModelsSessionID: options.sessionID ?? null,
-  });
-  setDialogStore("config", "open", true);
-  void loadSettingsInfo().then(() => renderAboutVersion());
+  })
+  setDialogStore("config", "open", true)
+  void loadSettingsInfo().then(() => renderAboutVersion())
 
   if (section) {
-    focusConfigSection(section);
+    focusConfigSection(section)
   }
 }
 
 export function openSessionAgentModels(sessionID: string): void {
-  openConfigDialog("agent-models", { agentModelsScope: "session", sessionID });
+  openConfigDialog("agent-models", { agentModelsScope: "session", sessionID })
 }
 
 export function closeConfigDialog(): void {
-  setDialogStore("config", "open", false);
+  setDialogStore("config", "open", false)
 }
 
 export function setConfigSidebarWidth(width: number): void {
-  if (!Number.isFinite(width) || width <= 0) return;
-  setDialogStore("config", "sidebarWidth", Math.round(width));
+  if (!Number.isFinite(width) || width <= 0) return
+  setDialogStore("config", "sidebarWidth", Math.round(width))
 }
 
 export function openGoalDialog(goalID = "", title = "", acceptance = ""): void {
@@ -145,7 +139,7 @@ export function openGoalDialog(goalID = "", title = "", acceptance = ""): void {
     title,
     acceptance,
     saving: false,
-  });
+  })
 }
 
 function resetGoalDialog(): void {
@@ -155,25 +149,25 @@ function resetGoalDialog(): void {
     title: "",
     acceptance: "",
     saving: false,
-  });
+  })
 }
 
 export function closeGoalDialog(): void {
-  resetGoalDialog();
+  resetGoalDialog()
 }
 
 export async function saveGoalDialog(): Promise<void> {
-  if (dialogStore.goal.saving || !activeTaskID()) return;
-  const goalID = dialogStore.goal.goalID.trim();
-  const title = dialogStore.goal.title.trim();
-  const acceptanceText = dialogStore.goal.acceptance.trim();
-  if (!title) return;
+  if (dialogStore.goal.saving || !activeTaskID()) return
+  const goalID = dialogStore.goal.goalID.trim()
+  const title = dialogStore.goal.title.trim()
+  const acceptanceText = dialogStore.goal.acceptance.trim()
+  if (!title) return
 
-  setDialogStore("goal", "saving", true);
+  setDialogStore("goal", "saving", true)
   try {
-    const taskID = activeTaskID() || undefined;
+    const taskID = activeTaskID() || undefined
     if (goalID) {
-      const criterion = acceptanceText || "The requested change is implemented and acceptance checks pass.";
+      const criterion = acceptanceText || "The requested change is implemented and acceptance checks pass."
       const acceptanceSpec = {
         id: `acc-operator-${goalID}-${Date.now()}`,
         source_requirement_id: "operator",
@@ -188,22 +182,22 @@ export async function saveGoalDialog(): Promise<void> {
             inputs: ["acceptance_summary", "changed_files"],
           },
         ],
-      };
+      }
       await panelMessage(`Update goal ${goalID}.`, {
         goalID,
         description: title,
         acceptance_specs: [acceptanceSpec],
         taskID,
-      });
+      })
     } else {
-      const payload = acceptanceText ? `/goal ${title}\nAcceptance: ${acceptanceText}` : `/goal ${title}`;
-      await panelMessage(payload, { taskID });
+      const payload = acceptanceText ? `/goal ${title}\nAcceptance: ${acceptanceText}` : `/goal ${title}`
+      await panelMessage(payload, { taskID })
     }
-    resetGoalDialog();
-    await loadBoard({ sync: true });
+    resetGoalDialog()
+    await loadBoard({ sync: true })
   } catch (err) {
-    console.error("Failed to save goal", err);
-    setDialogStore("goal", "saving", false);
+    console.error("Failed to save goal", err)
+    setDialogStore("goal", "saving", false)
   }
 }
 
@@ -213,68 +207,69 @@ export async function saveGoalDialog(): Promise<void> {
  * and the main conversation (Card step body) so the render logic isn't
  * duplicated across surfaces.
  */
-export async function openBuildSessionDialog(
-  sessionID: string,
-  title: string,
-): Promise<void> {
-  const openToken = ++sessionDialogSeq;
+export async function openBuildSessionDialog(sessionID: string, title: string): Promise<void> {
+  const openToken = ++sessionDialogSeq
   setDialogStore("session", {
     open: true,
     title: title || "Build Session",
     bodyHtml: '<p class="empty-hint">Loading…</p>',
-  });
+  })
   try {
-    const messages: any[] = await apiJson(`session/${sessionID}/message`);
+    const messages: any[] = await apiJson(`session/${sessionID}/message`)
     if (!messages || messages.length === 0) {
       if (sessionDialogSeq === openToken) {
-        setDialogStore("session", "bodyHtml", '<p class="empty-hint">No messages yet.</p>');
+        setDialogStore("session", "bodyHtml", '<p class="empty-hint">No messages yet.</p>')
       }
-      return;
+      return
     }
     const html = messages
       .map((msg: any) => {
-        const role: string = msg.info?.role ?? msg.role ?? "unknown";
-        const parts: any[] = Array.isArray(msg.parts) ? msg.parts : [];
+        const role: string = msg.info?.role ?? msg.role ?? "unknown"
+        const parts: any[] = Array.isArray(msg.parts) ? msg.parts : []
         const textParts = parts
           .filter((p) => p.type === "text" && p.text)
           .map((p) => `<div class="session-msg-text md-content">${renderMarkdown(p.text)}</div>`)
-          .join("");
+          .join("")
         const toolParts = parts
           .filter((p) => p.type === "tool-invocation" || p.type === "tool-call")
           .map((p) => renderSessionToolChip(p))
           .filter(Boolean)
-          .join("");
-        if (!textParts && !toolParts) return "";
+          .join("")
+        if (!textParts && !toolParts) return ""
         return `<div class="session-msg" data-role="${escapeHtml(role)}">
           <span class="session-msg-role">${escapeHtml(role)}</span>
           ${textParts}${toolParts}
-        </div>`;
+        </div>`
       })
       .filter(Boolean)
-      .join("");
+      .join("")
     if (sessionDialogSeq === openToken) {
-      setDialogStore("session", "bodyHtml", html || '<p class="empty-hint">No displayable messages.</p>');
+      setDialogStore("session", "bodyHtml", html || '<p class="empty-hint">No displayable messages.</p>')
     }
   } catch (e) {
     if (sessionDialogSeq === openToken) {
-      setDialogStore("session", "bodyHtml", `<p class="empty-hint">Failed to load session: ${escapeHtml(String(e))}</p>`);
+      setDialogStore(
+        "session",
+        "bodyHtml",
+        `<p class="empty-hint">Failed to load session: ${escapeHtml(String(e))}</p>`,
+      )
     }
   }
 }
 
 export function closeBuildSessionDialog(): void {
-  sessionDialogSeq += 1;
-  setDialogStore("session", "open", false);
+  sessionDialogSeq += 1
+  setDialogStore("session", "open", false)
 }
 
 export function setupDialogBackdropClose(): void {
   document.querySelectorAll("dialog.dialog").forEach((dialog) => {
-    const el = dialog as HTMLDialogElement;
-    if (el.dataset.backdropClose === "true") return;
-    el.dataset.backdropClose = "true";
+    const el = dialog as HTMLDialogElement
+    if (el.dataset.backdropClose === "true") return
+    el.dataset.backdropClose = "true"
     el.addEventListener("click", (event) => {
-      if (event.target !== el) return;
-      el.close();
-    });
-  });
+      if (event.target !== el) return
+      el.close()
+    })
+  })
 }

@@ -98,9 +98,7 @@ export namespace ConfigPaths {
       const value = process.env[varName]
       if (value !== undefined) return value
       if (missing === "error") {
-        throw new Error(
-          `Config substitution failed: env var ${varName} is unset (referenced from ${sourceLabel})`,
-        )
+        throw new Error(`Config substitution failed: env var ${varName} is unset (referenced from ${sourceLabel})`)
       }
       return ""
     })

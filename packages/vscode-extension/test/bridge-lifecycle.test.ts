@@ -1,9 +1,5 @@
 import { afterEach, beforeEach, describe, expect, test } from "bun:test"
-import {
-  PROTOCOL_VERSION,
-  type ExtensionMessage,
-  type WebviewMessage,
-} from "@opencorvus-ai/transport-protocol"
+import { PROTOCOL_VERSION, type ExtensionMessage, type WebviewMessage } from "@opencorvus-ai/transport-protocol"
 import { TransportBridge } from "../src/transport/bridge"
 
 /**
@@ -56,7 +52,9 @@ function mockWebview(): MockWebview {
       posted.push(m)
       return Promise.resolve(true) as any
     },
-    asWebviewUri(uri) { return uri },
+    asWebviewUri(uri) {
+      return uri
+    },
     async receive(message) {
       if (!receiveHandler) throw new Error("no message handler attached")
       receiveHandler(message)
@@ -64,7 +62,9 @@ function mockWebview(): MockWebview {
       // make progress.
       await new Promise((r) => setTimeout(r, 0))
     },
-    get _receiveHandler() { return receiveHandler },
+    get _receiveHandler() {
+      return receiveHandler
+    },
   }
 }
 

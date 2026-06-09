@@ -21,16 +21,16 @@ CLAUDE.md rules that govern this spec:
 
 ## Abbreviations
 
-| Term | Meaning |
-| ---- | ------- |
-| ADV  | advisory finding (informational, non-blocking) |
-| BF   | blocking finding |
-| LLM  | Large Language Model — the model-backed reviewer agent |
-| MVP  | Minimum Viable Product (smallest acceptance that satisfies the request) |
-| brief     | Source brief for implementation and acceptance |
-| REQ  | Requirement row mined from the user request |
-| SSE  | Server-Sent Events (chat streaming protocol) |
-| UI   | User Interface surface |
+| Term  | Meaning                                                                 |
+| ----- | ----------------------------------------------------------------------- |
+| ADV   | advisory finding (informational, non-blocking)                          |
+| BF    | blocking finding                                                        |
+| LLM   | Large Language Model — the model-backed reviewer agent                  |
+| MVP   | Minimum Viable Product (smallest acceptance that satisfies the request) |
+| brief | Source brief for implementation and acceptance                          |
+| REQ   | Requirement row mined from the user request                             |
+| SSE   | Server-Sent Events (chat streaming protocol)                            |
+| UI    | User Interface surface                                                  |
 
 ## Hazard Audit Integration (2026-05-24)
 
@@ -86,13 +86,13 @@ ORDER BY emitted_at ASC;
 
 ### 1.1 Advisory → Blocking Upgrade Pairs (verified)
 
-| Pair | Earlier finding (severity=advisory) | Later finding (severity=blocking) | Semantic delta |
-| ---- | ----------------------------------- | --------------------------------- | -------------- |
-| P1 — silent quota loss | R7 `ADV-3-silent-quota-error` "safeSetItem() silently swallows QuotaExceededError without user notification" (also R2 `AF-5`, R6 `F-INT-04`) | R8 `BF-1` "localStorage quota exceeded causes silent data loss with no user feedback" | identical surface (`safeSetItem` in `storage.ts`) — same description nucleus; severity flipped without code change between R7 and R8 |
-| P2 — NaN settings validation | R5 `CONSENSUS-AF3` "SettingsPanel persists invalid values before blur validation … `{...prev, ...partial}` has no validation" | R8 `BF-2` "validateSettings() does not check for NaN … NaN values pass validation and reach the API" | both target the validation gap in `validateSettings`/`updateSettings`; R5 filed it as advisory after BF-SV1/2/3 supposedly addressed range checks, R8 promoted the NaN special case to blocking |
-| P3 — getConversations no structural validation | R5 `CONSENSUS-AF5` "getConversations() lacks structural validation of loaded data" (also R3 `BF-SV4` blocking, then back to R6/R8 advisory) | R3 `BF-SV4` "getConversations() performs no structural validation — corrupted data crashes components" → R5/R6/R8 advisory | reverse drift: same surface oscillates blocking → advisory → advisory; severity is not a property of the finding, it is a property of the reviewer |
-| P4 — fragile network-error detection | R2 `BF-2` "Network offline/CORS error detection is fragile — can produce non-Chinese error messages on Safari" | R4 `BF-3` "Non-standard network errors bypass Chinese error messages" — both blocking, but R5/R6 drop it entirely from the consensus set | not advisory→blocking; this is the **invisibility drift** — a blocker rediscovered and silently dropped two rounds later without a verified repair |
-| P5 — large bundle / code-splitting | R2 `AF-6` "Large JS bundle (1035KB) without code-splitting — slow initial load" | R6 `F-BT-3` advisory; R7 `ADV-5-bundle-size` advisory | severity stable (advisory across rounds), demonstrating the same bug class **can** be stable when reviewers tacitly agree it is non-blocking — but the prompt provides no language to make that agreement explicit, so other reviewers (P1/P2) flip it freely |
+| Pair                                           | Earlier finding (severity=advisory)                                                                                                          | Later finding (severity=blocking)                                                                                                        | Semantic delta                                                                                                                                                                                                                                                |
+| ---------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| P1 — silent quota loss                         | R7 `ADV-3-silent-quota-error` "safeSetItem() silently swallows QuotaExceededError without user notification" (also R2 `AF-5`, R6 `F-INT-04`) | R8 `BF-1` "localStorage quota exceeded causes silent data loss with no user feedback"                                                    | identical surface (`safeSetItem` in `storage.ts`) — same description nucleus; severity flipped without code change between R7 and R8                                                                                                                          |
+| P2 — NaN settings validation                   | R5 `CONSENSUS-AF3` "SettingsPanel persists invalid values before blur validation … `{...prev, ...partial}` has no validation"                | R8 `BF-2` "validateSettings() does not check for NaN … NaN values pass validation and reach the API"                                     | both target the validation gap in `validateSettings`/`updateSettings`; R5 filed it as advisory after BF-SV1/2/3 supposedly addressed range checks, R8 promoted the NaN special case to blocking                                                               |
+| P3 — getConversations no structural validation | R5 `CONSENSUS-AF5` "getConversations() lacks structural validation of loaded data" (also R3 `BF-SV4` blocking, then back to R6/R8 advisory)  | R3 `BF-SV4` "getConversations() performs no structural validation — corrupted data crashes components" → R5/R6/R8 advisory               | reverse drift: same surface oscillates blocking → advisory → advisory; severity is not a property of the finding, it is a property of the reviewer                                                                                                            |
+| P4 — fragile network-error detection           | R2 `BF-2` "Network offline/CORS error detection is fragile — can produce non-Chinese error messages on Safari"                               | R4 `BF-3` "Non-standard network errors bypass Chinese error messages" — both blocking, but R5/R6 drop it entirely from the consensus set | not advisory→blocking; this is the **invisibility drift** — a blocker rediscovered and silently dropped two rounds later without a verified repair                                                                                                            |
+| P5 — large bundle / code-splitting             | R2 `AF-6` "Large JS bundle (1035KB) without code-splitting — slow initial load"                                                              | R6 `F-BT-3` advisory; R7 `ADV-5-bundle-size` advisory                                                                                    | severity stable (advisory across rounds), demonstrating the same bug class **can** be stable when reviewers tacitly agree it is non-blocking — but the prompt provides no language to make that agreement explicit, so other reviewers (P1/P2) flip it freely |
 
 Pairs P1 and P2 prove the death-loop mechanism that drives this task past
 8 rounds: the orchestrator fixed each blocker, the next round's fresh reviewer
@@ -115,15 +115,15 @@ blocking finding when they describe the same defect at finer granularity.
 
 Where the words `blocking` / `advisory` appear in the integrity prompt path:
 
-| File | Line(s) | What it says about severity |
-| ---- | ------- | --------------------------- |
-| `packages/opencorvus/src/integrity/team-schema.ts` | 31 | `severity: z.enum(["blocking", "advisory"])` — schema-only enum, no semantic |
-| `packages/opencorvus/src/integrity/team-schema.ts` | 109–129 | `superRefine`: requires `needs_correction` when any blocking exists; forbids blocking under `pass`. Coupling rules only — does NOT define what makes a finding blocking. |
-| `packages/opencorvus/src/prompt/core/integrity-team-core.txt` | 34 | "If a potentially blocking disagreement remains unresolved, the final verdict cannot be pass." — uses the word but does not define it. |
-| `packages/opencorvus/src/prompt/core/integrity-core.txt` (legacy) | 60, 78, 107, 145 | Mentions `advisory-only concerns can pass`, advisory findings have no executable repair, etc. Still does not say *what kind of problem is blocking vs advisory*. Also this is the LEGACY single-reviewer prompt — the active team prompt does not inherit it. |
-| `packages/opencorvus/src/integrity/team-agent.ts` `buildSupervisorPlanPrompt` / `buildReviewerPrompt` / `buildSupervisorConsensusPrompt` (lines 411–449) | — | No severity guidance. No maturity threshold. No user-request maturity context beyond the raw request text. |
-| `packages/opencorvus/src/intent/request-prompt.ts` `renderUserRequestSection` | 50–76 | Renders the raw user request excerpt and a pointer to the bundle file. No maturity / risk-tolerance signal extracted. |
-| `packages/opencorvus/src/integrity/team-agent.ts` `buildIntegrityEvidencePrompt` (451–535) | — | Renders requirements, requirement status, acceptance, design specs, goal contracts, contract graph, decision log. No maturity-class, target-audience, or risk-acceptance signal. |
+| File                                                                                                                                                     | Line(s)          | What it says about severity                                                                                                                                                                                                                                   |
+| -------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `packages/opencorvus/src/integrity/team-schema.ts`                                                                                                       | 31               | `severity: z.enum(["blocking", "advisory"])` — schema-only enum, no semantic                                                                                                                                                                                  |
+| `packages/opencorvus/src/integrity/team-schema.ts`                                                                                                       | 109–129          | `superRefine`: requires `needs_correction` when any blocking exists; forbids blocking under `pass`. Coupling rules only — does NOT define what makes a finding blocking.                                                                                      |
+| `packages/opencorvus/src/prompt/core/integrity-team-core.txt`                                                                                            | 34               | "If a potentially blocking disagreement remains unresolved, the final verdict cannot be pass." — uses the word but does not define it.                                                                                                                        |
+| `packages/opencorvus/src/prompt/core/integrity-core.txt` (legacy)                                                                                        | 60, 78, 107, 145 | Mentions `advisory-only concerns can pass`, advisory findings have no executable repair, etc. Still does not say _what kind of problem is blocking vs advisory_. Also this is the LEGACY single-reviewer prompt — the active team prompt does not inherit it. |
+| `packages/opencorvus/src/integrity/team-agent.ts` `buildSupervisorPlanPrompt` / `buildReviewerPrompt` / `buildSupervisorConsensusPrompt` (lines 411–449) | —                | No severity guidance. No maturity threshold. No user-request maturity context beyond the raw request text.                                                                                                                                                    |
+| `packages/opencorvus/src/intent/request-prompt.ts` `renderUserRequestSection`                                                                            | 50–76            | Renders the raw user request excerpt and a pointer to the bundle file. No maturity / risk-tolerance signal extracted.                                                                                                                                         |
+| `packages/opencorvus/src/integrity/team-agent.ts` `buildIntegrityEvidencePrompt` (451–535)                                                               | —                | Renders requirements, requirement status, acceptance, design specs, goal contracts, contract graph, decision log. No maturity-class, target-audience, or risk-acceptance signal.                                                                              |
 
 There is **no prompt-level definition of `blocking` vs `advisory` anywhere in
 the active team path**. The model is left to interpolate from training data,
@@ -150,7 +150,7 @@ The severity drift has two interacting causes:
 
 The replay-aware spec
 (`packages/opencorvus/specs/integrity-team-replay-aware-2026-05-23.md`) fixes
-the *memory* dimension: fresh reviewers will see what prior reviewers said.
+the _memory_ dimension: fresh reviewers will see what prior reviewers said.
 But replay alone does NOT prevent a re-review reviewer who now sees the prior
 `advisory` from disagreeing and re-classifying it as blocking. The two fixes
 are complementary; this spec covers the **definition** dimension.
@@ -175,28 +175,29 @@ There are exactly two severities. They are not a sliding scale; they encode
 
 `blocking` — the deliverable cannot be accepted in its current state. The
 finding satisfies at least one of:
-  (a) a user-visible flow fails or produces obviously wrong output for an
-      input shape the user is expected to encounter under normal use of the
-      stated request;
-  (b) the implementation contradicts an explicit user-request phrase or an
-      explicit REQ row;
-  (c) the build, install, type-check, or test suite is broken (cannot ship);
-  (d) data the user can produce in normal flow is silently destroyed,
-      corrupted, or made unrecoverable, with no in-app recovery path;
-  (e) a security or credential disclosure that exists in the actual data
-      flow on a path a benign user will hit, not a hypothetical attacker
-      pivot.
+(a) a user-visible flow fails or produces obviously wrong output for an
+input shape the user is expected to encounter under normal use of the
+stated request;
+(b) the implementation contradicts an explicit user-request phrase or an
+explicit REQ row;
+(c) the build, install, type-check, or test suite is broken (cannot ship);
+(d) data the user can produce in normal flow is silently destroyed,
+corrupted, or made unrecoverable, with no in-app recovery path;
+(e) a security or credential disclosure that exists in the actual data
+flow on a path a benign user will hit, not a hypothetical attacker
+pivot.
 
 `advisory` — the deliverable can ship; the finding is improvement
 information the orchestrator may queue but is NOT required to address in the
 current task. This includes:
-  - hardening against inputs the user did not ask for (extra browser
-    quirks, attack pivots, tab-collision races) when normal flow works;
-  - polish, performance, or bundle-size concerns within reasonable defaults;
-  - missing tests for behavior that is itself correct;
-  - dead code, unused parameters, redundant wrappers;
-  - "mature apps usually do X" suggestions without a concrete user-request
-    phrase or REQ row demanding X.
+
+- hardening against inputs the user did not ask for (extra browser
+  quirks, attack pivots, tab-collision races) when normal flow works;
+- polish, performance, or bundle-size concerns within reasonable defaults;
+- missing tests for behavior that is itself correct;
+- dead code, unused parameters, redundant wrappers;
+- "mature apps usually do X" suggestions without a concrete user-request
+  phrase or REQ row demanding X.
 
 Severity is decided **per finding against the bar above**, not by feel of
 "how mature should this be". Two reviewers must reach the same severity for
@@ -205,20 +206,21 @@ fold them under the same severity in consensus. Disagreement is a
 `disputed`/`unresolved` consensus marker, not a quietly different severity.
 
 Anti-patterns (reject these in consensus):
-  - Promoting a prior `advisory` to `blocking` in a later round without new
-    evidence. `new evidence` means at least one of:
-      1. code lines on the same defect surface changed after the prior
-         attempt;
-      2. a new explicit REQ row was added after the prior attempt;
-      3. a newly executed runtime observation, command output, screenshot,
-         or trace was produced after the prior attempt.
-    A deeper reading of the same unchanged code, artifact, request text, or
-    prior runtime output is NOT new evidence. More precise prose over the
-    same evidence is NOT new evidence. Persistence alone is NOT promotion.
-  - Filing the same defect at both severities through different reviewer
-    ids inside one consensus.
-  - Quoting "the app should be mature" as the entire justification for
-    `blocking`. Cite the bar clause (a)–(e) you are invoking.
+
+- Promoting a prior `advisory` to `blocking` in a later round without new
+  evidence. `new evidence` means at least one of:
+  1. code lines on the same defect surface changed after the prior
+     attempt;
+  2. a new explicit REQ row was added after the prior attempt;
+  3. a newly executed runtime observation, command output, screenshot,
+     or trace was produced after the prior attempt.
+     A deeper reading of the same unchanged code, artifact, request text, or
+     prior runtime output is NOT new evidence. More precise prose over the
+     same evidence is NOT new evidence. Persistence alone is NOT promotion.
+- Filing the same defect at both severities through different reviewer
+  ids inside one consensus.
+- Quoting "the app should be mature" as the entire justification for
+  `blocking`. Cite the bar clause (a)–(e) you are invoking.
 
 If you are unsure whether a finding crosses the bar, file `advisory` and
 state the conditions under which it would become `blocking`. Conservative
@@ -253,11 +255,13 @@ classifier:
 # Scope-Bounded Maturity Evidence
 
 Maturity-related bounded REQs from requirements/scope:
+
 - REQ-6: errors render in Chinese for 401 / 429 / network-off.
   acceptance: ...
   non_goals: ...
 
 Maturity terms from original request not landed as bounded REQs:
+
 - "成熟" -> no bounded REQ found. Valid integrity action: at most one
   requirements-extraction concern; do not derive severity thresholds from
   this word.
@@ -285,10 +289,10 @@ Before emitting the team report:
 2. For each group, decide a single team severity using the bar in
    "Severity Discipline". Do NOT carry both severities forward. If
    reviewers disagree:
-     - if the disagreement is real, fold into one finding with
-       consensus="disputed" and pick the severity that the bar clauses
-       (a)–(e) support; explain in the description.
-     - if neither bar clause is met, the team severity is advisory.
+   - if the disagreement is real, fold into one finding with
+     consensus="disputed" and pick the severity that the bar clauses
+     (a)–(e) support; explain in the description.
+   - if neither bar clause is met, the team severity is advisory.
 
 3. If a finding repeats a defect that was advisory in any prior attempt's
    report (replay context), and there is no §3.1 new evidence raising it to
@@ -303,7 +307,7 @@ Before emitting the team report:
 ```
 
 This is text guidance, not a host check. The LLM remains the decider; the
-host only ensures the reconciliation is *prompted for*, not *enforced*.
+host only ensures the reconciliation is _prompted for_, not _enforced_.
 
 ### 3.4 What This Spec Explicitly Does NOT Add
 
@@ -441,14 +445,14 @@ bun test packages/opencorvus/test/prompt/integrity-severity-prompt.test.ts `
 this spec are **complementary, not overlapping**. They fix two distinct
 dimensions of the same death-loop:
 
-| Dimension | Replay-aware spec | Severity-discipline spec (this one) |
-| --------- | ----------------- | ---------------------------------- |
-| Memory | Adds replay context: each reviewer sees prior attempts, prior findings, changed files since last review. | (none) |
-| Definition | (none) | Adds prompt-level definition of `blocking` vs `advisory` and reads scope-bounded maturity REQs without interpreting maturity words independently. |
-| Per-finding judgment | Reviewer knows what was said before. | Reviewer knows the bar to apply. |
-| Consensus | Consensus knows what prior consensus said. | Consensus is told to fold overlapping severities and respect the "persistence ≠ promotion" rule. |
-| Failure mode if applied alone | Reviewer sees prior advisory, still re-classifies as blocking (the R7→R8 case here, even after replay). | First-round reviewers still drift between advisory and blocking on the same finding class within a single task. |
-| Failure mode if applied together | Reviewer sees prior advisory **and** knows persistence is not a promotion trigger and knows the bar — stable severity across rounds. | — |
+| Dimension                        | Replay-aware spec                                                                                                                    | Severity-discipline spec (this one)                                                                                                               |
+| -------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Memory                           | Adds replay context: each reviewer sees prior attempts, prior findings, changed files since last review.                             | (none)                                                                                                                                            |
+| Definition                       | (none)                                                                                                                               | Adds prompt-level definition of `blocking` vs `advisory` and reads scope-bounded maturity REQs without interpreting maturity words independently. |
+| Per-finding judgment             | Reviewer knows what was said before.                                                                                                 | Reviewer knows the bar to apply.                                                                                                                  |
+| Consensus                        | Consensus knows what prior consensus said.                                                                                           | Consensus is told to fold overlapping severities and respect the "persistence ≠ promotion" rule.                                                  |
+| Failure mode if applied alone    | Reviewer sees prior advisory, still re-classifies as blocking (the R7→R8 case here, even after replay).                              | First-round reviewers still drift between advisory and blocking on the same finding class within a single task.                                   |
+| Failure mode if applied together | Reviewer sees prior advisory **and** knows persistence is not a promotion trigger and knows the bar — stable severity across rounds. | —                                                                                                                                                 |
 
 The two specs touch the same prompt files (`integrity-team-core.txt`,
 `team-agent.ts` builders) and the same replay / bounded-REQ evidence
@@ -487,22 +491,22 @@ This design is prompt-over-host:
 ## 7. Implementation Checklist
 
 1. [ ] Edit `packages/opencorvus/src/prompt/core/integrity-team-core.txt`:
-   add the "Severity Discipline" section verbatim from §3.1.
+       add the "Severity Discipline" section verbatim from §3.1.
 2. [ ] Edit `packages/opencorvus/src/integrity/team-agent.ts`
-   `buildIntegrityEvidencePrompt`: render the "Scope-Bounded Maturity
-   Evidence" section using bounded REQs and request-quote evidence already on
-   `ReviewPromptInput`.
+       `buildIntegrityEvidencePrompt`: render the "Scope-Bounded Maturity
+       Evidence" section using bounded REQs and request-quote evidence already on
+       `ReviewPromptInput`.
 3. [ ] Edit `buildSupervisorConsensusPrompt`: prepend the "Severity
-   Reconciliation Pass" section from §3.3 before the current reviewer
-   reports section.
+       Reconciliation Pass" section from §3.3 before the current reviewer
+       reports section.
 4. [ ] Verify reviewer and consensus prior-attempt context is consumed from
-   replay-aware's `SpecSnapshotLineage` output, not active-spec-only artifact
-   lookup, for the §4.2 severity-stability and §4.5 active-path tests.
+       replay-aware's `SpecSnapshotLineage` output, not active-spec-only artifact
+       lookup, for the §4.2 severity-stability and §4.5 active-path tests.
 5. [ ] Add the five test files in §4.1–§4.5 with the assertions described.
 6. [ ] Run the targeted command in §4.6.
 7. [ ] Verify on the same failing task replay (or a saved fixture from it)
-   that the new prompt contents materialize, by capturing a single dry-run
-   prompt build through the orchestrator test mocks.
+       that the new prompt contents materialize, by capturing a single dry-run
+       prompt build through the orchestrator test mocks.
 
 No code outside `integrity-team-core.txt`, `team-agent.ts` prompt
 builders, and the new test files is touched by this spec.

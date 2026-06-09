@@ -34,13 +34,7 @@ export interface DecisionEntry {
 
 export interface DecisionLogWriter {
   /** Append a decision entry. Safe to call concurrently. */
-  append(entry: {
-    goalID?: string
-    phase: string
-    key: string
-    value: string
-    reason: string
-  }): void
+  append(entry: { goalID?: string; phase: string; key: string; value: string; reason: string }): void
 }
 
 export interface DecisionLogReader {
@@ -81,11 +75,7 @@ export interface DecisionLogReader {
    * under that phase so task-level reviewers can see the full contract
    * surface without reimplementing decision-log formatting.
    */
-  phasePromptSection(
-    phase: string,
-    heading: string,
-    options?: { limit?: number; valueCap?: number },
-  ): string
+  phasePromptSection(phase: string, heading: string, options?: { limit?: number; valueCap?: number }): string
   /**
    * Format decisions for a specific phase, scoped to entries that are
    * either task-wide (no goalID) or attached to `goalID`. Per-goal
@@ -184,9 +174,8 @@ function formatPromptSectionEntries(
     const value = capEntryValue(e.value, valueCap)
     return `### ${e.key}\n${value}${e.reason ? `\n_Why: ${e.reason}_` : ""}${e.goalID ? ` [goal:${e.goalID.slice(-8)}]` : ""}`
   })
-  const count = omitted > 0
-    ? `latest ${shown.length} of ${entries.length}; ${omitted} older omitted`
-    : `${shown.length} entries`
+  const count =
+    omitted > 0 ? `latest ${shown.length} of ${entries.length}; ${omitted} older omitted` : `${shown.length} entries`
   return `## ${heading} (${count})\n\n${lines.join("\n\n")}`
 }
 
@@ -201,16 +190,19 @@ export function createDecisionLog(taskID: string): DecisionLog {
       const now = Date.now()
       try {
         Database.use((db) =>
-          db.insert(DecisionLogTable).values({
-            id,
-            task_id: taskID,
-            goal_id: entry.goalID ?? null,
-            phase: entry.phase,
-            key: entry.key,
-            value: entry.value,
-            reason: entry.reason,
-            time_created: now,
-          }).run(),
+          db
+            .insert(DecisionLogTable)
+            .values({
+              id,
+              task_id: taskID,
+              goal_id: entry.goalID ?? null,
+              phase: entry.phase,
+              key: entry.key,
+              value: entry.value,
+              reason: entry.reason,
+              time_created: now,
+            })
+            .run(),
         )
         log.info("decision logged", { taskID, key: entry.key, value: entry.value, phase: entry.phase })
       } catch (err) {
@@ -220,7 +212,9 @@ export function createDecisionLog(taskID: string): DecisionLog {
 
     read(): DecisionEntry[] {
       return Database.use((db) =>
-        db.select().from(DecisionLogTable)
+        db
+          .select()
+          .from(DecisionLogTable)
           .where(eq(DecisionLogTable.task_id, taskID))
           .orderBy(DecisionLogTable.time_created)
           .all(),
@@ -229,7 +223,9 @@ export function createDecisionLog(taskID: string): DecisionLog {
 
     readByPhase(phase: string): DecisionEntry[] {
       return Database.use((db) =>
-        db.select().from(DecisionLogTable)
+        db
+          .select()
+          .from(DecisionLogTable)
           .where(and(eq(DecisionLogTable.task_id, taskID), eq(DecisionLogTable.phase, phase)))
           .orderBy(DecisionLogTable.time_created)
           .all(),
@@ -241,7 +237,9 @@ export function createDecisionLog(taskID: string): DecisionLog {
       // entries owned by this specific goal. We deliberately exclude entries
       // owned by peer goals so each per-goal prompt stays narrow.
       return Database.use((db) =>
-        db.select().from(DecisionLogTable)
+        db
+          .select()
+          .from(DecisionLogTable)
           .where(and(eq(DecisionLogTable.task_id, taskID), eq(DecisionLogTable.phase, phase)))
           .orderBy(DecisionLogTable.time_created)
           .all(),
@@ -252,7 +250,9 @@ export function createDecisionLog(taskID: string): DecisionLog {
 
     readByKey(key: string): DecisionEntry | undefined {
       const row = Database.use((db) =>
-        db.select().from(DecisionLogTable)
+        db
+          .select()
+          .from(DecisionLogTable)
           .where(and(eq(DecisionLogTable.task_id, taskID), eq(DecisionLogTable.key, key)))
           .orderBy(desc(DecisionLogTable.time_created))
           .get(),
@@ -268,16 +268,12 @@ export function createDecisionLog(taskID: string): DecisionLog {
       // push other entries out of the read() ascending window before the
       // limit is applied.
       const excludeSet = new Set(options?.excludePhases ?? [])
-      const all = excludeSet.size > 0
-        ? allRaw.filter((e) => !excludeSet.has(e.phase))
-        : allRaw
+      const all = excludeSet.size > 0 ? allRaw.filter((e) => !excludeSet.has(e.phase)) : allRaw
       if (all.length === 0) return ""
       const limit = options?.limit
       // `read()` returns ascending by time_created. Keep the latest slice so
       // recent decisions win when the log outgrows the budget.
-      const entries = typeof limit === "number" && all.length > limit
-        ? all.slice(all.length - limit)
-        : all
+      const entries = typeof limit === "number" && all.length > limit ? all.slice(all.length - limit) : all
       const omitted = all.length - entries.length
       // Per-entry value cap. Without this, a single LLM-written architect
       // decision of 20K chars would dominate the prompt even though entry
@@ -290,17 +286,14 @@ export function createDecisionLog(taskID: string): DecisionLog {
         const value = capEntryValue(e.value, valueCap)
         return `- **${e.key}**: ${value}${e.reason ? ` (${e.reason})` : ""}${e.goalID ? ` [goal:${e.goalID.slice(-8)}]` : ""}`
       })
-      const header = omitted > 0
-        ? `## Decision Log (latest ${entries.length} of ${all.length}; ${omitted} older omitted)`
-        : `## Decision Log (${entries.length} entries)`
+      const header =
+        omitted > 0
+          ? `## Decision Log (latest ${entries.length} of ${all.length}; ${omitted} older omitted)`
+          : `## Decision Log (${entries.length} entries)`
       return `${header}\n\n${lines.join("\n")}`
     },
 
-    phasePromptSection(
-      phase: string,
-      heading: string,
-      options?: { limit?: number; valueCap?: number },
-    ): string {
+    phasePromptSection(phase: string, heading: string, options?: { limit?: number; valueCap?: number }): string {
       return formatPromptSectionEntries(this.readByPhase(phase), heading, options)
     },
 

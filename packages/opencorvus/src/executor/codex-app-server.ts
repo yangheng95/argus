@@ -1,6 +1,13 @@
 import z from "zod"
 import { Log } from "@/util/log"
-import { CodingCapabilities, CodingRunInput, CodingResumeInput, codingRuntimeEnv, type CodingEventInfo, type CodingProvider } from "./contract"
+import {
+  CodingCapabilities,
+  CodingRunInput,
+  CodingResumeInput,
+  codingRuntimeEnv,
+  type CodingEventInfo,
+  type CodingProvider,
+} from "./contract"
 import { record, text } from "./contract"
 import { ToolAdapterRegistry } from "./protocol"
 
@@ -47,15 +54,8 @@ export type CodexAppServerClient = {
   threadStart(input: Record<string, unknown>): Promise<ThreadRef>
   threadResume(input: Record<string, unknown>): Promise<ThreadRef>
   turnStart(input: Record<string, unknown>): Promise<TurnRef>
-  turnInterrupt(input: {
-    threadId: string
-    turnId: string
-  }): Promise<unknown>
-  respond?(input: {
-    id: RequestID
-    result?: Record<string, unknown>
-    error?: Record<string, unknown>
-  }): Promise<void>
+  turnInterrupt(input: { threadId: string; turnId: string }): Promise<unknown>
+  respond?(input: { id: RequestID; result?: Record<string, unknown>; error?: Record<string, unknown> }): Promise<void>
   events(input?: { signal?: AbortSignal }): AsyncIterable<CodexInbound>
   close?(): Promise<void> | void
 }
@@ -73,7 +73,9 @@ export namespace CodexAppServerExecutor {
     })
   }
 
-  export function create(input: CodexAppServerClient | ((input: z.infer<typeof CodingRunInput>) => CodexAppServerClient)): CodingProvider {
+  export function create(
+    input: CodexAppServerClient | ((input: z.infer<typeof CodingRunInput>) => CodexAppServerClient),
+  ): CodingProvider {
     const factory = typeof input === "function" ? input : () => input
     const sessions = new Map<string, { client: CodexAppServerClient; threadID?: string; turnID?: string }>()
     return {
@@ -192,16 +194,22 @@ async function* stream(client: CodexAppServerClient, threadID: string, turnID: s
 function terminal(threadID: string, turnID: string, method: string, params?: Record<string, unknown>) {
   const data = params ?? {}
   const currentThread = typeof data.threadId === "string" ? data.threadId : threadID
-  const currentTurn = typeof data.turnId === "string"
-    ? data.turnId
-    : typeof record(data.turn)?.id === "string"
-      ? String(record(data.turn)?.id)
-      : turnID
+  const currentTurn =
+    typeof data.turnId === "string"
+      ? data.turnId
+      : typeof record(data.turn)?.id === "string"
+        ? String(record(data.turn)?.id)
+        : turnID
   if (currentThread !== threadID || currentTurn !== turnID) return false
   return method === "turn/completed" || method === "error"
 }
 
-function* notification(threadID: string, turnID: string, method: string, params?: Record<string, unknown>): Generator<CodingEventInfo> {
+function* notification(
+  threadID: string,
+  turnID: string,
+  method: string,
+  params?: Record<string, unknown>,
+): Generator<CodingEventInfo> {
   const data = params ?? {}
   const currentThread = typeof data.threadId === "string" ? data.threadId : threadID
   const currentTurn = typeof data.turnId === "string" ? data.turnId : turnID
@@ -345,7 +353,12 @@ function* notification(threadID: string, turnID: string, method: string, params?
     }
     return
   }
-  if (method === "thread/status/changed" || method === "thread/name/updated" || method === "model/rerouted" || method === "thread/compacted") {
+  if (
+    method === "thread/status/changed" ||
+    method === "thread/name/updated" ||
+    method === "model/rerouted" ||
+    method === "thread/compacted"
+  ) {
     return
   }
 
@@ -398,9 +411,8 @@ function* notification(threadID: string, turnID: string, method: string, params?
     })
     if (type === "commandExecution" || type === "fileChange" || type === "mcpToolCall") {
       const itemId = typeof item.id === "string" ? item.id : currentTurn
-      const toolName = type === "commandExecution" ? "Bash"
-        : type === "fileChange" ? "FileEdit"
-        : String(item.tool || "MCP")
+      const toolName =
+        type === "commandExecution" ? "Bash" : type === "fileChange" ? "FileEdit" : String(item.tool || "MCP")
       const cmd = type === "commandExecution" ? text(item.command ?? item.args?.[0] ?? "") : ""
       yield {
         type: "tool_call",
@@ -455,14 +467,12 @@ function* notification(threadID: string, turnID: string, method: string, params?
       // `item/started`, which is fine: both events still flow through the
       // same handler in order.
       const itemId = typeof item.id === "string" ? item.id : currentTurn
-      const toolName = type === "commandExecution" ? "Bash"
-        : type === "fileChange" ? "FileEdit"
-        : String(item.tool || "MCP")
+      const toolName =
+        type === "commandExecution" ? "Bash" : type === "fileChange" ? "FileEdit" : String(item.tool || "MCP")
       const cmd = type === "commandExecution" ? text(item.command ?? item.args?.[0] ?? "") : ""
       const output = text(item.output ?? item.contentItems ?? item.content ?? "")
-      const input: string | Record<string, unknown> = type === "commandExecution"
-        ? { command: cmd }
-        : codingInput(item.arguments ?? item.input) ?? item
+      const input: string | Record<string, unknown> =
+        type === "commandExecution" ? { command: cmd } : (codingInput(item.arguments ?? item.input) ?? item)
       yield {
         type: "tool_result" as const,
         id: itemId,
@@ -540,21 +550,29 @@ async function* request(
     requestID: item.id,
     paramsJSON: JSON.stringify(data).slice(0, 4000),
   })
-  if (item.method === "item/tool/requestUserInput" || item.method === "toolRequestUserInput" || item.method === "mcpServer/elicitation/request") {
+  if (
+    item.method === "item/tool/requestUserInput" ||
+    item.method === "toolRequestUserInput" ||
+    item.method === "mcpServer/elicitation/request"
+  ) {
     yield {
       type: "input_request",
       id: String(item.id),
-      questions: Array.isArray(data.questions) ? data.questions.flatMap((question) => {
-        const next = record(question)
-        return next ? [next] : []
-      }) : [{
-        id: String(item.id),
-        header: typeof data.serverName === "string" ? data.serverName : "Input",
-        question: text(data.message || "Additional input required"),
-        mode: data.mode,
-        url: data.url,
-        requested_schema: data.requestedSchema,
-      }],
+      questions: Array.isArray(data.questions)
+        ? data.questions.flatMap((question) => {
+            const next = record(question)
+            return next ? [next] : []
+          })
+        : [
+            {
+              id: String(item.id),
+              header: typeof data.serverName === "string" ? data.serverName : "Input",
+              question: text(data.message || "Additional input required"),
+              mode: data.mode,
+              url: data.url,
+              requested_schema: data.requestedSchema,
+            },
+          ],
       meta: {
         request_id: item.id,
         ...data,
@@ -625,20 +643,22 @@ function codexPlanTodos(plan: unknown): NormalizedTodo[] | null {
     const item = record(entry)
     const content = typeof item?.step === "string" ? item.step.trim() : ""
     if (!content) return []
-    const priority = typeof item?.priority === "string" && item.priority.trim()
-      ? item.priority.trim()
-      : undefined
-    return [{
-      content,
-      status: codexPlanStatus(item?.status),
-      ...(priority ? { priority } : {}),
-    }]
+    const priority = typeof item?.priority === "string" && item.priority.trim() ? item.priority.trim() : undefined
+    return [
+      {
+        content,
+        status: codexPlanStatus(item?.status),
+        ...(priority ? { priority } : {}),
+      },
+    ]
   })
   return todos.length > 0 ? todos : null
 }
 
 function codexPlanStatus(input: unknown): string {
-  const key = String(input || "pending").replace(/[-_\s]/g, "").toLowerCase()
+  const key = String(input || "pending")
+    .replace(/[-_\s]/g, "")
+    .toLowerCase()
   const values: Record<string, string> = {
     pending: "pending",
     inprogress: "in_progress",
@@ -688,7 +708,7 @@ function codexPlanCallID(turnID: string, todos: NormalizedTodo[]): string {
   const raw = JSON.stringify(todos)
   let hash = 0
   for (let i = 0; i < raw.length; i++) {
-    hash = ((hash * 31) + raw.charCodeAt(i)) >>> 0
+    hash = (hash * 31 + raw.charCodeAt(i)) >>> 0
   }
   return `${turnID}:codex-plan:${hash.toString(36)}`
 }

@@ -39,7 +39,8 @@ export namespace AgentRoleContract {
     },
     build: {
       id: "build",
-      description: "General workflow executor. Produces one scoped task or goal deliverable through the build-core terminal-report contract.",
+      description:
+        "General workflow executor. Produces one scoped task or goal deliverable through the build-core terminal-report contract.",
       promptEditable: true,
       defaultPromptRequired: true,
       promptConfigMode: "append",
@@ -47,7 +48,7 @@ export namespace AgentRoleContract {
     "visual-qa": {
       id: "visual-qa",
       description:
-        "Full-function visual QA (Quality Assurance) agent. Uses browser/runtime evidence to test frontend visual quality, may repair defects like build, and reports reproducible visual findings instead of relying on fixed screenshot baselines.",
+        "Focused visual QA (Quality Assurance) agent. Uses browser/runtime evidence to test frontend GUI fidelity and observable functions, may repair in-scope defects, and reports reproducible visual and functional findings instead of relying on fixed screenshot baselines.",
       promptEditable: true,
       defaultPromptRequired: true,
       promptConfigMode: "append",
@@ -111,7 +112,8 @@ export namespace AgentRoleContract {
     },
     requirements: {
       id: "requirements",
-      description: "Requirements agent. Extracts user requirements and foundational technical decisions; it does not produce goals.",
+      description:
+        "Requirements agent. Extracts user requirements and foundational technical decisions; it does not produce goals.",
       promptEditable: true,
       defaultPromptRequired: true,
       promptConfigMode: "append",
@@ -125,28 +127,32 @@ export namespace AgentRoleContract {
     },
     "frontend-design": {
       id: "frontend-design",
-      description: "Frontend design and webpage-replica agent. Converts visual/reference evidence into the authoritative frontend implementation template, fillable modules, component inventory, material inventory, source handoff, and visual/data contracts. For ainvest webpage rewrite work, generated code and PRD/SPEC/report material are reference inputs only; the rewritten webpage must be based on ainvest-frontend-design. It is not the owner for PRD/SPEC/report webpage research unless the requested deliverable is UI implementation or replication.",
+      description:
+        "Frontend design and webpage-replica agent. Converts visual/reference evidence into the authoritative frontend implementation template, fillable modules, component inventory, material inventory, source handoff, and visual/data contracts. For ainvest webpage rewrite work, generated code and PRD/SPEC/report material are reference inputs only; the rewritten webpage must be based on ainvest-frontend-design. It is not the owner for PRD/SPEC/report webpage research unless the requested deliverable is UI implementation or replication.",
       promptEditable: true,
       defaultPromptRequired: true,
       promptConfigMode: "append",
     },
     "intent-analysis": {
       id: "intent-analysis",
-      description: "Intent-analysis agent. Disambiguates the raw request into intent, complexity, slots, missing info, and clarifications.",
+      description:
+        "Intent-analysis agent. Disambiguates the raw request into intent, complexity, slots, missing info, and clarifications.",
       promptEditable: true,
       defaultPromptRequired: true,
       promptConfigMode: "append",
     },
     integrity: {
       id: "integrity",
-      description: "Integrity reviewer. Audits requirement and goal integrity and owns final session-bound acceptance review, including runtime, frontend, visual, and rejection-detail evidence.",
+      description:
+        "Integrity reviewer. Audits requirement and goal integrity and owns final session-bound acceptance review, including runtime, frontend, visual, and rejection-detail evidence.",
       promptEditable: false,
       defaultPromptRequired: false,
       promptConfigMode: "none",
     },
     "fact-check": {
       id: "fact-check",
-      description: "Fact-check agent. Verifies factual claims (APIs, library versions, numbers, paths, historical decisions) emitted by worker agents in their terminal report `fact_check_items[]`. Dispatched by the orchestrator after integrity pass; outputs structured verified/corrected/unresolved findings with evidence pointers.",
+      description:
+        "Fact-check agent. Verifies factual claims (APIs, library versions, numbers, paths, historical decisions) emitted by worker agents in their terminal report `fact_check_items[]`. Dispatched by the orchestrator after integrity pass; outputs structured verified/corrected/unresolved findings with evidence pointers.",
       promptEditable: true,
       defaultPromptRequired: true,
       promptConfigMode: "append",

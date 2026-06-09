@@ -20,9 +20,11 @@ describe("tool.registry", () => {
       directory: tmp.path,
       fn: async () => {
         const ids = await ToolRegistry.ids()
-        ;["bash", "read", "glob", "search_code", "edit", "write", "skill", "task", "todoread", "todowrite"].forEach((id) => {
-          expect(ids).toContain(id)
-        })
+        ;["bash", "read", "glob", "search_code", "edit", "write", "skill", "task", "todoread", "todowrite"].forEach(
+          (id) => {
+            expect(ids).toContain(id)
+          },
+        )
       },
     })
   }, 20000)

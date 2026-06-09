@@ -54,7 +54,9 @@ async function main() {
   const renderedFlag = flag("--rendered")
   const renderedDirFlag = flag("--rendered-dir")
   if (!renderedFlag && !renderedDirFlag) {
-    console.error("[visual-diff] must provide --rendered with a live http(s) URL or --rendered-dir with an app directory")
+    console.error(
+      "[visual-diff] must provide --rendered with a live http(s) URL or --rendered-dir with an app directory",
+    )
     process.exit(2)
   }
   if (renderedFlag && renderedDirFlag) {
@@ -68,16 +70,16 @@ async function main() {
   const reference = required("--reference")
   const threshold = Number(flag("--threshold") ?? "0.85")
   const worstThreshold = Number(flag("--worst-threshold") ?? "0.55")
-  const browserLaunchTimeoutMs = Number(flag("--browser-launch-timeout-ms") ?? process.env.OPENCORVUS_BROWSER_LAUNCH_TIMEOUT_MS ?? 60_000)
+  const browserLaunchTimeoutMs = Number(
+    flag("--browser-launch-timeout-ms") ?? process.env.OPENCORVUS_BROWSER_LAUNCH_TIMEOUT_MS ?? 60_000,
+  )
   const headless = process.argv.includes("--headless") || process.env.OPENCORVUS_VISUAL_DIFF_HEADLESS === "1"
   const defaultOutDir = path.resolve(import.meta.dir, "../../../..", ".scratch", "benchmark-runs", "visual-diff-out")
   const outDir = path.resolve(flag("--out") ?? defaultOutDir)
   const viewportFlag = flag("--viewport")
   const viewport = viewportFlag ? parseViewport(viewportFlag) : undefined
 
-  const server = renderedDirFlag
-    ? await serveRenderedDir(path.resolve(renderedDirFlag))
-    : undefined
+  const server = renderedDirFlag ? await serveRenderedDir(path.resolve(renderedDirFlag)) : undefined
   let exitCode = 2
   try {
     const renderedResolved = renderedFlag ?? server?.url

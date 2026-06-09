@@ -77,14 +77,10 @@ describe("coding CLI external launch", () => {
         fn: async () => {
           await expect(
             CodingCli.open({ cliID: "missing", terminalProfileID: "powershell", cwd: dir.path }),
-          ).rejects.toBeInstanceOf(
-            CodingCli.ConfigError,
-          )
+          ).rejects.toBeInstanceOf(CodingCli.ConfigError)
           await expect(
             CodingCli.open({ cliID: "codex", terminalProfileID: "powershell", cwd: outside.path }),
-          ).rejects.toBeInstanceOf(
-            SystemTerminal.ConfigError,
-          )
+          ).rejects.toBeInstanceOf(SystemTerminal.ConfigError)
           await expect(
             CodingCli.open({ cliID: "codex", terminalProfileID: "missing", cwd: dir.path }),
           ).rejects.toBeInstanceOf(SystemTerminal.ConfigError)

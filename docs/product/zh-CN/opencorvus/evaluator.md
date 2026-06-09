@@ -53,11 +53,11 @@ code_review · dead_code_review · startup · spec_check
 
 verdict 以 `engine_artifact[kind="verdict"]` 形式落盘：
 
-| verdict        | 后续动作                                                                                                                       |
-| -------------- | ------------------------------------------------------------------------------------------------------------------------------ |
+| verdict        | 后续动作                                                                                                                           |
+| -------------- | ---------------------------------------------------------------------------------------------------------------------------------- |
 | `accepted`     | `deliver` 直接完成 task；如需补充 patch / git preview 等交付物，可显式调用 `publish_acceptance` 做 post-acceptance artifact export |
 | `rejected`     | 走 `acceptance-retry-feedback.ts` 回修；超过 `acceptance.max_retries` 后由 Orchestrator 决定 retry / replan / fail                 |
-| `inconclusive` | 视为 rejected，但优先 replan（无法判决通常意味着信息不全或 doom-loop）                                                         |
+| `inconclusive` | 视为 rejected，但优先 replan（无法判决通常意味着信息不全或 doom-loop）                                                             |
 
 Acceptance review 只负责 verdict 和证据。启动 / 停止 / retry / cancel / fail 当前 task，以及发布新的 follow-up task，是 Orchestrator 的 lifecycle 权限；Acceptance 如果发现应拆成新 task，只能在 verdict evidence 中提出建议，不能直接创建 task。
 

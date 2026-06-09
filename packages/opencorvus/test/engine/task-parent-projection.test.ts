@@ -14,15 +14,9 @@ import { Task as TaskModel } from "../../src/engine/model"
 const REPO_ROOT = join(import.meta.dir, "..", "..", "..", "..")
 const STORE_TS = readFileSync(join(REPO_ROOT, "packages/opencorvus/src/engine/store.ts"), "utf8")
 const MODEL_TS = readFileSync(join(REPO_ROOT, "packages/opencorvus/src/engine/model.ts"), "utf8")
-const PROPOSE_TASK_TS = readFileSync(
-  join(REPO_ROOT, "packages/opencorvus/src/orchestrator/tools.ts"),
-  "utf8",
-)
+const PROPOSE_TASK_TS = readFileSync(join(REPO_ROOT, "packages/opencorvus/src/orchestrator/tools.ts"), "utf8")
 const OPENAPI_JSON = readFileSync(join(REPO_ROOT, "packages/sdk/openapi.json"), "utf8")
-const SDK_TYPES_TS = readFileSync(
-  join(REPO_ROOT, "packages/sdk/js/src/gen/types.gen.ts"),
-  "utf8",
-)
+const SDK_TYPES_TS = readFileSync(join(REPO_ROOT, "packages/sdk/js/src/gen/types.gen.ts"), "utf8")
 
 describe("Task zod schema accepts parentTaskID", () => {
   function fullTask(extra: Record<string, unknown> = {}) {

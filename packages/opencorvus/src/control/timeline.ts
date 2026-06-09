@@ -30,20 +30,22 @@ export const TimelineMessage = z.object({
       updated: z.number(),
     }),
   }),
-  parts: z.array(z.discriminatedUnion("type", [
-    z.object({
-      id: z.string(),
-      type: z.literal("text"),
-      text: z.string(),
-    }),
-    z.object({
-      id: z.string(),
-      type: z.literal("file"),
-      mime: z.string(),
-      url: z.string(),
-      filename: z.string().optional(),
-    }),
-  ])),
+  parts: z.array(
+    z.discriminatedUnion("type", [
+      z.object({
+        id: z.string(),
+        type: z.literal("text"),
+        text: z.string(),
+      }),
+      z.object({
+        id: z.string(),
+        type: z.literal("file"),
+        mime: z.string(),
+        url: z.string(),
+        filename: z.string().optional(),
+      }),
+    ]),
+  ),
 })
 
 const AppendInput = z.object({
@@ -85,7 +87,12 @@ export namespace ControlTimeline {
           : db
               .select()
               .from(ControlMessageTable)
-              .where(and(eq(ControlMessageTable.scope, "global"), eq(ControlMessageTable.scope_id, input.surface ?? "panel")))
+              .where(
+                and(
+                  eq(ControlMessageTable.scope, "global"),
+                  eq(ControlMessageTable.scope_id, input.surface ?? "panel"),
+                ),
+              )
               .orderBy(asc(ControlMessageTable.time_created))
               .all(),
     )
@@ -127,9 +134,7 @@ export namespace ControlTimeline {
 
 function view(row: typeof ControlMessageTable.$inferSelect) {
   const metadata =
-    row.metadata && typeof row.metadata === "object" && !Array.isArray(row.metadata)
-      ? row.metadata
-      : undefined
+    row.metadata && typeof row.metadata === "object" && !Array.isArray(row.metadata) ? row.metadata : undefined
   const attachments = TimelineAttachment.array().safeParse(metadata?.attachments).data ?? []
   return {
     info: {

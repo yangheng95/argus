@@ -1,14 +1,11 @@
 // ── ChangesPanel Component ──
-// Shows the list of changed files for the selected task. Clicking a row
-// surfaces the diff in the right-hand workspace via the window.openWorkspaceDiff
-// bridge (wired in main.tsx). The panel itself is read-only — it does not
-// render the diff inline any more.
+// Shows changed files for the selected task. Clicking a row resolves the same
+// shared diff data that the workspace preview uses; FileChangesView renders the
+// result inline below the row.
 
-import { createMemo, createResource } from "solid-js";
-import { boardStore,
-  activeTaskID,
-} from "../store/board";
-import { cardTreeStore, type CardNode } from "../store/card-tree";
+import { createMemo, createResource } from "solid-js"
+import { boardStore, activeTaskID } from "../store/board"
+import { cardTreeStore, type CardNode } from "../store/card-tree"
 import {
   changeGroupsRevisionKey,
   currentChangeGroups,
@@ -16,36 +13,30 @@ import {
   resolveDiff,
   type ChangeGroup,
   type DiffTarget,
-} from "../services/diff";
-import { collectAgentFileChangeGroupsFromNodes, mergeChangeGroups } from "../utils/file-change-summary";
-import type { FileChange } from "./DiffView";
-import { FileChangesView } from "./FileChangesView";
+} from "../services/diff"
+import { collectAgentFileChangeGroupsFromNodes, mergeChangeGroups } from "../utils/file-change-summary"
+import type { FileChange } from "./DiffView"
+import { FileChangesView } from "./FileChangesView"
 
 // ── ChangesPanel ──
 
 export interface ChangesPanelProps {
   /** File changes to display. If omitted, the shared diff service supplies board-derived groups. */
-  changes?: FileChange[];
+  changes?: FileChange[]
   /** Whether a task is currently selected (affects empty-state messaging). */
-  hasSelectedTask?: boolean;
+  hasSelectedTask?: boolean
 }
 
 export function ChangesPanel(props: ChangesPanelProps) {
   const agentGroups = createMemo<ChangeGroup[]>(() => {
-    const board = boardStore.board as any;
-    const roots = cardTreeStore.order
-      .map((id) => cardTreeStore.cards[id])
-      .filter((node): node is CardNode => !!node);
-    return collectAgentFileChangeGroupsFromNodes(
-      roots,
-      String(board?.task?.directory || ""),
-      board?.goalWorkflows,
-    );
-  });
+    const board = boardStore.board as any
+    const roots = cardTreeStore.order.map((id) => cardTreeStore.cards[id]).filter((node): node is CardNode => !!node)
+    return collectAgentFileChangeGroupsFromNodes(roots, String(board?.task?.directory || ""), board?.goalWorkflows)
+  })
 
   const sourceGroups = createMemo<ChangeGroup[]>(() => {
-    if (props.changes === undefined) return currentChangeGroups();
-    const changes = props.changes;
+    if (props.changes === undefined) return currentChangeGroups()
+    const changes = props.changes
     return [
       {
         id: "props",
@@ -53,40 +44,35 @@ export function ChangesPanel(props: ChangesPanelProps) {
         deletions: changes.reduce((sum, item) => sum + (item.deletions ?? 0), 0),
         changes,
       },
-    ];
-  });
+    ]
+  })
 
   const requestKey = createMemo(() => {
-    const groups = sourceGroups();
-    const agentKey = changeGroupsRevisionKey(agentGroups());
+    const groups = sourceGroups()
+    const agentKey = changeGroupsRevisionKey(agentGroups())
     return props.changes !== undefined
       ? `props:${groups[0]?.changes.length ?? 0}`
-      : `${activeTaskID()}:${boardStore.snapshotVersion}:${cardTreeStore.visibleVersion}:${agentKey}:${changeGroupsRevisionKey(groups)}`;
-  });
+      : `${activeTaskID()}:${boardStore.snapshotVersion}:${cardTreeStore.visibleVersion}:${agentKey}:${changeGroupsRevisionKey(groups)}`
+  })
 
   const [resolvedGroups] = createResource(requestKey, async () => {
-    if (props.changes !== undefined) return sourceGroups();
-    return resolveCurrentChangeGroups();
-  });
+    if (props.changes !== undefined) return sourceGroups()
+    return resolveCurrentChangeGroups()
+  })
 
   const groups = createMemo<ChangeGroup[]>(() =>
     props.changes === undefined
       ? mergeChangeGroups([...agentGroups(), ...(resolvedGroups() || sourceGroups())])
       : sourceGroups().filter((group) => group.changes.length > 0),
-  );
-  const openWorkspaceDiff = (window as any).openWorkspaceDiff as
-    | ((target: DiffTarget) => void)
-    | undefined;
+  )
 
   async function handleRowClick(group: ChangeGroup, item: FileChange) {
-    if (typeof openWorkspaceDiff !== "function") return;
     const target: DiffTarget = {
       filePath: item.file,
       ...(group.goalRunID ? { goalRunID: group.goalRunID } : {}),
       ...(group.goalLabel ? { goalLabel: group.goalLabel } : {}),
-    };
-    void resolveDiff(target);
-    openWorkspaceDiff(target);
+    }
+    void resolveDiff(target)
   }
 
   return (
@@ -96,5 +82,5 @@ export function ChangesPanel(props: ChangesPanelProps) {
       focusEvent="acceptance:focus-changes"
       onRowClick={handleRowClick}
     />
-  );
+  )
 }

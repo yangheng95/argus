@@ -245,7 +245,11 @@ export const runPointGuard = async (
       const stack = document.elementsFromPoint(point.x, point.y)
       const target = best([...stack, ...ancestors(hit)].map(candidateOf).filter(Boolean) as EvalGuardCandidate[])
 
-      const all = [...document.querySelectorAll("button,a,input,select,textarea,summary,[role],[tabindex],[onclick],[onmousedown],[aria-label],[title],svg,canvas")]
+      const all = [
+        ...document.querySelectorAll(
+          "button,a,input,select,textarea,summary,[role],[tabindex],[onclick],[onmousedown],[aria-label],[title],svg,canvas",
+        ),
+      ]
       const nearby = all
         .map(candidateOf)
         .filter((x): x is EvalGuardCandidate => !!x && x.distance <= profile.radius && x.confidence > 0.2)

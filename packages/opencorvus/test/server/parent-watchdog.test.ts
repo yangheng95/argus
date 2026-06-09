@@ -16,7 +16,9 @@ describe("ParentWatchdog", () => {
     const wd = ParentWatchdog.start({
       parentPid: process.pid,
       intervalMs: 30,
-      onOrphan: () => { fired++ },
+      onOrphan: () => {
+        fired++
+      },
     })
     stops.push(() => wd.stop())
     await new Promise((r) => setTimeout(r, 200))
@@ -30,7 +32,10 @@ describe("ParentWatchdog", () => {
     const wd = ParentWatchdog.start({
       parentPid: deadPid,
       intervalMs: 20,
-      onOrphan: (reason) => { fired++; lastReason = reason },
+      onOrphan: (reason) => {
+        fired++
+        lastReason = reason
+      },
     })
     stops.push(() => wd.stop())
     await new Promise((r) => setTimeout(r, 200))
@@ -43,7 +48,9 @@ describe("ParentWatchdog", () => {
     const wd = ParentWatchdog.start({
       parentPid: 999_999_999,
       intervalMs: 200,
-      onOrphan: () => { fired++ },
+      onOrphan: () => {
+        fired++
+      },
     })
     wd.stop()
     await new Promise((r) => setTimeout(r, 400))
@@ -73,7 +80,9 @@ describe("ParentWatchdog", () => {
       const wd = ParentWatchdog.start({
         parentPid: 12345,
         intervalMs: 20,
-        onOrphan: () => { fired++ },
+        onOrphan: () => {
+          fired++
+        },
       })
       stops.push(() => wd.stop())
       await new Promise((r) => setTimeout(r, 150))
@@ -99,7 +108,9 @@ describe("ParentWatchdog", () => {
       const wd = ParentWatchdog.start({
         parentPid: 12345,
         intervalMs: 20,
-        onOrphan: () => { fired++ },
+        onOrphan: () => {
+          fired++
+        },
       })
       stops.push(() => wd.stop())
       await new Promise((r) => setTimeout(r, 150))
@@ -125,7 +136,10 @@ describe("ParentWatchdog", () => {
       const wd = ParentWatchdog.start({
         parentPid: 12345,
         intervalMs: 20,
-        onOrphan: () => { fired++; throw new Error("intentional") },
+        onOrphan: () => {
+          fired++
+          throw new Error("intentional")
+        },
       })
       stops.push(() => wd.stop())
       await new Promise((r) => setTimeout(r, 150))

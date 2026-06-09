@@ -36,6 +36,8 @@ describe("frontend-research agent", () => {
     expect(prompt).toContain("Requirements-Agent Handoff")
     expect(prompt).toContain("page API verification scope")
     expect(prompt).toContain("expected persisted API adaptation document")
-    expect(prompt).toContain("do not invent endpoints, payloads, live market feeds, or backend obligations from visual labels alone")
+    expect(prompt).toContain(
+      "do not invent endpoints, payloads, live market feeds, or backend obligations from visual labels alone",
+    )
   })
 })

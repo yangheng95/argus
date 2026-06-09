@@ -1,12 +1,6 @@
 import { afterEach, beforeEach, describe, expect, test } from "bun:test"
-import {
-  PROTOCOL_VERSION,
-  type ExtensionMessage,
-} from "@opencorvus-ai/transport-protocol"
-import {
-  __resetVsCodeTransportForTest,
-  createVsCodeTransport,
-} from "../src/services/vscode-transport"
+import { PROTOCOL_VERSION, type ExtensionMessage } from "@opencorvus-ai/transport-protocol"
+import { __resetVsCodeTransportForTest, createVsCodeTransport } from "../src/services/vscode-transport"
 import { DEFAULT_REQUEST_TIMEOUT_MILLISECONDS } from "../src/services/host-transport"
 
 /**
@@ -50,15 +44,25 @@ function installFakeWindow(): { fake: FakeVsCode; trigger: (m: ExtensionMessage)
     location: { reload() {} },
     sessionStorage: {
       _data: new Map<string, string>(),
-      getItem(k: string) { return this._data.get(k) ?? null },
-      setItem(k: string, v: string) { this._data.set(k, v) },
-      removeItem(k: string) { this._data.delete(k) },
+      getItem(k: string) {
+        return this._data.get(k) ?? null
+      },
+      setItem(k: string, v: string) {
+        this._data.set(k, v)
+      },
+      removeItem(k: string) {
+        this._data.delete(k)
+      },
     },
     acquireVsCodeApi() {
       return {
-        postMessage(m: unknown) { posted.push(m) },
+        postMessage(m: unknown) {
+          posted.push(m)
+        },
         setState() {},
-        getState() { return null },
+        getState() {
+          return null
+        },
       }
     },
   }
@@ -96,7 +100,9 @@ describe("vscode-transport response error envelope (audit transport F3 / overlay
     // Static-imported at top of file: `await import(...)` previously
     // tripped Bun's circular-load TDZ because host-transport eagerly
     // imports vscode-transport.
-    try { __resetVsCodeTransportForTest() } catch {} // best-effort
+    try {
+      __resetVsCodeTransportForTest()
+    } catch {} // best-effort
     const transport = createVsCodeTransport()
 
     // Kick off a request; capture the id from the postMessage envelope.
@@ -121,7 +127,9 @@ describe("vscode-transport response error envelope (audit transport F3 / overlay
     // Race the promise against a timeout — the bug was an indefinite
     // hang. 1 s is more than enough for a settled microtask.
     const verdict = await Promise.race([
-      reqPromise.then(() => "resolved" as const).catch((e) => ({ rejected: e instanceof Error ? e.message : String(e) })),
+      reqPromise
+        .then(() => "resolved" as const)
+        .catch((e) => ({ rejected: e instanceof Error ? e.message : String(e) })),
       new Promise<"timeout">((r) => setTimeout(() => r("timeout"), 1000)),
     ])
     expect(verdict).not.toBe("timeout")
@@ -138,7 +146,9 @@ describe("vscode-transport response error envelope (audit transport F3 / overlay
     // partially-initialised module on first call. With the static
     // import below, the test runner finishes module initialisation
     // before any test runs.
-    try { __resetVsCodeTransportForTest() } catch {} // best-effort
+    try {
+      __resetVsCodeTransportForTest()
+    } catch {} // best-effort
     const transport = createVsCodeTransport()
 
     const reqPromise = transport.request<{ ok: boolean }>({ path: "global/health" })
@@ -155,10 +165,7 @@ describe("vscode-transport response error envelope (audit transport F3 / overlay
       body: { kind: "json", value: { ok: true } },
     })
 
-    const result = await Promise.race([
-      reqPromise,
-      new Promise<"timeout">((r) => setTimeout(() => r("timeout"), 1000)),
-    ])
+    const result = await Promise.race([reqPromise, new Promise<"timeout">((r) => setTimeout(() => r("timeout"), 1000))])
     expect(result).not.toBe("timeout")
     expect((result as any).ok).toBe(true)
     expect((result as any).body).toEqual({ ok: true })
@@ -172,7 +179,9 @@ describe("vscode-transport request abort uses request.abort envelope (audit over
     fakeCleanup?.()
     fakeCleanup = undefined
     AbortSignal.timeout = originalAbortSignalTimeout
-    try { __resetVsCodeTransportForTest() } catch {}
+    try {
+      __resetVsCodeTransportForTest()
+    } catch {}
   })
 
   test("aborting an in-flight request posts request.abort, not stream.close", async () => {
@@ -184,7 +193,9 @@ describe("vscode-transport request abort uses request.abort envelope (audit over
     // partially-initialised module on first call. With the static
     // import below, the test runner finishes module initialisation
     // before any test runs.
-    try { __resetVsCodeTransportForTest() } catch {} // best-effort
+    try {
+      __resetVsCodeTransportForTest()
+    } catch {} // best-effort
     const transport = createVsCodeTransport()
 
     const controller = new AbortController()
@@ -201,9 +212,7 @@ describe("vscode-transport request abort uses request.abort envelope (audit over
 
     // Find the abort envelope; pre-fix this would be `stream.close`,
     // post-fix it must be `request.abort` with the same id.
-    const abortMsg = fake.fake.posted
-      .slice(1)
-      .find((m: any) => m && m.id === sentRequest.id)
+    const abortMsg = fake.fake.posted.slice(1).find((m: any) => m && m.id === sentRequest.id)
     expect((abortMsg as any)?.type).toBe("request.abort")
 
     const verdict = await reqPromise
@@ -219,7 +228,9 @@ describe("vscode-transport request abort uses request.abort envelope (audit over
       timeoutMilliseconds = milliseconds
       return timeoutController.signal
     }) as typeof AbortSignal.timeout
-    try { __resetVsCodeTransportForTest() } catch {}
+    try {
+      __resetVsCodeTransportForTest()
+    } catch {}
     const transport = createVsCodeTransport()
 
     const reqPromise = transport
@@ -234,9 +245,7 @@ describe("vscode-transport request abort uses request.abort envelope (audit over
     timeoutController.abort()
     await new Promise((r) => setTimeout(r, 0))
 
-    const abortMsg = fake.fake.posted.find(
-      (m: any) => m?.type === "request.abort" && m.id === sentRequest.id,
-    )
+    const abortMsg = fake.fake.posted.find((m: any) => m?.type === "request.abort" && m.id === sentRequest.id)
     expect((abortMsg as any)?.type).toBe("request.abort")
 
     const verdict = await reqPromise

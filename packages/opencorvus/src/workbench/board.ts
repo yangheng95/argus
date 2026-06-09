@@ -50,9 +50,7 @@ const BOARD_SUMMARY_LIMIT = 4000
 const BOARD_ARTIFACT_STRING_LIMIT = 1200
 const BOARD_ARTIFACT_ARRAY_LIMIT = 8
 const BOARD_ARTIFACT_OBJECT_DEPTH_LIMIT = 3
-const BOARD_VISIBLE_PROTOCOL_EVENT_TYPES = [
-  "workflow.step.updated",
-] as const
+const BOARD_VISIBLE_PROTOCOL_EVENT_TYPES = ["workflow.step.updated"] as const
 
 export function compileBoard(input: { taskID: string }) {
   const task = Database.use((db) => db.select().from(EngineTaskTable).where(eq(EngineTaskTable.id, input.taskID)).get())
@@ -119,9 +117,7 @@ function buildBoard(
     planVersionID: plan?.id ?? undefined,
     sessionID: task.session_id ?? undefined,
   })
-  const staging = notes.filter((note) =>
-    ["goal_update", "operator_note", "constraint", "decision"].includes(note.kind),
-  )
+  const staging = notes.filter((note) => ["goal_update", "operator_note", "constraint", "decision"].includes(note.kind))
   const history = notes.filter((note) => ["user_request", "summary"].includes(note.kind))
   // Phase 5-e: board reads through the engine/store projection helpers
   // instead of issuing its own SQL against EngineAcceptance / EngineEvaluation.
@@ -200,122 +196,122 @@ function buildBoard(
   const workflowFields = buildWorkflowFields(task, goals)
 
   return {
-      snapshotVersion,
-      lastSequence,
-      ...workflowFields,
-      spec: specSnapshot,
-      task: {
-        id: task.id,
-        projectID: task.project_id,
-        directory: Instance.directory,
-        sessionID: task.session_id ?? undefined,
-        activePlanVersionID: plan?.id ?? undefined,
-        activeRunID: run?.id ?? undefined,
-        requestID: task.request_id ?? undefined,
-        source: task.source,
-        kind: task.kind,
-        title: task.title,
-        request: task.request,
-        status: deriveTaskStatus(task),
-        priority: task.priority,
-        // Phase-6-f-4: blocking lives on run (or none when no active run).
-        blockingReason: run?.blocking_reason ?? undefined,
-        error: task.error ?? undefined,
-        budget: task.budget
-          ? {
-              maxExecutorGroups: task.budget.max_executor_groups,
-            }
-          : undefined,
-        metadata: task.metadata ?? undefined,
-        // Attachment references (url/mime/filename/sha/size/intent/source) —
-        // the overlay's `buildUserContextMessages` appends each as a file part
-        // under the synthetic user-request bubble so images render inline.
-        attachments: Array.isArray(task.attachments) ? task.attachments : undefined,
-        time: {
-          created: task.time_created,
-          updated: task.time_updated,
-          started: task.time_started ?? undefined,
-          completed: task.time_completed ?? undefined,
-        },
+    snapshotVersion,
+    lastSequence,
+    ...workflowFields,
+    spec: specSnapshot,
+    task: {
+      id: task.id,
+      projectID: task.project_id,
+      directory: Instance.directory,
+      sessionID: task.session_id ?? undefined,
+      activePlanVersionID: plan?.id ?? undefined,
+      activeRunID: run?.id ?? undefined,
+      requestID: task.request_id ?? undefined,
+      source: task.source,
+      kind: task.kind,
+      title: task.title,
+      request: task.request,
+      status: deriveTaskStatus(task),
+      priority: task.priority,
+      // Phase-6-f-4: blocking lives on run (or none when no active run).
+      blockingReason: run?.blocking_reason ?? undefined,
+      error: task.error ?? undefined,
+      budget: task.budget
+        ? {
+            maxExecutorGroups: task.budget.max_executor_groups,
+          }
+        : undefined,
+      metadata: task.metadata ?? undefined,
+      // Attachment references (url/mime/filename/sha/size/intent/source) —
+      // the overlay's `buildUserContextMessages` appends each as a file part
+      // under the synthetic user-request bubble so images render inline.
+      attachments: Array.isArray(task.attachments) ? task.attachments : undefined,
+      time: {
+        created: task.time_created,
+        updated: task.time_updated,
+        started: task.time_started ?? undefined,
+        completed: task.time_completed ?? undefined,
       },
-      plan: plan
-        ? {
-            id: plan.id,
-            taskID: plan.task_id,
-            version: plan.version,
-            status: plan.status,
-            summary: plan.summary,
-            prompt: plan.prompt,
-            metadata: plan.metadata ?? undefined,
-            time: {
-              created: plan.time_created,
-              updated: plan.time_updated,
-            },
-          }
-        : undefined,
-      run: run
-        ? {
-            id: run.id,
-            taskID: run.task_id,
-            planVersionID: run.plan_version_id ?? undefined,
-            sessionID: run.session_id ?? undefined,
-            executor: run.executor,
-            status: run.status,
-            phase: run.phase,
-            blockingReason: run.blocking_reason ?? undefined,
-            error: run.error ?? undefined,
-            retryCount: run.retry_count,
-            executorRef: run.executor_ref
-              ? {
-                  sessionID: run.executor_ref.session_id,
-                  queueTaskID: run.executor_ref.queue_task_id,
-                }
-              : undefined,
-            metadata: run.metadata ?? undefined,
-            time: {
-              created: run.time_created,
-              updated: run.time_updated,
-              started: run.time_started ?? undefined,
-              completed: run.time_completed ?? undefined,
-            },
-          }
-        : undefined,
-      acceptance: viewBoardAcceptance(latestAcceptance),
-      candidateAcceptance: viewBoardAcceptance(latestAcceptance),
-      acceptedAcceptance: viewBoardAcceptance(acceptedAcceptance),
-      evaluation: viewBoardEvaluation(latestEvaluation),
-      interactions: interactions.map((item) => ({
-        id: item.id,
-        taskID: item.task_id,
-        runID: item.run_id,
-        sessionID: item.session_id ?? undefined,
-        externalID: item.external_id,
-        type: item.request_type,
-        status: item.status,
-        title: item.title,
-        body: item.body,
-        payload: item.payload ?? undefined,
-        response: item.response ?? undefined,
-        time: {
-          created: item.time_created,
-          updated: item.time_updated,
-          resolved: item.time_resolved ?? undefined,
-        },
-      })),
-      channels: bindings.map((item) => ({
-        id: item.id,
-        platform: item.platform,
-        channel: item.channel,
-        thread: item.thread,
-        payload: item.payload ?? undefined,
-        time: {
-          created: item.time_created,
-          updated: item.time_updated,
-        },
-      })),
-      artifacts: latestArtifacts
-        .filter((item) => item.kind !== "diff" && item.kind !== "changed_file")
-        .map((item) => ({
+    },
+    plan: plan
+      ? {
+          id: plan.id,
+          taskID: plan.task_id,
+          version: plan.version,
+          status: plan.status,
+          summary: plan.summary,
+          prompt: plan.prompt,
+          metadata: plan.metadata ?? undefined,
+          time: {
+            created: plan.time_created,
+            updated: plan.time_updated,
+          },
+        }
+      : undefined,
+    run: run
+      ? {
+          id: run.id,
+          taskID: run.task_id,
+          planVersionID: run.plan_version_id ?? undefined,
+          sessionID: run.session_id ?? undefined,
+          executor: run.executor,
+          status: run.status,
+          phase: run.phase,
+          blockingReason: run.blocking_reason ?? undefined,
+          error: run.error ?? undefined,
+          retryCount: run.retry_count,
+          executorRef: run.executor_ref
+            ? {
+                sessionID: run.executor_ref.session_id,
+                queueTaskID: run.executor_ref.queue_task_id,
+              }
+            : undefined,
+          metadata: run.metadata ?? undefined,
+          time: {
+            created: run.time_created,
+            updated: run.time_updated,
+            started: run.time_started ?? undefined,
+            completed: run.time_completed ?? undefined,
+          },
+        }
+      : undefined,
+    acceptance: viewBoardAcceptance(latestAcceptance),
+    candidateAcceptance: viewBoardAcceptance(latestAcceptance),
+    acceptedAcceptance: viewBoardAcceptance(acceptedAcceptance),
+    evaluation: viewBoardEvaluation(latestEvaluation),
+    interactions: interactions.map((item) => ({
+      id: item.id,
+      taskID: item.task_id,
+      runID: item.run_id,
+      sessionID: item.session_id ?? undefined,
+      externalID: item.external_id,
+      type: item.request_type,
+      status: item.status,
+      title: item.title,
+      body: item.body,
+      payload: item.payload ?? undefined,
+      response: item.response ?? undefined,
+      time: {
+        created: item.time_created,
+        updated: item.time_updated,
+        resolved: item.time_resolved ?? undefined,
+      },
+    })),
+    channels: bindings.map((item) => ({
+      id: item.id,
+      platform: item.platform,
+      channel: item.channel,
+      thread: item.thread,
+      payload: item.payload ?? undefined,
+      time: {
+        created: item.time_created,
+        updated: item.time_updated,
+      },
+    })),
+    artifacts: latestArtifacts
+      .filter((item) => item.kind !== "diff" && item.kind !== "changed_file")
+      .map((item) => ({
         id: item.id,
         taskID: item.task_id,
         runID: item.run_id,
@@ -328,29 +324,31 @@ function buildBoard(
           updated: item.time_updated,
         },
       })),
-      overview,
-      brief: {
-        content: brief.content,
-        updated_at: brief.updatedAt ?? Date.now(),
-      },
-      // Task-level criteria rollup. Sourced from engine_task.criteria_results,
-      // populated by:
-      //   - integrity acceptance verdict (deferred_checks + rejection_details + overall),
-      //     sunk via orchestrator/tools.ts → sinkAcceptanceVerdictToCriteria()
-      //   - in-process visual-diff gate (orchestrator/tools.ts, when task carries
-      //     image attachments and a rendered index.html exists)
-      // Hidden in the overlay for kind=build tasks (build self-verifies; this
-      // panel only applies to workflow tasks running through acceptance).
-      criteriaResults: boardChecks(task.criteria_results),
+    overview,
+    brief: {
+      content: brief.content,
+      updated_at: brief.updatedAt ?? Date.now(),
+    },
+    // Task-level criteria rollup. Sourced from engine_task.criteria_results,
+    // populated by:
+    //   - integrity acceptance verdict (deferred_checks + rejection_details + overall),
+    //     sunk via orchestrator/tools.ts → sinkAcceptanceVerdictToCriteria()
+    //   - in-process visual-diff gate (orchestrator/tools.ts, when task carries
+    //     image attachments and a rendered index.html exists)
+    // Hidden in the overlay for kind=build tasks (build self-verifies; this
+    // panel only applies to workflow tasks running through acceptance).
+    criteriaResults: boardChecks(task.criteria_results),
   }
 }
 
 function latestTaskProtocolSequence(taskID: string) {
-  return Database.use((db) =>
-    db.select({ seq: sql<number>`coalesce(max(seq), 0)` })
-      .from(ProtocolEventTable)
-      .where(eq(ProtocolEventTable.task_id, taskID))
-      .get()?.seq ?? 0
+  return Database.use(
+    (db) =>
+      db
+        .select({ seq: sql<number>`coalesce(max(seq), 0)` })
+        .from(ProtocolEventTable)
+        .where(eq(ProtocolEventTable.task_id, taskID))
+        .get()?.seq ?? 0,
   )
 }
 
@@ -388,12 +386,7 @@ function boardTagForTask(task: typeof EngineTaskTable.$inferSelect) {
         updated: sql<number>`coalesce(max(${EngineArtifactTable.time_updated}), 0)`,
       })
       .from(EngineArtifactTable)
-      .where(
-        and(
-          eq(EngineArtifactTable.task_id, task.id),
-          eq(EngineArtifactTable.kind, "goal_run_attempt"),
-        ),
-      )
+      .where(and(eq(EngineArtifactTable.task_id, task.id), eq(EngineArtifactTable.kind, "goal_run_attempt")))
       .get(),
   )
   const interactions = Database.use((db) =>
@@ -458,10 +451,12 @@ function boardTagForTask(task: typeof EngineTaskTable.$inferSelect) {
         updated: sql<number>`coalesce(max(${ProtocolEventTable.emitted_at}), 0)`,
       })
       .from(ProtocolEventTable)
-      .where(and(
-        eq(ProtocolEventTable.task_id, task.id),
-        inArray(ProtocolEventTable.type, BOARD_VISIBLE_PROTOCOL_EVENT_TYPES),
-      ))
+      .where(
+        and(
+          eq(ProtocolEventTable.task_id, task.id),
+          inArray(ProtocolEventTable.type, BOARD_VISIBLE_PROTOCOL_EVENT_TYPES),
+        ),
+      )
       .get(),
   )
   const noteStats = Database.use((db) =>
@@ -557,10 +552,7 @@ function compactArtifactPayload(kind: string, input: unknown) {
   }
   if (kind === "report") {
     return Object.fromEntries(
-      Object.entries(item).map(([key, value]) => [
-        key,
-        typeof value === "string" ? clipBoard(value) : value,
-      ]),
+      Object.entries(item).map(([key, value]) => [key, typeof value === "string" ? clipBoard(value) : value]),
     )
   }
   if (kind === "build_session_contract") {
@@ -576,9 +568,7 @@ function compactArtifactPayload(kind: string, input: unknown) {
       collaboration_goals_count: Array.isArray(item.collaboration_goals_snapshot)
         ? item.collaboration_goals_snapshot.length
         : undefined,
-      requirements_count: Array.isArray(item.requirements_snapshot)
-        ? item.requirements_snapshot.length
-        : undefined,
+      requirements_count: Array.isArray(item.requirements_snapshot) ? item.requirements_snapshot.length : undefined,
       source_artifact_ids: Array.isArray(item.source_artifact_ids)
         ? item.source_artifact_ids.slice(0, BOARD_ARTIFACT_ARRAY_LIMIT)
         : undefined,
@@ -595,9 +585,7 @@ function boardChecks(input: unknown) {
   })
 }
 
-function viewBoardAcceptance(
-  row: AcceptanceRow | undefined,
-) {
+function viewBoardAcceptance(row: AcceptanceRow | undefined) {
   if (!row) return undefined
   const result = (row.result ?? {}) as Record<string, unknown>
   // Project status from the acceptance-agent verdict (single source — rule 22).
@@ -607,17 +595,10 @@ function viewBoardAcceptance(
   // Verdict-absent: keep the underlying row.status so unrun / in-flight
   // deliveries still render their lifecycle stage.
   const verdictArt = findLatestAcceptanceVerdictArtifactForAcceptance(row.id)
-  const verdictPayload = (verdictArt?.payload ?? null) as
-    | { verdict?: string; summary?: string }
-    | null
+  const verdictPayload = (verdictArt?.payload ?? null) as { verdict?: string; summary?: string } | null
   const verdict = verdictPayload?.verdict
   const manifest = findLatestAcceptanceEvidenceManifest({ acceptanceID: row.id })
-  const projectedStatus =
-    verdict === "rejected"
-      ? "failed"
-      : verdict === "accepted"
-        ? "delivered"
-        : row.status
+  const projectedStatus = verdict === "rejected" ? "failed" : verdict === "accepted" ? "delivered" : row.status
   return {
     id: row.id,
     taskID: row.task_id,
@@ -656,7 +637,9 @@ function viewBoardAcceptance(
     result: {
       summary: clipBoard(String(result.summary ?? row.summary)),
       changedFiles: Array.isArray(result.changed_files)
-        ? result.changed_files.filter((item): item is string => typeof item === "string").slice(0, BOARD_CHANGED_FILE_LIMIT)
+        ? result.changed_files
+            .filter((item): item is string => typeof item === "string")
+            .slice(0, BOARD_CHANGED_FILE_LIMIT)
         : [],
       diffs: Array.isArray(result.diffs)
         ? result.diffs
@@ -679,9 +662,7 @@ function viewBoardAcceptance(
   }
 }
 
-function viewBoardEvaluation(
-  row: EvaluationRow | undefined,
-) {
+function viewBoardEvaluation(row: EvaluationRow | undefined) {
   if (!row) return undefined
   return {
     id: row.id,
@@ -772,8 +753,7 @@ function boardOverview(input: {
 }) {
   const derivedStatus = deriveTaskStatus(input.task)
   const active = derivedStatus === "queued" || derivedStatus === "active"
-  const terminal =
-    derivedStatus === "completed" || derivedStatus === "failed" || derivedStatus === "cancelled"
+  const terminal = derivedStatus === "completed" || derivedStatus === "failed" || derivedStatus === "cancelled"
   const canRetry = terminal && input.pendingInteractions.length === 0
   const headline =
     input.pendingInteractions.length > 0
@@ -794,12 +774,12 @@ function boardOverview(input: {
       ? `${input.pendingInteractions.length} interaction${input.pendingInteractions.length > 1 ? "s" : ""} need attention before the task can continue.`
       : derivedStatus === "completed" && input.acceptedAcceptance
         ? clipBoard(input.acceptedAcceptance.summary)
-        : input.currentFailure?.summary ??
+        : (input.currentFailure?.summary ??
           (input.candidateAcceptance
             ? clipBoard(input.candidateAcceptance.summary)
             : input.run
               ? `Current run is in ${input.run.phase}.`
-              : "Task is ready for the first run.")
+              : "Task is ready for the first run."))
   const nextStep =
     input.pendingInteractions.length > 0
       ? {
@@ -819,13 +799,13 @@ function boardOverview(input: {
               title: "Retry if the task should continue",
               detail: "The task is cancelled. Retry will queue a new run from the latest context.",
             }
-            : derivedStatus === "completed"
-              ? {
-                  kind: "review_acceptance" as const,
-                  title: "Review the accepted acceptance",
-                  detail: "Inspect the accepted result, changed files, and evaluation evidence before closing the loop.",
-                }
-              : active
+          : derivedStatus === "completed"
+            ? {
+                kind: "review_acceptance" as const,
+                title: "Review the accepted acceptance",
+                detail: "Inspect the accepted result, changed files, and evaluation evidence before closing the loop.",
+              }
+            : active
               ? {
                   kind: "observe" as const,
                   title: "Monitor the active run",
@@ -891,7 +871,7 @@ function buildWorkflowFields(
   const workflowBoard = {
     id: workflow.id,
     name: workflow.name,
-    steps: workflow.steps.map(step => ({
+    steps: workflow.steps.map((step) => ({
       id: step.id,
       label: step.label,
       tool: step.tool,
@@ -899,15 +879,20 @@ function buildWorkflowFields(
       skippable: step.skippable,
       status: (step.scope === "task"
         ? (projectedTaskSteps[step.id]?.status ?? "pending")
-        : deriveGoalScopeStatusFromProjection(projectedGoalSteps, step.id, taskStatus)) as "pending" | "running" | "completed" | "skipped" | "failed",
+        : deriveGoalScopeStatusFromProjection(projectedGoalSteps, step.id, taskStatus)) as
+        | "pending"
+        | "running"
+        | "completed"
+        | "skipped"
+        | "failed",
       ...(step.phases && step.phases.length > 0
-        ? { phases: step.phases.map(p => ({ id: p.id, label: p.label, sessionKind: p.sessionKind })) }
+        ? { phases: step.phases.map((p) => ({ id: p.id, label: p.label, sessionKind: p.sessionKind })) }
         : {}),
     })),
     goalLoopStepIDs: workflow.goalLoopStepIDs,
   }
 
-  const goalWorkflows = goals.map(goal => {
+  const goalWorkflows = goals.map((goal) => {
     const gws = projectedGoalSteps[goal.id]
     // Identify the current attempt by the tip goal_run id. Overlay uses
     // this to scope per-attempt step cards — each new attempt gets its
@@ -956,9 +941,14 @@ function buildWorkflowFields(
       acceptanceSpecs: goal.acceptance_specs,
       priority: (goal.priority ?? "blocking") as "blocking" | "advisory",
       steps: workflow.steps
-        .filter(s => s.scope === "goal")
-        .map(s => {
-          const stepStatus = (gws?.steps[s.id]?.status ?? "pending") as "pending" | "running" | "completed" | "skipped" | "failed"
+        .filter((s) => s.scope === "goal")
+        .map((s) => {
+          const stepStatus = (gws?.steps[s.id]?.status ?? "pending") as
+            | "pending"
+            | "running"
+            | "completed"
+            | "skipped"
+            | "failed"
           const phaseProjection = gws?.stepPhases?.[s.id]
           return {
             stepID: s.id,
@@ -968,18 +958,14 @@ function buildWorkflowFields(
             completedAt: gws?.steps[s.id]?.completedAt,
             summary: buildStepSummary(s, goal.id, stepStatus),
             payload: buildStepPayload(s, goal.id, stepStatus),
-            ...(phaseProjection && Object.keys(phaseProjection).length > 0
-              ? { phases: phaseProjection }
-              : {}),
+            ...(phaseProjection && Object.keys(phaseProjection).length > 0 ? { phases: phaseProjection } : {}),
           }
         }),
     }
   })
 
   const activeSpec = findActiveSpecForTask(task.id)
-  const requirements = activeSpec
-    ? buildRequirements(task.id, activeSpec.id, goals)
-    : []
+  const requirements = activeSpec ? buildRequirements(task.id, activeSpec.id, goals) : []
 
   const architect = buildArchitectSummary(task.id)
 
@@ -994,11 +980,9 @@ function buildWorkflowFields(
 type TaskStepProjection = Record<string, { status: string; startedAt?: number; completedAt?: number }>
 
 function isWorkflowStepStatus(value: unknown): value is "pending" | "running" | "completed" | "skipped" | "failed" {
-  return value === "pending"
-    || value === "running"
-    || value === "completed"
-    || value === "skipped"
-    || value === "failed"
+  return (
+    value === "pending" || value === "running" || value === "completed" || value === "skipped" || value === "failed"
+  )
 }
 
 function projectTaskStepsFromWorkflowEvents(taskID: string): TaskStepProjection {
@@ -1009,12 +993,7 @@ function projectTaskStepsFromWorkflowEvents(taskID: string): TaskStepProjection 
         emittedAt: ProtocolEventTable.emitted_at,
       })
       .from(ProtocolEventTable)
-      .where(
-        and(
-          eq(ProtocolEventTable.task_id, taskID),
-          eq(ProtocolEventTable.type, "workflow.step.updated"),
-        ),
-      )
+      .where(and(eq(ProtocolEventTable.task_id, taskID), eq(ProtocolEventTable.type, "workflow.step.updated")))
       .orderBy(ProtocolEventTable.seq)
       .all(),
   )
@@ -1029,18 +1008,13 @@ function projectTaskStepsFromWorkflowEvents(taskID: string): TaskStepProjection 
     out[stepID] = {
       status,
       ...(status === "running" ? { startedAt: row.emittedAt } : {}),
-      ...(status === "completed" || status === "skipped" || status === "failed"
-        ? { completedAt: row.emittedAt }
-        : {}),
+      ...(status === "completed" || status === "skipped" || status === "failed" ? { completedAt: row.emittedAt } : {}),
     }
   }
   return out
 }
 
-function mergeTaskStepProjections(
-  sideEffects: TaskStepProjection,
-  events: TaskStepProjection,
-): TaskStepProjection {
+function mergeTaskStepProjections(sideEffects: TaskStepProjection, events: TaskStepProjection): TaskStepProjection {
   const out: TaskStepProjection = { ...sideEffects }
   for (const [stepID, eventStep] of Object.entries(events)) {
     const sideEffectStep = sideEffects[stepID]
@@ -1084,18 +1058,13 @@ function deriveGoalScopeStatusFromProjection(
 }
 
 /** Build structured requirements array from DB */
-function buildRequirements(
-  taskID: string,
-  specSnapshotID: string,
-  goals: Array<typeof EngineGoalTable.$inferSelect>,
-) {
+function buildRequirements(taskID: string, specSnapshotID: string, goals: Array<typeof EngineGoalTable.$inferSelect>) {
   const rows = Database.use((db) =>
-    db.select().from(EngineRequirementTable)
+    db
+      .select()
+      .from(EngineRequirementTable)
       .where(
-        and(
-          eq(EngineRequirementTable.task_id, taskID),
-          eq(EngineRequirementTable.spec_snapshot_id, specSnapshotID),
-        ),
+        and(eq(EngineRequirementTable.task_id, taskID), eq(EngineRequirementTable.spec_snapshot_id, specSnapshotID)),
       )
       .orderBy(EngineRequirementTable.order_index, EngineRequirementTable.id)
       .all(),
@@ -1113,7 +1082,7 @@ function buildRequirements(
   return rows.map((r) => ({
     id: r.id,
     description: r.description,
-    type: r.priority === "blocking" ? "explicit" as const : "inferred" as const,
+    type: r.priority === "blocking" ? ("explicit" as const) : ("inferred" as const),
     priority: r.priority as "blocking" | "advisory",
     status: requirementStatus(r, goalsByRequirement),
   }))
@@ -1186,9 +1155,7 @@ function buildStepSummary(step: MiniWorkflowStep, goalID: string, status?: strin
   if (status === "running") return "running…"
   // Pre-execution: surface plan-step count if planning has produced nodes.
   const nodes = Database.use((db) =>
-    db.select().from(EnginePlanNodeTable)
-      .where(eq(EnginePlanNodeTable.goal_id, goalID))
-      .all(),
+    db.select().from(EnginePlanNodeTable).where(eq(EnginePlanNodeTable.goal_id, goalID)).all(),
   )
   if (nodes.length) return `${nodes.length} planned steps`
   return undefined
@@ -1216,22 +1183,21 @@ function buildStepPayload(step: MiniWorkflowStep, goalID: string, status?: strin
 
   const goalRun = currentGoalRun(goalID)
   const nodes = Database.use((db) =>
-    db.select().from(EnginePlanNodeTable)
-      .where(eq(EnginePlanNodeTable.goal_id, goalID))
-      .all(),
+    db.select().from(EnginePlanNodeTable).where(eq(EnginePlanNodeTable.goal_id, goalID)).all(),
   )
-  const planNodes = nodes.length > 0
-    ? nodes
-        .map((n) => {
-          return {
-            id: n.id,
-            title: n.title,
-            brief: n.brief,
-            orderIndex: n.order_index,
-          }
-        })
-        .sort((a, b) => a.orderIndex - b.orderIndex)
-    : undefined
+  const planNodes =
+    nodes.length > 0
+      ? nodes
+          .map((n) => {
+            return {
+              id: n.id,
+              title: n.title,
+              brief: n.brief,
+              orderIndex: n.order_index,
+            }
+          })
+          .sort((a, b) => a.orderIndex - b.orderIndex)
+      : undefined
 
   let buildSessionID: string | undefined
   let commitRef: string | undefined
@@ -1258,32 +1224,47 @@ function buildStepPayload(step: MiniWorkflowStep, goalID: string, status?: strin
     const result = acceptance?.result as {
       commit_ref?: unknown
       changed_files?: string[]
-      diffs?: { file?: string; additions?: unknown; deletions?: unknown; before?: unknown; after?: unknown; status?: string }[]
+      diffs?: {
+        file?: string
+        additions?: unknown
+        deletions?: unknown
+        before?: unknown
+        after?: unknown
+        status?: string
+      }[]
       stats?: { additions?: number; deletions?: number }
     } | null
-    commitRef = typeof result?.commit_ref === "string" && result.commit_ref.trim()
-      ? result.commit_ref.trim()
-      : undefined
+    commitRef =
+      typeof result?.commit_ref === "string" && result.commit_ref.trim() ? result.commit_ref.trim() : undefined
     const diffRows = Array.isArray(result?.diffs)
       ? result.diffs
-          .filter((d): d is { file: string; additions?: unknown; deletions?: unknown; before?: unknown; after?: unknown; status?: string } =>
-            !!d && typeof d.file === "string",
+          .filter(
+            (
+              d,
+            ): d is {
+              file: string
+              additions?: unknown
+              deletions?: unknown
+              before?: unknown
+              after?: unknown
+              status?: string
+            } => !!d && typeof d.file === "string",
           )
           .map((d) => ({
             file: d.file,
             additions: typeof d.additions === "number" ? d.additions : 0,
             deletions: typeof d.deletions === "number" ? d.deletions : 0,
-            status: (d.status === "added" || d.status === "deleted" || d.status === "modified")
-              ? d.status
-              : (typeof d.before === "string" && d.before === "" && typeof d.after === "string" && d.after !== "")
-                ? "added" as const
-                : (typeof d.after === "string" && d.after === "" && typeof d.before === "string" && d.before !== "")
-                  ? "deleted" as const
-                  : "modified" as const,
+            status:
+              d.status === "added" || d.status === "deleted" || d.status === "modified"
+                ? d.status
+                : typeof d.before === "string" && d.before === "" && typeof d.after === "string" && d.after !== ""
+                  ? ("added" as const)
+                  : typeof d.after === "string" && d.after === "" && typeof d.before === "string" && d.before !== ""
+                    ? ("deleted" as const)
+                    : ("modified" as const),
           }))
       : []
-    changedFiles = result?.changed_files
-      ?? (diffRows.length > 0 ? diffRows.map((d) => d.file) : undefined)
+    changedFiles = result?.changed_files ?? (diffRows.length > 0 ? diffRows.map((d) => d.file) : undefined)
     changedFileDiffs = diffRows.length > 0 ? diffRows : undefined
     diffStats = {
       files: changedFiles?.length,
@@ -1305,15 +1286,20 @@ function buildStepPayload(step: MiniWorkflowStep, goalID: string, status?: strin
     }
   }
 
-  if (
-    planNodes === undefined &&
-    buildSessionID === undefined &&
-    changedFiles === undefined &&
-    checks === undefined
-  ) {
+  if (planNodes === undefined && buildSessionID === undefined && changedFiles === undefined && checks === undefined) {
     return undefined
   }
-  return { planNodes, buildSessionID, commitRef, changedFiles, changedFileDiffs, diffStats, checks, evalSummary, verdict }
+  return {
+    planNodes,
+    buildSessionID,
+    commitRef,
+    changedFiles,
+    changedFileDiffs,
+    diffStats,
+    checks,
+    evalSummary,
+    verdict,
+  }
 }
 
 /** Build architect summary from the Architect Contract Graph artifact. */

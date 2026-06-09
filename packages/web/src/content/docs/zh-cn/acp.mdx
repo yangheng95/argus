@@ -47,43 +47,43 @@ Zed 按需 spawn `opencorvus acp`，通过 stdin/stdout 通信（`src/acp/README
 
 ### 初始化
 
-| 方法 | 说明 |
-|---|---|
+| 方法         | 说明                                                  |
+| ------------ | ----------------------------------------------------- |
 | `initialize` | 协商协议版本（返回 `protocolVersion: 1`），广播能力集 |
 
 广播的能力（`src/acp/agent.ts:539-555`）：`loadSession: true`，MCP 支持 `http` / `sse`，Prompt 支持 `embeddedContext` / `image`，Session 能力 `fork` / `list` / `resume`。
 
 ### 会话管理
 
-| 方法 | 说明 |
-|---|---|
-| `session/new` | 新建会话，映射到内部 opencorvus session |
-| `session/load` | 加载会话，回放消息历史，恢复模型与 mode |
-| `unstable_listSessions` | 按更新时间倒序列出，cursor 分页（100/页） |
-| `unstable_forkSession` | Fork 会话，回放历史 |
-| `unstable_resumeSession` | 恢复会话（不回放历史） |
-| `unstable_setSessionModel` | 切换当前模型，支持 variant |
-| `setSessionMode` | 切换当前 agent（仅 primary） |
+| 方法                       | 说明                                      |
+| -------------------------- | ----------------------------------------- |
+| `session/new`              | 新建会话，映射到内部 opencorvus session   |
+| `session/load`             | 加载会话，回放消息历史，恢复模型与 mode   |
+| `unstable_listSessions`    | 按更新时间倒序列出，cursor 分页（100/页） |
+| `unstable_forkSession`     | Fork 会话，回放历史                       |
+| `unstable_resumeSession`   | 恢复会话（不回放历史）                    |
+| `unstable_setSessionModel` | 切换当前模型，支持 variant                |
+| `setSessionMode`           | 切换当前 agent（仅 primary）              |
 
 ### 对话
 
-| 方法 | 说明 |
-|---|---|
+| 方法             | 说明                                                                                              |
+| ---------------- | ------------------------------------------------------------------------------------------------- |
 | `session/prompt` | 发消息，支持 `text` / `image` / `resource_link` / `resource`；`/command` 前缀路由到 slash command |
 
 ### 实时通知（server → client）
 
 通过 `connection.sessionUpdate()`：
 
-| 事件 | 时机 |
-|---|---|
-| `agent_message_chunk` | AI 文本流式输出（`message.part.delta` 驱动） |
-| `agent_thought_chunk` | reasoning 内容流 |
-| `tool_call` | 工具调用开始 |
-| `tool_call_update` | 执行中 / 完成 / 失败 |
-| `plan` | `todowrite` 完成时同步 ACP plan entries |
-| `usage_update` | prompt 完成后更新 token 与成本 |
-| `available_commands_update` | 会话加载时推送 slash command 列表 |
+| 事件                        | 时机                                         |
+| --------------------------- | -------------------------------------------- |
+| `agent_message_chunk`       | AI 文本流式输出（`message.part.delta` 驱动） |
+| `agent_thought_chunk`       | reasoning 内容流                             |
+| `tool_call`                 | 工具调用开始                                 |
+| `tool_call_update`          | 执行中 / 完成 / 失败                         |
+| `plan`                      | `todowrite` 完成时同步 ACP plan entries      |
+| `usage_update`              | prompt 完成后更新 token 与成本               |
+| `available_commands_update` | 会话加载时推送 slash command 列表            |
 
 ### 认证
 
@@ -100,6 +100,7 @@ ACP 转发内部 `permission.asked` 到客户端（通过 `connection.requestPer
 ## MCP 服务器支持
 
 `session/new` / `session/load` 参数可含 `mcpServers` 列表：
+
 - 本地进程（`command` + `args` + `env`）
 - 远程 HTTP/SSE（`url` + `headers`）
 
@@ -107,23 +108,23 @@ ACP 转发内部 `permission.asked` 到客户端（通过 `connection.requestPer
 
 ## vs `opencorvus serve`（REST）
 
-| 维度 | ACP | serve |
-|---|---|---|
-| 传输 | stdin/stdout（ndjson） | HTTP（REST + SSE） |
-| 客户端 | ACP 兼容编辑器（Zed） | 浏览器 / SDK / GH Action |
-| 协议 | ACP v1（JSON-RPC） | 自有 REST |
-| 流式 | `session/update` 通知 | SSE `/event` |
-| 外部端口 | 不暴露 | `7878` |
-| 并发 | 单客户端 | 多客户端 |
+| 维度     | ACP                    | serve                    |
+| -------- | ---------------------- | ------------------------ |
+| 传输     | stdin/stdout（ndjson） | HTTP（REST + SSE）       |
+| 客户端   | ACP 兼容编辑器（Zed）  | 浏览器 / SDK / GH Action |
+| 协议     | ACP v1（JSON-RPC）     | 自有 REST                |
+| 流式     | `session/update` 通知  | SSE `/event`             |
+| 外部端口 | 不暴露                 | `7878`                   |
+| 并发     | 单客户端               | 多客户端                 |
 
 ## vs MCP
 
-| 维度 | ACP | MCP |
-|---|---|---|
-| 定位 | 编辑器 ↔ AI 代理 | LLM ↔ 工具/数据源 |
-| 方向 | 编辑器调用代理 | LLM 调用工具 |
-| 会话 | 有（`session/new/load`） | 无 |
-| 权限 UI | 代理向编辑器请求 | 无 |
+| 维度            | ACP                      | MCP                            |
+| --------------- | ------------------------ | ------------------------------ |
+| 定位            | 编辑器 ↔ AI 代理        | LLM ↔ 工具/数据源             |
+| 方向            | 编辑器调用代理           | LLM 调用工具                   |
+| 会话            | 有（`session/new/load`） | 无                             |
+| 权限 UI         | 代理向编辑器请求         | 无                             |
 | OpenCorvus 角色 | **ACP Server**（被连接） | **MCP Client**（连接外部 MCP） |
 
 ## 当前限制

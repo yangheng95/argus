@@ -38,25 +38,31 @@ describe("title agent resolution", () => {
         parentID: null,
         title: "New session - 2026-05-12T00:00:00.000Z",
       } as any,
-      history: [{
-        info: {
-          role: "user",
-          id: "msg_user",
-        },
-        parts: [{
-          type: "subtask",
-          prompt: "Generate a task title for this request",
-        }],
-      } as any],
+      history: [
+        {
+          info: {
+            role: "user",
+            id: "msg_user",
+          },
+          parts: [
+            {
+              type: "subtask",
+              prompt: "Generate a task title for this request",
+            },
+          ],
+        } as any,
+      ],
     })
 
     expect(resolveAgentModel).toHaveBeenCalledWith("title", { sessionID: "ses_title" })
-    expect(stream).toHaveBeenCalledWith(expect.objectContaining({
-      model: {
-        providerID: "anthropic",
-        modelID: "claude-sonnet-4-20250514",
-      },
-    }))
+    expect(stream).toHaveBeenCalledWith(
+      expect.objectContaining({
+        model: {
+          providerID: "anthropic",
+          modelID: "claude-sonnet-4-20250514",
+        },
+      }),
+    )
     expect(setTitle).toHaveBeenCalledWith({
       sessionID: "ses_title",
       title: "Generated title",

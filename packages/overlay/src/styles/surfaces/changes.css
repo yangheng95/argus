@@ -178,6 +178,26 @@
   font-variant-numeric: tabular-nums;
 }
 
+.changes-non-text-filter {
+  display: inline-flex;
+  flex: 0 0 auto;
+  align-items: center;
+  gap: calc(5px * var(--ui-scale));
+  min-height: calc(22px * var(--ui-scale));
+  padding: 0 calc(7px * var(--ui-scale));
+  color: var(--text-muted);
+  font-size: var(--ui-font-control);
+  line-height: 1.2;
+  white-space: nowrap;
+}
+
+.changes-non-text-filter input {
+  width: calc(13px * var(--ui-scale));
+  height: calc(13px * var(--ui-scale));
+  margin: 0;
+  accent-color: var(--accent);
+}
+
 .changes-list {
   display: flex;
   flex-direction: column;
@@ -257,6 +277,15 @@
   font-family: var(--font-mono);
 }
 
+.change-row-shell {
+  min-width: 0;
+  border-top: var(--oc-border-width) solid color-mix(in srgb, var(--border) 50%, transparent);
+}
+
+.change-row-shell:first-child {
+  border-top: 0;
+}
+
 .change-row {
   width: 100%;
   display: flex;
@@ -274,16 +303,16 @@
   box-shadow: none;
 }
 
-.change-row + .change-row {
-  border-top: var(--oc-border-width) solid color-mix(in srgb, var(--border) 50%, transparent);
-}
-
 .change-row:hover {
   background: color-mix(in srgb, var(--surface-hover) 60%, transparent);
 }
 
 .change-row[data-selected="true"] {
   background: color-mix(in srgb, var(--accent) 12%, transparent);
+}
+
+.change-row[aria-expanded="true"] {
+  background: color-mix(in srgb, var(--accent) 10%, transparent);
 }
 
 .change-row[data-clickable="false"] {
@@ -412,6 +441,21 @@
   color: var(--accent);
   background: var(--accent-dim);
   border-color: color-mix(in srgb, var(--accent) 14%, transparent);
+}
+
+.change-inline-diff {
+  max-height: min(46vh, calc(420px * var(--ui-scale)));
+  overflow: auto;
+  border-top: var(--oc-border-width) solid color-mix(in srgb, var(--border) 50%, transparent);
+  background: var(--surface-inset);
+}
+
+.change-inline-diff .diff-lines {
+  min-width: max-content;
+}
+
+.change-inline-diff__hint {
+  margin: calc(10px * var(--ui-scale)) calc(8px * var(--ui-scale));
 }
 
 .changes-empty-hint {

@@ -1,7 +1,12 @@
 import { describe, expect, test } from "bun:test"
 import fs from "node:fs/promises"
 import path from "node:path"
-import { auditWorkspace, deriveRunMetrics, evaluateQualityGates, moduleBlocksFromRequest } from "../../script/benchmark/quality-gates"
+import {
+  auditWorkspace,
+  deriveRunMetrics,
+  evaluateQualityGates,
+  moduleBlocksFromRequest,
+} from "../../script/benchmark/quality-gates"
 import { tmpdir } from "../fixture/fixture"
 
 describe("benchmark quality gates", () => {
@@ -16,12 +21,7 @@ describe("benchmark quality gates", () => {
 
     const audit = await auditWorkspace({
       rootDir: tmp.path,
-      changedFiles: [
-        "src/entities/README.md",
-        "src/services/README.md",
-        "app.json",
-        "src/feature.ts",
-      ],
+      changedFiles: ["src/entities/README.md", "src/services/README.md", "app.json", "src/feature.ts"],
       request: "Implement a feature without README or scaffold files.",
     })
 
@@ -85,10 +85,12 @@ describe("benchmark quality gates", () => {
     await Bun.write(path.join(tmp.path, "src", "hero", "index.ts"), "export const hero = 1\n")
     await Bun.write(path.join(tmp.path, "src", "search", "index.ts"), "export const search = 1\n")
 
-    const moduleBlocks = [{
-      id: "hero",
-      owned_paths: ["src/hero"],
-    }]
+    const moduleBlocks = [
+      {
+        id: "hero",
+        owned_paths: ["src/hero"],
+      },
+    ]
     const audit = await auditWorkspace({
       rootDir: tmp.path,
       changedFiles: ["src/hero/index.ts", "src/search/index.ts"],
@@ -151,18 +153,20 @@ describe("benchmark quality gates", () => {
     await fs.mkdir(path.join(tmp.path, "src"), { recursive: true })
     await Bun.write(path.join(tmp.path, "src", "note-store.ts"), "export const noteStore = 1\n")
     await Bun.write(path.join(tmp.path, "src", "note-store.test.ts"), "export const testFile = 1\n")
-    await Bun.write(path.join(tmp.path, "package.json"), "{\n  \"name\": \"tmp\"\n}\n")
+    await Bun.write(path.join(tmp.path, "package.json"), '{\n  "name": "tmp"\n}\n')
     await Bun.write(path.join(tmp.path, "bun.lock"), "lockfile\n")
 
-    const moduleBlocks = moduleBlocksFromRequest([
-      "Implement a minimal NoteStore.",
-      "",
-      "Only create or modify these files:",
-      "- src/note-store.ts",
-      "- src/note-store.test.ts",
-      "",
-      "Do not add package.json, tsconfig.json, README files, docs, or any other files unless they are strictly required.",
-    ].join("\n"))
+    const moduleBlocks = moduleBlocksFromRequest(
+      [
+        "Implement a minimal NoteStore.",
+        "",
+        "Only create or modify these files:",
+        "- src/note-store.ts",
+        "- src/note-store.test.ts",
+        "",
+        "Do not add package.json, tsconfig.json, README files, docs, or any other files unless they are strictly required.",
+      ].join("\n"),
+    )
 
     const changedFiles = ["src/note-store.ts", "src/note-store.test.ts", "package.json", "bun.lock"]
     const audit = await auditWorkspace({
@@ -186,10 +190,12 @@ describe("benchmark quality gates", () => {
       evaluationVerdict: "accepted",
     })
 
-    expect(moduleBlocks).toEqual([{
-      id: "request-scope",
-      owned_paths: ["src/note-store.ts", "src/note-store.test.ts"],
-    }])
+    expect(moduleBlocks).toEqual([
+      {
+        id: "request-scope",
+        owned_paths: ["src/note-store.ts", "src/note-store.test.ts"],
+      },
+    ])
     expect(audit.out_of_scope_files).toEqual(["package.json", "bun.lock"])
     expect(verdict.verdict).toBe("rejected")
     expect(verdict.primary_failure).toBe("scope_drift")

@@ -80,26 +80,22 @@ describe("aggregateUsageAcrossSessions", () => {
 
   test("aggregates across many sessions (cards from orchestrator + build + planner)", () => {
     const cards: UsageCardLike[] = [
-      { usage: { totalTokens: 200, costUSD: 0.10 } },
-      { usage: { totalTokens: 5_000, costUSD: 1.50 } },
+      { usage: { totalTokens: 200, costUSD: 0.1 } },
+      { usage: { totalTokens: 5_000, costUSD: 1.5 } },
       { usage: { totalTokens: 800, costUSD: 0.25 } },
     ]
     expect(aggregateUsageAcrossSessions(cards)).toEqual({ tokens: 6_000, costUSD: 1.85, estimated: false })
   })
 
   test("falls back to inputTokens + outputTokens when totalTokens is absent", () => {
-    const cards: UsageCardLike[] = [
-      { usage: { inputTokens: 120, outputTokens: 80 } },
-    ]
+    const cards: UsageCardLike[] = [{ usage: { inputTokens: 120, outputTokens: 80 } }]
     expect(aggregateUsageAcrossSessions(cards)).toEqual({ tokens: 200, costUSD: 0, estimated: false })
   })
 
   test("treats nullish and undefined card entries as no-ops", () => {
-    const cards = [
-      undefined,
-      null,
-      { usage: { totalTokens: 50, costUSD: 0.02 } },
-    ] as Array<UsageCardLike | undefined | null>
+    const cards = [undefined, null, { usage: { totalTokens: 50, costUSD: 0.02 } }] as Array<
+      UsageCardLike | undefined | null
+    >
     expect(aggregateUsageAcrossSessions(cards)).toEqual({ tokens: 50, costUSD: 0.02, estimated: false })
   })
 

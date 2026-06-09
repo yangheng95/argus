@@ -81,14 +81,26 @@ export async function* jsonLines(input: {
     // where the child is hung waiting on stdin / network. SIGTERM here;
     // Process.spawn's own watchdog escalates to SIGKILL after 5s.
     if (proc.exitCode === null && proc.signalCode === null) {
-      try { proc.kill("SIGTERM") } catch { /* race: child already exited */ }
+      try {
+        proc.kill("SIGTERM")
+      } catch {
+        /* race: child already exited */
+      }
     }
 
     // Drain proc.exited + stderr inside finally so we always settle them
     // before the generator returns. Catch errors (kill races, abort) so a
     // teardown failure can't shadow the original consumer exception.
-    try { exitCode = await proc.exited } catch { /* ignore */ }
-    try { stderrBody = await stderrPromise } catch { /* ignore */ }
+    try {
+      exitCode = await proc.exited
+    } catch {
+      /* ignore */
+    }
+    try {
+      stderrBody = await stderrPromise
+    } catch {
+      /* ignore */
+    }
   }
 
   // Only surface a non-zero exit when the consumer actually finished

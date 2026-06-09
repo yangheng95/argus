@@ -216,11 +216,7 @@ function assessFunctionalCompletion(input: {
 }): AcceptanceManifestFunctionalAssessment {
   const blockingReviewIds = input.failedReviewIds.filter((id) => id === "review:contract_audit")
   const blockingReviewIdSet = new Set<string>(blockingReviewIds)
-  const primaryFailureIds = [
-    ...input.failedReadinessIds,
-    ...input.failedCoverageIds,
-    ...blockingReviewIds,
-  ]
+  const primaryFailureIds = [...input.failedReadinessIds, ...input.failedCoverageIds, ...blockingReviewIds]
   const auxiliaryFailureIds = [
     ...input.failedCheckIds,
     ...input.failedReviewIds.filter((id) => !blockingReviewIdSet.has(id)),
@@ -415,7 +411,10 @@ async function requiredChecksFromGroups(groups: ReturnType<typeof commandGroups>
   return checks
 }
 
-async function runRequiredCheck(taskID: string | undefined, check: AcceptanceRequiredCheck): Promise<AcceptanceCheckResult> {
+async function runRequiredCheck(
+  taskID: string | undefined,
+  check: AcceptanceRequiredCheck,
+): Promise<AcceptanceCheckResult> {
   const startedAt = Date.now()
   const script = await scriptBodyForCommand(check.cwd ?? Instance.directory, check.command)
   const forbidden = forbiddenShellSuccess(check.command, script)
@@ -478,7 +477,11 @@ function skipRequiredCheck(check: AcceptanceRequiredCheck, reason: string): Acce
   }
 }
 
-async function withIsolatedCheckWorkspace<T>(taskID: string | undefined, sourceCwd: string, fn: (workspace: string) => Promise<T>): Promise<T> {
+async function withIsolatedCheckWorkspace<T>(
+  taskID: string | undefined,
+  sourceCwd: string,
+  fn: (workspace: string) => Promise<T>,
+): Promise<T> {
   const scratchParent = taskID
     ? ProjectRuntimePaths.acceptancePaths(Instance.directory, taskID).checkWorkspaces
     : ProjectRuntimePaths.tasklessAcceptancePaths(sourceCwd).checkWorkspaces

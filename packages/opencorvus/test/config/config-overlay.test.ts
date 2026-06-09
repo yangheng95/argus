@@ -21,9 +21,7 @@ describe("Config.Overlay schema (Phase 0)", () => {
   })
 
   test("pinned invariant: rejects a non-overridable agent sub-key (.strict)", () => {
-    expect(() =>
-      Config.Overlay.parse({ agent: { coding: { permission: { edit: "deny" } } } } as never),
-    ).toThrow()
+    expect(() => Config.Overlay.parse({ agent: { coding: { permission: { edit: "deny" } } } } as never)).toThrow()
     expect(() => Config.Overlay.parse({ agent: { coding: { tools: { include: ["x"] } } } } as never)).toThrow()
   })
 })

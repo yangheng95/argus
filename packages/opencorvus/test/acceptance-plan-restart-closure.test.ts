@@ -4,10 +4,7 @@ import { resolve } from "node:path"
 
 describe("acceptance rejection closure", () => {
   test("structural rejection branches no longer auto-restart from plan", () => {
-    const source = readFileSync(
-      resolve(import.meta.dir, "../src/orchestrator/tools.ts"),
-      "utf8",
-    )
+    const source = readFileSync(resolve(import.meta.dir, "../src/orchestrator/tools.ts"), "utf8")
 
     expect(source).not.toContain('stopReason: "acceptance_restart_plan_budget_exhausted"')
     expect(source).not.toContain('stopReason: "acceptance_restart_plan_repeated_failures"')

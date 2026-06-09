@@ -13,12 +13,7 @@ import { resetDatabase } from "../fixture/db"
 import { tmpdir } from "../fixture/fixture"
 import { installControlModel } from "../workspace/mock-control-model"
 
-function insertActiveRun(input: {
-  taskID: string
-  runID: string
-  rootSessionID: string
-  now: number
-}) {
+function insertActiveRun(input: { taskID: string; runID: string; rootSessionID: string; now: number }) {
   Database.use((db) => {
     db.insert(EngineTaskTable)
       .values({
@@ -65,17 +60,22 @@ function insertActiveRun(input: {
 
 function streamErrorArtifacts(taskID: string) {
   return Database.use((db) =>
-    db.select()
+    db
+      .select()
       .from(EngineArtifactTable)
       .where(and(eq(EngineArtifactTable.task_id, taskID), eq(EngineArtifactTable.kind, "orchestrator-stream-error")))
       .all(),
   )
 }
 
-function finalAssistantMessage(input: Parameters<typeof SessionPrompt.prompt>[0], now: number, options?: {
-  text?: string
-  error?: unknown
-}): Message.WithParts {
+function finalAssistantMessage(
+  input: Parameters<typeof SessionPrompt.prompt>[0],
+  now: number,
+  options?: {
+    text?: string
+    error?: unknown
+  },
+): Message.WithParts {
   return {
     info: {
       id: Identifier.ascending("message"),
@@ -127,8 +127,7 @@ describe("orchestrator session hard-error funnel", () => {
 
         const normal = await createActiveTask("Normal orchestrator task")
         prompt.mockImplementation((async (input) =>
-          finalAssistantMessage(input, normal.now, { text: "Current task state recorded." })
-        ) as never)
+          finalAssistantMessage(input, normal.now, { text: "Current task state recorded." })) as never)
 
         await Orchestrator.processTask(normal.taskID)
 
@@ -142,8 +141,7 @@ describe("orchestrator session hard-error funnel", () => {
           "StructuredOutput payload must be a JSON object; received undefined",
         )
         prompt.mockImplementation((async (input) =>
-          finalAssistantMessage(input, hard.now, { error: stampedError })
-        ) as never)
+          finalAssistantMessage(input, hard.now, { error: stampedError })) as never)
 
         await Orchestrator.processTask(hard.taskID)
 
@@ -158,7 +156,9 @@ describe("orchestrator session hard-error funnel", () => {
         expect(artifact).toBeDefined()
         expect((artifact!.payload as { errorName?: string }).errorName).toBe("StructuredOutputPayloadError")
         expect((artifact!.payload as { reason?: string }).reason).toContain("StructuredOutputPayloadError")
-        expect((artifact!.payload as { reason?: string }).reason).toContain("StructuredOutput payload must be a JSON object")
+        expect((artifact!.payload as { reason?: string }).reason).toContain(
+          "StructuredOutput payload must be a JSON object",
+        )
 
         const duplicate = await createActiveTask("Duplicate hard error task")
         const duplicateError = structuredOutputPayloadError("StructuredOutput payload failed during compaction")
@@ -178,12 +178,16 @@ describe("orchestrator session hard-error funnel", () => {
 
         const duplicateArtifacts = streamErrorArtifacts(duplicate.taskID)
         expect(duplicateArtifacts).toHaveLength(1)
-        expect((duplicateArtifacts[0]!.payload as { errorName?: string }).errorName).toBe("StructuredOutputPayloadError")
-        expect((duplicateArtifacts[0]!.payload as { reason?: string }).reason).toContain("StructuredOutput payload failed during compaction")
+        expect((duplicateArtifacts[0]!.payload as { errorName?: string }).errorName).toBe(
+          "StructuredOutputPayloadError",
+        )
+        expect((duplicateArtifacts[0]!.payload as { reason?: string }).reason).toContain(
+          "StructuredOutput payload failed during compaction",
+        )
 
         const provider = await createActiveTask("Provider validation error task")
         const providerError = new Error(
-          'Type validation failed: Value: {"object":"chat.completion","status_code":66049,"status_msg":"引擎结果格式错误:{\'error\': {\'message\': "\'NoneType\' object is not iterable", \'type\': \'BadRequestError\', \'param\': None, \'code\': 400}}"}',
+          "Type validation failed: Value: {\"object\":\"chat.completion\",\"status_code\":66049,\"status_msg\":\"引擎结果格式错误:{'error': {'message': \"'NoneType' object is not iterable\", 'type': 'BadRequestError', 'param': None, 'code': 400}}\"}",
         )
         providerError.name = "AI_TypeValidationError"
         prompt.mockImplementation((async () => {

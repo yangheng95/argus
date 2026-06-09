@@ -34,10 +34,7 @@ test("prompt loop finish cleans state without publishing terminal aborted", asyn
     },
   })
 
-  expect(events).toEqual([
-    { type: "streaming" },
-    { type: "terminal", reason: "completed" },
-  ])
+  expect(events).toEqual([{ type: "streaming" }, { type: "terminal", reason: "completed" }])
   expect(SessionStatus.get(sessionID)).toEqual({ type: "terminal", reason: "completed" })
 })
 
@@ -61,9 +58,6 @@ test("prompt cancel remains the user cancellation terminal source", async () => 
     },
   })
 
-  expect(events).toEqual([
-    { type: "streaming" },
-    { type: "terminal", reason: "aborted" },
-  ])
+  expect(events).toEqual([{ type: "streaming" }, { type: "terminal", reason: "aborted" }])
   expect(SessionStatus.get(sessionID)).toEqual({ type: "terminal", reason: "aborted" })
 })

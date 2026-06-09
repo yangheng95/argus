@@ -43,7 +43,9 @@ function stripCssComments(input: string): string {
   return input.replace(/\/\*[\s\S]*?\*\//g, "")
 }
 const STYLES = stripCssComments(
-  walkCss(STYLES_ROOT).map((f) => readFileSync(f, "utf8")).join("\n"),
+  walkCss(STYLES_ROOT)
+    .map((f) => readFileSync(f, "utf8"))
+    .join("\n"),
 )
 
 function rootBodyOfTheme(theme: "dark" | "vscode-dark"): string {
@@ -51,10 +53,7 @@ function rootBodyOfTheme(theme: "dark" | "vscode-dark"): string {
   // The helper reads that file and returns the body of the sole
   // `body[data-theme="<theme>"] { … }` block — there should be exactly one.
   const file = readFileSync(path.join(CASCADE_DIR, `${theme}.css`), "utf8")
-  const headRe = new RegExp(
-    `body\\[data-theme="${theme}"\\]\\s*\\{`,
-    "g",
-  )
+  const headRe = new RegExp(`body\\[data-theme="${theme}"\\]\\s*\\{`, "g")
   const matches = [...file.matchAll(headRe)]
   if (matches.length === 0) throw new Error(`theme block for ${theme} not found`)
   const last = matches[matches.length - 1]!

@@ -1,10 +1,7 @@
 import { afterEach, beforeEach, describe, expect, test } from "bun:test"
 import type { AcceptanceSpec } from "../../src/acceptance/types"
 import type { EngineGoalRunStatus } from "../../src/engine/engine.sql"
-import {
-  computeRequirementStatusSnapshot,
-  type RequirementStatusDeps,
-} from "../../src/integrity/requirement-status"
+import { computeRequirementStatusSnapshot, type RequirementStatusDeps } from "../../src/integrity/requirement-status"
 
 /**
  * Pure-projection tests for `computeRequirementStatusSnapshot`. Deps are
@@ -28,9 +25,11 @@ type GoalRowStub = {
 }
 
 type GoalRunRowStub = { id: string; status: EngineGoalRunStatus } | undefined
-type EvidenceRowStub = {
-  checks: Array<{ spec_id?: string; status: "passed" | "failed" | "skipped"; evidence?: string }>
-} | undefined
+type EvidenceRowStub =
+  | {
+      checks: Array<{ spec_id?: string; status: "passed" | "failed" | "skipped"; evidence?: string }>
+    }
+  | undefined
 
 let requirementsByID: Record<string, RequirementRowStub[]> = {}
 let goalsByTask: Record<string, GoalRowStub[]> = {}
@@ -102,9 +101,7 @@ describe("computeRequirementStatusSnapshot", () => {
   })
 
   test("REQ-N falls back to internal id when metadata.source_requirement_id is missing", () => {
-    requirementsByID["spec1"] = [
-      { id: "rq_legacy_42", description: "Legacy REQ without metadata", metadata: null },
-    ]
+    requirementsByID["spec1"] = [{ id: "rq_legacy_42", description: "Legacy REQ without metadata", metadata: null }]
     goalsByTask["task1"] = [
       {
         id: "goal_legacy",
@@ -120,9 +117,7 @@ describe("computeRequirementStatusSnapshot", () => {
   })
 
   test("REQ unmatched by any goal has empty claimingGoals (uncovered surfaces via fidelity, not snapshot)", () => {
-    requirementsByID["spec1"] = [
-      { id: "rq_a", description: "REQ-A", metadata: { source_requirement_id: "REQ-A" } },
-    ]
+    requirementsByID["spec1"] = [{ id: "rq_a", description: "REQ-A", metadata: { source_requirement_id: "REQ-A" } }]
     goalsByTask["task1"] = [
       {
         id: "goal_other",
@@ -138,9 +133,7 @@ describe("computeRequirementStatusSnapshot", () => {
   })
 
   test("only goals on the same spec snapshot are joined", () => {
-    requirementsByID["spec1"] = [
-      { id: "rq_a", description: "REQ-A", metadata: { source_requirement_id: "REQ-A" } },
-    ]
+    requirementsByID["spec1"] = [{ id: "rq_a", description: "REQ-A", metadata: { source_requirement_id: "REQ-A" } }]
     goalsByTask["task1"] = [
       {
         id: "goal_other_snapshot",
@@ -162,9 +155,7 @@ describe("computeRequirementStatusSnapshot", () => {
   })
 
   test("runStatus comes from goal_run row, not from evidence; missing tip run yields 'unstarted'", () => {
-    requirementsByID["spec1"] = [
-      { id: "rq_a", description: "REQ-A", metadata: { source_requirement_id: "REQ-A" } },
-    ]
+    requirementsByID["spec1"] = [{ id: "rq_a", description: "REQ-A", metadata: { source_requirement_id: "REQ-A" } }]
     goalsByTask["task1"] = [
       {
         id: "goal_running",
@@ -189,9 +180,7 @@ describe("computeRequirementStatusSnapshot", () => {
   })
 
   test("two-step spec join: only acceptance_specs whose source_requirement_id matches the REQ surface, then their evidence is looked up by spec_id", () => {
-    requirementsByID["spec1"] = [
-      { id: "rq_a", description: "REQ-A", metadata: { source_requirement_id: "REQ-A" } },
-    ]
+    requirementsByID["spec1"] = [{ id: "rq_a", description: "REQ-A", metadata: { source_requirement_id: "REQ-A" } }]
     goalsByTask["task1"] = [
       {
         id: "goal_be",
@@ -224,9 +213,7 @@ describe("computeRequirementStatusSnapshot", () => {
   })
 
   test("evidence join uses tip goal_run, NOT a stale superseded run; passed=undefined when no checks for the spec", () => {
-    requirementsByID["spec1"] = [
-      { id: "rq_a", description: "REQ-A", metadata: { source_requirement_id: "REQ-A" } },
-    ]
+    requirementsByID["spec1"] = [{ id: "rq_a", description: "REQ-A", metadata: { source_requirement_id: "REQ-A" } }]
     goalsByTask["task1"] = [
       {
         id: "goal_retry",
@@ -250,9 +237,7 @@ describe("computeRequirementStatusSnapshot", () => {
   })
 
   test("multi-claim REQ: snapshot lists all claiming goals, each with its own runStatus + specOutcomes (host does not aggregate)", () => {
-    requirementsByID["spec1"] = [
-      { id: "rq_a", description: "REQ-A", metadata: { source_requirement_id: "REQ-A" } },
-    ]
+    requirementsByID["spec1"] = [{ id: "rq_a", description: "REQ-A", metadata: { source_requirement_id: "REQ-A" } }]
     goalsByTask["task1"] = [
       {
         id: "goal_fe",

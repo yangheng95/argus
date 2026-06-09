@@ -16,62 +16,74 @@ let taskID = ""
 function seedProjectAndTask() {
   const now = Date.now()
   Database.use((db) =>
-    db.insert(ProjectTable).values({
-      id: projectID,
-      worktree: process.cwd(),
-      name: "Helpers Caps Test",
-      sandboxes: "[]",
-      time_created: now,
-      time_updated: now,
-    }).run(),
+    db
+      .insert(ProjectTable)
+      .values({
+        id: projectID,
+        worktree: process.cwd(),
+        name: "Helpers Caps Test",
+        sandboxes: "[]",
+        time_created: now,
+        time_updated: now,
+      })
+      .run(),
   )
   Database.use((db) =>
-    db.insert(EngineTaskTable).values({
-      id: taskID,
-      project_id: projectID,
-      source: "test",
-      title: "helpers caps",
-      request: "caps test",
-      priority: "normal",
-      time_created: now,
-      time_updated: now,
-      time_started: now,
-    }).run(),
+    db
+      .insert(EngineTaskTable)
+      .values({
+        id: taskID,
+        project_id: projectID,
+        source: "test",
+        title: "helpers caps",
+        request: "caps test",
+        priority: "normal",
+        time_created: now,
+        time_updated: now,
+        time_started: now,
+      })
+      .run(),
   )
 }
 
 function insertNote(content: string, offsetMs: number) {
   const now = Date.now() + offsetMs
   Database.use((db) =>
-    db.insert(WorkbenchTaskNoteTable).values({
-      id: Identifier.ascending("note"),
-      task_id: taskID,
-      kind: "operator_note",
-      source: "test",
-      content,
-      time_created: now,
-      time_updated: now,
-    }).run(),
+    db
+      .insert(WorkbenchTaskNoteTable)
+      .values({
+        id: Identifier.ascending("note"),
+        task_id: taskID,
+        kind: "operator_note",
+        source: "test",
+        content,
+        time_created: now,
+        time_updated: now,
+      })
+      .run(),
   )
 }
 
 function insertAnsweredQuestion(questionText: string, answerText: string, offsetMs: number) {
   const now = Date.now() + offsetMs
   Database.use((db) =>
-    db.insert(EngineInteractionRequestTable).values({
-      id: Identifier.ascending("interaction"),
-      task_id: taskID,
-      external_id: Identifier.ascending("ext"),
-      request_type: "question",
-      status: "answered",
-      title: "q",
-      body: "b",
-      payload: { questions: [{ question: questionText }] } as any,
-      response: { answers: [answerText] } as any,
-      time_resolved: now,
-      time_created: now,
-      time_updated: now,
-    }).run(),
+    db
+      .insert(EngineInteractionRequestTable)
+      .values({
+        id: Identifier.ascending("interaction"),
+        task_id: taskID,
+        external_id: Identifier.ascending("ext"),
+        request_type: "question",
+        status: "answered",
+        title: "q",
+        body: "b",
+        payload: { questions: [{ question: questionText }] } as any,
+        response: { answers: [answerText] } as any,
+        time_resolved: now,
+        time_created: now,
+        time_updated: now,
+      })
+      .run(),
   )
 }
 

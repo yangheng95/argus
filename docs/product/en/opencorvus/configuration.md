@@ -4,11 +4,11 @@ OpenCorvus config layers: **CLI flag > environment variable > `opencorvus.jsonc`
 
 ## File locations
 
-| Location | Purpose |
-|---|---|
-| `~/.opencorvus/config/opencorvus.json` | Global defaults |
-| `<repo>/.opencorvus/opencorvus.jsonc` | Project-level override (JSONC comments supported) |
-| `OPENCORVUS_CONFIG_CONTENT` env | Runtime injection (recommended for CI/containers) |
+| Location                               | Purpose                                           |
+| -------------------------------------- | ------------------------------------------------- |
+| `~/.opencorvus/config/opencorvus.json` | Global defaults                                   |
+| `<repo>/.opencorvus/opencorvus.jsonc`  | Project-level override (JSONC comments supported) |
+| `OPENCORVUS_CONFIG_CONTENT` env        | Runtime injection (recommended for CI/containers) |
 
 Same-name fields: later wins.
 
@@ -17,7 +17,7 @@ Same-name fields: later wins.
 ```jsonc
 {
   "$schema": "https://opencorvus.ai/config.json",
-  "model": "alibaba-cn/qwen3.5-plus"
+  "model": "alibaba-cn/qwen3.5-plus",
 }
 ```
 
@@ -32,7 +32,7 @@ Modeled on the real `packages/opencorvus/.opencorvus/opencorvus.jsonc`:
 
   "skills": {
     "paths": ["<abs-path>/skills-market/github.com-anthropics-skills"],
-    "urls": []
+    "urls": [],
   },
 
   "plugin": [],
@@ -41,19 +41,19 @@ Modeled on the real `packages/opencorvus/.opencorvus/opencorvus.jsonc`:
     "skill": {
       "local-note": "deny",
       "sora": "ask",
-      "figma": "ask"
-    }
+      "figma": "ask",
+    },
   },
 
   "assistant": {
     "auto_iteration": false,
     "max_executor_groups": 3,
-    "default_workflow": "pipeline"
+    "default_workflow": "pipeline",
   },
 
   "experimental": {
-    "auto_question": true
-  }
+    "auto_question": true,
+  },
 }
 ```
 
@@ -105,8 +105,8 @@ Fine-tunes orchestration policy and each agent (merged in `EngineConfig.get()` â
     "architect": { "max_steps": 40 },
     "build": { "max_steps": 80, "skills": [] },
     "acceptance": { "max_retries": 2 },
-    "max_executor_groups": 3
-  }
+    "max_executor_groups": 3,
+  },
 }
 ```
 

@@ -6,7 +6,14 @@ import { EngineGit, ensureGitignore } from "../../src/engine/git"
 import { EngineTaskTable } from "../../src/engine/engine.sql"
 import { Identifier } from "../../src/id/id"
 import { Instance } from "../../src/project/instance"
-import { listSnapshots, requireTask, type AcceptanceRow, type PlanRow, type ProgressRow, type TaskRow } from "../../src/engine/store"
+import {
+  listSnapshots,
+  requireTask,
+  type AcceptanceRow,
+  type PlanRow,
+  type ProgressRow,
+  type TaskRow,
+} from "../../src/engine/store"
 import { Log } from "../../src/util/log"
 import { tmpdir } from "../fixture/fixture"
 import { resetDatabase } from "../fixture/db"

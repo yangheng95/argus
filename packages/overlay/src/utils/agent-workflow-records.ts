@@ -1,8 +1,6 @@
 import type { AgentWorkflowRecord } from "./agent-workflow"
 
-export function sortAgentWorkflowRecordsChronologically(
-  records: AgentWorkflowRecord[],
-): AgentWorkflowRecord[] {
+export function sortAgentWorkflowRecordsChronologically(records: AgentWorkflowRecord[]): AgentWorkflowRecord[] {
   return records.slice().sort((left, right) => {
     const byStart = left.startedAt - right.startedAt
     if (byStart !== 0) return byStart

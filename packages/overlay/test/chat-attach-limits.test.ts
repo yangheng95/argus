@@ -24,7 +24,7 @@ describe("chat-attach-limits (audit W2-V15)", () => {
     expect(MAX_TOTAL_ATTACHMENT_SIZE).toBe(32 * 1024 * 1024)
     // Total budget must hold at least a single max-size file's
     // base64-inflated form (roughly 4/3 expansion).
-    expect(MAX_TOTAL_ATTACHMENT_SIZE).toBeGreaterThan(Math.ceil(MAX_ATTACHMENT_SIZE * 4 / 3))
+    expect(MAX_TOTAL_ATTACHMENT_SIZE).toBeGreaterThan(Math.ceil((MAX_ATTACHMENT_SIZE * 4) / 3))
   })
 
   test("aggregateEncodedSize sums the post-encoding lengths, not raw bytes", () => {
@@ -37,11 +37,7 @@ describe("chat-attach-limits (audit W2-V15)", () => {
   })
 
   test("aggregateEncodedSize tolerates entries with missing url field", () => {
-    const list = [
-      { url: "ABC" },
-      {} as { url?: string },
-      { url: "DE" },
-    ]
+    const list = [{ url: "ABC" }, {} as { url?: string }, { url: "DE" }]
     expect(aggregateEncodedSize(list)).toBe(5)
   })
 

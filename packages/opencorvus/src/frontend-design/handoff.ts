@@ -99,12 +99,15 @@ function renderSourceRegionRefactorGuidance(entries: Map<string, DecisionEntry>)
  * required). The `frontend_design` decision-log phase is canonical; the
  * files are a materialized read-only projection of it.
  */
-export function renderFrontendDesignHandoffReference(taskID: string, options?: {
-  valueCap?: number
-  includeExcerpts?: boolean
-  pathMode?: "relative" | "absolute"
-  projectDir?: string
-}): string {
+export function renderFrontendDesignHandoffReference(
+  taskID: string,
+  options?: {
+    valueCap?: number
+    includeExcerpts?: boolean
+    pathMode?: "relative" | "absolute"
+    projectDir?: string
+  },
+): string {
   const valueCap = options?.valueCap ?? 500
   const includeExcerpts = options?.includeExcerpts ?? true
   const mode = options?.pathMode ?? "relative"
@@ -117,9 +120,7 @@ export function renderFrontendDesignHandoffReference(taskID: string, options?: {
       // Hard fail (rule 7) — an external executor given a relative path it
       // cannot resolve is exactly the latent bug this mode fixes; never
       // silently fall back to the unreachable relative form.
-      throw new Error(
-        "renderFrontendDesignHandoffReference: pathMode 'absolute' requires projectDir",
-      )
+      throw new Error("renderFrontendDesignHandoffReference: pathMode 'absolute' requires projectDir")
     }
     const resolved = frontendDesignArtifactPaths(options.projectDir, taskID)
     templatePath = resolved.templateAbsolute
@@ -133,8 +134,12 @@ export function renderFrontendDesignHandoffReference(taskID: string, options?: {
   lines.push(`Materialized frontend_design public report (read this): ${templatePath}`)
   lines.push(`Materialized source manifest file (read this): ${manifestPath}`)
   lines.push("Canonical decision-log phase (source of truth): frontend_design")
-  lines.push("Read the public report and source manifest files before implementing or decomposing any visual/reference surface.")
-  lines.push("Use file/image/source names from the manifest as readable evidence; do not run webpage evidence tools outside frontend_design.")
+  lines.push(
+    "Read the public report and source manifest files before implementing or decomposing any visual/reference surface.",
+  )
+  lines.push(
+    "Use file/image/source names from the manifest as readable evidence; do not run webpage evidence tools outside frontend_design.",
+  )
 
   if (!includeExcerpts) return lines.join("\n")
 
@@ -150,7 +155,9 @@ export function renderFrontendDesignHandoffReference(taskID: string, options?: {
 
   lines.push("")
   lines.push("### Compact Decision-Log Excerpts")
-  lines.push("These excerpts orient the next agent only; read the materialized public report file for the complete source.")
+  lines.push(
+    "These excerpts orient the next agent only; read the materialized public report file for the complete source.",
+  )
   for (const key of present) {
     const entry = entries.get(key)
     if (!entry) continue

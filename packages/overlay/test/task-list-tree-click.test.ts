@@ -143,14 +143,20 @@ test("task tree parent selection does not leave later task-row clicks trapped in
     await page.waitForFunction(() => document.querySelector("#connBadge")?.getAttribute("data-status") === "online")
     await page.waitForSelector('.task-row-main[data-task-id="task-parent"]')
     await page.click('.task-row-main[data-task-id="task-parent"]')
-    await page.waitForFunction(() => document.querySelector('.task-row-main[data-task-id="task-parent"]')?.getAttribute("aria-current") === "page")
+    await page.waitForFunction(
+      () =>
+        document.querySelector('.task-row-main[data-task-id="task-parent"]')?.getAttribute("aria-current") === "page",
+    )
 
     const siblingHitPoint = await page.$eval('.task-row-mini[data-task-row-id="task-sibling"]', (row) => {
       const rect = (row as HTMLElement).getBoundingClientRect()
       return { x: rect.right - 96, y: rect.top + rect.height / 2 }
     })
     await page.mouse.click(siblingHitPoint.x, siblingHitPoint.y)
-    await page.waitForFunction(() => document.querySelector('.task-row-main[data-task-id="task-sibling"]')?.getAttribute("aria-current") === "page")
+    await page.waitForFunction(
+      () =>
+        document.querySelector('.task-row-main[data-task-id="task-sibling"]')?.getAttribute("aria-current") === "page",
+    )
 
     expect(badResponses).toEqual([])
   } finally {

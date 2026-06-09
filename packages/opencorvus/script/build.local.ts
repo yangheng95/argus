@@ -308,7 +308,10 @@ async function copyBrowserMcpNodeRuntime(item: Target, outdir: string) {
   }
 }
 
-function pluginResourcePath(resource: NonNullable<PackagedPluginManifest["resources"]>[number], targetOS: PackagedPluginTargetOS) {
+function pluginResourcePath(
+  resource: NonNullable<PackagedPluginManifest["resources"]>[number],
+  targetOS: PackagedPluginTargetOS,
+) {
   const selected = resource.paths?.[targetOS] ?? resource.path
   return typeof selected === "string" ? selected : ""
 }

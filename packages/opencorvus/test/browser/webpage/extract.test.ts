@@ -80,134 +80,116 @@ async function serveFixture(): Promise<{ url: string; server: Server }> {
 }
 
 describe("extractPage", () => {
-  test(
-    "extracts DOM, tokens, assets, and validates schema",
-    async () => {
-      const { url, server } = await serveFixture()
-      try {
-        const result = await extractPage({ url, noScreenshots: true, waitMs: 0 })
+  test("extracts DOM, tokens, assets, and validates schema", async () => {
+    const { url, server } = await serveFixture()
+    try {
+      const result = await extractPage({ url, noScreenshots: true, waitMs: 0 })
 
-        expect(() => ExtractedPageSchema.parse(result)).not.toThrow()
-        expect(result.url).toBe(url)
-        expect(result.title).toBe("Extract Fixture")
-        expect(result.viewport.width).toBeGreaterThan(0)
-        expect(result.tree.length).toBeGreaterThan(0)
-        expect(result.tokens.customProperties["--color-primary"]).toBe("#3366ff")
-        expect(result.stats.totalElements).toBeGreaterThanOrEqual(result.stats.extractedElements)
-      } finally {
-        server.close()
-      }
-    },
-    90_000,
-  )
+      expect(() => ExtractedPageSchema.parse(result)).not.toThrow()
+      expect(result.url).toBe(url)
+      expect(result.title).toBe("Extract Fixture")
+      expect(result.viewport.width).toBeGreaterThan(0)
+      expect(result.tree.length).toBeGreaterThan(0)
+      expect(result.tokens.customProperties["--color-primary"]).toBe("#3366ff")
+      expect(result.stats.totalElements).toBeGreaterThanOrEqual(result.stats.extractedElements)
+    } finally {
+      server.close()
+    }
+  }, 90_000)
 
-  test(
-    "scoped extraction limits the returned tree",
-    async () => {
-      const { url, server } = await serveFixture()
-      try {
-        const result = await extractPage({
-          url,
-          noScreenshots: true,
-          waitMs: 0,
-          scopeSelector: ".hero",
-        })
-        expect(result.tree.length).toBeGreaterThan(0)
-        expect(result.tree.map((element) => element.tag).sort()).toEqual(["button", "h1", "p"])
-      } finally {
-        server.close()
-      }
-    },
-    90_000,
-  )
+  test("scoped extraction limits the returned tree", async () => {
+    const { url, server } = await serveFixture()
+    try {
+      const result = await extractPage({
+        url,
+        noScreenshots: true,
+        waitMs: 0,
+        scopeSelector: ".hero",
+      })
+      expect(result.tree.length).toBeGreaterThan(0)
+      expect(result.tree.map((element) => element.tag).sort()).toEqual(["button", "h1", "p"])
+    } finally {
+      server.close()
+    }
+  }, 90_000)
 })
 
 describe("extractPage error paths", () => {
-  test(
-    "keeps DOM evidence when one external image socket closes during asset mirroring",
-    async () => {
-      const outputDir = path.join(os.tmpdir(), `extract-image-skip-${process.pid}-${Date.now()}`)
-      mkdirSync(outputDir, { recursive: true })
-      const progress: string[] = []
-      const server = createServer((req, res) => {
-        if (req.url === "/broken.jpg") {
-          res.destroy(new Error("simulated image socket close"))
-          return
-        }
-        res.writeHead(200, { "Content-Type": "text/html", Connection: "close" })
-        res.end(`<!doctype html><html><head><title>Image Skip</title></head><body><main><h1>Evidence survives</h1><img src="/broken.jpg" alt="broken asset"></main></body></html>`)
+  test("keeps DOM evidence when one external image socket closes during asset mirroring", async () => {
+    const outputDir = path.join(os.tmpdir(), `extract-image-skip-${process.pid}-${Date.now()}`)
+    mkdirSync(outputDir, { recursive: true })
+    const progress: string[] = []
+    const server = createServer((req, res) => {
+      if (req.url === "/broken.jpg") {
+        res.destroy(new Error("simulated image socket close"))
+        return
+      }
+      res.writeHead(200, { "Content-Type": "text/html", Connection: "close" })
+      res.end(
+        `<!doctype html><html><head><title>Image Skip</title></head><body><main><h1>Evidence survives</h1><img src="/broken.jpg" alt="broken asset"></main></body></html>`,
+      )
+    })
+    await new Promise<void>((ok) => server.listen(0, "127.0.0.1", ok))
+    const port = (server.address() as AddressInfo).port
+    try {
+      const result = await extractPage({
+        url: `http://127.0.0.1:${port}/`,
+        noScreenshots: true,
+        waitMs: 0,
+        outputDir,
+        onProgress: (message) => progress.push(message),
       })
-      await new Promise<void>((ok) => server.listen(0, "127.0.0.1", ok))
-      const port = (server.address() as AddressInfo).port
-      try {
-        const result = await extractPage({
-          url: `http://127.0.0.1:${port}/`,
-          noScreenshots: true,
-          waitMs: 0,
-          outputDir,
-          onProgress: (message) => progress.push(message),
-        })
 
-        expect(result.title).toBe("Image Skip")
-        expect(result.tree.length).toBeGreaterThan(0)
-        expect(result.stats.extractedElements).toBeGreaterThan(0)
-        expect(result.assets.imageMap ?? {}).toEqual({})
-        expect(progress.some((message) => message.includes("skipped image"))).toBe(true)
-        expect(progress.some((message) => message.includes("skipped 1 unavailable images"))).toBe(true)
-      } finally {
-        server.close()
-        rmSync(outputDir, { recursive: true, force: true })
-      }
-    },
-    90_000,
-  )
+      expect(result.title).toBe("Image Skip")
+      expect(result.tree.length).toBeGreaterThan(0)
+      expect(result.stats.extractedElements).toBeGreaterThan(0)
+      expect(result.assets.imageMap ?? {}).toEqual({})
+      expect(progress.some((message) => message.includes("skipped image"))).toBe(true)
+      expect(progress.some((message) => message.includes("skipped 1 unavailable images"))).toBe(true)
+    } finally {
+      server.close()
+      rmSync(outputDir, { recursive: true, force: true })
+    }
+  }, 90_000)
 
-  test(
-    "throws UrlExtractError on navigation failure",
-    async () => {
-      try {
-        await extractPage({
-          url: "http://127.0.0.1:1/does-not-exist",
-          noScreenshots: true,
-          waitMs: 0,
-        })
-        throw new Error("should have thrown")
-      } catch (error) {
-        expect(UrlExtractError.isInstance(error)).toBe(true)
-        if (UrlExtractError.isInstance(error)) {
-          expect(["navigate", "launch"]).toContain(error.data.phase)
-        }
-      }
-    },
-    60_000,
-  )
-
-  test(
-    "throws UrlExtractError on HTTP 403",
-    async () => {
-      const server = createServer((_req, res) => {
-        res.writeHead(403, { "Content-Type": "text/plain" })
-        res.end("Forbidden")
+  test("throws UrlExtractError on navigation failure", async () => {
+    try {
+      await extractPage({
+        url: "http://127.0.0.1:1/does-not-exist",
+        noScreenshots: true,
+        waitMs: 0,
       })
-      await new Promise<void>((ok) => server.listen(0, "127.0.0.1", ok))
-      const port = (server.address() as AddressInfo).port
-      try {
-        await extractPage({
-          url: `http://127.0.0.1:${port}/`,
-          noScreenshots: true,
-          waitMs: 0,
-        })
-        throw new Error("should have thrown")
-      } catch (error) {
-        expect(UrlExtractError.isInstance(error)).toBe(true)
-        if (UrlExtractError.isInstance(error)) {
-          // @ts-expect-error status is attached by the runtime error payload.
-          expect(error.data.status).toBe(403)
-        }
-      } finally {
-        server.close()
+      throw new Error("should have thrown")
+    } catch (error) {
+      expect(UrlExtractError.isInstance(error)).toBe(true)
+      if (UrlExtractError.isInstance(error)) {
+        expect(["navigate", "launch"]).toContain(error.data.phase)
       }
-    },
-    60_000,
-  )
+    }
+  }, 60_000)
+
+  test("throws UrlExtractError on HTTP 403", async () => {
+    const server = createServer((_req, res) => {
+      res.writeHead(403, { "Content-Type": "text/plain" })
+      res.end("Forbidden")
+    })
+    await new Promise<void>((ok) => server.listen(0, "127.0.0.1", ok))
+    const port = (server.address() as AddressInfo).port
+    try {
+      await extractPage({
+        url: `http://127.0.0.1:${port}/`,
+        noScreenshots: true,
+        waitMs: 0,
+      })
+      throw new Error("should have thrown")
+    } catch (error) {
+      expect(UrlExtractError.isInstance(error)).toBe(true)
+      if (UrlExtractError.isInstance(error)) {
+        // @ts-expect-error status is attached by the runtime error payload.
+        expect(error.data.status).toBe(403)
+      }
+    } finally {
+      server.close()
+    }
+  }, 60_000)
 })

@@ -7,22 +7,18 @@ OpenCorvus loads project-specific instructions from a small set of well-known fi
 
 ## Sources
 
-| File | Purpose |
-|---|---|
-| `AGENTS.md` | Generic agent instructions; primary file recognized by OpenCorvus |
-| `CLAUDE.md` | Compatibility with Claude Code conventions |
-| `.cursor/rules/*.md` | Cursor-style project rules (when configured via `instructions`) |
-| `instructions` glob entries | Anything you list in `opencorvus.jsonc` |
+| File                        | Purpose                                                           |
+| --------------------------- | ----------------------------------------------------------------- |
+| `AGENTS.md`                 | Generic agent instructions; primary file recognized by OpenCorvus |
+| `CLAUDE.md`                 | Compatibility with Claude Code conventions                        |
+| `.cursor/rules/*.md`        | Cursor-style project rules (when configured via `instructions`)   |
+| `instructions` glob entries | Anything you list in `opencorvus.jsonc`                           |
 
 ## Configuring extra rule files
 
 ```jsonc
 {
-  "instructions": [
-    "CONTRIBUTING.md",
-    "docs/guidelines.md",
-    ".cursor/rules/*.md"
-  ]
+  "instructions": ["CONTRIBUTING.md", "docs/guidelines.md", ".cursor/rules/*.md"],
 }
 ```
 

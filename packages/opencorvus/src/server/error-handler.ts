@@ -46,11 +46,7 @@ export function serverErrorResponse(err: Error | unknown, c: Context): Response 
   const id = requestID(c)
   c.header("x-opencorvus-request-id", id)
   const namedError = isNamedErrorLike(err)
-  const status = namedError
-    ? namedErrorStatus(err)
-    : err instanceof HTTPException
-      ? err.status
-      : 500
+  const status = namedError ? namedErrorStatus(err) : err instanceof HTTPException ? err.status : 500
   log.error("request failed", {
     requestID: id,
     method: c.req.method,

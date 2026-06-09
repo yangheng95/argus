@@ -33,13 +33,17 @@ const VisionJudgeSchema = z.object({
   referencePath: z.string().min(1),
   renderedPath: z.string().min(1),
   accepted: z.boolean(),
-  differences: z.array(z.object({
-    severity: z.enum(["critical", "major", "minor"]),
-    region: z.string().min(1),
-    observed: z.string().min(1),
-    expected: z.string().min(1),
-    fix_hint: z.string().min(1),
-  })).default([]),
+  differences: z
+    .array(
+      z.object({
+        severity: z.enum(["critical", "major", "minor"]),
+        region: z.string().min(1),
+        observed: z.string().min(1),
+        expected: z.string().min(1),
+        fix_hint: z.string().min(1),
+      }),
+    )
+    .default([]),
 })
 
 export async function tryMaterializeVisualEvidenceBundle(input: {
@@ -68,7 +72,16 @@ export async function tryMaterializeVisualEvidenceBundle(input: {
 
   const reference = await readPngEvidence(evalResult.data.referencePath)
   const rendered = await readPngEvidence(evalResult.data.renderedPath)
-  if (!reference.valid || !rendered.valid || !reference.sha256 || !rendered.sha256 || !reference.width || !reference.height || !rendered.width || !rendered.height) {
+  if (
+    !reference.valid ||
+    !rendered.valid ||
+    !reference.sha256 ||
+    !rendered.sha256 ||
+    !reference.width ||
+    !reference.height ||
+    !rendered.width ||
+    !rendered.height
+  ) {
     return undefined
   }
 
@@ -135,18 +148,22 @@ function buildRegions(input: {
   passing: boolean
 }): VisualEvidenceBundle["regions"] {
   if (input.differences.length === 0) {
-    return [{
-      id: "region_full_page",
-      label: "Full page",
-      requirementIDs: [],
-      acceptanceSpecIDs: [],
-      sourceRefs: input.evidenceRefs,
-      viewport: "primary",
-      required: true,
-      status: input.passing ? "passing" : "failing",
-      evidenceRefs: input.evidenceRefs,
-      notes: input.passing ? "Numeric and qualitative evidence both passed." : "No qualitative differences were listed, but numeric or qualitative evidence did not pass.",
-    }]
+    return [
+      {
+        id: "region_full_page",
+        label: "Full page",
+        requirementIDs: [],
+        acceptanceSpecIDs: [],
+        sourceRefs: input.evidenceRefs,
+        viewport: "primary",
+        required: true,
+        status: input.passing ? "passing" : "failing",
+        evidenceRefs: input.evidenceRefs,
+        notes: input.passing
+          ? "Numeric and qualitative evidence both passed."
+          : "No qualitative differences were listed, but numeric or qualitative evidence did not pass.",
+      },
+    ]
   }
 
   return input.differences.map((difference, index) => ({
@@ -164,9 +181,11 @@ function buildRegions(input: {
 }
 
 function slug(value: string): string {
-  return value
-    .toLowerCase()
-    .replace(/[^a-z0-9]+/g, "_")
-    .replace(/^_+|_+$/g, "")
-    .slice(0, 40) || "visual_region"
+  return (
+    value
+      .toLowerCase()
+      .replace(/[^a-z0-9]+/g, "_")
+      .replace(/^_+|_+$/g, "")
+      .slice(0, 40) || "visual_region"
+  )
 }

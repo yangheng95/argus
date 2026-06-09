@@ -20,15 +20,18 @@ describe("browser preview verification", () => {
       directory,
       fn: () => {
         Database.use((db) =>
-          db.insert(EngineTaskTable).values({
-            id: taskID,
-            project_id: Instance.project.id,
-            title: "Preview task",
-            request: "Preview task",
-            source: "api",
-            time_created: Date.now(),
-            time_updated: Date.now(),
-          }).run(),
+          db
+            .insert(EngineTaskTable)
+            .values({
+              id: taskID,
+              project_id: Instance.project.id,
+              title: "Preview task",
+              request: "Preview task",
+              source: "api",
+              time_created: Date.now(),
+              time_updated: Date.now(),
+            })
+            .run(),
         )
       },
     })
@@ -128,7 +131,9 @@ describe("browser preview verification", () => {
     expect(result.status).toBe("failed")
     expect(result.target.latestEvidenceID).toBeTruthy()
     const artifact = Database.use((db) =>
-      db.select().from(EngineArtifactTable)
+      db
+        .select()
+        .from(EngineArtifactTable)
         .where(eq(EngineArtifactTable.kind, "browser_preview_evidence"))
         .limit(1)
         .get(),

@@ -72,8 +72,14 @@ export namespace SessionCompaction {
     text: string
   }
 
-  export async function isOverflow(input: { tokens: Message.Assistant["tokens"]; model: Provider.Model; sessionID?: string }) {
-    const config = input.sessionID ? await EffectiveConfig.effective({ sessionID: input.sessionID }) : await Config.get()
+  export async function isOverflow(input: {
+    tokens: Message.Assistant["tokens"]
+    model: Provider.Model
+    sessionID?: string
+  }) {
+    const config = input.sessionID
+      ? await EffectiveConfig.effective({ sessionID: input.sessionID })
+      : await Config.get()
     return ContextBudget.isUsageOverflow({ config, tokens: input.tokens, model: input.model })
   }
 
@@ -115,11 +121,7 @@ export namespace SessionCompaction {
   }
 
   function escapeTranscriptText(text: string) {
-    return text
-      .replaceAll("&", "&amp;")
-      .replaceAll("<", "&lt;")
-      .replaceAll(">", "&gt;")
-      .replaceAll('"', "&quot;")
+    return text.replaceAll("&", "&amp;").replaceAll("<", "&lt;").replaceAll(">", "&gt;").replaceAll('"', "&quot;")
   }
 
   function transcriptText(text: string) {
@@ -320,18 +322,18 @@ export namespace SessionCompaction {
       acceptanceCriteria: userMessages || (input.previousHandoff?.acceptanceCriteria.length ?? 0) > 0,
       previousHandoff: input.previousHandoff
         ? {
-          acceptanceCriteria: input.previousHandoff.acceptanceCriteria,
-          workingContext: input.previousHandoff.workingContext,
-          chronology: input.previousHandoff.chronology.map((item) => item.event),
-          decisions: input.previousHandoff.decisions.map((item) => item.decision),
-          evidence: input.previousHandoff.evidence.map((item) => item.value),
-          files: input.previousHandoff.files.map((item) => item.path),
-          testsAndCommands: input.previousHandoff.testsAndCommands.map((item) => item.command),
-          errorsAndBlockers: input.previousHandoff.errorsAndBlockers.map((item) => item.issue),
-          userMessages: input.previousHandoff.userMessages,
-          nextActions: input.previousHandoff.nextActions,
-          openRisks: input.previousHandoff.openRisks,
-        }
+            acceptanceCriteria: input.previousHandoff.acceptanceCriteria,
+            workingContext: input.previousHandoff.workingContext,
+            chronology: input.previousHandoff.chronology.map((item) => item.event),
+            decisions: input.previousHandoff.decisions.map((item) => item.decision),
+            evidence: input.previousHandoff.evidence.map((item) => item.value),
+            files: input.previousHandoff.files.map((item) => item.path),
+            testsAndCommands: input.previousHandoff.testsAndCommands.map((item) => item.command),
+            errorsAndBlockers: input.previousHandoff.errorsAndBlockers.map((item) => item.issue),
+            userMessages: input.previousHandoff.userMessages,
+            nextActions: input.previousHandoff.nextActions,
+            openRisks: input.previousHandoff.openRisks,
+          }
         : undefined,
     }
   }
@@ -509,8 +511,7 @@ export namespace SessionCompaction {
       const msg = messages[i]
       // Turn boundaries follow real conversation starts and assistant step starts,
       // which keeps long dispatcher-owned build sessions compactable without a kind branch.
-      const isUserBoundary =
-        msg.info.role === "user" && !msg.parts.some((part) => part.type === "compaction")
+      const isUserBoundary = msg.info.role === "user" && !msg.parts.some((part) => part.type === "compaction")
       const isAssistantStepBoundary =
         msg.info.role === "assistant" && msg.parts.some((part) => part.type === "step-start")
       if (!isUserBoundary && !isAssistantStepBoundary) continue
@@ -849,7 +850,9 @@ export namespace SessionCompaction {
     if (processor.message.error) return "stop"
     if (!structured) {
       const toolErrors = (await Message.parts(processor.message.id)).flatMap((part) =>
-        part.type === "tool" && part.state.status === "error" ? [`${part.tool}: ${renderToolFailureCause(part.state.failure)}`] : [],
+        part.type === "tool" && part.state.status === "error"
+          ? [`${part.tool}: ${renderToolFailureCause(part.state.failure)}`]
+          : [],
       )
       const reason = toolErrors.length
         ? toolErrors.join("\n")
@@ -985,5 +988,4 @@ export namespace SessionCompaction {
     latestCompactionPruneRange,
     prunableToolParts,
   }
-
 }

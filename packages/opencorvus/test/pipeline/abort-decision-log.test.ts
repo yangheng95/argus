@@ -43,27 +43,33 @@ describe("P4 abort decision-log writers — read/write contract", () => {
   function seed() {
     const now = Date.now()
     Database.use((db) =>
-      db.insert(ProjectTable).values({
-        id: projectID,
-        worktree: process.cwd(),
-        name: "P4 abort writers test",
-        sandboxes: "[]",
-        time_created: now,
-        time_updated: now,
-      }).run(),
+      db
+        .insert(ProjectTable)
+        .values({
+          id: projectID,
+          worktree: process.cwd(),
+          name: "P4 abort writers test",
+          sandboxes: "[]",
+          time_created: now,
+          time_updated: now,
+        })
+        .run(),
     )
     Database.use((db) =>
-      db.insert(EngineTaskTable).values({
-        id: taskID,
-        project_id: projectID,
-        source: "test",
-        title: "P4 abort writers",
-        request: "test request",
-        priority: "normal",
-        time_created: now,
-        time_updated: now,
-        time_started: now,
-      }).run(),
+      db
+        .insert(EngineTaskTable)
+        .values({
+          id: taskID,
+          project_id: projectID,
+          source: "test",
+          title: "P4 abort writers",
+          request: "test request",
+          priority: "normal",
+          time_created: now,
+          time_updated: now,
+          time_started: now,
+        })
+        .run(),
     )
   }
 
@@ -90,7 +96,8 @@ describe("P4 abort decision-log writers — read/write contract", () => {
         log.append({
           phase: "frontend_design",
           key: "abort_no_visual_input",
-          value: "frontend_design aborted before agent call: caller provided no visual reference (no attachments, no url, no figma_url, no materials).",
+          value:
+            "frontend_design aborted before agent call: caller provided no visual reference (no attachments, no url, no figma_url, no materials).",
           reason: "no_visual_input_provided",
         })
 
@@ -119,7 +126,8 @@ describe("P4 abort decision-log writers — read/write contract", () => {
         log.append({
           phase: "frontend_design",
           key: "abort_materialization_failed",
-          value: "frontend_design aborted before agent call: all 1 provided visual source(s) (live=1, figma=0, materials=0) failed to materialize.",
+          value:
+            "frontend_design aborted before agent call: all 1 provided visual source(s) (live=1, figma=0, materials=0) failed to materialize.",
           reason: "materialization_failed_all_sources",
         })
 

@@ -14,21 +14,22 @@ OpenCorvus GitHub Action 让你在 PR 或 Issue 评论区用 `/oc` 或 `/opencor
 4. 结果经 Octokit 写回 Issue/PR 评论；代码有变动时自动 commit、push、开 PR
 
 支持触发事件（`github/index.ts:127-128`）：
+
 - `issue_comment` — Issue 评论、PR 评论（通过 `issue.pull_request` 区分）
 - `pull_request_review_comment` — PR "Files" 标签页的行级 review 评论
 
 ## 输入参数
 
-| 参数 | 必填 | 默认 | 说明 |
-|---|---|---|---|
-| `model` | ✓ | — | `provider/model`，如 `anthropic/claude-sonnet-4-20250514` |
-| `agent` | — | config 的 `default_agent` | 主 agent；subagent 不生效 |
-| `share` | — | 公开仓库 `true` | 是否共享到 `opencorvus.ai/s/<id>` |
-| `prompt` | — | — | 自定义 prompt，覆盖默认行为 |
-| `use_github_token` | — | `false` | 用 `GITHUB_TOKEN` 直通，跳过 OIDC 流程 |
-| `mentions` | — | `/opencorvus,/oc` | 触发短语（逗号分隔，大小写不敏感） |
-| `variant` | — | — | provider 推理等级（`high` / `max` / `minimal`） |
-| `oidc_base_url` | — | `https://api.opencorvus.ai` | 自定义 App 安装时的 OIDC 换 token 接口 |
+| 参数               | 必填 | 默认                        | 说明                                                      |
+| ------------------ | ---- | --------------------------- | --------------------------------------------------------- |
+| `model`            | ✓    | —                           | `provider/model`，如 `anthropic/claude-sonnet-4-20250514` |
+| `agent`            | —    | config 的 `default_agent`   | 主 agent；subagent 不生效                                 |
+| `share`            | —    | 公开仓库 `true`             | 是否共享到 `opencorvus.ai/s/<id>`                         |
+| `prompt`           | —    | —                           | 自定义 prompt，覆盖默认行为                               |
+| `use_github_token` | —    | `false`                     | 用 `GITHUB_TOKEN` 直通，跳过 OIDC 流程                    |
+| `mentions`         | —    | `/opencorvus,/oc`           | 触发短语（逗号分隔，大小写不敏感）                        |
+| `variant`          | —    | —                           | provider 推理等级（`high` / `max` / `minimal`）           |
+| `oidc_base_url`    | —    | `https://api.opencorvus.ai` | 自定义 App 安装时的 OIDC 换 token 接口                    |
 
 （`github/action.yml:7-39`）
 
@@ -72,10 +73,10 @@ env:
 
 ```yaml
 permissions:
-  id-token: write        # OIDC（方式 A 必需）
-  contents: write        # git push / 分支
-  pull-requests: write   # 开 PR / 评论
-  issues: write          # 创建/更新 Issue 评论
+  id-token: write # OIDC（方式 A 必需）
+  contents: write # git push / 分支
+  pull-requests: write # 开 PR / 评论
+  issues: write # 创建/更新 Issue 评论
 ```
 
 本仓库 `.github/workflows/opencorvus.yml` 实际只声明了 `read` 权限（方式 A 下写权限由 App Token 携带，`GITHUB_TOKEN` 不需要写权限）。方式 B 需显式声明 write。
@@ -145,11 +146,11 @@ jobs:
 
 ## 使用示例
 
-| 评论 | 效果 |
-|---|---|
-| `/opencorvus explain this issue` | 阅读 Issue 线程，回复解释 |
-| `/opencorvus fix this` | 新分支、实现、开 PR |
-| `/oc`（PR 评论） | 对当前 PR 做 review |
+| 评论                                      | 效果                              |
+| ----------------------------------------- | --------------------------------- |
+| `/opencorvus explain this issue`          | 阅读 Issue 线程，回复解释         |
+| `/opencorvus fix this`                    | 新分支、实现、开 PR               |
+| `/oc`（PR 评论）                          | 对当前 PR 做 review               |
 | `/oc add error handling here`（行级评论） | 在指定行位置添加错误处理并 commit |
 
 ## 代码流转

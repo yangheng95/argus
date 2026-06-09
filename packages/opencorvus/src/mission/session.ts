@@ -25,27 +25,32 @@ function missionIDFromInfo(session: Session.Info): string | undefined {
 }
 
 function findMissionSessionID(missionID: string) {
-  return Database.use((db) =>
-    db
-      .select({ id: SessionTable.id })
-      .from(SessionTable)
-      .where(and(
-        eq(SessionTable.project_id, Instance.project.id),
-        eq(SessionTable.kind, "mission"),
-        sql`json_extract(${SessionTable.metadata}, '$.mission.id') = ${missionID}`,
-      ))
-      .get()
-      ?.id,
+  return Database.use(
+    (db) =>
+      db
+        .select({ id: SessionTable.id })
+        .from(SessionTable)
+        .where(
+          and(
+            eq(SessionTable.project_id, Instance.project.id),
+            eq(SessionTable.kind, "mission"),
+            sql`json_extract(${SessionTable.metadata}, '$.mission.id') = ${missionID}`,
+          ),
+        )
+        .get()?.id,
   )
 }
 
-function missionSessionConditions(input?: {
-  directory?: string
-  search?: string
-  cursorUpdated?: number
-  cursorSessionID?: string
-  archived?: boolean
-}, projectID?: string) {
+function missionSessionConditions(
+  input?: {
+    directory?: string
+    search?: string
+    cursorUpdated?: number
+    cursorSessionID?: string
+    archived?: boolean
+  },
+  projectID?: string,
+) {
   const conditions = [
     eq(SessionTable.kind, "mission"),
     sql`json_extract(${SessionTable.metadata}, '$.mission.id') IS NOT NULL`,

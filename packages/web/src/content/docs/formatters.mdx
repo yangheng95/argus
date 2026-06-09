@@ -9,13 +9,13 @@ OpenCorvus auto-formats files the agent writes or edits, using the formatter tha
 
 OpenCorvus detects formatters by inspecting the project's tooling:
 
-| Formatter | Trigger |
-|---|---|
-| `prettier` | `prettier` in `package.json` deps or `.prettierrc*` config present |
-| `gofmt` | `*.go` files in repo |
-| `rustfmt` | `Cargo.toml` present |
-| `black` | `pyproject.toml` with `tool.black` or `requirements*.txt` lists `black` |
-| Project script | `package.json` `format` / `lint:fix` scripts |
+| Formatter      | Trigger                                                                 |
+| -------------- | ----------------------------------------------------------------------- |
+| `prettier`     | `prettier` in `package.json` deps or `.prettierrc*` config present      |
+| `gofmt`        | `*.go` files in repo                                                    |
+| `rustfmt`      | `Cargo.toml` present                                                    |
+| `black`        | `pyproject.toml` with `tool.black` or `requirements*.txt` lists `black` |
+| Project script | `package.json` `format` / `lint:fix` scripts                            |
 
 The exact registry is in `packages/opencorvus/src/format/formatter.ts`.
 
@@ -30,9 +30,9 @@ Override or extend in [config](/docs/config/) under `formatter`:
     "custom-prettier": {
       "command": ["npx", "prettier", "--write", "$FILE"],
       "environment": { "NODE_ENV": "development" },
-      "extensions": [".js", ".ts", ".jsx", ".tsx"]
-    }
-  }
+      "extensions": [".js", ".ts", ".jsx", ".tsx"],
+    },
+  },
 }
 ```
 

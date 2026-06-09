@@ -86,10 +86,8 @@ test("session processor exits a stalled provider iterator when its activity sign
 
 test("session processor serializes concurrent materialization for the same tool callID", async () => {
   const store = new Map<string, Message.Part>()
-  spyOn(Message, "parts").mockImplementation(
-    (async (messageID: string) =>
-      [...store.values()].filter((p) => p.messageID === messageID)) as typeof Message.parts,
-  )
+  spyOn(Message, "parts").mockImplementation((async (messageID: string) =>
+    [...store.values()].filter((p) => p.messageID === messageID)) as typeof Message.parts)
   spyOn(Session, "updatePart").mockImplementation(async (part) => {
     await Bun.sleep(10)
     store.set(part.id, part as Message.Part)

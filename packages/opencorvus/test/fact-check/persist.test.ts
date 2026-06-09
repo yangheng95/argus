@@ -3,11 +3,7 @@ import { Database } from "../../src/storage/db"
 import { ProjectTable } from "../../src/project/project.sql"
 import { EngineTaskTable } from "../../src/engine/engine.sql"
 import { Instance } from "../../src/project/instance"
-import {
-  recordFactCheckAttempt,
-  findFactCheckAttempt,
-  listFactCheckAttempts,
-} from "../../src/fact-check/persist"
+import { recordFactCheckAttempt, findFactCheckAttempt, listFactCheckAttempts } from "../../src/fact-check/persist"
 import type { FactCheckReport } from "../../src/fact-check/schema"
 import { resetDatabase } from "../fixture/db"
 import { tmpdir } from "../fixture/fixture"
@@ -29,27 +25,31 @@ const stubReport: FactCheckReport = {
 
 function seedTask(projectID: string, taskID: string, now: number) {
   Database.use((db) => {
-    db.insert(ProjectTable).values({
-      id: projectID,
-      worktree: "D:/tmp/fc-test",
-      name: "FC Persist Test",
-      sandboxes: "[]",
-      time_created: now,
-      time_updated: now,
-    }).run()
-    db.insert(EngineTaskTable).values({
-      id: taskID,
-      project_id: projectID,
-      session_id: null,
-      source: "test",
-      title: "FC Task",
-      request: "Run fact check",
-      kind: "workflow",
-      priority: "normal",
-      time_created: now,
-      time_updated: now,
-      time_started: now,
-    }).run()
+    db.insert(ProjectTable)
+      .values({
+        id: projectID,
+        worktree: "D:/tmp/fc-test",
+        name: "FC Persist Test",
+        sandboxes: "[]",
+        time_created: now,
+        time_updated: now,
+      })
+      .run()
+    db.insert(EngineTaskTable)
+      .values({
+        id: taskID,
+        project_id: projectID,
+        session_id: null,
+        source: "test",
+        title: "FC Task",
+        request: "Run fact check",
+        kind: "workflow",
+        priority: "normal",
+        time_created: now,
+        time_updated: now,
+        time_started: now,
+      })
+      .run()
   })
 }
 

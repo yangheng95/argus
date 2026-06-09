@@ -18,14 +18,18 @@ function styleSheet(): string {
     "src/styles/primitives/button.css",
     "src/styles/surfaces/composer.css",
     "src/styles/surfaces/card.css",
-  ].map(css).join("\n")
+  ]
+    .map(css)
+    .join("\n")
 }
 
-test("critical icon affordances keep readable computed contrast", async () => {
-  const browser = await launchBrowser()
-  try {
-    const page = await browser.newPage()
-    const fixtureHtml = `
+test(
+  "critical icon affordances keep readable computed contrast",
+  async () => {
+    const browser = await launchBrowser()
+    try {
+      const page = await browser.newPage()
+      const fixtureHtml = `
       <!doctype html>
       <html data-theme="light">
         <head><style>${styleSheet()}</style></head>
@@ -48,65 +52,67 @@ test("critical icon affordances keep readable computed contrast", async () => {
         </body>
       </html>
     `
-    await page.goto(`data:text/html;charset=utf-8,${encodeURIComponent(fixtureHtml)}`)
+      await page.goto(`data:text/html;charset=utf-8,${encodeURIComponent(fixtureHtml)}`)
 
-    const report = await page.evaluate(() => {
-      type Rgb = { r: number; g: number; b: number; a: number }
-      const parseColor = (value: string): Rgb => {
-        const rgb = value.match(/rgba?\(([^)]+)\)/)
-        if (rgb) {
-          const parts = rgb[1]!.split(/,\s*/).map(Number)
-          return { r: parts[0]!, g: parts[1]!, b: parts[2]!, a: parts[3] ?? 1 }
+      const report = await page.evaluate(() => {
+        type Rgb = { r: number; g: number; b: number; a: number }
+        const parseColor = (value: string): Rgb => {
+          const rgb = value.match(/rgba?\(([^)]+)\)/)
+          if (rgb) {
+            const parts = rgb[1]!.split(/,\s*/).map(Number)
+            return { r: parts[0]!, g: parts[1]!, b: parts[2]!, a: parts[3] ?? 1 }
+          }
+          const srgb = value.match(/color\(srgb\s+([0-9.]+)\s+([0-9.]+)\s+([0-9.]+)(?:\s*\/\s*([0-9.]+))?\)/)
+          if (srgb) {
+            return {
+              r: Number(srgb[1]) * 255,
+              g: Number(srgb[2]) * 255,
+              b: Number(srgb[3]) * 255,
+              a: srgb[4] ? Number(srgb[4]) : 1,
+            }
+          }
+          throw new Error(`Unsupported computed color: ${value}`)
         }
-        const srgb = value.match(/color\(srgb\s+([0-9.]+)\s+([0-9.]+)\s+([0-9.]+)(?:\s*\/\s*([0-9.]+))?\)/)
-        if (srgb) {
+        const luminance = (c: Rgb) => {
+          const channel = (v: number) => {
+            const s = v / 255
+            return s <= 0.03928 ? s / 12.92 : ((s + 0.055) / 1.055) ** 2.4
+          }
+          return 0.2126 * channel(c.r) + 0.7152 * channel(c.g) + 0.0722 * channel(c.b)
+        }
+        const contrast = (fg: string, bg: string) => {
+          const a = luminance(parseColor(fg))
+          const b = luminance(parseColor(bg))
+          const hi = Math.max(a, b)
+          const lo = Math.min(a, b)
+          return (hi + 0.05) / (lo + 0.05)
+        }
+        const read = (fgSelector: string, bgSelector: string) => {
+          const fg = document.querySelector(fgSelector)
+          const bg = document.querySelector(bgSelector)
+          if (!(fg instanceof HTMLElement) || !(bg instanceof HTMLElement)) {
+            throw new Error(`Missing fixture nodes: ${fgSelector} / ${bgSelector}`)
+          }
+          const fgStyle = getComputedStyle(fg)
+          const bgStyle = getComputedStyle(bg)
           return {
-            r: Number(srgb[1]) * 255,
-            g: Number(srgb[2]) * 255,
-            b: Number(srgb[3]) * 255,
-            a: srgb[4] ? Number(srgb[4]) : 1,
+            fg: fgStyle.color,
+            bg: bgStyle.backgroundColor,
+            fgOpacity: fgStyle.opacity,
+            bgOpacity: bgStyle.opacity,
+            ratio: contrast(fgStyle.color, bgStyle.backgroundColor),
           }
         }
-        throw new Error(`Unsupported computed color: ${value}`)
-      }
-      const luminance = (c: Rgb) => {
-        const channel = (v: number) => {
-          const s = v / 255
-          return s <= 0.03928 ? s / 12.92 : ((s + 0.055) / 1.055) ** 2.4
-        }
-        return 0.2126 * channel(c.r) + 0.7152 * channel(c.g) + 0.0722 * channel(c.b)
-      }
-      const contrast = (fg: string, bg: string) => {
-        const a = luminance(parseColor(fg))
-        const b = luminance(parseColor(bg))
-        const hi = Math.max(a, b)
-        const lo = Math.min(a, b)
-        return (hi + 0.05) / (lo + 0.05)
-      }
-      const read = (fgSelector: string, bgSelector: string) => {
-        const fg = document.querySelector(fgSelector)
-        const bg = document.querySelector(bgSelector)
-        if (!(fg instanceof HTMLElement) || !(bg instanceof HTMLElement)) {
-          throw new Error(`Missing fixture nodes: ${fgSelector} / ${bgSelector}`)
-        }
-        const fgStyle = getComputedStyle(fg)
-        const bgStyle = getComputedStyle(bg)
         return {
-          fg: fgStyle.color,
-          bg: bgStyle.backgroundColor,
-          fgOpacity: fgStyle.opacity,
-          bgOpacity: bgStyle.opacity,
-          ratio: contrast(fgStyle.color, bgStyle.backgroundColor),
+          send: read(".chat-send-icon", ".chat-send"),
         }
-      }
-      return {
-        send: read(".chat-send-icon", ".chat-send"),
-      }
-    })
+      })
 
-    expect(report.send.fgOpacity).toBe("1")
-    expect(report.send.ratio).toBeGreaterThanOrEqual(4.5)
-  } finally {
-    await browser.close()
-  }
-}, { timeout: 120_000 })
+      expect(report.send.fgOpacity).toBe("1")
+      expect(report.send.ratio).toBeGreaterThanOrEqual(4.5)
+    } finally {
+      await browser.close()
+    }
+  },
+  { timeout: 120_000 },
+)

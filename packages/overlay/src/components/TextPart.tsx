@@ -1,7 +1,7 @@
 /** @jsxImportSource solid-js */
-import { createMemo, For, Show } from "solid-js";
-import { renderMarkdown } from "../utils/markdown";
-import { createStreamingTextPartModel } from "./text-part-model";
+import { createMemo, For, Show } from "solid-js"
+import { renderMarkdown } from "../utils/markdown"
+import { createStreamingTextPartModel } from "./text-part-model"
 
 /**
  * Incremental streaming markdown renderer.
@@ -16,18 +16,16 @@ import { createStreamingTextPartModel } from "./text-part-model";
  */
 
 export function TextPart(props: { text: string; streaming?: boolean }) {
-  const { frozenHtml, activeText } = createStreamingTextPartModel(props, renderMarkdown);
+  const { frozenHtml, activeText } = createStreamingTextPartModel(props, renderMarkdown)
 
   return (
     <div class="msg-text">
-      <For each={frozenHtml()}>
-        {(html) => <div class="md-frozen-block" innerHTML={html} />}
-      </For>
+      <For each={frozenHtml()}>{(html) => <div class="md-frozen-block" innerHTML={html} />}</For>
       <Show when={activeText()}>
         <div class="md-active-text">{activeText()}</div>
       </Show>
     </div>
-  );
+  )
 }
 
 /**
@@ -36,6 +34,6 @@ export function TextPart(props: { text: string; streaming?: boolean }) {
  * (e.g. board spec panel, loaded transcript messages).
  */
 export function StaticTextPart(props: { text: string }) {
-  const html = createMemo(() => renderMarkdown(props.text));
-  return <div class="msg-text" innerHTML={html()} />;
+  const html = createMemo(() => renderMarkdown(props.text))
+  return <div class="msg-text" innerHTML={html()} />
 }

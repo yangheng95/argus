@@ -12,8 +12,18 @@ describe("AttachmentStore.stageToWorktree", () => {
       directory: tmp.path,
       fn: async () => {
         const projectID = Instance.project.id
-        const a = await AttachmentStore.write(projectID, Buffer.from([0x89, 0x50, 0x4e, 0x47]), "image/png", "screenshot.png")
-        const b = await AttachmentStore.write(projectID, Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d]), "image/png", "另一个 截图.png")
+        const a = await AttachmentStore.write(
+          projectID,
+          Buffer.from([0x89, 0x50, 0x4e, 0x47]),
+          "image/png",
+          "screenshot.png",
+        )
+        const b = await AttachmentStore.write(
+          projectID,
+          Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d]),
+          "image/png",
+          "另一个 截图.png",
+        )
         const worktreeDir = await fs.mkdtemp(path.join(tmp.path, "worktree-"))
 
         const staged = await AttachmentStore.stageToWorktree(projectID, [a, b], worktreeDir)
@@ -22,7 +32,10 @@ describe("AttachmentStore.stageToWorktree", () => {
         // CJK + space passes the safe-filename regex (rule: only ban shell-meta + path sep).
         expect(staged[1].relPath).toBe("references/另一个 截图.png")
         for (const s of staged) {
-          const exists = await fs.stat(s.absPath).then(() => true).catch(() => false)
+          const exists = await fs
+            .stat(s.absPath)
+            .then(() => true)
+            .catch(() => false)
           expect(exists).toBe(true)
           expect(s.absPath.startsWith(path.join(worktreeDir, "references"))).toBe(true)
         }
@@ -36,7 +49,12 @@ describe("AttachmentStore.stageToWorktree", () => {
       directory: tmp.path,
       fn: async () => {
         const projectID = Instance.project.id
-        const a = await AttachmentStore.write(projectID, Buffer.from([0x89, 0x50, 0x4e]), "image/png", "evil$name|with;chars.png")
+        const a = await AttachmentStore.write(
+          projectID,
+          Buffer.from([0x89, 0x50, 0x4e]),
+          "image/png",
+          "evil$name|with;chars.png",
+        )
         const worktreeDir = await fs.mkdtemp(path.join(tmp.path, "worktree-"))
         const staged = await AttachmentStore.stageToWorktree(projectID, [a], worktreeDir)
         expect(staged).toHaveLength(1)
@@ -55,7 +73,10 @@ describe("AttachmentStore.stageToWorktree", () => {
         const worktreeDir = await fs.mkdtemp(path.join(tmp.path, "worktree-"))
         const staged = await AttachmentStore.stageToWorktree(projectID, [txt], worktreeDir)
         expect(staged).toEqual([])
-        const refsDirExists = await fs.stat(path.join(worktreeDir, "references")).then(() => true).catch(() => false)
+        const refsDirExists = await fs
+          .stat(path.join(worktreeDir, "references"))
+          .then(() => true)
+          .catch(() => false)
         // Empty input → no references/ directory created
         expect(refsDirExists).toBe(false)
 
@@ -92,7 +113,12 @@ describe("AttachmentStore.stageToWorktree", () => {
 
   test("renderStagedList includes worktree-relative paths and original filename when present", () => {
     const out = AttachmentStore.renderStagedList([
-      { relPath: "references/screenshot.png", absPath: "/abs/screenshot.png", mime: "image/png", originalFilename: "屏幕截图.png" },
+      {
+        relPath: "references/screenshot.png",
+        absPath: "/abs/screenshot.png",
+        mime: "image/png",
+        originalFilename: "屏幕截图.png",
+      },
     ])
     expect(out).toContain("`references/screenshot.png`")
     expect(out).toContain("originally `屏幕截图.png`")

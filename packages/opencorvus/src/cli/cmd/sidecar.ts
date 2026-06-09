@@ -2,10 +2,7 @@ import path from "path"
 import { Server } from "../../server/server"
 import { SidecarLock } from "../../server/sidecar-lock"
 import { ParentWatchdog } from "../../server/parent-watchdog"
-import {
-  clearServerShutdownHandler,
-  registerServerShutdownHandler,
-} from "../../server/shutdown"
+import { clearServerShutdownHandler, registerServerShutdownHandler } from "../../server/shutdown"
 import { cmd } from "./cmd"
 import { Log } from "../../util/log"
 
@@ -109,11 +106,11 @@ export const SidecarCommand = cmd({
         startedAt: Date.now(),
       })
     } catch (err) {
-      try { await server.stop(true) } catch {}
+      try {
+        await server.stop(true)
+      } catch {}
       if (err instanceof SidecarLock.SidecarLockContendedError) {
-        console.error(
-          `[sidecar] ${err.message}. Stop it before opening this workspace in VS Code.`,
-        )
+        console.error(`[sidecar] ${err.message}. Stop it before opening this workspace in VS Code.`)
         process.exit(3)
       }
       throw err

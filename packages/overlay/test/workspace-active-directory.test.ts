@@ -1,16 +1,16 @@
-import { afterEach, describe, expect, test } from "bun:test";
-import { boardStore, setBoardStore } from "../src/store/board";
-import { setSettingsStore } from "../src/store/settings";
-import { appStore, setAppStore } from "../src/store/app";
-import { apiUrl } from "../src/services/api";
-import { activeDirectory, closeProject } from "../src/services/workspace";
-import { startTaskListSSE, stopTaskListSSE } from "../src/services/sse";
-import { __setHostTransportForTest, type HostTransport } from "../src/services/host-transport";
+import { afterEach, describe, expect, test } from "bun:test"
+import { boardStore, setBoardStore } from "../src/store/board"
+import { setSettingsStore } from "../src/store/settings"
+import { appStore, setAppStore } from "../src/store/app"
+import { apiUrl } from "../src/services/api"
+import { activeDirectory, closeProject } from "../src/services/workspace"
+import { startTaskListSSE, stopTaskListSSE } from "../src/services/sse"
+import { __setHostTransportForTest, type HostTransport } from "../src/services/host-transport"
 
 describe("workspace active directory", () => {
   afterEach(() => {
-    stopTaskListSSE();
-    __setHostTransportForTest(undefined);
+    stopTaskListSSE()
+    __setHostTransportForTest(undefined)
     setBoardStore({
       board: null,
       tasks: [],
@@ -21,13 +21,13 @@ describe("workspace active directory", () => {
       changes: [],
       boardEtag: "",
       snapshotVersion: "",
-    });
+    })
     setSettingsStore({
       directory: "",
       savedDirectory: "",
       workspaceTaskID: "",
       workspaceDirectory: "",
-    });
+    })
     setAppStore({
       config: null,
       executors: [],
@@ -38,52 +38,52 @@ describe("workspace active directory", () => {
       mcp: {},
       memoryFiles: [],
       promptEntries: [],
-    });
-  });
+    })
+  })
 
   test("uses selected task directory when settings directory is empty", () => {
-    setSettingsStore("directory", "");
+    setSettingsStore("directory", "")
     setBoardStore("board", {
       task: {
         id: "task_1",
         directory: "D:/repo/from-task",
       },
-    });
+    })
 
-    expect(activeDirectory()).toBe("D:/repo/from-task");
-  });
+    expect(activeDirectory()).toBe("D:/repo/from-task")
+  })
 
   test("selected task directory owns project-scoped controls over stale settings", () => {
-    setSettingsStore("directory", "D:/repo/from-settings");
+    setSettingsStore("directory", "D:/repo/from-settings")
     setBoardStore("board", {
       task: {
         id: "task_2",
         directory: "D:/repo/from-task",
       },
-    });
+    })
 
-    expect(activeDirectory()).toBe("D:/repo/from-task");
-  });
+    expect(activeDirectory()).toBe("D:/repo/from-task")
+  })
 
   test("closeProject clears selected directory and project-scoped projections", () => {
-    const nativeCommands: unknown[] = [];
+    const nativeCommands: unknown[] = []
     __setHostTransportForTest({
       kind: "browser",
       request: async () => ({ status: 200, ok: true, headers: {}, body: null }),
       openStream: () => ({ close: () => undefined }),
       native: async (command) => {
-        nativeCommands.push(command);
-        return true;
+        nativeCommands.push(command)
+        return true
       },
       subscribeUiCommand: () => ({ unsubscribe: () => undefined }),
-    } satisfies HostTransport);
+    } satisfies HostTransport)
 
     setSettingsStore({
       directory: "D:/repo/current",
       savedDirectory: "D:/repo/current",
       workspaceTaskID: "task_1",
       workspaceDirectory: "D:/repo/current",
-    });
+    })
     setBoardStore({
       selectedTaskID: "task_1",
       board: { task: { id: "task_1", directory: "D:/repo/current" } },
@@ -94,7 +94,7 @@ describe("workspace active directory", () => {
       changes: [{ file: "src/app.ts" }],
       boardEtag: "etag-current",
       snapshotVersion: "snapshot-current",
-    });
+    })
     setAppStore({
       config: { model: "provider/model" },
       executors: [{ id: "codex" }],
@@ -105,58 +105,62 @@ describe("workspace active directory", () => {
       mcp: { local: {} },
       memoryFiles: [{ path: "memory.md" }],
       promptEntries: [{ key: "core" }],
-    });
+    })
 
-    closeProject();
+    closeProject()
 
-    expect(activeDirectory()).toBe("");
-    expect(boardStore.selectedTaskID).toBe("");
-    expect(boardStore.board).toBeNull();
-    expect(boardStore.tasks).toEqual([]);
-    expect(boardStore.pendingTasks).toEqual([]);
-    expect(boardStore.path).toBeNull();
-    expect(boardStore.vcs).toBeNull();
-    expect(boardStore.changes).toEqual([]);
-    expect(boardStore.boardEtag).toBe("");
-    expect(boardStore.snapshotVersion).toBe("");
-    expect(appStore.config).toBeNull();
-    expect(appStore.executors).toEqual([]);
-    expect(appStore.providerCatalog).toBeNull();
-    expect(appStore.providerAuth).toBeNull();
-    expect(appStore.channels).toEqual([]);
-    expect(appStore.skills).toEqual([]);
-    expect(appStore.mcp).toEqual({});
-    expect(appStore.memoryFiles).toEqual([]);
-    expect(appStore.promptEntries).toEqual([]);
-    expect(new URL(apiUrl("tasks")).searchParams.has("directory")).toBe(false);
+    expect(activeDirectory()).toBe("")
+    expect(boardStore.selectedTaskID).toBe("")
+    expect(boardStore.board).toBeNull()
+    expect(boardStore.tasks).toEqual([])
+    expect(boardStore.pendingTasks).toEqual([])
+    expect(boardStore.path).toBeNull()
+    expect(boardStore.vcs).toBeNull()
+    expect(boardStore.changes).toEqual([])
+    expect(boardStore.boardEtag).toBe("")
+    expect(boardStore.snapshotVersion).toBe("")
+    expect(appStore.config).toBeNull()
+    expect(appStore.executors).toEqual([])
+    expect(appStore.providerCatalog).toBeNull()
+    expect(appStore.providerAuth).toBeNull()
+    expect(appStore.channels).toEqual([])
+    expect(appStore.skills).toEqual([])
+    expect(appStore.mcp).toEqual({})
+    expect(appStore.memoryFiles).toEqual([])
+    expect(appStore.promptEntries).toEqual([])
+    expect(new URL(apiUrl("tasks")).searchParams.has("directory")).toBe(false)
     expect(nativeCommands).toContainEqual({
       kind: "settings.save",
       payload: expect.objectContaining({ directory: undefined }),
-    });
-  });
+    })
+  })
 
   test("closeProject stops the task-list SSE stream bound to the old directory", () => {
-    let openCalls = 0;
-    let closeCalls = 0;
+    let openCalls = 0
+    let closeCalls = 0
     __setHostTransportForTest({
       kind: "browser",
       request: async () => ({ status: 200, ok: true, headers: {}, body: null }),
       openStream: () => {
-        openCalls += 1;
-        return { close: () => { closeCalls += 1; } };
+        openCalls += 1
+        return {
+          close: () => {
+            closeCalls += 1
+          },
+        }
       },
       native: async () => true,
       subscribeUiCommand: () => ({ unsubscribe: () => undefined }),
-    } satisfies HostTransport);
+    } satisfies HostTransport)
 
-    setSettingsStore("directory", "D:/repo/current");
+    setSettingsStore("directory", "D:/repo/current")
 
-    startTaskListSSE();
-    expect(openCalls).toBe(1);
-    expect(closeCalls).toBe(0);
+    startTaskListSSE()
+    expect(openCalls).toBe(1)
+    expect(closeCalls).toBe(0)
 
-    closeProject();
+    closeProject()
 
-    expect(closeCalls).toBe(1);
-  });
-});
+    expect(closeCalls).toBe(1)
+  })
+})

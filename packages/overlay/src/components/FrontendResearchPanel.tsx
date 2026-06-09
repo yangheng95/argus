@@ -1,21 +1,21 @@
-import { Index, Show } from "solid-js";
-import { CardParts } from "./CardParts";
-import { orderedMessageParts } from "../utils/message";
-import { t } from "../utils/i18n";
+import { Index, Show } from "solid-js"
+import { CardParts } from "./CardParts"
+import { orderedMessageParts } from "../utils/message"
+import { t } from "../utils/i18n"
 
 interface FrontendResearchPanelProps {
-  status?: string;
-  streamingMessages?: any[];
+  status?: string
+  streamingMessages?: any[]
 }
 
 function hasStream(messages: any[] | undefined): boolean {
-  return Array.isArray(messages) && messages.length > 0;
+  return Array.isArray(messages) && messages.length > 0
 }
 
 export function FrontendResearchPanel(props: FrontendResearchPanelProps) {
-  const status = () => String(props.status || "pending");
-  const isGenerating = () => status() === "running";
-  const isFailed = () => status() === "failed";
+  const status = () => String(props.status || "pending")
+  const isGenerating = () => status() === "running"
+  const isFailed = () => status() === "failed"
 
   return (
     <div class="frontend-research-panel" data-status={status()}>
@@ -44,5 +44,5 @@ export function FrontendResearchPanel(props: FrontendResearchPanelProps) {
         <p class="empty-hint empty-hint--card">{t("workflow.frontend_research_pending")}</p>
       </Show>
     </div>
-  );
+  )
 }

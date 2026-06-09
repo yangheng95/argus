@@ -57,9 +57,7 @@ describe("ConfigPaths {env:VAR} substitution (audit W2-V23)", () => {
   })
 
   test("UNSET env var in 'error' mode (default) throws naming the variable", async () => {
-    await expect(
-      ConfigPaths.parseText(`{"x": "{env:W2_V23_MISSING}"}`, fakeSource()),
-    ).rejects.toThrow(/W2_V23_MISSING/)
+    await expect(ConfigPaths.parseText(`{"x": "{env:W2_V23_MISSING}"}`, fakeSource())).rejects.toThrow(/W2_V23_MISSING/)
   })
 
   test("UNSET env var error message names the source for triage", async () => {
@@ -75,11 +73,7 @@ describe("ConfigPaths {env:VAR} substitution (audit W2-V23)", () => {
   })
 
   test("UNSET env var in 'empty' mode falls back to '' silently (back-compat for tui.ts)", async () => {
-    const json = await ConfigPaths.parseText(
-      `{"x": "{env:W2_V23_MISSING}"}`,
-      fakeSource(),
-      "empty",
-    )
+    const json = await ConfigPaths.parseText(`{"x": "{env:W2_V23_MISSING}"}`, fakeSource(), "empty")
     expect(json).toEqual({ x: "" })
   })
 

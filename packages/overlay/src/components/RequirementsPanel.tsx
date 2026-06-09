@@ -6,41 +6,45 @@
  * 2. Complete — shows structured requirements list with type/priority badges
  * 3. Pending — shows "pending" hint when no data and not generating
  */
-import { For, Index, Show } from "solid-js";
-import { CardParts } from "./CardParts";
-import { orderedMessageParts } from "../utils/message";
-import { t } from "../utils/i18n";
+import { For, Index, Show } from "solid-js"
+import { CardParts } from "./CardParts"
+import { orderedMessageParts } from "../utils/message"
+import { t } from "../utils/i18n"
 
 interface Requirement {
-  id: string;
-  description: string;
-  type: "explicit" | "inferred" | "system";
-  priority: "blocking" | "advisory";
-  status?: string;
+  id: string
+  description: string
+  type: "explicit" | "inferred" | "system"
+  priority: "blocking" | "advisory"
+  status?: string
 }
 
 interface RequirementsPanelProps {
-  requirements: Requirement[] | undefined;
+  requirements: Requirement[] | undefined
   /** Spec content shown as a collapsible detail below the requirements list. */
-  specContent?: string;
+  specContent?: string
   /** Whether the requirements step is currently running */
-  isGenerating?: boolean;
+  isGenerating?: boolean
   /** Streaming agent messages from the requirements stage */
-  streamingMessages?: any[];
+  streamingMessages?: any[]
 }
 
 function typeBadgeClass(type: string): string {
   switch (type) {
-    case "explicit": return "req-type--explicit";
-    case "inferred": return "req-type--inferred";
-    case "system": return "req-type--system";
-    default: return "";
+    case "explicit":
+      return "req-type--explicit"
+    case "inferred":
+      return "req-type--inferred"
+    case "system":
+      return "req-type--system"
+    default:
+      return ""
   }
 }
 
 export function RequirementsPanel(props: RequirementsPanelProps) {
-  const hasData = () => props.requirements && props.requirements.length > 0;
-  const hasStream = () => props.streamingMessages && props.streamingMessages.length > 0;
+  const hasData = () => props.requirements && props.requirements.length > 0
+  const hasStream = () => props.streamingMessages && props.streamingMessages.length > 0
 
   return (
     <div class="req-panel">
@@ -55,7 +59,9 @@ export function RequirementsPanel(props: RequirementsPanelProps) {
             <div class="req-streaming-messages">
               {/* Index over For: SSE stream is append-only, never reorders. */}
               <Index each={props.streamingMessages}>
-                {(msg) => <CardParts parts={orderedMessageParts(msg())} depth={1} streaming={props.isGenerating === true} />}
+                {(msg) => (
+                  <CardParts parts={orderedMessageParts(msg())} depth={1} streaming={props.isGenerating === true} />
+                )}
               </Index>
             </div>
           </Show>
@@ -69,7 +75,9 @@ export function RequirementsPanel(props: RequirementsPanelProps) {
             {(req, index) => (
               <div class="req-item">
                 <div class="req-item-main">
-                  <span class="req-index" title={req.id}>REQ {String(index() + 1).padStart(2, "0")}</span>
+                  <span class="req-index" title={req.id}>
+                    REQ {String(index() + 1).padStart(2, "0")}
+                  </span>
                   <span class="req-desc">{req.description}</span>
                 </div>
                 <div class="req-item-meta">
@@ -100,5 +108,5 @@ export function RequirementsPanel(props: RequirementsPanelProps) {
         </details>
       </Show>
     </div>
-  );
+  )
 }

@@ -47,27 +47,33 @@ describe("DecisionLog.toPromptSection truncation", () => {
   function seed() {
     const now = Date.now()
     Database.use((db) =>
-      db.insert(ProjectTable).values({
-        id: projectID,
-        worktree: process.cwd(),
-        name: "DecisionLog Truncation Test",
-        sandboxes: "[]",
-        time_created: now,
-        time_updated: now,
-      }).run(),
+      db
+        .insert(ProjectTable)
+        .values({
+          id: projectID,
+          worktree: process.cwd(),
+          name: "DecisionLog Truncation Test",
+          sandboxes: "[]",
+          time_created: now,
+          time_updated: now,
+        })
+        .run(),
     )
     Database.use((db) =>
-      db.insert(EngineTaskTable).values({
-        id: taskID,
-        project_id: projectID,
-        source: "test",
-        title: "trunc test",
-        request: "decision log truncation",
-        priority: "normal",
-        time_created: now,
-        time_updated: now,
-        time_started: now,
-      }).run(),
+      db
+        .insert(EngineTaskTable)
+        .values({
+          id: taskID,
+          project_id: projectID,
+          source: "test",
+          title: "trunc test",
+          request: "decision log truncation",
+          priority: "normal",
+          time_created: now,
+          time_updated: now,
+          time_started: now,
+        })
+        .run(),
     )
   }
 
@@ -167,27 +173,33 @@ describe("DecisionLog.phasePromptSectionForGoal bounded", () => {
   function seed() {
     const now = Date.now()
     Database.use((db) =>
-      db.insert(ProjectTable).values({
-        id: projectID,
-        worktree: process.cwd(),
-        name: "DecisionLog Phase Test",
-        sandboxes: "[]",
-        time_created: now,
-        time_updated: now,
-      }).run(),
+      db
+        .insert(ProjectTable)
+        .values({
+          id: projectID,
+          worktree: process.cwd(),
+          name: "DecisionLog Phase Test",
+          sandboxes: "[]",
+          time_created: now,
+          time_updated: now,
+        })
+        .run(),
     )
     Database.use((db) =>
-      db.insert(EngineTaskTable).values({
-        id: taskID,
-        project_id: projectID,
-        source: "test",
-        title: "phase test",
-        request: "phase prompt section test",
-        priority: "normal",
-        time_created: now,
-        time_updated: now,
-        time_started: now,
-      }).run(),
+      db
+        .insert(EngineTaskTable)
+        .values({
+          id: taskID,
+          project_id: projectID,
+          source: "test",
+          title: "phase test",
+          request: "phase prompt section test",
+          priority: "normal",
+          time_created: now,
+          time_updated: now,
+          time_started: now,
+        })
+        .run(),
     )
   }
 

@@ -9,12 +9,12 @@ Plugin 是 OpenCorvus 的深层扩展机制。与 Skill（通过 `skill` 工具�
 
 ## 1. Plugin vs Skill
 
-| 维度 | Skill | Plugin |
-|---|---|---|
-| 实现 | Markdown + YAML | TypeScript/JavaScript 模块 |
-| 加载 | agent 调用 `skill` 工具加载 | 服务启动时，全局常驻 |
-| 能力 | 给 agent 提供可加载工作流 | hook LLM 请求 / 注册工具 / 拦截事件 / 扩展评估 |
-| 门槛 | 零代码 | 实现 `Plugin` 函数接口 |
+| 维度 | Skill                       | Plugin                                         |
+| ---- | --------------------------- | ---------------------------------------------- |
+| 实现 | Markdown + YAML             | TypeScript/JavaScript 模块                     |
+| 加载 | agent 调用 `skill` 工具加载 | 服务启动时，全局常驻                           |
+| 能力 | 给 agent 提供可加载工作流   | hook LLM 请求 / 注册工具 / 拦截事件 / 扩展评估 |
+| 门槛 | 零代码                      | 实现 `Plugin` 函数接口                         |
 
 ## 2. 默认插件
 
@@ -55,11 +55,15 @@ export const MyPlugin: Plugin = async (ctx) => {
       my_tool: tool({
         description: "说明这个工具做什么",
         args: { query: tool.schema.string() },
-        async execute(args) { return `结果：${args.query}` },
+        async execute(args) {
+          return `结果：${args.query}`
+        },
       }),
     },
 
-    "chat.params": async (_input, output) => { output.temperature = 0.3 },
+    "chat.params": async (_input, output) => {
+      output.temperature = 0.3
+    },
 
     "permission.ask": async (request, output) => {
       if (request.permission === "bash" && request.patterns[0]?.startsWith("echo")) {
@@ -86,34 +90,31 @@ export const MyPlugin: Plugin = async (ctx) => {
 
 完整列表见 `packages/plugin/src/index.ts:148-337`。常用：
 
-| Hook | 时机 |
-|---|---|
-| `event` | 任意 Bus 事件发布 |
-| `config` | 配置加载后 |
-| `tool` | 静态注册额外工具 |
-| `auth` | provider 认证扩展 |
-| `chat.message` | 收到新消息 |
-| `chat.params` | LLM 请求参数构建后、发送前 |
-| `chat.headers` | LLM HTTP 头构建后 |
-| `permission.ask` | 权限询问（可覆盖 ask→allow/deny） |
-| `shell.env` | shell 命令前注入 env |
-| `tool.execute.before` | 工具执行前（可改 args） |
-| `tool.execute.after` | 工具执行后（可改输出） |
-| `tool.definition` | 工具定义发给 LLM 前 |
-| `evaluation.checks` | 评估阶段注入自定义检查 |
-| `evaluation.result` | 评估完成后（通知 / 写外部） |
-| `evaluation.analysis` | 完整替换默认 LLM 评估分析 |
-| `acceptance.ready` | 交付持久化后（部署钩子） |
-| `experimental.chat.system.transform` | system prompt 构建后 |
+| Hook                                 | 时机                              |
+| ------------------------------------ | --------------------------------- |
+| `event`                              | 任意 Bus 事件发布                 |
+| `config`                             | 配置加载后                        |
+| `tool`                               | 静态注册额外工具                  |
+| `auth`                               | provider 认证扩展                 |
+| `chat.message`                       | 收到新消息                        |
+| `chat.params`                        | LLM 请求参数构建后、发送前        |
+| `chat.headers`                       | LLM HTTP 头构建后                 |
+| `permission.ask`                     | 权限询问（可覆盖 ask→allow/deny） |
+| `shell.env`                          | shell 命令前注入 env              |
+| `tool.execute.before`                | 工具执行前（可改 args）           |
+| `tool.execute.after`                 | 工具执行后（可改输出）            |
+| `tool.definition`                    | 工具定义发给 LLM 前               |
+| `evaluation.checks`                  | 评估阶段注入自定义检查            |
+| `evaluation.result`                  | 评估完成后（通知 / 写外部）       |
+| `evaluation.analysis`                | 完整替换默认 LLM 评估分析         |
+| `acceptance.ready`                   | 交付持久化后（部署钩子）          |
+| `experimental.chat.system.transform` | system prompt 构建后              |
 
 ## 6. 在 config 中声明
 
 ```jsonc
 {
-  "plugin": [
-    "my-npm-plugin@1.0.0",
-    "file:///path/to/my-plugin.ts"
-  ]
+  "plugin": ["my-npm-plugin@1.0.0", "file:///path/to/my-plugin.ts"],
 }
 ```
 
@@ -122,6 +123,7 @@ export const MyPlugin: Plugin = async (ctx) => {
 ## 7. Plugin vs Provider vs Executor
 
 Plugin 不直接替换 Provider 或 Executor，但可通过：
+
 - `auth` hook — 为特定 Provider 实现自定义认证
 - `chat.headers` / `chat.params` — 请求前修改参数
 - `evaluation.analysis` — 完整接管评估

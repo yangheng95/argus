@@ -23,9 +23,7 @@ export const pathExists = async (p: string) =>
     .catch(() => false)
 
 export function pathWithBin() {
-  return [process.env["PATH"], Global.Path.bin]
-    .filter((value): value is string => Boolean(value))
-    .join(path.delimiter)
+  return [process.env["PATH"], Global.Path.bin].filter((value): value is string => Boolean(value)).join(path.delimiter)
 }
 
 export function resolveNpmCommand() {
@@ -77,19 +75,4 @@ export interface Info {
 }
 
 // Re-export dependencies that handler files need
-export {
-  spawn,
-  path,
-  os,
-  fs,
-  $,
-  text,
-  Global,
-  BunProc,
-  Filesystem,
-  Instance,
-  Flag,
-  Archive,
-  Process,
-  which,
-}
+export { spawn, path, os, fs, $, text, Global, BunProc, Filesystem, Instance, Flag, Archive, Process, which }

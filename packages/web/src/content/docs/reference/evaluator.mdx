@@ -14,15 +14,15 @@ Per-goal build attempts produce verification evidence, and the pipeline's final 
 
 ## Evidence Surfaces
 
-| Surface | Current source |
-|---|---|
-| Acceptance/project checks | `packages/opencorvus/src/acceptance/checks/project-gate.ts` |
-| Runtime readiness | `packages/opencorvus/src/acceptance/checks/runtime-readiness.ts` |
-| Contract audit review | `packages/opencorvus/src/acceptance/checks/contract-audit-review.ts` |
-| Specialist reviews | `packages/opencorvus/src/acceptance/specialists/` |
-| Integrity team review | `packages/opencorvus/src/integrity/team-agent.ts` |
-| Integrity schemas | `packages/opencorvus/src/integrity/team-schema.ts` |
-| Artifact-backed evaluation rows | `packages/opencorvus/src/engine/store.ts` |
+| Surface                         | Current source                                                       |
+| ------------------------------- | -------------------------------------------------------------------- |
+| Acceptance/project checks       | `packages/opencorvus/src/acceptance/checks/project-gate.ts`          |
+| Runtime readiness               | `packages/opencorvus/src/acceptance/checks/runtime-readiness.ts`     |
+| Contract audit review           | `packages/opencorvus/src/acceptance/checks/contract-audit-review.ts` |
+| Specialist reviews              | `packages/opencorvus/src/acceptance/specialists/`                    |
+| Integrity team review           | `packages/opencorvus/src/integrity/team-agent.ts`                    |
+| Integrity schemas               | `packages/opencorvus/src/integrity/team-schema.ts`                   |
+| Artifact-backed evaluation rows | `packages/opencorvus/src/engine/store.ts`                            |
 
 ## Evaluation Row Shape
 
@@ -41,11 +41,11 @@ Checks are audit evidence for operators and downstream review.
 
 ## Integrity Verdict Semantics
 
-| Integrity outcome | Orchestrator meaning |
-|---|---|
-| pass | The integrated system is acceptable for this task; the orchestrator may complete the task. |
-| non-pass with blocking findings | The orchestrator must route repairs to build, `modify_goal`, `architect`, or a user question based on evidence. |
-| thrown / artifact missing | The orchestrator receives visible failure evidence and decides recovery; the UI should not silently show an empty card. |
+| Integrity outcome               | Orchestrator meaning                                                                                                    |
+| ------------------------------- | ----------------------------------------------------------------------------------------------------------------------- |
+| pass                            | The integrated system is acceptable for this task; the orchestrator may complete the task.                              |
+| non-pass with blocking findings | The orchestrator must route repairs to build, `modify_goal`, `architect`, or a user question based on evidence.         |
+| thrown / artifact missing       | The orchestrator receives visible failure evidence and decides recovery; the UI should not silently show an empty card. |
 
 ## Configuration Notes
 

@@ -66,7 +66,10 @@ describe("worker prompt composition — withFactCheckRegistration injection", ()
     const source = await readSrc("integrity/team-agent.ts")
     // Exactly ONE withFactCheckRegistration call (the consensus stage).
     const matches = source.match(/withFactCheckRegistration\(/g) ?? []
-    expect(matches.length, "integrity/team-agent.ts must call withFactCheckRegistration exactly once (consensus only)").toBe(1)
+    expect(
+      matches.length,
+      "integrity/team-agent.ts must call withFactCheckRegistration exactly once (consensus only)",
+    ).toBe(1)
     // Verify the call is attached to the consensus stage by inspecting the
     // surrounding code: it should be near `submit_integrity_consensus`
     // or follow the `consensusCollector` declaration.

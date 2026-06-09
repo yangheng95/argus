@@ -81,8 +81,9 @@ describe("Worktree.create submodules", () => {
 
     const content = await fs.readFile(path.join(info.directory, "vendor", "child", "nested.txt"), "utf8")
     expect(content.replace(/\r\n/g, "\n")).toBe("submodule payload\n")
-    expect((await $`git rev-parse --is-inside-work-tree`.cwd(path.join(info.directory, "vendor", "child")).text()).trim())
-      .toBe("true")
+    expect(
+      (await $`git rev-parse --is-inside-work-tree`.cwd(path.join(info.directory, "vendor", "child")).text()).trim(),
+    ).toBe("true")
   }, 30_000)
 
   test("reset rematerializes url-less gitlinks from the primary checkout", async () => {

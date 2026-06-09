@@ -45,7 +45,10 @@ function buildOnErrorProbe(throwFn: () => never): Hono {
   probe.onError((err, c) => {
     if (
       err instanceof NamedError ||
-      (err && typeof err === "object" && typeof (err as any).name === "string" && typeof (err as any).toObject === "function")
+      (err &&
+        typeof err === "object" &&
+        typeof (err as any).name === "string" &&
+        typeof (err as any).toObject === "function")
     ) {
       let status: ContentfulStatusCode
       if (err.name === "NotFoundError") status = 404
@@ -67,11 +70,7 @@ function buildOnErrorProbe(throwFn: () => never): Hono {
   return probe
 }
 
-async function expectMapping(
-  err: () => never,
-  expectedStatus: number,
-  expectedName: string,
-): Promise<void> {
+async function expectMapping(err: () => never, expectedStatus: number, expectedName: string): Promise<void> {
   const probe = buildOnErrorProbe(err)
   const r = await probe.request("/__throw__", { method: "GET" })
   expect(r.status).toBe(expectedStatus)

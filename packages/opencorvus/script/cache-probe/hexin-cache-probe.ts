@@ -61,14 +61,20 @@ interface Args {
 function parseArgs(): Args {
   // Resolve relative to this script file, not cwd, so we don't get
   // packages/opencorvus/packages/opencorvus/... when invoked from package root.
-  const defaultOut = path.resolve(path.dirname(new URL(import.meta.url).pathname.replace(/^\/([A-Za-z]:)/, "$1")), "out")
+  const defaultOut = path.resolve(
+    path.dirname(new URL(import.meta.url).pathname.replace(/^\/([A-Za-z]:)/, "$1")),
+    "out",
+  )
   const args: Args = { model: "gpt-5.4", vendor: "openai", out: defaultOut, skip: new Set() }
   for (const a of process.argv.slice(2)) {
     if (a.startsWith("--model=")) args.model = a.slice(8)
-    else if (a.startsWith("--vendor=")) args.vendor = (a.slice(9) as Vendor)
+    else if (a.startsWith("--vendor=")) args.vendor = a.slice(9) as Vendor
     else if (a.startsWith("--out=")) args.out = path.resolve(a.slice(6))
     else if (a.startsWith("--only=")) args.only = a.slice(7)
-    else if (a.startsWith("--skip=")) a.slice(7).split(",").forEach((s) => args.skip.add(s.trim()))
+    else if (a.startsWith("--skip="))
+      a.slice(7)
+        .split(",")
+        .forEach((s) => args.skip.add(s.trim()))
   }
   // Auto-derive vendor from model id when vendor was left default but model
   // is clearly Claude. Saves a flag in the common case.
@@ -158,13 +164,8 @@ async function call(opts: CallOpts): Promise<ProbeRow> {
       // Anthropic prompt cache reports two distinct counters, NOT
       // prompt_tokens_details.cached_tokens. LiteLLM passes them through
       // either at usage root or under cache_*_input_tokens keys.
-      const cacheRead =
-        usage.cache_read_input_tokens ??
-        details.cache_read_input_tokens ??
-        details.cached_tokens ??
-        0
-      const cacheCreate =
-        usage.cache_creation_input_tokens ?? details.cache_creation_input_tokens ?? 0
+      const cacheRead = usage.cache_read_input_tokens ?? details.cache_read_input_tokens ?? details.cached_tokens ?? 0
+      const cacheCreate = usage.cache_creation_input_tokens ?? details.cache_creation_input_tokens ?? 0
       row.cached_tokens = cacheRead
       // For Anthropic, prompt_tokens excludes cache_read/cache_creation —
       // total prompt = prompt_tokens + cache_read + cache_creation. Use the
@@ -282,14 +283,24 @@ async function probe0_response_cache(model: string) {
   const fixedNonce = `fixed-${Date.now()}`
   const fixedBody = baseBody(model, system, fixedNonce)
   for (let i = 0; i < 2; i++) {
-    record(await call({ probe: "0-response-cache", variant: "same-body-repeat", iteration: i, stickyKey, body: fixedBody }))
+    record(
+      await call({ probe: "0-response-cache", variant: "same-body-repeat", iteration: i, stickyKey, body: fixedBody }),
+    )
   }
 
   // Different nonce each time — busts gateway response cache, but the
   // 4096-token system prefix is identical, so OpenAI prompt cache *should*
   // hit (if the gateway forwards prompt_tokens_details correctly).
   for (let i = 0; i < 4; i++) {
-    record(await call({ probe: "0-response-cache", variant: "fresh-nonce", iteration: i, stickyKey, body: baseBody(model, system, nonce("0", "fresh", i)) }))
+    record(
+      await call({
+        probe: "0-response-cache",
+        variant: "fresh-nonce",
+        iteration: i,
+        stickyKey,
+        body: baseBody(model, system, nonce("0", "fresh", i)),
+      }),
+    )
   }
 }
 
@@ -297,14 +308,29 @@ async function probe1_sticky(model: string) {
   const system = makeSystem(4096, "p1")
   const stickyKey = `probe-sticky-${Date.now()}`
   for (let i = 0; i < 4; i++) {
-    record(await call({ probe: "1-sticky", variant: "with-sticky", iteration: i, stickyKey, body: baseBody(model, system, nonce("1", "sticky", i)) }))
+    record(
+      await call({
+        probe: "1-sticky",
+        variant: "with-sticky",
+        iteration: i,
+        stickyKey,
+        body: baseBody(model, system, nonce("1", "sticky", i)),
+      }),
+    )
   }
 }
 
 async function probe2_no_sticky(model: string) {
   const system = makeSystem(4096, "p2")
   for (let i = 0; i < 6; i++) {
-    record(await call({ probe: "2-no-sticky", variant: "no-sticky", iteration: i, body: baseBody(model, system, nonce("2", "nosticky", i)) }))
+    record(
+      await call({
+        probe: "2-no-sticky",
+        variant: "no-sticky",
+        iteration: i,
+        body: baseBody(model, system, nonce("2", "nosticky", i)),
+      }),
+    )
   }
 }
 
@@ -314,7 +340,15 @@ async function probe3_prefix_floor(model: string) {
     const system = makeSystem(t, `p3-${t}`)
     const stickyKey = `probe-floor-${t}-${Date.now()}`
     for (let i = 0; i < 3; i++) {
-      record(await call({ probe: "3-prefix-floor", variant: `tokens-${t}`, iteration: i, stickyKey, body: baseBody(model, system, nonce("3", `t${t}`, i)) }))
+      record(
+        await call({
+          probe: "3-prefix-floor",
+          variant: `tokens-${t}`,
+          iteration: i,
+          stickyKey,
+          body: baseBody(model, system, nonce("3", `t${t}`, i)),
+        }),
+      )
     }
   }
 }
@@ -324,7 +358,15 @@ async function probe4_sticky_isolation(model: string) {
   const keys = ["alpha", "beta", "gamma"].map((k) => `probe-iso-${k}-${Date.now()}`)
   for (const k of keys) {
     for (let i = 0; i < 3; i++) {
-      record(await call({ probe: "4-sticky-isolation", variant: `key-${k.split("-")[2]}`, iteration: i, stickyKey: k, body: baseBody(model, system, nonce("4", k, i)) }))
+      record(
+        await call({
+          probe: "4-sticky-isolation",
+          variant: `key-${k.split("-")[2]}`,
+          iteration: i,
+          stickyKey: k,
+          body: baseBody(model, system, nonce("4", k, i)),
+        }),
+      )
     }
   }
 }
@@ -344,8 +386,14 @@ async function probe5_prefix_instability(model: string) {
       tag: "with-tools-A",
       body: mkBody("with-tools-A", baseSystem, {
         tools: [
-          { type: "function", function: { name: "noop_a", description: "no-op", parameters: { type: "object", properties: {} } } },
-          { type: "function", function: { name: "noop_b", description: "no-op", parameters: { type: "object", properties: {} } } },
+          {
+            type: "function",
+            function: { name: "noop_a", description: "no-op", parameters: { type: "object", properties: {} } },
+          },
+          {
+            type: "function",
+            function: { name: "noop_b", description: "no-op", parameters: { type: "object", properties: {} } },
+          },
         ],
       }),
     },
@@ -353,8 +401,14 @@ async function probe5_prefix_instability(model: string) {
       tag: "with-tools-B-reordered",
       body: mkBody("with-tools-B-reordered", baseSystem, {
         tools: [
-          { type: "function", function: { name: "noop_b", description: "no-op", parameters: { type: "object", properties: {} } } },
-          { type: "function", function: { name: "noop_a", description: "no-op", parameters: { type: "object", properties: {} } } },
+          {
+            type: "function",
+            function: { name: "noop_b", description: "no-op", parameters: { type: "object", properties: {} } },
+          },
+          {
+            type: "function",
+            function: { name: "noop_a", description: "no-op", parameters: { type: "object", properties: {} } },
+          },
         ],
       }),
     },
@@ -362,7 +416,15 @@ async function probe5_prefix_instability(model: string) {
 
   // Warm cache on baseline (use unique nonces so this is real prefix-cache priming, not response cache)
   for (let i = 0; i < 2; i++) {
-    record(await call({ probe: "5-instability", variant: "warmup-baseline", iteration: i, stickyKey, body: baseBody(model, baseSystem, nonce("5", "warmup", i)) }))
+    record(
+      await call({
+        probe: "5-instability",
+        variant: "warmup-baseline",
+        iteration: i,
+        stickyKey,
+        body: baseBody(model, baseSystem, nonce("5", "warmup", i)),
+      }),
+    )
   }
   for (const v of variants) {
     record(await call({ probe: "5-instability", variant: v.tag, iteration: 0, stickyKey, body: v.body }))
@@ -379,28 +441,88 @@ async function probe7_tools_stable(model: string) {
   const system = makeSystem(4096, "p7")
   const stickyKey = `probe-tools-${Date.now()}`
   const tools = [
-    { type: "function", function: { name: "search", description: "stub search", parameters: { type: "object", properties: { q: { type: "string" } }, required: ["q"] } } },
-    { type: "function", function: { name: "fetch", description: "stub fetch", parameters: { type: "object", properties: { url: { type: "string" } }, required: ["url"] } } },
+    {
+      type: "function",
+      function: {
+        name: "search",
+        description: "stub search",
+        parameters: { type: "object", properties: { q: { type: "string" } }, required: ["q"] },
+      },
+    },
+    {
+      type: "function",
+      function: {
+        name: "fetch",
+        description: "stub fetch",
+        parameters: { type: "object", properties: { url: { type: "string" } }, required: ["url"] },
+      },
+    },
   ]
   for (let i = 0; i < 4; i++) {
-    record(await call({ probe: "7-tools-stable", variant: "with-tools", iteration: i, stickyKey, body: baseBody(model, system, nonce("7", "tools", i), { tools }) }))
+    record(
+      await call({
+        probe: "7-tools-stable",
+        variant: "with-tools",
+        iteration: i,
+        stickyKey,
+        body: baseBody(model, system, nonce("7", "tools", i), { tools }),
+      }),
+    )
   }
   // Now same prefix, different tool order — does reordering alone bust cache?
   const reordered = [tools[1], tools[0]]
-  record(await call({ probe: "7-tools-stable", variant: "tools-reordered", iteration: 0, stickyKey, body: baseBody(model, system, nonce("7", "reord", 0), { tools: reordered }) }))
+  record(
+    await call({
+      probe: "7-tools-stable",
+      variant: "tools-reordered",
+      iteration: 0,
+      stickyKey,
+      body: baseBody(model, system, nonce("7", "reord", 0), { tools: reordered }),
+    }),
+  )
   // Add a 3rd tool — does adding bust?
-  const expanded = [...tools, { type: "function", function: { name: "noop", description: "noop", parameters: { type: "object", properties: {} } } }]
-  record(await call({ probe: "7-tools-stable", variant: "tools-expanded", iteration: 0, stickyKey, body: baseBody(model, system, nonce("7", "exp", 0), { tools: expanded }) }))
+  const expanded = [
+    ...tools,
+    {
+      type: "function",
+      function: { name: "noop", description: "noop", parameters: { type: "object", properties: {} } },
+    },
+  ]
+  record(
+    await call({
+      probe: "7-tools-stable",
+      variant: "tools-expanded",
+      iteration: 0,
+      stickyKey,
+      body: baseBody(model, system, nonce("7", "exp", 0), { tools: expanded }),
+    }),
+  )
   // Change one tool's description — does desc text bust?
   const desc_changed = [{ ...tools[0], function: { ...tools[0].function, description: "stub search v2" } }, tools[1]]
-  record(await call({ probe: "7-tools-stable", variant: "tool-desc-changed", iteration: 0, stickyKey, body: baseBody(model, system, nonce("7", "desc", 0), { tools: desc_changed }) }))
+  record(
+    await call({
+      probe: "7-tools-stable",
+      variant: "tool-desc-changed",
+      iteration: 0,
+      stickyKey,
+      body: baseBody(model, system, nonce("7", "desc", 0), { tools: desc_changed }),
+    }),
+  )
 }
 
 async function probe6_ttl(model: string) {
   const system = makeSystem(4096, "p6")
   const stickyKey = `probe-ttl-${Date.now()}`
   for (let i = 0; i < 2; i++) {
-    record(await call({ probe: "6-ttl", variant: "warmup", iteration: i, stickyKey, body: baseBody(model, system, nonce("6", "warmup", i)) }))
+    record(
+      await call({
+        probe: "6-ttl",
+        variant: "warmup",
+        iteration: i,
+        stickyKey,
+        body: baseBody(model, system, nonce("6", "warmup", i)),
+      }),
+    )
   }
   const waits = [0, 30, 120, 300, 600]
   for (const w of waits) {
@@ -408,7 +530,15 @@ async function probe6_ttl(model: string) {
       console.error(`[ttl] sleeping ${w}s ...`)
       await new Promise((r) => setTimeout(r, w * 1000))
     }
-    record(await call({ probe: "6-ttl", variant: `wait-${w}s`, iteration: 0, stickyKey, body: baseBody(model, system, nonce("6", `w${w}`, 0)) }))
+    record(
+      await call({
+        probe: "6-ttl",
+        variant: `wait-${w}s`,
+        iteration: 0,
+        stickyKey,
+        body: baseBody(model, system, nonce("6", `w${w}`, 0)),
+      }),
+    )
   }
 }
 
@@ -469,7 +599,9 @@ function writeReports(args: Args) {
   md.push(`| Probe | Variant | N | avg prompt_tok | avg cached_tok | avg hit | errors |`)
   md.push(`|-------|---------|---|---------------:|---------------:|--------:|-------:|`)
   for (const s of summary) {
-    md.push(`| ${s.probe} | ${s.variant} | ${s.n} | ${s.avg_prompt} | ${s.avg_cached} | ${(s.avg_hit * 100).toFixed(1)}% | ${s.errors} |`)
+    md.push(
+      `| ${s.probe} | ${s.variant} | ${s.n} | ${s.avg_prompt} | ${s.avg_cached} | ${(s.avg_hit * 100).toFixed(1)}% | ${s.errors} |`,
+    )
   }
   md.push(``)
   md.push(`## Per-call detail`)

@@ -58,81 +58,92 @@ describe("task project archive route", () => {
         const interactionID = Identifier.ascending("interaction")
         const now = Date.now()
         Database.use((db) =>
-          db.insert(EngineTaskTable).values({
-            id: taskID,
-            project_id: Instance.project.id,
-            source: "panel",
-            title: "Archive task",
-            request: "Export task project archive",
-            priority: "normal",
-            time_created: now,
-            time_updated: now,
-          }).run(),
+          db
+            .insert(EngineTaskTable)
+            .values({
+              id: taskID,
+              project_id: Instance.project.id,
+              source: "panel",
+              title: "Archive task",
+              request: "Export task project archive",
+              priority: "normal",
+              time_created: now,
+              time_updated: now,
+            })
+            .run(),
         )
         Database.use((db) => {
-          db.insert(EngineArtifactTable).values({
-            id: runID,
-            task_id: taskID,
-            run_id: runID,
-            kind: "run",
-            label: "archive-run",
-            payload: {
-              status: "completed",
-              phase: "execute",
-              retry_count: 2,
-              metadata: { archiveMarker: "run-db-row" },
-              time_started: now + 1,
-              time_completed: now + 2,
-            },
-            time_created: now + 1,
-            time_updated: now + 2,
-          }).run()
-          db.insert(EngineArtifactTable).values({
-            id: Identifier.ascending("artifact"),
-            task_id: taskID,
-            run_id: runID,
-            kind: "report",
-            label: "archive-report",
-            payload: { archiveMarker: "artifact-db-row" },
-            time_created: now + 3,
-            time_updated: now + 3,
-          }).run()
-          db.insert(EngineInteractionRequestTable).values({
-            id: interactionID,
-            task_id: taskID,
-            run_id: runID,
-            external_id: "archive-question",
-            request_type: "question",
-            status: "answered",
-            title: "Archive interaction",
-            body: "Should this database interaction be exported?",
-            payload: { archiveMarker: "interaction-payload" },
-            response: { answer: "yes", archiveMarker: "interaction-response" },
-            time_resolved: now + 4,
-            time_created: now + 4,
-            time_updated: now + 4,
-          }).run()
-          db.insert(ProtocolEventTable).values({
-            id: Identifier.ascending("protocol_event"),
-            kind: "event",
-            type: "workflow.step.updated",
-            aggregate_type: "task",
-            aggregate_id: taskID,
-            task_id: taskID,
-            run_id: runID,
-            interaction_id: interactionID,
-            source: "archive-test",
-            seq: 1,
-            emitted_at: now + 5,
-            payload: {
-              stepID: "archive-step",
-              status: "completed",
-              summary: "archive protocol db row",
-              archiveMarker: "protocol-db-row",
-            },
-            time_created: now + 5,
-            time_updated: now + 5,
-          }).run()
+          db.insert(EngineArtifactTable)
+            .values({
+              id: runID,
+              task_id: taskID,
+              run_id: runID,
+              kind: "run",
+              label: "archive-run",
+              payload: {
+                status: "completed",
+                phase: "execute",
+                retry_count: 2,
+                metadata: { archiveMarker: "run-db-row" },
+                time_started: now + 1,
+                time_completed: now + 2,
+              },
+              time_created: now + 1,
+              time_updated: now + 2,
+            })
+            .run()
+          db.insert(EngineArtifactTable)
+            .values({
+              id: Identifier.ascending("artifact"),
+              task_id: taskID,
+              run_id: runID,
+              kind: "report",
+              label: "archive-report",
+              payload: { archiveMarker: "artifact-db-row" },
+              time_created: now + 3,
+              time_updated: now + 3,
+            })
+            .run()
+          db.insert(EngineInteractionRequestTable)
+            .values({
+              id: interactionID,
+              task_id: taskID,
+              run_id: runID,
+              external_id: "archive-question",
+              request_type: "question",
+              status: "answered",
+              title: "Archive interaction",
+              body: "Should this database interaction be exported?",
+              payload: { archiveMarker: "interaction-payload" },
+              response: { answer: "yes", archiveMarker: "interaction-response" },
+              time_resolved: now + 4,
+              time_created: now + 4,
+              time_updated: now + 4,
+            })
+            .run()
+          db.insert(ProtocolEventTable)
+            .values({
+              id: Identifier.ascending("protocol_event"),
+              kind: "event",
+              type: "workflow.step.updated",
+              aggregate_type: "task",
+              aggregate_id: taskID,
+              task_id: taskID,
+              run_id: runID,
+              interaction_id: interactionID,
+              source: "archive-test",
+              seq: 1,
+              emitted_at: now + 5,
+              payload: {
+                stepID: "archive-step",
+                status: "completed",
+                summary: "archive protocol db row",
+                archiveMarker: "protocol-db-row",
+              },
+              time_created: now + 5,
+              time_updated: now + 5,
+            })
+            .run()
         })
 
         const response = await Server.App().request(`/task/${taskID}/project-archive`, {
@@ -159,49 +170,57 @@ describe("task project archive route", () => {
         expect(entries.get("opencorvus-task-execution-flow/task.json")).toContain(taskID)
         expect(entries.get("opencorvus-task-execution-flow/board.json")).toContain(taskID)
         const runs = JSON.parse(entries.get("opencorvus-task-execution-flow/runs.json") || "[]")
-        expect(runs).toEqual(expect.arrayContaining([
-          expect.objectContaining({
-            id: runID,
-            status: "completed",
-            phase: "execute",
-            retryCount: 2,
-            metadata: { archiveMarker: "run-db-row" },
-          }),
-        ]))
+        expect(runs).toEqual(
+          expect.arrayContaining([
+            expect.objectContaining({
+              id: runID,
+              status: "completed",
+              phase: "execute",
+              retryCount: 2,
+              metadata: { archiveMarker: "run-db-row" },
+            }),
+          ]),
+        )
         const artifacts = JSON.parse(entries.get("opencorvus-task-execution-flow/artifacts.json") || "[]")
         const runArtifacts = artifacts.find((item: any) => item.runID === runID)
-        expect(runArtifacts?.artifacts).toEqual(expect.arrayContaining([
-          expect.objectContaining({
-            runID,
-            kind: "report",
-            label: "archive-report",
-            payload: { archiveMarker: "artifact-db-row" },
-          }),
-        ]))
+        expect(runArtifacts?.artifacts).toEqual(
+          expect.arrayContaining([
+            expect.objectContaining({
+              runID,
+              kind: "report",
+              label: "archive-report",
+              payload: { archiveMarker: "artifact-db-row" },
+            }),
+          ]),
+        )
         const interactions = JSON.parse(entries.get("opencorvus-task-execution-flow/interactions.json") || "[]")
-        expect(interactions).toEqual(expect.arrayContaining([
-          expect.objectContaining({
-            id: interactionID,
-            runID,
-            status: "answered",
-            response: { answer: "yes", archiveMarker: "interaction-response" },
-          }),
-        ]))
+        expect(interactions).toEqual(
+          expect.arrayContaining([
+            expect.objectContaining({
+              id: interactionID,
+              runID,
+              status: "answered",
+              response: { answer: "yes", archiveMarker: "interaction-response" },
+            }),
+          ]),
+        )
         const protocolEvents = JSON.parse(entries.get("opencorvus-task-execution-flow/protocol-events.json") || "[]")
-        expect(protocolEvents).toEqual(expect.arrayContaining([
-          expect.objectContaining({
-            type: "workflow.step.updated",
-            runID,
-            interactionID,
-            summary: "archive protocol db row",
-            payload: {
-              stepID: "archive-step",
-              status: "completed",
+        expect(protocolEvents).toEqual(
+          expect.arrayContaining([
+            expect.objectContaining({
+              type: "workflow.step.updated",
+              runID,
+              interactionID,
               summary: "archive protocol db row",
-              archiveMarker: "protocol-db-row",
-            },
-          }),
-        ]))
+              payload: {
+                stepID: "archive-step",
+                status: "completed",
+                summary: "archive protocol db row",
+                archiveMarker: "protocol-db-row",
+              },
+            }),
+          ]),
+        )
         expect(entries.get("opencorvus-task-execution-flow/transcript.json")).toContain("[")
       },
     })
@@ -216,16 +235,19 @@ describe("task project archive route", () => {
         const taskID = Identifier.ascending("task")
         const now = Date.now()
         Database.use((db) =>
-          db.insert(EngineTaskTable).values({
-            id: taskID,
-            project_id: Instance.project.id,
-            source: "panel",
-            title: "Archive non-git task",
-            request: "Export task project archive",
-            priority: "normal",
-            time_created: now,
-            time_updated: now,
-          }).run(),
+          db
+            .insert(EngineTaskTable)
+            .values({
+              id: taskID,
+              project_id: Instance.project.id,
+              source: "panel",
+              title: "Archive non-git task",
+              request: "Export task project archive",
+              priority: "normal",
+              time_created: now,
+              time_updated: now,
+            })
+            .run(),
         )
 
         const response = await Server.App().request(`/task/${taskID}/project-archive`, {
@@ -233,7 +255,7 @@ describe("task project archive route", () => {
         })
 
         expect(response.status).toBe(422)
-        const body = await response.json() as { message: string }
+        const body = (await response.json()) as { message: string }
         expect(body.message).toContain("not a Git worktree")
       },
     })

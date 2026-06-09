@@ -34,22 +34,16 @@ export const RubricLevelSchema = z.object({
 const HeuristicScorerSchema = z.object({
   type: z
     .literal("heuristic")
-    .describe(
-      "heuristic — deterministic shell/script check, pass/fail by exit code. Requires: name, spec{kind}.",
-    ),
+    .describe("heuristic — deterministic shell/script check, pass/fail by exit code. Requires: name, spec{kind}."),
   name: z.string().min(1),
   spec: z.discriminatedUnion("kind", [
     z.object({
-      kind: z
-        .literal("shell")
-        .describe("shell — run an inline command. Requires: cmd; optional cwd."),
+      kind: z.literal("shell").describe("shell — run an inline command. Requires: cmd; optional cwd."),
       cmd: z.string().min(1).describe("Shell command. Exit 0 = pass unless expect.exit_code set."),
       cwd: z.string().optional(),
     }),
     z.object({
-      kind: z
-        .literal("script_ref")
-        .describe("script_ref — run a repo script. Requires: path; optional args."),
+      kind: z.literal("script_ref").describe("script_ref — run a repo script. Requires: path; optional args."),
       path: z.string().min(1).describe("Repo-relative script path."),
       args: z.array(z.string()).optional(),
     }),
@@ -64,9 +58,7 @@ const HeuristicScorerSchema = z.object({
 const LlmJudgeScorerSchema = z.object({
   type: z
     .literal("llm_judge")
-    .describe(
-      "llm_judge — natural-language rubric evaluation. Requires: name, criteria; optional rubric, inputs.",
-    ),
+    .describe("llm_judge — natural-language rubric evaluation. Requires: name, criteria; optional rubric, inputs."),
   name: z.string().min(1),
   criteria: z.string().min(10).describe("Single-criterion evaluation question in natural language."),
   rubric: z

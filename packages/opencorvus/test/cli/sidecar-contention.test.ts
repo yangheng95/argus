@@ -30,33 +30,34 @@ describe("opencorvus sidecar contention (audit W2-G5 / F2)", () => {
     const cliEntry = path.resolve(__dirname, "../../src/index.ts")
     const TOKEN = "test-token-" + Math.random().toString(36).slice(2)
 
-    const spawnSidecar = (extra: Record<string, string> = {}) => Bun.spawn(
-      [
-        "bun",
-        "--preload",
-        "@opentui/solid/preload",
-        "--conditions=browser",
-        cliEntry,
-        "sidecar",
-        "--project-dir",
-        workspace,
-        "--parent-pid",
-        String(process.pid),
-        "--watchdog-interval-ms",
-        "1000",
-      ],
-      {
-        env: {
-          ...process.env,
-          OPENCORVUS_HOME: tempHome,
-          OPENCORVUS_SERVER_PASSWORD: TOKEN,
-          OPENCORVUS_SERVER_USERNAME: "opencorvus",
-          ...extra,
+    const spawnSidecar = (extra: Record<string, string> = {}) =>
+      Bun.spawn(
+        [
+          "bun",
+          "--preload",
+          "@opentui/solid/preload",
+          "--conditions=browser",
+          cliEntry,
+          "sidecar",
+          "--project-dir",
+          workspace,
+          "--parent-pid",
+          String(process.pid),
+          "--watchdog-interval-ms",
+          "1000",
+        ],
+        {
+          env: {
+            ...process.env,
+            OPENCORVUS_HOME: tempHome,
+            OPENCORVUS_SERVER_PASSWORD: TOKEN,
+            OPENCORVUS_SERVER_USERNAME: "opencorvus",
+            ...extra,
+          },
+          stdout: "pipe",
+          stderr: "pipe",
         },
-        stdout: "pipe",
-        stderr: "pipe",
-      },
-    )
+      )
 
     const first = spawnSidecar()
     let firstPort: number | undefined
@@ -79,19 +80,20 @@ describe("opencorvus sidecar contention (audit W2-G5 / F2)", () => {
           break
         }
       }
-      try { reader.releaseLock() } catch {}
+      try {
+        reader.releaseLock()
+      } catch {}
       if (firstPort === undefined) {
         const stderrText = await new Response(first.stderr).text().catch(() => "")
-        throw new Error(`first sidecar never printed handshake within 30s. stderr=${stderrText.slice(0, 2000)} stdout-buf=${buf.slice(0, 500)}`)
+        throw new Error(
+          `first sidecar never printed handshake within 30s. stderr=${stderrText.slice(0, 2000)} stdout-buf=${buf.slice(0, 500)}`,
+        )
       }
       expect(firstPort).toBeDefined()
 
       // Second sidecar — must lose the contention.
       const second = spawnSidecar()
-      const exit = await Promise.race([
-        second.exited,
-        new Promise<number>((r) => setTimeout(() => r(-1), 30_000)),
-      ])
+      const exit = await Promise.race([second.exited, new Promise<number>((r) => setTimeout(() => r(-1), 30_000))])
       const stderr = await new Response(second.stderr).text()
       expect(exit).toBe(3)
       // Either detectExisting found the live lock first (preferred,
@@ -113,15 +115,18 @@ describe("opencorvus sidecar contention (audit W2-G5 / F2)", () => {
         }
       } catch {}
       try {
-        await Promise.race([
-          first.exited,
-          new Promise<number>((r) => setTimeout(() => r(-1), 5_000)),
-        ])
+        await Promise.race([first.exited, new Promise<number>((r) => setTimeout(() => r(-1), 5_000))])
       } catch {}
-      try { first.kill() } catch {}
+      try {
+        first.kill()
+      } catch {}
 
-      try { fs.rmSync(tempHome, { recursive: true, force: true }) } catch {}
-      try { fs.rmSync(workspace, { recursive: true, force: true }) } catch {}
+      try {
+        fs.rmSync(tempHome, { recursive: true, force: true })
+      } catch {}
+      try {
+        fs.rmSync(workspace, { recursive: true, force: true })
+      } catch {}
     }
   }, 90_000)
 })

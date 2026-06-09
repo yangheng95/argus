@@ -171,9 +171,7 @@ export function createToolCallRepair(
     }
     if (InvalidToolInputError.isInstance(failed.error)) {
       const issues = zodIssuesFromError(failed.error)
-      const union = issues?.find(
-        (it) => it && typeof it === "object" && it.code === "invalid_union",
-      )
+      const union = issues?.find((it) => it && typeof it === "object" && it.code === "invalid_union")
       if (union && Array.isArray(union.path) && union.path.length > 0) {
         let jsonSchema: JsonSchemaNode | undefined
         try {

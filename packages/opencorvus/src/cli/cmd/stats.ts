@@ -365,10 +365,15 @@ export function displayStats(stats: SessionStats, toolLimit?: number, modelLimit
       console.log(renderRow("  Output Tokens", formatNumber(usage.tokens.output)))
       console.log(renderRow("  Cache Read", formatNumber(usage.tokens.cache.read)))
       console.log(renderRow("  Cache Write", formatNumber(usage.tokens.cache.write)))
-      console.log(renderRow("  Cache Hit %", formatHitRatio({
-        input: usage.tokens.input,
-        cache: usage.tokens.cache,
-      })))
+      console.log(
+        renderRow(
+          "  Cache Hit %",
+          formatHitRatio({
+            input: usage.tokens.input,
+            cache: usage.tokens.cache,
+          }),
+        ),
+      )
       console.log(renderRow("  Cost", `$${usage.cost.toFixed(4)}`))
       console.log("├────────────────────────────────────────────────────────┤")
     }

@@ -39,7 +39,8 @@ export const ExecutorRoutes = lazy(() => {
     "/",
     describeRoute({
       summary: "List executors",
-      description: "Get executor availability, local discovery state, and whether each executor is selectable for new tasks.",
+      description:
+        "Get executor availability, local discovery state, and whether each executor is selectable for new tasks.",
       operationId: "executor.list",
       responses: {
         200: {
@@ -59,9 +60,15 @@ export const ExecutorRoutes = lazy(() => {
       const codex = protocolInfo("codex")
       const claude = protocolInfo("claude-code")
       const tools = {
-        opencorvus: await ToolAdapterRegistry.declare(ToolAdapterRegistry.context({ provider: "opencorvus", capabilities: opencorvus.capabilities })),
-        codex: await ToolAdapterRegistry.declare(ToolAdapterRegistry.context({ provider: "codex", capabilities: codex.capabilities })),
-        claude: await ToolAdapterRegistry.declare(ToolAdapterRegistry.context({ provider: "claude-code", capabilities: claude.capabilities })),
+        opencorvus: await ToolAdapterRegistry.declare(
+          ToolAdapterRegistry.context({ provider: "opencorvus", capabilities: opencorvus.capabilities }),
+        ),
+        codex: await ToolAdapterRegistry.declare(
+          ToolAdapterRegistry.context({ provider: "codex", capabilities: codex.capabilities }),
+        ),
+        claude: await ToolAdapterRegistry.declare(
+          ToolAdapterRegistry.context({ provider: "claude-code", capabilities: claude.capabilities }),
+        ),
       }
       return c.json([
         {

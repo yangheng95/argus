@@ -30,17 +30,20 @@ export async function createRewindScenario(root: string): Promise<RewindScenario
   const taskID = Identifier.ascending("task")
   const now = Date.now()
   Database.use((db) =>
-    db.insert(EngineTaskTable).values({
-      id: taskID,
-      project_id: Instance.project.id,
-      session_id: sessionID,
-      source: "test",
-      title: "rewind task",
-      request: "rewind task",
-      priority: "normal",
-      time_created: now,
-      time_updated: now,
-    }).run(),
+    db
+      .insert(EngineTaskTable)
+      .values({
+        id: taskID,
+        project_id: Instance.project.id,
+        session_id: sessionID,
+        source: "test",
+        title: "rewind task",
+        request: "rewind task",
+        priority: "normal",
+        time_created: now,
+        time_updated: now,
+      })
+      .run(),
   )
 
   const filename = path.join(root, "doc.txt")

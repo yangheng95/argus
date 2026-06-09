@@ -330,7 +330,7 @@ describe("ProviderTransform - Hexin GLM thinking configuration", () => {
 
   test("extracts inline think tags into reasoning_content for Hexin GLM-5.1", async () => {
     const model = createGlmModel()
-    const result = await ProviderTransform.message(
+    const result = (await ProviderTransform.message(
       [
         {
           role: "assistant",
@@ -339,7 +339,7 @@ describe("ProviderTransform - Hexin GLM thinking configuration", () => {
       ] as any[],
       model,
       {},
-    ) as any[]
+    )) as any[]
 
     expect(result[0].content).toEqual([{ type: "text", text: "\nVisible answer" }])
     expect(result[0].providerOptions.openaiCompatible.reasoning_content).toBe("internal plan")
@@ -347,7 +347,7 @@ describe("ProviderTransform - Hexin GLM thinking configuration", () => {
 
   test("removes stray closing think tags without inventing reasoning content", async () => {
     const model = createGlmModel()
-    const result = await ProviderTransform.message(
+    const result = (await ProviderTransform.message(
       [
         {
           role: "assistant",
@@ -356,7 +356,7 @@ describe("ProviderTransform - Hexin GLM thinking configuration", () => {
       ] as any[],
       model,
       {},
-    ) as any[]
+    )) as any[]
 
     expect(result[0].content).toEqual([{ type: "text", text: "Visible answer" }])
     expect(result[0].providerOptions.openaiCompatible.reasoning_content).toBe("")
@@ -377,7 +377,7 @@ describe("ProviderTransform - Hexin GLM thinking configuration", () => {
       transform: undefined,
     })
 
-    const result = await ProviderTransform.message(
+    const result = (await ProviderTransform.message(
       [
         {
           role: "assistant",
@@ -386,7 +386,7 @@ describe("ProviderTransform - Hexin GLM thinking configuration", () => {
       ] as any[],
       model,
       {},
-    ) as any[]
+    )) as any[]
 
     expect(result[0].content).toEqual([{ type: "text", text: "<think>not normalized</think>Visible answer" }])
     expect(result[0].providerOptions?.openaiCompatible?.reasoning_content).toBeUndefined()
@@ -405,7 +405,7 @@ describe("ProviderTransform - Hexin GLM thinking configuration", () => {
       transform: undefined,
     })
 
-    const result = await ProviderTransform.message(
+    const result = (await ProviderTransform.message(
       [
         {
           role: "assistant",
@@ -414,7 +414,7 @@ describe("ProviderTransform - Hexin GLM thinking configuration", () => {
       ] as any[],
       model,
       {},
-    ) as any[]
+    )) as any[]
 
     expect(result[0].content).toEqual([{ type: "text", text: "<think>visible literal</think>Answer" }])
     expect(result[0].providerOptions?.openaiCompatible?.reasoning_content).toBe("")
@@ -472,7 +472,7 @@ describe("ProviderTransform.message - local attachment transport", () => {
   test("inlines canonical AI SDK data file parts backed by attachment refs", async () => {
     await withProject(async (projectID) => {
       const ref = await AttachmentStore.write(projectID, pngBytes, "image/png", "shot.png")
-      const result = await ProviderTransform.message(
+      const result = (await ProviderTransform.message(
         [
           {
             role: "user",
@@ -481,7 +481,7 @@ describe("ProviderTransform.message - local attachment transport", () => {
         ] as any[],
         model,
         {},
-      ) as any[]
+      )) as any[]
 
       // AI SDK v6 contract: `data` carries raw base64 — the openai-compatible
       // adapter prepends `data:<mediaType>;base64,` itself when serializing
@@ -494,7 +494,7 @@ describe("ProviderTransform.message - local attachment transport", () => {
   test("inlines legacy url file parts backed by attachment refs", async () => {
     await withProject(async (projectID) => {
       const ref = await AttachmentStore.write(projectID, pngBytes, "image/png", "legacy.png")
-      const result = await ProviderTransform.message(
+      const result = (await ProviderTransform.message(
         [
           {
             role: "user",
@@ -503,14 +503,14 @@ describe("ProviderTransform.message - local attachment transport", () => {
         ] as any[],
         model,
         {},
-      ) as any[]
+      )) as any[]
 
       expect(result[0].content[0].url).toBe(`data:image/png;base64,${pngBytes.toString("base64")}`)
     })
   })
 
   test("leaves existing data URLs unchanged", async () => {
-    const result = await ProviderTransform.message(
+    const result = (await ProviderTransform.message(
       [
         {
           role: "user",
@@ -519,13 +519,13 @@ describe("ProviderTransform.message - local attachment transport", () => {
       ] as any[],
       model,
       {},
-    ) as any[]
+    )) as any[]
 
     expect(result[0].content[0].data).toBe("data:image/jpeg;base64,abc")
   })
 
   test("leaves remote HTTPS URLs unchanged", async () => {
-    const result = await ProviderTransform.message(
+    const result = (await ProviderTransform.message(
       [
         {
           role: "user",
@@ -534,14 +534,18 @@ describe("ProviderTransform.message - local attachment transport", () => {
       ] as any[],
       model,
       {},
-    ) as any[]
+    )) as any[]
 
     expect(result[0].content[0].data).toBe("https://example.com/x.png")
   })
 
   test("preserves the original part when attachment read fails", async () => {
     const original = { type: "file", data: "/attachment/missing/abcdef.png", mediaType: "image/png" }
-    const result = await ProviderTransform.message([{ role: "user", content: [original] }] as any[], model, {}) as any[]
+    const result = (await ProviderTransform.message(
+      [{ role: "user", content: [original] }] as any[],
+      model,
+      {},
+    )) as any[]
 
     expect(result[0].content[0]).toBe(original)
   })
@@ -549,7 +553,7 @@ describe("ProviderTransform.message - local attachment transport", () => {
   test("inlines PDF attachment refs with their media type", async () => {
     await withProject(async (projectID) => {
       const ref = await AttachmentStore.write(projectID, pdfBytes, "application/pdf", "doc.pdf")
-      const result = await ProviderTransform.message(
+      const result = (await ProviderTransform.message(
         [
           {
             role: "user",
@@ -558,7 +562,7 @@ describe("ProviderTransform.message - local attachment transport", () => {
         ] as any[],
         model,
         {},
-      ) as any[]
+      )) as any[]
 
       expect(result[0].content[0].data).toBe(pdfBytes.toString("base64"))
     })
@@ -567,7 +571,7 @@ describe("ProviderTransform.message - local attachment transport", () => {
   test("only rewrites local file parts in mixed content", async () => {
     await withProject(async (projectID) => {
       const ref = await AttachmentStore.write(projectID, pngBytes, "image/png", "mixed.png")
-      const result = await ProviderTransform.message(
+      const result = (await ProviderTransform.message(
         [
           {
             role: "user",
@@ -580,7 +584,7 @@ describe("ProviderTransform.message - local attachment transport", () => {
         ] as any[],
         model,
         {},
-      ) as any[]
+      )) as any[]
 
       expect(result[0].content[0]).toEqual({ type: "text", text: "look" })
       expect(result[0].content[1].data).toBe(pngBytes.toString("base64"))
@@ -1161,7 +1165,7 @@ describe("ProviderTransform.message - DeepSeek reasoning content", () => {
       },
     ] as any[]
 
-    const result = await ProviderTransform.message(msgs, deepseekModel, {}) as any[]
+    const result = (await ProviderTransform.message(msgs, deepseekModel, {})) as any[]
     const serialized = convertToOpenAICompatibleChatMessages(result)
 
     expect(serialized).toEqual([
@@ -1638,7 +1642,7 @@ describe("ProviderTransform.message - strip openai metadata when store=false", (
       },
     ] as any[]
 
-    const result = await ProviderTransform.message(msgs, openaiModel, { store: false }) as any[]
+    const result = (await ProviderTransform.message(msgs, openaiModel, { store: false })) as any[]
 
     expect(result).toHaveLength(1)
     expect(result[0].content[0].providerOptions?.openai?.itemId).toBe("rs_123")
@@ -1677,7 +1681,7 @@ describe("ProviderTransform.message - strip openai metadata when store=false", (
       },
     ] as any[]
 
-    const result = await ProviderTransform.message(msgs, zenModel, { store: false }) as any[]
+    const result = (await ProviderTransform.message(msgs, zenModel, { store: false })) as any[]
 
     expect(result).toHaveLength(1)
     expect(result[0].content[0].providerOptions?.openai?.itemId).toBe("rs_123")
@@ -1703,7 +1707,7 @@ describe("ProviderTransform.message - strip openai metadata when store=false", (
       },
     ] as any[]
 
-    const result = await ProviderTransform.message(msgs, openaiModel, { store: false }) as any[]
+    const result = (await ProviderTransform.message(msgs, openaiModel, { store: false })) as any[]
 
     expect(result[0].content[0].providerOptions?.openai?.itemId).toBe("msg_123")
     expect(result[0].content[0].providerOptions?.openai?.otherOption).toBe("value")
@@ -1728,7 +1732,7 @@ describe("ProviderTransform.message - strip openai metadata when store=false", (
     ] as any[]
 
     // openai package preserves itemId regardless of store value
-    const result = await ProviderTransform.message(msgs, openaiModel, { store: true }) as any[]
+    const result = (await ProviderTransform.message(msgs, openaiModel, { store: true })) as any[]
 
     expect(result[0].content[0].providerOptions?.openai?.itemId).toBe("msg_123")
   })
@@ -1761,7 +1765,7 @@ describe("ProviderTransform.message - strip openai metadata when store=false", (
     ] as any[]
 
     // store=false preserves metadata for non-openai packages
-    const result = await ProviderTransform.message(msgs, anthropicModel, { store: false }) as any[]
+    const result = (await ProviderTransform.message(msgs, anthropicModel, { store: false })) as any[]
 
     expect(result[0].content[0].providerOptions?.openai?.itemId).toBe("msg_123")
   })
@@ -1794,7 +1798,7 @@ describe("ProviderTransform.message - strip openai metadata when store=false", (
       },
     ] as any[]
 
-    const result = await ProviderTransform.message(msgs, opencorvusModel, { store: false }) as any[]
+    const result = (await ProviderTransform.message(msgs, opencorvusModel, { store: false })) as any[]
 
     expect(result[0].content[0].providerOptions?.opencorvus?.itemId).toBe("msg_123")
     expect(result[0].content[0].providerOptions?.opencorvus?.otherOption).toBe("value")
@@ -1832,7 +1836,7 @@ describe("ProviderTransform.message - strip openai metadata when store=false", (
       },
     ] as any[]
 
-    const result = await ProviderTransform.message(msgs, opencorvusModel, { store: false }) as any[]
+    const result = (await ProviderTransform.message(msgs, opencorvusModel, { store: false })) as any[]
 
     expect(result[0].providerOptions?.openai?.itemId).toBe("msg_root")
     expect(result[0].providerOptions?.opencorvus?.itemId).toBe("msg_opencorvus")
@@ -1869,7 +1873,7 @@ describe("ProviderTransform.message - strip openai metadata when store=false", (
       },
     ] as any[]
 
-    const result = await ProviderTransform.message(msgs, anthropicModel, {}) as any[]
+    const result = (await ProviderTransform.message(msgs, anthropicModel, {})) as any[]
 
     expect(result[0].content[0].providerOptions?.openai?.itemId).toBe("msg_123")
   })
@@ -2015,12 +2019,11 @@ describe("ProviderTransform.message - cache control on gateway", () => {
       },
     ] as any[]
 
-    const result = await ProviderTransform.message(msgs, model, {}) as any[]
+    const result = (await ProviderTransform.message(msgs, model, {})) as any[]
 
     expect(result[0].content[0].providerOptions).toBeUndefined()
     expect(result[0].providerOptions).toBeUndefined()
   })
-
 })
 
 describe("ProviderTransform.variants", () => {

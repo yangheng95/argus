@@ -139,7 +139,10 @@ export function createIntegrityAcceptanceTools(input?: IntegrityEvidenceToolCont
         "Inspect the scoped VisualEvidenceBundle artifacts for reference-driven UI review. " +
         "Use this before accepting visual fidelity claims; it returns reference/rendered paths, score, qualitative verdict, region coverage, and provenance from the reviewed task context.",
       inputSchema: z.object({
-        bundle_id: z.string().optional().describe("Specific VisualEvidenceBundle id. Omit to inspect every scoped bundle."),
+        bundle_id: z
+          .string()
+          .optional()
+          .describe("Specific VisualEvidenceBundle id. Omit to inspect every scoped bundle."),
         max_chars: z.number().int().min(1_000).max(40_000).default(12_000),
       }),
       execute: async ({ bundle_id, max_chars }) =>

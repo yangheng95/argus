@@ -25,7 +25,9 @@ async function main() {
     throw new Error(`OPENCORVUS_E2E_HOLD_MS must be a non-negative integer, got ${process.env.OPENCORVUS_E2E_HOLD_MS}`)
   }
   if (!Number.isInteger(visualSettleMs) || visualSettleMs < 0) {
-    throw new Error(`OPENCORVUS_E2E_VISUAL_SETTLE_MS must be a non-negative integer, got ${process.env.OPENCORVUS_E2E_VISUAL_SETTLE_MS}`)
+    throw new Error(
+      `OPENCORVUS_E2E_VISUAL_SETTLE_MS must be a non-negative integer, got ${process.env.OPENCORVUS_E2E_VISUAL_SETTLE_MS}`,
+    )
   }
   if (visualEnabled && process.platform !== "win32") {
     throw new Error("VS Code visual E2E screenshot capture currently requires a Windows runner")
@@ -101,11 +103,9 @@ async function main() {
   if (!events.some((event) => event.type === "request" && event.url !== "/shutdown")) {
     throw new Error(`VS Code webview did not send any sidecar HTTP request; events=${JSON.stringify(events)}`)
   }
-  const failedResponses = events.filter((event) =>
-    event.type === "response" &&
-    typeof event.status === "number" &&
-    event.status >= 400 &&
-    event.url !== "/shutdown",
+  const failedResponses = events.filter(
+    (event) =>
+      event.type === "response" && typeof event.status === "number" && event.status >= 400 && event.url !== "/shutdown",
   )
   if (failedResponses.length > 0) {
     throw new Error(`VS Code webview received failing sidecar responses; responses=${JSON.stringify(failedResponses)}`)
@@ -184,7 +184,9 @@ async function runVsCodeCli(options: {
       if (idleTimer) clearTimeout(idleTimer)
       if (settled) return
       settled = true
-      try { child.kill("SIGTERM") } catch {}
+      try {
+        child.kill("SIGTERM")
+      } catch {}
       reject(error)
     }
     if (options.visual) {
@@ -416,20 +418,15 @@ function createSidecarWrapper(tempRoot: string): string {
   const runtime = process.execPath
   if (process.platform === "win32") {
     const wrapper = path.join(tempRoot, "fake-sidecar.cmd")
-    fs.writeFileSync(
-      wrapper,
-      `@echo off\r\n"${runtime}" "${fakeSidecar}" %*\r\n`,
-      "utf8",
-    )
+    fs.writeFileSync(wrapper, `@echo off\r\n"${runtime}" "${fakeSidecar}" %*\r\n`, "utf8")
     return wrapper
   }
 
   const wrapper = path.join(tempRoot, "fake-sidecar")
-  fs.writeFileSync(
-    wrapper,
-    `#!/usr/bin/env sh\nexec "${runtime}" "${fakeSidecar}" "$@"\n`,
-    { encoding: "utf8", mode: 0o755 },
-  )
+  fs.writeFileSync(wrapper, `#!/usr/bin/env sh\nexec "${runtime}" "${fakeSidecar}" "$@"\n`, {
+    encoding: "utf8",
+    mode: 0o755,
+  })
   return wrapper
 }
 

@@ -62,20 +62,15 @@ export class OpencorvusPanel {
       return OpencorvusPanel.current
     }
     const mediaUiUri = vscode.Uri.joinPath(context.extensionUri, "media", "ui")
-    const panel = vscode.window.createWebviewPanel(
-      "opencorvus.panel",
-      "OpenCorvus",
-      vscode.ViewColumn.Beside,
-      {
-        // plan §19.2.2 webview安全锁 — pinned here so a future drift
-        // is caught at code review.
-        enableScripts: true,
-        enableForms: false,
-        enableCommandUris: false,
-        retainContextWhenHidden: false,
-        localResourceRoots: [mediaUiUri],
-      },
-    )
+    const panel = vscode.window.createWebviewPanel("opencorvus.panel", "OpenCorvus", vscode.ViewColumn.Beside, {
+      // plan §19.2.2 webview安全锁 — pinned here so a future drift
+      // is caught at code review.
+      enableScripts: true,
+      enableForms: false,
+      enableCommandUris: false,
+      retainContextWhenHidden: false,
+      localResourceRoots: [mediaUiUri],
+    })
     OpencorvusPanel.current = new OpencorvusPanel(panel, sidecar, context)
     panel.onDidDispose(() => {
       const c = OpencorvusPanel.current
@@ -111,8 +106,7 @@ export class OpencorvusPanel {
     // time the same sidecar handle was passed (e.g. on `reveal`).
     // Only rebuild bridge + reassign HTML when the sidecar identity
     // actually changed; on no-op refresh do nothing.
-    const sidecarChanged =
-      this.sidecar.baseUrl !== sidecar.baseUrl || this.sidecar.token !== sidecar.token
+    const sidecarChanged = this.sidecar.baseUrl !== sidecar.baseUrl || this.sidecar.token !== sidecar.token
     const needsBridgeInit = !this.bridge
 
     if (sidecarChanged && this.bridge) {
@@ -181,10 +175,7 @@ export class OpencorvusPanel {
     try {
       serialized = JSON.stringify(msg)
     } catch (err) {
-      console.error(
-        `[opencorvus] sendUiCommand(${kind}): payload not JSON-serialisable, dropping.`,
-        err,
-      )
+      console.error(`[opencorvus] sendUiCommand(${kind}): payload not JSON-serialisable, dropping.`, err)
       return
     }
     if (serialized.length > UI_COMMAND_MAX_BYTES) {
@@ -210,7 +201,9 @@ export class OpencorvusPanel {
   private disposeResources(): void {
     while (this.disposables.length) {
       const d = this.disposables.pop()
-      try { d?.dispose() } catch {}
+      try {
+        d?.dispose()
+      } catch {}
     }
     this.bridge?.dispose()
     this.bridge = undefined

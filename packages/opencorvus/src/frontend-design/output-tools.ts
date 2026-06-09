@@ -49,65 +49,77 @@ function emptyCollector(): FrontendTemplateOutputCollector {
 }
 
 function titleFromMarkdown(text: string): string | undefined {
-  const line = text.split("\n").map((item) => item.trim()).find((item) => item.startsWith("# "))
+  const line = text
+    .split("\n")
+    .map((item) => item.trim())
+    .find((item) => item.startsWith("# "))
   return line?.replace(/^#+\s*/, "").trim()
 }
 
 function renderComponentReusePlan(items: readonly FrontendTemplateFinal["component_reuse_plan"][number][]): string {
   if (items.length === 0) return "- no component reuse plan submitted"
-  return items.map((item) => {
-    const lines = [
-      `- ${item.family_id} — ${item.name}`,
-      `  - strategy: ${item.implementation_strategy}`,
-      `  - surface: ${item.observed_surface}`,
-      `  - reuse_source: ${item.reuse_source}`,
-      `  - props_states: ${item.props_states}`,
-      `  - replacement_boundary: ${item.replacement_boundary}`,
-      `  - parity_guard: ${item.parity_guard}`,
-    ]
-    if (item.mature_library_candidates.length > 0) {
-      lines.push(`  - mature_library_candidates: ${item.mature_library_candidates.join(", ")}`)
-    }
-    if (item.source_refs.length > 0) {
-      lines.push(`  - source_refs: ${item.source_refs.join(", ")}`)
-    }
-    if (item.custom_fallback_reason) {
-      lines.push(`  - custom_fallback_reason: ${item.custom_fallback_reason}`)
-    }
-    return lines.join("\n")
-  }).join("\n")
+  return items
+    .map((item) => {
+      const lines = [
+        `- ${item.family_id} — ${item.name}`,
+        `  - strategy: ${item.implementation_strategy}`,
+        `  - surface: ${item.observed_surface}`,
+        `  - reuse_source: ${item.reuse_source}`,
+        `  - props_states: ${item.props_states}`,
+        `  - replacement_boundary: ${item.replacement_boundary}`,
+        `  - parity_guard: ${item.parity_guard}`,
+      ]
+      if (item.mature_library_candidates.length > 0) {
+        lines.push(`  - mature_library_candidates: ${item.mature_library_candidates.join(", ")}`)
+      }
+      if (item.source_refs.length > 0) {
+        lines.push(`  - source_refs: ${item.source_refs.join(", ")}`)
+      }
+      if (item.custom_fallback_reason) {
+        lines.push(`  - custom_fallback_reason: ${item.custom_fallback_reason}`)
+      }
+      return lines.join("\n")
+    })
+    .join("\n")
 }
 
-function renderBaselineReplacementPlan(items: readonly FrontendTemplateFinal["baseline_replacement_plan"][number][]): string {
+function renderBaselineReplacementPlan(
+  items: readonly FrontendTemplateFinal["baseline_replacement_plan"][number][],
+): string {
   if (items.length === 0) return "- no source-region evolution plan submitted"
-  return items.map((item) => {
-    const lines = [
-      `- ${item.boundary_id} — ${item.source_region}`,
-      `  - action: ${item.action}`,
-      `  - component_family_id: ${item.component_family_id}`,
-      `  - replacement_strategy: ${item.replacement_strategy}`,
-      `  - reuse_source: ${item.reuse_source}`,
-      `  - deletion_rule: ${item.deletion_rule}`,
-      `  - parity_guard: ${item.parity_guard}`,
-    ]
-    if (item.mature_library_candidates.length > 0) {
-      lines.push(`  - mature_library_candidates: ${item.mature_library_candidates.join(", ")}`)
-    }
-    if (item.source_refs.length > 0) {
-      lines.push(`  - source_refs: ${item.source_refs.join(", ")}`)
-    }
-    if (item.custom_fallback_reason) {
-      lines.push(`  - custom_fallback_reason: ${item.custom_fallback_reason}`)
-    }
-    return lines.join("\n")
-  }).join("\n")
+  return items
+    .map((item) => {
+      const lines = [
+        `- ${item.boundary_id} — ${item.source_region}`,
+        `  - action: ${item.action}`,
+        `  - component_family_id: ${item.component_family_id}`,
+        `  - replacement_strategy: ${item.replacement_strategy}`,
+        `  - reuse_source: ${item.reuse_source}`,
+        `  - deletion_rule: ${item.deletion_rule}`,
+        `  - parity_guard: ${item.parity_guard}`,
+      ]
+      if (item.mature_library_candidates.length > 0) {
+        lines.push(`  - mature_library_candidates: ${item.mature_library_candidates.join(", ")}`)
+      }
+      if (item.source_refs.length > 0) {
+        lines.push(`  - source_refs: ${item.source_refs.join(", ")}`)
+      }
+      if (item.custom_fallback_reason) {
+        lines.push(`  - custom_fallback_reason: ${item.custom_fallback_reason}`)
+      }
+      return lines.join("\n")
+    })
+    .join("\n")
 }
 
-function renderNamedItems(title: string, items: readonly {
-  title: string
-  detail: string
-  source_refs?: string[]
-}[]): string {
+function renderNamedItems(
+  title: string,
+  items: readonly {
+    title: string
+    detail: string
+    source_refs?: string[]
+  }[],
+): string {
   if (items.length === 0) return ""
   const lines = [`## ${title}`]
   for (const item of items) {
@@ -119,7 +131,9 @@ function renderNamedItems(title: string, items: readonly {
   return lines.join("\n")
 }
 
-function renderComponentInventoryFromReusePlan(items: readonly FrontendTemplateFinal["component_reuse_plan"][number][]): string {
+function renderComponentInventoryFromReusePlan(
+  items: readonly FrontendTemplateFinal["component_reuse_plan"][number][],
+): string {
   if (items.length === 0) return ""
   return [
     "Legacy compatibility summary only.",
@@ -176,17 +190,29 @@ function normalizeFrontendTemplateFinal(final: FrontendTemplateFinal): FrontendT
     ...final,
     frontend_project: normalizeFrontendProject(final.frontend_project),
   }
-  next.frontend_template = next.frontend_template.trim() || renderNamedItems("Frontend Template", next.frontend_template_sections)
-  next.fillable_modules = next.fillable_modules.trim() || renderNamedItems("Fillable Modules", next.fillable_module_items)
-  next.component_inventory = next.component_inventory.trim() || renderComponentInventoryFromReusePlan(next.component_reuse_plan)
-  next.quality_project_contract = next.quality_project_contract.trim() || renderNamedItems("Quality Project Contract", next.quality_project_items) || renderQualityProjectContract(next)
-  next.material_inventory = next.material_inventory.trim() || renderNamedItems("Material Inventory", next.material_inventory_items)
-  next.visual_consistency_contract = next.visual_consistency_contract.trim() || renderNamedItems("Visual Consistency Contract", next.visual_consistency_items)
-  next.ui_data_contract = next.ui_data_contract.trim() || renderNamedItems("UI Data Contract", next.ui_data_contract_items)
+  next.frontend_template =
+    next.frontend_template.trim() || renderNamedItems("Frontend Template", next.frontend_template_sections)
+  next.fillable_modules =
+    next.fillable_modules.trim() || renderNamedItems("Fillable Modules", next.fillable_module_items)
+  next.component_inventory =
+    next.component_inventory.trim() || renderComponentInventoryFromReusePlan(next.component_reuse_plan)
+  next.quality_project_contract =
+    next.quality_project_contract.trim() ||
+    renderNamedItems("Quality Project Contract", next.quality_project_items) ||
+    renderQualityProjectContract(next)
+  next.material_inventory =
+    next.material_inventory.trim() || renderNamedItems("Material Inventory", next.material_inventory_items)
+  next.visual_consistency_contract =
+    next.visual_consistency_contract.trim() ||
+    renderNamedItems("Visual Consistency Contract", next.visual_consistency_items)
+  next.ui_data_contract =
+    next.ui_data_contract.trim() || renderNamedItems("UI Data Contract", next.ui_data_contract_items)
   return next
 }
 
-function normalizeFrontendProject(project: FrontendTemplateFinal["frontend_project"]): FrontendTemplateFinal["frontend_project"] {
+function normalizeFrontendProject(
+  project: FrontendTemplateFinal["frontend_project"],
+): FrontendTemplateFinal["frontend_project"] {
   const root = normalizeProjectRootForReport(project.project_root)
   if (isFrontendDesignSkeletonRoot(root) && project.role === "implementation_target") {
     return { ...project, role: "source_baseline_input" }
@@ -195,11 +221,16 @@ function normalizeFrontendProject(project: FrontendTemplateFinal["frontend_proje
 }
 
 function normalizeProjectRootForReport(projectRoot: string): string {
-  return projectRoot.replaceAll("\\", "/").replace(/^\.\/+/, "").replace(/\/+$/, "")
+  return projectRoot
+    .replaceAll("\\", "/")
+    .replace(/^\.\/+/, "")
+    .replace(/\/+$/, "")
 }
 
 function isFrontendDesignSkeletonRoot(normalizedProjectRoot: string): boolean {
-  return normalizedProjectRoot === "frontend-design-skeleton" || normalizedProjectRoot.endsWith("/frontend-design-skeleton")
+  return (
+    normalizedProjectRoot === "frontend-design-skeleton" || normalizedProjectRoot.endsWith("/frontend-design-skeleton")
+  )
 }
 
 function parseMaybeStringArray(value: unknown): unknown {
@@ -236,8 +267,10 @@ function normalizeFrontendTemplateInput(input: unknown): unknown {
   // Some providers flatten a nested tool object into keys like
   // `frontend_project<arg_key>status`; rebuild that object before Zod parsing.
   const frontendProject: Record<string, unknown> = {
-    ...(source.frontend_project && typeof source.frontend_project === "object" && !Array.isArray(source.frontend_project)
-      ? source.frontend_project as Record<string, unknown>
+    ...(source.frontend_project &&
+    typeof source.frontend_project === "object" &&
+    !Array.isArray(source.frontend_project)
+      ? (source.frontend_project as Record<string, unknown>)
       : {}),
   }
   let sawFlattenedFrontendProject = false
@@ -246,9 +279,7 @@ function normalizeFrontendTemplateInput(input: unknown): unknown {
     if (!match) continue
     sawFlattenedFrontendProject = true
     const field = match[1]
-    frontendProject[field] = field === "entrypoints" || field === "notes"
-      ? parseMaybeStringArray(value)
-      : value
+    frontendProject[field] = field === "entrypoints" || field === "notes" ? parseMaybeStringArray(value) : value
     delete normalized[key]
   }
   if (sawFlattenedFrontendProject || source.frontend_project) {
@@ -263,9 +294,7 @@ function normalizeFrontendTemplateInput(input: unknown): unknown {
 export function buildFrontendTemplateReport(collector: FrontendTemplateOutputCollector) {
   if (!collector.final) throw new Error("agent report design final is missing")
   const title = titleFromMarkdown(collector.final.frontend_template)
-  const summary = title
-    ? title
-    : `${collector.specs.length} visual spec(s) for ${collector.final.design_system}`
+  const summary = title ? title : `${collector.specs.length} visual spec(s) for ${collector.final.design_system}`
   const specLines = collector.specs.map((spec) => `${spec.id} [${spec.category}]: ${spec.title}`)
   return {
     summary: limitSummary(summary),
@@ -301,7 +330,8 @@ function assertFrontendTemplateFinal(final: FrontendTemplateFinal): void {
     ["ui_data_contract", final.ui_data_contract],
   ] as const
   for (const [key, value] of requiredRenderedFields) {
-    if (!value.trim()) throw new Error(`${key} is required; provide concise markdown or the matching structured *_items field`)
+    if (!value.trim())
+      throw new Error(`${key} is required; provide concise markdown or the matching structured *_items field`)
   }
 }
 
@@ -323,20 +353,34 @@ function renderFrontendProjectReport(final: FrontendTemplateFinal): string {
     `- generation_tool: ${project.generation_tool || "(not specified)"}`,
   ]
   if (maintainableSourceBaseline) {
-    lines.push("- maintainable_status: incomplete_source_baseline. This is explicit unfinished frontend_design source debt, not a final maintainable implementation target.")
+    lines.push(
+      "- maintainable_status: incomplete_source_baseline. This is explicit unfinished frontend_design source debt, not a final maintainable implementation target.",
+    )
   }
   if (visualSourceBaseline) {
-    lines.push("- visual_status: incomplete_visual_baseline. This visual-only workflow has not delivered the required `visual-html-skeleton/` static HTML/CSS baseline.")
-    lines.push("- visual_next_action: frontend_design must restore and verify `visual-html-skeleton/index.html`, `visual-html-skeleton/styles/tokens.css`, external region CSS/assets, screenshots, and visual-diff evidence before handoff.")
+    lines.push(
+      "- visual_status: incomplete_visual_baseline. This visual-only workflow has not delivered the required `visual-html-skeleton/` static HTML/CSS baseline.",
+    )
+    lines.push(
+      "- visual_next_action: frontend_design must restore and verify `visual-html-skeleton/index.html`, `visual-html-skeleton/styles/tokens.css`, external region CSS/assets, screenshots, and visual-diff evidence before handoff.",
+    )
   }
   if (project.role === "visual_baseline_input") {
-    lines.push("- visual_baseline_rule: this project is a derived static HTML/CSS visual baseline input, not an implementation target and not the acceptance app root.")
-    lines.push("- visual_authority: original `web-clone-source/source-ir/*`, `web-clone-source/source-skeleton/*`, and `web-clone-source/reference.png` remain authoritative if this skeleton conflicts with source evidence or visible pixels.")
-    lines.push("- transcription_rule: future maintainable project work must transcribe this skeleton into semantic components/data/style modules while preserving the original source IR, assets, and reference screenshot as verification evidence.")
+    lines.push(
+      "- visual_baseline_rule: this project is a derived static HTML/CSS visual baseline input, not an implementation target and not the acceptance app root.",
+    )
+    lines.push(
+      "- visual_authority: original `web-clone-source/source-ir/*`, `web-clone-source/source-skeleton/*`, and `web-clone-source/reference.png` remain authoritative if this skeleton conflicts with source evidence or visible pixels.",
+    )
+    lines.push(
+      "- transcription_rule: future maintainable project work must transcribe this skeleton into semantic components/data/style modules while preserving the original source IR, assets, and reference screenshot as verification evidence.",
+    )
     lines.push(renderVisualBaselineQualityStatus(final))
   }
   if (isFrontendDesignSkeleton) {
-    lines.push("- adoption_rule: frontend-design-skeleton is captured source evidence only. frontend_design must restore a separate static HTML/CSS visual skeleton from it; if this remains the named project, the named visual/source debt is unfinished frontend_design work.")
+    lines.push(
+      "- adoption_rule: frontend-design-skeleton is captured source evidence only. frontend_design must restore a separate static HTML/CSS visual skeleton from it; if this remains the named project, the named visual/source debt is unfinished frontend_design work.",
+    )
   }
   if (project.entrypoints.length > 0) {
     lines.push("- entrypoints:")
@@ -355,8 +399,14 @@ function renderVisualBaselineQualityStatus(final: FrontendTemplateFinal): string
     return "- visual_quality_status: evidence_missing. No measured high-fidelity `webpage_evaluate` score was reported for the visual HTML skeleton; treat the skeleton as unproven until a 96/100 evaluation or >=0.95 similarity is recorded."
   }
   if (evidence.status === "incomplete_visual_fidelity") {
-    const score = evidence.lastScore === undefined ? "" : ` Reported score ${formatNumber(evidence.lastScore)}/100 is below required ${HIGH_FIDELITY_VISUAL_SCORE}/100.`
-    const similarity = evidence.lastSimilarity === undefined ? "" : ` Reported similarity ${formatNumber(evidence.lastSimilarity)} is below required ${HIGH_FIDELITY_VISUAL_SIMILARITY}.`
+    const score =
+      evidence.lastScore === undefined
+        ? ""
+        : ` Reported score ${formatNumber(evidence.lastScore)}/100 is below required ${HIGH_FIDELITY_VISUAL_SCORE}/100.`
+    const similarity =
+      evidence.lastSimilarity === undefined
+        ? ""
+        : ` Reported similarity ${formatNumber(evidence.lastSimilarity)} is below required ${HIGH_FIDELITY_VISUAL_SIMILARITY}.`
     const debt = evidence.hasRemainingDebt ? " Remaining visual debt is present in the submitted contract." : ""
     return `- visual_quality_status: incomplete_visual_fidelity.${score}${similarity}${debt} This skeleton is unproven and must not be treated as ready for downstream transcription.`
   }
@@ -370,7 +420,9 @@ function inspectVisualBaselineQuality(final: FrontendTemplateFinal): {
   hasRemainingDebt: boolean
 } {
   const text = collectVisualBaselineText(final)
-  const scores = Array.from(text.matchAll(/\b(?:score|overallScore|current score)\s*:?\s*(\d{1,3}(?:\.\d+)?)\s*\/\s*100\b/gi))
+  const scores = Array.from(
+    text.matchAll(/\b(?:score|overallScore|current score)\s*:?\s*(\d{1,3}(?:\.\d+)?)\s*\/\s*100\b/gi),
+  )
     .map((match) => Number(match[1]))
     .filter((score) => Number.isFinite(score))
   const similarities = Array.from(text.matchAll(/\b(?:similarity|mean)\s*(?:=|:)\s*(0(?:\.\d+)?|1(?:\.0+)?)\b/gi))
@@ -378,7 +430,8 @@ function inspectVisualBaselineQuality(final: FrontendTemplateFinal): {
     .filter((score) => Number.isFinite(score))
   const lastScore = scores.at(-1)
   const lastSimilarity = similarities.at(-1)
-  const explicitBelowThreshold = /\b(?:below|under|less than)\s+(?:the\s+)?(?:95%|0\.95|95\/100|96\/100|threshold)\b/i.test(text)
+  const explicitBelowThreshold =
+    /\b(?:below|under|less than)\s+(?:the\s+)?(?:95%|0\.95|95\/100|96\/100|threshold)\b/i.test(text)
   const hasRemainingDebt = /\bremaining visual debt\s*:\s*(?!\s*(?:none|no|0|\(\s*none\s*\))\b)/i.test(text)
 
   if (explicitBelowThreshold || hasRemainingDebt) {
@@ -386,7 +439,8 @@ function inspectVisualBaselineQuality(final: FrontendTemplateFinal): {
   }
   if (lastScore !== undefined) {
     return {
-      status: lastScore >= HIGH_FIDELITY_VISUAL_SCORE ? "high_fidelity_evidence_reported" : "incomplete_visual_fidelity",
+      status:
+        lastScore >= HIGH_FIDELITY_VISUAL_SCORE ? "high_fidelity_evidence_reported" : "incomplete_visual_fidelity",
       lastScore,
       lastSimilarity,
       hasRemainingDebt,
@@ -394,7 +448,10 @@ function inspectVisualBaselineQuality(final: FrontendTemplateFinal): {
   }
   if (lastSimilarity !== undefined) {
     return {
-      status: lastSimilarity >= HIGH_FIDELITY_VISUAL_SIMILARITY ? "high_fidelity_evidence_reported" : "incomplete_visual_fidelity",
+      status:
+        lastSimilarity >= HIGH_FIDELITY_VISUAL_SIMILARITY
+          ? "high_fidelity_evidence_reported"
+          : "incomplete_visual_fidelity",
       lastScore,
       lastSimilarity,
       hasRemainingDebt,
@@ -444,9 +501,10 @@ function buildRequirement(category: VisualSpecCategory, input: Record<string, un
       return `${input.section_role} [${input.layout_method}] @ ${input.position}, ${input.dimensions}${parent}`
     }
     case "component": {
-      const refs = Array.isArray(input.visual_refs) && input.visual_refs.length > 0
-        ? ` · refs=[${(input.visual_refs as string[]).join(", ")}]`
-        : ""
+      const refs =
+        Array.isArray(input.visual_refs) && input.visual_refs.length > 0
+          ? ` · refs=[${(input.visual_refs as string[]).join(", ")}]`
+          : ""
       const layout = input.within_layout_id ? ` · in=${input.within_layout_id}` : ""
       return `${input.component_type}/${input.variant} — ${input.props}${layout}${refs}`
     }
@@ -481,7 +539,7 @@ export function createFrontendTemplateOutputTools(options: { autoIteration?: boo
     if (collector.specs.length >= VISUAL_ANCHOR_BUDGET) {
       return (
         `VISUAL_ANCHOR_BUDGET_REACHED: ${VISUAL_ANCHOR_BUDGET} visual anchors are already registered. ` +
-      "Stop registering per-item visual rows; consolidate remaining detail in frontend_template/fillable_modules/completeness_review/material_inventory/visual_consistency_contract/ui_data_contract, " +
+        "Stop registering per-item visual rows; consolidate remaining detail in frontend_template/fillable_modules/completeness_review/material_inventory/visual_consistency_contract/ui_data_contract, " +
         "complete the frontend template review pass(es) required by assistant.auto_iteration, then call submit_frontend_template."
       )
     }
@@ -607,8 +665,11 @@ export function createFrontendTemplateOutputTools(options: { autoIteration?: boo
         "do not register rows or call more webpage evidence tools once this terminal tool is exposed.",
       inputSchema: FrontendTemplateToolInputSchema,
       execute: async (input) => {
-        if (collector.final) return "Error: frontend template already submitted; duplicate submit_frontend_template ignored."
-        const final = normalizeFrontendTemplateFinal(FrontendTemplateFinalSchema.parse(normalizeFrontendTemplateInput(input)))
+        if (collector.final)
+          return "Error: frontend template already submitted; duplicate submit_frontend_template ignored."
+        const final = normalizeFrontendTemplateFinal(
+          FrontendTemplateFinalSchema.parse(normalizeFrontendTemplateInput(input)),
+        )
         assertFrontendTemplateFinal(final)
         if (autoIteration && final.template_iteration_notes.length < 2) {
           throw new Error(
@@ -619,7 +680,6 @@ export function createFrontendTemplateOutputTools(options: { autoIteration?: boo
         return "OK: complete frontend design/replica contract submitted for orchestrator handoff."
       },
     }),
-
   }
 
   return {

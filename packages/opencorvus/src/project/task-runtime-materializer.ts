@@ -29,10 +29,7 @@ export namespace TaskRuntimeMaterializer {
   }
 }
 
-async function copyRuntimeView(input: {
-  sourcePath: string
-  viewPath: string
-}): Promise<void> {
+async function copyRuntimeView(input: { sourcePath: string; viewPath: string }): Promise<void> {
   await fs.mkdir(input.sourcePath, { recursive: true })
 
   const existing = await fs.lstat(input.viewPath).catch(() => undefined)

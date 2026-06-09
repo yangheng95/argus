@@ -17,7 +17,11 @@ export namespace SessionSummary {
 
   export async function readDiff(sessionID: string): Promise<Snapshot.FileDiff[]> {
     let lastError: unknown
-    for (const target of ProjectRuntimePaths.sessionDiffPathReadCandidates(Instance.directory, Instance.project.id, sessionID)) {
+    for (const target of ProjectRuntimePaths.sessionDiffPathReadCandidates(
+      Instance.directory,
+      Instance.project.id,
+      sessionID,
+    )) {
       try {
         return await Filesystem.readJson<Snapshot.FileDiff[]>(target)
       } catch (error) {
@@ -147,9 +151,10 @@ export namespace SessionSummary {
         }
       })
       const changed = next.some((item, i) => item.file !== diffs[i]?.file)
-      if (changed) writeDiff(input.sessionID, next).catch((err) => {
-        log.warn("session_diff storage write failed", { sessionID: input.sessionID, error: String(err) })
-      })
+      if (changed)
+        writeDiff(input.sessionID, next).catch((err) => {
+          log.warn("session_diff storage write failed", { sessionID: input.sessionID, error: String(err) })
+        })
       return next
     },
   )

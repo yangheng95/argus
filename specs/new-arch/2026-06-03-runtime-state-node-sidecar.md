@@ -6,14 +6,14 @@ Overlay benchmark exposed a Windows runtime failure in `frontend_design` webpage
 evidence materialization. The failing path is host-owned evidence preparation,
 not an LLM tool choice:
 
-| Call point | Decision |
-| --- | --- |
-| `packages/opencorvus/src/orchestrator/tools.ts` `frontend_design` | Keep. It calls host materialization before the frontend-design agent. |
-| `packages/opencorvus/src/orchestrator/webpage-evidence.ts` `ensureLiveWebpageEvidence` | Keep. It remains the single live webpage evidence pipeline. |
-| `packages/opencorvus/src/research/webpage-prd-evidence.ts` `prepareWebpagePrdEvidence` | Keep. It reuses the same pipeline for PRD evidence. |
-| `packages/opencorvus/src/frontend-design/tools/webpage-runtime-state.ts` | Keep. It continues to call the same runtime-state capture entrypoint. |
-| `packages/opencorvus/src/browser/webpage/runtime-state.ts` `captureWebpageRuntimeStateEvidence` | Replace internals. The public entrypoint and artifact contract stay unchanged. |
-| `packages/opencorvus/src/browser/runtime/index.ts` `launchPlaywrightBrowser` | Keep for existing MCP/session callers, but remove it from runtime-state evidence capture. |
+| Call point                                                                                      | Decision                                                                                  |
+| ----------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------- |
+| `packages/opencorvus/src/orchestrator/tools.ts` `frontend_design`                               | Keep. It calls host materialization before the frontend-design agent.                     |
+| `packages/opencorvus/src/orchestrator/webpage-evidence.ts` `ensureLiveWebpageEvidence`          | Keep. It remains the single live webpage evidence pipeline.                               |
+| `packages/opencorvus/src/research/webpage-prd-evidence.ts` `prepareWebpagePrdEvidence`          | Keep. It reuses the same pipeline for PRD evidence.                                       |
+| `packages/opencorvus/src/frontend-design/tools/webpage-runtime-state.ts`                        | Keep. It continues to call the same runtime-state capture entrypoint.                     |
+| `packages/opencorvus/src/browser/webpage/runtime-state.ts` `captureWebpageRuntimeStateEvidence` | Replace internals. The public entrypoint and artifact contract stay unchanged.            |
+| `packages/opencorvus/src/browser/runtime/index.ts` `launchPlaywrightBrowser`                    | Keep for existing MCP/session callers, but remove it from runtime-state evidence capture. |
 
 The benchmark process runs under Bun. On Windows, Bun plus Playwright failed to
 launch system Chrome through `remote-debugging-pipe` within the 60 second host

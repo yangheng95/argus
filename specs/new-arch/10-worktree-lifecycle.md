@@ -34,7 +34,9 @@
 ## 1 · 问题陈述
 
 ### 症状
+
 `bench14` 跑 AMD chart 复刻：goal 2 被 owned_paths conformance gate 正确拦截 4 次，每次 supersede + 重跑，但**每次违规位置完全不同**：
+
 1. `src/src/` 双层嵌套
 2. `server/index.ts outside owned_paths`
 3. `src/App.tsx outside declared`
@@ -43,22 +45,25 @@
 executor 根本没收敛——每次以"空 worktree"起步，没看到前次自己写的错位置。
 
 ### 根因
+
 1. `goal-pool.ts` 三个失败路径（pipeline-error / conformance gate / per-goal evaluator）都调用 `cleanupGoalWorkspace(worktreeDir)` → `Worktree.remove` → **删 dir + 删 branch**
 2. `goal_run` supersede 创建新 goal_run → `dispatchGoal` 调 `Worktree.create` → **全新 worktree 从 baseRef branch out**
 3. `goal/runner.ts:491` retry prompt 声称 "previous acceptance files have already been restored into this worktree" —— **这一直是谎话**，文件没有被 restore
 4. executor 看到：空 worktree + retry feedback 描述前次违规的文件（这些文件不存在）→ 无法 "modify them"，只能从零重写 → 每次新 LLM 盲猜新路径 → 不收敛
 
 ### 行业对照
-| 系统 | 失败/重试后默认是否立即丢弃工作空间 |
-|---|---|
-| Claude Code | **否**（无改动自动删；有改动或 commits 时提示 keep/remove；孤儿 subagent worktree 仅在 age + no uncommitted + no untracked + no unpushed commits 时清） |
-| Codex Cloud | **否**（每个 task 独立 container；environment cache 最多 12h，用于加速新任务和 follow-up，但官方未承诺跨 task 保留上次工作区脏状态） |
-| Codex CLI | **否**（默认直接在当前 cwd 运行；sandbox 是安全边界，不是 retry 生命周期） |
-| **opencorvus 当前** | **是**，每次失败都删 |
+
+| 系统                | 失败/重试后默认是否立即丢弃工作空间                                                                                                                     |
+| ------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Claude Code         | **否**（无改动自动删；有改动或 commits 时提示 keep/remove；孤儿 subagent worktree 仅在 age + no uncommitted + no untracked + no unpushed commits 时清） |
+| Codex Cloud         | **否**（每个 task 独立 container；environment cache 最多 12h，用于加速新任务和 follow-up，但官方未承诺跨 task 保留上次工作区脏状态）                    |
+| Codex CLI           | **否**（默认直接在当前 cwd 运行；sandbox 是安全边界，不是 retry 生命周期）                                                                              |
+| **opencorvus 当前** | **是**，每次失败都删                                                                                                                                    |
 
 → 我们是**孤立反模式**。
 
 ### 约束
+
 - CLAUDE.md rule 1：no fallback
 - CLAUDE.md rule 2：no 打补丁兼容旧（不留双路径 `if (retryable) skip_cleanup`）
 - CLAUDE.md rule 4：改本质，不绕过
@@ -68,9 +73,11 @@ executor 根本没收敛——每次以"空 worktree"起步，没看到前次自
 ## 2 · 设计原则
 
 ### 2.1 对齐 Claude Code
+
 以下只采信公开一手文档，不把推断写成产品事实。
 
 Claude Code 本地 worktree 会话的清理策略（公开文档）：
+
 - 无改动 → 自动删
 - 有改动或 commits → 提示用户 keep/remove；keep 会保留目录和 branch，remove 会删除目录和 branch
 - 对 crash / interrupted parallel run 遗留的 orphaned **subagent** worktree：仅在 `older > cleanupPeriodDays` + `无 uncommitted` + `无 untracked` + `无 unpushed commits` 时自动清
@@ -79,18 +86,22 @@ Claude Code 本地 worktree 会话的清理策略（公开文档）：
 本方案借鉴其保守原则：**默认不删除仍可能承载在途修改的 worktree；只有最新 goal_run 成功完成时才清**。
 
 ### 2.2 生命周期绑定改 goal
-| 状态 | worktree 生命周期 |
-|---|---|
-| 当前 | goal_run ↔ worktree 1:1，每 run 建、每 run 清 |
+
+| 状态   | worktree 生命周期                                                             |
+| ------ | ----------------------------------------------------------------------------- |
+| 当前   | goal_run ↔ worktree 1:1，每 run 建、每 run 清                                |
 | 新设计 | **goal ↔ worktree 1:1**，goal 首次 dispatch 建，最新 goal_run 成功完成后才清 |
 
 依据：同 goal 的多个 goal_run（supersede chain）本质上是"同一任务的多次 attempt"，共享工作空间更合理。并发安全由 `LIVE_GOAL_RUN_STATUSES` 保证——同 goal 同时只有一个 live goal_run。
 
 ### 2.3 什么是终态
+
 触发 worktree 清理的时机（**只有这些**）：
+
 1. **最新 goal_run.status = completed**：build passed，并且 merge_back 已经落到 primary 后。
 
 禁止清理的时机：
+
 - `failed`：失败现场是下一轮修复的输入。
 - `aborted`：abort 只能终止调度状态，不能删除仍可能被 executor 持有的源码目录。
 - `task cancel`：用户取消不等于用户同意删除工作现场。
@@ -98,11 +109,13 @@ Claude Code 本地 worktree 会话的清理策略（公开文档）：
 - `engine-recovery`：恢复流程只能中止失联运行，不能把失联 worktree 当作成功交付物删除。
 
 ### 2.4 可重试失败不清
+
 原三处 `cleanupGoalWorkspace` 调用（pipeline-error / conformance gate / eval-reject）**全部删除**。这些都是"可重试失败"，worktree 保留供下次 retry 复用。
 
 ## 3 · 数据模型
 
 ### 3.1 goal_run_attempt 保存当前 workspace 指针
+
 ```
 goal_run_attempt payload:
   workspace_dir       -- 当前 live worktree 绝对路径
@@ -112,12 +125,14 @@ goal_run_attempt payload:
 ```
 
 语义：
+
 - goal 首次 dispatch 时写入最新 attempt。
 - retry / supersede 后，最新 tip attempt 继续承载 workspace 指针。
 - cleanup 只能读取最新 tip；只有 `status=completed` 才能物理删除并把同一 tip 的 workspace 字段置空。
 - `engine_goal.workspace_*` 已删除，不能恢复双源字段。
 
 ### 3.2 engine_goal_run 字段语义调整
+
 - `workspace_dir`：记录这个 goal_run **使用的**（复用或创建）worktree。不负责生命周期。
 - `base_ref` / `merge_ref`：保留，每 attempt 独立。
 - `status`：cleanup 资格的唯一状态来源。
@@ -125,6 +140,7 @@ goal_run_attempt payload:
 ## 4 · 行为规范（状态迁移）
 
 ### 4.1 首次 dispatch
+
 ```
 pool.dispatchGoal(goal) where goal.workspace_dir IS NULL
   → Worktree.create({ name: `goal-${goalId.slice(-8)}`, checkout: "sync" })
@@ -133,6 +149,7 @@ pool.dispatchGoal(goal) where goal.workspace_dir IS NULL
 ```
 
 ### 4.2 Retry dispatch（supersede 触发的新 goal_run）
+
 ```
 pool.dispatchGoal(goal) where goal.workspace_dir IS NOT NULL AND exists-on-disk
   → 跳过 Worktree.create
@@ -143,6 +160,7 @@ pool.dispatchGoal(goal) where goal.workspace_dir IS NOT NULL AND exists-on-disk
 ```
 
 ### 4.3 Worktree 缺失（异常）
+
 ```
 pool.dispatchGoal(goal) where goal.workspace_dir IS NOT NULL BUT not-exists-on-disk
   → 这是异常状态（process crash 后磁盘被清）
@@ -151,6 +169,7 @@ pool.dispatchGoal(goal) where goal.workspace_dir IS NOT NULL BUT not-exists-on-d
 ```
 
 ### 4.4 Goal 终态 passed
+
 ```
 deliver 阶段成功 cherry-pick merge → goal.status = passed
   → trigger cleanup
@@ -159,6 +178,7 @@ deliver 阶段成功 cherry-pick merge → goal.status = passed
 ```
 
 ### 4.5 Goal failed / aborted
+
 ```
 orchestrator calls fail_task / records a terminal failure decision from evidence
   → updateGoalCascadeFailed(goalID)
@@ -167,6 +187,7 @@ orchestrator calls fail_task / records a terminal failure decision from evidence
 ```
 
 ### 4.6 Task cancel / restart_from_stage
+
 ```
 abortLiveExecutionForTask 已有入口（writer.ts）
   → abort live goal_run / run / executor_session
@@ -175,6 +196,7 @@ abortLiveExecutionForTask 已有入口（writer.ts）
 ```
 
 ### 4.7 启动孤儿清理（engine-recovery）
+
 ```
 listLiveGoalRunsForProject → 每个关联的 goal.workspace_dir：
   abort lost live rows
@@ -185,10 +207,12 @@ listLiveGoalRunsForProject → 每个关联的 goal.workspace_dir：
 ## 5 · 代码变更面
 
 ### 5.1 engine.sql.ts / storage/ddl.ts
+
 - engine_goal 加 `workspace_dir text`, `workspace_branch text`
 - Rule 14：禁迁移数据库 → reset DB 重建
 
 ### 5.2 engine/goal-pool.ts::dispatchGoal
+
 - 入口查 `engine_goal.workspace_dir`
   - NULL → 走首次 dispatch 路径
   - NOT NULL + exists → 复用
@@ -197,6 +221,7 @@ listLiveGoalRunsForProject → 每个关联的 goal.workspace_dir：
 - **删除所有失败路径的 `cleanupGoalWorkspace` 调用**（3 处）
 
 ### 5.3 engine/writer.ts · success-only cleanup
+
 - `cleanupGoalWorkspaceForGoal(goalID)` 必须读取 `findGoalLatestWorkspace(goalID)`：
   ```
   if (!live.directory) return false
@@ -209,67 +234,80 @@ listLiveGoalRunsForProject → 每个关联的 goal.workspace_dir：
   - deliver 发布完成时对已 completed goals 的幂等清理
 
 ### 5.4 goal/runner.ts::cleanupGoalWorkspace
+
 - 函数**保留原样**（物理清目录 + remove worktree + branch）
 - 不再被 per-attempt 失败路径调用
 - 只被 per-goal-terminal 路径调用
 
 ### 5.5 goal/runner.ts::buildRetryFeedbackSection
+
 - prompt 改 "previous acceptance files have already been restored into this worktree" 为实话：
   ```
-  "This worktree contains your prior attempt(s). The files you wrote before are 
-   present — read them, compare to the failures below, and edit in place. Do NOT 
+  "This worktree contains your prior attempt(s). The files you wrote before are
+   present — read them, compare to the failures below, and edit in place. Do NOT
    delete them and start over unless the failure specifically requires it."
   ```
 
 ### 5.6 engine/writer.ts::abortLiveExecutionForTask
+
 - `cleanupGoalWorkspaces?: boolean` 默认 false。
 - 即使调用方显式传 true，`cleanupGoalWorkspaceForGoal` 也必须按最新 tip status 做 success-only gate。
 - 保持现有 abortGoalRuns 逻辑不变
 
 ### 5.7 engine/recovery.ts · 启动孤儿清理
+
 - 读所有 project 的 live goal_run。
 - 恢复流程只中止失联执行状态，不删除非 completed workspace。
 - completed cleanup 仍统一走 `cleanupGoalWorkspaceForGoal`，禁止 recovery 自己实现第二套删除条件。
 
 ## 6 · Claude Code 对齐检查
 
-| 项 | Claude Code | 本方案 |
-|---|---|---|
-| "有改动时不直接自动删" | ✅ 退出时提示 keep/remove，孤儿 sweep 只清 clean worktree | ✅ 可重试失败不清 |
-| 退出/终态清理 | ✅ 无改动自动删；有改动需显式 remove 或满足孤儿清理 gate | ✅ goal terminal 才删 |
-| 启动孤儿清理 gate | age + uncommitted + untracked + unpushed | 同样 gate |
-| 复用 branch | ✅ | ✅ |
-| 用户 keep/remove prompt | ✅（交互）| ❌ 不做（我们是 headless benchmark 主导） |
+| 项                      | Claude Code                                               | 本方案                                    |
+| ----------------------- | --------------------------------------------------------- | ----------------------------------------- |
+| "有改动时不直接自动删"  | ✅ 退出时提示 keep/remove，孤儿 sweep 只清 clean worktree | ✅ 可重试失败不清                         |
+| 退出/终态清理           | ✅ 无改动自动删；有改动需显式 remove 或满足孤儿清理 gate  | ✅ goal terminal 才删                     |
+| 启动孤儿清理 gate       | age + uncommitted + untracked + unpushed                  | 同样 gate                                 |
+| 复用 branch             | ✅                                                        | ✅                                        |
+| 用户 keep/remove prompt | ✅（交互）                                                | ❌ 不做（我们是 headless benchmark 主导） |
 
 ## 7 · 与既有系统的交互
 
 ### 7.1 与 Option B（supersedeGoalRun）
+
 完全兼容。supersede 的语义"同一 goal 的新 attempt"与"同一 worktree 的新 attempt"一致。
 
 ### 7.2 与 manifest conformance gate
+
 gate 本身不变，但它失败后不再触发 cleanup，只写 evidence + updateGoalRun(failed)。下次 supersede + dispatch 时 executor 看到**前次违规的文件**还在，能针对性改。
 
 ### 7.3 与 visual_diff vision-only
+
 rendered.png 存在 `Instance.directory/.opencorvus/visual-diff/`（主 worktree 级），与 goal worktree 独立，不受本方案影响。
 
 ### 7.4 与 Phase C retry prompt
+
 buildRetryFeedbackSection 的 evidence 读取路径不变。它读的 goal_run evidence 和本方案无冲突。
 
 ## 8 · 风险 / 未决
 
 ### 8.1 Windows 文件锁
+
 current problem：失败时清 worktree 清不掉是**已知痛点**（bench12/13 遇到过 EACCES）。本方案**减少清理频次**（只在终态清），实际上**降低**这个问题暴露概率。但终态清仍有锁风险，保留 maxRetries=50 的 fs.rm 策略。
 
 ### 8.2 Worktree 累积
+
 极端场景：长任务、多 goal、多 retry。总 worktree 数 = 活跃 goal 数（不是 goal_run 数）。典型 task 5-10 goals → 5-10 worktrees，可接受。对比旧设计高峰 goal_runs × concurrency worktrees，显著降低。
 
 ### 8.3 并发安全
+
 supersedeGoalRun → dispatchGoal 之间有 gap，期间同 goal 不会有第二个 dispatch（LIVE_GOAL_RUN_STATUSES gate）。复用 worktree 是安全的。
 
 ### 8.4 Executor 看到"脏"worktree
+
 首次失败后 worktree 里留着失败 attempt 的文件。retry 看到脏状态可能被"沉没成本"影响（LLM 不肯推翻自己上次写的）。Mitigation：retry prompt 明确 "you MAY delete files + rewrite if the failure requires structural change (e.g. wrong layout); do NOT get anchored by prior attempt".
 
 ### 8.5 Branch 复用 vs 新 branch
+
 复用现有 branch：attempts 累积 commits 在同一 branch 上。好处：history 完整。坏处：branch 变"脏"。
 另一选择：每 attempt 新 commit 到同一 branch 的 tip 之上。这是 git 默认行为，无需额外处理。
 
@@ -294,6 +332,7 @@ supersedeGoalRun → dispatchGoal 之间有 gap，期间同 goal 不会有第二
 ## 11 · 验收标准
 
 bench15（AMD chart case）期望观察：
+
 - [ ] goal 2 第一次失败 → worktree 保留（log "worktree preserved for retry"）
 - [ ] goal 2 第二次 dispatch → "reusing workspace dir" log
 - [ ] Executor 第二次能看到 `src/src/app/layout.tsx` 实际存在，能 move/rename 修复

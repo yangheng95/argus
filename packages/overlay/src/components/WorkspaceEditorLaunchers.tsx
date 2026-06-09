@@ -1,13 +1,10 @@
-import { For, createSignal } from "solid-js";
-import { type ProjectEditorID } from "../services/host-transport";
-import { activeDirectory, openDirectoryInEditor, PROJECT_EDITORS } from "../services/workspace";
-import { saveSettings, settingsStore, setSettingsStore } from "../store/settings";
-import { t } from "../utils/i18n";
-import { Icon, type IconName } from "./Icon";
-import {
-  WorkspaceSplitLauncher,
-  WorkspaceSplitLauncherItem,
-} from "./WorkspaceSplitLauncher";
+import { For, createSignal } from "solid-js"
+import { type ProjectEditorID } from "../services/host-transport"
+import { activeDirectory, openDirectoryInEditor, PROJECT_EDITORS } from "../services/workspace"
+import { saveSettings, settingsStore, setSettingsStore } from "../store/settings"
+import { t } from "../utils/i18n"
+import { Icon, type IconName } from "./Icon"
+import { WorkspaceSplitLauncher, WorkspaceSplitLauncherItem } from "./WorkspaceSplitLauncher"
 
 const EDITOR_ICONS: Record<ProjectEditorID, IconName> = {
   vscode: "editor-vscode",
@@ -15,7 +12,7 @@ const EDITOR_ICONS: Record<ProjectEditorID, IconName> = {
   webstorm: "editor-webstorm",
   intellij: "editor-intellij",
   cursor: "editor-cursor",
-};
+}
 
 const EDITOR_ICON_SIZES: Record<ProjectEditorID, number> = {
   vscode: 18,
@@ -23,24 +20,24 @@ const EDITOR_ICON_SIZES: Record<ProjectEditorID, number> = {
   webstorm: 20,
   intellij: 20,
   cursor: 20,
-};
+}
 
 export function WorkspaceEditorLaunchers() {
-  const disabled = () => !activeDirectory();
-  const selectedEditor = () => settingsStore.projectEditor;
+  const disabled = () => !activeDirectory()
+  const selectedEditor = () => settingsStore.projectEditor
   const selectedEditorLabel = () =>
-    PROJECT_EDITORS.find((editor) => editor.id === selectedEditor())?.label ?? selectedEditor();
-  const [open, setOpen] = createSignal(false);
+    PROJECT_EDITORS.find((editor) => editor.id === selectedEditor())?.label ?? selectedEditor()
+  const [open, setOpen] = createSignal(false)
 
   function close() {
-    setOpen(false);
+    setOpen(false)
   }
 
   async function openEditor(editor: ProjectEditorID) {
-    close();
-    setSettingsStore("projectEditor", editor);
-    saveSettings();
-    await openDirectoryInEditor(editor);
+    close()
+    setSettingsStore("projectEditor", editor)
+    saveSettings()
+    await openDirectoryInEditor(editor)
   }
 
   return (
@@ -58,16 +55,16 @@ export function WorkspaceEditorLaunchers() {
       menuDataUI="workspace-editor-menu"
       onPrimaryClick={() => openEditor(selectedEditor())}
       onOpenChange={setOpen}
-      primaryChildren={(
+      primaryChildren={
         <span class="workspace-editor-select-icon" data-editor={selectedEditor()} aria-hidden="true">
           <Icon name={EDITOR_ICONS[selectedEditor()]} size={EDITOR_ICON_SIZES[selectedEditor()]} />
         </span>
-      )}
-      menuButtonChildren={(
+      }
+      menuButtonChildren={
         <span class="workspace-editor-select-caret" aria-hidden="true">
           <Icon name="caret-down" size={12} />
         </span>
-      )}
+      }
     >
       <For each={PROJECT_EDITORS}>
         {(editor) => (
@@ -79,12 +76,10 @@ export function WorkspaceEditorLaunchers() {
             <span class="workspace-editor-option-icon" aria-hidden="true">
               <Icon name={EDITOR_ICONS[editor.id]} size={EDITOR_ICON_SIZES[editor.id]} />
             </span>
-            <span class="workspace-editor-option-label">
-              {t("cwd.open_in_editor", { name: editor.label })}
-            </span>
+            <span class="workspace-editor-option-label">{t("cwd.open_in_editor", { name: editor.label })}</span>
           </WorkspaceSplitLauncherItem>
         )}
       </For>
     </WorkspaceSplitLauncher>
-  );
+  )
 }

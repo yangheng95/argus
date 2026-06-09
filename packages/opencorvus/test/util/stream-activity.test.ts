@@ -93,7 +93,11 @@ describe("abortableIterable", () => {
   })
 
   test("yields values normally when the source progresses", async () => {
-    async function* src() { yield 1; yield 2; yield 3 }
+    async function* src() {
+      yield 1
+      yield 2
+      yield 3
+    }
     const ctrl = new AbortController()
     const out: number[] = []
     for await (const v of abortableIterable(src(), ctrl.signal)) out.push(v)
@@ -107,17 +111,29 @@ describe("abortableIterable", () => {
         let i = 0
         return {
           next: async () => {
-            if (i === 0) { i++; return { value: 1, done: false } }
+            if (i === 0) {
+              i++
+              return { value: 1, done: false }
+            }
             return new Promise<IteratorResult<number>>(() => {})
           },
-          return: async () => { returned = true; return { value: undefined as any, done: true } },
+          return: async () => {
+            returned = true
+            return { value: undefined as any, done: true }
+          },
         }
       },
     }
     const ctrl = new AbortController()
     const it = abortableIterable(src, ctrl.signal)
     const consumer = (async () => {
-      try { for await (const _ of it) { /* drain first */ } } catch { /* expected */ }
+      try {
+        for await (const _ of it) {
+          /* drain first */
+        }
+      } catch {
+        /* expected */
+      }
     })()
     await Bun.sleep(20)
     ctrl.abort(new DOMException("idle", "AbortError"))

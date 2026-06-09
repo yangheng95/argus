@@ -17,57 +17,50 @@
 //     letting the user fall back to the inline card without the popup
 //     re-asserting itself for the same prompt.
 
-import { createMemo, createSignal, Show } from "solid-js";
-import { boardStore } from "../store/board";
-import { t } from "../utils/i18n";
-import {
-  InteractionCard,
-  type InteractionData,
-} from "./InteractionCard";
-import { Dialog } from "./primitives/Dialog";
+import { createMemo, createSignal, Show } from "solid-js"
+import { boardStore } from "../store/board"
+import { t } from "../utils/i18n"
+import { InteractionCard, type InteractionData } from "./InteractionCard"
+import { Dialog } from "./primitives/Dialog"
 
 export function pickDialogInteraction(
   interactions: InteractionData[] | null | undefined,
   dismissed: ReadonlySet<string>,
 ): InteractionData | null {
-  if (!Array.isArray(interactions)) return null;
+  if (!Array.isArray(interactions)) return null
   const pending = interactions.filter(
-    (it) =>
-      it?.status === "pending" &&
-      (it.type === "permission" || it.type === "question"),
-  );
-  if (pending.length === 0) return null;
+    (it) => it?.status === "pending" && (it.type === "permission" || it.type === "question"),
+  )
+  if (pending.length === 0) return null
   const sorted = [...pending].sort((a, b) => {
-    const aT = Number((a as any)?.time?.created ?? 0);
-    const bT = Number((b as any)?.time?.created ?? 0);
-    return aT - bT;
-  });
+    const aT = Number((a as any)?.time?.created ?? 0)
+    const bT = Number((b as any)?.time?.created ?? 0)
+    return aT - bT
+  })
   for (const it of sorted) {
-    if (!dismissed.has(it.id)) return it;
+    if (!dismissed.has(it.id)) return it
   }
-  return null;
+  return null
 }
 
 export function InteractionDialogHost() {
-  const [dismissed, setDismissed] = createSignal<ReadonlySet<string>>(new Set());
+  const [dismissed, setDismissed] = createSignal<ReadonlySet<string>>(new Set())
 
   const current = createMemo<InteractionData | null>(() => {
-    const list = (boardStore.board?.interactions || []) as InteractionData[];
-    const it = pickDialogInteraction(list, dismissed());
-    if (!it) return null;
-    const pruned = pruneDismissed(dismissed(), list);
-    if (pruned !== dismissed()) setDismissed(pruned);
-    return it;
-  });
+    const list = (boardStore.board?.interactions || []) as InteractionData[]
+    const it = pickDialogInteraction(list, dismissed())
+    if (!it) return null
+    const pruned = pruneDismissed(dismissed(), list)
+    if (pruned !== dismissed()) setDismissed(pruned)
+    return it
+  })
 
   const titleText = () => {
-    const it = current();
-    if (!it) return "";
-    if (it.title) return it.title;
-    return it.type === "permission"
-      ? t("interaction.icon.permission")
-      : t("interaction.icon.question");
-  };
+    const it = current()
+    if (!it) return ""
+    if (it.title) return it.title
+    return it.type === "permission" ? t("interaction.icon.permission") : t("interaction.icon.question")
+  }
 
   return (
     <Dialog
@@ -77,13 +70,13 @@ export function InteractionDialogHost() {
       title={<span>{titleText()}</span>}
       formClass="interaction-dialog-form"
       onClose={() => {
-        const it = current();
-        if (!it) return;
+        const it = current()
+        if (!it) return
         setDismissed((prev) => {
-          const next = new Set(prev);
-          next.add(it.id);
-          return next;
-        });
+          const next = new Set(prev)
+          next.add(it.id)
+          return next
+        })
       }}
     >
       {/* `keyed` so the card remounts when the queue advances from one
@@ -93,18 +86,15 @@ export function InteractionDialogHost() {
         {(it) => <InteractionCard interaction={it} />}
       </Show>
     </Dialog>
-  );
+  )
 }
 
-function pruneDismissed(
-  dismissed: ReadonlySet<string>,
-  interactions: InteractionData[],
-): ReadonlySet<string> {
-  if (dismissed.size === 0) return dismissed;
-  const stillPending = new Set<string>();
+function pruneDismissed(dismissed: ReadonlySet<string>, interactions: InteractionData[]): ReadonlySet<string> {
+  if (dismissed.size === 0) return dismissed
+  const stillPending = new Set<string>()
   for (const it of interactions) {
-    if (it?.status === "pending" && dismissed.has(it.id)) stillPending.add(it.id);
+    if (it?.status === "pending" && dismissed.has(it.id)) stillPending.add(it.id)
   }
-  if (stillPending.size === dismissed.size) return dismissed;
-  return stillPending;
+  if (stillPending.size === dismissed.size) return dismissed
+  return stillPending
 }

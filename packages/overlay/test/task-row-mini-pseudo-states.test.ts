@@ -57,7 +57,9 @@ function stripCssComments(input: string): string {
   return input.replace(/\/\*[\s\S]*?\*\//g, "")
 }
 const STYLES = stripCssComments(
-  walkCss(STYLES_ROOT).map((f) => readFileSync(f, "utf8")).join("\n"),
+  walkCss(STYLES_ROOT)
+    .map((f) => readFileSync(f, "utf8"))
+    .join("\n"),
 )
 
 function countTopLevelRulesEndingWithSelector(selector: string): number {
@@ -97,9 +99,7 @@ describe(".task-row-mini pseudo-state base rules are single source", () => {
     expect(countTopLevelRulesEndingWithSelector(".task-row-mini:hover")).toBe(1)
   })
 
-  test("[data-active=\"true\"] base rule appears in exactly one top-level block", () => {
-    expect(
-      countTopLevelRulesEndingWithSelector('.task-row-mini[data-active="true"]'),
-    ).toBe(1)
+  test('[data-active="true"] base rule appears in exactly one top-level block', () => {
+    expect(countTopLevelRulesEndingWithSelector('.task-row-mini[data-active="true"]')).toBe(1)
   })
 })

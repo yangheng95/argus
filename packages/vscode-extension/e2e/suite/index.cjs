@@ -24,8 +24,9 @@ async function run() {
     await waitFor("fake sidecar listen event", () =>
       readEvents().some((event) => event.type === "listen" && typeof event.port === "number"),
     )
-    await waitFor("webview sidecar request", () =>
-      readEvents().some((event) => event.type === "request" && event.url !== "/shutdown"),
+    await waitFor(
+      "webview sidecar request",
+      () => readEvents().some((event) => event.type === "request" && event.url !== "/shutdown"),
       30_000,
     )
     record("visual.ready", { labels: currentTabLabels() })

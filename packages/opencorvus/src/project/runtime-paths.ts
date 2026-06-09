@@ -1,9 +1,7 @@
 import path from "node:path"
 import { Identifier } from "@/id/id"
 
-type BranchInput =
-  | { taskID: string; goalID: string; runID: string }
-  | { taskID: string; sessionID: string }
+type BranchInput = { taskID: string; goalID: string; runID: string } | { taskID: string; sessionID: string }
 
 function safeSegment(input: string): string {
   const value = input
@@ -87,7 +85,11 @@ export namespace ProjectRuntimePaths {
     return path.join(taskRootFromRuntimeRoot(runtimeRoot, taskID), ...parts)
   }
 
-  export function taskAbsoluteReadCandidatesFromRuntimeRoot(runtimeRoot: string, taskID: string, ...parts: string[]): string[] {
+  export function taskAbsoluteReadCandidatesFromRuntimeRoot(
+    runtimeRoot: string,
+    taskID: string,
+    ...parts: string[]
+  ): string[] {
     return taskRootReadCandidatesFromRuntimeRoot(runtimeRoot, taskID).map((root) => path.join(root, ...parts))
   }
 
@@ -99,7 +101,11 @@ export namespace ProjectRuntimePaths {
     return taskAbsoluteFromRuntimeRoot(runtimeRoot, taskID, "sessions", idSegment(sessionID))
   }
 
-  export function sessionRootReadCandidatesFromRuntimeRoot(runtimeRoot: string, taskID: string, sessionID: string): string[] {
+  export function sessionRootReadCandidatesFromRuntimeRoot(
+    runtimeRoot: string,
+    taskID: string,
+    sessionID: string,
+  ): string[] {
     return taskRootReadCandidatesFromRuntimeRoot(runtimeRoot, taskID).flatMap((taskRoot) =>
       idSegmentCandidates(sessionID).map((sessionSegment) => path.join(taskRoot, "sessions", sessionSegment)),
     )
@@ -113,7 +119,11 @@ export namespace ProjectRuntimePaths {
     return path.join(sessionRootFromRuntimeRoot(runtimeRoot, taskID, sessionID), "trace.jsonl")
   }
 
-  export function tracePathReadCandidatesFromRuntimeRoot(runtimeRoot: string, taskID: string, sessionID: string): string[] {
+  export function tracePathReadCandidatesFromRuntimeRoot(
+    runtimeRoot: string,
+    taskID: string,
+    sessionID: string,
+  ): string[] {
     return sessionRootReadCandidatesFromRuntimeRoot(runtimeRoot, taskID, sessionID).map((root) =>
       path.join(root, "trace.jsonl"),
     )
@@ -137,7 +147,10 @@ export namespace ProjectRuntimePaths {
     }
   }
 
-  export function frontendDesignPaths(projectDir: string, taskID: string): {
+  export function frontendDesignPaths(
+    projectDir: string,
+    taskID: string,
+  ): {
     relativeDir: string
     webpageEvidenceRelative: string
     sourcePackageRelative: string
@@ -167,7 +180,11 @@ export namespace ProjectRuntimePaths {
     }
   }
 
-  export function deepResearchPaths(projectDir: string, taskID: string, sessionID: string): {
+  export function deepResearchPaths(
+    projectDir: string,
+    taskID: string,
+    sessionID: string,
+  ): {
     relativeDir: string
     absoluteDir: string
     fullMarkdownAbsolute: string
@@ -185,7 +202,11 @@ export namespace ProjectRuntimePaths {
     }
   }
 
-  export function frontendResearchPaths(projectDir: string, taskID: string, sessionID: string): {
+  export function frontendResearchPaths(
+    projectDir: string,
+    taskID: string,
+    sessionID: string,
+  ): {
     relativeDir: string
     absoluteDir: string
     fullMarkdownAbsolute: string
@@ -203,7 +224,10 @@ export namespace ProjectRuntimePaths {
     }
   }
 
-  export function acceptancePaths(projectDir: string, taskID: string): {
+  export function acceptancePaths(
+    projectDir: string,
+    taskID: string,
+  ): {
     root: string
     screenshots: string
     checkWorkspaces: string
@@ -231,7 +255,10 @@ export namespace ProjectRuntimePaths {
     return taskAbsolute(projectDir, taskID, "docs")
   }
 
-  export function docsPaths(projectDir: string, taskID: string): Record<"prds" | "plans" | "goals" | "evaluations", string> {
+  export function docsPaths(
+    projectDir: string,
+    taskID: string,
+  ): Record<"prds" | "plans" | "goals" | "evaluations", string> {
     const root = docsRoot(projectDir, taskID)
     return {
       prds: path.join(root, "prds"),
@@ -266,7 +293,9 @@ export namespace ProjectRuntimePaths {
   }
 
   export function sessionDiffPathReadCandidates(projectDir: string, projectID: string, sessionID: string): string[] {
-    return idSegmentCandidates(sessionID).map((segment) => path.join(sessionDiffRoot(projectDir, projectID), `${segment}.json`))
+    return idSegmentCandidates(sessionID).map((segment) =>
+      path.join(sessionDiffRoot(projectDir, projectID), `${segment}.json`),
+    )
   }
 
   export function worktreesRoot(projectDir: string): string {
@@ -292,7 +321,12 @@ export namespace ProjectRuntimePaths {
     return path.join(projectRuntimeRoot(projectDir), "ownership")
   }
 
-  export function ownershipPaths(projectDir: string, taskID: string, sessionID: string, goalRunID?: string): {
+  export function ownershipPaths(
+    projectDir: string,
+    taskID: string,
+    sessionID: string,
+    goalRunID?: string,
+  ): {
     worktreeMarkerDir: string
     processMarkerDir: string
     worktreeMarkerName: string

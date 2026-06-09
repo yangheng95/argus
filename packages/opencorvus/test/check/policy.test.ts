@@ -21,28 +21,21 @@ describe("check policy", () => {
     const checks = [{ name: "typecheck", status: "passed" as const }]
 
     expect(matchSelectors(["spec_check"], checks)).toEqual([])
-    expect(
-      selectorsSatisfied(
-        ["spec_check"],
-        [{ name: "spec_check", status: "passed" }],
-      ),
-    ).toBe(true)
+    expect(selectorsSatisfied(["spec_check"], [{ name: "spec_check", status: "passed" }])).toBe(true)
   })
 
   test("unmatched selectors fail instead of silently passing", () => {
     // selector references a check that never ran → should NOT pass
-    expect(
-      selectorsSatisfied(
-        ["spec_check"],
-        [{ name: "build", status: "passed" }],
-      ),
-    ).toBe(false)
+    expect(selectorsSatisfied(["spec_check"], [{ name: "build", status: "passed" }])).toBe(false)
 
     // multiple selectors, none match → should NOT pass
     expect(
       selectorsSatisfied(
         ["spec_check", "code_review"],
-        [{ name: "build", status: "passed" }, { name: "test", status: "passed" }],
+        [
+          { name: "build", status: "passed" },
+          { name: "test", status: "passed" },
+        ],
       ),
     ).toBe(false)
   })
@@ -54,11 +47,6 @@ describe("check policy", () => {
 
   test("mixed matched and unmatched selectors fail", () => {
     // "build" matches and passes, but "spec_check" has no matching check
-    expect(
-      selectorsSatisfied(
-        ["build", "spec_check"],
-        [{ name: "build", status: "passed" }],
-      ),
-    ).toBe(false)
+    expect(selectorsSatisfied(["build", "spec_check"], [{ name: "build", status: "passed" }])).toBe(false)
   })
 })

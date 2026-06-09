@@ -39,29 +39,29 @@ orchestrator message turn 3 card
 
 落盘前按 rule 35 穷举与本设计相关的调用点。
 
-| Area | Current source | Current assumption | Required decision |
-| --- | --- | --- | --- |
-| Card identity | `packages/overlay/src/store/card-tree.ts` ID comment: `<stage>:session:<sid>` | Agent card is session-scoped | Replace display agent card identity with contiguous-session segment ID |
-| Card payload | `CardNode` lacks explicit `sessionID` / `messageID` | UI derives session from `card.id` | Add explicit `sessionID` and `messageID`; stop parsing IDs |
-| Writer session index | `packages/overlay/src/services/tree-writer.ts` `SessionInfo.cardID` | One session has one render card | Split runtime session index from display card ids |
-| Writer part index | `SessionInfo.partIndex: Map<string, number>` | Part id targets `session.cardID.parts[index]` | Change to `Map<string, { cardID, index }>` |
-| Message creation | `handleMessageUpdated` | `ensureSessionCard` creates/reuses one card then `ensureBoundaryPart` | Reuse the current session card for consecutive messages; open a new segment after another session interrupts |
-| Part creation | `handlePartUpdated` | Missing session creates session card, then writes part to `session.cardID` | Route part by `messageID`; create pending turn card if message metadata has not arrived |
-| Delta routing | `handlePartDelta` / `validatePartDeltaTarget` | Lookup part index only within session card | Lookup exact `{cardID,index}` target |
-| Status routing | `handleSessionStatus` / `handleSessionError` / `drainPendingSessionStatus` | Session lifecycle mutates `info.cardID` | Mutate the current active turn card for that session |
-| Usage routing | `handleUsageUpdated` | Session usage mutates `info.cardID` | Mutate current active turn card; do not try to retroactively distribute cumulative usage |
-| Integrity | `materializeRunningIntegrity` / `materializeIntegrity` use `session.cardID` | Integrity verdict lives on the session card | If integrity remains single-message in practice, it still uses turn card; otherwise verdict applies to active turn |
-| Hydrate | `hydrateConversationView` iterates `sessionView.messageIDs` but writes into one session card | Hydration re-aggregates an entire session into one display card | Hydrate must mirror live contiguous-session segmenting |
-| Backend view | `packages/opencorvus/src/conversation/view.ts` groups by session and carries `messageIDs` | Frontend currently re-aggregates those IDs into one display card | P1 must stop using session grouping as render identity; prefer message-level view |
-| Hierarchy | `rebuildCardHierarchyImpl` iterates `sessions.values()` and uses `info.cardID` | Session card is the node to claim / hide / attach interactions to | Hierarchy must operate over session-owned turn card ids |
-| Top-level order | `rebuildTopLevelOrder` sorts cards by `time` | Session card birth time equals session first message | Turn card birth time is message creation time; existing sorter becomes correct |
-| Executor visibility | `syncExecutorTopLevelVisibility` checks `session.cardID` | Empty executor container has one card | Check active/current executor turn card or all session turn cards |
-| Interactions | `rebuildInteractionCards` attaches by `session.cardID` | Interactions attach to the session card | Attach to the active turn card at interaction time; if unavailable, pending until a turn exists |
-| Chat bubble trace/reply | `ChatBubble.tsx` `sessionIDFromCardID` | Card id format contains session id as suffix | Use `node.sessionID` |
-| Workflow projection | `utils/agent-workflow.ts` `sessionIDFromCardID` | Card id format contains session id as suffix | Use `node.sessionID`, with `phaseSessionID` for phase cards |
-| Board streams | `Board.tsx` `cardToMessageSegments` splits one agent card by `boundary` | One card may contain N messages | Keep boundary splitting because a contiguous segment can contain multiple real messages |
-| Transcript | `utils/transcript.ts` flatten card parts | One session card exports as one message with boundary parts inside | Segment cards export in display order; boundary parts preserve grouped message turns |
-| Tests | `tree-writer-hierarchy`, `conversation-view-hydrate`, `delta-coalesce`, `tool-call-generation-stream`, `tree-writer-perf` | Assert `<stage>:session:<sid>` card ids and one-card aggregation | Update to message-turn card ids and add orchestrator interleaving regression |
+| Area                    | Current source                                                                                                            | Current assumption                                                         | Required decision                                                                                                  |
+| ----------------------- | ------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------ |
+| Card identity           | `packages/overlay/src/store/card-tree.ts` ID comment: `<stage>:session:<sid>`                                             | Agent card is session-scoped                                               | Replace display agent card identity with contiguous-session segment ID                                             |
+| Card payload            | `CardNode` lacks explicit `sessionID` / `messageID`                                                                       | UI derives session from `card.id`                                          | Add explicit `sessionID` and `messageID`; stop parsing IDs                                                         |
+| Writer session index    | `packages/overlay/src/services/tree-writer.ts` `SessionInfo.cardID`                                                       | One session has one render card                                            | Split runtime session index from display card ids                                                                  |
+| Writer part index       | `SessionInfo.partIndex: Map<string, number>`                                                                              | Part id targets `session.cardID.parts[index]`                              | Change to `Map<string, { cardID, index }>`                                                                         |
+| Message creation        | `handleMessageUpdated`                                                                                                    | `ensureSessionCard` creates/reuses one card then `ensureBoundaryPart`      | Reuse the current session card for consecutive messages; open a new segment after another session interrupts       |
+| Part creation           | `handlePartUpdated`                                                                                                       | Missing session creates session card, then writes part to `session.cardID` | Route part by `messageID`; create pending turn card if message metadata has not arrived                            |
+| Delta routing           | `handlePartDelta` / `validatePartDeltaTarget`                                                                             | Lookup part index only within session card                                 | Lookup exact `{cardID,index}` target                                                                               |
+| Status routing          | `handleSessionStatus` / `handleSessionError` / `drainPendingSessionStatus`                                                | Session lifecycle mutates `info.cardID`                                    | Mutate the current active turn card for that session                                                               |
+| Usage routing           | `handleUsageUpdated`                                                                                                      | Session usage mutates `info.cardID`                                        | Mutate current active turn card; do not try to retroactively distribute cumulative usage                           |
+| Integrity               | `materializeRunningIntegrity` / `materializeIntegrity` use `session.cardID`                                               | Integrity verdict lives on the session card                                | If integrity remains single-message in practice, it still uses turn card; otherwise verdict applies to active turn |
+| Hydrate                 | `hydrateConversationView` iterates `sessionView.messageIDs` but writes into one session card                              | Hydration re-aggregates an entire session into one display card            | Hydrate must mirror live contiguous-session segmenting                                                             |
+| Backend view            | `packages/opencorvus/src/conversation/view.ts` groups by session and carries `messageIDs`                                 | Frontend currently re-aggregates those IDs into one display card           | P1 must stop using session grouping as render identity; prefer message-level view                                  |
+| Hierarchy               | `rebuildCardHierarchyImpl` iterates `sessions.values()` and uses `info.cardID`                                            | Session card is the node to claim / hide / attach interactions to          | Hierarchy must operate over session-owned turn card ids                                                            |
+| Top-level order         | `rebuildTopLevelOrder` sorts cards by `time`                                                                              | Session card birth time equals session first message                       | Turn card birth time is message creation time; existing sorter becomes correct                                     |
+| Executor visibility     | `syncExecutorTopLevelVisibility` checks `session.cardID`                                                                  | Empty executor container has one card                                      | Check active/current executor turn card or all session turn cards                                                  |
+| Interactions            | `rebuildInteractionCards` attaches by `session.cardID`                                                                    | Interactions attach to the session card                                    | Attach to the active turn card at interaction time; if unavailable, pending until a turn exists                    |
+| Chat bubble trace/reply | `ChatBubble.tsx` `sessionIDFromCardID`                                                                                    | Card id format contains session id as suffix                               | Use `node.sessionID`                                                                                               |
+| Workflow projection     | `utils/agent-workflow.ts` `sessionIDFromCardID`                                                                           | Card id format contains session id as suffix                               | Use `node.sessionID`, with `phaseSessionID` for phase cards                                                        |
+| Board streams           | `Board.tsx` `cardToMessageSegments` splits one agent card by `boundary`                                                   | One card may contain N messages                                            | Keep boundary splitting because a contiguous segment can contain multiple real messages                            |
+| Transcript              | `utils/transcript.ts` flatten card parts                                                                                  | One session card exports as one message with boundary parts inside         | Segment cards export in display order; boundary parts preserve grouped message turns                               |
+| Tests                   | `tree-writer-hierarchy`, `conversation-view-hydrate`, `delta-coalesce`, `tool-call-generation-stream`, `tree-writer-perf` | Assert `<stage>:session:<sid>` card ids and one-card aggregation           | Update to message-turn card ids and add orchestrator interleaving regression                                       |
 
 ## 2. Target Protocol
 
@@ -267,9 +267,7 @@ The executor container session is hidden unless it has display parts. With turn 
 `ChatBubble.tsx` must remove local `sessionIDFromCardID`.
 
 ```ts
-const traceSessionID = createMemo(() =>
-  props.node.kind === "agent" ? props.node.sessionID : undefined,
-)
+const traceSessionID = createMemo(() => (props.node.kind === "agent" ? props.node.sessionID : undefined))
 ```
 
 Reply/cancel remains session-scoped and uses `node.sessionID`.
@@ -279,10 +277,7 @@ Reply/cancel remains session-scoped and uses `node.sessionID`.
 `utils/agent-workflow.ts` must remove card-id parsing:
 
 ```ts
-const sessionID =
-  card.kind === "phase"
-    ? String(card.phaseSessionID || "")
-    : String(card.sessionID || "")
+const sessionID = card.kind === "phase" ? String(card.phaseSessionID || "") : String(card.sessionID || "")
 ```
 
 Multiple turn cards for the same session should merge into one workflow record keyed by `sessionID`, with:
@@ -488,7 +483,7 @@ Rules:
 - The card id still uses the first message id in that segment:
 
 ```ts
-`${stage}:session:${sessionID}:message:${firstMessageIDInSegment}`
+;`${stage}:session:${sessionID}:message:${firstMessageIDInSegment}`
 ```
 
 - `messageCardIDs` may therefore map multiple `messageID`s to the same display card.

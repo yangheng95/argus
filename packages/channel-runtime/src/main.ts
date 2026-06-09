@@ -27,7 +27,9 @@ import { resolveRuntimeConfig } from "./runtime-config"
 
 const bundled = await applyBundledEnv()
 if (bundled.expired) {
-  console.warn(`[ChannelRuntime] Bundled env expired at ${bundled.expireAt}. Configure your own packages/channel-runtime/.env to continue.`)
+  console.warn(
+    `[ChannelRuntime] Bundled env expired at ${bundled.expireAt}. Configure your own packages/channel-runtime/.env to continue.`,
+  )
 } else if (bundled.enabled) {
   console.log(
     `[ChannelRuntime] Bundled env active until ${bundled.expireAt} (applied ${bundled.applied}, user overrides ${bundled.skipped}).`,
@@ -54,9 +56,13 @@ if (profileState.invalid) {
 }
 console.log(`[ChannelRuntime] Permission profile: ${profileState.profile}`)
 
-console.log("[ChannelRuntime] Model/provider config source: opencorvus auth + opencorvus.json + OPENCORVUS_CONFIG_CONTENT")
+console.log(
+  "[ChannelRuntime] Model/provider config source: opencorvus auth + opencorvus.json + OPENCORVUS_CONFIG_CONTENT",
+)
 if (!activeKey) {
-  console.log("[ChannelRuntime] DashScope key not found in opencorvus auth. Run: opencorvus auth login (provider: alibaba-cn)")
+  console.log(
+    "[ChannelRuntime] DashScope key not found in opencorvus auth. Run: opencorvus auth login (provider: alibaba-cn)",
+  )
 }
 if (activeKey) {
   const keyType = useCodingPlan ? "sk-sp-* (Coding Plan)" : "sk-* (DashScope)"
@@ -124,7 +130,9 @@ if (activeKey) {
       }),
     )
     const keySource = useCodingPlan ? "opencorvus auth (coding plan)" : "opencorvus auth"
-    console.log(`[ChannelRuntime] Vision pipeline enabled (model: ${visionModel}, key: ${keySource}, baseURL: ${baseURL})`)
+    console.log(
+      `[ChannelRuntime] Vision pipeline enabled (model: ${visionModel}, key: ${keySource}, baseURL: ${baseURL})`,
+    )
   } else {
     console.log("[ChannelRuntime] Vision pipeline disabled (OPENCORVUS_VISION_MODEL not set)")
   }
@@ -167,4 +175,3 @@ if (process.env.TEST_PROMPT) {
     .injectPrompt("slack", channel, process.env.TEST_PROMPT)
     .catch((err) => console.error("[Test] injectPrompt failed:", err))
 }
-

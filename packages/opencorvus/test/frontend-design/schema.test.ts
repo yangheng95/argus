@@ -11,14 +11,16 @@ test("frontend-design schema module owns compact submit schema and visual spec s
 
   expect(providerSchema.required).toContain("final_acceptance_mode")
   expect(JSON.stringify(providerSchema).length).toBeLessThan(12_000)
-  expect(VisualSpecSchema.parse({
-    id: "vis-color-primary",
-    category: "color",
-    title: "Primary color",
-    requirement: "#ffffff",
-    applies_to: "body",
-    severity: "must",
-  }).category).toBe("color")
+  expect(
+    VisualSpecSchema.parse({
+      id: "vis-color-primary",
+      category: "color",
+      title: "Primary color",
+      requirement: "#ffffff",
+      applies_to: "body",
+      severity: "must",
+    }).category,
+  ).toBe("color")
 
   const final = FrontendTemplateFinalSchema.parse({
     design_system: "source-derived visual baseline",

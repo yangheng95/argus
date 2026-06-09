@@ -87,13 +87,7 @@ test("SessionStatus.set: pre-terminal flow (streaming/retry/idle) still works as
         expect(idleEvents).toEqual(["idle"])
         // After idle, state is deleted — fresh terminal is allowed.
         SessionStatus.set("ses_test_flow", { type: "terminal", reason: "completed" })
-        expect(events.map((e) => e.type)).toEqual([
-          "streaming",
-          "retry",
-          "streaming",
-          "idle",
-          "terminal",
-        ])
+        expect(events.map((e) => e.type)).toEqual(["streaming", "retry", "streaming", "idle", "terminal"])
       } finally {
         sub1()
         sub2()

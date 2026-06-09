@@ -6,12 +6,12 @@ Diagnose by symptom. Each entry gives a **check path**, not "try restarting".
 
 ### `opencorvus serve` fails to start
 
-| Check | Detail |
-|---|---|
-| `opencorvus doctor` | Run the full diagnostic first |
-| Port in use | Default 7878; `netstat -ano \| findstr 7878` on Windows |
+| Check                        | Detail                                                                                                       |
+| ---------------------------- | ------------------------------------------------------------------------------------------------------------ |
+| `opencorvus doctor`          | Run the full diagnostic first                                                                                |
+| Port in use                  | Default 7878; `netstat -ano \| findstr 7878` on Windows                                                      |
 | `OPENCORVUS_SERVER_PASSWORD` | Required when exposing beyond localhost; otherwise startup rejects with `refuses to expose without password` |
-| `ENOSPC` | `~/.opencorvus` disk is full |
+| `ENOSPC`                     | `~/.opencorvus` disk is full                                                                                 |
 
 ### Overlay launches but can't reach the backend
 
@@ -41,11 +41,11 @@ Root cause almost always: **missing provider API key**. Because `Env.state()` sn
 
 ### Stuck in requirements / architect / build
 
-| Symptom | Check |
-|---|---|
-| No events at all | LLM provider connectivity |
-| Reasoning tokens but no tool-call | Reasoning models must use `toolChoice: "auto"` |
-| Agent silent for long | Activity is managed by the engine's internal stream-activity watchdog (180 s idle abort). The `--planning-stall-timeout-ms` / `--stall-timeout-ms` flags are no longer accepted. |
+| Symptom                           | Check                                                                                                                                                                            |
+| --------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| No events at all                  | LLM provider connectivity                                                                                                                                                        |
+| Reasoning tokens but no tool-call | Reasoning models must use `toolChoice: "auto"`                                                                                                                                   |
+| Agent silent for long             | Activity is managed by the engine's internal stream-activity watchdog (180 s idle abort). The `--planning-stall-timeout-ms` / `--stall-timeout-ms` flags are no longer accepted. |
 
 ### Task replans indefinitely
 
@@ -57,10 +57,10 @@ Usually evaluator's `replan_guidance` isn't providing improvement info. Check:
 
 ### Permission ask never resolves
 
-| Check | Detail |
-|---|---|
-| Does config explicitly set `ask` | Built-in agent permissions default to `allow`; only explicit `ask` rules wait for an operator reply. |
-| `OPENCORVUS_PERMISSION_TIMEOUT_MS` | Reject timeout for unanswered asks, default `300000` ms. Minimum honored value is `1000` ms. |
+| Check                              | Detail                                                                                               |
+| ---------------------------------- | ---------------------------------------------------------------------------------------------------- |
+| Does config explicitly set `ask`   | Built-in agent permissions default to `allow`; only explicit `ask` rules wait for an operator reply. |
+| `OPENCORVUS_PERMISSION_TIMEOUT_MS` | Reject timeout for unanswered asks, default `300000` ms. Minimum honored value is `1000` ms.         |
 
 ## Evaluation
 

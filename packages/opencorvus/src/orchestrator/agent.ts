@@ -104,9 +104,7 @@ export interface OrchestratorTaskErrorEnvelope {
 
 export const ORCHESTRATOR_TASK_ERROR_ENVELOPE_MARKER = "\n[orchestrator-error-envelope]"
 
-export function parseOrchestratorTaskErrorEnvelope(
-  input?: string | null,
-): OrchestratorTaskErrorEnvelope | undefined {
+export function parseOrchestratorTaskErrorEnvelope(input?: string | null): OrchestratorTaskErrorEnvelope | undefined {
   if (!input) return undefined
   const markerIndex = input.indexOf(ORCHESTRATOR_TASK_ERROR_ENVELOPE_MARKER)
   if (markerIndex < 0) return undefined
@@ -138,8 +136,7 @@ function serializeOrchestratorTaskError(error: unknown): {
     envelope,
     message,
     taskError:
-      `Orchestrator error: ${message}` +
-      `${ORCHESTRATOR_TASK_ERROR_ENVELOPE_MARKER}${JSON.stringify(envelope)}`,
+      `Orchestrator error: ${message}` + `${ORCHESTRATOR_TASK_ERROR_ENVELOPE_MARKER}${JSON.stringify(envelope)}`,
   }
 }
 
@@ -150,9 +147,7 @@ function orchestratorErrorEnvelope(error: unknown): OrchestratorTaskErrorEnvelop
     data && typeof data === "object" && typeof (data as { message?: unknown }).message === "string"
       ? (data as { message: string }).message
       : undefined
-  const message =
-    dataMessage ??
-    (typeof candidate?.message === "string" ? candidate.message : String(error))
+  const message = dataMessage ?? (typeof candidate?.message === "string" ? candidate.message : String(error))
   const errorName =
     typeof candidate?.name === "string" && candidate.name.length > 0
       ? candidate.name
@@ -167,9 +162,7 @@ function orchestratorErrorEnvelope(error: unknown): OrchestratorTaskErrorEnvelop
 }
 
 function hardErrorEnvelope(error: AgentRunError): OrchestratorTaskErrorEnvelope {
-  return error.cause === undefined
-    ? orchestratorErrorEnvelope(error)
-    : orchestratorErrorEnvelope(error.cause)
+  return error.cause === undefined ? orchestratorErrorEnvelope(error) : orchestratorErrorEnvelope(error.cause)
 }
 
 export function recordOrchestratorTraceReportForSession(
@@ -181,11 +174,7 @@ export function recordOrchestratorTraceReportForSession(
   })
 }
 
-async function recordOrchestratorSessionHardError(input: {
-  taskID: string
-  sessionID: string
-  error: AgentRunError
-}) {
+async function recordOrchestratorSessionHardError(input: { taskID: string; sessionID: string; error: AgentRunError }) {
   return recordOrchestratorSessionErrorEnvelope({
     taskID: input.taskID,
     sessionID: input.sessionID,
@@ -312,7 +301,7 @@ export namespace Orchestrator {
       // LLM reads describe output for actual phase identification, not
       // a cached step-FSM cell.
       const workflowID = task.kind === "build" ? "direct" : await WorkflowRegistry.defaultID()
-      const workflow = await WorkflowRegistry.resolve(workflowID) ?? WorkflowRegistry.resolveSync("pipeline")
+      const workflow = (await WorkflowRegistry.resolve(workflowID)) ?? WorkflowRegistry.resolveSync("pipeline")
       const workflowState: WorkflowState | undefined = workflow ? createWorkflowState(workflow) : undefined
       const isFirstWake = !task.time_started
       if (isFirstWake && workflow) {
@@ -353,7 +342,6 @@ export namespace Orchestrator {
       const agentSession = await orchestratorSessionForTask(task)
       agentSessionID = agentSession.id
       agentSessionInfo = agentSession
-
 
       // 3. Create tools (agentSessionID passed so tool sessions become children)
       const { tools } = createOrchestratorTools({
@@ -429,18 +417,20 @@ export namespace Orchestrator {
         model.capabilities.input.pdf ||
         model.capabilities.input.audio ||
         model.capabilities.input.video
-      const inlinedNote = inlineFileParts.length > 0
-        ? "Multimodal items (image / pdf / audio / video) below are inlined as file parts in this wake's user message — you can see and reason about them directly."
-        : !appendUserMessage
-          ? "This is an internal engine wake, so no new user message is created and no hidden file parts are injected. Use this inventory to cite task attachments; do not claim pixel-level inspection unless the visible conversation already contains the file parts."
-          : visionCapable
-            ? "No multimodal items are inlined in this wake (the task carries no image / pdf / audio / video attachments, or none was inlinable)."
-          : "Your current model does NOT accept image / pdf / audio / video input — multimodal items below are listed by filename ONLY; you cannot see their pixels. Do NOT pretend you saw them; describe them only via the textual context the user provided in prose, and rely on `frontend_design` / sub-agents whose models DO support vision for visual reasoning."
+      const inlinedNote =
+        inlineFileParts.length > 0
+          ? "Multimodal items (image / pdf / audio / video) below are inlined as file parts in this wake's user message — you can see and reason about them directly."
+          : !appendUserMessage
+            ? "This is an internal engine wake, so no new user message is created and no hidden file parts are injected. Use this inventory to cite task attachments; do not claim pixel-level inspection unless the visible conversation already contains the file parts."
+            : visionCapable
+              ? "No multimodal items are inlined in this wake (the task carries no image / pdf / audio / video attachments, or none was inlinable)."
+              : "Your current model does NOT accept image / pdf / audio / video input — multimodal items below are listed by filename ONLY; you cannot see their pixels. Do NOT pretend you saw them; describe them only via the textual context the user provided in prose, and rely on `frontend_design` / sub-agents whose models DO support vision for visual reasoning."
       const inventoryText = AttachmentStore.renderAttachmentInventory(allAttachments, {
         header: "## Task Attachments (forwarded to sub-agents automatically)",
         hint:
           "The user attached the files below to this task. " +
-          inlinedNote + " " +
+          inlinedNote +
+          " " +
           "Reference-only items (text / json) are not inlined; sub-agents read them via their `read` tool. " +
           "You do NOT have a `read` tool yourself — do not attempt to fetch reference content. " +
           "When you call `requirements` / `frontend_design` / `architect` / `build` / `refine`, the engine forwards every attachment to the sub-agent automatically — but the sub-agent's prompt only cites them when YOU mention them by filename in your dispatch instructions. ALWAYS cite the relevant attachments by EXACT filename and explain their relevance. NEVER reference an attachment that is not listed below — if this section is empty, the user attached nothing in this wake and any phrase implying you saw a file is a hallucination.",
@@ -458,8 +448,7 @@ export namespace Orchestrator {
       // as FilePart (data URL) so Session.saveMessage can persist the part
       // without re-resolving a local file path.
       const parts: Array<
-        | { type: "text"; text: string }
-        | { type: "file"; url: string; mime: string; filename?: string }
+        { type: "text"; text: string } | { type: "file"; url: string; mime: string; filename?: string }
       > = appendUserMessage ? [{ type: "text", text: enrichedUserText }, ...inlineFileParts] : []
       const partsWithIds = parts.map((p) => ({ ...p, id: Identifier.ascending("part") }))
 
@@ -559,7 +548,7 @@ export namespace Orchestrator {
         })
         promptInFlight = true
         finalMessage = appendUserMessage
-          ? (await SessionPrompt.prompt({
+          ? ((await SessionPrompt.prompt({
               sessionID: agentSession.id,
               model: { providerID: model.providerID, modelID: model.api.id },
               agent: "orchestrator",
@@ -567,10 +556,10 @@ export namespace Orchestrator {
               systemMode: "complete",
               tools: enableMap,
               parts: partsWithIds,
-            })) as Message.WithParts
-          : (await SessionPrompt.loop({
+            })) as Message.WithParts)
+          : ((await SessionPrompt.loop({
               sessionID: agentSession.id,
-            })) as Message.WithParts
+            })) as Message.WithParts)
         promptInFlight = false
       } finally {
         SessionPrompt.clearSessionRuntimeContract(agentSession.id)
@@ -606,9 +595,9 @@ export namespace Orchestrator {
         // eslint-disable-next-line no-console
         console.error(
           `\n[FATAL] INFORMATION MISSING detected in orchestrator stream — terminating process.\n` +
-          `Task: ${taskID}\n` +
-          `Session: ${agentSession.id}\n` +
-          `${block}\n`,
+            `Task: ${taskID}\n` +
+            `Session: ${agentSession.id}\n` +
+            `${block}\n`,
         )
         process.exit(99)
       }
@@ -710,7 +699,6 @@ export namespace Orchestrator {
           })
         }
       }
-
     } catch (error) {
       // SessionLoop persists its own assistant parts; no explicit flush
       // equivalent for the post-phase-3 the pre-migration runtime hooks path.
@@ -808,13 +796,11 @@ export namespace Orchestrator {
           const current = requireTask(taskID)
           const { isTaskTerminal } = await import("@/engine/task-status")
           if (!isTaskTerminal(current)) {
-            await updateTask(
-              current,
-              { error: structured.taskError },
-              `Orchestrator failed: ${structured.message}`,
-            )
+            await updateTask(current, { error: structured.taskError }, `Orchestrator failed: ${structured.message}`)
           }
-        } catch { /* task may have been deleted */ }
+        } catch {
+          /* task may have been deleted */
+        }
       }
     } finally {
       running.delete(taskID)
@@ -930,7 +916,12 @@ const ORCHESTRATOR_INSTRUCTIONS = ORCHESTRATOR_CORE
  *         enum branching. The optional `event.note` is the USER MESSAGE,
  *         not a prompt segment — do not thread it through here.
  */
-async function buildSystemParts(task: TaskRow, _event: OrchestratorEvent | undefined, workflow?: MiniWorkflow, workflowState?: WorkflowState): Promise<string[]> {
+async function buildSystemParts(
+  task: TaskRow,
+  _event: OrchestratorEvent | undefined,
+  workflow?: MiniWorkflow,
+  workflowState?: WorkflowState,
+): Promise<string[]> {
   const ctx: string[] = []
   const autoIteration = (await EngineConfig.get()).auto_iteration === true
 
@@ -939,12 +930,22 @@ async function buildSystemParts(task: TaskRow, _event: OrchestratorEvent | undef
   // flipping `assistant.auto_iteration` changes the next wake immediately.
   ctx.push("## Auto Iteration Mode")
   if (autoIteration) {
-    ctx.push("- assistant.auto_iteration=true: rejected acceptance reviews and failed terminal waves may queue same-task repair work automatically when evidence is concrete and not a repeated identical failure.")
-    ctx.push("- Route the repair to the responsible owner inside this task: product/toolchain/git-worktree blockers go to Build, graph/dependency contract blockers go to modify_goal or architect, then rerun the relevant verification/integrity gate.")
-    ctx.push("- Do not keep retrying a verification-only goal when its evidence proves a product, dependency, git, or toolchain blocker owned elsewhere; stop and ask only when the failure repeats or needs operator judgment.")
+    ctx.push(
+      "- assistant.auto_iteration=true: rejected acceptance reviews and failed terminal waves may queue same-task repair work automatically when evidence is concrete and not a repeated identical failure.",
+    )
+    ctx.push(
+      "- Route the repair to the responsible owner inside this task: product/toolchain/git-worktree blockers go to Build, graph/dependency contract blockers go to modify_goal or architect, then rerun the relevant verification/integrity gate.",
+    )
+    ctx.push(
+      "- Do not keep retrying a verification-only goal when its evidence proves a product, dependency, git, or toolchain blocker owned elsewhere; stop and ask only when the failure repeats or needs operator judgment.",
+    )
   } else {
-    ctx.push("- assistant.auto_iteration=false: rejected acceptance reviews and failed terminal waves do not open host-side rework attempts or queue a new build loop by themselves.")
-    ctx.push("- The current reasoning turn still owns the next decision. Do not stop with a plain-text blocker when same-task repair is available; use the evidence to build, modify_goal, architect, ask a concrete external-only question, or fail the task.")
+    ctx.push(
+      "- assistant.auto_iteration=false: rejected acceptance reviews and failed terminal waves do not open host-side rework attempts or queue a new build loop by themselves.",
+    )
+    ctx.push(
+      "- The current reasoning turn still owns the next decision. Do not stop with a plain-text blocker when same-task repair is available; use the evidence to build, modify_goal, architect, ask a concrete external-only question, or fail the task.",
+    )
   }
   ctx.push("")
 
@@ -996,9 +997,7 @@ async function buildSystemParts(task: TaskRow, _event: OrchestratorEvent | undef
     const { findLatestAcceptanceVerdictArtifact } = await import("@/engine/store")
     const latestVerdictArt = findLatestAcceptanceVerdictArtifact(task.id)
     const latestVerdictPayload = (latestVerdictArt?.payload ?? {}) as Record<string, unknown>
-    const latest = latestVerdictPayload.verdict === "rejected"
-      ? latestVerdictPayload
-      : undefined
+    const latest = latestVerdictPayload.verdict === "rejected" ? latestVerdictPayload : undefined
     if (latest) {
       ctx.push("")
       ctx.push("### Latest acceptance-agent feedback")
@@ -1010,9 +1009,7 @@ async function buildSystemParts(task: TaskRow, _event: OrchestratorEvent | undef
       // Single source of truth (rule 22): the human-readable issues list is
       // derived from rejection_details[].error here, not stored as a
       // separate `issues_found` field on the verdict payload.
-      const issues = details
-        .map((d) => (typeof d.error === "string" ? d.error : ""))
-        .filter((s) => s.length > 0)
+      const issues = details.map((d) => (typeof d.error === "string" ? d.error : "")).filter((s) => s.length > 0)
       if (issues.length > 0) {
         ctx.push("Issues found:")
         for (const issue of issues) ctx.push(`  - ${issue}`)
@@ -1029,7 +1026,7 @@ async function buildSystemParts(task: TaskRow, _event: OrchestratorEvent | undef
     ctx.push("")
     ctx.push(
       "You decide what to do next from the trajectory + latest acceptance feedback above: " +
-      "patch code, modify/add goals, adjust scope — based on where the loop is stuck.",
+        "patch code, modify/add goals, adjust scope — based on where the loop is stuck.",
     )
     ctx.push("")
   }
@@ -1084,11 +1081,13 @@ async function buildSystemParts(task: TaskRow, _event: OrchestratorEvent | undef
       const pointer = pointerHints.length > 0 ? pointerHints.join("; ") : "read_context"
 
       ctx.push("")
-      ctx.push(SubAgentProtocol.yieldResult({
-        headline: `## Latest Run Result (run ${activeRunID})`,
-        fields,
-        pointer,
-      }))
+      ctx.push(
+        SubAgentProtocol.yieldResult({
+          headline: `## Latest Run Result (run ${activeRunID})`,
+          fields,
+          pointer,
+        }),
+      )
     }
   }
 

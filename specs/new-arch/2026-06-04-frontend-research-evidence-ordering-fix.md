@@ -11,12 +11,12 @@ each `evidence_index` item lacked the required `bundle_ref`.
 
 ## Evidence
 
-| Surface | Current behavior | Decision |
-| --- | --- | --- |
-| `ResearchEvidenceRefSchema.bundle_ref` | Required model-authored field, no prompt coverage, no runtime consumers outside tests. | Host normalizes a missing value to `research-bundle.md#<evidence_id>`. |
-| `ResearchWebpageContractSchema.reference_image_evidence_ids` | Requires at least one evidence id even when no visual capture exists. | Allow an empty array so missing visual evidence is represented honestly. |
-| `frontend-research-core.txt` | Says to submit reference image ids but does not explain the no-capture case. | Tell the agent to use `[]` and never create placeholder evidence. |
-| `orchestrator-core.txt` / tool descriptions / workflow hint | Says frontend tools are siblings, but not that webpage clone implementation usually needs `frontend_design` evidence before `frontend_research`. | Prompt the orchestrator to dispatch `frontend_design` first when implementation-template/source handoff evidence is absent. |
+| Surface                                                      | Current behavior                                                                                                                                 | Decision                                                                                                                    |
+| ------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------ | --------------------------------------------------------------------------------------------------------------------------- |
+| `ResearchEvidenceRefSchema.bundle_ref`                       | Required model-authored field, no prompt coverage, no runtime consumers outside tests.                                                           | Host normalizes a missing value to `research-bundle.md#<evidence_id>`.                                                      |
+| `ResearchWebpageContractSchema.reference_image_evidence_ids` | Requires at least one evidence id even when no visual capture exists.                                                                            | Allow an empty array so missing visual evidence is represented honestly.                                                    |
+| `frontend-research-core.txt`                                 | Says to submit reference image ids but does not explain the no-capture case.                                                                     | Tell the agent to use `[]` and never create placeholder evidence.                                                           |
+| `orchestrator-core.txt` / tool descriptions / workflow hint  | Says frontend tools are siblings, but not that webpage clone implementation usually needs `frontend_design` evidence before `frontend_research`. | Prompt the orchestrator to dispatch `frontend_design` first when implementation-template/source handoff evidence is absent. |
 
 ## Validation
 

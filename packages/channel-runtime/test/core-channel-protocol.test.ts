@@ -35,10 +35,7 @@ function adapter(
   }
 }
 
-function incoming(
-  platform: "slack" | "telegram" | "discord" | "googlechat",
-  text: string,
-): IncomingMessage {
+function incoming(platform: "slack" | "telegram" | "discord" | "googlechat", text: string): IncomingMessage {
   return {
     platform,
     channel: platform === "telegram" ? "chat-1" : platform === "googlechat" ? "spaces/AAA" : "ch-1",
@@ -92,11 +89,13 @@ describe("channel runtime channel protocol", () => {
               kind: "panel_response",
               message: "Captured OpenCorvus GUI.",
               task_id: "task_1",
-              attachments: [{
-                mime: "image/png",
-                filename: "opencorvus-gui.png",
-                url: "data:image/png;base64,aGVsbG8=",
-              }],
+              attachments: [
+                {
+                  mime: "image/png",
+                  filename: "opencorvus-gui.png",
+                  url: "data:image/png;base64,aGVsbG8=",
+                },
+              ],
             },
           }
         },
@@ -116,12 +115,14 @@ describe("channel runtime channel protocol", () => {
       allow_create: true,
     })
     expect(sent).toEqual(["chat-1:101:Captured OpenCorvus GUI."])
-    expect(uploads).toEqual([{
-      channel: "chat-1",
-      thread: "101",
-      filename: "opencorvus-gui.png",
-      title: "Captured OpenCorvus GUI.",
-    }])
+    expect(uploads).toEqual([
+      {
+        channel: "chat-1",
+        thread: "101",
+        filename: "opencorvus-gui.png",
+        title: "Captured OpenCorvus GUI.",
+      },
+    ])
   })
 
   test("publishes orchestrator evaluation updates back to the bound discord thread", async () => {
@@ -174,10 +175,7 @@ describe("channel runtime channel protocol", () => {
       },
     })
 
-    expect(sent).toEqual([
-      "ch-1:root-1:Task accepted: `task_2`",
-      "ch-1:root-1:Evaluation accepted: All checks passed",
-    ])
+    expect(sent).toEqual(["ch-1:root-1:Task accepted: `task_2`", "ch-1:root-1:Evaluation accepted: All checks passed"])
     expect(uploads).toHaveLength(0)
   })
 
@@ -212,11 +210,13 @@ describe("channel runtime channel protocol", () => {
             data: {
               kind: "panel_response",
               message: "Captured OpenCorvus GUI.",
-              attachments: [ {
-                mime: "image/png",
-                filename: "overlay.png",
-                url: "data:image/png;base64,aGVsbG8=",
-              } ],
+              attachments: [
+                {
+                  mime: "image/png",
+                  filename: "overlay.png",
+                  url: "data:image/png;base64,aGVsbG8=",
+                },
+              ],
             },
           }
         },
@@ -242,12 +242,14 @@ describe("channel runtime channel protocol", () => {
       allow_create: true,
     })
     expect(sent).toEqual(["oc_1:om_1:Captured OpenCorvus GUI."])
-    expect(uploads).toEqual([{
-      channel: "oc_1",
-      thread: "om_1",
-      filename: "overlay.png",
-      title: "Captured OpenCorvus GUI.",
-    }])
+    expect(uploads).toEqual([
+      {
+        channel: "oc_1",
+        thread: "om_1",
+        filename: "overlay.png",
+        title: "Captured OpenCorvus GUI.",
+      },
+    ])
   })
 
   test("publishes URL attachments for channels that require remote image URLs", async () => {
@@ -284,11 +286,13 @@ describe("channel runtime channel protocol", () => {
             data: {
               kind: "panel_response",
               message: "Captured OpenCorvus GUI.",
-              attachments: [{
-                mime: "image/png",
-                filename: "overlay.png",
-                url: "data:image/png;base64,aGVsbG8=",
-              }],
+              attachments: [
+                {
+                  mime: "image/png",
+                  filename: "overlay.png",
+                  url: "data:image/png;base64,aGVsbG8=",
+                },
+              ],
             },
           }
         },
@@ -311,13 +315,14 @@ describe("channel runtime channel protocol", () => {
     expect(calls).toHaveLength(1)
     expect(sent).toEqual(["spaces/AAA:spaces/AAA/threads/t-1:Captured OpenCorvus GUI."])
     expect(uploads).toHaveLength(0)
-    expect(urlUploads).toEqual([{
-      channel: "spaces/AAA",
-      thread: "spaces/AAA/threads/t-1",
-      url: "https://public.opencorvus.dev/channel/attachment/att_test?e=1&s=1",
-      filename: "overlay.png",
-      title: "Captured OpenCorvus GUI.",
-    }])
+    expect(urlUploads).toEqual([
+      {
+        channel: "spaces/AAA",
+        thread: "spaces/AAA/threads/t-1",
+        url: "https://public.opencorvus.dev/channel/attachment/att_test?e=1&s=1",
+        filename: "overlay.png",
+        title: "Captured OpenCorvus GUI.",
+      },
+    ])
   })
 })
-

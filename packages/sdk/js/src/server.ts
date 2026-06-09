@@ -1,21 +1,14 @@
 import { spawn, execSync } from "node:child_process"
-import { type Config } from "./gen/types.gen.js"
+import { type ConfigGetResponse } from "./gen/types.gen.js"
 import { DEFAULT_SERVER_HOST, DEFAULT_SERVER_PORT } from "./defaults.js"
+
+type Config = ConfigGetResponse
 
 export type ServerOptions = {
   hostname?: string
   port?: number
   signal?: AbortSignal
   timeout?: number
-  config?: Config
-}
-
-export type TuiOptions = {
-  project?: string
-  model?: string
-  session?: string
-  agent?: string
-  signal?: AbortSignal
   config?: Config
 }
 
@@ -103,38 +96,4 @@ export async function createOpenCorvusServer(options?: ServerOptions) {
   }
 }
 
-export function createOpenCorvusTui(options?: TuiOptions) {
-  const args: string[] = []
-
-  if (options?.project) {
-    args.push(`--project=${options.project}`)
-  }
-  if (options?.model) {
-    args.push(`--model=${options.model}`)
-  }
-  if (options?.session) {
-    args.push(`--session=${options.session}`)
-  }
-  if (options?.agent) {
-    args.push(`--agent=${options.agent}`)
-  }
-
-  const config = options?.config === undefined ? process.env.OPENCORVUS_CONFIG_CONTENT : JSON.stringify(options.config)
-  const proc = spawn(resolveCommand(), args, {
-    signal: options?.signal,
-    stdio: "inherit",
-    env: {
-      ...process.env,
-      ...(config === undefined ? {} : { OPENCORVUS_CONFIG_CONTENT: config }),
-    },
-  })
-
-  return {
-    close() {
-      proc.kill()
-    },
-  }
-}
-
 export const createOpencodeServer = createOpenCorvusServer
-export const createOpencodeTui = createOpenCorvusTui

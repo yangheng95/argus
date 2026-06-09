@@ -21,14 +21,14 @@ child agents with `Promise.all(plan.reviewers.map(...))`.
 
 Full-repo grep before implementation:
 
-| Surface | Callsites | Decision |
-| --- | --- | --- |
-| `reviewIntegrity()` | `orchestrator/tools.ts`, integrity tests | Keep the public API; change its internal execution model. |
-| `Promise.all(plan.reviewers.map(...))` | `integrity/team-agent.ts` only | Remove reviewer child-session fanout from the live review path. |
-| `submit_integrity_review_plan` | `integrity/team-agent.ts`, tests | Stop requiring a separate plan session before review. |
-| `submit_reviewer_report` | reviewer child sessions only | Stop using separate reviewer sessions in the live path. |
-| `IntegrityTeamReportSchema.reviewers.min(2)` | team report schema and tests | Preserve multi-perspective report shape without spawning multiple sessions. |
-| review stream IDs | `integrity/team-agent.ts`, review stream tests | Use one review stream ID for the single integrity session. |
+| Surface                                      | Callsites                                      | Decision                                                                    |
+| -------------------------------------------- | ---------------------------------------------- | --------------------------------------------------------------------------- |
+| `reviewIntegrity()`                          | `orchestrator/tools.ts`, integrity tests       | Keep the public API; change its internal execution model.                   |
+| `Promise.all(plan.reviewers.map(...))`       | `integrity/team-agent.ts` only                 | Remove reviewer child-session fanout from the live review path.             |
+| `submit_integrity_review_plan`               | `integrity/team-agent.ts`, tests               | Stop requiring a separate plan session before review.                       |
+| `submit_reviewer_report`                     | reviewer child sessions only                   | Stop using separate reviewer sessions in the live path.                     |
+| `IntegrityTeamReportSchema.reviewers.min(2)` | team report schema and tests                   | Preserve multi-perspective report shape without spawning multiple sessions. |
+| review stream IDs                            | `integrity/team-agent.ts`, review stream tests | Use one review stream ID for the single integrity session.                  |
 
 ## Design
 

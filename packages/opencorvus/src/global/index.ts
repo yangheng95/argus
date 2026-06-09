@@ -56,11 +56,21 @@ function configPath() {
 
 export namespace Global {
   export const Path = {
-    get home() { return resolveHome() },
-    get data() { return dataPath() },
-    get bin() { return path.join(dataPath(), "bin") },
-    get log() { return path.join(dataPath(), "log") },
-    get cache() { return cachePath() },
+    get home() {
+      return resolveHome()
+    },
+    get data() {
+      return dataPath()
+    },
+    get bin() {
+      return path.join(dataPath(), "bin")
+    },
+    get log() {
+      return path.join(dataPath(), "log")
+    },
+    get cache() {
+      return cachePath()
+    },
     // Global user config — XDG-style (~/.config/opencorvus on Linux, %APPDATA%/opencorvus
     // on Windows, $OPENCORVUS_HOME/config when running portable). NEVER falls back to
     // process.cwd(): that historical default polluted the active project's primary
@@ -68,8 +78,12 @@ export namespace Global {
     // which then collided with build-agent commits at `git merge --ff-only` time.
     // Project-scoped config still lives under `<projectDir>/.opencorvus/`, picked up
     // by `ConfigPaths.directories` walking up from `Instance.directory`.
-    get config() { return process.env.OPENCORVUS_GLOBAL_CONFIG_DIR?.trim() || configPath() },
-    get state() { return statePath() },
+    get config() {
+      return process.env.OPENCORVUS_GLOBAL_CONFIG_DIR?.trim() || configPath()
+    },
+    get state() {
+      return statePath()
+    },
   }
 }
 

@@ -4,6 +4,7 @@ import { resolver } from "hono-openapi"
 import { Instance } from "../../project/instance"
 import { Project } from "../../project/project"
 import { Vcs } from "../../project/vcs"
+import { Worktree } from "../../worktree"
 import z from "zod"
 import { errors } from "../error"
 import { lazy } from "../../util/lazy"
@@ -88,6 +89,53 @@ export const ProjectRoutes = lazy(() =>
           }
         }
         return c.json(result)
+      },
+    )
+    .get(
+      "/current/worktrees",
+      describeRoute({
+        summary: "List current project worktrees",
+        description: "List git worktrees registered for the current project and their live goal binding, if any.",
+        operationId: "project.current.worktrees",
+        responses: {
+          200: {
+            description: "Project worktrees",
+            content: {
+              "application/json": {
+                schema: resolver(Worktree.ProjectWorktreeInfo.array()),
+              },
+            },
+          },
+          ...errors(400, 404),
+        },
+      }),
+      async (c) => {
+        return c.json(await Worktree.listProjectWorktrees(Instance.project.id))
+      },
+    )
+    .delete(
+      "/current/worktrees",
+      describeRoute({
+        summary: "Delete a current project worktree",
+        description: "Remove a git worktree registered for the current project.",
+        operationId: "project.current.worktrees.delete",
+        responses: {
+          200: {
+            description: "Worktree removed",
+            content: {
+              "application/json": {
+                schema: resolver(z.object({ ok: z.boolean() })),
+              },
+            },
+          },
+          ...errors(400, 404),
+        },
+      }),
+      validator("json", Worktree.RemoveInput),
+      async (c) => {
+        const body = c.req.valid("json")
+        await Worktree.remove(body)
+        return c.json({ ok: true })
       },
     )
     .patch(

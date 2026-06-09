@@ -27,9 +27,7 @@ const overlay = path.join(repo, "packages/overlay")
 const skipCli = process.argv.includes("--skip-cli")
 const skipLinux = process.argv.includes("--skip-linux")
 const skipNative = process.argv.includes("--skip-native")
-const linuxTargets = process.argv
-  .filter((a) => a.startsWith("--target="))
-  .map((a) => a.split("=")[1])
+const linuxTargets = process.argv.filter((a) => a.startsWith("--target=")).map((a) => a.split("=")[1])
 
 // ── 1. opencorvus overlay server — all platforms ─────────────────────────────
 if (!skipCli) {

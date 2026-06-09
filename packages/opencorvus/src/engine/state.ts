@@ -35,11 +35,7 @@ const TERMINAL_TASK_RUN_STATUS = {
   cancelled: "aborted",
 } as const satisfies Partial<Record<NonNullable<TaskUpdateValues["status"]>, RunRow["status"]>>
 
-export async function updateTask(
-  row: TaskRow,
-  values: TaskUpdateValues,
-  summary: string,
-) {
+export async function updateTask(row: TaskRow, values: TaskUpdateValues, summary: string) {
   const { status: intent, ...rest } = values
   const now = Date.now()
 
@@ -48,7 +44,7 @@ export async function updateTask(
   // "now" from the transaction entry point.
   const resolved: Partial<typeof EngineTaskTable.$inferInsert> = { ...rest }
   const metaBase: Record<string, unknown> =
-    (typeof rest.metadata === "object" && rest.metadata !== null && !Array.isArray(rest.metadata))
+    typeof rest.metadata === "object" && rest.metadata !== null && !Array.isArray(rest.metadata)
       ? { ...(rest.metadata as Record<string, unknown>) }
       : {}
   let metaMutated = rest.metadata !== undefined
@@ -93,9 +89,10 @@ export async function updateTask(
   if (metaMutated) {
     // Merge over row.metadata when caller didn't already supply full metadata.
     if (rest.metadata === undefined) {
-      const existing = (row.metadata && typeof row.metadata === "object" && !Array.isArray(row.metadata))
-        ? (row.metadata as Record<string, unknown>)
-        : {}
+      const existing =
+        row.metadata && typeof row.metadata === "object" && !Array.isArray(row.metadata)
+          ? (row.metadata as Record<string, unknown>)
+          : {}
       resolved.metadata = { ...existing, ...metaBase }
     } else {
       resolved.metadata = metaBase
@@ -238,9 +235,8 @@ async function finalizeLiveRunForTerminalTask(
 
   const run = findActiveRunForTask(task.id)
   if (!isLiveRunStatus(run?.status)) return
-  const completedAt = typeof resolved.time_completed === "number"
-    ? resolved.time_completed
-    : task.time_completed ?? Date.now()
+  const completedAt =
+    typeof resolved.time_completed === "number" ? resolved.time_completed : (task.time_completed ?? Date.now())
   const error = runStatus === "completed" ? null : String(resolved.error ?? task.error ?? summary)
   await updateRun(
     run,
@@ -254,11 +250,7 @@ async function finalizeLiveRunForTerminalTask(
   )
 }
 
-export async function updateRun(
-  row: RunRow,
-  values: Partial<RunRow>,
-  summary: string,
-) {
+export async function updateRun(row: RunRow, values: Partial<RunRow>, summary: string) {
   const nextStatus = values.status ?? row.status
   // Rule 23: no state-machine transition gate. LLM / orchestrator may drive
   // run.status to any value at any time.
@@ -299,11 +291,14 @@ export async function updateRun(
     executor_ref: nextRef,
     metadata: nextMetadata,
     time_started:
-      !row.time_started && ["accepted", "running", "blocked", "completed"].includes(nextStatus) && values.time_started === undefined
+      !row.time_started &&
+      ["accepted", "running", "blocked", "completed"].includes(nextStatus) &&
+      values.time_started === undefined
         ? now
         : nextStarted,
     time_completed:
-      (nextStatus === "completed" || nextStatus === "failed" || nextStatus === "aborted") && values.time_completed === undefined
+      (nextStatus === "completed" || nextStatus === "failed" || nextStatus === "aborted") &&
+      values.time_completed === undefined
         ? now
         : nextCompleted,
   }
@@ -323,10 +318,7 @@ export async function updateRun(
     // Phase-6-f-3: task.active_run_id deleted — derive via
     // findActiveRunForTask(taskID) from the run artifact stream. Keep the
     // time_updated bump so task listings refresh on run writes.
-    db.update(EngineTaskTable)
-      .set({ time_updated: effectiveNow })
-      .where(eq(EngineTaskTable.id, row.task_id))
-      .run()
+    db.update(EngineTaskTable).set({ time_updated: effectiveNow }).where(eq(EngineTaskTable.id, row.task_id)).run()
     Database.effect(() =>
       EngineProtocol.emit(
         Event.RunUpdated,
@@ -335,10 +327,7 @@ export async function updateRun(
       ),
     )
   })
-  if (
-    statusChanged &&
-    (nextStatus === "completed" || nextStatus === "failed" || nextStatus === "aborted")
-  ) {
+  if (statusChanged && (nextStatus === "completed" || nextStatus === "failed" || nextStatus === "aborted")) {
     const { PerRunState } = await import("./per-run-state")
     PerRunState.finalize(row.id)
   }
@@ -355,11 +344,15 @@ export async function blockActiveRunForTask(
 ) {
   const run = findActiveRunForTask(taskID)
   if (!isLiveRunStatus(run?.status)) return undefined
-  return updateRun(run, {
-    status: "blocked",
-    blocking_reason: input.blockingReason,
-    error: input.error,
-  }, input.summary)
+  return updateRun(
+    run,
+    {
+      status: "blocked",
+      blocking_reason: input.blockingReason,
+      error: input.error,
+    },
+    input.summary,
+  )
 }
 
 export function hooks() {
@@ -396,9 +389,13 @@ export async function upsertTaskCriteria(
     byName.set(criteriaMergeKey(incoming), { ...byName.get(criteriaMergeKey(incoming)), ...incoming })
   }
   const merged = [...byName.values()].filter((c) => c && typeof c.name === "string" && c.name)
-  await updateTask(task, {
-    criteria_results: merged,
-  }, `criteria upsert: ${checks.map((c) => `${c.name}=${c.status}`).join(", ")}`)
+  await updateTask(
+    task,
+    {
+      criteria_results: merged,
+    },
+    `criteria upsert: ${checks.map((c) => `${c.name}=${c.status}`).join(", ")}`,
+  )
   return merged
 }
 

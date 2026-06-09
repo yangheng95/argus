@@ -4,7 +4,13 @@ import { Log } from "@/util/log"
 import { createEventQueue, type EventQueue } from "@/util/event-queue"
 import { abortableIterable } from "@/util/stream-activity"
 import { EngineConfig } from "@/engine/config"
-import { PlanningCapabilities, type CodingEventInfo, type CodingProvider, type CodingProviderOptions, type ExecutorStatusInfo } from "./contract"
+import {
+  PlanningCapabilities,
+  type CodingEventInfo,
+  type CodingProvider,
+  type CodingProviderOptions,
+  type ExecutorStatusInfo,
+} from "./contract"
 import type { ExecutorAdapter } from "./contract"
 import {
   extractExecutorSessionRef,
@@ -66,14 +72,17 @@ type State = {
 }
 
 export const ManagedCodingExecutor = {
-  create(
-    provider: CodingProvider,
-    options: CodingProviderOptions,
-  ): ExecutorAdapter {
+  create(provider: CodingProvider, options: CodingProviderOptions): ExecutorAdapter {
     const tasks = new Map<string, State>()
     const latest = new Map<string, string>()
 
-    const start = (state: State, mode: "run" | "resume", prompt: string, cwdOverride?: string, systemOverride?: string) => {
+    const start = (
+      state: State,
+      mode: "run" | "resume",
+      prompt: string,
+      cwdOverride?: string,
+      systemOverride?: string,
+    ) => {
       const resolvedCwd = cwdOverride ?? value(options.cwd)
       const input = {
         model: value(options.model),
@@ -104,38 +113,40 @@ export const ManagedCodingExecutor = {
         },
       })
 
-      consume(stream, state, latest).catch((err) => {
-        if (state.status !== "failed" && state.status !== "completed" && !state.abort.signal.aborted) {
-          state.status = "failed"
-          state.error = formatErrorChain(err)
-          // Log the raw Error so Log.formatError walks the .cause chain into
-          // the file log. The state.error string only carries message + first
-          // cause, which is what downstream consumers (overlay, status feeds)
-          // can render inline.
-          log.error("managed executor stream errored", {
-            sessionID: state.sessionID,
-            queueTaskID: state.id,
-            error: err,
-          })
-          push(state, {
-            type: "session.error",
-            summary: state.error,
-            payload: {
+      consume(stream, state, latest)
+        .catch((err) => {
+          if (state.status !== "failed" && state.status !== "completed" && !state.abort.signal.aborted) {
+            state.status = "failed"
+            state.error = formatErrorChain(err)
+            // Log the raw Error so Log.formatError walks the .cause chain into
+            // the file log. The state.error string only carries message + first
+            // cause, which is what downstream consumers (overlay, status feeds)
+            // can render inline.
+            log.error("managed executor stream errored", {
               sessionID: state.sessionID,
               queueTaskID: state.id,
-              error: state.error,
-            },
-          })
-          completeConsumers(state)
-        }
-      }).finally(() => {
-        // consume() may land in terminal status via its own "done" / "error"
-        // branches without going through the catch above; mirror the broadcast
-        // so consumer iterables always exit.
-        if (state.status === "completed" || state.status === "failed") {
-          completeConsumers(state)
-        }
-      })
+              error: err,
+            })
+            push(state, {
+              type: "session.error",
+              summary: state.error,
+              payload: {
+                sessionID: state.sessionID,
+                queueTaskID: state.id,
+                error: state.error,
+              },
+            })
+            completeConsumers(state)
+          }
+        })
+        .finally(() => {
+          // consume() may land in terminal status via its own "done" / "error"
+          // branches without going through the catch above; mirror the broadcast
+          // so consumer iterables always exit.
+          if (state.status === "completed" || state.status === "failed") {
+            completeConsumers(state)
+          }
+        })
     }
 
     return {
@@ -247,9 +258,7 @@ export const ManagedCodingExecutor = {
         const id = Identifier.ascending("task")
         const prev = pick(tasks, latest, { sessionID: input.sessionID })
         const metadata = prev?.externalSessionID ? undefined : await readExecutorSessionRef(input.sessionID)
-        const externalSessionID =
-          prev?.externalSessionID ??
-          resolveNativeResumeRef(provider.name, metadata)
+        const externalSessionID = prev?.externalSessionID ?? resolveNativeResumeRef(provider.name, metadata)
         const state: State = {
           id,
           sessionID: input.sessionID,
@@ -441,7 +450,12 @@ async function consume(stream: AsyncIterable<CodingEventInfo>, state: State, lat
       })
       return
     }
-    log.info("consume completed", { sessionID: state.sessionID, queueTaskID: state.id, eventCount, outputLength: state.output.length })
+    log.info("consume completed", {
+      sessionID: state.sessionID,
+      queueTaskID: state.id,
+      eventCount,
+      outputLength: state.output.length,
+    })
     state.status = "completed"
   }
 }
@@ -459,7 +473,11 @@ async function bestEffortInterrupt(provider: CodingProvider, state: State) {
   }
 }
 
-function pick(tasks: Map<string, State>, latest: Map<string, string>, input: { sessionID?: string; queueTaskID?: string }) {
+function pick(
+  tasks: Map<string, State>,
+  latest: Map<string, string>,
+  input: { sessionID?: string; queueTaskID?: string },
+) {
   if (input.queueTaskID) return tasks.get(input.queueTaskID)
   if (!input.sessionID) return
   const current = latest.get(input.sessionID)

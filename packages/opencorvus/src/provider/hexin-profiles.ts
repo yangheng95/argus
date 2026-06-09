@@ -304,9 +304,7 @@ const MATCHERS: Matcher[] = [
 
 function displayName(id: string): string {
   const trimmed = id.replace(/^[^/]+\//, "")
-  return trimmed
-    .replace(/[-_.]/g, " ")
-    .replace(/\b\w/g, (c) => c.toUpperCase())
+  return trimmed.replace(/[-_.]/g, " ").replace(/\b\w/g, (c) => c.toUpperCase())
 }
 
 export function profileFor(id: string): HexinModelProfile {
@@ -326,6 +324,7 @@ export function interleavedReasoningProfileContractIDs(): string[] {
 }
 
 export function interleavedReasoningProfileContractGaps(): string[] {
-  return MATCHERS.filter((matcher) => typeof matcher.profile.interleaved === "object" && !matcher.contractIDs?.length)
-    .map((matcher) => matcher.profile.family)
+  return MATCHERS.filter(
+    (matcher) => typeof matcher.profile.interleaved === "object" && !matcher.contractIDs?.length,
+  ).map((matcher) => matcher.profile.family)
 }

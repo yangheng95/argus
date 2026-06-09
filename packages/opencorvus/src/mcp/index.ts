@@ -1025,15 +1025,9 @@ export namespace MCP {
   // Server-side adapter functions (used by MCPServe to expose proxied tools)
   // ---------------------------------------------------------------------------
 
-  export const PromptsChanged = BusEvent.define(
-    "mcp.prompts.changed",
-    z.object({ server: z.string().optional() }),
-  )
+  export const PromptsChanged = BusEvent.define("mcp.prompts.changed", z.object({ server: z.string().optional() }))
 
-  export const ResourcesChanged = BusEvent.define(
-    "mcp.resources.changed",
-    z.object({ server: z.string().optional() }),
-  )
+  export const ResourcesChanged = BusEvent.define("mcp.resources.changed", z.object({ server: z.string().optional() }))
 
   export async function serverTools() {
     const toolsMap = await tools()
@@ -1041,7 +1035,10 @@ export namespace MCP {
       key,
       name: key,
       description: tool.description ?? "",
-      inputSchema: (tool as { inputSchema?: Record<string, unknown> }).inputSchema ?? { type: "object" as const, properties: {} },
+      inputSchema: (tool as { inputSchema?: Record<string, unknown> }).inputSchema ?? {
+        type: "object" as const,
+        properties: {},
+      },
       annotations: (tool as { annotations?: Record<string, unknown> }).annotations,
       client: key.split("_")[0] ?? key,
       execute: (tool as { execute?: (args: unknown) => unknown }).execute,
@@ -1053,7 +1050,7 @@ export namespace MCP {
     const promptsMap = await prompts()
     return Object.entries(promptsMap).map(([key, prompt]) => ({
       key,
-      name: (prompt as Record<string, unknown>).name as string ?? key,
+      name: ((prompt as Record<string, unknown>).name as string) ?? key,
       title: (prompt as Record<string, unknown>).description as string | undefined,
       description: (prompt as Record<string, unknown>).description as string | undefined,
       arguments: (prompt as Record<string, unknown>).arguments,
@@ -1065,11 +1062,11 @@ export namespace MCP {
     const resourcesMap = await resources()
     return Object.entries(resourcesMap).map(([key, resource]) => ({
       key,
-      name: (resource as Record<string, unknown>).name as string ?? key,
+      name: ((resource as Record<string, unknown>).name as string) ?? key,
       title: (resource as Record<string, unknown>).description as string | undefined,
       description: (resource as Record<string, unknown>).description as string | undefined,
       mimeType: (resource as Record<string, unknown>).mimeType as string | undefined,
-      uri: (resource as Record<string, unknown>).uri as string ?? key,
+      uri: ((resource as Record<string, unknown>).uri as string) ?? key,
       client: (resource as { client?: string }).client ?? key.split("_")[0] ?? key,
     }))
   }

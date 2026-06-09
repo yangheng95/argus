@@ -50,7 +50,9 @@ export function buildWorkloadUserPrompt(input: WorkloadPromptInput): string {
   )
 
   if (input.prdFullText && input.prdFullText.trim().length > 0) {
-    sections.push("# Full frontend template (read this completely before scoring any goal)\n\n" + input.prdFullText.trim())
+    sections.push(
+      "# Full frontend template (read this completely before scoring any goal)\n\n" + input.prdFullText.trim(),
+    )
   } else if (input.frontendDesign && input.frontendDesign.trim().length > 0) {
     sections.push(input.frontendDesign.trim())
   }

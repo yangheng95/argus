@@ -28,17 +28,17 @@
 
 ## 1. 角色边界
 
-| 角色 | 职责 | Research 不得侵入的边界 |
-|---|---|---|
-| `intent-analysis` | 判断意图、复杂度、缺失槽位、是否需要向用户澄清 | research 不替它做 intent classification，也不直接问用户 |
-| `explore` | focused repository investigation，回答代码库/架构/依赖事实，结果写 decision log | research 不替代短平快 repo lookup；只有需要持久化外部证据包时才用 research |
-| `research` | 外部事实 + 项目上下文的证据包；产 problem statements、user needs、constraints、source map、document outline、open questions | 不产最终 REQ-N，不产 acceptance specs，不拆 goal，不写代码，不直接交付 |
-| `requirements` | 最终 REQ-N + foundational decisions + scope calibration | 不做大规模多源调研；只消费 research 的证据和问题陈述 |
-| `architect` | goal graph、contracts、acceptance specs、traceability | 不重新创造 research facts；只引用 evidence IDs |
-| `goal-workload-analyst` | 复核 goal 是否低估，产 execution inventory | 不搜索资料，不产需求，不产 PRD/SPEC |
-| `fact-check` | 验证 worker terminal report 中的 factual claims | 不主动调研需求；research 不复制 fact-check schema |
-| `build` | 产实际文件改动，包括 markdown 文档文件 | 不重新调研来改变需求边界 |
-| `integrity` | 最终验收 gate | 不补资料、不写 PRD/SPEC |
+| 角色                    | 职责                                                                                                                        | Research 不得侵入的边界                                                    |
+| ----------------------- | --------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------- |
+| `intent-analysis`       | 判断意图、复杂度、缺失槽位、是否需要向用户澄清                                                                              | research 不替它做 intent classification，也不直接问用户                    |
+| `explore`               | focused repository investigation，回答代码库/架构/依赖事实，结果写 decision log                                             | research 不替代短平快 repo lookup；只有需要持久化外部证据包时才用 research |
+| `research`              | 外部事实 + 项目上下文的证据包；产 problem statements、user needs、constraints、source map、document outline、open questions | 不产最终 REQ-N，不产 acceptance specs，不拆 goal，不写代码，不直接交付     |
+| `requirements`          | 最终 REQ-N + foundational decisions + scope calibration                                                                     | 不做大规模多源调研；只消费 research 的证据和问题陈述                       |
+| `architect`             | goal graph、contracts、acceptance specs、traceability                                                                       | 不重新创造 research facts；只引用 evidence IDs                             |
+| `goal-workload-analyst` | 复核 goal 是否低估，产 execution inventory                                                                                  | 不搜索资料，不产需求，不产 PRD/SPEC                                        |
+| `fact-check`            | 验证 worker terminal report 中的 factual claims                                                                             | 不主动调研需求；research 不复制 fact-check schema                          |
+| `build`                 | 产实际文件改动，包括 markdown 文档文件                                                                                      | 不重新调研来改变需求边界                                                   |
+| `integrity`             | 最终验收 gate                                                                                                               | 不补资料、不写 PRD/SPEC                                                    |
 
 决策信号（不是路由规则）：
 
@@ -64,15 +64,15 @@
 
 ### 2.2 REQ-N 需求清单
 
-| ID | 类型 | 需求 | 验收 | 非目标 |
-|---|---|---|---|---|
-| REQ-1 | explicit | 用户可要求系统根据自然语言请求搜索资料并整理 PRD/SPEC 输入。 | 给定开放调研请求时，系统产生 compact research brief 和磁盘 evidence bundle。 | 不要求 research 直接改代码或交付最终文档。 |
-| REQ-2 | explicit | research 必须细化用户需求素材，把模糊表述转成 problem statements、user needs、constraints、open questions。 | 输出包含证据支撑的问题陈述、用户需求、约束、待确认问题和文档大纲。 | 不注册最终 REQ-N，不写 acceptance specs。 |
-| REQ-3 | implicit | 所有非显然事实必须可追溯到来源。 | 每个 fact 关联有效 evidence id；每个 evidence 有 pointer、retrieved_at、reliability、bundle pointer。 | 不为无法验证的事实编造来源。 |
-| REQ-4 | implicit | research 结果必须能被 downstream agents 结构化消费且可判过期。 | artifact 包含 request_hash、source_digest、research_session_id、created_for_message_id、created_at；下游只消费未过期 brief。 | 不通过隐藏消息或 UI-only 文本传递上下文。 |
-| REQ-5 | implicit | 调研必须区分事实、推断、约束、文档结构和待确认问题。 | schema 中分别记录 facts、inferences、constraints、document_outline、open_questions。 | 不把建议或推断伪装成事实。 |
-| REQ-6 | implicit | 纯文档交付不得新增平行 acceptance 系统。 | 当 orchestrator 判断需要文件交付时，使用现有可执行/验收工具面产出和验收 markdown；不调用 disabled publish_acceptance。 | research 不选择交付路径，不直接交付最终文档。 |
-| REQ-7 | implicit | agent 只读，不执行 shell、不写代码、不编辑仓库。 | effective runtime tools 不包含 bash/edit/write/apply_patch/task。 | 不承担 build、acceptance 或 integrity 职责。 |
+| ID    | 类型     | 需求                                                                                                        | 验收                                                                                                                         | 非目标                                        |
+| ----- | -------- | ----------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------- |
+| REQ-1 | explicit | 用户可要求系统根据自然语言请求搜索资料并整理 PRD/SPEC 输入。                                                | 给定开放调研请求时，系统产生 compact research brief 和磁盘 evidence bundle。                                                 | 不要求 research 直接改代码或交付最终文档。    |
+| REQ-2 | explicit | research 必须细化用户需求素材，把模糊表述转成 problem statements、user needs、constraints、open questions。 | 输出包含证据支撑的问题陈述、用户需求、约束、待确认问题和文档大纲。                                                           | 不注册最终 REQ-N，不写 acceptance specs。     |
+| REQ-3 | implicit | 所有非显然事实必须可追溯到来源。                                                                            | 每个 fact 关联有效 evidence id；每个 evidence 有 pointer、retrieved_at、reliability、bundle pointer。                        | 不为无法验证的事实编造来源。                  |
+| REQ-4 | implicit | research 结果必须能被 downstream agents 结构化消费且可判过期。                                              | artifact 包含 request_hash、source_digest、research_session_id、created_for_message_id、created_at；下游只消费未过期 brief。 | 不通过隐藏消息或 UI-only 文本传递上下文。     |
+| REQ-5 | implicit | 调研必须区分事实、推断、约束、文档结构和待确认问题。                                                        | schema 中分别记录 facts、inferences、constraints、document_outline、open_questions。                                         | 不把建议或推断伪装成事实。                    |
+| REQ-6 | implicit | 纯文档交付不得新增平行 acceptance 系统。                                                                    | 当 orchestrator 判断需要文件交付时，使用现有可执行/验收工具面产出和验收 markdown；不调用 disabled publish_acceptance。       | research 不选择交付路径，不直接交付最终文档。 |
+| REQ-7 | implicit | agent 只读，不执行 shell、不写代码、不编辑仓库。                                                            | effective runtime tools 不包含 bash/edit/write/apply_patch/task。                                                            | 不承担 build、acceptance 或 integrity 职责。  |
 
 ---
 

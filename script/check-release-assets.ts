@@ -80,7 +80,10 @@ if (mode === "cli") {
   if (!dir || !rawPlatforms) {
     throw new Error("cli mode requires --dir and --platforms")
   }
-  const platforms = rawPlatforms.split(",").map((item) => item.trim()).filter(Boolean)
+  const platforms = rawPlatforms
+    .split(",")
+    .map((item) => item.trim())
+    .filter(Boolean)
   for (const platform of platforms) {
     const root = path.join(dir, `opencorvus-${platform}`)
     const ui = path.join(root, "ui")
@@ -88,10 +91,9 @@ if (mode === "cli") {
     requireAny(root, [/^opencorvus(\.exe)?$/], "CLI binary")
     requireUiBundle(ui)
     if (requireArchives) {
-      const archive =
-        platform.startsWith("linux")
-          ? path.join(dir, `opencorvus-${platform}.tar.gz`)
-          : path.join(dir, `opencorvus-${platform}.zip`)
+      const archive = platform.startsWith("linux")
+        ? path.join(dir, `opencorvus-${platform}.tar.gz`)
+        : path.join(dir, `opencorvus-${platform}.zip`)
       requireFile(archive)
     }
   }

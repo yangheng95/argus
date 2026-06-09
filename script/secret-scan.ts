@@ -54,14 +54,31 @@ export const SECRET_PATTERNS: ReadonlyArray<SecretPattern> = [
   { id: "aws-akid", description: "AWS access key id", pattern: /\bAKIA[A-Z0-9]{16}\b/ },
   { id: "google-api", description: "Google API key", pattern: /\bAIza[A-Za-z0-9_\-]{35,}\b/ },
   { id: "slack-token", description: "Slack bot/user token", pattern: /\bxox[bp]-[A-Za-z0-9-]{20,}\b/ },
-  { id: "jwt", description: "Embedded JWT", pattern: /\beyJ[A-Za-z0-9_\-]{20,}\.[A-Za-z0-9_\-]{20,}\.[A-Za-z0-9_\-]{10,}\b/ },
+  {
+    id: "jwt",
+    description: "Embedded JWT",
+    pattern: /\beyJ[A-Za-z0-9_\-]{20,}\.[A-Za-z0-9_\-]{20,}\.[A-Za-z0-9_\-]{10,}\b/,
+  },
 ]
 
 const IGNORE_DIRECTIVE = "secret-scan: ignore"
 const TEXT_EXTENSIONS = new Set([
-  ".ts", ".tsx", ".js", ".jsx", ".mjs", ".cjs",
-  ".json", ".md", ".yml", ".yaml", ".toml",
-  ".html", ".css", ".sh", ".env.example", ".rs",
+  ".ts",
+  ".tsx",
+  ".js",
+  ".jsx",
+  ".mjs",
+  ".cjs",
+  ".json",
+  ".md",
+  ".yml",
+  ".yaml",
+  ".toml",
+  ".html",
+  ".css",
+  ".sh",
+  ".env.example",
+  ".rs",
 ])
 
 export interface SecretHit {

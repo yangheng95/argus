@@ -46,9 +46,7 @@ function listCss(dir: string): string[] {
 function isAllowed(value: string): boolean {
   const parts = splitOutsideParens(value)
   if (parts.length === 0) return false
-  return parts.every(
-    (p) => ALLOWED_TOKENS.has(p) || ALLOWED_LITERALS.has(p),
-  )
+  return parts.every((p) => ALLOWED_TOKENS.has(p) || ALLOWED_LITERALS.has(p))
 }
 
 /** Split a CSS value on top-level whitespace (respecting calc() / var() parens). */
@@ -121,10 +119,7 @@ describe("flat-redesign radius token coverage", () => {
       const stripped = content.replace(/\/\*[\s\S]*?\*\//g, "")
       for (const token of RETIRED) {
         // var() consumer
-        const consumerRe = new RegExp(
-          `var\\(${token.replace(/-/g, "\\-")}\\)`,
-          "g",
-        )
+        const consumerRe = new RegExp(`var\\(${token.replace(/-/g, "\\-")}\\)`, "g")
         if (consumerRe.test(stripped)) {
           violations.push(`${file}: still references ${token}`)
         }
@@ -141,16 +136,8 @@ describe("flat-redesign radius token coverage", () => {
   })
 
   test("design-language.css declares exactly the 4 canonical radius tokens", () => {
-    const tokenFile = readFileSync(
-      join(STYLES_ROOT, "tokens", "design-language.css"),
-      "utf8",
-    )
-    for (const token of [
-      "--oc-radius-none",
-      "--oc-radius-soft",
-      "--oc-radius-large",
-      "--oc-radius-pill",
-    ]) {
+    const tokenFile = readFileSync(join(STYLES_ROOT, "tokens", "design-language.css"), "utf8")
+    for (const token of ["--oc-radius-none", "--oc-radius-soft", "--oc-radius-large", "--oc-radius-pill"]) {
       // matches `--oc-radius-X:` declaration (not just a comment mention)
       const declRe = new RegExp(`^\\s*${token.replace(/-/g, "\\-")}\\s*:`, "m")
       expect(declRe.test(tokenFile)).toBe(true)

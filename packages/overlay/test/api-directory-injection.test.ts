@@ -1,11 +1,7 @@
-import { afterEach, beforeEach, describe, expect, test } from "bun:test";
-import { apiJson, apiRequest, apiUrl, configure } from "../src/services/api";
-import { __setHostTransportForTest } from "../src/services/host-transport";
-import type {
-  HostTransport,
-  TransportRequest,
-  TransportResponse,
-} from "../src/services/host-transport";
+import { afterEach, beforeEach, describe, expect, test } from "bun:test"
+import { apiJson, apiRequest, apiUrl, configure } from "../src/services/api"
+import { __setHostTransportForTest } from "../src/services/host-transport"
+import type { HostTransport, TransportRequest, TransportResponse } from "../src/services/host-transport"
 
 /**
  * 2026-04-30 W2-V31 — overlay api.ts must decide per-path whether to
@@ -27,140 +23,168 @@ import type {
  * `packages/opencorvus/src/server/server.ts`.
  */
 
-const SAVED_DIRECTORY = "/Users/alice/projects/demo";
+const SAVED_DIRECTORY = "/Users/alice/projects/demo"
 
 function fakeTransport(capture: (req: TransportRequest) => void): HostTransport {
   return {
     kind: "tauri",
     async request<T>(req: TransportRequest): Promise<TransportResponse<T>> {
-      capture(req);
-      return { status: 200, ok: true, headers: {}, body: {} as T };
+      capture(req)
+      return { status: 200, ok: true, headers: {}, body: {} as T }
     },
     openStream() {
-      throw new Error("openStream not used");
+      throw new Error("openStream not used")
     },
     async native() {
-      throw new Error("native not used");
+      throw new Error("native not used")
     },
     subscribeUiCommand() {
-      return { unsubscribe() {} };
+      return { unsubscribe() {} }
     },
-  };
+  }
 }
 
 function expectInjects(path: string) {
-  const url = new URL(apiUrl(path));
-  expect(url.searchParams.get("directory")).toBe(SAVED_DIRECTORY);
+  const url = new URL(apiUrl(path))
+  expect(url.searchParams.get("directory")).toBe(SAVED_DIRECTORY)
 }
 
 function expectDoesNotInject(path: string) {
-  const url = new URL(apiUrl(path));
-  expect(url.searchParams.has("directory")).toBe(false);
+  const url = new URL(apiUrl(path))
+  expect(url.searchParams.has("directory")).toBe(false)
 }
 
 describe("apiUrl directory injection (W2-V31)", () => {
   beforeEach(() => {
-    configure({ serverUrl: "http://127.0.0.1:7878", directory: SAVED_DIRECTORY });
-  });
+    configure({ serverUrl: "http://127.0.0.1:7878", directory: SAVED_DIRECTORY })
+  })
 
   afterEach(() => {
-    __setHostTransportForTest(undefined);
-    configure({ directory: "" });
-  });
+    __setHostTransportForTest(undefined)
+    configure({ directory: "" })
+  })
 
   describe("control-plane routes (no-inject)", () => {
-    test("log", () => expectDoesNotInject("log"));
-    test("log files", () => expectDoesNotInject("log/files"));
-    test("log tail", () => expectDoesNotInject("log/tail"));
-    test("shutdown", () => expectDoesNotInject("shutdown"));
-    test("restart", () => expectDoesNotInject("restart"));
-  });
+    test("log", () => expectDoesNotInject("log"))
+    test("log files", () => expectDoesNotInject("log/files"))
+    test("log tail", () => expectDoesNotInject("log/tail"))
+    test("shutdown", () => expectDoesNotInject("shutdown"))
+    test("restart", () => expectDoesNotInject("restart"))
+  })
 
   describe("global and exact middleware bypass routes — no-inject", () => {
-    test("global/health", () => expectDoesNotInject("global/health"));
-    test("global/event", () => expectDoesNotInject("global/event"));
-    test("global/config", () => expectDoesNotInject("global/config"));
-    test("global/dispose", () => expectDoesNotInject("global/dispose"));
-    test("global/db/reset", () => expectDoesNotInject("global/db/reset"));
-    test("global/tasks", () => expectDoesNotInject("global/tasks"));
-    test("mission ledger", () => expectDoesNotInject("mission"));
-  });
+    test("global/health", () => expectDoesNotInject("global/health"))
+    test("global/event", () => expectDoesNotInject("global/event"))
+    test("global/config", () => expectDoesNotInject("global/config"))
+    test("global/dispose", () => expectDoesNotInject("global/dispose"))
+    test("global/db/reset", () => expectDoesNotInject("global/db/reset"))
+    test("global/tasks", () => expectDoesNotInject("global/tasks"))
+    test("mission ledger", () => expectDoesNotInject("mission"))
+  })
 
   describe("auth routes — no-inject (cross-project by design)", () => {
-    test("auth", () => expectDoesNotInject("auth"));
-    test("auth/login", () => expectDoesNotInject("auth/login"));
-    test("auth/logout", () => expectDoesNotInject("auth/logout"));
-  });
+    test("auth", () => expectDoesNotInject("auth"))
+    test("auth/login", () => expectDoesNotInject("auth/login"))
+    test("auth/logout", () => expectDoesNotInject("auth/logout"))
+  })
 
   describe("project-scoped routes (registered under AppRoutes) — must inject", () => {
-    test("tasks", () => expectInjects("tasks"));
-    test("task create", () => expectInjects("task"));
-    test("task scoped followup", () => expectInjects("task/abc/followup"));
-    test("path", () => expectInjects("path"));
-    test("vcs", () => expectInjects("vcs"));
-    test("config", () => expectInjects("config"));
-    test("config/providers", () => expectInjects("config/providers"));
-    test("session config", () => expectInjects("session/session_123/config"));
-    test("config/auth", () => expectInjects("config/auth"));
-    test("config/mcp", () => expectInjects("config/mcp"));
-    test("config/skill", () => expectInjects("config/skill"));
-    test("config/prompt", () => expectInjects("config/prompt"));
-    test("config/executor", () => expectInjects("config/executor"));
-    test("provider", () => expectInjects("provider"));
-    test("mission wake", () => expectInjects("mission/wake"));
-    test("channel", () => expectInjects("channel"));
-    test("agent", () => expectInjects("agent"));
-    test("installed", () => expectInjects("installed"));
-    test("skill", () => expectInjects("skill"));
-    test("skill/installed", () => expectInjects("skill/installed"));
-    test("skill/market", () => expectInjects("skill/market"));
-    test("skill/directories", () => expectInjects("skill/directories"));
-    test("mcp", () => expectInjects("mcp"));
-    test("browser preview target", () => expectInjects("task/tsk_browserpreview0001/browser-preview"));
-    test("browser preview capture", () => expectInjects("task/tsk_browserpreview0001/browser-preview/capture"));
-    test("coding assistant session list", () => expectInjects("coding/sessions"));
-    test("coding assistant session create", () => expectInjects("coding/session"));
-    test("coding assistant session claim", () => expectInjects("coding/session/ses_123"));
-  });
+    test("tasks", () => expectInjects("tasks"))
+    test("task create", () => expectInjects("task"))
+    test("task scoped followup", () => expectInjects("task/abc/followup"))
+    test("task operator model context", () => expectInjects("task/abc/operator-model-context"))
+    test("path", () => expectInjects("path"))
+    test("vcs", () => expectInjects("vcs"))
+    test("config", () => expectInjects("config"))
+    test("config/providers", () => expectInjects("config/providers"))
+    test("session config", () => expectInjects("session/session_123/config"))
+    test("config/auth", () => expectInjects("config/auth"))
+    test("config/mcp", () => expectInjects("config/mcp"))
+    test("config/skill", () => expectInjects("config/skill"))
+    test("config/prompt", () => expectInjects("config/prompt"))
+    test("config/executor", () => expectInjects("config/executor"))
+    test("provider", () => expectInjects("provider"))
+    test("mission wake", () => expectInjects("mission/wake"))
+    test("channel", () => expectInjects("channel"))
+    test("agent", () => expectInjects("agent"))
+    test("installed", () => expectInjects("installed"))
+    test("skill", () => expectInjects("skill"))
+    test("skill/installed", () => expectInjects("skill/installed"))
+    test("skill/market", () => expectInjects("skill/market"))
+    test("skill/directories", () => expectInjects("skill/directories"))
+    test("mcp", () => expectInjects("mcp"))
+    test("browser preview target", () => expectInjects("task/tsk_browserpreview0001/browser-preview"))
+    test("browser preview capture", () => expectInjects("task/tsk_browserpreview0001/browser-preview/capture"))
+    test("coding assistant session list", () => expectInjects("coding/sessions"))
+    test("coding assistant session create", () => expectInjects("coding/session"))
+    test("coding assistant session claim", () => expectInjects("coding/session/ses_123"))
+  })
 
   describe("when no directory is configured, no path receives the query", () => {
     beforeEach(() => {
-      configure({ directory: "" });
-    });
+      configure({ directory: "" })
+    })
 
     test("project-scoped path skips inject when context is empty", () => {
-      const url = new URL(apiUrl("tasks"));
-      expect(url.searchParams.has("directory")).toBe(false);
-    });
-  });
+      const url = new URL(apiUrl("tasks"))
+      expect(url.searchParams.has("directory")).toBe(false)
+    })
+  })
 
   describe("an explicit ?directory= already in the path is preserved", () => {
     test("does not double-set directory", () => {
-      const url = new URL(apiUrl("tasks?directory=/explicit"));
+      const url = new URL(apiUrl("tasks?directory=/explicit"))
       // explicit value wins; we never overwrite a caller-provided directory
-      expect(url.searchParams.get("directory")).toBe("/explicit");
-    });
-  });
+      expect(url.searchParams.get("directory")).toBe("/explicit")
+    })
+
+    test("preserves clicked Mission row directory on action routes", () => {
+      const url = new URL(apiUrl("mission/m-alpha/abort?directory=/mission-row-project"))
+      expect(url.searchParams.get("directory")).toBe("/mission-row-project")
+    })
+  })
 
   describe("transport request query injection", () => {
     test("apiJson sends directory through HostTransport query", async () => {
-      let captured: TransportRequest | undefined;
-      __setHostTransportForTest(fakeTransport((req) => { captured = req }));
+      let captured: TransportRequest | undefined
+      __setHostTransportForTest(
+        fakeTransport((req) => {
+          captured = req
+        }),
+      )
 
-      await apiJson("tasks");
+      await apiJson("tasks")
 
-      expect(captured?.path).toBe("tasks");
-      expect(captured?.query?.directory).toBe(SAVED_DIRECTORY);
-    });
+      expect(captured?.path).toBe("tasks")
+      expect(captured?.query?.directory).toBe(SAVED_DIRECTORY)
+    })
 
     test("apiRequest preserves explicit directory through HostTransport query", async () => {
-      let captured: TransportRequest | undefined;
-      __setHostTransportForTest(fakeTransport((req) => { captured = req }));
+      let captured: TransportRequest | undefined
+      __setHostTransportForTest(
+        fakeTransport((req) => {
+          captured = req
+        }),
+      )
 
-      await apiRequest("tasks?directory=/explicit");
+      await apiRequest("tasks?directory=/explicit")
 
-      expect(captured?.path).toBe("tasks");
-      expect(captured?.query?.directory).toBe("/explicit");
-    });
-  });
-});
+      expect(captured?.path).toBe("tasks")
+      expect(captured?.query?.directory).toBe("/explicit")
+    })
+
+    test("apiJson preserves explicit Mission row directory through HostTransport query", async () => {
+      let captured: TransportRequest | undefined
+      __setHostTransportForTest(
+        fakeTransport((req) => {
+          captured = req
+        }),
+      )
+
+      await apiJson("mission/m-alpha?directory=/mission-row-project", { method: "DELETE" })
+
+      expect(captured?.path).toBe("mission/m-alpha")
+      expect(captured?.query?.directory).toBe("/mission-row-project")
+    })
+  })
+})

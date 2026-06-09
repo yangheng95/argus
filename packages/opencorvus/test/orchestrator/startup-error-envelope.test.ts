@@ -37,19 +37,21 @@ describe("Orchestrator startup error envelope", () => {
           })
 
           Database.use((db) => {
-            db.insert(EngineTaskTable).values({
-              id: taskID,
-              project_id: Instance.project.id,
-              session_id: root.id,
-              source: "test",
-              title: "Startup error task",
-              request: "do work",
-              kind: "workflow",
-              priority: "normal",
-              time_created: now,
-              time_updated: now,
-              time_started: now,
-            }).run()
+            db.insert(EngineTaskTable)
+              .values({
+                id: taskID,
+                project_id: Instance.project.id,
+                session_id: root.id,
+                source: "test",
+                title: "Startup error task",
+                request: "do work",
+                kind: "workflow",
+                priority: "normal",
+                time_created: now,
+                time_updated: now,
+                time_started: now,
+              })
+              .run()
           })
 
           await Orchestrator.processTask(taskID)

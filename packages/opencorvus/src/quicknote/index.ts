@@ -1,6 +1,6 @@
 /**
  * AI-QuickNote 模块入口
- * 
+ *
  * 提供快速笔记功能，包括：
  * - 文本处理和标题提取
  * - 笔记 CRUD 操作
@@ -22,14 +22,7 @@ export {
 } from "./text-processor"
 
 // 导出服务层
-export {
-  createNote,
-  listNotes,
-  getNote,
-  deleteNote,
-  type Note,
-  type CreateNoteResult,
-} from "./service"
+export { createNote, listNotes, getNote, deleteNote, type Note, type CreateNoteResult } from "./service"
 
 // 导出路由
 export { routes } from "./routes"

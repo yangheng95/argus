@@ -40,26 +40,30 @@ const GatewayStats = z.object({
     total: z.number(),
     status: z.record(z.string(), z.number()),
     summary: z.unknown(),
-    recent: z.array(z.object({
-      id: z.string(),
-      title: z.string(),
-      status: z.string(),
-      priority: z.string().optional(),
-      directory: z.string().optional(),
-      updated: z.number().optional(),
-    })),
+    recent: z.array(
+      z.object({
+        id: z.string(),
+        title: z.string(),
+        status: z.string(),
+        priority: z.string().optional(),
+        directory: z.string().optional(),
+        updated: z.number().optional(),
+      }),
+    ),
   }),
   capabilities: z.object({
     total: z.number(),
     queries: z.number(),
     mutations: z.number(),
   }),
-  channelRuntime: z.object({
-    running: z.boolean(),
-    status: z.string(),
-    channels: z.array(z.string()),
-    detail: z.string().optional(),
-  }).optional(),
+  channelRuntime: z
+    .object({
+      running: z.boolean(),
+      status: z.string(),
+      channels: z.array(z.string()),
+      detail: z.string().optional(),
+    })
+    .optional(),
 })
 
 // Lazy schema factory — defers `ChannelIngressInput.omit(...)` evaluation so
@@ -139,14 +143,16 @@ async function gatewayStats(input: z.infer<typeof GatewayStatsQuery>) {
       queries: actions.filter((item) => item.kind === "query").length,
       mutations: actions.filter((item) => item.kind === "mutation").length,
     },
-    ...(runtime ? {
-      channelRuntime: {
-        running: runtime.running,
-        status: runtime.status,
-        channels: runtime.channels,
-        detail: runtime.detail,
-      },
-    } : {}),
+    ...(runtime
+      ? {
+          channelRuntime: {
+            running: runtime.running,
+            status: runtime.status,
+            channels: runtime.channels,
+            detail: runtime.detail,
+          },
+        }
+      : {}),
   })
 }
 
@@ -199,11 +205,13 @@ export function GatewayRoutes() {
       validator("json", GatewayControlMessageInput),
       async (c) => {
         const input = c.req.valid("json")
-        return c.json(await ControlMessage.handle({
-          ...input,
-          surface: "gateway",
-          source: input.source ?? "gateway",
-        }))
+        return c.json(
+          await ControlMessage.handle({
+            ...input,
+            surface: "gateway",
+            source: input.source ?? "gateway",
+          }),
+        )
       },
     )
     .post(
@@ -228,11 +236,13 @@ export function GatewayRoutes() {
         }
         const tool = await PanelTool.init()
         const result = await tool.execute(action, fakeGatewayToolContext())
-        return c.json(GatewayActionResult.parse({
-          title: result.title,
-          output: result.output,
-          metadata: result.metadata ?? {},
-        }))
+        return c.json(
+          GatewayActionResult.parse({
+            title: result.title,
+            output: result.output,
+            metadata: result.metadata ?? {},
+          }),
+        )
       },
     )
     .post(
@@ -252,11 +262,13 @@ export function GatewayRoutes() {
       async (c) => {
         const platform = ChannelId.parse(c.req.param("platform"))
         const input = c.req.valid("json")
-        return c.json(await ChannelIngress.message({
-          ...input,
-          platform,
-          source: input.source ?? `gateway:${platform}`,
-        }))
+        return c.json(
+          await ChannelIngress.message({
+            ...input,
+            platform,
+            source: input.source ?? `gateway:${platform}`,
+          }),
+        )
       },
     )
 }

@@ -76,7 +76,10 @@ export namespace LLM {
     sessionID?: string
     runtimeSystemMode?: "complete"
   }) {
-    const agent = Agent.resolveSessionAgent(input.agent, await resolveSessionOverlay(input.sessionID ? { sessionID: input.sessionID } : undefined))
+    const agent = Agent.resolveSessionAgent(
+      input.agent,
+      await resolveSessionOverlay(input.sessionID ? { sessionID: input.sessionID } : undefined),
+    )
     const providerPrompt =
       input.runtimeSystemMode === "complete" || input.user.systemMode === "complete"
         ? []

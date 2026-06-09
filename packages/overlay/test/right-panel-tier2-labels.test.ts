@@ -41,7 +41,9 @@ function walkCss(dir: string): string[] {
 
 // Concatenate all surface + cascade + primitive CSS files (styles.css was
 // dissolved 2026-05-04 into this decomposed architecture).
-const CSS = walkCss(STYLES_ROOT).map((f) => readFileSync(f, "utf8")).join("\n")
+const CSS = walkCss(STYLES_ROOT)
+  .map((f) => readFileSync(f, "utf8"))
+  .join("\n")
 
 function blockFor(selector: string): string {
   // Find the first CSS rule whose selector list STARTS with the given

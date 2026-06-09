@@ -56,10 +56,7 @@ describe("capture reference diagnostics", () => {
   })
 
   test("does not keep an in-process browser capture override", () => {
-    const source = readFileSync(
-      path.join(import.meta.dir, "../../src/frontend-design/capture-gate.ts"),
-      "utf8",
-    )
+    const source = readFileSync(path.join(import.meta.dir, "../../src/frontend-design/capture-gate.ts"), "utf8")
 
     expect(source).not.toContain("OPENCORVUS_CAPTURE_BROWSER_IN_PROCESS")
     expect(source).not.toContain("captureBrowserEvidenceInProcess")
@@ -67,10 +64,7 @@ describe("capture reference diagnostics", () => {
   })
 
   test("node capture script uses the shared launch timeout instead of a hard-coded Chrome startup cap", () => {
-    const source = readFileSync(
-      path.join(import.meta.dir, "../../src/frontend-design/capture-gate.ts"),
-      "utf8",
-    )
+    const source = readFileSync(path.join(import.meta.dir, "../../src/frontend-design/capture-gate.ts"), "utf8")
 
     expect(source).toContain("timeout: input.launchTimeoutMs")
     expect(source).not.toContain("timeout: 15000")
@@ -79,10 +73,7 @@ describe("capture reference diagnostics", () => {
   })
 
   test("node capture script does not require networkidle for initial navigation", () => {
-    const source = readFileSync(
-      path.join(import.meta.dir, "../../src/frontend-design/capture-gate.ts"),
-      "utf8",
-    )
+    const source = readFileSync(path.join(import.meta.dir, "../../src/frontend-design/capture-gate.ts"), "utf8")
 
     expect(source).toContain('waitUntil: "domcontentloaded"')
     expect(source).not.toContain('page.goto(input.url, { waitUntil: "networkidle"')

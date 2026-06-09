@@ -74,27 +74,31 @@ describe("pipeline workflow architecture review step", () => {
     const taskID = `tsk_workflow_design_${stamp}`
 
     Database.use((db) => {
-      db.insert(ProjectTable).values({
-        id: projectID,
-        worktree: process.cwd(),
-        name: "Workflow design step test",
-        sandboxes: [],
-        time_created: now,
-        time_updated: now,
-      }).run()
-      db.insert(EngineTaskTable).values({
-        id: taskID,
-        project_id: projectID,
-        source: "test",
-        title: "Workflow design status",
-        request: "Clone a visual webpage",
-        kind: "workflow",
-        priority: "normal",
-        design_specs: [],
-        time_created: now,
-        time_updated: now,
-        time_started: now,
-      }).run()
+      db.insert(ProjectTable)
+        .values({
+          id: projectID,
+          worktree: process.cwd(),
+          name: "Workflow design step test",
+          sandboxes: [],
+          time_created: now,
+          time_updated: now,
+        })
+        .run()
+      db.insert(EngineTaskTable)
+        .values({
+          id: taskID,
+          project_id: projectID,
+          source: "test",
+          title: "Workflow design status",
+          request: "Clone a visual webpage",
+          kind: "workflow",
+          priority: "normal",
+          design_specs: [],
+          time_created: now,
+          time_updated: now,
+          time_started: now,
+        })
+        .run()
     })
 
     const log = createDecisionLog(taskID)
@@ -130,37 +134,43 @@ describe("pipeline workflow architecture review step", () => {
     const specID = `spec_workflow_integrity_${stamp}`
 
     Database.use((db) => {
-      db.insert(ProjectTable).values({
-        id: projectID,
-        worktree: process.cwd(),
-        name: "Workflow integrity step test",
-        sandboxes: [],
-        time_created: now,
-        time_updated: now,
-      }).run()
-      db.insert(EngineTaskTable).values({
-        id: taskID,
-        project_id: projectID,
-        source: "test",
-        title: "Workflow integrity status",
-        request: "Show integrity stage as completed",
-        kind: "workflow",
-        priority: "normal",
-        time_created: now,
-        time_updated: now,
-        time_started: now,
-      }).run()
-      db.insert(EngineSpecSnapshotTable).values({
-        id: specID,
-        task_id: taskID,
-        version: 1,
-        status: "ready",
-        summary: "Active spec",
-        content: "spec",
-        scope: "scope",
-        time_created: now,
-        time_updated: now,
-      }).run()
+      db.insert(ProjectTable)
+        .values({
+          id: projectID,
+          worktree: process.cwd(),
+          name: "Workflow integrity step test",
+          sandboxes: [],
+          time_created: now,
+          time_updated: now,
+        })
+        .run()
+      db.insert(EngineTaskTable)
+        .values({
+          id: taskID,
+          project_id: projectID,
+          source: "test",
+          title: "Workflow integrity status",
+          request: "Show integrity stage as completed",
+          kind: "workflow",
+          priority: "normal",
+          time_created: now,
+          time_updated: now,
+          time_started: now,
+        })
+        .run()
+      db.insert(EngineSpecSnapshotTable)
+        .values({
+          id: specID,
+          task_id: taskID,
+          version: 1,
+          status: "ready",
+          summary: "Active spec",
+          content: "spec",
+          scope: "scope",
+          time_created: now,
+          time_updated: now,
+        })
+        .run()
     })
 
     recordIntegrityAttempt({
@@ -201,37 +211,43 @@ describe("pipeline workflow architecture review step", () => {
     const specID = `spec_workflow_integrity_failed_${stamp}`
 
     Database.use((db) => {
-      db.insert(ProjectTable).values({
-        id: projectID,
-        worktree: process.cwd(),
-        name: "Workflow integrity failed projection test",
-        sandboxes: [],
-        time_created: now,
-        time_updated: now,
-      }).run()
-      db.insert(EngineTaskTable).values({
-        id: taskID,
-        project_id: projectID,
-        source: "test",
-        title: "Workflow integrity failed status",
-        request: "Show integrity stage as failed when correction is required",
-        kind: "workflow",
-        priority: "normal",
-        time_created: now,
-        time_updated: now,
-        time_started: now,
-      }).run()
-      db.insert(EngineSpecSnapshotTable).values({
-        id: specID,
-        task_id: taskID,
-        version: 1,
-        status: "ready",
-        summary: "Active spec",
-        content: "spec",
-        scope: "scope",
-        time_created: now,
-        time_updated: now,
-      }).run()
+      db.insert(ProjectTable)
+        .values({
+          id: projectID,
+          worktree: process.cwd(),
+          name: "Workflow integrity failed projection test",
+          sandboxes: [],
+          time_created: now,
+          time_updated: now,
+        })
+        .run()
+      db.insert(EngineTaskTable)
+        .values({
+          id: taskID,
+          project_id: projectID,
+          source: "test",
+          title: "Workflow integrity failed status",
+          request: "Show integrity stage as failed when correction is required",
+          kind: "workflow",
+          priority: "normal",
+          time_created: now,
+          time_updated: now,
+          time_started: now,
+        })
+        .run()
+      db.insert(EngineSpecSnapshotTable)
+        .values({
+          id: specID,
+          task_id: taskID,
+          version: 1,
+          status: "ready",
+          summary: "Active spec",
+          content: "spec",
+          scope: "scope",
+          time_created: now,
+          time_updated: now,
+        })
+        .run()
     })
 
     recordIntegrityAttempt({
@@ -270,37 +286,43 @@ describe("pipeline workflow architecture review step", () => {
     const specID = `spec_workflow_integrity_concern_failed_${stamp}`
 
     Database.use((db) => {
-      db.insert(ProjectTable).values({
-        id: projectID,
-        worktree: process.cwd(),
-        name: "Workflow integrity concern correction projection test",
-        sandboxes: [],
-        time_created: now,
-        time_updated: now,
-      }).run()
-      db.insert(EngineTaskTable).values({
-        id: taskID,
-        project_id: projectID,
-        source: "test",
-        title: "Workflow integrity correction status",
-        request: "Show integrity stage as failed when concerns contain correction work",
-        kind: "workflow",
-        priority: "normal",
-        time_created: now,
-        time_updated: now,
-        time_started: now,
-      }).run()
-      db.insert(EngineSpecSnapshotTable).values({
-        id: specID,
-        task_id: taskID,
-        version: 1,
-        status: "ready",
-        summary: "Active spec",
-        content: "spec",
-        scope: "scope",
-        time_created: now,
-        time_updated: now,
-      }).run()
+      db.insert(ProjectTable)
+        .values({
+          id: projectID,
+          worktree: process.cwd(),
+          name: "Workflow integrity concern correction projection test",
+          sandboxes: [],
+          time_created: now,
+          time_updated: now,
+        })
+        .run()
+      db.insert(EngineTaskTable)
+        .values({
+          id: taskID,
+          project_id: projectID,
+          source: "test",
+          title: "Workflow integrity correction status",
+          request: "Show integrity stage as failed when concerns contain correction work",
+          kind: "workflow",
+          priority: "normal",
+          time_created: now,
+          time_updated: now,
+          time_started: now,
+        })
+        .run()
+      db.insert(EngineSpecSnapshotTable)
+        .values({
+          id: specID,
+          task_id: taskID,
+          version: 1,
+          status: "ready",
+          summary: "Active spec",
+          content: "spec",
+          scope: "scope",
+          time_created: now,
+          time_updated: now,
+        })
+        .run()
     })
 
     // New aggregate semantics no longer produce a top-level `concerns` verdict:

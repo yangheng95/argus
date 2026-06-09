@@ -19,8 +19,20 @@ function countMatches(pattern: RegExp, text: string): number {
 
 type FakeKeyEvent = { key: string; metaKey: boolean; ctrlKey: boolean; altKey: boolean; shiftKey: boolean }
 
-function buildKeyEvent(init: { key: string; metaKey?: boolean; ctrlKey?: boolean; altKey?: boolean; shiftKey?: boolean }): FakeKeyEvent {
-  return { key: init.key, metaKey: init.metaKey ?? false, ctrlKey: init.ctrlKey ?? false, altKey: init.altKey ?? false, shiftKey: init.shiftKey ?? false }
+function buildKeyEvent(init: {
+  key: string
+  metaKey?: boolean
+  ctrlKey?: boolean
+  altKey?: boolean
+  shiftKey?: boolean
+}): FakeKeyEvent {
+  return {
+    key: init.key,
+    metaKey: init.metaKey ?? false,
+    ctrlKey: init.ctrlKey ?? false,
+    altKey: init.altKey ?? false,
+    shiftKey: init.shiftKey ?? false,
+  }
 }
 
 // ── Unit tests via manual listener simulation ──

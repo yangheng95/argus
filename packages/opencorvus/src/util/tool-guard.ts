@@ -20,10 +20,7 @@ const log = Log.create({ service: "tool-guard" })
  * @param maxFailures - consecutive error threshold (default 30)
  * @returns wrapped tool map (same shape, safe to pass to streamText)
  */
-export function withCircuitBreaker<T extends Record<string, any>>(
-  tools: T,
-  maxFailures = 30,
-): T {
+export function withCircuitBreaker<T extends Record<string, any>>(tools: T, maxFailures = 30): T {
   const failures = new Map<string, number>()
   const result = { ...tools } as Record<string, any>
 
@@ -35,9 +32,7 @@ export function withCircuitBreaker<T extends Record<string, any>>(
       execute: async (input: unknown, options: unknown) => {
         const count = failures.get(name) ?? 0
         if (count >= maxFailures) {
-          throw new Error(
-            `Tool "${name}" circuit-open after ${count} consecutive failures. Use a different approach.`,
-          )
+          throw new Error(`Tool "${name}" circuit-open after ${count} consecutive failures. Use a different approach.`)
         }
         try {
           const r = await original(input, options)

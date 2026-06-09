@@ -57,9 +57,7 @@ const PRIMARY_WEBPAGE_EVIDENCE_FILES = [
 ] as const
 
 export function primaryWebpageEvidenceArtifacts(taskID?: string): string[] {
-  const root = taskID
-    ? ProjectRuntimePaths.frontendDesignPaths("", taskID).webpageEvidenceRelative
-    : "webpage-evidence"
+  const root = taskID ? ProjectRuntimePaths.frontendDesignPaths("", taskID).webpageEvidenceRelative : "webpage-evidence"
   return PRIMARY_WEBPAGE_EVIDENCE_FILES.map((file) => path.posix.join(root, file))
 }
 
@@ -93,9 +91,7 @@ const PRIMARY_WEBPAGE_SOURCE_PACKAGE_FILES = [
 ] as const
 
 export function primaryWebpageSourcePackageArtifacts(taskID?: string): string[] {
-  const root = taskID
-    ? ProjectRuntimePaths.frontendDesignPaths("", taskID).sourcePackageRelative
-    : "web-clone-source"
+  const root = taskID ? ProjectRuntimePaths.frontendDesignPaths("", taskID).sourcePackageRelative : "web-clone-source"
   return PRIMARY_WEBPAGE_SOURCE_PACKAGE_FILES.map((file) => path.posix.join(root, file))
 }
 
@@ -125,7 +121,10 @@ export async function ensureLiveWebpageEvidence(input: {
       status: "reused",
       url,
       evidenceDir,
-      artifacts: [...primaryWebpageEvidenceArtifacts(input.taskID), ...primaryWebpageSourcePackageArtifacts(input.taskID)],
+      artifacts: [
+        ...primaryWebpageEvidenceArtifacts(input.taskID),
+        ...primaryWebpageSourcePackageArtifacts(input.taskID),
+      ],
     }
   }
 
@@ -135,7 +134,9 @@ export async function ensureLiveWebpageEvidence(input: {
   await pipeline.analyze({ outputDir: evidenceDir, signal: input.signal, taskID: input.taskID })
   await pipeline.captureRuntimeState({ url, outputDir: evidenceDir, signal: input.signal, taskID: input.taskID })
   if (!(await hasCompletePrimaryEvidence(evidenceDir, url))) {
-    throw new Error(`Live webpage evidence pipeline finished but did not produce the complete primary webpage evidence artifact set in ${evidenceDir}`)
+    throw new Error(
+      `Live webpage evidence pipeline finished but did not produce the complete primary webpage evidence artifact set in ${evidenceDir}`,
+    )
   }
   await ensureVisibleSourcePackage(input.projectDir, input.worktreeDir, input.taskID)
 
@@ -143,7 +144,10 @@ export async function ensureLiveWebpageEvidence(input: {
     status: "generated",
     url,
     evidenceDir,
-    artifacts: [...primaryWebpageEvidenceArtifacts(input.taskID), ...primaryWebpageSourcePackageArtifacts(input.taskID)],
+    artifacts: [
+      ...primaryWebpageEvidenceArtifacts(input.taskID),
+      ...primaryWebpageSourcePackageArtifacts(input.taskID),
+    ],
   }
 }
 
@@ -154,7 +158,9 @@ async function ensureVisibleSourcePackage(projectDir: string, worktreeDir: strin
     outputDir: paths.sourcePackageAbsolute,
   })
   if (!(await hasCompleteSourcePackage(paths.sourcePackageAbsolute))) {
-    throw new Error(`Live webpage evidence pipeline produced an incomplete web-clone-source package in ${paths.sourcePackageAbsolute}`)
+    throw new Error(
+      `Live webpage evidence pipeline produced an incomplete web-clone-source package in ${paths.sourcePackageAbsolute}`,
+    )
   }
   await TaskRuntimeMaterializer.materializeFrontendDesign({ projectDir, taskID, worktreeDir })
 }
@@ -185,13 +191,18 @@ export async function hasCompleteSourcePackage(sourcePackageDir: string): Promis
 function defaultLiveWebpageEvidencePipeline(): LiveWebpageEvidencePipeline {
   return {
     extract: async ({ url, outputDir, signal, taskID }) => {
-      await runTool(WebpageExtractTool, {
-        url,
-        outputDir,
-        viewport_width: 1440,
-        viewport_height: 900,
-        keep_images: true,
-      }, signal, taskID)
+      await runTool(
+        WebpageExtractTool,
+        {
+          url,
+          outputDir,
+          viewport_width: 1440,
+          viewport_height: 900,
+          keep_images: true,
+        },
+        signal,
+        taskID,
+      )
     },
     compile: async ({ outputDir, signal, taskID }) => {
       await runTool(WebpageCompileTool, { outputDir }, signal, taskID)

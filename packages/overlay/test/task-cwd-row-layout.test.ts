@@ -10,10 +10,9 @@
 // dropdown sits on the left edge and the vcs info sits on the
 // right edge.
 //
-// 2026-05-11: the execution-workspace button on this row is gone
-// (per-goal worktree now lives on GoalWorkflowGroup — see
-// specs/new-arch/2026-05-11-goal-worktree-display.md). This test
-// only covers what remains: the dropdown/breadcrumb layout.
+// 2026-06-09: project worktree management returned to this row as a
+// compact dropdown. Per-goal worktree detail remains on GoalWorkflowGroup;
+// this test covers the cwd row chrome only.
 
 import { describe, expect, test } from "bun:test"
 import { readFileSync, readdirSync, statSync } from "node:fs"
@@ -85,10 +84,25 @@ describe("task-cwd cluster lays out left/right (dropdown left, workspace info ri
     expect(INDEX_HTML).toMatch(/<div id="solidProjectDirectoryBarMount"><\/div>/)
     expect(TASK_DIR_BAR).toMatch(/export function ProjectDirectoryBar\(\)/)
     expect(TASK_DIR_BAR).toMatch(/<TaskDirContent \/>/)
+    expect(TASK_DIR_BAR).toMatch(/<ProjectWorktreeDropdown \/>/)
     expect(TASK_DIR_BAR).toMatch(/<VcsBadge \/>/)
+    expect(TASK_DIR_BAR).toMatch(/export function ProjectWorktreeDropdown\(\)/)
     expect(TASK_DIR_BAR).toMatch(/export function VcsBadge\(\)/)
     expect(INDEX_HTML).not.toMatch(/solidTaskDirMount/)
     expect(INDEX_HTML).not.toMatch(/solidTaskVcsMount/)
+  })
+
+  test("project worktree dropdown is a compact sibling in the cwd row", () => {
+    const taskCluster = soloRuleBody(".task-project-cluster")
+    expect(taskCluster).toMatch(/display:\s*flex/)
+    expect(taskCluster).toMatch(/align-items:\s*center/)
+    const button = soloRuleBody(".project-worktree-dropdown")
+    expect(button).toMatch(/display:\s*inline-flex/)
+    expect(button).toMatch(/height:\s*calc\(24px \* var\(--ui-scale\)\)/)
+    expect(button).toMatch(/flex-shrink:\s*0/)
+    expect(TASK_DIR_BAR).toContain('class="project-worktree-dropdown"')
+    expect(TASK_DIR_BAR).toContain('class="project-worktree-panel"')
+    expect(TASK_DIR_BAR).toContain('class="project-worktree-remove"')
   })
 
   test("recent directory popup is portalled above page stacking contexts", () => {

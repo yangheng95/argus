@@ -13,157 +13,139 @@
 // reusing the same `--card-*` design vars as the agent / goal cards so all
 // system-prompt cards share one look.
 
-import { createMemo, createSignal, For, Show } from "solid-js";
-import { t } from "../utils/i18n";
-import { renderMarkdown } from "../utils/markdown";
-import { loadBoard } from "../store/board";
-import {
-  type InteractionReplyEndpoint,
-  replyInteraction,
-  rejectInteraction,
-} from "../services/interaction-reply";
-import { Button } from "./ui/Button";
+import { createMemo, createSignal, For, Show } from "solid-js"
+import { t } from "../utils/i18n"
+import { renderMarkdown } from "../utils/markdown"
+import { loadBoard } from "../store/board"
+import { type InteractionReplyEndpoint, replyInteraction, rejectInteraction } from "../services/interaction-reply"
+import { Button } from "./ui/Button"
 
 export interface InteractionQuestion {
-  header?: string;
-  question?: string;
-  multiple?: boolean;
-  custom?: boolean;
-  options?: Array<{ label: string; description?: string }>;
+  header?: string
+  question?: string
+  multiple?: boolean
+  custom?: boolean
+  options?: Array<{ label: string; description?: string }>
 }
 
 export interface InteractionData {
-  id: string;
-  type: string;
-  title?: string;
-  body?: string;
-  status: string;
-  payload?: { questions?: InteractionQuestion[] };
-  replyEndpoint?: InteractionReplyEndpoint;
+  id: string
+  type: string
+  title?: string
+  body?: string
+  status: string
+  payload?: { questions?: InteractionQuestion[] }
+  replyEndpoint?: InteractionReplyEndpoint
 }
 
 export function InteractionCard(props: { interaction: InteractionData }) {
-  const [busy, setBusy] = createSignal(false);
-  const [error, setError] = createSignal("");
-  const [drafts, setDrafts] = createSignal<string[][]>([]);
-  const [customText, setCustomText] = createSignal<string[]>([]);
+  const [busy, setBusy] = createSignal(false)
+  const [error, setError] = createSignal("")
+  const [drafts, setDrafts] = createSignal<string[][]>([])
+  const [customText, setCustomText] = createSignal<string[]>([])
 
-  const isPermission = () => props.interaction.type === "permission";
-  const dataKind = () =>
-    isPermission() ? "interaction-permission" : "interaction-question";
-  const iconGlyph = () => (isPermission() ? "\uD83D\uDD12" : "\u2753");
-  const iconLabel = () =>
-    isPermission()
-      ? t("interaction.icon.permission")
-      : t("interaction.icon.question");
+  const isPermission = () => props.interaction.type === "permission"
+  const dataKind = () => (isPermission() ? "interaction-permission" : "interaction-question")
+  const iconGlyph = () => (isPermission() ? "\uD83D\uDD12" : "\u2753")
+  const iconLabel = () => (isPermission() ? t("interaction.icon.permission") : t("interaction.icon.question"))
 
   const questions = createMemo<InteractionQuestion[]>(() => {
-    const q = props.interaction?.payload?.questions;
-    return Array.isArray(q) ? q : [];
-  });
+    const q = props.interaction?.payload?.questions
+    return Array.isArray(q) ? q : []
+  })
   const replyEndpoint = createMemo<InteractionReplyEndpoint>(() =>
     props.interaction.replyEndpoint === "question" ? "question" : "interaction",
-  );
+  )
 
   function getSelected(qIdx: number): string[] {
-    return drafts()[qIdx] ?? [];
+    return drafts()[qIdx] ?? []
   }
 
   function toggleOption(qIdx: number, label: string, multiple: boolean) {
     setDrafts((prev) => {
-      const next = [...prev];
-      const current = next[qIdx] ?? [];
+      const next = [...prev]
+      const current = next[qIdx] ?? []
       next[qIdx] = multiple
         ? current.includes(label)
           ? current.filter((l) => l !== label)
           : [...current, label]
         : current.includes(label)
           ? []
-          : [label];
-      return next;
-    });
+          : [label]
+      return next
+    })
   }
 
   function setCustomAt(qIdx: number, value: string) {
     setCustomText((prev) => {
-      const next = [...prev];
-      next[qIdx] = value;
-      return next;
-    });
+      const next = [...prev]
+      next[qIdx] = value
+      return next
+    })
   }
 
   async function runAction(fn: () => Promise<void>) {
-    if (busy()) return;
-    setBusy(true);
-    setError("");
+    if (busy()) return
+    setBusy(true)
+    setError("")
     try {
-      await fn();
-      await loadBoard();
+      await fn()
+      await loadBoard()
     } catch (err: any) {
-      setError(err?.message || String(err));
+      setError(err?.message || String(err))
     } finally {
-      setBusy(false);
+      setBusy(false)
     }
   }
 
   const resolvePermission = (action: "once" | "always") =>
-    runAction(() => replyInteraction(props.interaction.id, action, false, {}, replyEndpoint()));
-  const reject = () =>
-    runAction(() => rejectInteraction(props.interaction.id, false, replyEndpoint()));
+    runAction(() => replyInteraction(props.interaction.id, action, false, {}, replyEndpoint()))
+  const reject = () => runAction(() => rejectInteraction(props.interaction.id, false, replyEndpoint()))
   const submitAnswers = () =>
     runAction(() => {
       const answers = questions().map((_, idx) => {
-        const picked = getSelected(idx);
-        const custom = (customText()[idx] ?? "").trim();
-        return custom ? [...picked, custom] : picked;
-      });
-      return replyInteraction(props.interaction.id, "answer", false, {
-        answers,
-      }, replyEndpoint());
-    });
+        const picked = getSelected(idx)
+        const custom = (customText()[idx] ?? "").trim()
+        return custom ? [...picked, custom] : picked
+      })
+      return replyInteraction(
+        props.interaction.id,
+        "answer",
+        false,
+        {
+          answers,
+        },
+        replyEndpoint(),
+      )
+    })
 
   return (
-    <div
-      class="interaction-card"
-      data-kind={dataKind()}
-      data-id={props.interaction.id}
-    >
+    <div class="interaction-card" data-kind={dataKind()} data-id={props.interaction.id}>
       <Show when={props.interaction.title}>
         <div class="interaction-card__title">
-          <span
-            class="interaction-card__icon"
-            role="img"
-            aria-label={iconLabel()}
-          >
+          <span class="interaction-card__icon" role="img" aria-label={iconLabel()}>
             {iconGlyph()}
           </span>
           {props.interaction.title}
         </div>
       </Show>
       <Show when={isPermission() && props.interaction.body}>
-        <div
-          class="interaction-card__body md-content"
-          innerHTML={renderMarkdown(props.interaction.body || "")}
-        />
+        <div class="interaction-card__body md-content" innerHTML={renderMarkdown(props.interaction.body || "")} />
       </Show>
       <Show when={error()}>
-        <div class="interaction-card__error">
-          {t("interaction.error", { message: error() })}
-        </div>
+        <div class="interaction-card__error">{t("interaction.error", { message: error() })}</div>
       </Show>
       <Show when={!isPermission() && questions().length > 0}>
         <div class="interaction-card__questions">
           <For each={questions()}>
             {(q, qIdx) => {
-              const multi = q.multiple === true;
-              const allowCustom = q.custom !== false;
-              const opts = Array.isArray(q.options) ? q.options : [];
+              const multi = q.multiple === true
+              const allowCustom = q.custom !== false
+              const opts = Array.isArray(q.options) ? q.options : []
               return (
                 <div class="interaction-card__question">
                   <Show when={q.question}>
-                    <div class="interaction-card__question-text">
-                      {q.question}
-                    </div>
+                    <div class="interaction-card__question-text">{q.question}</div>
                   </Show>
                   <Show when={opts.length > 0}>
                     <div class="interaction-card__options">
@@ -175,17 +157,11 @@ export function InteractionCard(props: { interaction: InteractionData }) {
                               name={`iq-${props.interaction.id}-${qIdx()}`}
                               checked={getSelected(qIdx()).includes(opt.label)}
                               disabled={busy()}
-                              onChange={() =>
-                                toggleOption(qIdx(), opt.label, multi)
-                              }
+                              onChange={() => toggleOption(qIdx(), opt.label, multi)}
                             />
-                            <span class="interaction-card__option-label">
-                              {opt.label}
-                            </span>
+                            <span class="interaction-card__option-label">{opt.label}</span>
                             <Show when={opt.description}>
-                              <span class="interaction-card__option-desc">
-                                {opt.description}
-                              </span>
+                              <span class="interaction-card__option-desc">{opt.description}</span>
                             </Show>
                           </label>
                         )}
@@ -199,16 +175,11 @@ export function InteractionCard(props: { interaction: InteractionData }) {
                       rows={opts.length > 0 ? 1 : 3}
                       disabled={busy()}
                       value={customText()[qIdx()] ?? ""}
-                      onInput={(e) =>
-                        setCustomAt(
-                          qIdx(),
-                          (e.currentTarget as HTMLTextAreaElement).value,
-                        )
-                      }
+                      onInput={(e) => setCustomAt(qIdx(), (e.currentTarget as HTMLTextAreaElement).value)}
                     />
                   </Show>
                 </div>
-              );
+              )
             }}
           </For>
         </div>
@@ -289,22 +260,16 @@ export function InteractionCard(props: { interaction: InteractionData }) {
         </Show>
       </div>
     </div>
-  );
+  )
 }
 
-export function InteractionCardList(props: {
-  interactions: InteractionData[];
-}) {
-  const pending = createMemo(() =>
-    (props.interactions || []).filter((it) => it?.status === "pending"),
-  );
+export function InteractionCardList(props: { interactions: InteractionData[] }) {
+  const pending = createMemo(() => (props.interactions || []).filter((it) => it?.status === "pending"))
   return (
     <Show when={pending().length > 0}>
       <div class="interaction-card-list">
-        <For each={pending()}>
-          {(item) => <InteractionCard interaction={item} />}
-        </For>
+        <For each={pending()}>{(item) => <InteractionCard interaction={item} />}</For>
       </div>
     </Show>
-  );
+  )
 }

@@ -14,44 +14,42 @@
  * list of "known checks" — the source of truth is whoever recorded the
  * criterion (integrity review, benchmark, etc).
  */
-import { For, Show } from "solid-js";
-import { familyOrder, familyLabel } from "../utils/criteria";
-import { goalStatusToTaskStatus, statusIconName } from "../utils/status-mapping";
-import { Icon } from "./Icon";
+import { For, Show } from "solid-js"
+import { familyOrder, familyLabel } from "../utils/criteria"
+import { goalStatusToTaskStatus, statusIconName } from "../utils/status-mapping"
+import { Icon } from "./Icon"
 
 interface CriteriaCheck {
-  name: string;
-  label?: string;
-  family?: string;
-  status: "passed" | "failed" | "skipped";
-  evidence?: string;
+  name: string
+  label?: string
+  family?: string
+  status: "passed" | "failed" | "skipped"
+  evidence?: string
 }
 
 interface Props {
-  checks: CriteriaCheck[];
+  checks: CriteriaCheck[]
 }
 
 function groupByFamily(checks: CriteriaCheck[]) {
-  const groups = new Map<string, CriteriaCheck[]>();
+  const groups = new Map<string, CriteriaCheck[]>()
   for (const c of checks) {
-    const key = familyLabel(c.family);
-    const list = groups.get(key) ?? [];
-    list.push(c);
-    groups.set(key, list);
+    const key = familyLabel(c.family)
+    const list = groups.get(key) ?? []
+    list.push(c)
+    groups.set(key, list)
   }
-  return [...groups.entries()].sort(
-    ([a], [b]) => familyOrder(a) - familyOrder(b),
-  );
+  return [...groups.entries()].sort(([a], [b]) => familyOrder(a) - familyOrder(b))
 }
 
 export function EvaluationCriteriaPanel(props: Props) {
-  const groups = () => groupByFamily(props.checks ?? []);
+  const groups = () => groupByFamily(props.checks ?? [])
   const summary = () => {
-    const passed = props.checks.filter((c) => c.status === "passed").length;
-    const failed = props.checks.filter((c) => c.status === "failed").length;
-    const skipped = props.checks.filter((c) => c.status === "skipped").length;
-    return { passed, failed, skipped, total: props.checks.length };
-  };
+    const passed = props.checks.filter((c) => c.status === "passed").length
+    const failed = props.checks.filter((c) => c.status === "failed").length
+    const skipped = props.checks.filter((c) => c.status === "skipped").length
+    return { passed, failed, skipped, total: props.checks.length }
+  }
 
   return (
     <div class="criteria-panel">
@@ -91,5 +89,5 @@ export function EvaluationCriteriaPanel(props: Props) {
         )}
       </For>
     </div>
-  );
+  )
 }

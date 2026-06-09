@@ -6,6 +6,7 @@ description: Connect OpenCorvus to local and remote MCP servers; expose OpenCorv
 MCP is an open protocol led by Anthropic that defines a standard interface between LLM applications and external tool servers. Spec: [modelcontextprotocol.io](https://modelcontextprotocol.io).
 
 OpenCorvus plays two roles:
+
 1. **MCP Client** — connects to external MCP Servers, exposing their tools/prompts/resources to internal agents.
 2. **MCP Server** — the running `opencorvus serve` process exposes its own tools to external coding executors over Streamable HTTP at `/mcp/transport`.
 
@@ -14,6 +15,7 @@ Source: `packages/opencorvus/src/mcp/index.ts`, `packages/opencorvus/src/mcp/ser
 ## Consuming external MCP Servers
 
 At startup, OpenCorvus reads every `mcp` config entry and connects (`src/mcp/index.ts:164-211`):
+
 - `"local"` → `StdioClientTransport` (subprocess stdin/stdout)
 - `"remote"` → tries `StreamableHTTPClientTransport` first, falls back to `SSEClientTransport`
 
@@ -22,6 +24,7 @@ After connecting, `client.listTools()` runs; tool names are sanitized and regist
 ## Configuration
 
 **Local (stdio):**
+
 ```jsonc
 {
   "mcp": {
@@ -30,14 +33,16 @@ After connecting, `client.listTools()` runs; tool names are sanitized and regist
       "command": ["node", "/path/to/server/index.js"],
       "environment": { "API_KEY": "sk-..." },
       "enabled": true,
-      "timeout": 30000
-    }
-  }
+      "timeout": 30000,
+    },
+  },
 }
 ```
+
 Source: `src/config/config.ts:533-552`.
 
 **Remote (HTTP):**
+
 ```jsonc
 {
   "mcp": {
@@ -46,9 +51,9 @@ Source: `src/config/config.ts:533-552`.
       "url": "https://mcp.example.com/api",
       "headers": { "Authorization": "Bearer sk-..." },
       "oauth": false,
-      "timeout": 15000
-    }
-  }
+      "timeout": 15000,
+    },
+  },
 }
 ```
 
@@ -56,14 +61,14 @@ OAuth: `oauth: false` disables auto-detection; `oauth: { clientId, clientSecret,
 
 ## Capabilities
 
-| Capability | Status |
-|---|---|
-| Tools (`listTools` + `callTool`) | Full |
-| Prompts / Resources | Full |
-| `ToolListChanged` notifications | Supported |
-| StreamableHTTP / SSE / stdio | All supported |
-| OAuth 2.0 + PKCE | Supported (remote, on by default) |
-| Dynamic client registration (RFC 7591) | Supported |
+| Capability                             | Status                            |
+| -------------------------------------- | --------------------------------- |
+| Tools (`listTools` + `callTool`)       | Full                              |
+| Prompts / Resources                    | Full                              |
+| `ToolListChanged` notifications        | Supported                         |
+| StreamableHTTP / SSE / stdio           | All supported                     |
+| OAuth 2.0 + PKCE                       | Supported (remote, on by default) |
+| Dynamic client registration (RFC 7591) | Supported                         |
 
 ## OAuth flow
 
@@ -80,16 +85,32 @@ Status: `opencorvus mcp status`. Remove: `opencorvus mcp remove-auth <server-nam
 ## Examples
 
 **Local Filesystem:**
+
 ```jsonc
-{ "mcp": { "fs": { "type": "local", "command": ["npx", "-y", "@modelcontextprotocol/server-filesystem", "/home/user"] } } }
+{
+  "mcp": {
+    "fs": { "type": "local", "command": ["npx", "-y", "@modelcontextprotocol/server-filesystem", "/home/user"] },
+  },
+}
 ```
 
 **Remote GitHub (Bearer Token):**
+
 ```jsonc
-{ "mcp": { "github": { "type": "remote", "url": "https://api.githubcopilot.com/mcp/", "headers": { "Authorization": "Bearer ghp_xxx" }, "oauth": false } } }
+{
+  "mcp": {
+    "github": {
+      "type": "remote",
+      "url": "https://api.githubcopilot.com/mcp/",
+      "headers": { "Authorization": "Bearer ghp_xxx" },
+      "oauth": false,
+    },
+  },
+}
 ```
 
 **Disable a configured server:**
+
 ```jsonc
 { "mcp": { "github": { "type": "remote", "url": "...", "enabled": false } } }
 ```
@@ -105,6 +126,7 @@ POST/GET/DELETE http://<host>:<port>/mcp/transport
 It speaks Streamable HTTP per the MCP 2025 spec. Each MCP session pins to a working directory via the `X-Opencorvus-Directory` header at initialize time. When `OPENCORVUS_SERVER_PASSWORD` is set, the same HTTP Basic auth that protects the rest of the API gates the transport.
 
 OpenCorvus injects this URL into executors automatically:
+
 - **Claude Code**: `MCPServe.url(...)` produces an `McpHttpServerConfig` (`{ type: "http", url, headers }`) which the Anthropic Agent SDK forwards to the claude-code CLI as `--mcp-config`.
 - **Codex**: opencorvus passes `-c mcp_servers.opencorvus.url=...` to `codex app-server`.
 
@@ -112,12 +134,12 @@ Exposes (`src/mcp/serve.ts`): `memory`, `task_report`, the webpage evidence tool
 
 ## Connection status
 
-| Status | Meaning |
-|---|---|
-| `connected` | Connected |
-| `disabled` | `enabled: false` or manually disconnected |
-| `failed` | Connection failed (see `error` field) |
-| `needs_auth` | OAuth required |
+| Status                      | Meaning                                     |
+| --------------------------- | ------------------------------------------- |
+| `connected`                 | Connected                                   |
+| `disabled`                  | `enabled: false` or manually disconnected   |
+| `failed`                    | Connection failed (see `error` field)       |
+| `needs_auth`                | OAuth required                              |
 | `needs_client_registration` | Server requires a pre-registered `clientId` |
 
 Default timeout: 30 000 ms (`src/mcp/index.ts:31`); override via per-server `timeout` or global `experimental.mcp_timeout`.

@@ -37,13 +37,7 @@ const DIRECT_VISUAL_PROPS = new Set([
   "lineHeight",
 ])
 
-const ALLOWED_DIRECT_PROPS = new Set([
-  "transform",
-  "opacity",
-  "display",
-  "visibility",
-  "pointerEvents",
-])
+const ALLOWED_DIRECT_PROPS = new Set(["transform", "opacity", "display", "visibility", "pointerEvents"])
 
 type StyleBlock = {
   text: string
@@ -94,7 +88,7 @@ function extractStyleBlocks(text: string): StyleBlock[] {
     let i = open
     while (i < text.length) {
       const ch = text[i]
-      if (ch === "'" || ch === "\"" || ch === "`") {
+      if (ch === "'" || ch === '"' || ch === "`") {
         i = skipQuoted(text, i, ch)
         continue
       }

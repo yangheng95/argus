@@ -105,7 +105,9 @@ describe("OpencorvusPanel", () => {
     const { OpencorvusPanel } = await import("../src/webview/panel")
     OpencorvusPanel.current?.dispose()
     OpencorvusPanel.current = undefined
-    try { fs.rmSync(extensionRoot, { recursive: true, force: true }) } catch {}
+    try {
+      fs.rmSync(extensionRoot, { recursive: true, force: true })
+    } catch {}
   })
 
   async function bootPanel() {
@@ -145,7 +147,9 @@ describe("OpencorvusPanel", () => {
     const panel = OpencorvusPanel.current!
     const errors: unknown[][] = []
     const origError = console.error
-    console.error = (...args: unknown[]) => { errors.push(args) }
+    console.error = (...args: unknown[]) => {
+      errors.push(args)
+    }
     try {
       const before = createdPanel.postedMessages.length
       // 8 MiB string > 6 MiB cap. JSON.stringify adds ~quote chars but
@@ -169,7 +173,9 @@ describe("OpencorvusPanel", () => {
     cyclic.self = cyclic
     const errors: unknown[][] = []
     const origError = console.error
-    console.error = (...args: unknown[]) => { errors.push(args) }
+    console.error = (...args: unknown[]) => {
+      errors.push(args)
+    }
     try {
       const before = createdPanel.postedMessages.length
       // Should not throw — the size guard's try/catch routes the
@@ -201,9 +207,9 @@ describe("OpencorvusPanel", () => {
 
     OpencorvusPanel.show(context as any, sidecar as any)
 
-    expect(createdPanel.webview.html).toContain("<meta http-equiv=\"Content-Security-Policy\"")
+    expect(createdPanel.webview.html).toContain('<meta http-equiv="Content-Security-Policy"')
     expect(createdPanel.webview.html).toContain('window.__OC_VSCODE_INITIAL_THEME__="vscode-dark"')
-    expect(createdPanel.webview.html).toContain("<div id=\"root\"></div>")
+    expect(createdPanel.webview.html).toContain('<div id="root"></div>')
     expect(createdPanel.htmlAssignments).toBe(1)
 
     OpencorvusPanel.show(context as any, sidecar as any)

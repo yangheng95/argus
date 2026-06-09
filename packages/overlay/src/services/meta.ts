@@ -2,26 +2,24 @@
 // TypeScript port of meta/changes functions
 // loadMeta, loadChanges, normalizeDiffs, diffStatus, openDiffDialog.
 
-import { setAppStore } from "../store/app";
-import { boardStore, setPath, setVcs,
-  activeTaskID,
-} from "../store/board";
-import { settingsStore } from "../store/settings";
-import { AppLog } from "../utils/log";
-import { apiJson } from "./api";
-import { setWorkspaceDirectory } from "./workspace";
+import { setAppStore } from "../store/app"
+import { boardStore, setPath, setVcs, activeTaskID } from "../store/board"
+import { settingsStore } from "../store/settings"
+import { AppLog } from "../utils/log"
+import { apiJson } from "./api"
+import { setWorkspaceDirectory } from "./workspace"
 
 // ── Types ──
 
-export type DiffStatus = "added" | "deleted" | "modified";
+export type DiffStatus = "added" | "deleted" | "modified"
 
 export interface DiffItem {
-  file: string;
-  before?: string;
-  after?: string;
-  additions: number;
-  deletions: number;
-  status: DiffStatus;
+  file: string
+  before?: string
+  after?: string
+  additions: number
+  deletions: number
+  status: DiffStatus
 }
 
 // ── loadMeta ──
@@ -35,39 +33,33 @@ export interface DiffItem {
  * lives on the right-side GoalWorkflowGroup card, not on this surface.
  */
 export async function loadMeta(): Promise<void> {
-  const epoch = settingsStore.directoryEpoch;
+  const epoch = settingsStore.directoryEpoch
   try {
-    const [path, vcs] = await Promise.all([
-      apiJson("path"),
-      apiJson("vcs"),
-    ]);
-    if (epoch !== settingsStore.directoryEpoch) return;
-    const directory =
-      path && typeof path.directory === "string"
-        ? path.directory.trim()
-        : "";
-    setPath(directory ? { directory } : null);
+    const [path, vcs] = await Promise.all([apiJson("path"), apiJson("vcs")])
+    if (epoch !== settingsStore.directoryEpoch) return
+    const directory = path && typeof path.directory === "string" ? path.directory.trim() : ""
+    setPath(directory ? { directory } : null)
     if (!settingsStore.directory && directory) {
-      setWorkspaceDirectory(directory, "auto");
+      setWorkspaceDirectory(directory, "auto")
     }
-    setVcs(vcs ?? null);
+    setVcs(vcs ?? null)
     setAppStore("config", (prev: any) => ({
       ...(prev ?? {}),
       _metaPath: directory ? { directory } : null,
       _metaVcs: vcs ?? null,
-    }));
+    }))
   } catch (e) {
     AppLog.debug("meta", "loadMeta failed, resetting path/vcs", {
       error: String(e),
-    });
-    if (epoch !== settingsStore.directoryEpoch) return;
-    setPath(null);
-    setVcs(null);
+    })
+    if (epoch !== settingsStore.directoryEpoch) return
+    setPath(null)
+    setVcs(null)
     setAppStore("config", (prev: any) => ({
       ...(prev ?? {}),
       _metaPath: null,
       _metaVcs: null,
-    }));
+    }))
   }
 }
 
@@ -85,15 +77,11 @@ export function normalizeDiffs(list: any[]): DiffItem[] {
       file: String(item.file || "").replace(/^[ab]\//, ""),
       before: typeof item.before === "string" ? item.before : undefined,
       after: typeof item.after === "string" ? item.after : undefined,
-      additions: Number.isFinite(Number(item.additions))
-        ? Number(item.additions)
-        : 0,
-      deletions: Number.isFinite(Number(item.deletions))
-        ? Number(item.deletions)
-        : 0,
+      additions: Number.isFinite(Number(item.additions)) ? Number(item.additions) : 0,
+      deletions: Number.isFinite(Number(item.deletions)) ? Number(item.deletions) : 0,
       status: diffStatus(item),
     }))
-    .sort((a, b) => a.file.localeCompare(b.file));
+    .sort((a, b) => a.file.localeCompare(b.file))
 }
 
 /**
@@ -101,16 +89,12 @@ export function normalizeDiffs(list: any[]): DiffItem[] {
  * Mirrors diffStatus.
  */
 export function diffStatus(item: any): DiffStatus {
-  if (
-    item.status === "added" ||
-    item.status === "deleted" ||
-    item.status === "modified"
-  ) {
-    return item.status as DiffStatus;
+  if (item.status === "added" || item.status === "deleted" || item.status === "modified") {
+    return item.status as DiffStatus
   }
-  if (!item.before && item.after) return "added";
-  if (item.before && !item.after) return "deleted";
-  return "modified";
+  if (!item.before && item.after) return "added"
+  if (item.before && !item.after) return "deleted"
+  return "modified"
 }
 
 // ── loadChanges ──
@@ -124,12 +108,12 @@ export function diffStatus(item: any): DiffStatus {
  * Mirrors loadChanges.
  */
 export function deriveChanges(): DiffItem[] {
-  if (!activeTaskID()) return [];
-  const board = boardStore.board as any;
+  if (!activeTaskID()) return []
+  const board = boardStore.board as any
   const acceptance =
     board?.acceptedAcceptance?.result?.diffs ||
     board?.acceptance?.result?.diffs ||
     board?.candidateAcceptance?.result?.diffs ||
-    [];
-  return normalizeDiffs(acceptance);
+    []
+  return normalizeDiffs(acceptance)
 }

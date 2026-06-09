@@ -551,7 +551,11 @@ export namespace Session {
   )
 
   export const diff = fn(Identifier.schema("session"), async (sessionID) => {
-    for (const target of ProjectRuntimePaths.sessionDiffPathReadCandidates(Instance.directory, Instance.project.id, sessionID)) {
+    for (const target of ProjectRuntimePaths.sessionDiffPathReadCandidates(
+      Instance.directory,
+      Instance.project.id,
+      sessionID,
+    )) {
       try {
         return await Filesystem.readJson<Snapshot.FileDiff[]>(target)
       } catch {}
@@ -591,7 +595,9 @@ export namespace Session {
    */
   export const snapshotLatestAssistant = fn(
     Identifier.schema("session"),
-    async (sessionID): Promise<{
+    async (
+      sessionID,
+    ): Promise<{
       finished: boolean
       messageID?: string
       contentHash?: string
@@ -980,7 +986,10 @@ export namespace Session {
    *    silently bloat the DB. */
   const INLINE_BASE64_RE = /"data:[^";,]+;base64,/
   export class InlineBase64InPartError extends Error {
-    constructor(public readonly partID: string, snippet: string) {
+    constructor(
+      public readonly partID: string,
+      snippet: string,
+    ) {
       super(
         `Session.updatePart: refusing inline base64 data URL in part ${partID}. ` +
           `Route the producer through AttachmentStore.write so part.data stores a ` +
@@ -1016,7 +1025,7 @@ export namespace Session {
       if (part.type === "tool" && part.state?.status) {
         const existing = db.select({ data: PartTable.data }).from(PartTable).where(eq(PartTable.id, id)).get()
         if (existing?.data) {
-          const prev = (existing.data as any)
+          const prev = existing.data as any
           if (prev.type === "tool" && prev.state?.status) {
             const oldRank = TOOL_STATUS_RANK[prev.state.status] ?? 0
             const newRank = TOOL_STATUS_RANK[part.state.status] ?? 0
@@ -1107,9 +1116,7 @@ export namespace Session {
           const providerKeys = Object.keys(input.metadata)
           const snapshot = providerKeys.reduce<Record<string, unknown>>((acc, key) => {
             const value = (input.metadata as Record<string, unknown>)[key]
-            acc[key] = value && typeof value === "object"
-              ? { keys: Object.keys(value as object) }
-              : typeof value
+            acc[key] = value && typeof value === "object" ? { keys: Object.keys(value as object) } : typeof value
             return acc
           }, {})
           log.info("cache_write extraction miss", {

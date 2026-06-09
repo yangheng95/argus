@@ -8,12 +8,12 @@
 
 ## Plan
 
-| Surface | Action |
-| --- | --- |
-| Runtime review modules | Rename the live review namespace from the retired identity to `acceptance`. |
-| Tests | Rename test paths and imports to match the single active namespace. |
-| Artifact labels and event strings | Rename review evidence labels/events to `acceptance_*` / `acceptance-*`. |
-| Product docs and specs | Remove references to retired agent identities; describe acceptance review through integrity/build ownership. |
+| Surface                           | Action                                                                                                       |
+| --------------------------------- | ------------------------------------------------------------------------------------------------------------ |
+| Runtime review modules            | Rename the live review namespace from the retired identity to `acceptance`.                                  |
+| Tests                             | Rename test paths and imports to match the single active namespace.                                          |
+| Artifact labels and event strings | Rename review evidence labels/events to `acceptance_*` / `acceptance-*`.                                     |
+| Product docs and specs            | Remove references to retired agent identities; describe acceptance review through integrity/build ownership. |
 
 ## Verification
 

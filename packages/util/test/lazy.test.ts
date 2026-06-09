@@ -15,7 +15,10 @@ describe("lazy (audit W2-V11)", () => {
   test("happy path: fn runs once, value is cached, identity preserved", () => {
     let calls = 0
     const obj = { x: 42 }
-    const get = lazy(() => { calls++; return obj })
+    const get = lazy(() => {
+      calls++
+      return obj
+    })
     const a = get()
     const b = get()
     expect(calls).toBe(1)
@@ -64,7 +67,10 @@ describe("lazy (audit W2-V11)", () => {
     // `value`. A truthy/falsy mistake here would cause `lazy(() =>
     // 0)()` to re-invoke fn forever.
     let calls = 0
-    const getZero = lazy(() => { calls++; return 0 })
+    const getZero = lazy(() => {
+      calls++
+      return 0
+    })
     expect(getZero()).toBe(0)
     expect(getZero()).toBe(0)
     expect(getZero()).toBe(0)

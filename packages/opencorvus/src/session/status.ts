@@ -127,7 +127,8 @@ export namespace SessionStatus {
     if (
       current?.type === "terminal" &&
       !(current.reason === "completed" && status.type === "terminal" && status.reason === "artifact_missing")
-    ) return
+    )
+      return
     // Seal the latch BEFORE publishing. Bus.publish dispatches subscribers
     // synchronously; if a subscriber re-enters set() (audit §11.3 H1 —
     // observed when message-bridge handlers chain into other session writes),

@@ -1,13 +1,12 @@
 import { afterEach, beforeEach, describe, expect, test } from "bun:test"
 import { __setHostTransportForTest } from "../src/services/host-transport"
 import type { HostTransport, TransportRequest, TransportResponse } from "../src/services/host-transport"
-
-;(globalThis as typeof globalThis & { __OPENCORVUS_OVERLAY_VERSION__?: string }).__OPENCORVUS_OVERLAY_VERSION__ =
-  "test"
+;(globalThis as typeof globalThis & { __OPENCORVUS_OVERLAY_VERSION__?: string }).__OPENCORVUS_OVERLAY_VERSION__ = "test"
 
 interface Captured {
   path: string
   method: string
+  query: Record<string, string | number | boolean> | undefined
   body: unknown
 }
 
@@ -44,6 +43,7 @@ function recordingTransport(): HostTransport {
     captured.push({
       path: req.path,
       method: req.method,
+      query: req.query,
       body: req.body && (req.body as any).kind === "json" ? (req.body as any).value : req.body,
     })
     if (req.method === "PATCH") {
@@ -70,12 +70,13 @@ function recordingTransport(): HostTransport {
 describe("Mission service action contract", () => {
   test("renameMission PATCHes mission/<id>/title with a trimmed title", async () => {
     __setHostTransportForTest(recordingTransport())
-    const result = await renameMission("m-alpha", "  Renamed  ")
+    const result = await renameMission({ missionID: "m-alpha", directory: "D:/repo" }, "  Renamed  ")
     expect(result.title).toBe("Renamed")
     expect(captured).toEqual([
       {
         path: "mission/m-alpha/title",
         method: "PATCH",
+        query: { directory: "D:/repo" },
         body: { title: "Renamed" },
       },
     ])
@@ -83,18 +84,22 @@ describe("Mission service action contract", () => {
 
   test("renameMission rejects empty and oversize titles before network", async () => {
     __setHostTransportForTest(recordingTransport())
-    await expect(renameMission("m-alpha", "   ")).rejects.toThrow("renameMission")
-    await expect(renameMission("m-alpha", "x".repeat(201))).rejects.toThrow("renameMission")
+    await expect(renameMission({ missionID: "m-alpha", directory: "D:/repo" }, "   ")).rejects.toThrow("renameMission")
+    await expect(renameMission({ missionID: "m-alpha", directory: "D:/repo" }, "x".repeat(201))).rejects.toThrow(
+      "renameMission",
+    )
+    await expect(renameMission({ missionID: "m-alpha", directory: "" }, "Renamed")).rejects.toThrow("missionActionPath")
     expect(captured).toEqual([])
   })
 
   test("abortMission POSTs mission/<id>/abort", async () => {
     __setHostTransportForTest(recordingTransport())
-    await expect(abortMission("m-alpha")).resolves.toBe(true)
+    await expect(abortMission({ missionID: "m-alpha", directory: "D:/repo" })).resolves.toBe(true)
     expect(captured).toEqual([
       {
         path: "mission/m-alpha/abort",
         method: "POST",
+        query: { directory: "D:/repo" },
         body: undefined,
       },
     ])
@@ -102,11 +107,12 @@ describe("Mission service action contract", () => {
 
   test("deleteMission DELETEs mission/<id>", async () => {
     __setHostTransportForTest(recordingTransport())
-    await expect(deleteMission("m-alpha")).resolves.toBe(true)
+    await expect(deleteMission({ missionID: "m-alpha", directory: "D:/repo" })).resolves.toBe(true)
     expect(captured).toEqual([
       {
         path: "mission/m-alpha",
         method: "DELETE",
+        query: { directory: "D:/repo" },
         body: undefined,
       },
     ])

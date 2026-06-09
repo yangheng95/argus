@@ -31,16 +31,8 @@ import {
   renderFrontendResearchBriefPromptSection,
   renderResearchBriefPromptSection,
 } from "@/research/prompt-section"
-import type {
-  ParsedRequirement,
-  RequirementsDecision,
-  RequirementsOutput,
-} from "./types"
-import {
-  createRequirementsOutputTools,
-  summarizeRequirements,
-  type RequirementsCollector,
-} from "./output-tools"
+import type { ParsedRequirement, RequirementsDecision, RequirementsOutput } from "./types"
+import { createRequirementsOutputTools, summarizeRequirements, type RequirementsCollector } from "./output-tools"
 import type { DecisionLog } from "@/decision-log"
 
 import REQUIREMENTS_CORE from "@/prompt/core/requirements-core.txt"
@@ -119,7 +111,9 @@ export namespace RequirementsAgent {
       signal: input.signal,
       onStatus: input.onStatus,
       onSessionCreated: input.onSessionCreated
-        ? (session) => { input.onSessionCreated!(session.id) }
+        ? (session) => {
+            input.onSessionCreated!(session.id)
+          }
         : undefined,
       toolKit: {
         tools: { ...contextTools, ...outputToolKit.tools },
@@ -179,9 +173,7 @@ export namespace RequirementsAgent {
 // Collector → RequirementsOutput
 // ---------------------------------------------------------------------------
 
-function collectorToOutput(
-  collector: RequirementsCollector,
-): RequirementsOutput {
+function collectorToOutput(collector: RequirementsCollector): RequirementsOutput {
   return {
     summary: summarizeRequirements(collector),
     requirements: collector.requirements.map((r) => ({
@@ -225,22 +217,28 @@ function buildUserPrompt(
 ): string {
   const sections: string[] = []
 
-  sections.push("# Delegation\n\nOrchestrator is asking requirements to extract the task requirements and foundational decisions.")
-  sections.push(renderUserRequestSection({
-    heading: "# Task",
-    title: input.title,
-    request: input.request,
-    taskID: input.taskID,
-  }))
+  sections.push(
+    "# Delegation\n\nOrchestrator is asking requirements to extract the task requirements and foundational decisions.",
+  )
+  sections.push(
+    renderUserRequestSection({
+      heading: "# Task",
+      title: input.title,
+      request: input.request,
+      taskID: input.taskID,
+    }),
+  )
 
   if (input.taskID) {
     const clarifications = clarificationTranscriptSection(input.taskID)
     if (clarifications) {
-      sections.push([
-        clarifications,
-        "Concrete stack or deliverable answers from clarifications/operator notes outrank existing package.json dependencies.",
-        "If the user explicitly chose a framework-free implementation, record that choice directly instead of inferring a framework from scaffold files.",
-      ].join("\n\n"))
+      sections.push(
+        [
+          clarifications,
+          "Concrete stack or deliverable answers from clarifications/operator notes outrank existing package.json dependencies.",
+          "If the user explicitly chose a framework-free implementation, record that choice directly instead of inferring a framework from scaffold files.",
+        ].join("\n\n"),
+      )
     }
     const operatorNotes = operatorNotesSection(input.taskID)
     if (operatorNotes) sections.push(operatorNotes)

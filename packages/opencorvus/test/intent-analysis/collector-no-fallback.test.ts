@@ -21,9 +21,7 @@ import type { IntentFinal } from "../../src/intent-analysis/output-tools"
  */
 
 const baseCollector = {
-  slots: [
-    { key: "lang", value: "typescript", confidence: 0.9 },
-  ],
+  slots: [{ key: "lang", value: "typescript", confidence: 0.9 }],
   missing: ["target_path"],
   clarifications: [],
 }

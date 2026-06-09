@@ -1,10 +1,12 @@
 import { afterEach, describe, expect, test } from "bun:test"
 import fs from "node:fs/promises"
 import path from "node:path"
+import z from "zod"
 import { EngineTaskTable } from "../../src/engine/engine.sql"
 import { extractBrowserPreviewUrlFromText, extractBrowserPreviewUrlsFromText } from "../../src/browser-preview/extract"
 import { findRecentBrowserPreviewTargets, persistBrowserPreviewTarget } from "../../src/browser-preview/persist"
 import { normalizeBrowserPreviewUrl, resolveBrowserPreviewTarget } from "../../src/browser-preview/target"
+import { Tool } from "../../src/tool/tool"
 import { Instance } from "../../src/project/instance"
 import { ProtocolStore } from "../../src/protocol/store"
 import { Database } from "../../src/storage/db"
@@ -26,15 +28,18 @@ describe("browser preview target resolver", () => {
       directory,
       fn: () => {
         Database.use((db) =>
-          db.insert(EngineTaskTable).values({
-            id: taskID,
-            project_id: Instance.project.id,
-            title: "Preview task",
-            request: "Preview task",
-            source: "api",
-            time_created: Date.now(),
-            time_updated: Date.now(),
-          }).run(),
+          db
+            .insert(EngineTaskTable)
+            .values({
+              id: taskID,
+              project_id: Instance.project.id,
+              title: "Preview task",
+              request: "Preview task",
+              source: "api",
+              time_created: Date.now(),
+              time_updated: Date.now(),
+            })
+            .run(),
         )
       },
     })
@@ -97,6 +102,38 @@ describe("browser preview target resolver", () => {
     expect(second.id).toBe(first.id)
     expect(second.timeUpdated).toBeGreaterThan(first.timeUpdated)
     expect(findRecentBrowserPreviewTargets(taskID).map((target) => target.id)).toEqual([first.id])
+  })
+
+  test("generic tool output materializes browser preview candidates", async () => {
+    await using tmp = await tmpdir()
+    const taskID = await seedTask(tmp.path)
+    const info = await Tool.define("fixture_preview_output", {
+      description: "Fixture preview output",
+      parameters: z.object({}),
+      async execute() {
+        return {
+          title: "fixture",
+          metadata: {},
+          output: "dev server ready at localhost:5173",
+        }
+      },
+    }).init()
+
+    await info.execute(
+      {},
+      {
+        sessionID: "ses_preview_fixture",
+        messageID: "msg_preview_fixture",
+        agent: "build",
+        abort: AbortSignal.any([]),
+        extra: { taskID },
+        messages: [],
+        metadata() {},
+        async ask() {},
+      },
+    )
+
+    expect(findRecentBrowserPreviewTargets(taskID).map((target) => target.url)).toEqual(["http://localhost:5173/"])
   })
 
   test("persisting a preview target emits a task update event for overlay refresh", async () => {

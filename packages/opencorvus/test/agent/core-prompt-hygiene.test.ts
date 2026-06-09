@@ -271,7 +271,9 @@ describe("core prompt hygiene", () => {
     const workflow = await readSource("engine/workflow.ts")
     const orchestratorAgentFlat = orchestratorAgent.replace(/\s*\*\s*/g, " ").replace(/\s+/g, " ")
 
-    expect(orchestratorAgent).not.toContain("requirements → goals → plan → execute → eval → acceptance verify → publish")
+    expect(orchestratorAgent).not.toContain(
+      "requirements → goals → plan → execute → eval → acceptance verify → publish",
+    )
     expect(orchestratorAgent).not.toContain("plan, eval, acceptance")
     expect(orchestratorAgentFlat).toContain("MiniWorkflow renders an advisory path")
     expect(orchestratorAgentFlat).toContain("Specialist agents own their structured artifacts")
@@ -643,7 +645,7 @@ describe("core prompt hygiene", () => {
     expect(normalized).toContain("UI data contract only when necessary to render the frontend")
     expect(normalized).toContain("Do not design backend infrastructure")
     expect(normalized).toContain("Automatic tool-result continuation is not an operator message")
-    expect(normalized).toContain('unless that exact text appears in the latest real user/delegation message')
+    expect(normalized).toContain("unless that exact text appears in the latest real user/delegation message")
     expect(normalized).toContain("skeleton-first visual handoff")
     expect(normalized).toContain("existing project components/design-system primitives first")
     expect(normalized).toContain("mature maintained libraries second")
@@ -656,7 +658,9 @@ describe("core prompt hygiene", () => {
 
     expect(normalized).toContain("webpage research agent and evidence hub")
     expect(normalized).not.toContain("delegate_deep_research_to_build")
-    expect(normalized).toContain("Do not write code, edit files, execute shell commands, search implementation code, or call build")
+    expect(normalized).toContain(
+      "Do not write code, edit files, execute shell commands, search implementation code, or call build",
+    )
     expect(normalized).toContain("publish source-backed investigation work packets")
     expect(normalized).toContain("host-prepared rendered webpage evidence")
     expect(normalized).toContain("the host prepares rendered webpage evidence before your session")
@@ -675,8 +679,12 @@ describe("core prompt hygiene", () => {
     expect(normalized).toContain("Style/Layout Questions")
     expect(normalized).toContain("Visual HTML Skeleton Coverage")
     expect(normalized).toContain("publish visual skeleton coverage packets only")
-    expect(normalized).toContain("Do not create the HTML skeleton, source skeleton, implementation template, acceptance app, or token catalog yourself")
-    expect(normalized).toContain("Treat `source-ir/style-profile.json` as a pointer to deterministic region-scoped style evidence")
+    expect(normalized).toContain(
+      "Do not create the HTML skeleton, source skeleton, implementation template, acceptance app, or token catalog yourself",
+    )
+    expect(normalized).toContain(
+      "Treat `source-ir/style-profile.json` as a pointer to deterministic region-scoped style evidence",
+    )
     expect(normalized).toContain("do not synthesize a parallel token catalog")
     expect(normalized).toContain("Treat `webpage_contract` as an investigation partition contract")
     expect(normalized).toContain("Build the brief with small registration tools")
@@ -692,7 +700,9 @@ describe("core prompt hygiene", () => {
     expect(normalized).toContain("pervasive `data-source-node-id`")
     expect(normalized).toContain("page API verification scope")
     expect(normalized).toContain("expected persisted API adaptation document")
-    expect(normalized).toContain("do not invent endpoints, payloads, live market feeds, or backend obligations from visual labels alone")
+    expect(normalized).toContain(
+      "do not invent endpoints, payloads, live market feeds, or backend obligations from visual labels alone",
+    )
   })
 
   test("webpage replica prompts enforce frontend-owned visual skeleton first workflow", async () => {
@@ -712,13 +722,17 @@ describe("core prompt hygiene", () => {
     expect(design).toContain(
       "`webpage-evidence/source-ir/content-model.json` as tables/lists/cards/controls/repeated group evidence",
     )
-    expect(design).toContain("`webpage-evidence/source-ir/style-profile.json` as region-scoped style/layout/selector/asset guidance")
+    expect(design).toContain(
+      "`webpage-evidence/source-ir/style-profile.json` as region-scoped style/layout/selector/asset guidance",
+    )
     expect(design).toContain("`webpage-evidence/source-skeleton/index.html` as raw semantic HTML evidence")
     expect(design).toContain(
       "`webpage-evidence/source-skeleton/critical.css` as reachable CSS plus computed-style fallback rules",
     )
     expect(design).toContain("`webpage-evidence/source-skeleton/full-source.css` as the complete CSS sidecar")
-    expect(design).toContain("`webpage-evidence/source-skeleton/source-skeleton-audit.json` as the skeleton quality evidence")
+    expect(design).toContain(
+      "`webpage-evidence/source-skeleton/source-skeleton-audit.json` as the skeleton quality evidence",
+    )
     expect(design).toContain("`webpage-evidence/source-ir/source-quality-audit.json` as semantic IR quality evidence")
     expect(design).toContain("skeleton-first visual handoff")
     expect(design).toContain("`web-clone-source/implementation-blueprint.md`")
@@ -799,7 +813,9 @@ describe("core prompt hygiene", () => {
     expect(buildOverlays).toContain("read the named work packets")
     expect(buildOverlays).toContain("chart, map, heatmap, table/grid")
     expect(buildOverlays).toContain("do not flatten it into SVG/image markup")
-    expect(buildOverlays).toContain("Use requirements, architect contracts, and frontend_design as the binding implementation contract")
+    expect(buildOverlays).toContain(
+      "Use requirements, architect contracts, and frontend_design as the binding implementation contract",
+    )
     expect(buildOverlays).toContain("web-clone-source/")
     expect(buildOverlays).toContain("source_baseline_input")
     expect(buildOverlays).toContain("source package files named by the handoff")
@@ -815,7 +831,9 @@ describe("core prompt hygiene", () => {
     expect(integrity).toContain("`quality_project_contract`")
     expect(integrity).toContain("`component_reuse_plan`")
     expect(integrity).toContain("`baseline_replacement_plan`")
-    expect(integrity.replace(/\s+/g, " ")).toContain("Do not maintain a separate integrity-side webpage-clone file inventory")
+    expect(integrity.replace(/\s+/g, " ")).toContain(
+      "Do not maintain a separate integrity-side webpage-clone file inventory",
+    )
     expect(integrity).toContain("component/data ownership")
     expect(integrity).toContain("inspect_visual_evidence")
     expect(integrity).toContain("VisualEvidenceBundle")
@@ -891,17 +909,20 @@ describe("core prompt hygiene", () => {
     expect(design).toContain("do not invent backend infrastructure names")
   })
 
-  test("visual-qa core prompt preserves full-agent visual evidence and repair loop", async () => {
+  test("visual-qa core prompt stays focused on GUI fidelity and functional testing", async () => {
     const text = await readPrompt("visualQa")
     const normalized = text.replace(/\s+/g, " ")
-    expect(normalized).toContain("same capability level as Build")
-    expect(normalized).toContain("read, edit, write, run commands, start dev servers")
+    expect(normalized).toContain("focused visual GUI fidelity and functional testing agent")
+    expect(normalized).toContain("GUI means Graphical User Interface")
     expect(normalized).toContain("Test the real running product")
+    expect(normalized).toContain("Functional testing means operating the task's visible controls and workflows")
     expect(normalized).toContain("Do not rely on fixed screenshot baselines as the primary verdict")
     expect(normalized).toContain("Do not accept build-agent claims")
     expect(normalized).toContain("fresh evidence")
     expect(normalized).toContain("previous visual report")
     expect(normalized).toContain("reproduce every prior blocking finding")
+    expect(normalized).not.toContain("same capability level as Build")
+    expect(normalized).not.toContain("full-function frontend visual quality agent")
     expect(normalized).toContain("accepted=true")
     expect(normalized).toContain("accepted=false")
     expect(normalized).toContain("coverage")
@@ -1052,7 +1073,9 @@ describe("core prompt hygiene", () => {
       "If the current workflow task has pending goals, no active build/run, no terminal integrity verdict, and no external blocker, a status-only response is wrong",
     )
     expect(normalized).toContain("dispatch `build({ goalID })` for the first eligible pending goal")
-    expect(normalized).toContain("Do not ask the operator whether to start work that the task contract already requires")
+    expect(normalized).toContain(
+      "Do not ask the operator whether to start work that the task contract already requires",
+    )
   })
 
   test("orchestrator prompt makes post-build integrity pass the terminal lifecycle path", async () => {

@@ -26,21 +26,21 @@ const KNOWN_STAGES = new Set([
   "integrity",
   "fact-check",
   "tool",
-]);
+])
 
 function hashString(s: string): number {
-  let h = 0;
+  let h = 0
   for (let i = 0; i < s.length; i++) {
-    h = (h * 31 + s.charCodeAt(i)) | 0;
+    h = (h * 31 + s.charCodeAt(i)) | 0
   }
-  return h;
+  return h
 }
 
 export function stageAccent(stage: string | undefined | null): string | undefined {
-  if (!stage) return undefined;
-  const s = String(stage).trim();
-  if (!s) return undefined;
-  if (KNOWN_STAGES.has(s)) return `var(--card-stage-${s})`;
-  const hue = Math.abs(hashString(s)) % 360;
-  return `hsl(${hue} 58% 66%)`;
+  if (!stage) return undefined
+  const s = String(stage).trim()
+  if (!s) return undefined
+  if (KNOWN_STAGES.has(s)) return `var(--card-stage-${s})`
+  const hue = Math.abs(hashString(s)) % 360
+  return `hsl(${hue} 58% 66%)`
 }

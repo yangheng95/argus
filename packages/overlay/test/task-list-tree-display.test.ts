@@ -117,8 +117,12 @@ describe("Parent-row badge: count + run-pulse + fail-color", () => {
     // the mousedown that would initiate drag, and a preventDefault
     // dragstart handler as belt-and-suspenders.
     expect(TASK_LIST).toMatch(/class="task-row-children-toggle"[\s\S]+?draggable=\{false\}/)
-    expect(TASK_LIST).toMatch(/class="task-row-children-toggle"[\s\S]+?onMouseDown=\{\(event\)\s*=>\s*\{\s*event\.stopPropagation\(\)/)
-    expect(TASK_LIST).toMatch(/class="task-row-children-toggle"[\s\S]+?onDragStart=\{\(event\)\s*=>\s*\{\s*event\.preventDefault\(\);\s*event\.stopPropagation\(\)/)
+    expect(TASK_LIST).toMatch(
+      /class="task-row-children-toggle"[\s\S]+?onMouseDown=\{\(event\)\s*=>\s*\{\s*event\.stopPropagation\(\)/,
+    )
+    expect(TASK_LIST).toMatch(
+      /class="task-row-children-toggle"[\s\S]+?onDragStart=\{\(event\)\s*=>\s*\{\s*event\.preventDefault\(\);\s*event\.stopPropagation\(\)/,
+    )
   })
 })
 

@@ -349,32 +349,32 @@ are switched.
 
 ### Source
 
-| Area                                                                         | Current Use                                        | Redesign                                             |
-| ---------------------------------------------------------------------------- | -------------------------------------------------- | ---------------------------------------------------- |
-| `pipeline/goal-contract.schema.ts`                                           | defines `exports/imports: string[]`                | remove fields                                        |
-| `pipeline/types.ts`                                                          | goal contract fields                               | remove fields                                        |
-| `build/types.ts`                                                             | BuildGoalInput carries `exports/imports`           | remove fields; add graph context types               |
-| `engine/persist.ts`                                                          | stores goal exports/imports                        | remove persistence                                   |
-| `engine/store.ts`                                                            | reads goal exports/imports                         | remove projection                                    |
-| `engine/engine.sql.ts` / `storage/ddl.ts`                                    | engine_goal columns and artifact kind/index        | remove columns; add graph artifact kind/index        |
-| `engine/describe.ts`                                                         | read-context renders exports/imports               | render contract graph summary                        |
-| `engine/model.ts`                                                            | task board goal contract schema                    | remove exports/imports or replace with graph summary |
-| `architect/output-tools.ts`                                                  | validates via linker and ContractIR tools          | replace with contract graph tools                    |
-| `architect/linker.ts`                                                        | parses string symbols                              | delete or narrow to TS extraction helper only        |
-| `architect/agent.ts`                                                         | maps collector goals and logs ContractIR           | persist graph artifact                               |
-| `orchestrator/tools.ts`                                                      | linkContracts for contract_audit and build context | load graph artifact                                  |
-| `build/agent.ts`                                                             | renders `exports/imports` and `architectContracts` | render graph sections                                |
-| `integrity/agent.ts` / `dimensions.ts`                                       | prompt and schema mention exports/imports          | switch to graph                                      |
-| `acceptance/types.ts`                                                        | contract audit scorer uses symbols                 | replace with graph contract ids                      |
-| `acceptance/contract-audit.ts`                                               | derives boundary from imports/exports              | resolve graph contract ids                           |
+| Area                                                                           | Current Use                                        | Redesign                                             |
+| ------------------------------------------------------------------------------ | -------------------------------------------------- | ---------------------------------------------------- |
+| `pipeline/goal-contract.schema.ts`                                             | defines `exports/imports: string[]`                | remove fields                                        |
+| `pipeline/types.ts`                                                            | goal contract fields                               | remove fields                                        |
+| `build/types.ts`                                                               | BuildGoalInput carries `exports/imports`           | remove fields; add graph context types               |
+| `engine/persist.ts`                                                            | stores goal exports/imports                        | remove persistence                                   |
+| `engine/store.ts`                                                              | reads goal exports/imports                         | remove projection                                    |
+| `engine/engine.sql.ts` / `storage/ddl.ts`                                      | engine_goal columns and artifact kind/index        | remove columns; add graph artifact kind/index        |
+| `engine/describe.ts`                                                           | read-context renders exports/imports               | render contract graph summary                        |
+| `engine/model.ts`                                                              | task board goal contract schema                    | remove exports/imports or replace with graph summary |
+| `architect/output-tools.ts`                                                    | validates via linker and ContractIR tools          | replace with contract graph tools                    |
+| `architect/linker.ts`                                                          | parses string symbols                              | delete or narrow to TS extraction helper only        |
+| `architect/agent.ts`                                                           | maps collector goals and logs ContractIR           | persist graph artifact                               |
+| `orchestrator/tools.ts`                                                        | linkContracts for contract_audit and build context | load graph artifact                                  |
+| `build/agent.ts`                                                               | renders `exports/imports` and `architectContracts` | render graph sections                                |
+| `integrity/agent.ts` / `dimensions.ts`                                         | prompt and schema mention exports/imports          | switch to graph                                      |
+| `acceptance/types.ts`                                                          | contract audit scorer uses symbols                 | replace with graph contract ids                      |
+| `acceptance/contract-audit.ts`                                                 | derives boundary from imports/exports              | resolve graph contract ids                           |
 | `acceptance/checks/types.ts`                                                   | GoalInfo carries imports/exports                   | remove fields; add graph refs                        |
 | `acceptance/checks/contract-audit-review.ts`                                   | boundary detection uses imports/exports            | use graph audit criteria                             |
 | `acceptance/specialists/backend-client.ts`                                     | client contract gate uses imports/exports          | use route/static graph contracts                     |
 | retired acceptance tool surface                                                | renders imports/exports in goal detail             | render graph contracts                               |
-| `prompt/upstream-context.ts`                                                 | acceptance catalog says exports/imports are gating   | render graph catalog                                 |
+| `prompt/upstream-context.ts`                                                   | acceptance catalog says exports/imports are gating | render graph catalog                                 |
 | `prompt/core/build-core.txt` / `acceptance-core.txt` / `orchestrator-core.txt` | system prompts name imports/exports                | switch to graph vocabulary                           |
-| `overlay/src/main.tsx`                                                       | debug SQL template selects exports/imports         | select graph artifact                                |
-| `prompt/core/architect-core.txt`                                             | asks for exports/imports and per-kind tools        | rewrite around graph tools                           |
+| `overlay/src/main.tsx`                                                         | debug SQL template selects exports/imports         | select graph artifact                                |
+| `prompt/core/architect-core.txt`                                               | asks for exports/imports and per-kind tools        | rewrite around graph tools                           |
 
 ### Tests
 

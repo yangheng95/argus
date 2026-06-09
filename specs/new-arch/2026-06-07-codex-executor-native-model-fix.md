@@ -9,14 +9,14 @@
 
 ## Call Points
 
-| Area | File | Decision |
-| --- | --- | --- |
-| Executor env model source | `packages/opencorvus/src/executor/runtime-env.ts` | Reject provider/model refs for Codex too; external CLI executors consume native model names. |
-| Executor model route | `packages/opencorvus/src/server/routes/executor.ts` | Keep route; validation remains centralized in `setModelOverride`. |
-| Codex bootstrap | `packages/opencorvus/src/executor/bootstrap.ts` | Keep using `OPENCORVUS_EXECUTOR_CODEX_MODEL`; fixed by env validation and overlay value shape. |
-| Overlay picker source | `packages/overlay/src/components/ExecutorSelector.tsx` | Internal OpenCorvus picker keeps provider/model refs; external picker emits native model IDs only. |
-| Overlay service | `packages/overlay/src/services/executor.ts` | Keep API boundary; value shape is produced by the picker. |
-| Tests | `packages/opencorvus/test/executor/runtime-env.test.ts`, `packages/overlay/test/executor-selector-dualbar.test.ts` | Add regressions for Codex native model validation and external picker native model IDs. |
+| Area                      | File                                                                                                               | Decision                                                                                           |
+| ------------------------- | ------------------------------------------------------------------------------------------------------------------ | -------------------------------------------------------------------------------------------------- |
+| Executor env model source | `packages/opencorvus/src/executor/runtime-env.ts`                                                                  | Reject provider/model refs for Codex too; external CLI executors consume native model names.       |
+| Executor model route      | `packages/opencorvus/src/server/routes/executor.ts`                                                                | Keep route; validation remains centralized in `setModelOverride`.                                  |
+| Codex bootstrap           | `packages/opencorvus/src/executor/bootstrap.ts`                                                                    | Keep using `OPENCORVUS_EXECUTOR_CODEX_MODEL`; fixed by env validation and overlay value shape.     |
+| Overlay picker source     | `packages/overlay/src/components/ExecutorSelector.tsx`                                                             | Internal OpenCorvus picker keeps provider/model refs; external picker emits native model IDs only. |
+| Overlay service           | `packages/overlay/src/services/executor.ts`                                                                        | Keep API boundary; value shape is produced by the picker.                                          |
+| Tests                     | `packages/opencorvus/test/executor/runtime-env.test.ts`, `packages/overlay/test/executor-selector-dualbar.test.ts` | Add regressions for Codex native model validation and external picker native model IDs.            |
 
 ## Implementation
 

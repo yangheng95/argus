@@ -27,14 +27,7 @@ import path from "node:path"
  * before re-introducing the wedge.
  */
 
-const GIT_SRC = path.join(
-  import.meta.dir,
-  "..",
-  "..",
-  "src",
-  "engine",
-  "git.ts",
-)
+const GIT_SRC = path.join(import.meta.dir, "..", "..", "src", "engine", "git.ts")
 
 const src = await fs.readFile(GIT_SRC, "utf8")
 

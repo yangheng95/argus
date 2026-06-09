@@ -117,54 +117,49 @@ export function architectFidelityIssues(input: {
   }
 
   const shouldRequireSourceCoverage = input.requireSourceCoverage !== false
-  const existingOwnedPaths = shouldRequireSourceCoverage ? input.goals.flatMap((goal) =>
-    goal.owned_paths.filter((ownedPath) => {
-      if (!input.workDir) return false
-      try {
-        return fs.existsSync(path.resolve(input.workDir, ownedPath))
-      } catch {
-        return false
-      }
-    }),
-  ) : []
+  const existingOwnedPaths = shouldRequireSourceCoverage
+    ? input.goals.flatMap((goal) =>
+        goal.owned_paths.filter((ownedPath) => {
+          if (!input.workDir) return false
+          try {
+            return fs.existsSync(path.resolve(input.workDir, ownedPath))
+          } catch {
+            return false
+          }
+        }),
+      )
+    : []
 
   if (existingOwnedPaths.length > 0) {
     if (input.fidelity.sourceCoverage.length === 0) {
-      issues.push(
-        `Missing source coverage for existing owned paths: ${existingOwnedPaths.join(", ")}`,
-      )
+      issues.push(`Missing source coverage for existing owned paths: ${existingOwnedPaths.join(", ")}`)
     } else {
-      const coverageRoots = input.fidelity.sourceCoverage.flatMap((row) =>
-        row.paths.map(normalizeCoveragePath),
-      )
+      const coverageRoots = input.fidelity.sourceCoverage.flatMap((row) => row.paths.map(normalizeCoveragePath))
       const uncoveredPaths = existingOwnedPaths.filter((ownedPath) => {
         const norm = normalizeCoveragePath(ownedPath)
         return !coverageRoots.some((root) => coverageContains(root, norm))
       })
       if (uncoveredPaths.length > 0) {
-        issues.push(
-          `Missing source coverage for existing owned paths: ${uncoveredPaths.join(", ")}`,
-        )
+        issues.push(`Missing source coverage for existing owned paths: ${uncoveredPaths.join(", ")}`)
       }
     }
   }
 
-  const shouldRequireReferenceCoverage =
-    Boolean(input.requireReferenceCoverage) || (input.designSpecs?.length ?? 0) > 0
+  const shouldRequireReferenceCoverage = Boolean(input.requireReferenceCoverage) || (input.designSpecs?.length ?? 0) > 0
   if (shouldRequireReferenceCoverage) {
     if (input.fidelity.referenceCoverage.length === 0) {
       const specIDs = (input.designSpecs ?? []).map((spec) => spec.id)
       if (specIDs.length > 0) {
         issues.push(`Missing reference coverage for visual specs: ${specIDs.join(", ")}`)
       } else {
-        issues.push("Missing reference coverage: reference-driven tasks must register authoritative reference ownership")
+        issues.push(
+          "Missing reference coverage: reference-driven tasks must register authoritative reference ownership",
+        )
       }
     } else if ((input.designSpecs?.length ?? 0) > 0) {
       const uncoveredSpecIDs = (input.designSpecs ?? [])
         .map((spec) => spec.id)
-        .filter((specID) =>
-          !input.fidelity.referenceCoverage.some((row) => row.visual_spec_ids.includes(specID)),
-        )
+        .filter((specID) => !input.fidelity.referenceCoverage.some((row) => row.visual_spec_ids.includes(specID)))
       if (uncoveredSpecIDs.length > 0) {
         issues.push(`Missing reference coverage for visual specs: ${uncoveredSpecIDs.join(", ")}`)
       }
@@ -178,10 +173,7 @@ export function architectFidelityIssues(input: {
   return issues
 }
 
-export function filterGoalFidelityState(input: {
-  goalID: string
-  fidelity: ArchitectFidelityState
-}) {
+export function filterGoalFidelityState(input: { goalID: string; fidelity: ArchitectFidelityState }) {
   return {
     sourceCoverage: input.fidelity.sourceCoverage.filter((row) => row.goal_ids.includes(input.goalID)),
     referenceCoverage: input.fidelity.referenceCoverage.filter((row) => row.goal_ids.includes(input.goalID)),

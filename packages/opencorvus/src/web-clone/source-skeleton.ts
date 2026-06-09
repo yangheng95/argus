@@ -55,13 +55,15 @@ export const WebCloneSourceSkeletonManifestSchema = z.object({
     fullSourceCssBytes: z.number().int().nonnegative(),
     criticalCssBytes: z.number().int().nonnegative(),
   }),
-  componentHints: z.array(z.object({
-    name: z.string(),
-    kind: z.string(),
-    sourceSegmentId: z.string(),
-    rootNodeId: z.string(),
-    textPreview: z.array(z.string()),
-  })),
+  componentHints: z.array(
+    z.object({
+      name: z.string(),
+      kind: z.string(),
+      sourceSegmentId: z.string(),
+      rootNodeId: z.string(),
+      textPreview: z.array(z.string()),
+    }),
+  ),
 })
 
 export const WebCloneSourceSkeletonAuditSchema = z.object({
@@ -239,13 +241,38 @@ export async function writeWebCloneSourceSkeleton(
   await writeText(skeletonDir, files, "used-selectors.json", JSON.stringify(cssBundle.usedSelectors, null, 2))
   await writeText(skeletonDir, files, "README.md", renderSkeletonReadme(input.pageIr, manifest))
   await writeText(skeletonDir, files, "skeleton-manifest.json", JSON.stringify(manifest, null, 2))
-  await writeText(input.outputDir, files, "source-ir/component-tree.json", JSON.stringify(sourceIr.componentTree, null, 2))
-  await writeText(input.outputDir, files, "source-ir/content-model.json", JSON.stringify(sourceIr.contentModel, null, 2))
+  await writeText(
+    input.outputDir,
+    files,
+    "source-ir/component-tree.json",
+    JSON.stringify(sourceIr.componentTree, null, 2),
+  )
+  await writeText(
+    input.outputDir,
+    files,
+    "source-ir/content-model.json",
+    JSON.stringify(sourceIr.contentModel, null, 2),
+  )
   await writeText(input.outputDir, files, "source-ir/layout-map.json", JSON.stringify(sourceIr.layoutMap, null, 2))
   await writeText(input.outputDir, files, "source-ir/style-tokens.json", JSON.stringify(sourceIr.styleTokens, null, 2))
-  await writeText(input.outputDir, files, "source-ir/style-profile.json", JSON.stringify(sourceIr.styleProfile, null, 2))
-  await writeText(input.outputDir, files, "source-ir/interaction-hints.json", JSON.stringify(sourceIr.interactionHints, null, 2))
-  await writeText(input.outputDir, files, "source-ir/source-quality-audit.json", JSON.stringify(sourceIr.sourceQualityAudit, null, 2))
+  await writeText(
+    input.outputDir,
+    files,
+    "source-ir/style-profile.json",
+    JSON.stringify(sourceIr.styleProfile, null, 2),
+  )
+  await writeText(
+    input.outputDir,
+    files,
+    "source-ir/interaction-hints.json",
+    JSON.stringify(sourceIr.interactionHints, null, 2),
+  )
+  await writeText(
+    input.outputDir,
+    files,
+    "source-ir/source-quality-audit.json",
+    JSON.stringify(sourceIr.sourceQualityAudit, null, 2),
+  )
 
   const audit = await auditWebCloneSourceSkeleton(skeletonDir)
   await writeText(skeletonDir, files, "source-skeleton-audit.json", JSON.stringify(audit, null, 2))
@@ -286,9 +313,12 @@ export async function auditWebCloneSourceSkeleton(skeletonDir: string): Promise<
     "interaction-hints.json",
     "source-quality-audit.json",
   ])
-  const frameworkAgnostic = !/\bimport\s+.*\b(react|vue|svelte|solid-js)\b|from\s+["'](react|vue|svelte|solid-js)["']/.test(allText)
+  const frameworkAgnostic =
+    !/\bimport\s+.*\b(react|vue|svelte|solid-js)\b|from\s+["'](react|vue|svelte|solid-js)["']/.test(allText)
   const referencesScreenshot = readme.includes("../reference.png") && html.includes("../reference.png")
-  const replayFactoryDetected = /\bel\s*\(|\{\s*["']?t["']?\s*:|document\.createElement|createRoot\(|createApp\(/.test(allText)
+  const replayFactoryDetected = /\bel\s*\(|\{\s*["']?t["']?\s*:|document\.createElement|createRoot\(|createApp\(/.test(
+    allText,
+  )
   const generatedProjectDetected = /package\.json|node_modules|bun run dev|web-clone-generated-runtime/.test(allText)
   const placeholderTextDetected = /__WEB_CLONE_[A-Z0-9_]+__/.test(html)
   const hiddenSourceNodeDetected = /(?:class\s*=\s*["'][^"']*\bsf-hidden\b|aria-hidden\s*=\s*["']true["'])/i.test(html)
@@ -305,9 +335,11 @@ export async function auditWebCloneSourceSkeleton(skeletonDir: string): Promise<
   if (!frameworkAgnostic) findings.push("source skeleton imports a concrete frontend framework")
   if (!referencesScreenshot) findings.push("source skeleton does not explicitly reference ../reference.png")
   if (replayFactoryDetected) findings.push("source skeleton contains generated runtime or DOM replay factory markers")
-  if (generatedProjectDetected) findings.push("source skeleton looks like a generated runnable project instead of source-only files")
+  if (generatedProjectDetected)
+    findings.push("source skeleton looks like a generated runnable project instead of source-only files")
   if (placeholderTextDetected) findings.push("source skeleton leaks extracted asset placeholder text into visible HTML")
-  if (hiddenSourceNodeDetected) findings.push("source skeleton includes hidden source-only duplicate nodes in visible HTML")
+  if (hiddenSourceNodeDetected)
+    findings.push("source skeleton includes hidden source-only duplicate nodes in visible HTML")
 
   return WebCloneSourceSkeletonAuditSchema.parse({
     version: 1,
@@ -345,40 +377,106 @@ export async function inspectWebCloneSourceSkeletonEvidence(input: {
   const referencePath = path.join(sourceRoot, "reference.png")
   const referenceEvidence = await readPngEvidence(referencePath)
   if (!referenceEvidence.valid) {
-    return { referenced: true, ok: false, auditPath, referencePath, findings: [`source skeleton handoff has invalid ${sourceLabel}/reference.png: ${referenceEvidence.error ?? "invalid PNG"}`] }
+    return {
+      referenced: true,
+      ok: false,
+      auditPath,
+      referencePath,
+      findings: [
+        `source skeleton handoff has invalid ${sourceLabel}/reference.png: ${referenceEvidence.error ?? "invalid PNG"}`,
+      ],
+    }
   }
   const manifestIntegrity = await inspectWebCloneSourceManifest(sourceRoot)
   if (!manifestIntegrity.passed) {
-    return { referenced: true, ok: false, auditPath, referencePath, findings: [`source skeleton handoff manifest failed: ${manifestIntegrity.findings.join("; ")}`] }
+    return {
+      referenced: true,
+      ok: false,
+      auditPath,
+      referencePath,
+      findings: [`source skeleton handoff manifest failed: ${manifestIntegrity.findings.join("; ")}`],
+    }
   }
-  if (!await exists(path.join(skeletonDir, "index.html"))) {
-    return { referenced: true, ok: false, auditPath, referencePath, findings: [`source skeleton handoff is missing ${sourceLabel}/source-skeleton/index.html`] }
+  if (!(await exists(path.join(skeletonDir, "index.html")))) {
+    return {
+      referenced: true,
+      ok: false,
+      auditPath,
+      referencePath,
+      findings: [`source skeleton handoff is missing ${sourceLabel}/source-skeleton/index.html`],
+    }
   }
-  if (!await exists(path.join(skeletonDir, "styles.css"))) {
-    return { referenced: true, ok: false, auditPath, referencePath, findings: [`source skeleton handoff is missing ${sourceLabel}/source-skeleton/styles.css`] }
+  if (!(await exists(path.join(skeletonDir, "styles.css")))) {
+    return {
+      referenced: true,
+      ok: false,
+      auditPath,
+      referencePath,
+      findings: [`source skeleton handoff is missing ${sourceLabel}/source-skeleton/styles.css`],
+    }
   }
   for (const file of ["critical.css", "full-source.css", "used-selectors.json"]) {
-    if (!await exists(path.join(skeletonDir, file))) {
-      return { referenced: true, ok: false, auditPath, referencePath, findings: [`source skeleton handoff is missing ${sourceLabel}/source-skeleton/${file}`] }
+    if (!(await exists(path.join(skeletonDir, file)))) {
+      return {
+        referenced: true,
+        ok: false,
+        auditPath,
+        referencePath,
+        findings: [`source skeleton handoff is missing ${sourceLabel}/source-skeleton/${file}`],
+      }
     }
   }
   const sourceIrDir = path.join(sourceRoot, "source-ir")
-  for (const file of ["component-tree.json", "content-model.json", "layout-map.json", "style-tokens.json", "style-profile.json", "interaction-hints.json", "source-quality-audit.json"]) {
-    if (!await exists(path.join(sourceIrDir, file))) {
-      return { referenced: true, ok: false, auditPath, referencePath, findings: [`source skeleton handoff is missing ${sourceLabel}/source-ir/${file}`] }
+  for (const file of [
+    "component-tree.json",
+    "content-model.json",
+    "layout-map.json",
+    "style-tokens.json",
+    "style-profile.json",
+    "interaction-hints.json",
+    "source-quality-audit.json",
+  ]) {
+    if (!(await exists(path.join(sourceIrDir, file)))) {
+      return {
+        referenced: true,
+        ok: false,
+        auditPath,
+        referencePath,
+        findings: [`source skeleton handoff is missing ${sourceLabel}/source-ir/${file}`],
+      }
     }
   }
-  if (await readPassedAudit(path.join(sourceIrDir, "source-quality-audit.json")) !== true) {
-    return { referenced: true, ok: false, auditPath, referencePath, findings: [`source skeleton source-quality audit did not pass: ${sourceLabel}/source-ir/source-quality-audit.json`] }
+  if ((await readPassedAudit(path.join(sourceIrDir, "source-quality-audit.json"))) !== true) {
+    return {
+      referenced: true,
+      ok: false,
+      auditPath,
+      referencePath,
+      findings: [
+        `source skeleton source-quality audit did not pass: ${sourceLabel}/source-ir/source-quality-audit.json`,
+      ],
+    }
   }
   let auditJson: unknown
   try {
     auditJson = JSON.parse(await fs.readFile(auditPath, "utf8"))
   } catch (error) {
     if ((error as NodeJS.ErrnoException).code === "ENOENT") {
-      return { referenced: true, ok: false, auditPath, referencePath, findings: [`source skeleton handoff is missing ${sourceLabel}/source-skeleton/source-skeleton-audit.json`] }
+      return {
+        referenced: true,
+        ok: false,
+        auditPath,
+        referencePath,
+        findings: [`source skeleton handoff is missing ${sourceLabel}/source-skeleton/source-skeleton-audit.json`],
+      }
     }
-    return { referenced: true, ok: false, auditPath, referencePath, findings: [`source skeleton audit is not valid JSON: ${auditPath}`] }
+    return {
+      referenced: true,
+      ok: false,
+      auditPath,
+      referencePath,
+      findings: [`source skeleton audit is not valid JSON: ${auditPath}`],
+    }
   }
   const audit = WebCloneSourceSkeletonAuditSchema.parse(auditJson)
   if (!audit.passed) {
@@ -423,7 +521,7 @@ function renderHtmlDocument(
     '  <body data-reference-image="../reference.png">',
     "    <!-- Component hints for LLM framework generation. Keep these semantic boundaries when porting. -->",
     hints,
-    body || "    <main data-source-node-id=\"empty\">No renderable body content was captured.</main>",
+    body || '    <main data-source-node-id="empty">No renderable body content was captured.</main>',
     "  </body>",
     "</html>",
     "",
@@ -530,7 +628,11 @@ interface CssBundle {
   usedSelectors: CssSelectorReachability
 }
 
-async function renderSkeletonCssBundle(outputDir: string, assetGraph: WebCloneAssetGraph, root: WebCloneNode): Promise<CssBundle> {
+async function renderSkeletonCssBundle(
+  outputDir: string,
+  assetGraph: WebCloneAssetGraph,
+  root: WebCloneNode,
+): Promise<CssBundle> {
   const base = [
     "/* Source skeleton CSS.",
     "   This critical file contains reachable stylesheet rules plus computed-style fallback rules.",
@@ -682,13 +784,16 @@ function buildSourceIr(
         total: segment.assetRefs.length,
         byKind: countBy(segment.assetRefs.map((asset) => asset.kind)),
       },
-      assetRefs: segment.assetRefs.filter((asset) => asset.kind !== "css").slice(0, 40).map((asset) => ({
-        id: asset.id,
-        kind: asset.kind,
-        path: asset.path,
-        semanticRole: asset.semanticRole,
-        bytes: asset.bytes,
-      })),
+      assetRefs: segment.assetRefs
+        .filter((asset) => asset.kind !== "css")
+        .slice(0, 40)
+        .map((asset) => ({
+          id: asset.id,
+          kind: asset.kind,
+          path: asset.path,
+          semanticRole: asset.semanticRole,
+          bytes: asset.bytes,
+        })),
       childElementCount: segment.childElementCount,
       implementationHint: implementationHintForSegment(segment),
     })),
@@ -770,14 +875,22 @@ function buildStyleProfile(
   const assetRefsByNode = buildAssetRefsByNode(assetGraph)
   const regions = segments.segments.map((segment) => {
     const root = nodeById.get(segment.rootNodeId)
-    const sourceNodeIds = [segment.rootNodeId, ...segment.nodeIds.filter((nodeId) => nodeId !== segment.rootNodeId)].slice(0, 80)
+    const sourceNodeIds = [
+      segment.rootNodeId,
+      ...segment.nodeIds.filter((nodeId) => nodeId !== segment.rootNodeId),
+    ].slice(0, 80)
     const sampledNodes = sourceNodeIds
       .map((nodeId) => nodeById.get(nodeId))
       .filter((node): node is WebCloneNode => Boolean(node))
       .slice(0, 32)
     const styleSummary = summarizeRegionStyles(sampledNodes)
-    const selectorRefs = Array.from(new Set(sourceNodeIds.flatMap((nodeId) => selectorRefsByNode.get(nodeId) ?? []))).slice(0, 32)
-    const assetRefs = Array.from(new Set(sourceNodeIds.flatMap((nodeId) => assetRefsByNode.get(nodeId) ?? []))).slice(0, 32)
+    const selectorRefs = Array.from(
+      new Set(sourceNodeIds.flatMap((nodeId) => selectorRefsByNode.get(nodeId) ?? [])),
+    ).slice(0, 32)
+    const assetRefs = Array.from(new Set(sourceNodeIds.flatMap((nodeId) => assetRefsByNode.get(nodeId) ?? []))).slice(
+      0,
+      32,
+    )
     return {
       id: segment.id,
       name: componentName(segment),
@@ -869,14 +982,35 @@ function summarizeRegionStyles(nodes: WebCloneNode[]) {
     const styles = node.layout?.styles ?? {}
     addStyleValue(values.display, styles.display)
     addStyleValue(values.position, styles.position)
-    addStyleValue(values.typography, compactStyleTuple(styles, ["fontFamily", "fontSize", "fontWeight", "lineHeight", "letterSpacing"]))
+    addStyleValue(
+      values.typography,
+      compactStyleTuple(styles, ["fontFamily", "fontSize", "fontWeight", "lineHeight", "letterSpacing"]),
+    )
     addStyleValue(values.color, styles.color)
     addStyleValue(values.background, styles.backgroundColor ?? styles.background)
     addStyleValue(values.spacing, compactStyleTuple(styles, ["margin", "padding", "gap", "rowGap", "columnGap"]))
-    addStyleValue(values.border, compactStyleTuple(styles, ["border", "borderTop", "borderRight", "borderBottom", "borderLeft"]))
+    addStyleValue(
+      values.border,
+      compactStyleTuple(styles, ["border", "borderTop", "borderRight", "borderBottom", "borderLeft"]),
+    )
     addStyleValue(values.radius, styles.borderRadius)
     addStyleValue(values.shadow, styles.boxShadow)
-    addStyleValue(values.layout, compactStyleTuple(styles, ["width", "height", "minWidth", "minHeight", "maxWidth", "maxHeight", "gridTemplateColumns", "gridTemplateRows", "flexDirection", "alignItems", "justifyContent"]))
+    addStyleValue(
+      values.layout,
+      compactStyleTuple(styles, [
+        "width",
+        "height",
+        "minWidth",
+        "minHeight",
+        "maxWidth",
+        "maxHeight",
+        "gridTemplateColumns",
+        "gridTemplateRows",
+        "flexDirection",
+        "alignItems",
+        "justifyContent",
+      ]),
+    )
   }
   return {
     display: rankedTokens(values.display).slice(0, 8),
@@ -923,7 +1057,8 @@ function buildContentModel(root: WebCloneNode, assetGraph: WebCloneAssetGraph) {
     if (tag === "table") tables.push(extractTableModel(node))
     if (tag === "ul" || tag === "ol") lists.push(extractListModel(node))
     if (isControlTag(tag)) controls.push(controlModel(node, tag, text))
-    if (tag === "a" || node.layout?.href) links.push({ nodeId: node.id, text, href: attr(node.attrs, "href") ?? node.layout?.href })
+    if (tag === "a" || node.layout?.href)
+      links.push({ nodeId: node.id, text, href: attr(node.attrs, "href") ?? node.layout?.href })
     if (tag === "img" || tag === "svg" || tag === "canvas" || node.layout?.imageSrc) {
       media.push(mediaModel(node, tag, assetGraph))
     }
@@ -962,10 +1097,12 @@ function buildStyleTokens(root: WebCloneNode, usedSelectors: CssSelectorReachabi
   walk(root, (node) => {
     if (node.type !== "element") return
     const styles = node.layout?.styles ?? {}
-    for (const [name, value] of Object.entries(styles)) collectToken(name, value, colorCounts, fontCounts, spacingCounts, radiusCounts, shadowCounts)
+    for (const [name, value] of Object.entries(styles))
+      collectToken(name, value, colorCounts, fontCounts, spacingCounts, radiusCounts, shadowCounts)
   })
   for (const rule of usedSelectors.rules.filter((candidate) => candidate.reachable)) {
-    for (const color of rule.selector.match(/#[0-9a-fA-F]{3,8}\b|rgba?\([^)]+\)|hsla?\([^)]+\)/g) ?? []) increment(colorCounts, color)
+    for (const color of rule.selector.match(/#[0-9a-fA-F]{3,8}\b|rgba?\([^)]+\)|hsla?\([^)]+\)/g) ?? [])
+      increment(colorCounts, color)
   }
   return {
     version: 1,
@@ -1010,7 +1147,7 @@ function buildInteractionHints(root: WebCloneNode) {
     stats: {
       totalHints: hints.length,
       omittedHints: Math.max(0, hints.length - visibleHints.length),
-      byKind: countBy(visibleHints.map((hint) => typeof hint.kind === "string" ? hint.kind : "unknown")),
+      byKind: countBy(visibleHints.map((hint) => (typeof hint.kind === "string" ? hint.kind : "unknown"))),
     },
   }
 }
@@ -1079,7 +1216,8 @@ function implementationHintForSegment(segment: WebCloneSegment): string {
   if (kind === "table") return "Convert rows and columns into typed data arrays and render with framework loops."
   if (kind === "list") return "Convert repeated list items into a data array and a reusable item component."
   if (kind === "controls") return "Implement controls as real framework state, not copied static DOM."
-  if (kind === "asset-backed-visual") return "Keep dense SVG/canvas/raster data as an asset or replace with a maintainable chart/map component."
+  if (kind === "asset-backed-visual")
+    return "Keep dense SVG/canvas/raster data as an asset or replace with a maintainable chart/map component."
   if (kind === "navigation") return "Implement navigation items from an array and preserve active state."
   return "Implement as a semantic component with project-owned data and styles."
 }
@@ -1096,7 +1234,8 @@ function buildSelectorNodeIndex(root: WebCloneNode) {
     for (const attribute of node.attrs ?? []) {
       const name = attribute.name.toLowerCase()
       if (name === "id" && attribute.value) addIndex(ids, attribute.value, node.id)
-      if (name === "class") for (const token of attribute.classTokens ?? splitClasses(attribute.value)) addIndex(classes, token, node.id)
+      if (name === "class")
+        for (const token of attribute.classTokens ?? splitClasses(attribute.value)) addIndex(classes, token, node.id)
       addIndex(attrs, name, node.id)
     }
   })
@@ -1120,7 +1259,10 @@ function extractReachableCssRules(
       }
       continue
     }
-    const selectors = rule.prelude.split(",").map((selector) => selector.trim()).filter(Boolean)
+    const selectors = rule.prelude
+      .split(",")
+      .map((selector) => selector.trim())
+      .filter(Boolean)
     const matchedBy = new Set<string>()
     for (const selector of selectors) {
       for (const nodeId of matchSelectorAtoms(selector, nodeIndex)) matchedBy.add(nodeId)
@@ -1187,9 +1329,13 @@ function splitCssDeclarations(body: string): string[] {
 function isCriticalCssProperty(property: string, value: string): boolean {
   const name = property.toLowerCase()
   if (name.startsWith("--")) {
-    return /#[0-9a-fA-F]{3,8}\b|rgba?\(|hsla?\(|-?\d+(?:\.\d+)?(?:px|rem|em|%|vh|vw)\b|font|radius|shadow|color/i.test(value)
+    return /#[0-9a-fA-F]{3,8}\b|rgba?\(|hsla?\(|-?\d+(?:\.\d+)?(?:px|rem|em|%|vh|vw)\b|font|radius|shadow|color/i.test(
+      value,
+    )
   }
-  return /^(display|position|inset|top|right|bottom|left|z-index|box-sizing|width|height|min-width|min-height|max-width|max-height|margin|margin-.+|padding|padding-.+|gap|row-gap|column-gap|grid|grid-.+|flex|flex-.+|place-.+|align-.+|justify-.+|font|font-.+|line-height|letter-spacing|text-.+|white-space|color|background|background-.+|border|border-.+|border-radius|box-shadow|opacity|overflow|overflow-.+|transform|object-fit|object-position|visibility|pointer-events)$/.test(name)
+  return /^(display|position|inset|top|right|bottom|left|z-index|box-sizing|width|height|min-width|min-height|max-width|max-height|margin|margin-.+|padding|padding-.+|gap|row-gap|column-gap|grid|grid-.+|flex|flex-.+|place-.+|align-.+|justify-.+|font|font-.+|line-height|letter-spacing|text-.+|white-space|color|background|background-.+|border|border-.+|border-radius|box-shadow|opacity|overflow|overflow-.+|transform|object-fit|object-position|visibility|pointer-events)$/.test(
+    name,
+  )
 }
 
 function splitCssRules(css: string): Array<{ prelude: string; body: string }> {
@@ -1229,12 +1375,13 @@ function splitCssRules(css: string): Array<{ prelude: string; body: string }> {
 }
 
 function matchSelectorAtoms(selector: string, nodeIndex: ReturnType<typeof buildSelectorNodeIndex>): string[] {
-  const stripped = selector
-    .replace(/::?[a-zA-Z-]+(?:\([^)]*\))?/g, "")
-    .replace(/\[[^\]]+\]/g, (match) => {
-      const name = match.slice(1, -1).split(/[~|^$*]?=/)[0]?.trim()
-      return name ? `[${name}]` : ""
-    })
+  const stripped = selector.replace(/::?[a-zA-Z-]+(?:\([^)]*\))?/g, "").replace(/\[[^\]]+\]/g, (match) => {
+    const name = match
+      .slice(1, -1)
+      .split(/[~|^$*]?=/)[0]
+      ?.trim()
+    return name ? `[${name}]` : ""
+  })
   const matches = new Set<string>()
   for (const id of stripped.match(/#[a-zA-Z0-9_-]+/g) ?? []) {
     for (const nodeId of nodeIndex.ids.get(id.slice(1)) ?? []) matches.add(nodeId)
@@ -1246,7 +1393,12 @@ function matchSelectorAtoms(selector: string, nodeIndex: ReturnType<typeof build
     for (const nodeId of nodeIndex.attrs.get(attrName.slice(1, -1).toLowerCase()) ?? []) matches.add(nodeId)
   }
   for (const tag of stripped.match(/(^|[\s>+~])([a-zA-Z][a-zA-Z0-9-]*)/g) ?? []) {
-    const normalized = normalizeTag(tag.trim().replace(/^[>+~]/, "").trim())
+    const normalized = normalizeTag(
+      tag
+        .trim()
+        .replace(/^[>+~]/, "")
+        .trim(),
+    )
     if (!normalized || ["not", "is", "where", "has"].includes(normalized)) continue
     for (const nodeId of nodeIndex.tags.get(normalized) ?? []) matches.add(nodeId)
   }
@@ -1355,7 +1507,9 @@ function structuralSignature(node: WebCloneNode): string {
     attr(node.attrs, "type"),
     attr(node.attrs, "aria-haspopup") ? "popup" : undefined,
     attr(node.attrs, "href") ? "link" : undefined,
-  ].filter(Boolean).join(".")
+  ]
+    .filter(Boolean)
+    .join(".")
   return `${normalizeTag(node.tag) ?? "div"}|${roles}|${childTags}`
 }
 
@@ -1390,7 +1544,10 @@ function sourceComponentPattern(node: WebCloneNode): Record<string, unknown> | u
 
 function sourceComponentSignals(node: WebCloneNode): Record<string, unknown> {
   const elementCount = countElementDescendants(node)
-  const linkCount = countElementDescendants(node, (child) => normalizeTag(child.tag) === "a" || Boolean(child.layout?.href))
+  const linkCount = countElementDescendants(
+    node,
+    (child) => normalizeTag(child.tag) === "a" || Boolean(child.layout?.href),
+  )
   const mediaCount = countElementDescendants(node, (child) => {
     const tag = normalizeTag(child.tag)
     return tag === "img" || tag === "svg" || tag === "canvas" || Boolean(child.layout?.imageSrc)
@@ -1429,8 +1586,10 @@ function sourceComponentPatternKind(tag: string, signals: Record<string, unknown
   if (tag === "table" || tableRowCount >= 3) return "data_grid_surface"
   if (mediaCount > 0 && (tag === "svg" || mediaCount >= 2 || elementCount >= 8)) return "media_chart_surface"
   if (tag === "form" || controlCount >= 2) return "form_control_surface"
-  if (tag === "nav" || tag === "header" || tag === "footer" || (linkCount >= 4 && linkDensity >= 0.2)) return "navigation_surface"
-  if (maxRepeatedSiblingCount >= 3 && (gridOrFlex || mediaCount > 0 || linkCount >= 3 || headingCount >= 3)) return "card_collection_surface"
+  if (tag === "nav" || tag === "header" || tag === "footer" || (linkCount >= 4 && linkDensity >= 0.2))
+    return "navigation_surface"
+  if (maxRepeatedSiblingCount >= 3 && (gridOrFlex || mediaCount > 0 || linkCount >= 3 || headingCount >= 3))
+    return "card_collection_surface"
   if (headingCount > 0 && elementCount >= 6 && textLength > 20) return "section_shell_surface"
   if (textLength > 160 && elementCount >= 4) return "text_content_surface"
   return undefined
@@ -1447,12 +1606,18 @@ function recommendedReplacementKindForPattern(kind: string): string {
 }
 
 function implementationHintForSourceComponentPattern(kind: string): string {
-  if (kind === "data_grid_surface") return "Extract rows and columns into typed data and render through a table/grid component."
-  if (kind === "card_collection_surface") return "Extract repeated item records and render them through a reusable collection component."
-  if (kind === "media_chart_surface") return "Move dense SVG/canvas/image evidence into owned assets or a maintained chart/map component."
-  if (kind === "navigation_surface") return "Extract links, labels, active state, and controls into navigation data and components."
-  if (kind === "form_control_surface") return "Model form controls with real state, labels, validation, and disabled/loading states."
-  if (kind === "section_shell_surface") return "Extract the section chrome and delegate repeated child surfaces to narrower components."
+  if (kind === "data_grid_surface")
+    return "Extract rows and columns into typed data and render through a table/grid component."
+  if (kind === "card_collection_surface")
+    return "Extract repeated item records and render them through a reusable collection component."
+  if (kind === "media_chart_surface")
+    return "Move dense SVG/canvas/image evidence into owned assets or a maintained chart/map component."
+  if (kind === "navigation_surface")
+    return "Extract links, labels, active state, and controls into navigation data and components."
+  if (kind === "form_control_surface")
+    return "Model form controls with real state, labels, validation, and disabled/loading states."
+  if (kind === "section_shell_surface")
+    return "Extract the section chrome and delegate repeated child surfaces to narrower components."
   return "Use semantic project components, data modules, and scoped styles for this source surface."
 }
 
@@ -1497,7 +1662,9 @@ function looksLikeCard(node: WebCloneNode, parent: WebCloneNode | undefined): bo
   const classes = classTokens(node.attrs).join(" ")
   if (/\b(card|tile|item|article|panel)\b/i.test(classes)) return true
   if (tag === "article") return true
-  const siblings = (parent.children ?? []).filter((child) => child.type === "element" && structuralSignature(child) === structuralSignature(node))
+  const siblings = (parent.children ?? []).filter(
+    (child) => child.type === "element" && structuralSignature(child) === structuralSignature(node),
+  )
   return siblings.length >= 2 && visibleText(node).length > 0
 }
 
@@ -1539,7 +1706,10 @@ function collectToken(
 ): void {
   if (!value || value === "initial") return
   if (/color|background|border/i.test(name)) {
-    for (const color of value.match(/#[0-9a-fA-F]{3,8}\b|rgba?\([^)]+\)|hsla?\([^)]+\)|\b(?:black|white|transparent|currentColor)\b/g) ?? []) increment(colorCounts, color)
+    for (const color of value.match(
+      /#[0-9a-fA-F]{3,8}\b|rgba?\([^)]+\)|hsla?\([^)]+\)|\b(?:black|white|transparent|currentColor)\b/g,
+    ) ?? [])
+      increment(colorCounts, color)
   }
   if (/font/i.test(name)) increment(fontCounts, value)
   if (/gap|padding|margin|width|height|top|left|right|bottom|size|lineHeight/i.test(name)) {
@@ -1584,10 +1754,12 @@ function inferInteractionKind(input: {
 }
 
 function interactionImplementationHint(kind: string): string {
-  if (kind === "tab" || kind === "tab-link") return "Model tabs as stateful selected keys and render tab panels conditionally."
+  if (kind === "tab" || kind === "tab-link")
+    return "Model tabs as stateful selected keys and render tab panels conditionally."
   if (kind === "search-input") return "Wire to real input state and filter/search behavior or an explicit mock adapter."
   if (kind === "accordion-toggle") return "Wire aria-expanded to component state and hide/show the associated panel."
-  if (kind === "menu-trigger" || kind === "menu-item") return "Implement with a real menu/dropdown component and keyboard-visible state."
+  if (kind === "menu-trigger" || kind === "menu-item")
+    return "Implement with a real menu/dropdown component and keyboard-visible state."
   if (kind === "form-control") return "Represent value, loading, error, and disabled states explicitly."
   return "Implement as a real interactive element, not static copied markup."
 }
@@ -1604,7 +1776,11 @@ function flattenElements(root: WebCloneNode): WebCloneNode[] {
   return elements
 }
 
-function walk(node: WebCloneNode, visit: (node: WebCloneNode, parent: WebCloneNode | undefined) => void, parent?: WebCloneNode): void {
+function walk(
+  node: WebCloneNode,
+  visit: (node: WebCloneNode, parent: WebCloneNode | undefined) => void,
+  parent?: WebCloneNode,
+): void {
   visit(node, parent)
   for (const child of node.children ?? []) walk(child, visit, node)
 }
@@ -1626,7 +1802,12 @@ function classTokens(attrs: WebCloneAttribute[] | undefined): string[] {
 }
 
 function splitClasses(value: string | undefined): string[] {
-  return value?.split(/\s+/).map((token) => token.trim()).filter(Boolean) ?? []
+  return (
+    value
+      ?.split(/\s+/)
+      .map((token) => token.trim())
+      .filter(Boolean) ?? []
+  )
 }
 
 function attr(attrs: WebCloneAttribute[] | undefined, name: string): string | undefined {
@@ -1637,7 +1818,9 @@ function toDataFieldName(value: string): string {
   const cleaned = value.replace(/[^a-zA-Z0-9]+/g, " ").trim()
   const words = cleaned ? cleaned.split(/\s+/) : ["field"]
   return words
-    .map((word, index) => index === 0 ? word.charAt(0).toLowerCase() + word.slice(1) : word.charAt(0).toUpperCase() + word.slice(1))
+    .map((word, index) =>
+      index === 0 ? word.charAt(0).toLowerCase() + word.slice(1) : word.charAt(0).toUpperCase() + word.slice(1),
+    )
     .join("")
 }
 
@@ -1650,7 +1833,12 @@ function buildSegmentLookup(segments: WebCloneSegment[]): Map<string, string> {
 }
 
 function componentName(segment: WebCloneSegment): string {
-  const text = segment.textPreview[0]?.replace(/[^a-zA-Z0-9]+/g, " ").trim().split(/\s+/).slice(0, 3).join(" ")
+  const text = segment.textPreview[0]
+    ?.replace(/[^a-zA-Z0-9]+/g, " ")
+    .trim()
+    .split(/\s+/)
+    .slice(0, 3)
+    .join(" ")
   const base = text || segment.tag || "surface"
   return `${toPascalCase(base)}Skeleton`
 }
@@ -1659,7 +1847,8 @@ function inferSkeletonKind(segment: WebCloneSegment): string {
   const tags = segment.nodeOutline.map((node) => node.tag).filter(Boolean)
   if (segment.tag === "header" || segment.tag === "nav" || tags.includes("nav")) return "navigation"
   if (tags.includes("table")) return "table"
-  if (tags.includes("form") || tags.includes("input") || tags.includes("button") || tags.includes("select")) return "controls"
+  if (tags.includes("form") || tags.includes("input") || tags.includes("button") || tags.includes("select"))
+    return "controls"
   if (tags.includes("ul") || tags.includes("ol") || tags.includes("li")) return "list"
   if (segment.strategy === "canvas-raster" || segment.strategy === "svg-inline") return "asset-backed-visual"
   return "content"
@@ -1679,7 +1868,21 @@ function isSafeAttr(name: string): boolean {
 }
 
 function isVoidTag(tag: string): boolean {
-  return ["area", "base", "br", "col", "embed", "hr", "img", "input", "link", "meta", "source", "track", "wbr"].includes(tag)
+  return [
+    "area",
+    "base",
+    "br",
+    "col",
+    "embed",
+    "hr",
+    "img",
+    "input",
+    "link",
+    "meta",
+    "source",
+    "track",
+    "wbr",
+  ].includes(tag)
 }
 
 function findFirstElement(node: WebCloneNode, tag: string): WebCloneNode | undefined {
@@ -1734,7 +1937,7 @@ async function exists(filePath: string): Promise<boolean> {
 
 async function hasAllFiles(root: string, files: string[]): Promise<boolean> {
   for (const file of files) {
-    if (!await exists(path.join(root, file))) return false
+    if (!(await exists(path.join(root, file)))) return false
   }
   return true
 }
@@ -1744,18 +1947,11 @@ function cssEscape(value: string): string {
 }
 
 function escapeAttr(value: string): string {
-  return value
-    .replaceAll("&", "&amp;")
-    .replaceAll('"', "&quot;")
-    .replaceAll("<", "&lt;")
-    .replaceAll(">", "&gt;")
+  return value.replaceAll("&", "&amp;").replaceAll('"', "&quot;").replaceAll("<", "&lt;").replaceAll(">", "&gt;")
 }
 
 function escapeText(value: string): string {
-  return value
-    .replaceAll("&", "&amp;")
-    .replaceAll("<", "&lt;")
-    .replaceAll(">", "&gt;")
+  return value.replaceAll("&", "&amp;").replaceAll("<", "&lt;").replaceAll(">", "&gt;")
 }
 
 function toKebabCase(value: string): string {

@@ -35,9 +35,7 @@ describe("protocol.v2", () => {
     sqlite.exec("PRAGMA foreign_keys = ON")
     sqlite.exec(SCHEMA_DDL)
 
-    const names = sqlite
-      .query("select name from sqlite_master where type = 'table'")
-      .all() as Array<{ name: string }>
+    const names = sqlite.query("select name from sqlite_master where type = 'table'").all() as Array<{ name: string }>
 
     expect(names.some((item) => item.name === "protocol_event")).toBe(true)
     expect(names.some((item) => item.name === "protocol_inbox")).toBe(true)

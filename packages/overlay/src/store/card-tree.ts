@@ -43,32 +43,32 @@
 // walk `cardTreeStore.cards[id]` through the Solid proxy, and Solid's
 // fine-grained reactivity handles the rest.
 
-import { createStore, produce, reconcile } from "solid-js/store";
+import { createStore, produce, reconcile } from "solid-js/store"
 
 export type CardKind =
-  | "agent"     // per-session agent card (orchestrator, build worker, planner, ...)
-  | "step"      // per-goal executor step card — top-level, carries goal metadata
-  | "phase"     // phase row inside a step (plan / build / evaluate inside pipeline.build)
-  | "tool"      // promoted tool call (nested card for task/subagent)
-  | "message"   // user / system message bubble
-  | "review"    // top-level running/completed review stream card
-  | "integrity"; // architecture integrity review verdict
+  | "agent" // per-session agent card (orchestrator, build worker, planner, ...)
+  | "step" // per-goal executor step card — top-level, carries goal metadata
+  | "phase" // phase row inside a step (plan / build / evaluate inside pipeline.build)
+  | "tool" // promoted tool call (nested card for task/subagent)
+  | "message" // user / system message bubble
+  | "review" // top-level running/completed review stream card
+  | "integrity" // architecture integrity review verdict
 
 export type CardStatus =
   | "pending"
-  | "running"   // LLM stream actively in flight (spinner ON)
-  | "idle"      // session alive but between turns, awaiting next user message / wake (no spinner)
+  | "running" // LLM stream actively in flight (spinner ON)
+  | "idle" // session alive but between turns, awaiting next user message / wake (no spinner)
   | "completed"
   | "error"
-  | "skipped";
+  | "skipped"
 
 /** Synthetic "part" used by the renderer to emit a role separator between
  *  flattened messages. Carries the effective role and optional timestamp. */
 export interface BoundaryPart {
-  type: "boundary";
-  role: string;
-  roleLabel: string;
-  time?: number;
+  type: "boundary"
+  role: string
+  roleLabel: string
+  time?: number
 }
 
 /** Structured step payload — only populated for kind="step" nodes. Mirrors
@@ -76,26 +76,26 @@ export interface BoundaryPart {
  *  the sidebar Goals panel shows. */
 export interface StepPayload {
   planNodes?: Array<{
-    id: string;
-    title: string;
-    brief: string;
-    orderIndex: number;
-    fileActions?: Array<{ path: string; intent: string }>;
-    verificationCommands?: Array<{ command: string; purpose: string }>;
-  }>;
-  buildSessionID?: string;
-  commitRef?: string;
-  changedFiles?: string[];
+    id: string
+    title: string
+    brief: string
+    orderIndex: number
+    fileActions?: Array<{ path: string; intent: string }>
+    verificationCommands?: Array<{ command: string; purpose: string }>
+  }>
+  buildSessionID?: string
+  commitRef?: string
+  changedFiles?: string[]
   changedFileDiffs?: Array<{
-    file: string;
-    additions?: number;
-    deletions?: number;
-    status?: "added" | "deleted" | "modified";
-  }>;
-  diffStats?: { files?: number; additions?: number; deletions?: number };
-  checks?: Array<{ name: string; status: string; evidence?: string; family?: string }>;
-  evalSummary?: string;
-  verdict?: string;
+    file: string
+    additions?: number
+    deletions?: number
+    status?: "added" | "deleted" | "modified"
+  }>
+  diffStats?: { files?: number; additions?: number; deletions?: number }
+  checks?: Array<{ name: string; status: string; evidence?: string; family?: string }>
+  evalSummary?: string
+  verdict?: string
 }
 
 /** Activity counts surfaced by collapsed bubble headers. Stored as a
@@ -103,10 +103,10 @@ export interface StepPayload {
  *  `node.subtreeCounts` in O(1) instead of walking the subtree on every
  *  SSE event — see the stats kernel below. */
 export interface ActivityCounts {
-  messages: number;
-  tools: number;
-  agents: number;
-  skills: number;
+  messages: number
+  tools: number
+  agents: number
+  skills: number
 }
 
 /** Cached "latest activity" hit used by `collectLatestActivityText`. The
@@ -116,17 +116,17 @@ export interface ActivityCounts {
  *  parts, "icon Tool: detail" for tool parts) — see toolHitText / partText
  *  in utils/card-tree.ts. */
 export interface LatestActivityHit {
-  time: number;
-  index: number;
-  text: string;
+  time: number
+  index: number
+  text: string
 }
 
 /** Cached todo-list hit (most-recent TODO tool call in the subtree). The
  *  renderer's `collectTodoSummary` derives counts from `todos`. */
 export interface TodoActivityHit {
-  time: number;
-  index: number;
-  todos: any[];
+  time: number
+  index: number
+  todos: any[]
 }
 
 /** CardNode is the fundamental unit of the conversation tree. `children` is
@@ -135,70 +135,72 @@ export interface TodoActivityHit {
  *  writes cheap — moving a card between parents is two `setCardTreeStore`
  *  calls (remove from old, add to new) rather than a full tree rebuild. */
 export interface CardNode {
-  id: string;
-  kind: CardKind;
+  id: string
+  kind: CardKind
   /** Back-pointer maintained by `tree-writer.linkChildToParent` whenever a
    *  cardID is placed into another card's `childIDs`. Read only by the
    *  stats kernel (`bubbleStatsFromCard`) to walk ancestors in O(depth)
    *  without rescanning the whole `cards` dict. Components never read this
    *  field, so writing it does not trigger spurious re-renders. */
-  parentID?: string;
+  parentID?: string
   /** Runtime session id that owns this card. Drives trace / reply / cancel /
    *  agent-workflow projection. Renderer and workflow utilities MUST read
    *  this explicit field — never parse the session id out of `id`. Phase
    *  cards intentionally leave this unset and use `phaseSessionID` instead
    *  (a phase card absorbs a goal-scoped runtime session, it is not a
    *  message-turn card). */
-  sessionID?: string;
+  sessionID?: string
   /** Durable message id that opened this display segment. Consecutive
    *  `message.updated` rows from the same session can share this card;
    *  once another session interrupts, the next message opens a new segment.
    *  Unset on phase / step / interaction / task-context cards. */
-  messageID?: string;
+  messageID?: string
   /** Session kind / stage name (assistant / executor / build / planner / goal / ...). */
-  stage?: string;
+  stage?: string
   /** Resolved accent colour for this card's stage. */
-  accent?: string;
-  status?: CardStatus;
-  role?: string;
-  title: string;
-  subtitle?: string;
+  accent?: string
+  status?: CardStatus
+  role?: string
+  title: string
+  subtitle?: string
   /** Goal decomposition index + 1; shown as `#GN` when > 0. Stamped onto the
    *  executor step card from the backend `goalWorkflow.orderIndex` so the
    *  number matches the numbered breakdown operators see during requirements
    *  planning (and does NOT re-number when a goal is removed). */
-  round?: number;
+  round?: number
   /** Goal attempt / retry index + 1; shown as `Vn` alongside `#GN` on the
    *  goal-scoped step card so retries are distinguishable in the timeline. */
-  attempt?: number;
+  attempt?: number
   /** Goal this card belongs to. Set on executor step cards, goal-phase cards,
    *  and any session card that was routed to a goal phase. */
-  goalID?: string;
+  goalID?: string
   /** Goal objective prose — rendered at the top of the step card body. Set
    *  only on executor step cards (kind="step"). */
-  goalDescription?: string;
-  stepPayload?: StepPayload;
-  stepID?: string;
+  goalDescription?: string
+  stepPayload?: StepPayload
+  stepID?: string
   /** Phase identifier for kind="phase" nodes. Matches the phase.id declared
    *  on the backend workflow step (see
    *  packages/opencorvus/src/engine/workflow.ts PIPELINE.build.phases). */
-  phaseID?: string;
+  phaseID?: string
   /** Session kind this phase claims — the stage value used by
    *  resolveSessionContainerCardID to route incoming session cards. Only
    *  set for kind="phase" nodes. */
-  phaseSessionKind?: string;
+  phaseSessionKind?: string
   /** SessionID of the sub-agent session whose parts this phase card has
    *  absorbed. Set by `resolvePhaseOrSessionCardID` when the phase card
    *  is materialized — phase cards fold their session into themselves so
    *  no `kind="agent"` card exists, but the AgentSessionReplyBox still
    *  needs the sessionID to POST `/task/:taskID/session/:sessionID/reply`.
    *  Without this field the user has no way to reply to the running
-   *  build / planner session, even though the route accepts it. */
-  phaseSessionID?: string;
+   *  build / planner session. The backend still decides whether that
+   *  session can be continued directly or must surface a structured
+   *  build/runtime error. */
+  phaseSessionID?: string
   /** Inline leaves — text / reasoning / tool / patch / file / subtask / boundary /
    *  interaction-question / interaction-permission. Tool parts that are "promoted"
    *  become their own CardNode instead (with `toolPart` populated). */
-  parts: any[];
+  parts: any[]
   /** Child card ids (resolved by the renderer via `cardTreeStore.cards[id]`).
    *  Used by cards that live in `cardTreeStore` — the renderer dereferences
    *  each id through the store proxy, preserving fine-grained reactivity.
@@ -206,7 +208,7 @@ export interface CardNode {
    *  Optional: transient cards (tool promotion, legacy old-pipeline nodes)
    *  use the inline `children` field below instead. Store-backed cards
    *  always populate this field (writer guarantees `[]` default). */
-  childIDs?: string[];
+  childIDs?: string[]
   /** Inline CardNode children — used only by TRANSIENT cards built on the fly
    *  by the renderer (e.g. `<CardParts>` promotes a tool `part` into its own
    *  card via `toolToCardNode`). Transient cards do not live in the store;
@@ -215,7 +217,7 @@ export interface CardNode {
    *
    *  The renderer prefers `childIDs` when present — if a card has both,
    *  the store-backed children win. */
-  children?: CardNode[];
+  children?: CardNode[]
   /** Chronological sort key in ms. Required: every card carries its birth
    *  timestamp. Upstream sources (message.info.time.created, task.time.created,
    *  goal_run.time_started) are all `Date.now()` on the server — this layer
@@ -225,13 +227,13 @@ export interface CardNode {
    *  `message.updated` overwrites `time`). If a consumer ever reads an
    *  undefined `time`, the rebuild sort throws — we surface the bug rather
    *  than silently park the card at an arbitrary position. */
-  time: number;
-  defaultExpanded?: boolean;
+  time: number
+  defaultExpanded?: boolean
   /** Raw tool part for kind="tool" nodes — rendered by <Card> via
    *  InlineToolPart mode="body". Always undefined for non-tool kinds. */
-  toolPart?: any;
-  contextTokens?: number;
-  contextTokensEstimated?: boolean;
+  toolPart?: any
+  contextTokens?: number
+  contextTokensEstimated?: boolean
   /** Per-message LLM usage projected from `Message.Assistant.{tokens,cost}`
    *  in tree-writer's `handleMessageUpdated`. The engine writes
    *  cumulative-within-message tokens onto the message row
@@ -240,140 +242,149 @@ export interface CardNode {
    *  source. Renderer (CardHeader) prints `↑in / ↓out · $cost`. Stays
    *  undefined for non-assistant cards. */
   usage?: {
-    inputTokens?: number;
-    outputTokens?: number;
-    totalTokens?: number;
-    costUSD?: number;
-  };
+    inputTokens?: number
+    outputTokens?: number
+    totalTokens?: number
+    costUSD?: number
+  }
+  /** Actual model observed on assistant message info. Projected from
+   *  `Message.Assistant.{providerID,modelID}` by tree-writer when the
+   *  backend emits or hydrates the message; renderers must not derive this
+   *  from current config because config may have changed after the turn. */
+  model?: {
+    providerID: string
+    modelID: string
+    display: string
+  }
   /** Timestamp (ms) when the session this card represents transitioned to
    *  a terminal state (idle / error / done). Stamped by tree-writer's
    *  `handleSessionStatus` on the terminal flip. CardHeader subtracts
    *  `time` to render the running-or-finished duration. */
-  timeCompleted?: number;
+  timeCompleted?: number
   /** Free-text error reason carried on `session.status` terminal events
    *  (status.message / status.error). Surfaced in CardHeader as a
    *  read-only chip when present so the operator sees WHY the card flipped
    *  red instead of just the badge color change. */
-  errorReason?: string;
+  errorReason?: string
   /** Raw terminal reason carried by `session.status` terminal events.
    *  Overlay keeps this separate from `status` because cancelled/aborted
    *  sessions intentionally use the terminal status channel while rendering
    *  differently from hard errors. */
-  terminalReason?: "completed" | "error" | "aborted";
+  terminalReason?: "completed" | "error" | "aborted"
   /** Structured integrity review payload. Populated on the integrity
    *  supervisor session card (`kind="agent"`, `stage="integrity"`) when
    *  consensus completes; reviewer child session cards usually carry only
    *  reviewStream/parts. Mirrors `IntegrityReviewCompleted` event shape. */
   integrity?: {
-    verdict: "pass" | "concerns" | "needs_correction";
-    summary: string;
-    teamReportMarkdown: string;
+    verdict: "pass" | "concerns" | "needs_correction"
+    summary: string
+    teamReportMarkdown: string
     reviewers: Array<{
-      reviewerID: string;
-      scope: string;
-      verdict: "pass" | "concerns" | "needs_correction";
-      summary: string;
-      evidence: string[];
-      findings: unknown[];
-      openQuestions: string[];
-    }>;
+      reviewerID: string
+      scope: string
+      verdict: "pass" | "concerns" | "needs_correction"
+      summary: string
+      evidence: string[]
+      findings: unknown[]
+      openQuestions: string[]
+    }>
     findings: Array<{
-      id: string;
-      severity: "blocking" | "advisory";
-      verdictImpact: "pass" | "concerns" | "needs_correction";
-      fingerprint?: string;
-      canonicalSymptom?: string;
-      title: string;
-      description: string;
-      evidence: string[];
-      targetIDs: string[];
-      requirementIDs: string[];
-      specIDs: string[];
-      filePaths: string[];
-      affectedSymbols: string[];
-      repair: string;
-      verify: string[];
-      sourceFindingIDs: string[];
-      priorAttemptRefs: string[];
-      reviewers: string[];
-      consensus: "agreed" | "disputed" | "unresolved";
-    }>;
+      id: string
+      severity: "blocking" | "advisory"
+      verdictImpact: "pass" | "concerns" | "needs_correction"
+      fingerprint?: string
+      canonicalSymptom?: string
+      title: string
+      description: string
+      evidence: string[]
+      targetIDs: string[]
+      requirementIDs: string[]
+      specIDs: string[]
+      filePaths: string[]
+      affectedSymbols: string[]
+      repair: string
+      verify: string[]
+      sourceFindingIDs: string[]
+      priorAttemptRefs: string[]
+      reviewers: string[]
+      consensus: "agreed" | "disputed" | "unresolved"
+    }>
     requiredRepairs: Array<{
-      id: string;
-      fingerprint?: string;
-      severity?: "blocking" | "advisory";
-      title?: string;
-      canonicalSymptom?: string;
-      description: string;
-      evidence: string[];
-      targetIDs: string[];
-      requirementIDs: string[];
-      specIDs: string[];
-      filePaths: string[];
-      affectedSymbols: string[];
-      repair?: string;
-      verify: string[];
-      sourceFindingIDs: string[];
-      priorAttemptRefs: string[];
-    }>;
+      id: string
+      fingerprint?: string
+      severity?: "blocking" | "advisory"
+      title?: string
+      canonicalSymptom?: string
+      description: string
+      evidence: string[]
+      targetIDs: string[]
+      requirementIDs: string[]
+      specIDs: string[]
+      filePaths: string[]
+      affectedSymbols: string[]
+      repair?: string
+      verify: string[]
+      sourceFindingIDs: string[]
+      priorAttemptRefs: string[]
+    }>
     unresolvedDisagreements: Array<{
-      id: string;
-      description: string;
-      reviewerIDs: string[];
-      consequence: string;
-    }>;
-    attempts: number;
-  };
+      id: string
+      description: string
+      reviewerIDs: string[]
+      consequence: string
+    }>
+    attempts: number
+  }
   reviewStream?: {
-    phase: "integrity";
-    currentStep?: "manifest" | "runtime" | "visual" | "specialist" | "agent" | "post_repair";
-    activity?: string;
-    reviewerID?: string;
-    roundID?: string;
-    elapsedMs?: number;
-    summary?: string;
-  };
+    phase: "integrity"
+    currentStep?: "manifest" | "runtime" | "visual" | "specialist" | "agent" | "post_repair"
+    activity?: string
+    reviewerID?: string
+    roundID?: string
+    elapsedMs?: number
+    summary?: string
+  }
   /** Cached activity counts for this card's subtree (own parts/toolPart +
    *  all reachable descendants). Maintained by the stats kernel below,
    *  invalidated by tree-writer whenever a part/toolPart/childIDs write
    *  could change the result. Components read this field directly via
    *  `collectActivityCounts` to render collapsed bubble headers in O(1). */
-  subtreeCounts?: ActivityCounts;
+  subtreeCounts?: ActivityCounts
   /** Cached "latest text-or-tool activity" hit for this card's subtree.
    *  Source of truth for the collapsed bubble preview line — components
    *  read this via `collectLatestActivityText`. */
-  subtreeLatestHit?: LatestActivityHit;
+  subtreeLatestHit?: LatestActivityHit
   /** Cached most-recent TODO-tool hit in this card's subtree. The renderer
    *  derives the user-facing `TodoSummary` from this via
    *  `collectTodoSummary`. */
-  subtreeTodoHit?: TodoActivityHit;
+  subtreeTodoHit?: TodoActivityHit
 }
 
 export interface CardTreeStore {
   /** Top-level card ids in display order. */
-  order: string[];
+  order: string[]
   /** Every card by id, flat. Includes cards referenced from any `childIDs`. */
-  cards: Record<string, CardNode>;
+  cards: Record<string, CardNode>
   /** Monotonic transcript-generation counter. Increments only when the whole
    *  visible tree is replaced, so scroll owners can drop follow-lock from the
    *  previous transcript instance without guessing from DOM emptiness. */
-  treeEpoch: number;
+  treeEpoch: number
   /** Scroll intent stamped onto the most recent whole-tree replacement.
    *  `bottom` is used for explicit task switches where the operator should
    *  land on the latest content of the newly selected task. `preserve` is
    *  used for same-task hydrate/recovery so a user reading history does not
    *  get yanked to the tail. */
-  treeReplacementScrollIntent: "preserve" | "bottom";
+  treeReplacementScrollIntent: "preserve" | "bottom"
   /** Human-readable replacement cause for diagnostics / tests. */
-  treeReplacementCause: string;
+  treeReplacementCause: string
   /** Monotonic visible-content version. The conversation scroll owner reads
    *  this single signal instead of observing rendered DOM mutations. */
-  visibleVersion: number;
+  visibleVersion: number
   /** Rewind cursor (ms). When non-null, cards with time > cursor have been
    *  pruned from `order` + `cards` by pruneCardsAfterCursor(). The backend
    *  also filters its describe outputs, so any SSE event stream for this
    *  task will not re-deliver the pruned slice unless the cursor is cleared. */
-  rewindCursor: number | null;
+  rewindCursor: number | null
 }
 
 export const [cardTreeStore, setCardTreeStore] = createStore<CardTreeStore>({
@@ -384,21 +395,21 @@ export const [cardTreeStore, setCardTreeStore] = createStore<CardTreeStore>({
   treeReplacementCause: "init",
   visibleVersion: 0,
   rewindCursor: null,
-});
+})
 
 export function markCardTreeReplaced(
   options: {
-    scrollIntent?: "preserve" | "bottom";
-    cause?: string;
+    scrollIntent?: "preserve" | "bottom"
+    cause?: string
   } = {},
 ): void {
-  setCardTreeStore("treeReplacementScrollIntent", options.scrollIntent ?? "preserve");
-  setCardTreeStore("treeReplacementCause", options.cause ?? "unspecified");
-  setCardTreeStore("treeEpoch", (epoch) => epoch + 1);
+  setCardTreeStore("treeReplacementScrollIntent", options.scrollIntent ?? "preserve")
+  setCardTreeStore("treeReplacementCause", options.cause ?? "unspecified")
+  setCardTreeStore("treeEpoch", (epoch) => epoch + 1)
 }
 
 export function markCardTreeVisibleChanged(): void {
-  setCardTreeStore("visibleVersion", (version) => version + 1);
+  setCardTreeStore("visibleVersion", (version) => version + 1)
 }
 
 /**
@@ -411,36 +422,36 @@ export function markCardTreeVisibleChanged(): void {
  * Idempotent: re-calling with the same cursor is a no-op.
  */
 export function pruneCardsAfterCursor(cursorTime: number) {
-  setCardTreeStore("rewindCursor", cursorTime);
+  setCardTreeStore("rewindCursor", cursorTime)
   setCardTreeStore("order", (order) =>
     order.filter((id) => {
-      const card = cardTreeStore.cards[id];
-      if (!card) return false;
-      return (card.time ?? 0) <= cursorTime;
+      const card = cardTreeStore.cards[id]
+      if (!card) return false
+      return (card.time ?? 0) <= cursorTime
     }),
-  );
+  )
   // Remove child cards whose time exceeds cursor as well. Keeping them
   // orphaned in `cards` wastes memory and risks stale references if the
   // renderer dereferences through childIDs.
-  const survivors: Record<string, CardNode> = {};
+  const survivors: Record<string, CardNode> = {}
   for (const [id, card] of Object.entries(cardTreeStore.cards)) {
-    if ((card.time ?? 0) <= cursorTime) survivors[id] = card;
+    if ((card.time ?? 0) <= cursorTime) survivors[id] = card
   }
-  setCardTreeStore("cards", reconcile(survivors, { merge: false }));
-  const liveCardIDs = new Set(Object.keys(survivors));
+  setCardTreeStore("cards", reconcile(survivors, { merge: false }))
+  const liveCardIDs = new Set(Object.keys(survivors))
   setCardTreeStore(
     "cards",
     produce((cards) => {
       for (const card of Object.values(cards)) {
-        if (!card?.childIDs?.length) continue;
-        const nextChildIDs = card.childIDs.filter((childID) => liveCardIDs.has(childID));
+        if (!card?.childIDs?.length) continue
+        const nextChildIDs = card.childIDs.filter((childID) => liveCardIDs.has(childID))
         if (nextChildIDs.length !== card.childIDs.length) {
-          card.childIDs = nextChildIDs;
+          card.childIDs = nextChildIDs
         }
       }
     }),
-  );
-  markCardTreeVisibleChanged();
+  )
+  markCardTreeVisibleChanged()
 }
 
 /** Clear the rewind cursor without re-fetching — used when the backend
@@ -448,6 +459,6 @@ export function pruneCardsAfterCursor(cursorTime: number) {
  *  cards are gone from memory; the caller may choose to reload timeline
  *  from the server if full restoration is desired. */
 export function clearPruneCursor() {
-  setCardTreeStore("rewindCursor", null);
-  markCardTreeVisibleChanged();
+  setCardTreeStore("rewindCursor", null)
+  markCardTreeVisibleChanged()
 }

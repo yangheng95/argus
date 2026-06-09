@@ -35,12 +35,12 @@
 
 ```ts
 export interface PaneConfig {
-  bodyId: string;        // panelBody | missionBody
-  centerId: string;      // workspaceMain | missionWorkbench
-  leftHandleId: string;  // leftPaneResizer | missionLedgerResizer
-  rightHandleId: string; // rightPaneResizer | missionChannelsResizer
-  sidebarVar: string;    // --ui-sidebar-width | --ui-mission-ledger-width
-  sectionsVar: string;   // --ui-sections-width | --ui-mission-channels-width
+  bodyId: string // panelBody | missionBody
+  centerId: string // workspaceMain | missionWorkbench
+  leftHandleId: string // leftPaneResizer | missionLedgerResizer
+  rightHandleId: string // rightPaneResizer | missionChannelsResizer
+  sidebarVar: string // --ui-sidebar-width | --ui-mission-ledger-width
+  sectionsVar: string // --ui-sections-width | --ui-mission-channels-width
 }
 ```
 
@@ -58,16 +58,16 @@ export interface PaneConfig {
 
 ## 4. 9 点映射
 
-| # | 修复 |
-|---|------|
+| #   | 修复                                                                               |
+| --- | ---------------------------------------------------------------------------------- |
 | 1/9 | ledger→`--rail-surface`，channels→`--inspector-surface`，workbench→`--chat-canvas` |
-| 2 | 删 `.mission-conversation-kicker`，列头单行 |
-| 3 | 三列头统一 `.oc-surface-header`（固定高度/背景/radius 0） |
-| 4 | 删 `.mission-conversation .task-progress` 覆盖块 |
-| 5 | 删 `.mission-conversation .chat-scroll` 覆盖块（卡片继承 Panel 布局） |
-| 6 | composer 齐平挂载，去 `.chat-input { max-width }` |
-| 7 | 泛化 pane.ts；mission-body grid→flex + `.pane-resizer`；独立列宽 |
-| 8 | 列级 chrome `--oc-radius-soft`→`--oc-radius-none`；列内控件保留 |
+| 2   | 删 `.mission-conversation-kicker`，列头单行                                        |
+| 3   | 三列头统一 `.oc-surface-header`（固定高度/背景/radius 0）                          |
+| 4   | 删 `.mission-conversation .task-progress` 覆盖块                                   |
+| 5   | 删 `.mission-conversation .chat-scroll` 覆盖块（卡片继承 Panel 布局）              |
+| 6   | composer 齐平挂载，去 `.chat-input { max-width }`                                  |
+| 7   | 泛化 pane.ts；mission-body grid→flex + `.pane-resizer`；独立列宽                   |
+| 8   | 列级 chrome `--oc-radius-soft`→`--oc-radius-none`；列内控件保留                    |
 
 ## 5. 改动文件
 

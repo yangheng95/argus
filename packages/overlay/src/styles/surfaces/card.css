@@ -815,7 +815,8 @@ body {
    absolutely-positioned this to the card's bottom-right, which read as
    floating debris against the card border; keeping it in the header flow
    aligns it with the status/title row. */
-.card__token-hint {
+.card__token-hint,
+.card__model-hint {
   padding: 0 calc(6px * var(--ui-scale));
   font-size: calc(10px * var(--ui-scale));
   font-variant-numeric: tabular-nums;
@@ -827,7 +828,16 @@ body {
   user-select: none;
   flex-shrink: 0;
 }
-.card__head:hover .card__token-hint {
+.card__model-hint {
+  max-width: min(calc(260px * var(--ui-scale)), 32vw);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  color: var(--accent);
+  opacity: var(--ui-opacity-subtle);
+}
+.card__head:hover .card__token-hint,
+.card__head:hover .card__model-hint,
+.chat-bubble__head:hover .card__model-hint {
   opacity: var(--ui-opacity-dim);
 }
 

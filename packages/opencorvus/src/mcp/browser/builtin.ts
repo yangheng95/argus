@@ -31,6 +31,9 @@ export namespace BrowserMCPBuiltin {
 }
 
 function isBunRuntime(execPath: string) {
-  const executable = path.basename(execPath).toLowerCase().replace(/\.exe$/, "")
+  const executable = path
+    .basename(execPath)
+    .toLowerCase()
+    .replace(/\.exe$/, "")
   return executable === "bun"
 }

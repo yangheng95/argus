@@ -125,14 +125,14 @@ If `codex` or `claude-code` are not discovered, task creation with that executor
 
 ### Product Surface
 
-| Surface | Status | Notes |
-| --- | --- | --- |
-| Local TUI and sessions | Available | Default `opencorvus` command, session continue/fork/export flows |
-| Headless HTTP API | Available | `opencorvus serve`, task lifecycle routes, SSE event stream |
-| Overlay UI | Available | Served from `/ui/` by the headless server |
-| Slack gateway | Available | First integrated remote channel for the orchestrator |
-| Multi-channel runtime adapters | In repo | `packages/channel-runtime` includes Slack, Telegram, Discord, Feishu, WhatsApp, Google Chat, Microsoft Teams, Line, Matrix, Mattermost, Signal, WeCom, and DingTalk |
-| GitHub Action | Available | See [`github/README.md`](./github/README.md) |
+| Surface                        | Status    | Notes                                                                                                                                                               |
+| ------------------------------ | --------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Local TUI and sessions         | Available | Default `opencorvus` command, session continue/fork/export flows                                                                                                    |
+| Headless HTTP API              | Available | `opencorvus serve`, task lifecycle routes, SSE event stream                                                                                                         |
+| Overlay UI                     | Available | Served from `/ui/` by the headless server                                                                                                                           |
+| Slack gateway                  | Available | First integrated remote channel for the orchestrator                                                                                                                |
+| Multi-channel runtime adapters | In repo   | `packages/channel-runtime` includes Slack, Telegram, Discord, Feishu, WhatsApp, Google Chat, Microsoft Teams, Line, Matrix, Mattermost, Signal, WeCom, and DingTalk |
+| GitHub Action                  | Available | See [`github/README.md`](./github/README.md)                                                                                                                        |
 
 ### Development
 

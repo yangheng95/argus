@@ -35,7 +35,7 @@ function BrowserEvidenceImage(props: { url: string; alt: string }) {
   const [objectUrl] = createResource(
     () => (authed() ? props.url : null),
     (url: string | null) => (url ? fetchResourceAsObjectUrl(url) : null),
-    { initialValue: authed() ? peekResourceObjectUrl(props.url) ?? null : null },
+    { initialValue: authed() ? (peekResourceObjectUrl(props.url) ?? null) : null },
   )
   const resolved = () => (authed() ? objectUrl() : resolveResourceUrl(props.url))
 
@@ -222,7 +222,8 @@ export function InlineToolPart(props: { part: any; mode?: "inline" | "block" | "
     const fullContent = FILE_READ_TOOLS.has(k)
       ? (parsedRead?.body ?? extractCodeContent(k, input(), output()))
       : extractCodeContent(k, input(), output())
-    const content = status() === "completed" ? fullContent : visibleStreamingText(fullContent, STREAMING_ACTIVE_TEXT_LIMIT)
+    const content =
+      status() === "completed" ? fullContent : visibleStreamingText(fullContent, STREAMING_ACTIVE_TEXT_LIMIT)
     if (!content) return null
     const lang = parsedRead?.kind === "directory" ? "plaintext" : extToLang(extractFilePath(input()))
     return renderCodeBlock(content, lang, Infinity)
@@ -254,9 +255,9 @@ export function InlineToolPart(props: { part: any; mode?: "inline" | "block" | "
       ["page", diagnostics.pageErrors],
       ["network", diagnostics.failedRequests],
       ["http", diagnostics.httpErrors],
-    ].flatMap(([label, value]) =>
-      typeof value === "number" && value > 0 ? [`${label} ${value}`] : [],
-    ).join(" · ")
+    ]
+      .flatMap(([label, value]) => (typeof value === "number" && value > 0 ? [`${label} ${value}`] : []))
+      .join(" · ")
     return {
       url: typeof browser.url === "string" ? browser.url : "",
       title: typeof browser.title === "string" ? browser.title : "",
@@ -285,7 +286,9 @@ export function InlineToolPart(props: { part: any; mode?: "inline" | "block" | "
           <span class="tool-icon">{icon()}</span>
           <span class="tool-name">{toolName()}</span>
           <Show when={detail()}>
-            <span class="tool-detail" title={detail()}>{detail()}</span>
+            <span class="tool-detail" title={detail()}>
+              {detail()}
+            </span>
           </Show>
           <span class="tool-status" data-status={status()} title={statusLabel()}>
             {statusLabel()}

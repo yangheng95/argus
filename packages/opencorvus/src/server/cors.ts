@@ -10,11 +10,7 @@ export function isAllowedCorsOrigin(input: string | undefined) {
   if (!input) return true
   if (input.startsWith("http://localhost:")) return true
   if (input.startsWith("http://127.0.0.1:")) return true
-  if (
-    input === "tauri://localhost" ||
-    input === "http://tauri.localhost" ||
-    input === "https://tauri.localhost"
-  )
+  if (input === "tauri://localhost" || input === "http://tauri.localhost" || input === "https://tauri.localhost")
     return true
   if (OPENCORVUS_ORIGIN.test(input)) return true
   return allowedOrigins.includes(input)

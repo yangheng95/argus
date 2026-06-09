@@ -22,28 +22,44 @@ test("renderAsBubble only routes message and agent cards into ChatBubble", () =>
 })
 
 test("bubbleAlign uses the normalized effective role instead of kind or stage heuristics", () => {
-  expect(bubbleAlign(card({
-    id: "user-message",
-    kind: "message",
-    title: "User",
-    role: "user",
-  }))).toBe("right")
-  expect(bubbleAlign(card({
-    id: "system-message",
-    kind: "message",
-    title: "System",
-    role: "system",
-  }))).toBe("left")
-  expect(bubbleAlign(card({
-    id: "executor-session",
-    kind: "agent",
-    title: "Executor",
-    stage: "executor",
-  }))).toBe("left")
-  expect(bubbleAlign(card({
-    id: "normalized-stage",
-    kind: "agent",
-    title: "Design",
-    stage: "frontend_design",
-  }))).toBe("left")
+  expect(
+    bubbleAlign(
+      card({
+        id: "user-message",
+        kind: "message",
+        title: "User",
+        role: "user",
+      }),
+    ),
+  ).toBe("right")
+  expect(
+    bubbleAlign(
+      card({
+        id: "system-message",
+        kind: "message",
+        title: "System",
+        role: "system",
+      }),
+    ),
+  ).toBe("left")
+  expect(
+    bubbleAlign(
+      card({
+        id: "executor-session",
+        kind: "agent",
+        title: "Executor",
+        stage: "executor",
+      }),
+    ),
+  ).toBe("left")
+  expect(
+    bubbleAlign(
+      card({
+        id: "normalized-stage",
+        kind: "agent",
+        title: "Design",
+        stage: "frontend_design",
+      }),
+    ),
+  ).toBe("left")
 })

@@ -76,9 +76,7 @@ export function deriveGoalStatus(goalID: string): EngineGoalStatus | undefined {
   const rows = listGoalRunsByGoal(goalID)
   if (rows.length === 0) return undefined
   const supersededIDs = new Set(
-    rows
-      .map((r) => (r as { supersede_of?: string | null }).supersede_of)
-      .filter((x): x is string => !!x),
+    rows.map((r) => (r as { supersede_of?: string | null }).supersede_of).filter((x): x is string => !!x),
   )
   const tips = rows.filter((r) => !supersededIDs.has(r.id))
   if (tips.length === 0) {
@@ -86,7 +84,7 @@ export function deriveGoalStatus(goalID: string): EngineGoalStatus | undefined {
     // Surface instead of defaulting, since it points at a circular link.
     throw new Error(
       `deriveGoalStatus(${goalID}): supersede chain has no tip — every goal_run is superseded. ` +
-      `This is a data inconsistency (circular supersede link or dangling reference).`,
+        `This is a data inconsistency (circular supersede link or dangling reference).`,
     )
   }
   // Tips are sorted desc by time_created (list() returns desc). The single
@@ -158,15 +156,26 @@ export function syncGoalStatus(goalID: string, reason: string) {
   if (prev === derived) return
   lastEmittedStatus.set(goalID, derived)
   log.info("goal status transition (derived, no cache write)", {
-    goalID, from: prev ?? "(initial)", to: derived, reason,
+    goalID,
+    from: prev ?? "(initial)",
+    to: derived,
+    reason,
   })
   if (derived === "passed") {
     Database.effect(() =>
-      EngineProtocol.emit(Event.GoalPassed, { taskID: goal.task_id, goalID, summary: goal.title }, { source: "goal-status.sync" }),
+      EngineProtocol.emit(
+        Event.GoalPassed,
+        { taskID: goal.task_id, goalID, summary: goal.title },
+        { source: "goal-status.sync" },
+      ),
     )
   } else if (derived === "failed") {
     Database.effect(() =>
-      EngineProtocol.emit(Event.GoalFailed, { taskID: goal.task_id, goalID, summary: goal.title }, { source: "goal-status.sync" }),
+      EngineProtocol.emit(
+        Event.GoalFailed,
+        { taskID: goal.task_id, goalID, summary: goal.title },
+        { source: "goal-status.sync" },
+      ),
     )
   }
 }

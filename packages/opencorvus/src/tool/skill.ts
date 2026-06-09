@@ -52,7 +52,7 @@ export const SkillTool = Tool.define("skill", async (ctx) => {
           "",
           "Use search before planning when the task may match a specialized workflow.",
           "",
-          "Search output returns names, descriptions, required tool hints, and locations only. Loading by name returns a `<skill_content name=\"...\">` block with the full SKILL.md body and sampled bundled files.",
+          'Search output returns names, descriptions, required tool hints, and locations only. Loading by name returns a `<skill_content name="...">` block with the full SKILL.md body and sampled bundled files.',
           incompatible.length > 0
             ? `${incompatible.length} skill(s) are incompatible with the current platform and will not appear in search results.`
             : "",
@@ -168,11 +168,7 @@ function searchSkills(skills: Skill.Info[], query: string | undefined): Skill.In
   const needle = query?.trim().toLocaleLowerCase()
   if (!needle) return skills
   return skills.filter((skill) => {
-    const haystack = [
-      skill.name,
-      skill.description,
-      ...(skill.required_tools ?? []),
-    ].join("\n").toLocaleLowerCase()
+    const haystack = [skill.name, skill.description, ...(skill.required_tools ?? [])].join("\n").toLocaleLowerCase()
     return haystack.includes(needle)
   })
 }

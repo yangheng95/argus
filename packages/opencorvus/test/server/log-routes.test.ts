@@ -15,7 +15,7 @@ describe("log routes", () => {
     const app = Server.App()
     const current = await app.request("/log?n=500")
     expect(current.status).toBe(200)
-    const currentBody = await current.json() as {
+    const currentBody = (await current.json()) as {
       directory: string
       path: string
       file: string
@@ -29,22 +29,24 @@ describe("log routes", () => {
 
     const files = await app.request("/log/files")
     expect(files.status).toBe(200)
-    const filesBody = await files.json() as {
+    const filesBody = (await files.json()) as {
       directory: string
       current: string
       files: Array<{ name: string; path: string; current: boolean }>
     }
     expect(filesBody.directory).toBe(Log.directory())
     expect(filesBody.current).toBe(Log.file())
-    expect(filesBody.files).toContainEqual(expect.objectContaining({
-      name: currentBody.file,
-      path: currentBody.path,
-      current: true,
-    }))
+    expect(filesBody.files).toContainEqual(
+      expect.objectContaining({
+        name: currentBody.file,
+        path: currentBody.path,
+        current: true,
+      }),
+    )
 
     const named = await app.request(`/log?file=${encodeURIComponent(currentBody.file)}&n=500`)
     expect(named.status).toBe(200)
-    const namedBody = await named.json() as { path: string; lines: string[] }
+    const namedBody = (await named.json()) as { path: string; lines: string[] }
     expect(namedBody.path).toBe(Log.file())
     expect(namedBody.lines.some((line) => JSON.parse(line).marker === marker)).toBe(true)
   })
@@ -69,7 +71,7 @@ describe("log routes", () => {
     const app = Server.App()
     const response = await app.request("/log/tail?n=100")
     expect(response.status).toBe(200)
-    const body = await response.json() as { directory: string; path: string; file: string; lines: string[] }
+    const body = (await response.json()) as { directory: string; path: string; file: string; lines: string[] }
 
     expect(body.directory).toBe(Log.directory())
     expect(body.path).toBe(Log.file())
@@ -85,7 +87,7 @@ describe("log routes", () => {
 
     const response = await Server.App().request("/log/tail?n=1")
     expect(response.status).toBe(200)
-    const body = await response.json() as { lines: string[] }
+    const body = (await response.json()) as { lines: string[] }
 
     expect(body.lines).toHaveLength(1)
     expect(JSON.parse(body.lines[0]!).message).toBe("last tail line")

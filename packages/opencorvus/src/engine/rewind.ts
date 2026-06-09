@@ -171,9 +171,10 @@ async function applyWorktreeReset(input: RewindTaskInput, cursorTime: number): P
   interruptTaskLoop(input.taskID, "task rewind worktree reset")
   await awaitTaskLoopIdle(input.taskID, WORKTREE_RESET_IDLE_TIMEOUT_MS)
 
-  const rows = input.anchor.kind === "cursorTime"
-    ? await collectPatchesAfterCursor(input.taskID, cursorTime)
-    : await collectPatchesFromMessageAnchor(input.anchor, cursorTime)
+  const rows =
+    input.anchor.kind === "cursorTime"
+      ? await collectPatchesAfterCursor(input.taskID, cursorTime)
+      : await collectPatchesFromMessageAnchor(input.anchor, cursorTime)
 
   await Snapshot.revert(patchList(rows))
   await publishDiffsBySession(rows)
@@ -201,7 +202,8 @@ export async function rewindTask(raw: RewindTaskInput): Promise<RewindTaskResult
   const anchorEventID = input.anchor.kind === "cursorTime" ? input.anchor.anchorEventID : input.anchor.messageID
 
   Database.use((db) =>
-    db.update(EngineTaskTable)
+    db
+      .update(EngineTaskTable)
       .set({
         rewind_cursor_time: cursorTime,
         rewind_cursor_event_id: anchorEventID ?? null,
@@ -256,7 +258,8 @@ export async function clearRewindCursor(taskID: string): Promise<void> {
 
   const now = Date.now()
   Database.use((db) =>
-    db.update(EngineTaskTable)
+    db
+      .update(EngineTaskTable)
       .set({
         rewind_cursor_time: null,
         rewind_cursor_event_id: null,
@@ -291,10 +294,7 @@ export async function clearRewindCursorForSession(sessionID: string): Promise<vo
  * task rewind cursor. Events without a timestamp pass through because there
  * is no task-time fact to compare.
  */
-export function applyRewindCursor<T extends { time_created?: number | null }>(
-  taskID: string,
-  events: T[],
-): T[] {
+export function applyRewindCursor<T extends { time_created?: number | null }>(taskID: string, events: T[]): T[] {
   const task = findTask(taskID)
   const cursor = task?.rewind_cursor_time
   if (cursor == null) return events

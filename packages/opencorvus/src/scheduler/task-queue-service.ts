@@ -15,10 +15,13 @@ import { TaskQueueTable } from "./task-queue.sql"
 import { SessionAgentIdentity } from "@/session/agent-identity"
 
 export const TaskQueueEvent = {
-  Completed: BusEvent.define("task-queue.completed", z.object({
-    queueTaskID: z.string(),
-    sessionID: z.string(),
-  })),
+  Completed: BusEvent.define(
+    "task-queue.completed",
+    z.object({
+      queueTaskID: z.string(),
+      sessionID: z.string(),
+    }),
+  ),
 }
 
 const RawTaskMetadata = z.object({
@@ -343,7 +346,10 @@ export namespace TaskQueueService {
       const props = event.properties ?? {}
       const sid =
         (typeof props.sessionID === "string" && props.sessionID) ||
-        (typeof props.part === "object" && props.part && typeof props.part.sessionID === "string" && props.part.sessionID) ||
+        (typeof props.part === "object" &&
+          props.part &&
+          typeof props.part.sessionID === "string" &&
+          props.part.sessionID) ||
         undefined
       if (sid !== task.session_id) return
       try {
@@ -493,7 +499,10 @@ function promptSchema() {
   })
 }
 
-function applyStoredSessionPromptIdentity<T extends z.infer<ReturnType<typeof promptSchema>>>(sessionID: string, prompt: T): T {
+function applyStoredSessionPromptIdentity<T extends z.infer<ReturnType<typeof promptSchema>>>(
+  sessionID: string,
+  prompt: T,
+): T {
   const row = Database.use((db) =>
     db.select({ kind: SessionTable.kind }).from(SessionTable).where(eq(SessionTable.id, sessionID)).get(),
   )

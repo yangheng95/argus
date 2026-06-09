@@ -22,7 +22,9 @@ describe("Worktree primary branch", () => {
     const file = path.join(info.directory, "feature.txt")
     await fs.writeFile(file, "from goal branch\n")
     await $`git add feature.txt`.cwd(info.directory).quiet()
-    await $`git -c user.email=opencorvus@local -c user.name=OpenCorvus commit -m "add feature"`.cwd(info.directory).quiet()
+    await $`git -c user.email=opencorvus@local -c user.name=OpenCorvus commit -m "add feature"`
+      .cwd(info.directory)
+      .quiet()
 
     const result = await Instance.provide({
       directory: tmp.path,
@@ -34,7 +36,11 @@ describe("Worktree primary branch", () => {
     expect((await Filesystem.readText(path.join(tmp.path, "feature.txt"))).replace(/\r\n/g, "\n")).toBe(
       "from goal branch\n",
     )
-    expect((await $`git show-ref --verify --quiet refs/heads/main`.cwd(tmp.path).quiet().nothrow()).exitCode).not.toBe(0)
-    expect((await $`git show-ref --verify --quiet refs/heads/master`.cwd(tmp.path).quiet().nothrow()).exitCode).not.toBe(0)
+    expect((await $`git show-ref --verify --quiet refs/heads/main`.cwd(tmp.path).quiet().nothrow()).exitCode).not.toBe(
+      0,
+    )
+    expect(
+      (await $`git show-ref --verify --quiet refs/heads/master`.cwd(tmp.path).quiet().nothrow()).exitCode,
+    ).not.toBe(0)
   })
 })

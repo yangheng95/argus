@@ -1,10 +1,6 @@
 import { afterEach, beforeEach, describe, expect, mock, test } from "bun:test"
 import { __setHostTransportForTest } from "../src/services/host-transport"
-import type {
-  HostTransport,
-  TransportRequest,
-  TransportResponse,
-} from "../src/services/host-transport"
+import type { HostTransport, TransportRequest, TransportResponse } from "../src/services/host-transport"
 
 // W2-V32 (commit aa14f20e7) removed every auto git-init in the project
 // bootstrap. Task creation now throws WorktreeNotGitError (HTTP 412) when the
@@ -14,7 +10,13 @@ import type {
 
 let dialogResponse: { confirmed: boolean } = { confirmed: true }
 let queueDialogResponse: { confirmed: boolean; value: string | null } = { confirmed: true, value: "start" }
-const dialogCalls: Array<{ title?: string; message?: string; select?: boolean; kind?: string; countdownSeconds?: number }> = []
+const dialogCalls: Array<{
+  title?: string
+  message?: string
+  select?: boolean
+  kind?: string
+  countdownSeconds?: number
+}> = []
 const initCalls: number[] = []
 let initResult = true
 

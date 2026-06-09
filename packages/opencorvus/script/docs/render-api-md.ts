@@ -224,7 +224,9 @@ async function main() {
   const enRes = writeOrCheck(OUT_EN, en, mode)
   const zhRes = writeOrCheck(OUT_ZH, zh, mode)
   if (mode === "write") {
-    console.log(`wrote: ${path.relative(REPO_ROOT, OUT_EN)} (${en.length} bytes, ${ops.length} ops, ${groups.length} groups)`)
+    console.log(
+      `wrote: ${path.relative(REPO_ROOT, OUT_EN)} (${en.length} bytes, ${ops.length} ops, ${groups.length} groups)`,
+    )
     console.log(`wrote: ${path.relative(REPO_ROOT, OUT_ZH)} (${zh.length} bytes)`)
     return
   }

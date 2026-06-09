@@ -18,10 +18,7 @@ import path from "node:path"
  * Spec — 2026-05-07 INFORMATION MISSING debug toggle, orchestrator-side
  * wiring fix discovered during the post-cleanup default-case benchmark.
  */
-const orchestratorAgentPath = path.resolve(
-  import.meta.dir,
-  "../../src/orchestrator/agent.ts",
-)
+const orchestratorAgentPath = path.resolve(import.meta.dir, "../../src/orchestrator/agent.ts")
 
 describe("orchestrator INFORMATION MISSING toggle wiring", () => {
   test("imports the single-source fallback constant", async () => {

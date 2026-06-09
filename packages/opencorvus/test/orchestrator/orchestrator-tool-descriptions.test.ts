@@ -38,11 +38,15 @@ describe("orchestrator tool descriptions for integrity stuck loops", () => {
 
   test("frontend_research and frontend_design descriptions separate investigation division from UI implementation", () => {
     expect(tools.frontend_design.description).toContain("frontend/UI implementation")
-    expect(tools.frontend_design.description).toContain("URL as a visual reference to clone, implement, reproduce, or refine")
+    expect(tools.frontend_design.description).toContain(
+      "URL as a visual reference to clone, implement, reproduce, or refine",
+    )
     expect(tools.frontend_design.description).toContain("PRD/SPEC/report source material")
     expect(tools.frontend_design.description).toContain("you decide")
     expect(tools.frontend_design.description).not.toContain("Call this BEFORE every other downstream agent")
-    expect(tools.frontend_design.description).not.toContain("route those URLs through `frontend_research` with `source_urls`")
+    expect(tools.frontend_design.description).not.toContain(
+      "route those URLs through `frontend_research` with `source_urls`",
+    )
 
     expect(tools.research).toBeUndefined()
     expect(tools.deep_research.description).toContain("PRD/SPEC/report source material")
@@ -58,9 +62,9 @@ describe("orchestrator tool descriptions for integrity stuck loops", () => {
     expect(tools.frontend_research.description).toContain("NOT build")
     expect(tools.frontend_research.description).toContain("NOT the frontend implementation template owner")
 
-    expect(tools.visual_qa.description).toContain("frontend UI/UX visual testing")
-    expect(tools.visual_qa.description).toContain("UI means User Interface")
-    expect(tools.visual_qa.description).toContain("UX means User Experience")
+    expect(tools.visual_qa.description).toContain("visual GUI fidelity and functional testing")
+    expect(tools.visual_qa.description).toContain("GUI means Graphical User Interface")
+    expect(tools.visual_qa.description).not.toContain("UX means User Experience")
     expect(tools.visual_qa.description).toContain("webpage_render/evaluate/text_diff/vision_judge")
     expect(tools.visual_qa.description).toContain("does NOT acquire new webpage clone evidence")
     expect(tools.visual_qa.description).toContain("NOT the final acceptance gate")
@@ -74,9 +78,10 @@ describe("orchestrator tool descriptions for integrity stuck loops", () => {
       "figma_url",
       "materials",
     ])
-    expect(tools.frontend_design.inputSchema!.safeParse({ reason: "visual reference", urls: ["https://example.com"] }).success).toBe(
-      true,
-    )
+    expect(
+      tools.frontend_design.inputSchema!.safeParse({ reason: "visual reference", urls: ["https://example.com"] })
+        .success,
+    ).toBe(true)
     expect(tools.frontend_design.inputSchema!.safeParse({ urls: ["https://example.com"] }).success).toBe(false)
 
     expect(Object.keys(tools.frontend_research.inputSchema!.shape)).toEqual(["reason", "source_urls", "focus"])

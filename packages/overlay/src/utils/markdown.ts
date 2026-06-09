@@ -249,9 +249,10 @@ export function renderMarkdown(text: string): string {
     if (url.length <= MARKDOWN_DATA_IMAGE_CHAR_LIMIT) return _match
     return alt || "[image omitted]"
   })
-  const source = withoutOversizedImages.length > MARKDOWN_RENDER_CHAR_LIMIT
-    ? `${withoutOversizedImages.slice(0, MARKDOWN_RENDER_CHAR_LIMIT)}${RENDER_CLIP_NOTICE}`
-    : withoutOversizedImages
+  const source =
+    withoutOversizedImages.length > MARKDOWN_RENDER_CHAR_LIMIT
+      ? `${withoutOversizedImages.slice(0, MARKDOWN_RENDER_CHAR_LIMIT)}${RENDER_CLIP_NOTICE}`
+      : withoutOversizedImages
   return marked.parse(source) as string
 }
 

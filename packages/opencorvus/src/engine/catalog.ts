@@ -74,13 +74,20 @@ function runStatusesWhere(predicate: (meta: RunStatusMeta) => boolean): EngineRu
 }
 
 export const LIVE_GOAL_RUN_STATUSES = goalRunStatusesWhere((meta) => meta.liveness === "live")
-export const ACTIVE_GOAL_RUN_STATUSES = LIVE_GOAL_RUN_STATUSES.filter((status) => status !== "queued") as EngineGoalRunStatus[]
+export const ACTIVE_GOAL_RUN_STATUSES = LIVE_GOAL_RUN_STATUSES.filter(
+  (status) => status !== "queued",
+) as EngineGoalRunStatus[]
 export const GOAL_RUN_RESETTABLE_STATUSES = goalRunStatusesWhere((meta) => meta.resettable)
 
 export const LIVE_RUN_STATUSES = runStatusesWhere((meta) => meta.live)
 export const DISPATCHABLE_RUN_STATUSES = runStatusesWhere((meta) => meta.dispatchable)
 export const EXECUTOR_ACTIVE_RUN_STATUSES = ["accepted", "running"] as const satisfies readonly EngineRunStatus[]
-export const RUNTIME_MONITORED_RUN_STATUSES = ["accepted", "running", "blocked", "completed"] as const satisfies readonly EngineRunStatus[]
+export const RUNTIME_MONITORED_RUN_STATUSES = [
+  "accepted",
+  "running",
+  "blocked",
+  "completed",
+] as const satisfies readonly EngineRunStatus[]
 
 export function isLiveGoalRunStatus(status?: EngineGoalRunStatus | null): status is EngineGoalRunStatus {
   return !!status && GOAL_RUN_STATUS_CATALOG[status].liveness === "live"

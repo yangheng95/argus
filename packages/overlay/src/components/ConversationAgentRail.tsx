@@ -33,11 +33,7 @@ function parentIDsForCard(cardID: string): string[] {
 }
 
 function describeRecord(record: AgentWorkflowRecord): string {
-  const lines = [
-    `agent: ${record.agentName}`,
-    `sessionID: ${record.sessionID}`,
-    `status: ${record.status}`,
-  ]
+  const lines = [`agent: ${record.agentName}`, `sessionID: ${record.sessionID}`, `status: ${record.status}`]
   if (record.attempt) lines.push(`attempt: V${record.attempt}`)
   if (record.renderedCardID) lines.push(`renderedCardID: ${record.renderedCardID}`)
   return lines.join("\n")
@@ -210,31 +206,21 @@ export function ConversationAgentRail() {
 
   return (
     <Show when={hasRecords()}>
-    <aside
-      class="conversation-agent-rail"
-      aria-label="Agent workflow"
-    >
-      <div
-        class="conversation-agent-rail__lanes"
-        role="list"
-        ref={(el) => {
-          if (!el) return
-          const dispose = attachRailDragScroll(el)
-          onCleanup(dispose)
-        }}
-      >
-        <div class="conversation-agent-rail__lane" data-kind="timeline" role="listitem">
-          <Index each={records()}>
-            {(record) => (
-              <AgentRailRow
-                record={record}
-                onLocate={locateRecord}
-              />
-            )}
-          </Index>
+      <aside class="conversation-agent-rail" aria-label="Agent workflow">
+        <div
+          class="conversation-agent-rail__lanes"
+          role="list"
+          ref={(el) => {
+            if (!el) return
+            const dispose = attachRailDragScroll(el)
+            onCleanup(dispose)
+          }}
+        >
+          <div class="conversation-agent-rail__lane" data-kind="timeline" role="listitem">
+            <Index each={records()}>{(record) => <AgentRailRow record={record} onLocate={locateRecord} />}</Index>
+          </div>
         </div>
-      </div>
-    </aside>
+      </aside>
     </Show>
   )
 }

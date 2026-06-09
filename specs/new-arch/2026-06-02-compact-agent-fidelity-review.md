@@ -10,17 +10,17 @@ User report: the compact agent loses too much context after compaction, making t
 
 Relevant decisions:
 
-| Surface | Decision |
-| --- | --- |
-| `SessionCompaction.create` | Keep control-record creation; not the root of lossy summaries. |
-| `SessionCompaction.process` | Replace the prior-summary merge input with structured handoff JSON and keep Markdown display derived-only. |
-| `SessionCompaction.prune` | Must not clear old tool outputs unless the newest accepted structured handoff has already covered the compacted history. Prune is projection cleanup after validated handoff, not an independent compression source. |
-| `Message.filterCompacted` | Keep assistant-tail rejection; fix the producer so it never emits assistant `tail_start_id`. |
-| `assistant.summary` / `CompactionHandoff.isValidSummaryMessage` | Keep structured boundary validation as the only accepted compact boundary. |
-| `maintenanceSummaryFailureMessage` / `flushPromptFinalMessage` / `result_mode` | Keep current summary-mode distinction; not the fidelity root. |
-| `experimental.session.compacting` | Keep context-only plugin extension. |
-| `agent.compaction.prompt` | Keep host-owned prompt contract; config prompt cannot replace the schema. |
-| `tail_start_id` / `anchor_id` | Replace assistant tail generation with complete user-turn tail only. |
+| Surface                                                                        | Decision                                                                                                                                                                                                             |
+| ------------------------------------------------------------------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `SessionCompaction.create`                                                     | Keep control-record creation; not the root of lossy summaries.                                                                                                                                                       |
+| `SessionCompaction.process`                                                    | Replace the prior-summary merge input with structured handoff JSON and keep Markdown display derived-only.                                                                                                           |
+| `SessionCompaction.prune`                                                      | Must not clear old tool outputs unless the newest accepted structured handoff has already covered the compacted history. Prune is projection cleanup after validated handoff, not an independent compression source. |
+| `Message.filterCompacted`                                                      | Keep assistant-tail rejection; fix the producer so it never emits assistant `tail_start_id`.                                                                                                                         |
+| `assistant.summary` / `CompactionHandoff.isValidSummaryMessage`                | Keep structured boundary validation as the only accepted compact boundary.                                                                                                                                           |
+| `maintenanceSummaryFailureMessage` / `flushPromptFinalMessage` / `result_mode` | Keep current summary-mode distinction; not the fidelity root.                                                                                                                                                        |
+| `experimental.session.compacting`                                              | Keep context-only plugin extension.                                                                                                                                                                                  |
+| `agent.compaction.prompt`                                                      | Keep host-owned prompt contract; config prompt cannot replace the schema.                                                                                                                                            |
+| `tail_start_id` / `anchor_id`                                                  | Replace assistant tail generation with complete user-turn tail only.                                                                                                                                                 |
 
 ## Findings
 

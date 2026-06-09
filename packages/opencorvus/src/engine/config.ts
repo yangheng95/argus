@@ -243,30 +243,19 @@ function merge(user?: Config.Info["assistant"]): EngineConfigType {
       max_steps: user?.architect?.max_steps ?? DEFAULTS.architect.max_steps,
     },
     acceptance_visual: {
-      phash_hamming_max:
-        user?.acceptance_visual?.phash_hamming_max ?? DEFAULTS.acceptance_visual.phash_hamming_max,
+      phash_hamming_max: user?.acceptance_visual?.phash_hamming_max ?? DEFAULTS.acceptance_visual.phash_hamming_max,
       ssim_min: user?.acceptance_visual?.ssim_min ?? DEFAULTS.acceptance_visual.ssim_min,
       chart_region_density_min_ratio:
         user?.acceptance_visual?.chart_region_density_min_ratio ??
         DEFAULTS.acceptance_visual.chart_region_density_min_ratio,
       unique_color_ratio_min:
-        user?.acceptance_visual?.unique_color_ratio_min ??
-        DEFAULTS.acceptance_visual.unique_color_ratio_min,
-      text_hit_ratio_min:
-        user?.acceptance_visual?.text_hit_ratio_min ?? DEFAULTS.acceptance_visual.text_hit_ratio_min,
+        user?.acceptance_visual?.unique_color_ratio_min ?? DEFAULTS.acceptance_visual.unique_color_ratio_min,
+      text_hit_ratio_min: user?.acceptance_visual?.text_hit_ratio_min ?? DEFAULTS.acceptance_visual.text_hit_ratio_min,
       score_weights: {
-        phash:
-          user?.acceptance_visual?.score_weights?.phash ??
-          DEFAULTS.acceptance_visual.score_weights.phash,
-        ssim:
-          user?.acceptance_visual?.score_weights?.ssim ??
-          DEFAULTS.acceptance_visual.score_weights.ssim,
-        density:
-          user?.acceptance_visual?.score_weights?.density ??
-          DEFAULTS.acceptance_visual.score_weights.density,
-        text_hit:
-          user?.acceptance_visual?.score_weights?.text_hit ??
-          DEFAULTS.acceptance_visual.score_weights.text_hit,
+        phash: user?.acceptance_visual?.score_weights?.phash ?? DEFAULTS.acceptance_visual.score_weights.phash,
+        ssim: user?.acceptance_visual?.score_weights?.ssim ?? DEFAULTS.acceptance_visual.score_weights.ssim,
+        density: user?.acceptance_visual?.score_weights?.density ?? DEFAULTS.acceptance_visual.score_weights.density,
+        text_hit: user?.acceptance_visual?.score_weights?.text_hit ?? DEFAULTS.acceptance_visual.score_weights.text_hit,
       },
     },
     frontend_design: {
@@ -279,10 +268,8 @@ function merge(user?: Config.Info["assistant"]): EngineConfigType {
       max_steps: user?.build?.max_steps ?? DEFAULTS.build.max_steps,
     },
     activity: {
-      session_llm_idle_ms:
-        user?.activity?.session_llm_idle_ms ?? DEFAULTS.activity.session_llm_idle_ms,
-      executor_events_idle_ms:
-        user?.activity?.executor_events_idle_ms ?? DEFAULTS.activity.executor_events_idle_ms,
+      session_llm_idle_ms: user?.activity?.session_llm_idle_ms ?? DEFAULTS.activity.session_llm_idle_ms,
+      executor_events_idle_ms: user?.activity?.executor_events_idle_ms ?? DEFAULTS.activity.executor_events_idle_ms,
       task_queue_run_timeout_ms:
         user?.activity?.task_queue_run_timeout_ms ?? DEFAULTS.activity.task_queue_run_timeout_ms,
     },
@@ -292,11 +279,11 @@ function merge(user?: Config.Info["assistant"]): EngineConfigType {
     },
     max_executor_groups: user?.max_executor_groups ?? DEFAULTS.max_executor_groups,
     default_workflow: user?.default_workflow ?? DEFAULTS.default_workflow,
-    workflows: (user?.workflows ?? DEFAULTS.workflows).map(w => ({
+    workflows: (user?.workflows ?? DEFAULTS.workflows).map((w) => ({
       id: w.id,
       name: w.name,
       description: w.description ?? "",
-      steps: w.steps.map(s => ({
+      steps: w.steps.map((s) => ({
         id: s.id,
         tool: s.tool,
         label: s.label,

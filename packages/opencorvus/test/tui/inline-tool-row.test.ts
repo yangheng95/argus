@@ -13,8 +13,8 @@ describe("OpenCode-derived inline tool row", () => {
     expect(source).toContain('id={`tool-inline-${props.subagent ? "subagent-" : ""}${props.part.id}`}')
     expect(source).toContain("width={INLINE_TOOL_ICON_WIDTH}")
     expect(source).toContain("flexGrow={1}")
-    expect(source).toContain("previous?.id.startsWith(\"tool-block-\")")
-    expect(source).toContain("previous?.id.startsWith(\"tool-inline-\")")
+    expect(source).toContain('previous?.id.startsWith("tool-block-")')
+    expect(source).toContain('previous?.id.startsWith("tool-inline-")')
     expect(source).toContain("props.separateAfter?.(previous?.id)")
   })
 

@@ -169,10 +169,14 @@ export const PtyRoutes = lazy(() =>
 
         return {
           onOpen(_event, ws) {
-            handler = Pty.connect(id, {
-              send: (data) => ws.send(data),
-              close: (code, reason) => ws.close(code, reason),
-            }, cursor)
+            handler = Pty.connect(
+              id,
+              {
+                send: (data) => ws.send(data),
+                close: (code, reason) => ws.close(code, reason),
+              },
+              cursor,
+            )
           },
           onMessage(event) {
             if (typeof event.data === "string") handler?.onMessage(event.data)

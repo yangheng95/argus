@@ -2,14 +2,8 @@ import { describe, expect, test } from "bun:test"
 import { readFileSync } from "node:fs"
 import path from "node:path"
 
-const component = readFileSync(
-  path.join(import.meta.dir, "../src/components/ChatComposer.tsx"),
-  "utf8",
-)
-const css = readFileSync(
-  path.join(import.meta.dir, "../src/styles/surfaces/composer.css"),
-  "utf8",
-)
+const component = readFileSync(path.join(import.meta.dir, "../src/components/ChatComposer.tsx"), "utf8")
+const css = readFileSync(path.join(import.meta.dir, "../src/styles/surfaces/composer.css"), "utf8")
 const en = JSON.parse(readFileSync(path.join(import.meta.dir, "../src/i18n/en-US.json"), "utf8"))
 const zh = JSON.parse(readFileSync(path.join(import.meta.dir, "../src/i18n/zh-CN.json"), "utf8"))
 

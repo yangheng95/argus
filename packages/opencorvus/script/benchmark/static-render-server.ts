@@ -53,7 +53,9 @@ export async function resolveStaticRoot(projectDir: string): Promise<string> {
     const stat = await fs.stat(indexPath).catch(() => undefined)
     if (stat?.isFile()) return candidate
   }
-  throw new Error(`[static-render-server] directory does not contain dist/index.html, build/index.html, out/index.html, or index.html: ${projectDir}`)
+  throw new Error(
+    `[static-render-server] directory does not contain dist/index.html, build/index.html, out/index.html, or index.html: ${projectDir}`,
+  )
 }
 
 async function getFreePort(): Promise<number> {

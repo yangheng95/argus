@@ -286,11 +286,7 @@ test("architect normalizes frontend-design source baseline owned paths to accept
   )
 
   expect(result).toContain("normalized source-baseline owned_paths to acceptance-root paths")
-  expect(kit.getCollector().goals[0]?.owned_paths).toEqual([
-    "package.json",
-    "src/types/api.ts",
-    "src/hooks/useApi.ts",
-  ])
+  expect(kit.getCollector().goals[0]?.owned_paths).toEqual(["package.json", "src/types/api.ts", "src/hooks/useApi.ts"])
 })
 
 test("architect rejects contract evidence_refs outside active research evidence ids", async () => {

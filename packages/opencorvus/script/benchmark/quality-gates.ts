@@ -57,8 +57,9 @@ export async function auditWorkspace(input: {
   request?: string
   moduleBlocks?: ModuleBlock[]
 }): Promise<ArtifactAuditType> {
-  const files = dedupeFiles(input.changedFiles && input.changedFiles.length > 0 ? input.changedFiles : await listFiles(input.rootDir))
-    .filter((f) => !isInternalPath(f))
+  const files = dedupeFiles(
+    input.changedFiles && input.changedFiles.length > 0 ? input.changedFiles : await listFiles(input.rootDir),
+  ).filter((f) => !isInternalPath(f))
   const requestText = String(input.request || "")
   const docFiles = files.filter((file) => DOC_EXTENSIONS.has(path.extname(file).toLowerCase()))
   const sourceFiles = files.filter((file) => SOURCE_EXTENSIONS.has(path.extname(file).toLowerCase()))
@@ -69,24 +70,32 @@ export async function auditWorkspace(input: {
     /(^|\/)(app\.json|babel\.config\.js|metro\.config\.js|src\/[^/]+\/README\.md)$/i.test(file.replace(/\\/g, "/")),
   )
 
-  const placeholderHits = (await Promise.all(sourceFiles.map(async (file) => {
-    const abs = path.join(input.rootDir, file)
-    const content = await fs.readFile(abs, "utf8").catch(() => "")
-    return PLACEHOLDER_MARKER_RE.test(content) ? [file] : []
-  }))).flat()
+  const placeholderHits = (
+    await Promise.all(
+      sourceFiles.map(async (file) => {
+        const abs = path.join(input.rootDir, file)
+        const content = await fs.readFile(abs, "utf8").catch(() => "")
+        return PLACEHOLDER_MARKER_RE.test(content) ? [file] : []
+      }),
+    )
+  ).flat()
 
   // Frontend integration checks: detect hidden compatibility issues that backend tests won't catch.
   const frontendIssues = await checkFrontendIntegration(input.rootDir, files)
   placeholderHits.push(...frontendIssues)
 
   const nonSourceCount = Math.max(0, files.length - sourceFiles.length)
-  const allowedDocs = /\b(add|create|write|update|document)\b[\s\S]{0,40}\b(readme|documentation|docs?)\b/i.test(requestText)
-  const scopeRelevantFiles = input.changedFiles && input.changedFiles.length > 0
-    ? dedupeFiles(input.changedFiles).filter((f) => !isInternalPath(f))
-    : []
-  const unmappedFiles = input.moduleBlocks && input.moduleBlocks.length > 0 && scopeRelevantFiles.length > 0
-    ? scopeRelevantFiles.filter((file) => !belongsToAnyBlock(file, input.moduleBlocks!))
-    : []
+  const allowedDocs = /\b(add|create|write|update|document)\b[\s\S]{0,40}\b(readme|documentation|docs?)\b/i.test(
+    requestText,
+  )
+  const scopeRelevantFiles =
+    input.changedFiles && input.changedFiles.length > 0
+      ? dedupeFiles(input.changedFiles).filter((f) => !isInternalPath(f))
+      : []
+  const unmappedFiles =
+    input.moduleBlocks && input.moduleBlocks.length > 0 && scopeRelevantFiles.length > 0
+      ? scopeRelevantFiles.filter((file) => !belongsToAnyBlock(file, input.moduleBlocks!))
+      : []
 
   return ArtifactAudit.parse({
     source_files_added: sourceFiles.length,
@@ -110,10 +119,12 @@ export async function auditWorkspace(input: {
 export function moduleBlocksFromRequest(request: string): ModuleBlock[] {
   const allowed = allowedArtifactsFromRequest(request)
   if (allowed.length === 0) return []
-  return [{
-    id: "request-scope",
-    owned_paths: allowed,
-  }]
+  return [
+    {
+      id: "request-scope",
+      owned_paths: allowed,
+    },
+  ]
 }
 
 export async function deriveRunMetrics(input: {
@@ -124,8 +135,9 @@ export async function deriveRunMetrics(input: {
   completedAt: number
   moduleBlocks?: ModuleBlock[]
 }): Promise<RunMetricsType> {
-  const files = dedupeFiles(input.changedFiles && input.changedFiles.length > 0 ? input.changedFiles : await listFiles(input.rootDir))
-    .filter((f) => !isInternalPath(f))
+  const files = dedupeFiles(
+    input.changedFiles && input.changedFiles.length > 0 ? input.changedFiles : await listFiles(input.rootDir),
+  ).filter((f) => !isInternalPath(f))
   const changedFiles = dedupeFiles(input.changedFiles ?? []).filter((f) => !isInternalPath(f))
   const latestChangeAt = await latestMtime(input.rootDir, files)
   const commandSummaries = input.events
@@ -147,15 +159,20 @@ export async function deriveRunMetrics(input: {
   // them. Package manifests and lockfiles are legitimate implementation
   // files, but they still need explicit ownership in request-scoped benches.
   const scopeFiles = changedFiles
-  const mappedChangedCount = scopeFiles.length > 0 && input.moduleBlocks && input.moduleBlocks.length > 0
-    ? scopeFiles.filter((file) => belongsToAnyBlock(file, input.moduleBlocks!)).length
-    : 0
-  const scopeDriftScore = scopeFiles.length > 0 && input.moduleBlocks && input.moduleBlocks.length > 0
-    ? Math.max(0, 1 - mappedChangedCount / scopeFiles.length)
-    : 0
-  const traceability = scopeFiles.length > 0 && input.moduleBlocks && input.moduleBlocks.length > 0
-    ? mappedChangedCount / scopeFiles.length
-    : files.length > 0 ? 1 : 0
+  const mappedChangedCount =
+    scopeFiles.length > 0 && input.moduleBlocks && input.moduleBlocks.length > 0
+      ? scopeFiles.filter((file) => belongsToAnyBlock(file, input.moduleBlocks!)).length
+      : 0
+  const scopeDriftScore =
+    scopeFiles.length > 0 && input.moduleBlocks && input.moduleBlocks.length > 0
+      ? Math.max(0, 1 - mappedChangedCount / scopeFiles.length)
+      : 0
+  const traceability =
+    scopeFiles.length > 0 && input.moduleBlocks && input.moduleBlocks.length > 0
+      ? mappedChangedCount / scopeFiles.length
+      : files.length > 0
+        ? 1
+        : 0
   return RunMetrics.parse({
     meaningful_change_gap_ms: latestChangeAt > 0 ? Math.max(0, input.completedAt - latestChangeAt) : input.completedAt,
     noop_cycle_count: noopCycles,
@@ -165,10 +182,11 @@ export async function deriveRunMetrics(input: {
     critical_check_pass_rate: totalChecks === 0 ? 0 : passedChecks / totalChecks,
     check_relevance_score: totalChecks === 0 ? 0 : Math.min(1, passedChecks / totalChecks + 0.25),
     verification_edit_ratio: files.length === 0 ? verificationEvents.length : verificationEvents.length / files.length,
-    feature_coverage_p0: totalChecks === 0 ? 0.5 : (passedChecks === totalChecks ? 1 : 0),
+    feature_coverage_p0: totalChecks === 0 ? 0.5 : passedChecks === totalChecks ? 1 : 0,
     scope_drift_score: scopeDriftScore,
     plan_to_change_traceability: traceability,
-    acceptance_focus_score: files.length === 0 ? 0 : Math.max(0, 1 - verificationEvents.length / Math.max(1, commandSummaries.length)),
+    acceptance_focus_score:
+      files.length === 0 ? 0 : Math.max(0, 1 - verificationEvents.length / Math.max(1, commandSummaries.length)),
   })
 }
 
@@ -184,7 +202,10 @@ export function evaluateQualityGates(input: {
   }
 }): QualityVerdict {
   const failures: QualityFailure[] = []
-  if (input.runMetrics.noop_cycle_count >= 8 || (input.runMetrics.meaningful_change_gap_ms >= 15 * 60 * 1000 && input.runMetrics.repeat_command_ratio >= 0.45)) {
+  if (
+    input.runMetrics.noop_cycle_count >= 8 ||
+    (input.runMetrics.meaningful_change_gap_ms >= 15 * 60 * 1000 && input.runMetrics.repeat_command_ratio >= 0.45)
+  ) {
     failures.push({
       category: "liveness",
       message: "Long verification-only loop without meaningful progress",
@@ -238,7 +259,13 @@ export function evaluateQualityGates(input: {
     })
   }
 
-  const hardFailCategories = new Set(["liveness", "scope_drift", "artifact_quality", "verification_gap", "acceptance_gap"])
+  const hardFailCategories = new Set([
+    "liveness",
+    "scope_drift",
+    "artifact_quality",
+    "verification_gap",
+    "acceptance_gap",
+  ])
   const hardFailures = failures.filter((item) => hardFailCategories.has(item.category))
   const verdict = hardFailures.some((item) => item.category === "liveness")
     ? "blocked"
@@ -249,9 +276,10 @@ export function evaluateQualityGates(input: {
     verdict,
     primary_failure: failures[0]?.category ?? null,
     failures,
-    manual_review_summary: failures.length === 0
-      ? "No quality-gate failures detected."
-      : failures.map((item) => `${item.category}: ${item.message}`).join(" | "),
+    manual_review_summary:
+      failures.length === 0
+        ? "No quality-gate failures detected."
+        : failures.map((item) => `${item.category}: ${item.message}`).join(" | "),
   }
 }
 
@@ -330,7 +358,10 @@ async function checkFrontendIntegration(rootDir: string, files: string[]): Promi
     const asset = match[1]
     if (asset.startsWith("http") || asset.startsWith("//") || asset.startsWith("data:")) continue
     const assetPath = path.join(publicDir, asset)
-    const exists = await fs.stat(assetPath).then(() => true).catch(() => false)
+    const exists = await fs
+      .stat(assetPath)
+      .then(() => true)
+      .catch(() => false)
     if (!exists) {
       issues.push(`frontend-integration: index.html references missing asset: ${asset}`)
     }
@@ -400,7 +431,9 @@ function repeatedSimilarity(values: string[]) {
 
 function belongsToAnyBlock(file: string, moduleBlocks: ModuleBlock[]) {
   return moduleBlocks.some((block) =>
-    (block.owned_paths ?? []).some((ownedPath) => file === ownedPath || file.startsWith(`${ownedPath}/`) || file.startsWith(`${ownedPath}\\`)),
+    (block.owned_paths ?? []).some(
+      (ownedPath) => file === ownedPath || file.startsWith(`${ownedPath}/`) || file.startsWith(`${ownedPath}\\`),
+    ),
   )
 }
 
@@ -410,7 +443,10 @@ function allowedArtifactsFromRequest(request: string) {
   let active = false
   for (const line of lines) {
     const trimmed = line.trim()
-    if (!active && /^only\s+(create|modify|create or modify|modify or create).*(files|paths?)\s*:?\s*$/i.test(trimmed)) {
+    if (
+      !active &&
+      /^only\s+(create|modify|create or modify|modify or create).*(files|paths?)\s*:?\s*$/i.test(trimmed)
+    ) {
       active = true
       continue
     }

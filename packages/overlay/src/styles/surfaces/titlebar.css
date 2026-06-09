@@ -160,7 +160,8 @@
   text-transform: none;
 }
 
-@media (max-width: 760px) { /* breakpoint: --ui-breakpoint-md */
+@media (max-width: 760px) {
+  /* breakpoint: --ui-breakpoint-md */
   .titlebar {
     display: flex;
     align-items: flex-start;
@@ -190,7 +191,8 @@
   }
 }
 
-@media (max-width: 520px) { /* breakpoint: --ui-breakpoint-sm */
+@media (max-width: 520px) {
+  /* breakpoint: --ui-breakpoint-sm */
   .brand-guide-copyblock {
     display: none;
   }
@@ -539,7 +541,8 @@
   width: min(calc(460px * var(--ui-scale)), calc(100vw - calc(24px * var(--ui-scale))));
 }
 
-@media (max-width: 520px) { /* breakpoint: --ui-breakpoint-sm */
+@media (max-width: 520px) {
+  /* breakpoint: --ui-breakpoint-sm */
   .titlebar-menubar-panel {
     position: fixed;
     top: calc(var(--ui-titlebar-height) + calc(8px * var(--ui-scale)));
@@ -703,7 +706,8 @@
   padding: calc(4px * var(--ui-scale));
 }
 
-@media (max-width: 760px) { /* breakpoint: --ui-breakpoint-md */
+@media (max-width: 760px) {
+  /* breakpoint: --ui-breakpoint-md */
   .titlebar-menubar {
     flex: 1 1 auto;
     min-width: 0;
@@ -881,7 +885,8 @@
   color: var(--text-muted);
 }
 
-@media (max-width: 520px) { /* breakpoint: --ui-breakpoint-sm */
+@media (max-width: 520px) {
+  /* breakpoint: --ui-breakpoint-sm */
   .titlebar-menubar .oc-button[data-ui="titlebar-menubar-trigger"] {
     --oc-button-padding-x: 0;
 
@@ -904,7 +909,8 @@
    max-width 760px, the titlebar reflows to two stacked rows.
    ───────────────────────────────────────────────────────────── */
 
-@media (max-width: 760px) { /* breakpoint: --ui-breakpoint-md */
+@media (max-width: 760px) {
+  /* breakpoint: --ui-breakpoint-md */
   .titlebar-left,
   .titlebar-utility {
     flex-basis: 100%;

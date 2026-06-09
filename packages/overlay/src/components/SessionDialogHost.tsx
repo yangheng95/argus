@@ -1,8 +1,8 @@
-import { dialogStore } from "../store/dialog";
-import { closeBuildSessionDialog } from "../services/dialog";
-import { t } from "../utils/i18n";
-import { Dialog } from "./primitives/Dialog";
-import { Button } from "./ui/Button";
+import { dialogStore } from "../store/dialog"
+import { closeBuildSessionDialog } from "../services/dialog"
+import { t } from "../utils/i18n"
+import { Dialog } from "./primitives/Dialog"
+import { Button } from "./ui/Button"
 
 export function SessionDialogHost() {
   return (
@@ -39,5 +39,5 @@ export function SessionDialogHost() {
         innerHTML={dialogStore.session.bodyHtml || '<p class="empty-hint">Loading...</p>'}
       />
     </Dialog>
-  );
+  )
 }

@@ -3,10 +3,7 @@ import { Database } from "../../src/storage/db"
 import { Identifier } from "../../src/id/id"
 import { ProjectTable } from "../../src/project/project.sql"
 import { EngineTaskTable } from "../../src/engine/engine.sql"
-import {
-  EngineIterationTable,
-  EngineMetricSpecTable,
-} from "../../src/metrics/metrics.sql"
+import { EngineIterationTable, EngineMetricSpecTable } from "../../src/metrics/metrics.sql"
 import {
   MetricWriteError,
   readResultsForIteration,
@@ -96,15 +93,11 @@ describe("registerBaselineSpec", () => {
   })
 
   test("rejects scope='goal' with null goal_id", () => {
-    expect(() =>
-      registerBaselineSpec(baselineInput({ scope: "goal", goal_id: null })),
-    ).toThrow()
+    expect(() => registerBaselineSpec(baselineInput({ scope: "goal", goal_id: null }))).toThrow()
   })
 
   test("rejects scope='global' with a goal_id", () => {
-    expect(() =>
-      registerBaselineSpec(baselineInput({ scope: "global", goal_id: "gol_x" })),
-    ).toThrow()
+    expect(() => registerBaselineSpec(baselineInput({ scope: "global", goal_id: "gol_x" }))).toThrow()
   })
 
   test("refuses to insert once any iteration row exists", () => {
@@ -142,11 +135,7 @@ describe("baseline frozen-ruler — DB-level trigger", () => {
     // The drizzle update would normally succeed; the trigger must abort it.
     expect(() =>
       Database.use((db) =>
-        db
-          .update(EngineMetricSpecTable)
-          .set({ weight: 99 })
-          .where(eq(EngineMetricSpecTable.id, row.id))
-          .run(),
+        db.update(EngineMetricSpecTable).set({ weight: 99 }).where(eq(EngineMetricSpecTable.id, row.id)).run(),
       ),
     ).toThrow(/baseline row is frozen/)
   })

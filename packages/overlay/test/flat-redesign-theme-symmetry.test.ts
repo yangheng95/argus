@@ -28,10 +28,7 @@ import { join } from "node:path"
 const STYLES_ROOT = join(import.meta.dir, "..", "src", "styles")
 
 function readCascade(name: string): string {
-  return readFileSync(join(STYLES_ROOT, "cascade", name), "utf8").replace(
-    /\/\*[\s\S]*?\*\//g,
-    "",
-  )
+  return readFileSync(join(STYLES_ROOT, "cascade", name), "utf8").replace(/\/\*[\s\S]*?\*\//g, "")
 }
 
 const DARK = readCascade("dark.css")
@@ -153,10 +150,10 @@ describe("theme-architecture Step 0 — structural tokens are not in theme block
   }
 
   test("tokens/design-language.css :root holds the structural tokens", () => {
-    const designLang = readFileSync(
-      join(STYLES_ROOT, "tokens", "design-language.css"),
-      "utf8",
-    ).replace(/\/\*[\s\S]*?\*\//g, "")
+    const designLang = readFileSync(join(STYLES_ROOT, "tokens", "design-language.css"), "utf8").replace(
+      /\/\*[\s\S]*?\*\//g,
+      "",
+    )
     for (const token of STRUCTURAL_TOKENS) {
       const re = new RegExp(`${token.replace(/-/g, "\\-")}\\s*:`)
       expect(re.test(designLang)).toBe(true)

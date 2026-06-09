@@ -4,11 +4,7 @@ import { type CodingProvider } from "../../src/executor/contract"
 import { type ExecutorAdapter } from "../../src/executor/contract"
 import { ExecutorRegistry } from "../../src/executor/registry"
 import { Identifier } from "../../src/id/id"
-import {
-  EngineArtifactTable,
-  EngineInteractionRequestTable,
-  EngineTaskTable,
-} from "../../src/engine/engine.sql"
+import { EngineArtifactTable, EngineInteractionRequestTable, EngineTaskTable } from "../../src/engine/engine.sql"
 import { EngineService } from "@/task-api"
 import { EngineRuntime } from "../../src/engine/runtime"
 import { hooks } from "../../src/engine/state"
@@ -43,67 +39,76 @@ describe("protocol interaction resolution", () => {
         const now = Date.now()
 
         Database.use((db) =>
-          db.insert(EngineTaskTable).values({
-            id: taskID,
-            project_id: Instance.project.id,
-            session_id: session.id,
-            source: "test",
-            title: "protocol interaction",
-            request: "protocol interaction",
-            priority: "normal",
-            time_created: now,
-            time_updated: now,
-            time_started: now,
-          }).run(),
+          db
+            .insert(EngineTaskTable)
+            .values({
+              id: taskID,
+              project_id: Instance.project.id,
+              session_id: session.id,
+              source: "test",
+              title: "protocol interaction",
+              request: "protocol interaction",
+              priority: "normal",
+              time_created: now,
+              time_updated: now,
+              time_started: now,
+            })
+            .run(),
         )
         // Phase-6-e: run rows live in engine_artifact (kind="run").
         Database.use((db) =>
-          db.insert(EngineArtifactTable).values({
-            id: runID,
-            task_id: taskID,
-            run_id: runID,
-            kind: "run",
-            label: "run-blocked",
-            payload: {
-              plan_version_id: null,
-              session_id: session.id,
-              executor: "codex",
-              status: "blocked",
-              phase: "execute",
-              blocking_reason: "permission",
-              error: null,
-              retry_count: 0,
-              executor_ref: {
-                session_id: "thr_1:turn_1",
-                queue_task_id: "queue_1",
+          db
+            .insert(EngineArtifactTable)
+            .values({
+              id: runID,
+              task_id: taskID,
+              run_id: runID,
+              kind: "run",
+              label: "run-blocked",
+              payload: {
+                plan_version_id: null,
+                session_id: session.id,
+                executor: "codex",
+                status: "blocked",
+                phase: "execute",
+                blocking_reason: "permission",
+                error: null,
+                retry_count: 0,
+                executor_ref: {
+                  session_id: "thr_1:turn_1",
+                  queue_task_id: "queue_1",
+                },
+                metadata: null,
+                time_started: null,
+                time_completed: null,
               },
-              metadata: null,
-              time_started: null,
-              time_completed: null,
-            },
-            time_created: now,
-            time_updated: now,
-          }).run(),
+              time_created: now,
+              time_updated: now,
+            })
+            .run(),
         )
         Database.use((db) =>
-          db.insert(EngineInteractionRequestTable).values({
-            id: interactionID,
-            task_id: taskID,
-            run_id: runID,
-            session_id: session.id,
-            external_id: "protocol:executor_session:7",
-            request_type: "permission",
-            status: "pending",
-            title: "Executor approval",
-            body: "git status",
-            payload: {
-              protocol_request: true,
-              request_id: "7",
-              request_kind: "approval_request",
-            },
-            time_created: now,
-            time_updated: now,
-          }).run(),
+          db
+            .insert(EngineInteractionRequestTable)
+            .values({
+              id: interactionID,
+              task_id: taskID,
+              run_id: runID,
+              session_id: session.id,
+              external_id: "protocol:executor_session:7",
+              request_type: "permission",
+              status: "pending",
+              title: "Executor approval",
+              body: "git status",
+              payload: {
+                protocol_request: true,
+                request_id: "7",
+                request_kind: "approval_request",
+              },
+              time_created: now,
+              time_updated: now,
+            })
+            .run(),
         )
 
         await EngineService.replyInteraction(interactionID, {
@@ -122,7 +127,11 @@ describe("protocol interaction resolution", () => {
         })
 
         const row = Database.use((db) =>
-          db.select().from(EngineInteractionRequestTable).where(eq(EngineInteractionRequestTable.id, interactionID)).get(),
+          db
+            .select()
+            .from(EngineInteractionRequestTable)
+            .where(eq(EngineInteractionRequestTable.id, interactionID))
+            .get(),
         )
         expect(row?.status).toBe("answered")
       },
@@ -140,43 +149,49 @@ describe("protocol interaction resolution", () => {
         const now = Date.now()
 
         Database.use((db) =>
-          db.insert(EngineTaskTable).values({
-            id: taskID,
-            project_id: Instance.project.id,
-            session_id: session.id,
-            source: "test",
-            title: "coordinator blocker",
-            request: "coordinator blocker",
-            priority: "normal",
-            time_created: now,
-            time_updated: now,
-            time_started: now,
-          }).run(),
+          db
+            .insert(EngineTaskTable)
+            .values({
+              id: taskID,
+              project_id: Instance.project.id,
+              session_id: session.id,
+              source: "test",
+              title: "coordinator blocker",
+              request: "coordinator blocker",
+              priority: "normal",
+              time_created: now,
+              time_updated: now,
+              time_started: now,
+            })
+            .run(),
         )
         Database.use((db) =>
-          db.insert(EngineArtifactTable).values({
-            id: runID,
-            task_id: taskID,
-            run_id: runID,
-            kind: "run",
-            label: "run-blocked",
-            payload: {
-              plan_version_id: null,
-              session_id: session.id,
-              executor: "opencorvus",
-              status: "blocked",
-              phase: "dispatch",
-              blocking_reason: "question",
-              error: null,
-              retry_count: 0,
-              executor_ref: null,
-              metadata: null,
-              time_started: now,
-              time_completed: null,
-            },
-            time_created: now,
-            time_updated: now,
-          }).run(),
+          db
+            .insert(EngineArtifactTable)
+            .values({
+              id: runID,
+              task_id: taskID,
+              run_id: runID,
+              kind: "run",
+              label: "run-blocked",
+              payload: {
+                plan_version_id: null,
+                session_id: session.id,
+                executor: "opencorvus",
+                status: "blocked",
+                phase: "dispatch",
+                blocking_reason: "question",
+                error: null,
+                retry_count: 0,
+                executor_ref: null,
+                metadata: null,
+                time_started: now,
+                time_completed: null,
+              },
+              time_created: now,
+              time_updated: now,
+            })
+            .run(),
         )
 
         await EngineRuntime.syncRun(runID, hooks())

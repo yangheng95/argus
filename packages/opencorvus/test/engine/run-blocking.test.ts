@@ -29,43 +29,49 @@ describe("run blocking state", () => {
         const now = Date.now()
 
         Database.use((db) =>
-          db.insert(EngineTaskTable).values({
-            id: taskID,
-            project_id: Instance.project.id,
-            session_id: session.id,
-            source: "test",
-            title: "stream error",
-            request: "stream error",
-            priority: "normal",
-            time_created: now,
-            time_updated: now,
-            time_started: now,
-          }).run(),
+          db
+            .insert(EngineTaskTable)
+            .values({
+              id: taskID,
+              project_id: Instance.project.id,
+              session_id: session.id,
+              source: "test",
+              title: "stream error",
+              request: "stream error",
+              priority: "normal",
+              time_created: now,
+              time_updated: now,
+              time_started: now,
+            })
+            .run(),
         )
         Database.use((db) =>
-          db.insert(EngineArtifactTable).values({
-            id: runID,
-            task_id: taskID,
-            run_id: runID,
-            kind: "run",
-            label: "run-running",
-            payload: {
-              plan_version_id: null,
-              session_id: session.id,
-              executor: "opencorvus",
-              status: "running",
-              phase: "dispatch",
-              blocking_reason: null,
-              error: null,
-              retry_count: 0,
-              executor_ref: null,
-              metadata: null,
-              time_started: now,
-              time_completed: null,
-            },
-            time_created: now,
-            time_updated: now,
-          }).run(),
+          db
+            .insert(EngineArtifactTable)
+            .values({
+              id: runID,
+              task_id: taskID,
+              run_id: runID,
+              kind: "run",
+              label: "run-running",
+              payload: {
+                plan_version_id: null,
+                session_id: session.id,
+                executor: "opencorvus",
+                status: "running",
+                phase: "dispatch",
+                blocking_reason: null,
+                error: null,
+                retry_count: 0,
+                executor_ref: null,
+                metadata: null,
+                time_started: now,
+                time_completed: null,
+              },
+              time_created: now,
+              time_updated: now,
+            })
+            .run(),
         )
 
         await blockActiveRunForTask(taskID, {
@@ -93,43 +99,49 @@ describe("run blocking state", () => {
         const now = Date.now()
 
         Database.use((db) =>
-          db.insert(EngineTaskTable).values({
-            id: taskID,
-            project_id: Instance.project.id,
-            session_id: session.id,
-            source: "test",
-            title: "stream error sync",
-            request: "stream error sync",
-            priority: "normal",
-            time_created: now,
-            time_updated: now,
-            time_started: now,
-          }).run(),
+          db
+            .insert(EngineTaskTable)
+            .values({
+              id: taskID,
+              project_id: Instance.project.id,
+              session_id: session.id,
+              source: "test",
+              title: "stream error sync",
+              request: "stream error sync",
+              priority: "normal",
+              time_created: now,
+              time_updated: now,
+              time_started: now,
+            })
+            .run(),
         )
         Database.use((db) =>
-          db.insert(EngineArtifactTable).values({
-            id: runID,
-            task_id: taskID,
-            run_id: runID,
-            kind: "run",
-            label: "run-blocked",
-            payload: {
-              plan_version_id: null,
-              session_id: session.id,
-              executor: "opencorvus",
-              status: "blocked",
-              phase: "dispatch",
-              blocking_reason: "orchestrator_stream_error",
-              error: "APIError: HTTP 429",
-              retry_count: 0,
-              executor_ref: null,
-              metadata: null,
-              time_started: now,
-              time_completed: null,
-            },
-            time_created: now,
-            time_updated: now,
-          }).run(),
+          db
+            .insert(EngineArtifactTable)
+            .values({
+              id: runID,
+              task_id: taskID,
+              run_id: runID,
+              kind: "run",
+              label: "run-blocked",
+              payload: {
+                plan_version_id: null,
+                session_id: session.id,
+                executor: "opencorvus",
+                status: "blocked",
+                phase: "dispatch",
+                blocking_reason: "orchestrator_stream_error",
+                error: "APIError: HTTP 429",
+                retry_count: 0,
+                executor_ref: null,
+                metadata: null,
+                time_started: now,
+                time_completed: null,
+              },
+              time_created: now,
+              time_updated: now,
+            })
+            .run(),
         )
 
         await EngineRuntime.syncRun(runID, hooks())

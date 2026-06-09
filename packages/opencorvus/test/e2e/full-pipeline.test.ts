@@ -95,9 +95,9 @@ const SLACK_APP_TOKEN = env("OPENCORVUS_E2E_SLACK_APP_TOKEN", "SLACK_APP_TOKEN")
 const SLACK_CHANNEL_ID = env("OPENCORVUS_E2E_SLACK_CHANNEL_ID", "SLACK_CHANNEL_ID") ?? "test-slack-channel"
 const RUN_LIVE_E2E = process.env.OPENCORVUS_RUN_LIVE_E2E === "1" || process.env.OPENCORVUS_RUN_LIVE_E2E === "true"
 const HAS_SLACK_CREDS = !!(
-  env("OPENCORVUS_E2E_SLACK_BOT_TOKEN", "SLACK_BOT_TOKEN")
-  && env("OPENCORVUS_E2E_SLACK_APP_TOKEN", "SLACK_APP_TOKEN")
-  && env("OPENCORVUS_E2E_SLACK_CHANNEL_ID", "SLACK_CHANNEL_ID")
+  env("OPENCORVUS_E2E_SLACK_BOT_TOKEN", "SLACK_BOT_TOKEN") &&
+  env("OPENCORVUS_E2E_SLACK_APP_TOKEN", "SLACK_APP_TOKEN") &&
+  env("OPENCORVUS_E2E_SLACK_CHANNEL_ID", "SLACK_CHANNEL_ID")
 )
 const liveTest = RUN_LIVE_E2E && HAS_LIVE_MODEL ? test : test.skip
 
@@ -291,212 +291,221 @@ describe("Full E2E: NoteStore Minimal — real Planner + Executor + Checks + Eva
       // taskID 提升到外部作用域，供 finally 块清理
       let taskID: string | undefined
 
-      try { await Instance.provide({
-        directory: tmp.path,
-        init: async () => {
-          const { Env } = await import("../../src/env/index")
-          Env.set("OPENCORVUS_SPEC_TIMEOUT_MS", String(SPEC_TIMEOUT_MS))
-          Env.set("OPENCORVUS_PLANNER_TIMEOUT_MS", String(PLANNER_TIMEOUT_MS))
-          Env.set("OPENCORVUS_EVALUATOR_AGENT_TIMEOUT_MS", String(EVALUATOR_TIMEOUT_MS))
-          Env.set("OPENCORVUS_INTERACTION_TIMEOUT_MS", String(TIMEOUT_MS))
-          Env.set("OPENCORVUS_SPEC_AGENT_MAX_STEPS", "10")
-          Env.set("OPENCORVUS_PLANNER_AGENT_MAX_STEPS", "10")
-          await ExecutorBootstrap.autoRegister(true)
-          // 启动 orchestrator 轮询调度
-          EngineService.init()
+      try {
+        await Instance.provide({
+          directory: tmp.path,
+          init: async () => {
+            const { Env } = await import("../../src/env/index")
+            Env.set("OPENCORVUS_SPEC_TIMEOUT_MS", String(SPEC_TIMEOUT_MS))
+            Env.set("OPENCORVUS_PLANNER_TIMEOUT_MS", String(PLANNER_TIMEOUT_MS))
+            Env.set("OPENCORVUS_EVALUATOR_AGENT_TIMEOUT_MS", String(EVALUATOR_TIMEOUT_MS))
+            Env.set("OPENCORVUS_INTERACTION_TIMEOUT_MS", String(TIMEOUT_MS))
+            Env.set("OPENCORVUS_SPEC_AGENT_MAX_STEPS", "10")
+            Env.set("OPENCORVUS_PLANNER_AGENT_MAX_STEPS", "10")
+            await ExecutorBootstrap.autoRegister(true)
+            // 启动 orchestrator 轮询调度
+            EngineService.init()
 
-          if (!HAS_SLACK_CREDS) {
-            console.log("[E2E] Slack 未配置，跳过 channel 绑定与网关联动")
-            return
-          }
-
-          // Slack
-          Env.set("SLACK_BOT_TOKEN", SLACK_BOT_TOKEN)
-          Env.set("SLACK_APP_TOKEN", SLACK_APP_TOKEN)
-
-          // 启动 SlackGateway（Socket Mode 双向通信）：
-          //   - 自动推送 TaskUpdated / RunCreated / EvaluationCompleted 事件（含工作目录）
-          //   - 接收用户发来的自然语言指令（查询会话、查看任务状态、选择会话进入等）
-          //     → 通过 ChannelIngress → ControlMessage.handle() 用 LLM 解析并执行
-          gateway = new SlackGateway({
-            directory: tmp.path,
-            token: SLACK_BOT_TOKEN,
-            appToken: SLACK_APP_TOKEN,
-          })
-          await gateway.start()
-          console.log("[E2E] SlackGateway 已启动（Socket Mode），支持双向通信")
-        },
-        fn: async () => {
-          // ── 创建 Slack 线程（获取 thread_ts）───────────────────────────
-          if (HAS_SLACK_CREDS) {
-            const initRes = await fetch("https://slack.com/api/chat.postMessage", {
-              method: "POST",
-              headers: { Authorization: `Bearer ${SLACK_BOT_TOKEN}`, "Content-Type": "application/json" },
-              body: JSON.stringify({
-                channel: SLACK_CHANNEL_ID,
-                text: `🎬 [E2E] 开始任务: *${TASK_TITLE}*`,
-              }),
-            }).then((r) => r.json() as Promise<{ ok: boolean; ts?: string; error?: string }>)
-
-            if (initRes.ok && initRes.ts) {
-              slackThreadTs = initRes.ts
-              console.log(`[E2E] Slack thread_ts = ${slackThreadTs}`)
-            } else {
-              console.warn(`[E2E] Slack 初始消息发送失败: ${initRes.error ?? "unknown"}`)
+            if (!HAS_SLACK_CREDS) {
+              console.log("[E2E] Slack 未配置，跳过 channel 绑定与网关联动")
+              return
             }
-          }
 
-          // ── 提交任务 ────────────────────────────────────────────────────
-          console.log("\n[E2E] ─── 提交任务 ───")
-          taskID = await EngineService.createTask({
-            executor: EXECUTOR,
-            title: TASK_TITLE,
-            request: TASK_REQUEST,
-            queue: false,
-            budget: { maxExecutorGroups: 2 },
-            checks: {
-              build: false,
-              lint: false,
-              test: ["bun test src/note-store.test.ts"],
-              verify_cmd: ["bun test src/note-store.test.ts"],
-            },
-            ...(HAS_SLACK_CREDS
-              ? {
-                  channelBinding: {
-                    platform: "slack" as const,
-                    channel: SLACK_CHANNEL_ID,
-                    thread: slackThreadTs ?? `e2e-note-store-${Date.now()}`,
-                  },
-                }
-              : {}),
-          })
-          console.log(`[E2E] task_id = ${taskID}`)
-          await slackPost(`📌 task_id = \`${taskID}\``, slackThreadTs)
+            // Slack
+            Env.set("SLACK_BOT_TOKEN", SLACK_BOT_TOKEN)
+            Env.set("SLACK_APP_TOKEN", SLACK_APP_TOKEN)
 
-          // ── 轮询终态 ────────────────────────────────────────────────────
-          console.log(`[E2E] 等待任务完成（最长 ${Math.round((TIMEOUT_MS - 15_000) / 60000)}m）...`)
-          const progress = await waitForFinal(taskID, TIMEOUT_MS - 15_000)
+            // 启动 SlackGateway（Socket Mode 双向通信）：
+            //   - 自动推送 TaskUpdated / RunCreated / EvaluationCompleted 事件（含工作目录）
+            //   - 接收用户发来的自然语言指令（查询会话、查看任务状态、选择会话进入等）
+            //     → 通过 ChannelIngress → ControlMessage.handle() 用 LLM 解析并执行
+            gateway = new SlackGateway({
+              directory: tmp.path,
+              token: SLACK_BOT_TOKEN,
+              appToken: SLACK_APP_TOKEN,
+            })
+            await gateway.start()
+            console.log("[E2E] SlackGateway 已启动（Socket Mode），支持双向通信")
+          },
+          fn: async () => {
+            // ── 创建 Slack 线程（获取 thread_ts）───────────────────────────
+            if (HAS_SLACK_CREDS) {
+              const initRes = await fetch("https://slack.com/api/chat.postMessage", {
+                method: "POST",
+                headers: { Authorization: `Bearer ${SLACK_BOT_TOKEN}`, "Content-Type": "application/json" },
+                body: JSON.stringify({
+                  channel: SLACK_CHANNEL_ID,
+                  text: `🎬 [E2E] 开始任务: *${TASK_TITLE}*`,
+                }),
+              }).then((r) => r.json() as Promise<{ ok: boolean; ts?: string; error?: string }>)
 
-          // ── 结果报告 ────────────────────────────────────────────────────
-          console.log(`\n[E2E] ─── 结果报告 ───`)
-          console.log(`[E2E] 最终状态: ${progress.task.status}`)
-          if (progress.task.error) console.log(`[E2E] 错误信息: ${progress.task.error}`)
-
-          const runs = await EngineService.listRuns(taskID)
-          const interactions = await EngineService.listTaskInteractions(taskID)
-          console.log(`[E2E] 执行轮次: ${runs.length}`)
-          for (const r of runs) {
-            console.log(`[E2E]   run=${r.id}  status=${r.status}  retry=${r.retryCount}  executor=${r.executor}`)
-            const events = await EngineService.listExecutorEvents(r.id).catch(() => [])
-            console.log(`[E2E]     executor_events=${events.length}`)
-            for (const event of events.slice(-12)) {
-              console.log(`[E2E]       #${event.sequence} ${event.kind}: ${event.summary ?? "(无摘要)"}`)
+              if (initRes.ok && initRes.ts) {
+                slackThreadTs = initRes.ts
+                console.log(`[E2E] Slack thread_ts = ${slackThreadTs}`)
+              } else {
+                console.warn(`[E2E] Slack 初始消息发送失败: ${initRes.error ?? "unknown"}`)
+              }
             }
-          }
-          console.log(`[E2E] 交互数: ${interactions.length}`)
-          for (const item of interactions) {
-            console.log(`[E2E]   interaction=${item.id}  type=${item.type}  status=${item.status}  title=${item.title ?? "(无标题)"}`)
-          }
 
-          if (progress.acceptance) {
-            console.log(`[E2E] 交付摘要: ${progress.acceptance.result?.summary ?? "(无)"}`)
-            const files = progress.acceptance.result?.changedFiles ?? []
-            console.log(`[E2E] 变更文件: ${files.length > 0 ? files.join(", ") : "(无)"}`)
-          }
+            // ── 提交任务 ────────────────────────────────────────────────────
+            console.log("\n[E2E] ─── 提交任务 ───")
+            taskID = await EngineService.createTask({
+              executor: EXECUTOR,
+              title: TASK_TITLE,
+              request: TASK_REQUEST,
+              queue: false,
+              budget: { maxExecutorGroups: 2 },
+              checks: {
+                build: false,
+                lint: false,
+                test: ["bun test src/note-store.test.ts"],
+                verify_cmd: ["bun test src/note-store.test.ts"],
+              },
+              ...(HAS_SLACK_CREDS
+                ? {
+                    channelBinding: {
+                      platform: "slack" as const,
+                      channel: SLACK_CHANNEL_ID,
+                      thread: slackThreadTs ?? `e2e-note-store-${Date.now()}`,
+                    },
+                  }
+                : {}),
+            })
+            console.log(`[E2E] task_id = ${taskID}`)
+            await slackPost(`📌 task_id = \`${taskID}\``, slackThreadTs)
 
-          if (progress.evaluation) {
-            console.log(`[E2E] 评估: verdict=${progress.evaluation.verdict}  status=${progress.evaluation.status}`)
-            console.log(`[E2E]       ${progress.evaluation.summary}`)
-            for (const chk of progress.evaluation.checks ?? []) {
-              console.log(`[E2E]       check ${chk.name}: ${chk.status}`)
+            // ── 轮询终态 ────────────────────────────────────────────────────
+            console.log(`[E2E] 等待任务完成（最长 ${Math.round((TIMEOUT_MS - 15_000) / 60000)}m）...`)
+            const progress = await waitForFinal(taskID, TIMEOUT_MS - 15_000)
+
+            // ── 结果报告 ────────────────────────────────────────────────────
+            console.log(`\n[E2E] ─── 结果报告 ───`)
+            console.log(`[E2E] 最终状态: ${progress.task.status}`)
+            if (progress.task.error) console.log(`[E2E] 错误信息: ${progress.task.error}`)
+
+            const runs = await EngineService.listRuns(taskID)
+            const interactions = await EngineService.listTaskInteractions(taskID)
+            console.log(`[E2E] 执行轮次: ${runs.length}`)
+            for (const r of runs) {
+              console.log(`[E2E]   run=${r.id}  status=${r.status}  retry=${r.retryCount}  executor=${r.executor}`)
+              const events = await EngineService.listExecutorEvents(r.id).catch(() => [])
+              console.log(`[E2E]     executor_events=${events.length}`)
+              for (const event of events.slice(-12)) {
+                console.log(`[E2E]       #${event.sequence} ${event.kind}: ${event.summary ?? "(无摘要)"}`)
+              }
             }
-          }
-
-          for (const goal of progress.goals ?? []) {
-            console.log(`[E2E] 目标 [${goal.priority}] ${goal.description}: ${goal.status}`)
-          }
-
-          // Slack 最终汇报
-          const files = progress.acceptance?.result?.changedFiles ?? []
-          await slackPost(
-            progress.task.status === "completed"
-              ? `🎉 E2E 测试通过！\n状态: *${progress.task.status}*\n变更文件: ${files.join(", ")}`
-              : `⚠️ 任务结束: *${progress.task.status}*\n${progress.task.error ?? "（无错误信息）"}`,
-            slackThreadTs,
-          )
-
-          // ── 文档快照扫描 ─────────────────────────────────────────────
-          const readDocDir = async (subdir: string) => {
-            const dir = path.join(tmp.path, ".opencorvus", subdir)
-            try {
-              const entries = await fs.readdir(dir)
-              return await Promise.all(
-                entries
-                  .filter((f) => f.endsWith(".md"))
-                  .sort()
-                  .map(async (f) => {
-                    const content = await fs.readFile(path.join(dir, f), "utf-8")
-                    return { name: f, length: content.length, content }
-                  }),
+            console.log(`[E2E] 交互数: ${interactions.length}`)
+            for (const item of interactions) {
+              console.log(
+                `[E2E]   interaction=${item.id}  type=${item.type}  status=${item.status}  title=${item.title ?? "(无标题)"}`,
               )
-            } catch {
-              return []
             }
-          }
 
-          const [prdDocs, planDocs, goalDocs, evalDocs] = await Promise.all([
-            readDocDir("prds"),
-            readDocDir("plans"),
-            readDocDir("goals"),
-            readDocDir("evaluations"),
-          ])
+            if (progress.acceptance) {
+              console.log(`[E2E] 交付摘要: ${progress.acceptance.result?.summary ?? "(无)"}`)
+              const files = progress.acceptance.result?.changedFiles ?? []
+              console.log(`[E2E] 变更文件: ${files.length > 0 ? files.join(", ") : "(无)"}`)
+            }
 
-          console.log(`\n[E2E] ─── 文档快照 ───`)
-          for (const [label, docs] of [["prds", prdDocs], ["plans", planDocs], ["goals", goalDocs], ["evaluations", evalDocs]] as const) {
-            console.log(`[E2E] ${label}/: ${docs.length} 个文件`)
-            for (const d of docs) console.log(`[E2E]   ${d.name}  (${d.length} chars)`)
-          }
+            if (progress.evaluation) {
+              console.log(`[E2E] 评估: verdict=${progress.evaluation.verdict}  status=${progress.evaluation.status}`)
+              console.log(`[E2E]       ${progress.evaluation.summary}`)
+              for (const chk of progress.evaluation.checks ?? []) {
+                console.log(`[E2E]       check ${chk.name}: ${chk.status}`)
+              }
+            }
 
-          // ── 断言 ─────────────────────────────────────────────────────────
-          expect(progress.task.status, progress.task.error ?? "task should complete").toBe("completed")
-          expect(progress.acceptance, "应生成交付物").toBeDefined()
-          expect(progress.evaluation?.verdict, "评估应通过").toBe("accepted")
+            for (const goal of progress.goals ?? []) {
+              console.log(`[E2E] 目标 [${goal.priority}] ${goal.description}: ${goal.status}`)
+            }
 
-          expect(prdDocs.length, "prds/ 应有至少 1 个文档").toBeGreaterThan(0)
-          expect(planDocs.length, "plans/ 应有至少 1 个文档").toBeGreaterThan(0)
-          expect(goalDocs.length, "goals/ 应有至少 1 个文档").toBeGreaterThan(0)
-          expect(evalDocs.length, "evaluations/ 应有至少 1 个文档").toBeGreaterThan(0)
+            // Slack 最终汇报
+            const files = progress.acceptance?.result?.changedFiles ?? []
+            await slackPost(
+              progress.task.status === "completed"
+                ? `🎉 E2E 测试通过！\n状态: *${progress.task.status}*\n变更文件: ${files.join(", ")}`
+                : `⚠️ 任务结束: *${progress.task.status}*\n${progress.task.error ?? "（无错误信息）"}`,
+              slackThreadTs,
+            )
 
-          for (const content of [
-            prdDocs.at(-1)?.content ?? "",
-            planDocs.at(-1)?.content ?? "",
-            goalDocs.at(-1)?.content ?? "",
-            evalDocs.at(-1)?.content ?? "",
-          ]) {
-            expect(content, "文档应包含 taskID").toContain(taskID)
-          }
+            // ── 文档快照扫描 ─────────────────────────────────────────────
+            const readDocDir = async (subdir: string) => {
+              const dir = path.join(tmp.path, ".opencorvus", subdir)
+              try {
+                const entries = await fs.readdir(dir)
+                return await Promise.all(
+                  entries
+                    .filter((f) => f.endsWith(".md"))
+                    .sort()
+                    .map(async (f) => {
+                      const content = await fs.readFile(path.join(dir, f), "utf-8")
+                      return { name: f, length: content.length, content }
+                    }),
+                )
+              } catch {
+                return []
+              }
+            }
 
-          const changedFiles = progress.acceptance?.result?.changedFiles ?? []
-          expect(changedFiles, "应修改 note-store 源文件").toContain("src/note-store.ts")
-          expect(changedFiles, "应修改 note-store 测试文件").toContain("src/note-store.test.ts")
+            const [prdDocs, planDocs, goalDocs, evalDocs] = await Promise.all([
+              readDocDir("prds"),
+              readDocDir("plans"),
+              readDocDir("goals"),
+              readDocDir("evaluations"),
+            ])
 
-          const noteStorePath = path.join(tmp.path, "src/note-store.ts")
-          const noteStoreTestPath = path.join(tmp.path, "src/note-store.test.ts")
-          expect(await Bun.file(noteStorePath).exists(), "src/note-store.ts 应存在").toBe(true)
-          expect(await Bun.file(noteStoreTestPath).exists(), "src/note-store.test.ts 应存在").toBe(true)
+            console.log(`\n[E2E] ─── 文档快照 ───`)
+            for (const [label, docs] of [
+              ["prds", prdDocs],
+              ["plans", planDocs],
+              ["goals", goalDocs],
+              ["evaluations", evalDocs],
+            ] as const) {
+              console.log(`[E2E] ${label}/: ${docs.length} 个文件`)
+              for (const d of docs) console.log(`[E2E]   ${d.name}  (${d.length} chars)`)
+            }
 
-          const noteStore = await Bun.file(noteStorePath).text()
-          const noteStoreTest = await Bun.file(noteStoreTestPath).text()
-          expect(noteStore, "源文件应定义 NoteStore").toMatch(/NoteStore/)
-          expect(noteStore, "源文件应定义 Note interface").toMatch(/interface\s+Note/)
-          expect(noteStore, "源文件应包含 create/list/toggle/remove").toMatch(/create|list|toggle|remove/)
-          expect(noteStoreTest, "测试文件应覆盖 create").toMatch(/create/)
-          expect(noteStoreTest, "测试文件应覆盖 toggle").toMatch(/toggle/)
-          expect(noteStoreTest, "测试文件应使用 bun:test").toMatch(/bun:test/)
+            // ── 断言 ─────────────────────────────────────────────────────────
+            expect(progress.task.status, progress.task.error ?? "task should complete").toBe("completed")
+            expect(progress.acceptance, "应生成交付物").toBeDefined()
+            expect(progress.evaluation?.verdict, "评估应通过").toBe("accepted")
 
-          console.log("\n[E2E] ✓ NoteStore 最小闭环全链路端到端测试通过！")
-        },
-      }) } finally {
+            expect(prdDocs.length, "prds/ 应有至少 1 个文档").toBeGreaterThan(0)
+            expect(planDocs.length, "plans/ 应有至少 1 个文档").toBeGreaterThan(0)
+            expect(goalDocs.length, "goals/ 应有至少 1 个文档").toBeGreaterThan(0)
+            expect(evalDocs.length, "evaluations/ 应有至少 1 个文档").toBeGreaterThan(0)
+
+            for (const content of [
+              prdDocs.at(-1)?.content ?? "",
+              planDocs.at(-1)?.content ?? "",
+              goalDocs.at(-1)?.content ?? "",
+              evalDocs.at(-1)?.content ?? "",
+            ]) {
+              expect(content, "文档应包含 taskID").toContain(taskID)
+            }
+
+            const changedFiles = progress.acceptance?.result?.changedFiles ?? []
+            expect(changedFiles, "应修改 note-store 源文件").toContain("src/note-store.ts")
+            expect(changedFiles, "应修改 note-store 测试文件").toContain("src/note-store.test.ts")
+
+            const noteStorePath = path.join(tmp.path, "src/note-store.ts")
+            const noteStoreTestPath = path.join(tmp.path, "src/note-store.test.ts")
+            expect(await Bun.file(noteStorePath).exists(), "src/note-store.ts 应存在").toBe(true)
+            expect(await Bun.file(noteStoreTestPath).exists(), "src/note-store.test.ts 应存在").toBe(true)
+
+            const noteStore = await Bun.file(noteStorePath).text()
+            const noteStoreTest = await Bun.file(noteStoreTestPath).text()
+            expect(noteStore, "源文件应定义 NoteStore").toMatch(/NoteStore/)
+            expect(noteStore, "源文件应定义 Note interface").toMatch(/interface\s+Note/)
+            expect(noteStore, "源文件应包含 create/list/toggle/remove").toMatch(/create|list|toggle|remove/)
+            expect(noteStoreTest, "测试文件应覆盖 create").toMatch(/create/)
+            expect(noteStoreTest, "测试文件应覆盖 toggle").toMatch(/toggle/)
+            expect(noteStoreTest, "测试文件应使用 bun:test").toMatch(/bun:test/)
+
+            console.log("\n[E2E] ✓ NoteStore 最小闭环全链路端到端测试通过！")
+          },
+        })
+      } finally {
         // 清理：取消正在运行的任务（终止 executor session + 清理 worktree）
         if (taskID) {
           await Instance.provide({

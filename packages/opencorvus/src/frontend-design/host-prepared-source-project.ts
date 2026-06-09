@@ -2,9 +2,7 @@ import fs from "node:fs/promises"
 import path from "node:path"
 import { decodePNG, type DecodedPNG } from "@/util/pixel-stats"
 import { auditWebCloneSourceSkeletonConsumption } from "@/web-clone/source-skeleton-consumption-audit"
-import {
-  renderSourceProjectVisualIterationMatrix,
-} from "@/web-clone/source-project-generator"
+import { renderSourceProjectVisualIterationMatrix } from "@/web-clone/source-project-generator"
 
 const FRONTEND_SKELETON_DEEP_REFERENCE_FILES = [
   "src/components/ContentTable.tsx",
@@ -56,7 +54,11 @@ async function readHostPreparedSourceReplacementPlan(projectRoot: string): Promi
   )
 }
 
-export async function readHostPreparedCompactEvidence(input: { sourcePackage: string; projectRoot: string; sourceAuditEvidence?: string }): Promise<string> {
+export async function readHostPreparedCompactEvidence(input: {
+  sourcePackage: string
+  projectRoot: string
+  sourceAuditEvidence?: string
+}): Promise<string> {
   const referencePixelSummary = await summarizeReferencePixels(path.join(input.sourcePackage, "reference.png"))
   const sourceProjectSummary = await summarizeHostPreparedSourceProject(input.projectRoot)
   const sections: string[] = []
@@ -73,7 +75,10 @@ export async function readHostPreparedCompactEvidence(input: { sourcePackage: st
   return sections.join("\n\n")
 }
 
-export async function summarizeHostPreparedSourceAudit(input: { sourcePackage: string; projectRoot: string }): Promise<string> {
+export async function summarizeHostPreparedSourceAudit(input: {
+  sourcePackage: string
+  projectRoot: string
+}): Promise<string> {
   const lines = [
     "Host-prepared source audit supervision.",
     "This is current-state evidence for the captured source project, not a final acceptance decision.",
@@ -87,9 +92,9 @@ export async function summarizeHostPreparedSourceAudit(input: { sourcePackage: s
       })
       lines.push(
         `- ${finalAcceptanceMode}: passed=${audit.passed}; generatedBaseline=${audit.risk.generatedBaselineDetected}; ` +
-        `finalBaselineOnly=${audit.risk.finalBaselineOnlyDetected}; sourceDomResidue=${audit.risk.finalSourceDomModuleResidueDetected}; ` +
-        `sourceDomModules=${audit.projectStats.sourceDomBaselineModuleCount}; sourceDomRegions=${audit.projectStats.sourceDomRegionFileCount}; ` +
-        `largestSourceDomRegionBytes=${audit.projectStats.largestSourceDomRegionBytes}; oversizedGeneratedRegions=${audit.projectStats.oversizedSourceDomRegionCount}`,
+          `finalBaselineOnly=${audit.risk.finalBaselineOnlyDetected}; sourceDomResidue=${audit.risk.finalSourceDomModuleResidueDetected}; ` +
+          `sourceDomModules=${audit.projectStats.sourceDomBaselineModuleCount}; sourceDomRegions=${audit.projectStats.sourceDomRegionFileCount}; ` +
+          `largestSourceDomRegionBytes=${audit.projectStats.largestSourceDomRegionBytes}; oversizedGeneratedRegions=${audit.projectStats.oversizedSourceDomRegionCount}`,
       )
       for (const finding of audit.findings.slice(0, 4)) {
         lines.push(`  finding: ${finding}`)
@@ -100,7 +105,7 @@ export async function summarizeHostPreparedSourceAudit(input: { sourcePackage: s
   }
   lines.push(
     "Supervision rule: a passing visual_baseline_allowed audit proves only traceable captured-source baseline adoption. " +
-    "A maintainable final remains unproven until maintainable_replacement_required passes with measured visual parity evidence.",
+      "A maintainable final remains unproven until maintainable_replacement_required passes with measured visual parity evidence.",
   )
   return lines.join("\n")
 }
@@ -128,7 +133,10 @@ function renderHostPreparedEvidenceIndex(): string {
     ["frontend-design-skeleton/src/components/source-dom/*Region.tsx", "named generated source-dom regions"],
     ["frontend-design-skeleton/src/data/sourceProjectManifest.json", "source project manifest and region counts"],
     ["frontend-design-skeleton/src/data/sourceDomReplacementPlan.ts", "known-problem and region-replacement map"],
-    ["frontend-design-skeleton/src/data/sourceDomIterationState.ts", "static replacement progress metadata and next candidate source region"],
+    [
+      "frontend-design-skeleton/src/data/sourceDomIterationState.ts",
+      "static replacement progress metadata and next candidate source region",
+    ],
     ["frontend-design-skeleton/src/data/sourceDomRegions.ts", "region registry"],
     ["frontend-design-skeleton/src/data/sourceData.ts", "source-derived repeated content data"],
     ["frontend-design-skeleton/src/data/sourceSvgAssetGroups.ts", "SVG asset grouping"],
@@ -198,7 +206,9 @@ interface SourceDomIterationStateForSummary {
 }
 
 export async function summarizeHostPreparedSourceProject(projectRoot: string): Promise<string> {
-  const manifest = await readJsonFile<SourceProjectManifestForSummary>(path.join(projectRoot, "src", "data", "sourceProjectManifest.json"))
+  const manifest = await readJsonFile<SourceProjectManifestForSummary>(
+    path.join(projectRoot, "src", "data", "sourceProjectManifest.json"),
+  )
   const replacementPlan = await readGeneratedConstArray<SourceReplacementPlanForSummary>(
     path.join(projectRoot, "src", "data", "sourceDomReplacementPlan.ts"),
     "sourceDomReplacementPlan",
@@ -221,9 +231,10 @@ export async function summarizeHostPreparedSourceProject(projectRoot: string): P
     lines.push(`- referenceImage: ${visualIteration.referenceImage ?? "unknown"}`)
     lines.push(`- comparisonTool: ${visualIteration.comparisonTool ?? "unknown"}`)
     for (const viewport of visualIteration.viewportMatrix ?? []) {
-      const size = typeof viewport.width === "number" && typeof viewport.height === "number"
-        ? `${viewport.width}x${viewport.height}`
-        : "unknown"
+      const size =
+        typeof viewport.width === "number" && typeof viewport.height === "number"
+          ? `${viewport.width}x${viewport.height}`
+          : "unknown"
       lines.push(`- ${viewport.name ?? "viewport"}: ${size} (${viewport.evidenceRole ?? "unknown"})`)
       if (viewport.comparison) lines.push(`  comparison: ${viewport.comparison}`)
     }
@@ -237,8 +248,12 @@ export async function summarizeHostPreparedSourceProject(projectRoot: string): P
     lines.push(`- largestBytes: ${regions.largestBytes ?? "unknown"}`)
     lines.push(`- highPriorityCount: ${regions.highPriorityCount ?? "unknown"}`)
     lines.push(`- replacementPlanCount: ${regions.replacementPlanCount ?? "unknown"}`)
-    lines.push(`- iterationStateModule: ${regions.iterationStateModule ?? manifest?.semanticReplacements?.iterationStateModule ?? "unknown"}`)
-    lines.push(`- semanticReplacementCount: ${regions.semanticReplacementCount ?? manifest?.semanticReplacements?.count ?? "unknown"}`)
+    lines.push(
+      `- iterationStateModule: ${regions.iterationStateModule ?? manifest?.semanticReplacements?.iterationStateModule ?? "unknown"}`,
+    )
+    lines.push(
+      `- semanticReplacementCount: ${regions.semanticReplacementCount ?? manifest?.semanticReplacements?.count ?? "unknown"}`,
+    )
     lines.push(`- svgAssetGroupCount: ${regions.svgAssetGroupCount ?? "unknown"}`)
     lines.push(`- faqGroupCount: ${regions.faqGroupCount ?? "unknown"}`)
   }
@@ -251,12 +266,19 @@ export async function summarizeHostPreparedSourceProject(projectRoot: string): P
     lines.push(`- remainingRegionCount: ${iterationState.remainingRegionCount ?? "unknown"}`)
     const nextReplacement = iterationState.nextReplacement
     if (nextReplacement) {
-      lines.push(`- nextReplacement: ${nextReplacement.regionComponentName ?? nextReplacement.regionFilePath ?? "unknown region"} -> ${nextReplacement.recommendedComponentName ?? "unknown component"}`)
-      lines.push(`  priority: ${nextReplacement.priority ?? "unknown"}, kind: ${nextReplacement.replacementKind ?? "unknown"}`)
-      if (nextReplacement.firstReplacementStep) lines.push(`  firstReplacementStep: ${nextReplacement.firstReplacementStep}`)
+      lines.push(
+        `- nextReplacement: ${nextReplacement.regionComponentName ?? nextReplacement.regionFilePath ?? "unknown region"} -> ${nextReplacement.recommendedComponentName ?? "unknown component"}`,
+      )
+      lines.push(
+        `  priority: ${nextReplacement.priority ?? "unknown"}, kind: ${nextReplacement.replacementKind ?? "unknown"}`,
+      )
+      if (nextReplacement.firstReplacementStep)
+        lines.push(`  firstReplacementStep: ${nextReplacement.firstReplacementStep}`)
       if (nextReplacement.parityGuard) lines.push(`  parityGuard: ${nextReplacement.parityGuard}`)
     } else {
-      lines.push("- nextReplacement: none; rerun the maintainable audit and visual comparison before claiming final acceptance.")
+      lines.push(
+        "- nextReplacement: none; rerun the maintainable audit and visual comparison before claiming final acceptance.",
+      )
     }
   }
 
@@ -269,9 +291,7 @@ export async function summarizeHostPreparedSourceProject(projectRoot: string): P
   if (replacementPlan.length > 0) {
     lines.push("")
     lines.push(`Complete in-scope replacement queue (${replacementPlan.length} rows):`)
-    for (const item of replacementPlan
-      .slice()
-      .sort(compareReplacementPriority)) {
+    for (const item of replacementPlan.slice().sort(compareReplacementPriority)) {
       const name = item.regionComponentName ?? item.regionFilePath ?? "unknown region"
       const priority = item.priority ?? "unknown"
       const kind = item.replacementKind ?? "unknown"
@@ -286,7 +306,9 @@ export async function summarizeHostPreparedSourceProject(projectRoot: string): P
   }
 
   lines.push("")
-  lines.push("Extraction rule: frontend_design should start from sourceDomIterationState.ts, then consume sourceDomReplacementPlan.ts, inspect existing target-project components/libraries before coding, and extract each source-dom region into target-project semantic source only when parity can be preserved. The skeleton remains evidence; it is not the final working project.")
+  lines.push(
+    "Extraction rule: frontend_design should start from sourceDomIterationState.ts, then consume sourceDomReplacementPlan.ts, inspect existing target-project components/libraries before coding, and extract each source-dom region into target-project semantic source only when parity can be preserved. The skeleton remains evidence; it is not the final working project.",
+  )
   return lines.join("\n")
 }
 
@@ -332,7 +354,7 @@ async function readGeneratedConstArray<T>(file: string, constName: string): Prom
   if (!match?.[1]) return []
   try {
     const parsed = JSON.parse(match[1])
-    return Array.isArray(parsed) ? parsed as T[] : []
+    return Array.isArray(parsed) ? (parsed as T[]) : []
   } catch {
     return []
   }
@@ -345,14 +367,14 @@ async function readGeneratedConstObject<T>(file: string, constName: string): Pro
   if (!match?.[1]) return undefined
   try {
     const parsed = JSON.parse(match[1])
-    return parsed && typeof parsed === "object" ? parsed as T : undefined
+    return parsed && typeof parsed === "object" ? (parsed as T) : undefined
   } catch {
     return undefined
   }
 }
 
 function compareReplacementPriority(a: SourceReplacementPlanForSummary, b: SourceReplacementPlanForSummary): number {
-  const rank = (value?: string) => value === "high" ? 0 : value === "medium" ? 1 : value === "low" ? 2 : 3
+  const rank = (value?: string) => (value === "high" ? 0 : value === "medium" ? 1 : value === "low" ? 2 : 3)
   return rank(a.priority) - rank(b.priority)
 }
 
@@ -392,7 +414,12 @@ export async function summarizeReferencePixels(referencePath: string): Promise<s
     summarizePixelRegion(img, "first viewport", 0, viewportHeight),
     summarizePixelRegion(img, "main fold below navigation", Math.min(img.height, 96), viewportHeight),
     summarizePixelRegion(img, "page middle band", Math.floor(img.height * 0.42), Math.floor(img.height * 0.58)),
-    summarizePixelRegion(img, "bottom band", Math.max(0, img.height - Math.min(900, Math.ceil(img.height * 0.18))), img.height),
+    summarizePixelRegion(
+      img,
+      "bottom band",
+      Math.max(0, img.height - Math.min(900, Math.ceil(img.height * 0.18))),
+      img.height,
+    ),
   ].filter((region): region is PixelRegionSummary => !!region)
 
   const firstViewport = regions.find((region) => region.label === "first viewport")
@@ -408,9 +435,9 @@ export async function summarizeReferencePixels(referencePath: string): Promise<s
   for (const region of regions) {
     lines.push(
       `- ${region.label} (${region.yRange}): ${region.tone}; ` +
-      `avg rgb(${region.avgRgb.join(", ")}), luminance ${formatRatio(region.avgLuminance / 255)}, ` +
-      `near-white ${formatPercent(region.nearWhiteRatio)}, light ${formatPercent(region.lightRatio)}, ` +
-      `dark ${formatPercent(region.darkRatio)}, top colors ${region.topColors.join(", ")}`,
+        `avg rgb(${region.avgRgb.join(", ")}), luminance ${formatRatio(region.avgLuminance / 255)}, ` +
+        `near-white ${formatPercent(region.nearWhiteRatio)}, light ${formatPercent(region.lightRatio)}, ` +
+        `dark ${formatPercent(region.darkRatio)}, top colors ${region.topColors.join(", ")}`,
     )
   }
 
@@ -480,19 +507,13 @@ function summarizePixelRegion(img: DecodedPNG, label: string, y0: number, y1: nu
   const darkRatio = dark / samples
   const avgLuminance = luminanceSum / samples
   const tone: PixelRegionSummary["tone"] =
-    lightRatio >= 0.58 && darkRatio <= 0.22 ? "light"
-      : darkRatio >= 0.45 && lightRatio <= 0.32 ? "dark"
-        : "mixed"
+    lightRatio >= 0.58 && darkRatio <= 0.22 ? "light" : darkRatio >= 0.45 && lightRatio <= 0.32 ? "dark" : "mixed"
 
   return {
     label,
     yRange: `${top}-${bottom}`,
     sampleCount: samples,
-    avgRgb: [
-      Math.round(rSum / samples),
-      Math.round(gSum / samples),
-      Math.round(bSum / samples),
-    ],
+    avgRgb: [Math.round(rSum / samples), Math.round(gSum / samples), Math.round(bSum / samples)],
     avgLuminance: Math.round(avgLuminance),
     nearWhiteRatio,
     lightRatio,
@@ -538,9 +559,7 @@ function findDarkHorizontalBands(img: DecodedPNG): Array<{ start: number; end: n
     prev = y
   }
   if (start !== undefined && prev !== undefined) pushBand(bands, start, prev + rowStep)
-  return bands
-    .filter((band) => band.height >= 32)
-    .sort((a, b) => b.height - a.height)
+  return bands.filter((band) => band.height >= 32).sort((a, b) => b.height - a.height)
 }
 
 function pushBand(bands: Array<{ start: number; end: number; height: number }>, start: number, end: number) {
@@ -610,7 +629,11 @@ export function renderHostPreparedFrontendProjectSection(project: HostPreparedFr
   }
   lines.push("")
   lines.push("# Finalization")
-  lines.push("After bounded evidence read/review plus visual HTML skeleton restoration you can complete with the exposed tools, call `submit_frontend_template` with the full frontend-design contract. The report must identify the skeleton as `visual_baseline_input`, describe completed visual-region restorations, and name any unfinished visual/source debt as frontend_design incomplete/blocked work.")
-  lines.push("Host-prepared webpage rawproject refinement uses `final_acceptance_mode=visual_baseline_allowed` for the first workflow; deferred regions must be reported as unfinished visual/source debt. If compact evidence leaves a named uncertainty, resolve it by reading the smallest relevant source file excerpt instead of replacing agent reasoning with a host-generated generic report.")
+  lines.push(
+    "After bounded evidence read/review plus visual HTML skeleton restoration you can complete with the exposed tools, call `submit_frontend_template` with the full frontend-design contract. The report must identify the skeleton as `visual_baseline_input`, describe completed visual-region restorations, and name any unfinished visual/source debt as frontend_design incomplete/blocked work.",
+  )
+  lines.push(
+    "Host-prepared webpage rawproject refinement uses `final_acceptance_mode=visual_baseline_allowed` for the first workflow; deferred regions must be reported as unfinished visual/source debt. If compact evidence leaves a named uncertainty, resolve it by reading the smallest relevant source file excerpt instead of replacing agent reasoning with a host-generated generic report.",
+  )
   return lines.join("\n")
 }

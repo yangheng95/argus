@@ -1,5 +1,5 @@
-import { afterEach, expect, test } from "bun:test";
-(globalThis as typeof globalThis & { __OPENCORVUS_OVERLAY_VERSION__?: string }).__OPENCORVUS_OVERLAY_VERSION__ = "test";
+import { afterEach, expect, test } from "bun:test"
+;(globalThis as typeof globalThis & { __OPENCORVUS_OVERLAY_VERSION__?: string }).__OPENCORVUS_OVERLAY_VERSION__ = "test"
 
 import type {
   HostTransport,
@@ -7,49 +7,47 @@ import type {
   StreamOpenRequest,
   TransportRequest,
   TransportResponse,
-} from "../src/services/host-transport";
+} from "../src/services/host-transport"
 
-const { setBoardStore } = await import("../src/store/board");
-const { cardTreeStore } = await import("../src/store/card-tree");
-const { recoverSelectedTaskConversation } = await import("../src/services/selected-task-recovery");
-const { routeSSEEvent, handleEventStreamEvent } = await import("../src/services/events");
-const { startSSE, stopSSE } = await import("../src/services/sse");
-const { __setHostTransportForTest } = await import("../src/services/host-transport");
-const { resetWriter } = await import("../src/services/tree-writer");
-const { markSelectedMessageWatermark, resetSelectedLiveCursor } = await import("../src/services/selected-stream-cursor");
-const {
-  __resetConversationRecoveryDiagnosticsSinkForTest,
-  __setConversationRecoveryDiagnosticsSinkForTest,
-} = await import("../src/services/refresh-diagnostics");
+const { setBoardStore } = await import("../src/store/board")
+const { cardTreeStore } = await import("../src/store/card-tree")
+const { recoverSelectedTaskConversation } = await import("../src/services/selected-task-recovery")
+const { routeSSEEvent, handleEventStreamEvent } = await import("../src/services/events")
+const { startSSE, stopSSE } = await import("../src/services/sse")
+const { __setHostTransportForTest } = await import("../src/services/host-transport")
+const { resetWriter } = await import("../src/services/tree-writer")
+const { markSelectedMessageWatermark, resetSelectedLiveCursor } = await import("../src/services/selected-stream-cursor")
+const { __resetConversationRecoveryDiagnosticsSinkForTest, __setConversationRecoveryDiagnosticsSinkForTest } =
+  await import("../src/services/refresh-diagnostics")
 
 function fakeTransport(opts: {
-  request: (req: TransportRequest) => Promise<TransportResponse<unknown>> | TransportResponse<unknown>;
-  streams?: StreamOpenRequest[];
-  handlers?: { current?: StreamHandlers };
-  closeCalls?: { count: number };
+  request: (req: TransportRequest) => Promise<TransportResponse<unknown>> | TransportResponse<unknown>
+  streams?: StreamOpenRequest[]
+  handlers?: { current?: StreamHandlers }
+  closeCalls?: { count: number }
 }): HostTransport {
   return {
     kind: "tauri",
     async request<T>(req: TransportRequest): Promise<TransportResponse<T>> {
-      return opts.request(req) as Promise<TransportResponse<T>> | TransportResponse<T>;
+      return opts.request(req) as Promise<TransportResponse<T>> | TransportResponse<T>
     },
     openStream(input: StreamOpenRequest, handlers: StreamHandlers) {
-      opts.streams?.push(input);
-      if (opts.handlers) opts.handlers.current = handlers;
+      opts.streams?.push(input)
+      if (opts.handlers) opts.handlers.current = handlers
       return {
         close() {
-          if (opts.closeCalls) opts.closeCalls.count += 1;
-          handlers.onClose?.("test-close");
+          if (opts.closeCalls) opts.closeCalls.count += 1
+          handlers.onClose?.("test-close")
         },
-      };
+      }
     },
     async native() {
-      throw new Error("native not used in selected-task recovery tests");
+      throw new Error("native not used in selected-task recovery tests")
     },
     subscribeUiCommand() {
-      return { unsubscribe() {} };
+      return { unsubscribe() {} }
     },
-  } satisfies HostTransport;
+  } satisfies HostTransport
 }
 
 function conversationPayload(taskID: string, transcript: any[] = [], view = { sessions: [] as any[] }) {
@@ -75,32 +73,32 @@ function conversationPayload(taskID: string, transcript: any[] = [], view = { se
     history: { oldestTimestamp: null, oldestMessageID: null, hasMore: false, limit: 160 },
     view,
     agentView: view,
-  };
+  }
 }
 
 afterEach(() => {
-  stopSSE();
-  __setHostTransportForTest(undefined);
-  __resetConversationRecoveryDiagnosticsSinkForTest();
-  resetWriter();
-  resetSelectedLiveCursor();
-  setBoardStore("selectedTaskID", "");
-  setBoardStore("taskSequence", 0);
-  setBoardStore("board", null);
-});
+  stopSSE()
+  __setHostTransportForTest(undefined)
+  __resetConversationRecoveryDiagnosticsSinkForTest()
+  resetWriter()
+  resetSelectedLiveCursor()
+  setBoardStore("selectedTaskID", "")
+  setBoardStore("taskSequence", 0)
+  setBoardStore("board", null)
+})
 
 test("selected-task recovery resumes with the consumed live cursor", async () => {
-  const streams: StreamOpenRequest[] = [];
+  const streams: StreamOpenRequest[] = []
   __setHostTransportForTest(
     fakeTransport({
       streams,
       request(req) {
-        throw new Error(`selected-task recovery must not hydrate ${req.path}`);
+        throw new Error(`selected-task recovery must not hydrate ${req.path}`)
       },
     }),
-  );
-  setBoardStore("selectedTaskID", "tsk_live");
-  setBoardStore("taskSequence", 12);
+  )
+  setBoardStore("selectedTaskID", "tsk_live")
+  setBoardStore("taskSequence", 12)
   setBoardStore("board", {
     snapshotVersion: "board:live",
     task: {
@@ -111,81 +109,85 @@ test("selected-task recovery resumes with the consumed live cursor", async () =>
       time: { created: 1_776_000_100_000 },
       attachments: [],
     },
-  });
+  })
 
-  expect(routeSSEEvent({
-    type: "message.updated",
-    task_id: "tsk_live",
-    sequence: 0,
-    live_sequence: 7,
-    live_epoch: 1776,
-    properties: {
-      info: {
-        id: "msg_live",
-        sessionID: "ses_live",
-        role: "assistant",
-        resolvedRole: "assistant",
-        channel: "assistant",
-        agent: "assistant",
-        time: { created: 1_776_000_200_000 },
+  expect(
+    routeSSEEvent({
+      type: "message.updated",
+      task_id: "tsk_live",
+      sequence: 0,
+      live_sequence: 7,
+      live_epoch: 1776,
+      properties: {
+        info: {
+          id: "msg_live",
+          sessionID: "ses_live",
+          role: "assistant",
+          resolvedRole: "assistant",
+          channel: "assistant",
+          agent: "assistant",
+          time: { created: 1_776_000_200_000 },
+        },
       },
-    },
-  })).toBe(true);
+    }),
+  ).toBe(true)
 
-  await expect(recoverSelectedTaskConversation("test live cursor recovery", "tsk_live")).resolves.toBe(12);
+  await expect(recoverSelectedTaskConversation("test live cursor recovery", "tsk_live")).resolves.toBe(12)
 
   expect(streams).toEqual([
     {
       path: "task/tsk_live/events",
       query: { after: "12", after_live: "7", after_live_epoch: "1776" },
     },
-  ]);
-});
+  ])
+})
 
 test("selected-task recovery advances the live cursor for non-message selected events", async () => {
-  const streams: StreamOpenRequest[] = [];
+  const streams: StreamOpenRequest[] = []
   __setHostTransportForTest(
     fakeTransport({
       streams,
       request(req) {
-        throw new Error(`selected-task recovery must not hydrate ${req.path}`);
+        throw new Error(`selected-task recovery must not hydrate ${req.path}`)
       },
     }),
-  );
-  setBoardStore("selectedTaskID", "tsk_live_non_message");
-  setBoardStore("taskSequence", 12);
+  )
+  setBoardStore("selectedTaskID", "tsk_live_non_message")
+  setBoardStore("taskSequence", 12)
 
-  expect(routeSSEEvent({
-    type: "session.updated",
-    task_id: "tsk_live_non_message",
-    sequence: 0,
-    live_sequence: 8,
-    live_epoch: 1777,
-    properties: { sessionID: "ses_live_non_message" },
-  })).toBe(true);
+  expect(
+    routeSSEEvent({
+      type: "session.updated",
+      task_id: "tsk_live_non_message",
+      sequence: 0,
+      live_sequence: 8,
+      live_epoch: 1777,
+      properties: { sessionID: "ses_live_non_message" },
+    }),
+  ).toBe(true)
 
-  await expect(recoverSelectedTaskConversation("test live cursor recovery", "tsk_live_non_message")).resolves.toBe(12);
+  await expect(recoverSelectedTaskConversation("test live cursor recovery", "tsk_live_non_message")).resolves.toBe(12)
 
   expect(streams).toEqual([
     {
       path: "task/tsk_live_non_message/events",
       query: { after: "12", after_live: "8", after_live_epoch: "1777" },
     },
-  ]);
-});
+  ])
+})
 
 test("selected-task recovery advances the live cursor for board-invalidating selected events", async () => {
-  const streams: StreamOpenRequest[] = [];
+  const streams: StreamOpenRequest[] = []
   __setHostTransportForTest(
     fakeTransport({
       streams,
       request(req) {
-        throw new Error(`selected-task recovery must not hydrate ${req.path}`);
+        throw new Error(`selected-task recovery must not hydrate ${req.path}`)
       },
     }),
-  );
-  setBoardStore("selectedTaskID", "tsk_live_board");
-  setBoardStore("taskSequence", 12);
+  )
+  setBoardStore("selectedTaskID", "tsk_live_board")
+  setBoardStore("taskSequence", 12)
 
   const event = {
     type: "task.updated",
@@ -194,53 +196,51 @@ test("selected-task recovery advances the live cursor for board-invalidating sel
     live_sequence: 9,
     live_epoch: 1778,
     properties: { taskID: "tsk_live_board" },
-  };
-  expect(routeSSEEvent(event)).toBe(false);
-  handleEventStreamEvent(event);
+  }
+  expect(routeSSEEvent(event)).toBe(false)
+  handleEventStreamEvent(event)
 
-  await expect(recoverSelectedTaskConversation("test live cursor recovery", "tsk_live_board")).resolves.toBe(13);
+  await expect(recoverSelectedTaskConversation("test live cursor recovery", "tsk_live_board")).resolves.toBe(13)
 
   expect(streams).toEqual([
     {
       path: "task/tsk_live_board/events",
       query: { after: "13", after_live: "9", after_live_epoch: "1778" },
     },
-  ]);
-});
+  ])
+})
 
 test("selected-task recovery restarts the stream from the current sequence without hydrating", async () => {
-  const streams: StreamOpenRequest[] = [];
-  const closeCalls = { count: 0 };
-  const diagnostics: any[] = [];
+  const streams: StreamOpenRequest[] = []
+  const closeCalls = { count: 0 }
+  const diagnostics: any[] = []
   __setConversationRecoveryDiagnosticsSinkForTest((_prefix, record) => {
-    diagnostics.push(record);
-  });
+    diagnostics.push(record)
+  })
   __setHostTransportForTest(
     fakeTransport({
       streams,
       closeCalls,
       request(req) {
-        throw new Error(`selected-task recovery must not hydrate ${req.path}`);
+        throw new Error(`selected-task recovery must not hydrate ${req.path}`)
       },
     }),
-  );
-  setBoardStore("selectedTaskID", "tsk_atomic");
-  setBoardStore("taskSequence", 9);
+  )
+  setBoardStore("selectedTaskID", "tsk_atomic")
+  setBoardStore("taskSequence", 9)
 
-  startSSE("tsk_atomic", 3);
-  expect(streams).toEqual([
-    { path: "task/tsk_atomic/events", query: { after: "3", after_live: "0" } },
-  ]);
-  const treeEpoch = cardTreeStore.treeEpoch;
+  startSSE("tsk_atomic", 3)
+  expect(streams).toEqual([{ path: "task/tsk_atomic/events", query: { after: "3", after_live: "0" } }])
+  const treeEpoch = cardTreeStore.treeEpoch
 
-  await expect(recoverSelectedTaskConversation("test atomic recovery", "tsk_atomic")).resolves.toBe(9);
+  await expect(recoverSelectedTaskConversation("test atomic recovery", "tsk_atomic")).resolves.toBe(9)
 
-  expect(closeCalls.count).toBe(1);
-  expect(cardTreeStore.treeEpoch).toBe(treeEpoch);
+  expect(closeCalls.count).toBe(1)
+  expect(cardTreeStore.treeEpoch).toBe(treeEpoch)
   expect(streams).toEqual([
     { path: "task/tsk_atomic/events", query: { after: "3", after_live: "0" } },
     { path: "task/tsk_atomic/events", query: { after: "9", after_live: "0" } },
-  ]);
+  ])
   expect(diagnostics).toEqual([
     {
       event: "conversation-recovery.started",
@@ -257,38 +257,39 @@ test("selected-task recovery restarts the stream from the current sequence witho
       source: "selected-task-recovery",
       resumeSequence: 9,
     }),
-  ]);
-});
+  ])
+})
 
 test("selected-task recovery refuses replay-expired full refresh and leaves the live tree mounted", async () => {
-  const streams: StreamOpenRequest[] = [];
-  const closeCalls = { count: 0 };
-  const diagnostics: any[] = [];
+  const streams: StreamOpenRequest[] = []
+  const closeCalls = { count: 0 }
+  const diagnostics: any[] = []
   __setConversationRecoveryDiagnosticsSinkForTest((_prefix, record) => {
-    diagnostics.push(record);
-  });
+    diagnostics.push(record)
+  })
 
   __setHostTransportForTest(
     fakeTransport({
       streams,
       closeCalls,
       request(req) {
-        throw new Error(`replay-expired recovery must not hydrate ${req.path}`);
+        throw new Error(`replay-expired recovery must not hydrate ${req.path}`)
       },
     }),
-  );
-  setBoardStore("selectedTaskID", "tsk_expired");
-  setBoardStore("taskSequence", 5);
+  )
+  setBoardStore("selectedTaskID", "tsk_expired")
+  setBoardStore("taskSequence", 5)
 
-  startSSE("tsk_expired", 5);
-  const treeEpoch = cardTreeStore.treeEpoch;
+  startSSE("tsk_expired", 5)
+  const treeEpoch = cardTreeStore.treeEpoch
 
-  await expect(recoverSelectedTaskConversation("task replay expired", "tsk_expired"))
-    .rejects.toThrow(/refused full conversation refresh/);
+  await expect(recoverSelectedTaskConversation("task replay expired", "tsk_expired")).rejects.toThrow(
+    /refused full conversation refresh/,
+  )
 
-  expect(closeCalls.count).toBe(0);
-  expect(cardTreeStore.treeEpoch).toBe(treeEpoch);
-  expect(streams).toEqual([{ path: "task/tsk_expired/events", query: { after: "5", after_live: "0" } }]);
+  expect(closeCalls.count).toBe(0)
+  expect(cardTreeStore.treeEpoch).toBe(treeEpoch)
+  expect(streams).toEqual([{ path: "task/tsk_expired/events", query: { after: "5", after_live: "0" } }])
   expect(diagnostics).toEqual([
     {
       event: "conversation-recovery.started",
@@ -304,78 +305,79 @@ test("selected-task recovery refuses replay-expired full refresh and leaves the 
       taskID: "tsk_expired",
       source: "selected-task-recovery",
     }),
-  ]);
-});
+  ])
+})
 
 test("selected-task recovery treats live replay expiry as persistent-sequence reconnect", async () => {
-  const streams: StreamOpenRequest[] = [];
-  const requests: string[] = [];
-  const closeCalls = { count: 0 };
+  const streams: StreamOpenRequest[] = []
+  const requests: string[] = []
+  const closeCalls = { count: 0 }
   __setHostTransportForTest(
     fakeTransport({
       streams,
       closeCalls,
       request(req) {
-        requests.push(req.path);
-        return { status: 200, ok: true, headers: {}, body: conversationPayload("tsk_live_expired") };
+        requests.push(req.path)
+        return { status: 200, ok: true, headers: {}, body: conversationPayload("tsk_live_expired") }
       },
     }),
-  );
-  setBoardStore("selectedTaskID", "tsk_live_expired");
-  setBoardStore("taskSequence", 5);
-  const treeEpoch = cardTreeStore.treeEpoch;
+  )
+  setBoardStore("selectedTaskID", "tsk_live_expired")
+  setBoardStore("taskSequence", 5)
+  const treeEpoch = cardTreeStore.treeEpoch
 
-  expect(routeSSEEvent({
-    type: "session.updated",
-    task_id: "tsk_live_expired",
-    sequence: 0,
-    live_sequence: 17,
-    live_epoch: 1776,
-    properties: { sessionID: "ses_live_expired" },
-  })).toBe(true);
+  expect(
+    routeSSEEvent({
+      type: "session.updated",
+      task_id: "tsk_live_expired",
+      sequence: 0,
+      live_sequence: 17,
+      live_epoch: 1776,
+      properties: { sessionID: "ses_live_expired" },
+    }),
+  ).toBe(true)
 
-  await expect(recoverSelectedTaskConversation("task.live_replay_expired", "tsk_live_expired"))
-    .resolves.toBe(5);
-  await Promise.resolve();
+  await expect(recoverSelectedTaskConversation("task.live_replay_expired", "tsk_live_expired")).resolves.toBe(5)
+  await Promise.resolve()
 
-  expect(closeCalls.count).toBe(0);
-  expect(cardTreeStore.treeEpoch).toBe(treeEpoch);
-  expect(streams).toEqual([
-    { path: "task/tsk_live_expired/events", query: { after: "5" } },
-  ]);
-  expect(requests).toEqual(["task/tsk_live_expired/conversation"]);
-});
+  expect(closeCalls.count).toBe(0)
+  expect(cardTreeStore.treeEpoch).toBe(treeEpoch)
+  expect(streams).toEqual([{ path: "task/tsk_live_expired/events", query: { after: "5" } }])
+  expect(requests).toEqual(["task/tsk_live_expired/conversation"])
+})
 
 test("task.messages.changed triggers non-reset tail merge for DB-backed message writes", async () => {
-  const requests: string[] = [];
+  const requests: string[] = []
   __setHostTransportForTest(
     fakeTransport({
       request(req) {
-        requests.push(req.path);
-        expect(req.query?.tail_limit).toBe("32");
-        return { status: 200, ok: true, headers: {}, body: conversationPayload("tsk_db_tail") };
+        requests.push(req.path)
+        expect(req.query?.tail_limit).toBe("32")
+        return { status: 200, ok: true, headers: {}, body: conversationPayload("tsk_db_tail") }
       },
     }),
-  );
-  setBoardStore("selectedTaskID", "tsk_db_tail");
-  const treeEpoch = cardTreeStore.treeEpoch;
+  )
+  setBoardStore("selectedTaskID", "tsk_db_tail")
+  const treeEpoch = cardTreeStore.treeEpoch
 
-  expect(routeSSEEvent({
-    type: "task.messages.changed",
-    task_id: "tsk_db_tail",
-    sequence: 0,
-    payload: { taskID: "tsk_db_tail", watermark: 1_779_000_000_000 },
-  })).toBe(true);
-  await new Promise((resolve) => setTimeout(resolve, 0));
+  expect(
+    routeSSEEvent({
+      type: "task.messages.changed",
+      task_id: "tsk_db_tail",
+      sequence: 0,
+      payload: { taskID: "tsk_db_tail", watermark: 1_779_000_000_000 },
+    }),
+  ).toBe(true)
+  await new Promise((resolve) => setTimeout(resolve, 0))
 
-  expect(cardTreeStore.treeEpoch).toBe(treeEpoch);
-  expect(requests).toEqual(["task/tsk_db_tail/conversation"]);
-});
+  expect(cardTreeStore.treeEpoch).toBe(treeEpoch)
+  expect(requests).toEqual(["task/tsk_db_tail/conversation"])
+})
 
 test("selected task stream renders DB-backed task.messages.changed tail without resetting tree", async () => {
-  const streams: StreamOpenRequest[] = [];
-  const handlers: { current?: StreamHandlers } = {};
-  const requests: string[] = [];
+  const streams: StreamOpenRequest[] = []
+  const handlers: { current?: StreamHandlers } = {}
+  const requests: string[] = []
   const transcript = [
     {
       info: {
@@ -397,7 +399,7 @@ test("selected task stream renders DB-backed task.messages.changed tail without 
         },
       ],
     },
-  ];
+  ]
   const view = {
     sessions: [
       {
@@ -409,25 +411,25 @@ test("selected task stream renders DB-backed task.messages.changed tail without 
         placement: "top_level",
       },
     ],
-  };
+  }
   __setHostTransportForTest(
     fakeTransport({
       streams,
       handlers,
       request(req) {
-        requests.push(req.path);
-        expect(req.query?.tail_limit).toBe("32");
-        return { status: 200, ok: true, headers: {}, body: conversationPayload("tsk_db_tail_stream", transcript, view) };
+        requests.push(req.path)
+        expect(req.query?.tail_limit).toBe("32")
+        return { status: 200, ok: true, headers: {}, body: conversationPayload("tsk_db_tail_stream", transcript, view) }
       },
     }),
-  );
-  setBoardStore("selectedTaskID", "tsk_db_tail_stream");
-  setBoardStore("taskSequence", 12);
-  markSelectedMessageWatermark(1_779_000_000_000);
-  const treeEpoch = cardTreeStore.treeEpoch;
-  const visibleVersion = cardTreeStore.visibleVersion;
+  )
+  setBoardStore("selectedTaskID", "tsk_db_tail_stream")
+  setBoardStore("taskSequence", 12)
+  markSelectedMessageWatermark(1_779_000_000_000)
+  const treeEpoch = cardTreeStore.treeEpoch
+  const visibleVersion = cardTreeStore.visibleVersion
 
-  startSSE("tsk_db_tail_stream", 12);
+  startSSE("tsk_db_tail_stream", 12)
   expect(streams).toEqual([
     {
       path: "task/tsk_db_tail_stream/events",
@@ -437,46 +439,50 @@ test("selected task stream renders DB-backed task.messages.changed tail without 
         after_message_watermark: "1779000000000",
       },
     },
-  ]);
+  ])
 
-  handlers.current?.onEvent(JSON.stringify({
-    type: "task.messages.changed",
-    task_id: "tsk_db_tail_stream",
-    sequence: 0,
-    payload: { taskID: "tsk_db_tail_stream", watermark: 1_779_000_000_002 },
-  }));
-  await new Promise((resolve) => setTimeout(resolve, 0));
+  handlers.current?.onEvent(
+    JSON.stringify({
+      type: "task.messages.changed",
+      task_id: "tsk_db_tail_stream",
+      sequence: 0,
+      payload: { taskID: "tsk_db_tail_stream", watermark: 1_779_000_000_002 },
+    }),
+  )
+  await new Promise((resolve) => setTimeout(resolve, 0))
 
-  const card = cardTreeStore.cards["assistant:session:ses_db_tail:message:msg_db_tail"];
-  expect(cardTreeStore.treeEpoch).toBe(treeEpoch);
-  expect(cardTreeStore.visibleVersion).toBeGreaterThan(visibleVersion);
-  expect(requests).toEqual(["task/tsk_db_tail_stream/conversation"]);
-  expect(card).toBeDefined();
-  expect(card?.parts.some((part: any) =>
-    part.id === "part_db_tail" && String(part.text || "").includes("DB tail arrived without switching tasks."),
-  )).toBe(true);
-});
+  const card = cardTreeStore.cards["assistant:session:ses_db_tail:message:msg_db_tail"]
+  expect(cardTreeStore.treeEpoch).toBe(treeEpoch)
+  expect(cardTreeStore.visibleVersion).toBeGreaterThan(visibleVersion)
+  expect(requests).toEqual(["task/tsk_db_tail_stream/conversation"])
+  expect(card).toBeDefined()
+  expect(
+    card?.parts.some(
+      (part: any) =>
+        part.id === "part_db_tail" && String(part.text || "").includes("DB tail arrived without switching tasks."),
+    ),
+  ).toBe(true)
+})
 
 test("stale scheduled recovery does not stop the newly selected task stream", async () => {
-  const streams: StreamOpenRequest[] = [];
-  const closeCalls = { count: 0 };
+  const streams: StreamOpenRequest[] = []
+  const closeCalls = { count: 0 }
   __setHostTransportForTest(
     fakeTransport({
       streams,
       closeCalls,
       request(req) {
-        throw new Error(`stale recovery must not request ${req.path}`);
+        throw new Error(`stale recovery must not request ${req.path}`)
       },
     }),
-  );
-  setBoardStore("selectedTaskID", "tsk_new");
+  )
+  setBoardStore("selectedTaskID", "tsk_new")
 
-  startSSE("tsk_new", 11);
-  await expect(recoverSelectedTaskConversation("stale delayed recovery", "tsk_old"))
-    .rejects.toMatchObject({ name: "AbortError" });
+  startSSE("tsk_new", 11)
+  await expect(recoverSelectedTaskConversation("stale delayed recovery", "tsk_old")).rejects.toMatchObject({
+    name: "AbortError",
+  })
 
-  expect(closeCalls.count).toBe(0);
-  expect(streams).toEqual([
-    { path: "task/tsk_new/events", query: { after: "11", after_live: "0" } },
-  ]);
-});
+  expect(closeCalls.count).toBe(0)
+  expect(streams).toEqual([{ path: "task/tsk_new/events", query: { after: "11", after_live: "0" } }])
+})

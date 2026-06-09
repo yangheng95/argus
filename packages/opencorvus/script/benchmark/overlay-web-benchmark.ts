@@ -7,7 +7,9 @@ const DIAG_LOG = require("node:path").join(require("node:os").tmpdir(), "benchma
 function diagWrite(msg: string) {
   const ts = new Date().toISOString()
   const line = `[${ts}] ${msg}\n`
-  try { require("node:fs").appendFileSync(DIAG_LOG, line) } catch {}
+  try {
+    require("node:fs").appendFileSync(DIAG_LOG, line)
+  } catch {}
   process.stderr.write(line)
 }
 diagWrite(`benchmark PID=${process.pid} started`)
@@ -27,18 +29,22 @@ process.on("exit", (code) => {
     try {
       require("node:fs").writeFileSync(
         _emergencyReportPath,
-        JSON.stringify({
-          generated_at: new Date().toISOString(),
-          type: "emergency_exit",
-          exit_code: code,
-          taskID,
-          elapsed_ms: Date.now() - marks.startedAt,
-          marks,
-          last_progress_signature: lastProgressSignature,
-          events_captured: events.length,
-          last_event_at: lastEventAt,
-          last_activity_at: lastActivityLogAt,
-        }, null, 2),
+        JSON.stringify(
+          {
+            generated_at: new Date().toISOString(),
+            type: "emergency_exit",
+            exit_code: code,
+            taskID,
+            elapsed_ms: Date.now() - marks.startedAt,
+            marks,
+            last_progress_signature: lastProgressSignature,
+            events_captured: events.length,
+            last_event_at: lastEventAt,
+            last_activity_at: lastActivityLogAt,
+          },
+          null,
+          2,
+        ),
       )
     } catch {}
   }
@@ -90,7 +96,10 @@ import { ensureStandaloneGitRepo } from "./git"
 import { auditWorkspace, deriveRunMetrics, evaluateQualityGates, moduleBlocksFromRequest } from "./quality-gates"
 
 type OverlayBenchmarkWindow = Window & {
-  applyDirectory: (directory: string, options: { save: boolean; temp: boolean; restoreWorkspace: boolean }) => Promise<void> | void
+  applyDirectory: (
+    directory: string,
+    options: { save: boolean; temp: boolean; restoreWorkspace: boolean },
+  ) => Promise<void> | void
   loadTasks: () => Promise<void> | void
   selectTask: (taskID: string) => Promise<void> | void
   persistOverlaySettings: () => Promise<void> | void
@@ -129,10 +138,7 @@ function flag(name: string) {
 function stripWrappingQuotes(value: string | undefined): string | undefined {
   if (!value) return value
   const trimmed = value.trim()
-  if (
-    (trimmed.startsWith('"') && trimmed.endsWith('"')) ||
-    (trimmed.startsWith("'") && trimmed.endsWith("'"))
-  ) {
+  if ((trimmed.startsWith('"') && trimmed.endsWith('"')) || (trimmed.startsWith("'") && trimmed.endsWith("'"))) {
     return trimmed.slice(1, -1)
   }
   return value
@@ -188,8 +194,8 @@ function validateFlags(): void {
     const known = [...KNOWN_FLAGS].sort().join("\n  ")
     process.stderr.write(
       `[overlay-benchmark] unknown flag(s): ${unknown.join(" ")}\n` +
-      `Known flags:\n  ${known}\n` +
-      `Hint: use either --name=value or --name value; quote paths that contain spaces.\n`,
+        `Known flags:\n  ${known}\n` +
+        `Hint: use either --name=value or --name value; quote paths that contain spaces.\n`,
     )
     process.exit(2)
   }
@@ -211,13 +217,14 @@ if (resumeMessage !== undefined && resumeMessage.trim().length === 0) {
   process.stderr.write("[overlay-benchmark] --resume-message must not be empty when provided\n")
   process.exit(2)
 }
-const executor = (flag("--executor") || "opencorvus") as
-  | "opencorvus"
-  | "codex"
-  | "claude-code"
+const executor = (flag("--executor") || "opencorvus") as "opencorvus" | "codex" | "claude-code"
 const requestFile = flag("--request-file")
 const requestAttachment = flag("--request-attachment")
-const rawReferenceImages = flag("--reference-images")?.split(",").map(s => s.trim()).filter(Boolean) ?? []
+const rawReferenceImages =
+  flag("--reference-images")
+    ?.split(",")
+    .map((s) => s.trim())
+    .filter(Boolean) ?? []
 if (requestFile && requestAttachment) {
   process.stderr.write("[overlay-benchmark] cannot pass both --request-file and --request-attachment\n")
   process.exit(2)
@@ -301,12 +308,17 @@ if (requestAttachment) {
   const ext = path.extname(src).toLowerCase().replace(".", "") || "txt"
   const filename = path.basename(src)
   const mime =
-    ext === "txt" || ext === "md" || ext === "log" ? "text/plain" :
-    ext === "json" ? "application/json" :
-    ext === "pdf"  ? "application/pdf"  :
-    ext === "html" || ext === "htm" ? "text/html" :
-    ext === "csv" ? "text/csv" :
-    "application/octet-stream"
+    ext === "txt" || ext === "md" || ext === "log"
+      ? "text/plain"
+      : ext === "json"
+        ? "application/json"
+        : ext === "pdf"
+          ? "application/pdf"
+          : ext === "html" || ext === "htm"
+            ? "text/html"
+            : ext === "csv"
+              ? "text/csv"
+              : "application/octet-stream"
   TASK_ATTACHMENTS.push({
     mime,
     data: Buffer.from(bytes).toString("base64"),
@@ -323,10 +335,11 @@ if (requestAttachment) {
 // visual capture path (e.g. url_screenshot tool against the URL in the
 // request). When `--reference-images` is supplied, each file stays at its
 // original absolute path and only feeds the visual-diff gate below.
-const TASK_TITLE = flag("--title")?.trim()
-  || (requestFile ? path.parse(requestFile).name : undefined)
-  || (requestAttachment ? path.parse(requestAttachment).name : undefined)
-  || DEFAULT_TASK_TITLE
+const TASK_TITLE =
+  flag("--title")?.trim() ||
+  (requestFile ? path.parse(requestFile).name : undefined) ||
+  (requestAttachment ? path.parse(requestAttachment).name : undefined) ||
+  DEFAULT_TASK_TITLE
 // ACCEPTANCE_VERIFY_CMD is assigned after temp.dir is initialized (see below).
 // Auto-registration rules when no explicit --acceptance-verify-cmd is supplied:
 //   1. --reference-images provided → task-scoped HTML skeleton workflow check
@@ -385,15 +398,18 @@ temp.home = resumeHomeDir
   ? path.resolve(resumeHomeDir)
   : await fs.mkdtemp(path.join(os.tmpdir(), "opencorvus-overlay-benchmark-home-"))
 if (resumeTaskID && !projectDir) throw new Error("--resume-task-id requires --project-dir")
-temp.dir = projectDir ? path.resolve(projectDir) : await fs.mkdtemp(path.join(os.tmpdir(), "opencorvus-overlay-benchmark-project-"))
+temp.dir = projectDir
+  ? path.resolve(projectDir)
+  : await fs.mkdtemp(path.join(os.tmpdir(), "opencorvus-overlay-benchmark-project-"))
 temp.config = path.join(temp.home, "config-override")
 process.env.OPENCORVUS_HOME = temp.home
 // Copy real auth.json into temp home so OAuth providers (e.g. github-copilot) work in isolated home
 {
   const appData = process.env.APPDATA || process.env.LOCALAPPDATA
-  const realDataDir = process.platform === "win32" && appData
-    ? path.join(appData, "opencorvus")
-    : path.join(os.homedir(), ".local", "share", "opencorvus")
+  const realDataDir =
+    process.platform === "win32" && appData
+      ? path.join(appData, "opencorvus")
+      : path.join(os.homedir(), ".local", "share", "opencorvus")
   const realAuth = path.join(realDataDir, "auth.json")
   const tempDataDir = path.join(temp.home, "data")
   await fs.mkdir(tempDataDir, { recursive: true })
@@ -517,7 +533,9 @@ const marks = {
 }
 let taskID = ""
 const defaultReportDir = path.resolve(import.meta.dir, "../../../..", ".scratch", "benchmark-runs")
-const reportFile = report ? path.resolve(report) : path.join(defaultReportDir, `overlay-web-benchmark-report-${Date.now()}.json`)
+const reportFile = report
+  ? path.resolve(report)
+  : path.join(defaultReportDir, `overlay-web-benchmark-report-${Date.now()}.json`)
 await fs.mkdir(path.dirname(reportFile), { recursive: true })
 
 // Now that temp.dir and reportFile are known, resolve ACCEPTANCE_VERIFY_CMD.
@@ -547,24 +565,28 @@ await fs.mkdir(path.dirname(reportFile), { recursive: true })
     return `'${s.replace(/'/g, "'\\''")}'`
   }
   const buildHtmlSkeletonWorkflowCmd = (refs: readonly string[]) => {
-    const baseOut = path.join(path.dirname(reportFile), path.basename(reportFile, ".json") + ".html-skeleton-workflow-out")
+    const baseOut = path.join(
+      path.dirname(reportFile),
+      path.basename(reportFile, ".json") + ".html-skeleton-workflow-out",
+    )
     const taskRoot = path.join(temp.dir, ".opencorvus", "runtime", "tasks")
-    return refs.map((ref, index) => {
-      const outDir = refs.length === 1 ? baseOut : path.join(baseOut, `reference-${index + 1}`)
-      return [
-        `bun run ${safe(htmlSkeletonWorkflowCheckScript)}`,
-        `--task-dir=${safe(taskRoot)}`,
-        `--reference=${safe(path.resolve(ref))}`,
-        `--out=${safe(outDir)}`,
-        `--threshold=${WEB_CLONE_VISUAL_THRESHOLD}`,
-        `--worst-threshold=${WEB_CLONE_VISUAL_WORST_THRESHOLD}`,
-      ].join(" ")
-    }).join(" && ")
+    return refs
+      .map((ref, index) => {
+        const outDir = refs.length === 1 ? baseOut : path.join(baseOut, `reference-${index + 1}`)
+        return [
+          `bun run ${safe(htmlSkeletonWorkflowCheckScript)}`,
+          `--task-dir=${safe(taskRoot)}`,
+          `--reference=${safe(path.resolve(ref))}`,
+          `--out=${safe(outDir)}`,
+          `--threshold=${WEB_CLONE_VISUAL_THRESHOLD}`,
+          `--worst-threshold=${WEB_CLONE_VISUAL_WORST_THRESHOLD}`,
+        ].join(" ")
+      })
+      .join(" && ")
   }
   ACCEPTANCE_VERIFY_CMD = skipLocalVerify
     ? ""
-    : (acceptanceVerifyCmd?.trim()
-      || (referenceImages.length > 0 ? buildHtmlSkeletonWorkflowCmd(referenceImages) : ""))
+    : acceptanceVerifyCmd?.trim() || (referenceImages.length > 0 ? buildHtmlSkeletonWorkflowCmd(referenceImages) : "")
   if (ACCEPTANCE_VERIFY_CMD) {
     console.log(`[overlay-benchmark] verify_cmd=${ACCEPTANCE_VERIFY_CMD}`)
   }
@@ -675,14 +697,19 @@ function formatEventLine(
     const summary = clipText(String((data as any).summary ?? ""), 200)
     const dims = Array.isArray((data as any).dimensions) ? (data as any).dimensions : []
     const dimText = dims
-      .map((d: any) => `${String(d.id ?? "")}=${String(d.verdict ?? "")}(i${d.issueCount ?? 0}/c${d.correctionCount ?? 0}/m${d.missingGoalCount ?? 0})`)
+      .map(
+        (d: any) =>
+          `${String(d.id ?? "")}=${String(d.verdict ?? "")}(i${d.issueCount ?? 0}/c${d.correctionCount ?? 0}/m${d.missingGoalCount ?? 0})`,
+      )
       .join(" ")
     const issueCount = Array.isArray((data as any).issues) ? (data as any).issues.length : 0
     const correctionCount = Array.isArray((data as any).corrections) ? (data as any).corrections.length : 0
     const missingCount = Array.isArray((data as any).missingGoals) ? (data as any).missingGoals.length : 0
-    return `[overlay-benchmark] integrity.review.completed verdict=${verdict || "?"} ` +
+    return (
+      `[overlay-benchmark] integrity.review.completed verdict=${verdict || "?"} ` +
       `dims=[${dimText}] totals=i${issueCount}/c${correctionCount}/m${missingCount} ` +
       `summary="${summary}"`
+    )
   }
   // Session lifecycle milestones (single source — see
   // packages/opencorvus/src/session/status.ts). Replaces the per-phase
@@ -742,9 +769,9 @@ function normalizeEvent(payload: unknown) {
   if (!DIAG_TYPES.has(type)) return
   const props =
     item.properties && typeof item.properties === "object"
-      ? item.properties as Record<string, unknown>
+      ? (item.properties as Record<string, unknown>)
       : item.payload && typeof item.payload === "object"
-        ? item.payload as Record<string, unknown>
+        ? (item.payload as Record<string, unknown>)
         : {}
   return {
     type,
@@ -773,8 +800,12 @@ const onEvent = ({ payload }: { payload: unknown }) => {
   // They don't produce a log line, but they DO count as progress activity —
   if (payload && typeof payload === "object" && "type" in payload) {
     const rawType = String((payload as any).type ?? "")
-    if (rawType === "message.part.delta" || rawType.endsWith(".part.delta") ||
-        rawType === "message.part.updated" || rawType.endsWith(".part.updated")) {
+    if (
+      rawType === "message.part.delta" ||
+      rawType.endsWith(".part.delta") ||
+      rawType === "message.part.updated" ||
+      rawType.endsWith(".part.updated")
+    ) {
       lastActivityLogAt = Date.now()
       lastLogAt = Date.now()
       // message.part.updated carries tool calls — let it through to normalizeEvent
@@ -795,7 +826,10 @@ const onEvent = ({ payload }: { payload: unknown }) => {
     kind: eventValue(normalized.props, normalized.payload, "kind") || topLevelText(normalized.payload, "kind"),
     status: eventValue(normalized.props, normalized.payload, "status"),
     toolName: eventValue(normalized.props, normalized.payload, "toolName"),
-    summary: clipText(eventValue(normalized.props, normalized.payload, "summary") || topLevelText(normalized.payload, "summary"), 600),
+    summary: clipText(
+      eventValue(normalized.props, normalized.payload, "summary") || topLevelText(normalized.payload, "summary"),
+      600,
+    ),
     text: clipText(eventValue(normalized.props, normalized.payload, "text"), 2000),
     progressType: eventValue(normalized.props, normalized.props, "type"),
     goalRunID: eventValue(normalized.payload, normalized.props, "goalRunID"),
@@ -832,9 +866,7 @@ const onEvent = ({ payload }: { payload: unknown }) => {
     lastActivityLogAt = Date.now()
     lastLogAt = lastActivityLogAt
   }
-  flushed = flushed
-    .then(() => fs.appendFile(eventLogFile, `${JSON.stringify(entry)}\n`))
-    .catch(() => undefined)
+  flushed = flushed.then(() => fs.appendFile(eventLogFile, `${JSON.stringify(entry)}\n`)).catch(() => undefined)
 }
 
 const api = async (pathname: string, init?: RequestInit) => {
@@ -878,31 +910,42 @@ try {
   await Bun.write(eventLogFile, "")
 
   if (page) {
-    await page.evaluateOnNewDocument((serverUrl, directory) => {
-      localStorage.setItem("oc_server_url", serverUrl)
-      localStorage.setItem("oc_auto_server", "false")
-      localStorage.setItem("oc_directory", directory)
-      localStorage.setItem("oc_directory_mode", "custom")
-      localStorage.setItem("oc_workspace_directory", directory)
-      localStorage.setItem("oc_auto_question", "true")
-    }, server.url.origin, temp.dir)
+    await page.evaluateOnNewDocument(
+      (serverUrl, directory) => {
+        localStorage.setItem("oc_server_url", serverUrl)
+        localStorage.setItem("oc_auto_server", "false")
+        localStorage.setItem("oc_directory", directory)
+        localStorage.setItem("oc_directory_mode", "custom")
+        localStorage.setItem("oc_workspace_directory", directory)
+        localStorage.setItem("oc_auto_question", "true")
+      },
+      server.url.origin,
+      temp.dir,
+    )
 
     await page.goto(new URL("/ui/index.html", server.url).toString(), { waitUntil: "load" })
-    const overlayReady = await page.waitForFunction(() => typeof (window as OverlayBenchmarkWindow).applyDirectory === "function", { timeout: 0 })
+    const overlayReady = await page
+      .waitForFunction(() => typeof (window as OverlayBenchmarkWindow).applyDirectory === "function", { timeout: 0 })
       .then(() => true)
       .catch((error) => {
-        errorLine(`[overlay-benchmark] overlay readiness wait failed; continuing API-only for primary task: ${error instanceof Error ? error.stack || error.message : String(error)}`)
+        errorLine(
+          `[overlay-benchmark] overlay readiness wait failed; continuing API-only for primary task: ${error instanceof Error ? error.stack || error.message : String(error)}`,
+        )
         return false
       })
     if (overlayReady) {
       const overlay = await syncDirectory(page, temp.dir).catch((error) => {
-        errorLine(`[overlay-benchmark] overlay directory sync failed; continuing API-only for primary task: ${error instanceof Error ? error.stack || error.message : String(error)}`)
+        errorLine(
+          `[overlay-benchmark] overlay directory sync failed; continuing API-only for primary task: ${error instanceof Error ? error.stack || error.message : String(error)}`,
+        )
         return null
       })
       if (overlay) logLine(`[overlay-benchmark] directory=${overlay.directory} saved=${overlay.savedDirectory}`)
     }
     await api("/global/health").catch((error) => {
-      errorLine(`[overlay-benchmark] health check failed; continuing primary task: ${error instanceof Error ? error.stack || error.message : String(error)}`)
+      errorLine(
+        `[overlay-benchmark] health check failed; continuing primary task: ${error instanceof Error ? error.stack || error.message : String(error)}`,
+      )
     })
   }
   marks.onlineAt = Date.now()
@@ -921,13 +964,19 @@ try {
         await overlay.loadTasks()
         await overlay.selectTask(id)
       }, taskID)
-      await page.waitForFunction((id) => {
-        return (window as OverlayBenchmarkWindow).boardStore.selectedTaskID === id
-      }, { timeout: 0 }, taskID)
+      await page.waitForFunction(
+        (id) => {
+          return (window as OverlayBenchmarkWindow).boardStore.selectedTaskID === id
+        },
+        { timeout: 0 },
+        taskID,
+      )
     }
 
     // Synthesize planning/streaming snapshots from current board state
-    const currentProg = await api(`/task/${taskID}/progress`).then((r) => r.json()).catch(() => null)
+    const currentProg = await api(`/task/${taskID}/progress`)
+      .then((r) => r.json())
+      .catch(() => null)
     planning = {
       pendingCount: 0,
       taskList: currentProg?.task?.title ?? TASK_TITLE,
@@ -941,9 +990,12 @@ try {
     marks.selectedAt = Date.now()
 
     if (page) {
-      await page.waitForFunction(() => {
-        return !!(window as OverlayBenchmarkWindow).boardStore.board?.task?.id
-      }, { timeout: 0 })
+      await page.waitForFunction(
+        () => {
+          return !!(window as OverlayBenchmarkWindow).boardStore.board?.task?.id
+        },
+        { timeout: 0 },
+      )
     }
     marks.boardAt = Date.now()
 
@@ -961,7 +1013,10 @@ try {
 
     if (page) {
       streaming = await waitForStreamingVisible(page).catch(() => ({
-        reasoning: "", assistantText: "", liveRole: "", liveText: "",
+        reasoning: "",
+        assistantText: "",
+        liveRole: "",
+        liveText: "",
       }))
     } else {
       streaming = { reasoning: "", assistantText: "", liveRole: "", liveText: "" }
@@ -1012,14 +1067,25 @@ try {
 
     if (page) {
       planning = await waitForPlanningVisible(page, api).catch((error) => {
-        errorLine(`[overlay-benchmark] overlay planning visibility check failed; falling back to API polling: ${error instanceof Error ? error.stack || error.message : String(error)}`)
+        errorLine(
+          `[overlay-benchmark] overlay planning visibility check failed; falling back to API polling: ${error instanceof Error ? error.stack || error.message : String(error)}`,
+        )
         return null
       })
       if (!planning) {
         while (true) {
-          const prog = await api(`/task/${taskID}/progress`).then((r) => r.json()).catch(() => null)
+          const prog = await api(`/task/${taskID}/progress`)
+            .then((r) => r.json())
+            .catch(() => null)
           if (prog?.task?.status && prog.task.status !== "queued") {
-            planning = { pendingCount: 0, taskList: [], reasoning: "", assistantText: "", taskIDs: [taskID], selectedTaskID: taskID }
+            planning = {
+              pendingCount: 0,
+              taskList: [],
+              reasoning: "",
+              assistantText: "",
+              taskIDs: [taskID],
+              selectedTaskID: taskID,
+            }
             break
           }
           await Bun.sleep(1000)
@@ -1027,9 +1093,18 @@ try {
       }
     } else {
       while (true) {
-        const prog = await api(`/task/${taskID}/progress`).then((r) => r.json()).catch(() => null)
+        const prog = await api(`/task/${taskID}/progress`)
+          .then((r) => r.json())
+          .catch(() => null)
         if (prog?.task?.status && prog.task.status !== "queued") {
-          planning = { pendingCount: 0, taskList: [], reasoning: "", assistantText: "", taskIDs: [taskID], selectedTaskID: taskID }
+          planning = {
+            pendingCount: 0,
+            taskList: [],
+            reasoning: "",
+            assistantText: "",
+            taskIDs: [taskID],
+            selectedTaskID: taskID,
+          }
           break
         }
         await Bun.sleep(1000)
@@ -1039,7 +1114,9 @@ try {
 
     if (page) {
       taskID = await waitForTaskCreated(page, api).catch((error) => {
-        errorLine(`[overlay-benchmark] overlay task-created visibility check failed; keeping API taskID=${taskID}: ${error instanceof Error ? error.stack || error.message : String(error)}`)
+        errorLine(
+          `[overlay-benchmark] overlay task-created visibility check failed; keeping API taskID=${taskID}: ${error instanceof Error ? error.stack || error.message : String(error)}`,
+        )
         return taskID
       })
     }
@@ -1057,33 +1134,54 @@ try {
     }).catch(() => undefined)
 
     if (page) {
-      await page.evaluate(async (id) => {
-        const overlay = window as OverlayBenchmarkWindow
-        if (overlay.boardStore.selectedTaskID === id) return
-        await overlay.loadTasks()
-        await overlay.selectTask(id)
-      }, taskID).catch((error) => {
-        errorLine(`[overlay-benchmark] overlay selectTask failed; continuing with API task state: ${error instanceof Error ? error.stack || error.message : String(error)}`)
-      })
-      await page.waitForFunction((id) => {
-        return (window as OverlayBenchmarkWindow).boardStore.selectedTaskID === id
-      }, { timeout: 0 }, taskID).catch((error) => {
-        errorLine(`[overlay-benchmark] overlay selected-task wait failed; continuing with API task state: ${error instanceof Error ? error.stack || error.message : String(error)}`)
-      })
+      await page
+        .evaluate(async (id) => {
+          const overlay = window as OverlayBenchmarkWindow
+          if (overlay.boardStore.selectedTaskID === id) return
+          await overlay.loadTasks()
+          await overlay.selectTask(id)
+        }, taskID)
+        .catch((error) => {
+          errorLine(
+            `[overlay-benchmark] overlay selectTask failed; continuing with API task state: ${error instanceof Error ? error.stack || error.message : String(error)}`,
+          )
+        })
+      await page
+        .waitForFunction(
+          (id) => {
+            return (window as OverlayBenchmarkWindow).boardStore.selectedTaskID === id
+          },
+          { timeout: 0 },
+          taskID,
+        )
+        .catch((error) => {
+          errorLine(
+            `[overlay-benchmark] overlay selected-task wait failed; continuing with API task state: ${error instanceof Error ? error.stack || error.message : String(error)}`,
+          )
+        })
     }
     marks.selectedAt = Date.now()
 
     if (page) {
-      await page.waitForFunction(() => {
-        return !!(window as OverlayBenchmarkWindow).boardStore.board?.task?.id
-      }, { timeout: 0 }).catch((error) => {
-        errorLine(`[overlay-benchmark] overlay board wait failed; continuing with API task state: ${error instanceof Error ? error.stack || error.message : String(error)}`)
-      })
+      await page
+        .waitForFunction(
+          () => {
+            return !!(window as OverlayBenchmarkWindow).boardStore.board?.task?.id
+          },
+          { timeout: 0 },
+        )
+        .catch((error) => {
+          errorLine(
+            `[overlay-benchmark] overlay board wait failed; continuing with API task state: ${error instanceof Error ? error.stack || error.message : String(error)}`,
+          )
+        })
     }
     marks.boardAt = Date.now()
     if (page) {
       streaming = await waitForStreamingVisible(page).catch((error) => {
-        errorLine(`[overlay-benchmark] overlay streaming visibility check failed; continuing with API task state: ${error instanceof Error ? error.stack || error.message : String(error)}`)
+        errorLine(
+          `[overlay-benchmark] overlay streaming visibility check failed; continuing with API task state: ${error instanceof Error ? error.stack || error.message : String(error)}`,
+        )
         return { reasoning: "", assistantText: "", liveRole: "", liveText: "" }
       })
     } else {
@@ -1093,23 +1191,28 @@ try {
     // ─────────────────────────────────────────────────────────────────────────
   }
   if (page && browser) {
-    page = await verifyResume(browser, page, server.url.origin, taskID, temp.dir, api)
-      .catch((error) => {
-        errorLine(`[overlay-benchmark] resume overlay verification failed; continuing primary task: ${error instanceof Error ? error.stack || error.message : String(error)}`)
-        return page
-      })
+    page = await verifyResume(browser, page, server.url.origin, taskID, temp.dir, api).catch((error) => {
+      errorLine(
+        `[overlay-benchmark] resume overlay verification failed; continuing primary task: ${error instanceof Error ? error.stack || error.message : String(error)}`,
+      )
+      return page
+    })
   }
   board = await api(`/task/${taskID}/board?sync=1`).then((res) => res.json())
 
   if (stopAfterArchitect) {
     finalBoard = await waitForArchitectBoard(taskID, api)
-    progress = await api(`/task/${taskID}/progress`).then((res) => res.json()).catch(() => null)
+    progress = await api(`/task/${taskID}/progress`)
+      .then((res) => res.json())
+      .catch(() => null)
     marks.completedAt = Date.now()
   } else {
     progress = await waitForFinal(taskID, api)
     const status = String(progress?.task?.status ?? "")
     if (status !== "completed") {
-      logLine(`[overlay-benchmark] task ended status=${status} — report preserves the terminal state without automatic resume`)
+      logLine(
+        `[overlay-benchmark] task ended status=${status} — report preserves the terminal state without automatic resume`,
+      )
     }
     marks.completedAt = Date.now()
     finalBoard = taskID ? await api(`/task/${taskID}/board?sync=1`).then((res) => res.json()) : board
@@ -1122,13 +1225,20 @@ try {
   const out = await buildBenchmarkReport()
 
   await flushed
-  await Bun.write(eventFile, JSON.stringify({
-    generated_at: new Date().toISOString(),
-    taskID,
-    event_count: events.length,
-    stage_summary: summarizeEvents(events, taskID),
-    events,
-  }, null, 2))
+  await Bun.write(
+    eventFile,
+    JSON.stringify(
+      {
+        generated_at: new Date().toISOString(),
+        taskID,
+        event_count: events.length,
+        stage_summary: summarizeEvents(events, taskID),
+        events,
+      },
+      null,
+      2,
+    ),
+  )
   await Bun.write(reportFile, JSON.stringify(out, null, 2))
   _emergencyWritten = true
   logLine(JSON.stringify(out, null, 2))
@@ -1137,8 +1247,17 @@ try {
   logLine(`events_ndjson: ${eventLogFile}`)
 
   const pass = stopAfterArchitect
-    ? out.assertions.planning_visible.pass && out.assertions.streaming_visible.pass && out.assertions.materialized.pass && out.assertions.frontend_design_agent_card.pass && out.assertions.architect_contract_graph.pass
-    : out.assertions.planning_visible.pass && out.assertions.streaming_visible.pass && out.assertions.materialized.pass && out.assertions.frontend_design_agent_card.pass && out.assertions.acceptance.pass && out.failure_matrix.verdict === "accepted"
+    ? out.assertions.planning_visible.pass &&
+      out.assertions.streaming_visible.pass &&
+      out.assertions.materialized.pass &&
+      out.assertions.frontend_design_agent_card.pass &&
+      out.assertions.architect_contract_graph.pass
+    : out.assertions.planning_visible.pass &&
+      out.assertions.streaming_visible.pass &&
+      out.assertions.materialized.pass &&
+      out.assertions.frontend_design_agent_card.pass &&
+      out.assertions.acceptance.pass &&
+      out.failure_matrix.verdict === "accepted"
   if (!pass) {
     process.exit(1)
   }
@@ -1176,13 +1295,17 @@ try {
   try {
     await Bun.write(eventFile, JSON.stringify(eventPayload, null, 2))
   } catch (writeErr) {
-    errorLine(`[overlay-benchmark] failed to write events report ${eventFile}: ${writeErr instanceof Error ? writeErr.message : String(writeErr)}`)
+    errorLine(
+      `[overlay-benchmark] failed to write events report ${eventFile}: ${writeErr instanceof Error ? writeErr.message : String(writeErr)}`,
+    )
   }
   try {
     await Bun.write(reportFile, JSON.stringify(out, null, 2))
     wroteReport = true
   } catch (writeErr) {
-    errorLine(`[overlay-benchmark] failed to write benchmark report ${reportFile}: ${writeErr instanceof Error ? writeErr.message : String(writeErr)}`)
+    errorLine(
+      `[overlay-benchmark] failed to write benchmark report ${reportFile}: ${writeErr instanceof Error ? writeErr.message : String(writeErr)}`,
+    )
   }
   _emergencyWritten = wroteReport
   errorLine(JSON.stringify(out, null, 2))
@@ -1200,7 +1323,12 @@ try {
     )
   }
   if (page) await cleanup("page.close", () => page!.close().catch(() => undefined))
-  if (browser) await cleanup("browser.close", () => browser!.close().catch(() => undefined), () => browser!.process()?.kill("SIGKILL"))
+  if (browser)
+    await cleanup(
+      "browser.close",
+      () => browser!.close().catch(() => undefined),
+      () => browser!.process()?.kill("SIGKILL"),
+    )
   await cleanup("server.stop", () => server.stop(true))
   await cleanup("instance.disposeAll", () => Instance.disposeAll().catch(() => undefined))
   // Kill any orphaned processes that executors left behind in the workspace
@@ -1209,7 +1337,9 @@ try {
     await cleanup("orphan.kill", async () => {
       try {
         await Bun.spawn(["pkill", "-9", "-f", temp.dir], { stdout: "pipe", stderr: "pipe" }).exited
-      } catch { /* best effort — pkill not available on all platforms */ }
+      } catch {
+        /* best effort — pkill not available on all platforms */
+      }
     })
   }
   if (!keep && temp.dir) {
@@ -1225,7 +1355,8 @@ try {
     }
     await cleanup("temp.dir", () => fs.rm(temp.dir, { recursive: true, force: true }).catch(() => undefined))
   }
-  if (!keep && temp.home) await cleanup("temp.home", () => fs.rm(temp.home, { recursive: true, force: true }).catch(() => undefined))
+  if (!keep && temp.home)
+    await cleanup("temp.home", () => fs.rm(temp.home, { recursive: true, force: true }).catch(() => undefined))
   process.exit(process.exitCode ?? 0)
 }
 
@@ -1441,7 +1572,9 @@ function formatIntegritySection(
   const dims = Array.isArray(payload.dimensions) ? (payload.dimensions as Array<Record<string, unknown>>) : []
   const issues = Array.isArray(payload.issues) ? (payload.issues as Array<Record<string, unknown>>) : []
   const corrections = Array.isArray(payload.corrections) ? (payload.corrections as Array<Record<string, unknown>>) : []
-  const missingGoals = Array.isArray(payload.missingGoals) ? (payload.missingGoals as Array<Record<string, unknown>>) : []
+  const missingGoals = Array.isArray(payload.missingGoals)
+    ? (payload.missingGoals as Array<Record<string, unknown>>)
+    : []
   return {
     sessionID: typeof payload.sessionID === "string" ? payload.sessionID : null,
     verdict: typeof payload.verdict === "string" ? payload.verdict : null,
@@ -1480,18 +1613,23 @@ async function buildBenchmarkReport(error?: unknown) {
   const currentBoard = board ?? (taskID ? await reportApiJson(`/task/${taskID}/board?sync=1`) : null)
   const currentFinalBoard = finalBoard ?? (taskID ? await reportApiJson(`/task/${taskID}/board?sync=1`) : null)
   const currentTranscript = transcript ?? (taskID ? await reportApiJson(`/task/${taskID}/transcript`) : null)
-  const currentTimeline = timeline ?? (taskID ? await reportApiJson(`/control/timeline?taskID=${encodeURIComponent(taskID)}`) : null)
+  const currentTimeline =
+    timeline ?? (taskID ? await reportApiJson(`/control/timeline?taskID=${encodeURIComponent(taskID)}`) : null)
   const currentRuns = runs ?? (taskID ? await reportApiJson(`/task/${taskID}/runs`) : null)
-  const currentTaskStatus = String(progress?.task?.status ?? currentFinalBoard?.task?.status ?? currentBoard?.task?.status ?? "")
-  const localVerify = reportError || currentTaskStatus !== "completed"
-    ? skippedLocalVerify(
-      reportError
-        ? `skipped because benchmark ended before task completion: ${reportError}`
-        : `skipped because task status is ${currentTaskStatus || "unknown"}, not completed`,
-      ACCEPTANCE_VERIFY_CMD,
-    )
-    : await runLocalVerify(temp.dir, ACCEPTANCE_VERIFY_CMD)
-  const acceptanceChangedFiles = progress?.acceptance?.result?.changedFiles ?? currentFinalBoard?.acceptance?.result?.changedFiles ?? []
+  const currentTaskStatus = String(
+    progress?.task?.status ?? currentFinalBoard?.task?.status ?? currentBoard?.task?.status ?? "",
+  )
+  const localVerify =
+    reportError || currentTaskStatus !== "completed"
+      ? skippedLocalVerify(
+          reportError
+            ? `skipped because benchmark ended before task completion: ${reportError}`
+            : `skipped because task status is ${currentTaskStatus || "unknown"}, not completed`,
+          ACCEPTANCE_VERIFY_CMD,
+        )
+      : await runLocalVerify(temp.dir, ACCEPTANCE_VERIFY_CMD)
+  const acceptanceChangedFiles =
+    progress?.acceptance?.result?.changedFiles ?? currentFinalBoard?.acceptance?.result?.changedFiles ?? []
   // Acceptance changedFiles may only contain internal .opencorvus/ files while
   // actual source files are in committed diffs. Git is a parallel evidence
   // source, not a substitute; failures throw instead of producing an empty
@@ -1513,13 +1651,16 @@ async function buildBenchmarkReport(error?: unknown) {
     evaluationChecks: progress?.evaluation?.checks ?? currentFinalBoard?.evaluation?.checks ?? [],
     moduleBlocks,
   })
-  const qualityVerdict = applyBenchmarkErrorVerdict(evaluateQualityGates({
-    artifactAudit,
-    runMetrics,
-    taskStatus: progress?.task?.status || currentFinalBoard?.task?.status || "",
-    evaluationVerdict: progress?.evaluation?.verdict || currentFinalBoard?.evaluation?.verdict || "",
-    localVerify,
-  }), reportError)
+  const qualityVerdict = applyBenchmarkErrorVerdict(
+    evaluateQualityGates({
+      artifactAudit,
+      runMetrics,
+      taskStatus: progress?.task?.status || currentFinalBoard?.task?.status || "",
+      evaluationVerdict: progress?.evaluation?.verdict || currentFinalBoard?.evaluation?.verdict || "",
+      localVerify,
+    }),
+    reportError,
+  )
   const screenshot = page
     ? await withTimeout(takeBenchmarkScreenshot(page), 15_000, "benchmark screenshot").catch(() => null)
     : null
@@ -1618,11 +1759,11 @@ async function buildBenchmarkReport(error?: unknown) {
         sample: planning,
       },
       streaming_visible: {
-        pass: !!streaming && (
-          meaningfulLiveText(streaming.reasoning) ||
-          meaningfulLiveText(streaming.assistantText) ||
-          meaningfulLiveText(streaming.liveText)
-        ),
+        pass:
+          !!streaming &&
+          (meaningfulLiveText(streaming.reasoning) ||
+            meaningfulLiveText(streaming.assistantText) ||
+            meaningfulLiveText(streaming.liveText)),
         sample: streaming,
       },
       materialized: {
@@ -1634,15 +1775,16 @@ async function buildBenchmarkReport(error?: unknown) {
         },
       },
       frontend_design_agent_card: {
-        pass: !expectsFrontendDesignCard || (
-          !!(currentOverlay as any)?.frontendDesignCard?.storePresent &&
-          !!(currentOverlay as any)?.frontendDesignCard?.renderedPresent
-        ),
+        pass:
+          !expectsFrontendDesignCard ||
+          (!!(currentOverlay as any)?.frontendDesignCard?.storePresent &&
+            !!(currentOverlay as any)?.frontendDesignCard?.renderedPresent),
         expected: expectsFrontendDesignCard,
         sample: (currentOverlay as any)?.frontendDesignCard ?? currentOverlay,
       },
       architect_contract_graph: {
-        pass: Array.isArray(currentFinalBoard?.goalWorkflows) &&
+        pass:
+          Array.isArray(currentFinalBoard?.goalWorkflows) &&
           currentFinalBoard.goalWorkflows.length >= 2 &&
           typeof currentFinalBoard?.architect?.contractCount === "number" &&
           currentFinalBoard.architect.contractCount > 0,
@@ -1653,9 +1795,10 @@ async function buildBenchmarkReport(error?: unknown) {
         },
       },
       acceptance: {
-        pass: (progress?.task?.status || currentFinalBoard?.task?.status) === "completed" &&
-            (progress?.evaluation?.verdict || currentFinalBoard?.evaluation?.verdict) === "accepted" &&
-            qualityVerdict.verdict === "accepted",
+        pass:
+          (progress?.task?.status || currentFinalBoard?.task?.status) === "completed" &&
+          (progress?.evaluation?.verdict || currentFinalBoard?.evaluation?.verdict) === "accepted" &&
+          qualityVerdict.verdict === "accepted",
         sample: {
           taskStatus: progress?.task?.status || currentFinalBoard?.task?.status || "",
           verdict: progress?.evaluation?.verdict || currentFinalBoard?.evaluation?.verdict || "",
@@ -1698,8 +1841,10 @@ async function withTimeout<T>(promise: Promise<T>, ms: number, label: string): P
 }
 
 function expectsFrontendDesignProjection(request: string) {
-  return /\b(frontend|web\s*clone|webpage|visual|ui|page|screen|screenshot|browser)\b/i.test(request) ||
+  return (
+    /\b(frontend|web\s*clone|webpage|visual|ui|page|screen|screenshot|browser)\b/i.test(request) ||
     /网页|复刻|还原|前端|视觉|截图|页面/.test(request)
+  )
 }
 
 async function reportApiJson(pathname: string) {
@@ -1733,7 +1878,13 @@ function elapsedOrNull(at: number) {
 }
 
 function dedupePaths(files: string[]) {
-  return [...new Set(files.filter((item): item is string => typeof item === "string" && item.length > 0).map((item) => item.replace(/\\/g, "/")))]
+  return [
+    ...new Set(
+      files
+        .filter((item): item is string => typeof item === "string" && item.length > 0)
+        .map((item) => item.replace(/\\/g, "/")),
+    ),
+  ]
 }
 
 async function gitChangedFiles(dir: string): Promise<string[]> {
@@ -1777,16 +1928,22 @@ function resolveModuleBlocks(progress: any, board: any, request: string) {
       .filter((item): item is Record<string, unknown> => !!item && typeof item === "object")
       .map((item) => ({
         id: typeof item.id === "string" ? item.id : "spec-block",
-        owned_paths: Array.isArray(item.owned_paths) ? dedupePaths(item.owned_paths.filter((path): path is string => typeof path === "string")) : [],
+        owned_paths: Array.isArray(item.owned_paths)
+          ? dedupePaths(item.owned_paths.filter((path): path is string => typeof path === "string"))
+          : [],
       }))
       .filter((item) => item.owned_paths.length > 0)
   }
-  const contractAllowed = progress?.plan?.metadata?.task_contract?.artifacts?.allowed ?? board?.plan?.metadata?.task_contract?.artifacts?.allowed
+  const contractAllowed =
+    progress?.plan?.metadata?.task_contract?.artifacts?.allowed ??
+    board?.plan?.metadata?.task_contract?.artifacts?.allowed
   if (Array.isArray(contractAllowed) && contractAllowed.length > 0) {
-    return [{
-      id: "task-contract",
-      owned_paths: dedupePaths(contractAllowed.filter((item): item is string => typeof item === "string")),
-    }]
+    return [
+      {
+        id: "task-contract",
+        owned_paths: dedupePaths(contractAllowed.filter((item): item is string => typeof item === "string")),
+      },
+    ]
   }
   return moduleBlocksFromRequest(request)
 }
@@ -1825,11 +1982,7 @@ async function findBrowser() {
   throw new Error("No local Edge/Chrome executable found for overlay benchmark")
 }
 
-async function cleanup(
-  label: string,
-  run: () => Promise<unknown>,
-  force?: () => void | Promise<void>,
-) {
+async function cleanup(label: string, run: () => Promise<unknown>, force?: () => void | Promise<void>) {
   try {
     await run()
   } catch (error) {
@@ -1838,10 +1991,7 @@ async function cleanup(
   }
 }
 
-async function waitForFinal(
-  taskID: string,
-  api: (pathname: string, init?: RequestInit) => Promise<Response>,
-) {
+async function waitForFinal(taskID: string, api: (pathname: string, init?: RequestInit) => Promise<Response>) {
   let lastStatus = ""
   lastProgressSignature = ""
   lastHeartbeatAt = 0
@@ -1850,66 +2000,67 @@ async function waitForFinal(
     terminalSignalResolver = () => resolve()
   })
   try {
-  while (true) {
-    let progress: any
-    try {
-      progress = await api(`/task/${taskID}/progress`).then((res) => res.json())
-    } catch (e) {
-      const isTransient = e instanceof SyntaxError
-        || (e instanceof DOMException && (e.name === "AbortError" || e.name === "TimeoutError"))
-        || (e instanceof TypeError && typeof (e as any).message === "string" && /fetch|network|abort/i.test((e as any).message))
-      if (isTransient) {
-        logLine(`[overlay-benchmark] warn: progress poll error (${(e as any)?.name ?? "Error"}: ${(e as any)?.message}), retrying in 2s`)
-        await Bun.sleep(2_000)
-        continue
+    while (true) {
+      let progress: any
+      try {
+        progress = await api(`/task/${taskID}/progress`).then((res) => res.json())
+      } catch (e) {
+        const isTransient =
+          e instanceof SyntaxError ||
+          (e instanceof DOMException && (e.name === "AbortError" || e.name === "TimeoutError")) ||
+          (e instanceof TypeError &&
+            typeof (e as any).message === "string" &&
+            /fetch|network|abort/i.test((e as any).message))
+        if (isTransient) {
+          logLine(
+            `[overlay-benchmark] warn: progress poll error (${(e as any)?.name ?? "Error"}: ${(e as any)?.message}), retrying in 2s`,
+          )
+          await Bun.sleep(2_000)
+          continue
+        }
+        throw e
       }
-      throw e
+      progress = await settle(progress, api)
+      if (FINAL.has(progress.task.status)) return progress
+      const signature = progressSignature(progress)
+      if (signature !== lastProgressSignature) {
+        lastProgressSignature = signature
+        activityLine(`[overlay-benchmark] progress=${signature}`)
+      }
+      if (progress.task.status !== lastStatus) {
+        lastStatus = progress.task.status
+        activityLine(`[overlay-benchmark] status=${lastStatus}`)
+      }
+      const now = Date.now()
+      const taskStatus = progress?.task?.status || ""
+      if (now - lastHeartbeatAt >= 60_000) {
+        lastHeartbeatAt = now
+        const retryCount = progress?.run?.retryCount ?? progress?.activeRun?.retryCount ?? 0
+        const maxFixRuns = (progress?.task as any)?.budget?.maxFixRuns ?? "?"
+        logLine(
+          `[overlay-benchmark] heartbeat status=${taskStatus} retry=${retryCount}/${maxFixRuns} last_progress=${lastProgressSignature || "none"}`,
+        )
+      }
+      if (terminalReached) {
+        await Bun.sleep(250)
+      } else {
+        await Promise.race([Bun.sleep(2_000), terminalPromise])
+      }
     }
-    progress = await settle(progress, api)
-    if (FINAL.has(progress.task.status)) return progress
-    const signature = progressSignature(progress)
-    if (signature !== lastProgressSignature) {
-      lastProgressSignature = signature
-      activityLine(`[overlay-benchmark] progress=${signature}`)
-    }
-    if (progress.task.status !== lastStatus) {
-      lastStatus = progress.task.status
-      activityLine(`[overlay-benchmark] status=${lastStatus}`)
-    }
-    const now = Date.now()
-    const taskStatus = progress?.task?.status || ""
-    if (now - lastHeartbeatAt >= 60_000) {
-      lastHeartbeatAt = now
-      const retryCount = progress?.run?.retryCount ?? progress?.activeRun?.retryCount ?? 0
-      const maxFixRuns = (progress?.task as any)?.budget?.maxFixRuns ?? "?"
-      logLine(
-        `[overlay-benchmark] heartbeat status=${taskStatus} retry=${retryCount}/${maxFixRuns} last_progress=${lastProgressSignature || "none"}`,
-      )
-    }
-    if (terminalReached) {
-      await Bun.sleep(250)
-    } else {
-      await Promise.race([Bun.sleep(2_000), terminalPromise])
-    }
-  }
   } finally {
     terminalSignalResolver = null
   }
 }
 
-async function waitForArchitectBoard(
-  taskID: string,
-  api: (pathname: string, init?: RequestInit) => Promise<Response>,
-) {
+async function waitForArchitectBoard(taskID: string, api: (pathname: string, init?: RequestInit) => Promise<Response>) {
   let lastSignature = ""
   let lastChangeAt = Date.now()
   while (true) {
     const currentBoard = await api(`/task/${taskID}/board?sync=1`).then((res) => res.json())
     const status = String(currentBoard?.task?.status ?? "")
     const goalCount = Array.isArray(currentBoard?.goalWorkflows) ? currentBoard.goalWorkflows.length : 0
-    const contractCount = typeof currentBoard?.architect?.contractCount === "number"
-      ? currentBoard.architect.contractCount
-      : null
+    const contractCount =
+      typeof currentBoard?.architect?.contractCount === "number" ? currentBoard.architect.contractCount : null
     const signature = JSON.stringify({
       status,
       goalCount,
@@ -1941,7 +2092,9 @@ function progressSignature(progress: any) {
       ? progress.goals.map((item: any) => `${item.id || "goal"}:${item.status || ""}`)
       : [],
     pending: Array.isArray(progress?.pendingInteractions)
-      ? progress.pendingInteractions.map((item: any) => `${item.id || "interaction"}:${item.type || ""}:${item.status || ""}`)
+      ? progress.pendingInteractions.map(
+          (item: any) => `${item.id || "interaction"}:${item.type || ""}:${item.status || ""}`,
+        )
       : [],
     // Pre-plan sessions (requirements / architect / fidelity / design-analyst)
     // surface here so the signature evolves while goals is still empty —
@@ -1952,14 +2105,13 @@ function progressSignature(progress: any) {
   })
 }
 
-async function waitForPlanningVisible(
-  page: Page,
-  api: (pathname: string, init?: RequestInit) => Promise<Response>,
-) {
+async function waitForPlanningVisible(page: Page, api: (pathname: string, init?: RequestInit) => Promise<Response>) {
   while (true) {
     const overlay = await overlaySnapshot(page)
     if (overlay.pendingCount > 0 || overlay.selectedTaskID || overlay.taskIDs[0]) return overlay
-    const board = await api("/tasks").then((res) => res.json()).catch(() => null)
+    const board = await api("/tasks")
+      .then((res) => res.json())
+      .catch(() => null)
     const taskID = Array.isArray(board?.tasks) ? board.tasks[0]?.task?.id || "" : ""
     if (taskID) return { ...overlay, taskIDs: [taskID, ...overlay.taskIDs].filter(Boolean).slice(0, 5) }
     await Bun.sleep(250)
@@ -1981,7 +2133,9 @@ async function waitForTaskCreated(page: Page, api: (pathname: string, init?: Req
     const overlay = await overlaySnapshot(page)
     if (overlay.selectedTaskID) return overlay.selectedTaskID
     if (overlay.taskIDs[0]) return overlay.taskIDs[0]
-    const board = await api("/tasks").then((res) => res.json()).catch(() => null)
+    const board = await api("/tasks")
+      .then((res) => res.json())
+      .catch(() => null)
     const taskID = Array.isArray(board?.tasks) ? board.tasks[0]?.task?.id || "" : ""
     if (taskID) return taskID
     await Bun.sleep(1_000)
@@ -1998,17 +2152,24 @@ async function verifyResume(
 ) {
   const next = await browser.newPage()
   await next.setViewport({ width: 1600, height: 1200 })
-  await next.evaluateOnNewDocument((origin, dir, id) => {
-    localStorage.setItem("oc_server_url", origin)
-    localStorage.setItem("oc_auto_server", "false")
-    localStorage.setItem("oc_directory", dir)
-    localStorage.setItem("oc_directory_mode", "custom")
-    localStorage.setItem("oc_workspace_directory", dir)
-    localStorage.setItem("oc_workspace_task", id)
-    localStorage.setItem("oc_auto_question", "true")
-  }, serverUrl, directory, taskID)
+  await next.evaluateOnNewDocument(
+    (origin, dir, id) => {
+      localStorage.setItem("oc_server_url", origin)
+      localStorage.setItem("oc_auto_server", "false")
+      localStorage.setItem("oc_directory", dir)
+      localStorage.setItem("oc_directory_mode", "custom")
+      localStorage.setItem("oc_workspace_directory", dir)
+      localStorage.setItem("oc_workspace_task", id)
+      localStorage.setItem("oc_auto_question", "true")
+    },
+    serverUrl,
+    directory,
+    taskID,
+  )
   await next.goto(new URL("/ui/index.html", serverUrl).toString(), { waitUntil: "load" })
-  await next.waitForFunction(() => typeof (window as OverlayBenchmarkWindow).applyDirectory === "function", { timeout: 0 })
+  await next.waitForFunction(() => typeof (window as OverlayBenchmarkWindow).applyDirectory === "function", {
+    timeout: 0,
+  })
   await syncDirectory(next, directory)
   await api("/global/health")
   await waitForTaskCreated(next, api)
@@ -2017,12 +2178,19 @@ async function verifyResume(
     if (overlay.boardStore.selectedTaskID === id && overlay.boardStore.board?.task?.id === id) return
     await overlay.selectTask(id)
   }, taskID)
-  await next.waitForFunction((id, dir) => {
-    const overlay = window as OverlayBenchmarkWindow
-    return overlay.settingsStore.directory === dir
-      && overlay.boardStore.board?.task?.id === id
-      && overlay.settingsStore.workspaceTaskID === id
-  }, { timeout: 0 }, taskID, directory)
+  await next.waitForFunction(
+    (id, dir) => {
+      const overlay = window as OverlayBenchmarkWindow
+      return (
+        overlay.settingsStore.directory === dir &&
+        overlay.boardStore.board?.task?.id === id &&
+        overlay.settingsStore.workspaceTaskID === id
+      )
+    },
+    { timeout: 0 },
+    taskID,
+    directory,
+  )
   await next.evaluate(async () => {
     const overlay = window as OverlayBenchmarkWindow
     await overlay.persistOverlaySettings()
@@ -2064,7 +2232,8 @@ function pickOptionLabel(options: Array<{ label?: unknown }>): string | undefine
 // posted `{ answers: { [id]: ["label"] } }` which violated the `z.array(...)`
 // schema check (caught on _session-20260429-005130.out at 17:06:49).
 function pickOptionAnswers(item: { payload?: unknown }): string[][] | undefined {
-  const payload = item.payload && typeof item.payload === "object" ? (item.payload as { questions?: unknown }) : undefined
+  const payload =
+    item.payload && typeof item.payload === "object" ? (item.payload as { questions?: unknown }) : undefined
   const questions = Array.isArray(payload?.questions) ? payload.questions : []
   if (questions.length === 0) return undefined
   const out: string[][] = []
@@ -2072,7 +2241,7 @@ function pickOptionAnswers(item: { payload?: unknown }): string[][] | undefined 
     if (!raw || typeof raw !== "object") return undefined
     const q = raw as { options?: unknown }
     const options = Array.isArray(q.options) ? (q.options as Array<{ label?: unknown }>) : []
-    if (options.length === 0) return undefined  // free-text — caller falls back to AUTO_REPLY
+    if (options.length === 0) return undefined // free-text — caller falls back to AUTO_REPLY
     const label = pickOptionLabel(options)
     if (!label) return undefined
     out.push([label])
@@ -2151,17 +2320,20 @@ async function overlaySnapshot(page: Page) {
     // Keep benchmark visibility checks aligned with both render paths; otherwise
     // task-scope agents such as frontend-design exist in cardTree but disappear
     // from the benchmark's human-facing overlay sample.
-    const visibleTurns = [...document.querySelectorAll<HTMLElement>('.chat-bubble-row[data-depth="0"], .card[data-depth="0"]')]
+    const visibleTurns = [
+      ...document.querySelectorAll<HTMLElement>('.chat-bubble-row[data-depth="0"], .card[data-depth="0"]'),
+    ]
       .map((element) => {
         const role = element.dataset.stage || element.dataset.role || element.dataset.kind || ""
         const body = element.querySelector(".chat-bubble__body, .card__body")
-        const text = body?.querySelector(".msg-text")?.textContent?.trim()
-          || body?.querySelector(".reasoning-text")?.textContent?.trim()
-          || element.querySelector(".card__goal-desc")?.textContent?.trim()
-          || body?.textContent?.trim().slice(0, 200)
-          || element.querySelector(".chat-bubble__title")?.textContent?.trim()
-          || element.querySelector(".card__title")?.textContent?.trim()
-          || ""
+        const text =
+          body?.querySelector(".msg-text")?.textContent?.trim() ||
+          body?.querySelector(".reasoning-text")?.textContent?.trim() ||
+          element.querySelector(".card__goal-desc")?.textContent?.trim() ||
+          body?.textContent?.trim().slice(0, 200) ||
+          element.querySelector(".chat-bubble__title")?.textContent?.trim() ||
+          element.querySelector(".card__title")?.textContent?.trim() ||
+          ""
         return { role, text }
       })
       .filter((item) => item.role && item.role !== "user" && item.text)
@@ -2172,27 +2344,32 @@ async function overlaySnapshot(page: Page) {
       workspaceDirectory: localStorage.getItem("oc_workspace_directory") || "",
       workspaceTaskID: localStorage.getItem("oc_workspace_task") || "",
     }
-    const firstText = (sel: string) =>
-      document.querySelector(sel)?.textContent?.trim() || ""
+    const firstText = (sel: string) => document.querySelector(sel)?.textContent?.trim() || ""
     const cardTree = overlay.cardTree || (window as any).cardTree
     const order = Array.isArray(cardTree?.order) ? cardTree.order : []
     const cards = cardTree?.cards && typeof cardTree.cards === "object" ? cardTree.cards : {}
-    const frontendCardID = order.find((id: string) => {
-      const node = cards[id]
-      return String(id || "").startsWith("frontend-design:") ||
-        String(node?.stage || node?.role || "").replace(/_/g, "-") === "frontend-design"
-    }) || ""
+    const frontendCardID =
+      order.find((id: string) => {
+        const node = cards[id]
+        return (
+          String(id || "").startsWith("frontend-design:") ||
+          String(node?.stage || node?.role || "").replace(/_/g, "-") === "frontend-design"
+        )
+      }) || ""
     const frontendNode = frontendCardID ? cards[frontendCardID] : undefined
     const frontendElement = frontendCardID
       ? document.querySelector<HTMLElement>(`[data-card-id="${CSS.escape(frontendCardID)}"]`)
-      : document.querySelector<HTMLElement>('.chat-bubble-row[data-stage="frontend-design"], .card[data-stage="frontend-design"]')
+      : document.querySelector<HTMLElement>(
+          '.chat-bubble-row[data-stage="frontend-design"], .card[data-stage="frontend-design"]',
+        )
     const frontendRect = frontendElement?.getBoundingClientRect()
     const frontendBody = frontendElement?.querySelector(".chat-bubble__body, .card__body")
     const frontendDesignCard = {
       expected: true,
       storePresent: !!frontendNode,
       renderedPresent: !!frontendElement,
-      viewportVisible: !!frontendRect &&
+      viewportVisible:
+        !!frontendRect &&
         frontendRect.bottom > 0 &&
         frontendRect.top < window.innerHeight &&
         frontendRect.right > 0 &&
@@ -2211,18 +2388,23 @@ async function overlaySnapshot(page: Page) {
       selectedTaskID: overlay.boardStore.selectedTaskID || "",
       pendingCount: Array.isArray(overlay.boardStore.pendingTasks) ? overlay.boardStore.pendingTasks.length : 0,
       taskIDs: Array.isArray(overlay.boardStore.tasks)
-        ? overlay.boardStore.tasks.map((item: { task?: { id?: string } }) => item?.task?.id || "").filter(Boolean).slice(0, 5)
+        ? overlay.boardStore.tasks
+            .map((item: { task?: { id?: string } }) => item?.task?.id || "")
+            .filter(Boolean)
+            .slice(0, 5)
         : [],
       taskList: document.querySelector("#taskListPanel")?.textContent?.trim() || "",
-      reasoning: firstText('.card[data-role="assistant"] .reasoning-text')
-        || firstText('.card[data-kind="agent"] .reasoning-text')
-        || firstText('.card[data-kind="goal"] .reasoning-text')
-        || firstText('.card[data-depth="0"] .reasoning-text'),
-      assistantText: firstText('.card[data-role="assistant"] .msg-text')
-        || firstText('.card[data-kind="agent"] .msg-text')
-        || firstText('.card[data-kind="goal"] .msg-text')
-        || firstText('.card[data-kind="tool"] .msg-text')
-        || firstText('.card[data-depth="0"]:not([data-role="user"]) .card__body'),
+      reasoning:
+        firstText('.card[data-role="assistant"] .reasoning-text') ||
+        firstText('.card[data-kind="agent"] .reasoning-text') ||
+        firstText('.card[data-kind="goal"] .reasoning-text') ||
+        firstText('.card[data-depth="0"] .reasoning-text'),
+      assistantText:
+        firstText('.card[data-role="assistant"] .msg-text') ||
+        firstText('.card[data-kind="agent"] .msg-text') ||
+        firstText('.card[data-kind="goal"] .msg-text') ||
+        firstText('.card[data-kind="tool"] .msg-text') ||
+        firstText('.card[data-depth="0"]:not([data-role="user"]) .card__body'),
       liveRole: liveTurn.role,
       liveText: liveTurn.text,
       visibleTurns: visibleTurns.slice(-5),
@@ -2246,9 +2428,8 @@ function clipText(value: string, max: number) {
 function summarizeEvents(events: Array<Record<string, unknown>>, taskID: string) {
   const filtered = events.filter((item) => !taskID || item.taskID === taskID)
   const agents = filtered.filter((item) => item.type === "orchestrator.agent.updated")
-  const runEvents = filtered.filter((item) =>
-    item.type === "orchestrator.message.part.updated" ||
-    item.type === "orchestrator.message.updated"
+  const runEvents = filtered.filter(
+    (item) => item.type === "orchestrator.message.part.updated" || item.type === "orchestrator.message.updated",
   )
   const kinds = filtered.reduce<Record<string, number>>((map, item) => {
     const type = typeof item.type === "string" ? item.type : ""
@@ -2290,41 +2471,66 @@ function summarizeEvents(events: Array<Record<string, unknown>>, taskID: string)
       map[kind] = (map[kind] ?? 0) + 1
       return map
     }, {})
-    return [[stage, {
-      event_count: list.length,
-      first_event_ms: list[0]?.elapsed_ms ?? null,
-      first_message_ms: list.find((item) => item.kind === "message_delta")?.elapsed_ms ?? null,
-      first_tool_call_ms: list.find((item) => item.kind === "tool_call")?.elapsed_ms ?? null,
-      first_tool_result_ms: list.find((item) => item.kind === "tool_result")?.elapsed_ms ?? null,
-      submit_tool_ms: list.find((item) => item.kind === "tool_call" && (item.toolName === "submit_spec" || item.toolName === "submit_plan" || item.toolName === "submit_analysis"))?.elapsed_ms ?? null,
-      error_ms: list.find((item) => item.kind === "error")?.elapsed_ms ?? null,
-      last_event_ms: list.at(-1)?.elapsed_ms ?? null,
-      kind_counts: byKind,
-      tool_calls: toolCalls,
-    }]]
+    return [
+      [
+        stage,
+        {
+          event_count: list.length,
+          first_event_ms: list[0]?.elapsed_ms ?? null,
+          first_message_ms: list.find((item) => item.kind === "message_delta")?.elapsed_ms ?? null,
+          first_tool_call_ms: list.find((item) => item.kind === "tool_call")?.elapsed_ms ?? null,
+          first_tool_result_ms: list.find((item) => item.kind === "tool_result")?.elapsed_ms ?? null,
+          submit_tool_ms:
+            list.find(
+              (item) =>
+                item.kind === "tool_call" &&
+                (item.toolName === "submit_spec" ||
+                  item.toolName === "submit_plan" ||
+                  item.toolName === "submit_analysis"),
+            )?.elapsed_ms ?? null,
+          error_ms: list.find((item) => item.kind === "error")?.elapsed_ms ?? null,
+          last_event_ms: list.at(-1)?.elapsed_ms ?? null,
+          kind_counts: byKind,
+          tool_calls: toolCalls,
+        },
+      ],
+    ]
   })
-  const execution = runEvents.length === 0
-    ? []
-    : [["execution", {
-        event_count: runEvents.length,
-        first_event_ms: runEvents[0]?.elapsed_ms ?? null,
-        first_progress_ms: runEvents.find((item) => item.type === "orchestrator.run.progress")?.elapsed_ms ?? null,
-        first_output_ms: runEvents.find((item) => item.type === "orchestrator.run.output")?.elapsed_ms ?? null,
-        last_event_ms: runEvents.at(-1)?.elapsed_ms ?? null,
-        types: runEvents.reduce<Record<string, number>>((map, item) => {
-          const type = typeof item.type === "string" ? item.type : ""
-          if (!type) return map
-          map[type] = (map[type] ?? 0) + 1
-          return map
-        }, {}),
-        progress_types: runEvents.reduce<Record<string, number>>((map, item) => {
-          const type = typeof item.progressType === "string" ? item.progressType : ""
-          if (!type) return map
-          map[type] = (map[type] ?? 0) + 1
-          return map
-        }, {}),
-        goal_runs: [...new Set(runEvents.flatMap((item) => typeof item.goalRunID === "string" && item.goalRunID ? [item.goalRunID] : []))],
-      }]]
+  const execution =
+    runEvents.length === 0
+      ? []
+      : [
+          [
+            "execution",
+            {
+              event_count: runEvents.length,
+              first_event_ms: runEvents[0]?.elapsed_ms ?? null,
+              first_progress_ms:
+                runEvents.find((item) => item.type === "orchestrator.run.progress")?.elapsed_ms ?? null,
+              first_output_ms: runEvents.find((item) => item.type === "orchestrator.run.output")?.elapsed_ms ?? null,
+              last_event_ms: runEvents.at(-1)?.elapsed_ms ?? null,
+              types: runEvents.reduce<Record<string, number>>((map, item) => {
+                const type = typeof item.type === "string" ? item.type : ""
+                if (!type) return map
+                map[type] = (map[type] ?? 0) + 1
+                return map
+              }, {}),
+              progress_types: runEvents.reduce<Record<string, number>>((map, item) => {
+                const type = typeof item.progressType === "string" ? item.progressType : ""
+                if (!type) return map
+                map[type] = (map[type] ?? 0) + 1
+                return map
+              }, {}),
+              goal_runs: [
+                ...new Set(
+                  runEvents.flatMap((item) =>
+                    typeof item.goalRunID === "string" && item.goalRunID ? [item.goalRunID] : [],
+                  ),
+                ),
+              ],
+            },
+          ],
+        ]
   return {
     types: kinds,
     stages: Object.fromEntries([...stages, ...execution]),

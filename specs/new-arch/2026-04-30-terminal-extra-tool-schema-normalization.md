@@ -95,12 +95,12 @@ does not share the registry/MCP schema normalization boundary.
 
 This created a protocol split:
 
-| Tool source | Provider schema normalization | Current status |
-| --- | --- | --- |
-| Registry | yes | correct before the fix |
-| MCP | yes | correct before the fix |
-| Extra tools | no | broken for complex terminal schemas |
-| StructuredOutput | no | broken for providers that require normalized root object tool parameters |
+| Tool source      | Provider schema normalization | Current status                                                           |
+| ---------------- | ----------------------------- | ------------------------------------------------------------------------ |
+| Registry         | yes                           | correct before the fix                                                   |
+| MCP              | yes                           | correct before the fix                                                   |
+| Extra tools      | no                            | broken for complex terminal schemas                                      |
+| StructuredOutput | no                            | broken for providers that require normalized root object tool parameters |
 
 The secondary issue is that `isReadyToFinalize` now mixes two different
 meanings:
@@ -708,6 +708,7 @@ architect-side invariant is enforced by the test in
 predicates remain per-agent lambdas. Re-opening this requires a new spec.
 
 ### Merge `TerminalToolContract` and structured-output guard into one
+
 `TurnExitContract`
 
 Rejected as scope for this spec. Today the session loop carries two parallel

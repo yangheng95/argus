@@ -70,9 +70,7 @@ test("session row missing from DB throws (let-it-crash, no fallback)", async () 
       const root = await Session.create({ kind: "root", title: "task root" })
       // Use a sessionID that was never persisted via Session.createNext.
       const ghostID = "ses_ghost_neverpersisted"
-      expect(() => overlayMeta(ghostID, root.id, { role: "user" })).toThrow(
-        /has no kind in the DB/,
-      )
+      expect(() => overlayMeta(ghostID, root.id, { role: "user" })).toThrow(/has no kind in the DB/)
     },
   })
 })

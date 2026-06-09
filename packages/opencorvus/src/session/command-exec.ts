@@ -122,7 +122,9 @@ export namespace SessionCommand {
     }
     const agent = await Agent.get(agentName, { config })
     if (!agent) {
-      const available = await Agent.list({ config }).then((agents) => agents.filter((a) => !a.hidden).map((a) => a.name))
+      const available = await Agent.list({ config }).then((agents) =>
+        agents.filter((a) => !a.hidden).map((a) => a.name),
+      )
       const hint = available.length ? ` Available agents: ${available.join(", ")}` : ""
       const error = new NamedError.Unknown({ message: `Agent not found: "${agentName}".${hint}` })
       Bus.publish(Session.Event.Error, {

@@ -825,10 +825,7 @@ export namespace Config {
   export const Overlay = z
     .object({
       model: ModelId.nullable().optional(),
-      prompt: z
-        .record(z.string(), z.string().nullable())
-        .nullable()
-        .optional(),
+      prompt: z.record(z.string(), z.string().nullable()).nullable().optional(),
       agent: z.record(z.string(), OverlayAgent.nullable()).nullable().optional(),
     })
     .strict()
@@ -1561,7 +1558,10 @@ export namespace Config {
             message: `config.agent.${agentID}.prompt is invalid for append-mode agents; use prompt_append.`,
           })
         }
-        if (role?.promptConfigMode === "none" && (agentConfig.prompt !== undefined || agentConfig.prompt_append !== undefined)) {
+        if (
+          role?.promptConfigMode === "none" &&
+          (agentConfig.prompt !== undefined || agentConfig.prompt_append !== undefined)
+        ) {
           ctx.addIssue({
             code: "custom",
             path: ["agent", agentID],

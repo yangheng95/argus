@@ -24,7 +24,9 @@ function walkCss(dir: string): string[] {
   return out
 }
 
-const STYLES = walkCss(STYLES_ROOT).map((f) => readFileSync(f, "utf8")).join("\n")
+const STYLES = walkCss(STYLES_ROOT)
+  .map((f) => readFileSync(f, "utf8"))
+  .join("\n")
 const CLEAN_STYLES = STYLES.replace(/\/\*[\s\S]*?\*\//g, "")
 
 function countSoloTopLevelRules(selector: string): number {
@@ -70,8 +72,7 @@ describe(".chat-input is a single-source canonical rule", () => {
       const openIdx = chunk.indexOf("{")
       if (openIdx < 0) continue
       const selector = chunk.slice(0, openIdx).trim()
-      const isThemeSelector =
-        /body(?:\[[^\]]*data-theme[^\]]*\]|:is\([^)]*data-theme[^)]*\))/.test(selector)
+      const isThemeSelector = /body(?:\[[^\]]*data-theme[^\]]*\]|:is\([^)]*data-theme[^)]*\))/.test(selector)
       if (!isThemeSelector) continue
       expect(selector).not.toMatch(/(?:^|\s|:is\([^)]*)\.chat-input(?:\b|[:.[#])/)
     }

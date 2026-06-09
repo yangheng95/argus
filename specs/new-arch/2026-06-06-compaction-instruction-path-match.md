@@ -23,13 +23,13 @@ Commands reviewed before editing:
 
 Relevant call points:
 
-| Location | Decision |
-| --- | --- |
-| `session/compaction.ts::runtimeContext` | Keep `InstructionPrompt.systemPaths()` as the single source of required instruction paths. |
-| `session/compaction.ts::validateHandoffPayload` | Keep schema validation and minimum evidence validation unchanged at the call site. |
+| Location                                                 | Decision                                                                                                              |
+| -------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------- |
+| `session/compaction.ts::runtimeContext`                  | Keep `InstructionPrompt.systemPaths()` as the single source of required instruction paths.                            |
+| `session/compaction.ts::validateHandoffPayload`          | Keep schema validation and minimum evidence validation unchanged at the call site.                                    |
 | `session/compaction-handoff.ts::validateMinimumEvidence` | Replace exact string comparison only for `durableInstructionSources` path matching with semantic path key comparison. |
-| `test/session/compaction.test.ts` | Existing rejection tests must still reject genuinely wrong instruction paths. |
-| `test/session/compaction-evidence-contract.test.ts` | Add regression coverage for Windows native path versus forward-slash path. |
+| `test/session/compaction.test.ts`                        | Existing rejection tests must still reject genuinely wrong instruction paths.                                         |
+| `test/session/compaction-evidence-contract.test.ts`      | Add regression coverage for Windows native path versus forward-slash path.                                            |
 
 ## Fix
 

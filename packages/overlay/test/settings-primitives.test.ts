@@ -23,14 +23,8 @@ import {
 } from "../src/components/settings/primitives"
 
 const OVERLAY_ROOT = join(import.meta.dir, "..")
-const SETTINGS_CSS = readFileSync(
-  join(OVERLAY_ROOT, "src/styles/surfaces/settings.css"),
-  "utf8",
-)
-const PRIMITIVES_SRC = readFileSync(
-  join(OVERLAY_ROOT, "src/components/settings/primitives.tsx"),
-  "utf8",
-)
+const SETTINGS_CSS = readFileSync(join(OVERLAY_ROOT, "src/styles/surfaces/settings.css"), "utf8")
+const PRIMITIVES_SRC = readFileSync(join(OVERLAY_ROOT, "src/components/settings/primitives.tsx"), "utf8")
 
 describe("settings primitives — CSS contract", () => {
   test.each([
@@ -70,24 +64,22 @@ describe("settings primitives — CSS contract", () => {
     // Allow `Npx` inside calc() (existing convention across the codebase)
     // and the literal `0` (unitless zero is the canonical "none"), but
     // disallow bare `padding: 8px` style literals on the property.
-    const bareLiterals = block.match(/^\s*(padding|margin|gap|width|height|min-height|max-height|top|right|bottom|left)\s*:\s*[1-9]/gm)
+    const bareLiterals = block.match(
+      /^\s*(padding|margin|gap|width|height|min-height|max-height|top|right|bottom|left)\s*:\s*[1-9]/gm,
+    )
     expect(bareLiterals).toBeNull()
   })
 
   test("pill tones cover the semantic palette", () => {
     for (const tone of ["ok", "warn", "bad", "accent", "muted"]) {
-      expect(SETTINGS_CSS).toMatch(
-        new RegExp(`\\.s-pill\\[data-tone="${tone}"\\]\\s*\\{`),
-      )
+      expect(SETTINGS_CSS).toMatch(new RegExp(`\\.s-pill\\[data-tone="${tone}"\\]\\s*\\{`))
     }
   })
 
   test("segmented active states wire through good/warn/bad/accent/neutral", () => {
     for (const tone of ["ok", "warn", "bad", "accent", "neutral"]) {
       expect(SETTINGS_CSS).toMatch(
-        new RegExp(
-          `\\.s-segmented-btn\\[data-active="true"\\]\\[data-tone="${tone}"\\]\\s*\\{`,
-        ),
+        new RegExp(`\\.s-segmented-btn\\[data-active="true"\\]\\[data-tone="${tone}"\\]\\s*\\{`),
       )
     }
   })
@@ -142,10 +134,7 @@ describe("settings primitives — Solid exports", () => {
 })
 
 describe("PermissionsPanel — primitive adoption", () => {
-  const panelSrc = readFileSync(
-    join(OVERLAY_ROOT, "src/components/settings/PermissionsPanel.tsx"),
-    "utf8",
-  )
+  const panelSrc = readFileSync(join(OVERLAY_ROOT, "src/components/settings/PermissionsPanel.tsx"), "utf8")
 
   test("imports the primitive components", () => {
     expect(panelSrc).toContain('from "./primitives"')

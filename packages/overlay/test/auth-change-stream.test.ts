@@ -1,9 +1,6 @@
 import { afterEach, beforeEach, describe, expect, test } from "bun:test"
 import { PROTOCOL_VERSION, type ExtensionMessage } from "@opencorvus-ai/transport-protocol"
-import {
-  __resetVsCodeTransportForTest,
-  createVsCodeTransport,
-} from "../src/services/vscode-transport"
+import { __resetVsCodeTransportForTest, createVsCodeTransport } from "../src/services/vscode-transport"
 import { configure } from "../src/services/api"
 
 /**
@@ -33,20 +30,32 @@ function installFakeWindow(): {
   const posted: any[] = []
   let listener: ((e: MessageEvent) => void) | undefined
   const fakeWindow: any = {
-    addEventListener(_t: string, fn: (e: MessageEvent) => void) { listener = fn },
+    addEventListener(_t: string, fn: (e: MessageEvent) => void) {
+      listener = fn
+    },
     removeEventListener() {},
     location: { reload() {} },
     sessionStorage: {
       _data: new Map<string, string>(),
-      getItem(k: string) { return this._data.get(k) ?? null },
-      setItem(k: string, v: string) { this._data.set(k, v) },
-      removeItem(k: string) { this._data.delete(k) },
+      getItem(k: string) {
+        return this._data.get(k) ?? null
+      },
+      setItem(k: string, v: string) {
+        this._data.set(k, v)
+      },
+      removeItem(k: string) {
+        this._data.delete(k)
+      },
     },
     acquireVsCodeApi() {
       return {
-        postMessage(m: unknown) { posted.push(m) },
+        postMessage(m: unknown) {
+          posted.push(m)
+        },
         setState() {},
-        getState() { return null },
+        getState() {
+          return null
+        },
       }
     },
   }
@@ -58,14 +67,18 @@ function installFakeWindow(): {
       if (!listener) throw new Error("no listener installed")
       listener({ data: m } as MessageEvent)
     },
-    cleanup: () => { (globalThis as any).window = prev },
+    cleanup: () => {
+      ;(globalThis as any).window = prev
+    },
   }
 }
 
 describe("auth-change drain: vscode-transport openStream (audit W2-V1)", () => {
   let cleanupFake: (() => void) | undefined
   beforeEach(() => {
-    try { __resetVsCodeTransportForTest() } catch {}
+    try {
+      __resetVsCodeTransportForTest()
+    } catch {}
     // Reset api credentials to a known baseline so the test's first
     // configure() registers as a real change.
     configure({ username: "opencorvus", password: "" })
@@ -73,7 +86,9 @@ describe("auth-change drain: vscode-transport openStream (audit W2-V1)", () => {
   afterEach(() => {
     cleanupFake?.()
     cleanupFake = undefined
-    try { __resetVsCodeTransportForTest() } catch {}
+    try {
+      __resetVsCodeTransportForTest()
+    } catch {}
   })
 
   test("configure({password}) drains the active stream with reason 'auth-changed'", async () => {
@@ -104,9 +119,7 @@ describe("auth-change drain: vscode-transport openStream (audit W2-V1)", () => {
     // close() must also post a stream.close envelope so the bridge
     // tears down the upstream fetch (otherwise the ext-host keeps the
     // old auth-bearing connection alive — exact bug we're fixing).
-    const closes = fake.fake.posted.filter(
-      (m) => m.type === "stream.close" && m.id === streamId,
-    )
+    const closes = fake.fake.posted.filter((m) => m.type === "stream.close" && m.id === streamId)
     expect(closes.length).toBe(1)
   })
 
@@ -141,10 +154,7 @@ describe("auth-change drain: vscode-transport openStream (audit W2-V1)", () => {
     const transport = createVsCodeTransport()
 
     const reasonsA: string[] = []
-    transport.openStream(
-      { path: "task/a/events" },
-      { onEvent: () => {}, onClose: (r) => reasonsA.push(r ?? "?") },
-    )
+    transport.openStream({ path: "task/a/events" }, { onEvent: () => {}, onClose: (r) => reasonsA.push(r ?? "?") })
     configure({ password: "rev1" })
     await new Promise((r) => setTimeout(r, 0))
     expect(reasonsA).toEqual(["auth-changed"])
@@ -152,10 +162,7 @@ describe("auth-change drain: vscode-transport openStream (audit W2-V1)", () => {
     // Open a new stream AFTER the drain. A second configure() must
     // close THIS stream, not double-close the (already-closed) old one.
     const reasonsB: string[] = []
-    transport.openStream(
-      { path: "task/b/events" },
-      { onEvent: () => {}, onClose: (r) => reasonsB.push(r ?? "?") },
-    )
+    transport.openStream({ path: "task/b/events" }, { onEvent: () => {}, onClose: (r) => reasonsB.push(r ?? "?") })
     configure({ password: "rev2" })
     await new Promise((r) => setTimeout(r, 0))
     expect(reasonsA).toEqual(["auth-changed"]) // unchanged
@@ -168,10 +175,7 @@ describe("auth-change drain: vscode-transport openStream (audit W2-V1)", () => {
     const transport = createVsCodeTransport()
 
     const reasons: string[] = []
-    transport.openStream(
-      { path: "task/c/events" },
-      { onEvent: () => {}, onClose: (r) => reasons.push(r ?? "?") },
-    )
+    transport.openStream({ path: "task/c/events" }, { onEvent: () => {}, onClose: (r) => reasons.push(r ?? "?") })
     await new Promise((r) => setTimeout(r, 0))
     const sid = fake.fake.posted.find((m) => m.type === "stream.open")!.id
 

@@ -31,7 +31,9 @@ describe("executor.opencorvus", () => {
           message: "continue with the latest operator note",
         })
         expect(result.sessionID).toBe(session.id)
-        const row = Database.use((db) => db.select().from(TaskQueueTable).where(eq(TaskQueueTable.id, result.queueTaskID)).get())
+        const row = Database.use((db) =>
+          db.select().from(TaskQueueTable).where(eq(TaskQueueTable.id, result.queueTaskID)).get(),
+        )
         expect(row?.session_id).toBe(session.id)
         expect(row?.source).toBe("engine.task")
       },
@@ -113,7 +115,12 @@ describe("executor.opencorvus", () => {
       directory: tmp.path,
       fn: async () => {
         const root = await Session.create({ kind: "assistant", goalID: "gol_shared", title: "root session" })
-        const child = await Session.create({ kind: "assistant", goalID: "gol_shared", parentID: root.id, title: "child session" })
+        const child = await Session.create({
+          kind: "assistant",
+          goalID: "gol_shared",
+          parentID: root.id,
+          title: "child session",
+        })
         const other = await Session.create({ kind: "assistant", goalID: "gol_other", title: "other goal" })
         const stream = OpencorvusExecutor.events({ goalID: "gol_shared", sessionID: root.id })
         const next = stream.next()

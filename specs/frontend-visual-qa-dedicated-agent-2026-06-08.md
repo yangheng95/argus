@@ -6,16 +6,16 @@ Add a dedicated orchestrator-dispatched frontend UI/UX QA stage built on the exi
 
 ## Call Point Inventory
 
-| Surface | Current evidence | Change |
-| --- | --- | --- |
-| Agent registry | `AgentRoleID` already includes `visual-qa`; `Agent.state()` registers it with build-grade tools and skill permission. | Keep identity; tighten prompt and add stage runner/output tools. |
-| Tool registry | Special-cases `visual-qa` to allow acceptance tools and deny webpage analysis tools. | Reuse; no new webpage extraction tools. |
-| Skill tool | `SkillTool` distinguishes webpage analysis/extraction tool hints from webpage acceptance tool hints. | Allow `visual-qa` to load acceptance skills such as `webpage_render`; keep extraction skills limited to `frontend-design`. |
-| Session kind | `SESSION_KINDS` lacks `visual-qa`. | Add `visual-qa` so the dedicated stage has a real child session kind. |
-| Orchestrator agent include list | No `visual_qa` workflow tool. | Add `visual_qa` dispatch tool. |
-| Orchestrator prompt | Mentions frontend tools and integrity but not dedicated visual QA. | Document `visual_qa` as optional post-build / post-repair UI evidence stage, not a gate. |
-| Stage runner modules | No `src/visual-qa/*` module. | Add `agent.ts`, `output-tools.ts`, `schema.ts`, `static-tools.ts`, and `index.ts`. |
-| Tests | Existing tests cover registry-level `visual-qa`. | Add output-tool tests, agent-runner wiring tests, and orchestrator tool/registry prompt tests. |
+| Surface                         | Current evidence                                                                                                      | Change                                                                                                                     |
+| ------------------------------- | --------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------- |
+| Agent registry                  | `AgentRoleID` already includes `visual-qa`; `Agent.state()` registers it with build-grade tools and skill permission. | Keep identity; tighten prompt and add stage runner/output tools.                                                           |
+| Tool registry                   | Special-cases `visual-qa` to allow acceptance tools and deny webpage analysis tools.                                  | Reuse; no new webpage extraction tools.                                                                                    |
+| Skill tool                      | `SkillTool` distinguishes webpage analysis/extraction tool hints from webpage acceptance tool hints.                  | Allow `visual-qa` to load acceptance skills such as `webpage_render`; keep extraction skills limited to `frontend-design`. |
+| Session kind                    | `SESSION_KINDS` lacks `visual-qa`.                                                                                    | Add `visual-qa` so the dedicated stage has a real child session kind.                                                      |
+| Orchestrator agent include list | No `visual_qa` workflow tool.                                                                                         | Add `visual_qa` dispatch tool.                                                                                             |
+| Orchestrator prompt             | Mentions frontend tools and integrity but not dedicated visual QA.                                                    | Document `visual_qa` as optional post-build / post-repair UI evidence stage, not a gate.                                   |
+| Stage runner modules            | No `src/visual-qa/*` module.                                                                                          | Add `agent.ts`, `output-tools.ts`, `schema.ts`, `static-tools.ts`, and `index.ts`.                                         |
+| Tests                           | Existing tests cover registry-level `visual-qa`.                                                                      | Add output-tool tests, agent-runner wiring tests, and orchestrator tool/registry prompt tests.                             |
 
 ## Tool Surface
 

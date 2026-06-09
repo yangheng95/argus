@@ -8,12 +8,7 @@ import { WorkbenchBriefSnapshotTable, WorkbenchTaskNoteTable } from "./workbench
 
 const BRIEF_VERSION = "brief-v2"
 
-export function compileBrief(input: {
-  taskID: string
-  runID?: string
-  planVersionID?: string
-  sessionID?: string
-}) {
+export function compileBrief(input: { taskID: string; runID?: string; planVersionID?: string; sessionID?: string }) {
   const task = Database.use((db) => db.select().from(EngineTaskTable).where(eq(EngineTaskTable.id, input.taskID)).get())
   if (!task) throw new Error(`Task not found: ${input.taskID}`)
   const planID = input.planVersionID ?? findActivePlanForTask(task.id)?.id
@@ -83,25 +78,28 @@ export function compileBrief(input: {
     goals.length > 0
       ? "Goals:\n" +
         goals
-          .map((goal) =>
-            `- ${goal.title} (acceptance:\n${renderSpecsAsText((goal.acceptance_specs ?? []) as AcceptanceSpec[])}${
-              Array.isArray((goal.metadata as Record<string, unknown> | null | undefined)?.check_selector)
-                ? `; checks: ${(((goal.metadata as Record<string, unknown>).check_selector as unknown[]) ?? [])
-                    .filter((item): item is string => typeof item === "string")
-                    .join(", ")}`
-                : ""
-            })`,
+          .map(
+            (goal) =>
+              `- ${goal.title} (acceptance:\n${renderSpecsAsText((goal.acceptance_specs ?? []) as AcceptanceSpec[])}${
+                Array.isArray((goal.metadata as Record<string, unknown> | null | undefined)?.check_selector)
+                  ? `; checks: ${(((goal.metadata as Record<string, unknown>).check_selector as unknown[]) ?? [])
+                      .filter((item): item is string => typeof item === "string")
+                      .join(", ")}`
+                  : ""
+              })`,
           )
           .join("\n")
       : "",
     notes.length > 0
-      ? "Recent task notes:\n" + notes.slice(-6).map((note) => `- [${note.kind}] ${note.content}`).join("\n")
+      ? "Recent task notes:\n" +
+        notes
+          .slice(-6)
+          .map((note) => `- [${note.kind}] ${note.content}`)
+          .join("\n")
       : "",
     memory.length > 0
       ? "Relevant memory:\n" +
-        memory
-          .map((item) => `- [${item.scope}] ${item.fileTitle}: ${item.content.slice(0, 200)}`)
-          .join("\n")
+        memory.map((item) => `- [${item.scope}] ${item.fileTitle}: ${item.content.slice(0, 200)}`).join("\n")
       : "",
     "</assistant-brief>",
     "Use the brief above to align your work before executing the task.",
@@ -200,4 +198,3 @@ function recallMemory(task: typeof EngineTaskTable.$inferSelect) {
     return []
   }
 }
-

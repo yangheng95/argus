@@ -113,7 +113,10 @@ export namespace SystemPrompt {
     ]
   }
 
-  export async function skills(agent: Agent.Info, input?: { availableToolNames?: Iterable<string> }): Promise<string | undefined> {
+  export async function skills(
+    agent: Agent.Info,
+    input?: { availableToolNames?: Iterable<string> },
+  ): Promise<string | undefined> {
     if (!agentCanUseSkillTool(agent, input?.availableToolNames)) return
 
     const all = await Skill.all()

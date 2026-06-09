@@ -27,7 +27,7 @@ describe("tool call generation stream", () => {
         sessionID: "ses_tool_stream",
         id: "call_write",
         name: "write_file",
-        delta: "{\"path\":\"src/app.ts\",",
+        delta: '{"path":"src/app.ts",',
       },
     })
     routeSSEEvent({
@@ -39,13 +39,13 @@ describe("tool call generation stream", () => {
         sessionID: "ses_tool_stream",
         id: "call_write",
         name: "write_file",
-        delta: "\"content\":\"console.log(1)\"}",
+        delta: '"content":"console.log(1)"}',
       },
     })
     flushBufferedPartDeltas()
 
     const part = toolPart()
-    expect(part?.state?.raw).toBe("{\"path\":\"src/app.ts\",\"content\":\"console.log(1)\"}")
+    expect(part?.state?.raw).toBe('{"path":"src/app.ts","content":"console.log(1)"}')
     expect(part?.raw).toBeUndefined()
     expect(describeToolPart(part)?.detail).toContain("src/app.ts")
   })

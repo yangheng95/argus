@@ -7,11 +7,11 @@ OpenCorvus 的配置分三层：**CLI flag > 环境变量 > `opencorvus.jsonc` �
 
 ## 配置文件位置
 
-| 位置 | 用途 |
-|---|---|
-| `~/.opencorvus/config/opencorvus.json` | 全局默认 |
-| `<repo>/.opencorvus/opencorvus.jsonc` | 项目级覆盖（支持 JSONC 注释） |
-| `OPENCORVUS_CONFIG_CONTENT` env | 运行时注入（CI/容器推荐） |
+| 位置                                   | 用途                          |
+| -------------------------------------- | ----------------------------- |
+| `~/.opencorvus/config/opencorvus.json` | 全局默认                      |
+| `<repo>/.opencorvus/opencorvus.jsonc`  | 项目级覆盖（支持 JSONC 注释） |
+| `OPENCORVUS_CONFIG_CONTENT` env        | 运行时注入（CI/容器推荐）     |
 
 同名字段，后者覆盖前者。
 
@@ -20,7 +20,7 @@ OpenCorvus 的配置分三层：**CLI flag > 环境变量 > `opencorvus.jsonc` �
 ```jsonc
 {
   "$schema": "https://opencorvus.ai/config.json",
-  "model": "alibaba-cn/qwen3.5-plus"
+  "model": "alibaba-cn/qwen3.5-plus",
 }
 ```
 
@@ -36,9 +36,9 @@ OpenCorvus 的配置分三层：**CLI flag > 环境变量 > `opencorvus.jsonc` �
   "skills": {
     "paths": [
       "<abs-path>/skills-market/github.com-openai-skills",
-      "<abs-path>/skills-market/github.com-anthropics-skills"
+      "<abs-path>/skills-market/github.com-anthropics-skills",
     ],
-    "urls": []
+    "urls": [],
   },
 
   "plugin": [],
@@ -48,13 +48,13 @@ OpenCorvus 的配置分三层：**CLI flag > 环境变量 > `opencorvus.jsonc` �
       "local-note": "deny",
       "sora": "ask",
       "figma": "ask",
-      "doc-coauthoring": "ask"
-    }
+      "doc-coauthoring": "ask",
+    },
   },
 
   "experimental": {
-    "auto_question": true
-  }
+    "auto_question": true,
+  },
 }
 ```
 
@@ -86,11 +86,11 @@ OpenCorvus 的配置分三层：**CLI flag > 环境变量 > `opencorvus.jsonc` �
 {
   "assistant": {
     "requirements": { "max_steps": 20 },
-    "evaluator": { "tier": "standard" },  // core | standard | full
+    "evaluator": { "tier": "standard" }, // core | standard | full
     "max_runs": 3,
     "max_fix_runs": 2,
-    "max_executor_groups": 4
-  }
+    "max_executor_groups": 4,
+  },
 }
 ```
 

@@ -13,21 +13,9 @@
  * directly when ready.
  */
 
-export type IntentClass =
-  | "question"
-  | "bug_fix"
-  | "feature"
-  | "refactor"
-  | "exploration"
-  | "chore"
-  | "unclear"
+export type IntentClass = "question" | "bug_fix" | "feature" | "refactor" | "exploration" | "chore" | "unclear"
 
-export type IntentComplexity =
-  | "trivial"
-  | "small"
-  | "medium"
-  | "large"
-  | "unknown"
+export type IntentComplexity = "trivial" | "small" | "medium" | "large" | "unknown"
 
 export type ClarificationPriority = "blocker" | "nice"
 

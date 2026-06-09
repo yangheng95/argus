@@ -11,11 +11,7 @@ import { Database } from "@/storage/db"
 import { Log } from "@/util/log"
 import { budgetRow } from "./helpers"
 import { CreateTaskInput, Event } from "./model"
-import {
-  EngineChannelBindingTable,
-  EngineProgressSnapshotTable,
-  EngineTaskTable,
-} from "./engine.sql"
+import { EngineChannelBindingTable, EngineProgressSnapshotTable, EngineTaskTable } from "./engine.sql"
 import { EngineProtocol } from "./protocol"
 import type { RunRow } from "./store"
 
@@ -143,19 +139,27 @@ export function persistQueuedTask(input: {
       })
       .run()
     Database.effect(() =>
-      EngineProtocol.emit(Event.TaskCreated, {
-        taskID: input.taskID,
-        status: taskStatus,
-        summary,
-      }, { source }),
-    )
-    if (!input.queue) {
-      Database.effect(() =>
-        EngineProtocol.emit(Event.TaskUpdated, {
+      EngineProtocol.emit(
+        Event.TaskCreated,
+        {
           taskID: input.taskID,
           status: taskStatus,
           summary,
-        }, { source }),
+        },
+        { source },
+      ),
+    )
+    if (!input.queue) {
+      Database.effect(() =>
+        EngineProtocol.emit(
+          Event.TaskUpdated,
+          {
+            taskID: input.taskID,
+            status: taskStatus,
+            summary,
+          },
+          { source },
+        ),
       )
     }
   })

@@ -2,71 +2,71 @@
 // Solid.js port of renderChatComposer / renderChatAttachments / chatForm submit
 // and related attachment/keyboard logic
 
-import { createSignal, createMemo, createEffect, For, Show, onCleanup, onMount } from "solid-js";
-import { t, tArray } from "../utils/i18n";
-import { ExecutorSelector } from "./ExecutorSelector";
-import { nativeMessage } from "../services/app-dialog";
-import { messageStore, setChatAttachments } from "../store/messages";
+import { createSignal, createMemo, createEffect, For, Show, onCleanup, onMount } from "solid-js"
+import { t, tArray } from "../utils/i18n"
+import { ExecutorSelector } from "./ExecutorSelector"
+import { nativeMessage } from "../services/app-dialog"
+import { messageStore, setChatAttachments } from "../store/messages"
 import {
   MAX_ATTACHMENT_SIZE,
   MAX_TOTAL_ATTACHMENT_SIZE,
   wouldExceedAggregateLimit,
-} from "../services/chat-attach-limits";
-import { fileToDataUrl } from "../services/file-to-data-url";
-import { Icon } from "./Icon";
-import { AutoGrowTextarea } from "./primitives/AutoGrowTextarea";
+} from "../services/chat-attach-limits"
+import { fileToDataUrl } from "../services/file-to-data-url"
+import { Icon } from "./Icon"
+import { AutoGrowTextarea } from "./primitives/AutoGrowTextarea"
 import {
   clearComposerDraft,
   composerDraftText,
   normalizeComposerDraftKey,
   setComposerDraft,
-} from "../services/composer-draft";
+} from "../services/composer-draft"
 
 // ── Types ──
 
 export interface ChatAttachment {
-  mime: string;
-  url: string;
-  filename: string;
+  mime: string
+  url: string
+  filename: string
 }
 
 export interface ChatComposerProps {
   /**
- * Whether the composer should be interactive.
- */
-  enabled: boolean;
+   * Whether the composer should be interactive.
+   */
+  enabled: boolean
   /**
- * Whether a task is active (in-flight request or interruptable task status).
- * When true the send button becomes a stop button.
- */
-  busy: boolean;
+   * Whether a task is active (in-flight request or interruptable task status).
+   * When true the send button becomes a stop button.
+   */
+  busy: boolean
   /**
- * Whether the busy request is being stopped (transitional state).
- */
-  stopping?: boolean;
+   * Whether the busy request is being stopped (transitional state).
+   */
+  stopping?: boolean
   /** Called when the user submits a message. */
-  onSubmit: (text: string, attachments: ChatAttachment[], webSearch: boolean) => void | Promise<void>;
+  onSubmit: (text: string, attachments: ChatAttachment[], webSearch: boolean) => void | Promise<void>
   /** Called when the user clicks the stop button while busy. */
-  onStop?: () => void;
+  onStop?: () => void
   /**
    * One-shot suggestion to inject into the empty composer (used after a
    * task finishes — parent provides an LLM-generated follow-up). Written
    * into the textarea only when the current text is empty so we never
    * overwrite the user's in-progress input.
    */
-  pendingSuggestion?: string;
+  pendingSuggestion?: string
   /** Called once the pending suggestion has been applied (or intentionally
    *  dropped because the user was already typing). Parent should clear its
    *  signal to avoid re-applying the same suggestion. */
-  onSuggestionConsumed?: () => void;
-  formID?: string;
-  textareaID?: string;
-  sendID?: string;
-  stopID?: string;
-  textareaDataUI?: string;
-  sendDataUI?: string;
+  onSuggestionConsumed?: () => void
+  formID?: string
+  textareaID?: string
+  sendID?: string
+  stopID?: string
+  textareaDataUI?: string
+  sendDataUI?: string
   /** Stable task/mission scoped key used to save and restore draft text. */
-  draftKey?: string;
+  draftKey?: string
 }
 
 // ── Constants ──
@@ -75,8 +75,8 @@ export interface ChatComposerProps {
 // services/chat-attach-limits (audit W2-V15) so the cap can be
 // unit-tested without rendering the component.
 
-const REQUEST_PERFORMANCE_WARNING_BYTES = 50 * 1024;
-const UTF8_ENCODER = new TextEncoder();
+const REQUEST_PERFORMANCE_WARNING_BYTES = 50 * 1024
+const UTF8_ENCODER = new TextEncoder()
 
 // ── Helpers ──
 //
@@ -95,7 +95,7 @@ const UTF8_ENCODER = new TextEncoder();
 // duplicated here (the server-side helper is not bundled into the
 // overlay) is the lesser evil; the alternative is shipping the server
 // rule through the SDK just for one literal.
-const SAFE_FILENAME_RE = /^[A-Za-z0-9._\-一-鿿 ]+$/;
+const SAFE_FILENAME_RE = /^[A-Za-z0-9._\-一-鿿 ]+$/
 const PASTE_EXT_BY_MIME: Record<string, string> = {
   "image/png": "png",
   "image/jpeg": "jpg",
@@ -104,28 +104,28 @@ const PASTE_EXT_BY_MIME: Record<string, string> = {
   "image/svg+xml": "svg",
   "application/pdf": "pdf",
   "text/plain": "txt",
-};
+}
 function chooseAttachmentFilename(original: string | undefined, mime: string): string {
-  if (original && SAFE_FILENAME_RE.test(original)) return original;
-  const ext = PASTE_EXT_BY_MIME[mime] ?? (mime.split("/")[1] ?? "bin").replace(/[^A-Za-z0-9]/g, "");
+  if (original && SAFE_FILENAME_RE.test(original)) return original
+  const ext = PASTE_EXT_BY_MIME[mime] ?? (mime.split("/")[1] ?? "bin").replace(/[^A-Za-z0-9]/g, "")
   // Stamp lets the operator distinguish multiple pastes within one
   // composer session at a glance — sha-style handles all blur together.
-  const stamp = new Date().toISOString().replace(/[-:T]/g, "").replace(/\..+/, "");
-  return `pasted-${stamp}.${ext || "bin"}`;
+  const stamp = new Date().toISOString().replace(/[-:T]/g, "").replace(/\..+/, "")
+  return `pasted-${stamp}.${ext || "bin"}`
 }
 
 function utf8ByteLength(value: string): number {
-  return UTF8_ENCODER.encode(value).byteLength;
+  return UTF8_ENCODER.encode(value).byteLength
 }
 
 // ── Component ──
 
 export function ChatComposer(props: ChatComposerProps) {
-  let textareaRef!: HTMLTextAreaElement;
-  let formRef!: HTMLFormElement;
+  let textareaRef!: HTMLTextAreaElement
+  let formRef!: HTMLFormElement
 
-  const [text, setText] = createSignal("");
-  let loadedDraftKey: string | null = null;
+  const [text, setText] = createSignal("")
+  let loadedDraftKey: string | null = null
   // audit-2026-04-29 W2-V12 — single source of truth for staged
   // chat attachments lives in `messageStore.chatAttachments`. The
   // composer used to keep its own local signal, which meant
@@ -136,42 +136,39 @@ export function ChatComposer(props: ChatComposerProps) {
   // and submitted without it. CLAUDE.md §二-8 forbids dual sources;
   // collapse to the store and route every add/remove/clear through
   // setChatAttachments.
-  const attachments = () => messageStore.chatAttachments as ChatAttachment[];
+  const attachments = () => messageStore.chatAttachments as ChatAttachment[]
   const setAttachments = (next: ChatAttachment[] | ((prev: ChatAttachment[]) => ChatAttachment[])) => {
-    const nextValue = typeof next === "function"
-      ? (next as (prev: ChatAttachment[]) => ChatAttachment[])(attachments())
-      : next;
-    setChatAttachments(nextValue);
-  };
-  const [dragover, setDragover] = createSignal(false);
-  const [focused, setFocused] = createSignal(false);
-  const [hintText, setHintText] = createSignal("");
-  const [submitting, setSubmitting] = createSignal(false);
-  let resizeSession:
-    | { pointerID: number; startY: number; startHeight: number }
-    | undefined;
+    const nextValue =
+      typeof next === "function" ? (next as (prev: ChatAttachment[]) => ChatAttachment[])(attachments()) : next
+    setChatAttachments(nextValue)
+  }
+  const [dragover, setDragover] = createSignal(false)
+  const [focused, setFocused] = createSignal(false)
+  const [hintText, setHintText] = createSignal("")
+  const [submitting, setSubmitting] = createSignal(false)
+  let resizeSession: { pointerID: number; startY: number; startHeight: number } | undefined
 
-  const hasText = createMemo(() => text().trim().length > 0);
-  const showLargeRequestWarning = createMemo(() => utf8ByteLength(text()) > REQUEST_PERFORMANCE_WARNING_BYTES);
-  const stopping = () => props.stopping === true;
+  const hasText = createMemo(() => text().trim().length > 0)
+  const showLargeRequestWarning = createMemo(() => utf8ByteLength(text()) > REQUEST_PERFORMANCE_WARNING_BYTES)
+  const stopping = () => props.stopping === true
 
   function writeText(next: string): void {
-    setText(next);
-    if (textareaRef && textareaRef.value !== next) textareaRef.value = next;
+    setText(next)
+    if (textareaRef && textareaRef.value !== next) textareaRef.value = next
   }
 
   function writeDraftText(next: string): void {
-    writeText(next);
-    const key = normalizeComposerDraftKey(props.draftKey);
-    if (key) setComposerDraft(key, next);
+    writeText(next)
+    const key = normalizeComposerDraftKey(props.draftKey)
+    if (key) setComposerDraft(key, next)
   }
 
   createEffect(() => {
-    const key = normalizeComposerDraftKey(props.draftKey);
-    if (loadedDraftKey === key) return;
-    loadedDraftKey = key;
-    writeText(key ? composerDraftText(key) : "");
-  });
+    const key = normalizeComposerDraftKey(props.draftKey)
+    if (loadedDraftKey === key) return
+    loadedDraftKey = key
+    writeText(key ? composerDraftText(key) : "")
+  })
 
   // ── Rotating placeholder ──
   // Cycles through a shuffled list of project-level examples while the
@@ -180,58 +177,56 @@ export function ChatComposer(props: ChatComposerProps) {
   // 20–70 signal-driven DOM mutations per second the entire time the
   // composer was visible — Tauri's transparent WebView2 then alpha-blended
   // the desktop on every frame, dominating idle power draw on laptops.
-  let rotateTimer: ReturnType<typeof setInterval> | undefined;
-  let hintOrder: number[] = [];
-  let hintCursor = 0;
-  const ROTATE_MS = 7_000;
+  let rotateTimer: ReturnType<typeof setInterval> | undefined
+  let hintOrder: number[] = []
+  let hintCursor = 0
+  const ROTATE_MS = 7_000
 
   function shuffleIndices(n: number): number[] {
-    const arr = Array.from({ length: n }, (_, i) => i);
+    const arr = Array.from({ length: n }, (_, i) => i)
     for (let i = arr.length - 1; i > 0; i--) {
-      const j = Math.floor(Math.random() * (i + 1));
-      [arr[i], arr[j]] = [arr[j], arr[i]];
+      const j = Math.floor(Math.random() * (i + 1))
+      ;[arr[i], arr[j]] = [arr[j], arr[i]]
     }
-    return arr;
+    return arr
   }
 
   function stopHint() {
     if (rotateTimer) {
-      clearInterval(rotateTimer);
-      rotateTimer = undefined;
+      clearInterval(rotateTimer)
+      rotateTimer = undefined
     }
   }
 
   function startRotate(examples: string[]) {
-    stopHint();
+    stopHint()
     if (examples.length === 0) {
-      setHintText("");
-      return;
+      setHintText("")
+      return
     }
     if (hintOrder.length !== examples.length) {
-      hintOrder = shuffleIndices(examples.length);
-      hintCursor = 0;
+      hintOrder = shuffleIndices(examples.length)
+      hintCursor = 0
     }
-    setHintText(examples[hintOrder[hintCursor % hintOrder.length]!]!);
-    if (examples.length === 1) return;
+    setHintText(examples[hintOrder[hintCursor % hintOrder.length]!]!)
+    if (examples.length === 1) return
     rotateTimer = setInterval(() => {
-      hintCursor = (hintCursor + 1) % hintOrder.length;
-      setHintText(examples[hintOrder[hintCursor]!]!);
-    }, ROTATE_MS);
+      hintCursor = (hintCursor + 1) % hintOrder.length
+      setHintText(examples[hintOrder[hintCursor]!]!)
+    }, ROTATE_MS)
   }
 
-  const showHint = createMemo(
-    () => props.enabled && !props.busy && !focused() && text().length === 0,
-  );
+  const showHint = createMemo(() => props.enabled && !props.busy && !focused() && text().length === 0)
 
   createEffect(() => {
-    const examples = tArray("chat.placeholder_projects");
+    const examples = tArray("chat.placeholder_projects")
     if (showHint() && examples.length > 0) {
-      startRotate(examples);
+      startRotate(examples)
     } else {
-      stopHint();
-      setHintText("");
+      stopHint()
+      setHintText("")
     }
-  });
+  })
 
   // Pause rotation when the overlay window is hidden / minimized — the user
   // is not looking, and Tauri's WebView2 still wakes the JS event loop on
@@ -239,17 +234,17 @@ export function ChatComposer(props: ChatComposerProps) {
   if (typeof document !== "undefined") {
     const onVisibility = () => {
       if (document.hidden) {
-        stopHint();
+        stopHint()
       } else {
-        const examples = tArray("chat.placeholder_projects");
-        if (showHint() && examples.length > 0) startRotate(examples);
+        const examples = tArray("chat.placeholder_projects")
+        if (showHint() && examples.length > 0) startRotate(examples)
       }
-    };
-    document.addEventListener("visibilitychange", onVisibility);
-    onCleanup(() => document.removeEventListener("visibilitychange", onVisibility));
+    }
+    document.addEventListener("visibilitychange", onVisibility)
+    onCleanup(() => document.removeEventListener("visibilitychange", onVisibility))
   }
 
-  onCleanup(() => stopHint());
+  onCleanup(() => stopHint())
 
   // ── Pending suggestion injection ──
   // When the parent supplies a non-empty suggestion and the composer is
@@ -258,14 +253,14 @@ export function ChatComposer(props: ChatComposerProps) {
   // onSuggestionConsumed so the parent clears its signal and we don't
   // re-apply on subsequent unrelated re-renders.
   createEffect(() => {
-    const pending = props.pendingSuggestion?.trim();
-    if (!pending) return;
-    if (!props.enabled || props.busy) return;
+    const pending = props.pendingSuggestion?.trim()
+    if (!pending) return
+    if (!props.enabled || props.busy) return
     if (text().length === 0) {
-      writeDraftText(pending);
+      writeDraftText(pending)
     }
-    props.onSuggestionConsumed?.();
-  });
+    props.onSuggestionConsumed?.()
+  })
 
   // ── Auto-grow textarea ──
   // Content-driven height (capped, then scroll) is owned by the shared
@@ -274,28 +269,28 @@ export function ChatComposer(props: ChatComposerProps) {
   // resize remains a hard floor while the primitive handles content height.
 
   onMount(() => {
-    if (!textareaRef) return;
+    if (!textareaRef) return
     // Park the caret at the start of the input. Click-focus uses the click
     // position, so this only matters for keyboard-driven focus.
     try {
-      textareaRef.setSelectionRange(0, 0);
+      textareaRef.setSelectionRange(0, 0)
     } catch {
       /* ignore — selection APIs throw on detached elements in some hosts */
     }
-  });
+  })
 
- // ── Attachment handling ──
+  // ── Attachment handling ──
 
   async function addAttachment(file: File) {
-    if (!file) return;
+    if (!file) return
     if (file.size > MAX_ATTACHMENT_SIZE) {
-      console.warn("[ChatComposer] file too large:", file.name, file.size);
-      const limitMb = (MAX_ATTACHMENT_SIZE / (1024 * 1024)).toFixed(0);
-      const sizeMb = (file.size / (1024 * 1024)).toFixed(1);
+      console.warn("[ChatComposer] file too large:", file.name, file.size)
+      const limitMb = (MAX_ATTACHMENT_SIZE / (1024 * 1024)).toFixed(0)
+      const sizeMb = (file.size / (1024 * 1024)).toFixed(1)
       void nativeMessage(t("chat.attach_too_large", { name: file.name, size: sizeMb, limit: limitMb }), {
         title: t("chat.attach_too_large_title"),
-      });
-      return;
+      })
+      return
     }
     // audit-2026-04-29 W2-V18 — pre-fix the FileReader reject
     // (file deleted mid-read, EACCES on the OS handle, browser-
@@ -309,26 +304,26 @@ export function ChatComposer(props: ChatComposerProps) {
     // failed.
     let url: string
     try {
-      url = await fileToDataUrl(file);
+      url = await fileToDataUrl(file)
     } catch (err) {
-      console.warn("[ChatComposer] FileReader failed for", file.name, err);
+      console.warn("[ChatComposer] FileReader failed for", file.name, err)
       void nativeMessage(t("chat.attach_read_failed", { name: file.name }), {
         title: t("chat.attach_too_large_title"),
-      });
-      return;
+      })
+      return
     }
     if (wouldExceedAggregateLimit(attachments(), url.length)) {
-      console.warn("[ChatComposer] aggregate attachment size exceeded:", url.length);
-      const limitMb = (MAX_TOTAL_ATTACHMENT_SIZE / (1024 * 1024)).toFixed(0);
-      const sizeMb = (url.length / (1024 * 1024)).toFixed(1);
+      console.warn("[ChatComposer] aggregate attachment size exceeded:", url.length)
+      const limitMb = (MAX_TOTAL_ATTACHMENT_SIZE / (1024 * 1024)).toFixed(0)
+      const sizeMb = (url.length / (1024 * 1024)).toFixed(1)
       // Reuse the per-file too-large i18n string so we don't churn
       // the locale catalogues for a single new copy line; the user
       // sees the same actionable message ("attachment too big") with
       // the aggregate numbers.
       void nativeMessage(t("chat.attach_too_large", { name: file.name, size: sizeMb, limit: limitMb }), {
         title: t("chat.attach_too_large_title"),
-      });
-      return;
+      })
+      return
     }
     // Clipboard paste hands us a synthesized File whose `name` is often
     // empty (Chromium) or an opaque "image.png" with no clue what was
@@ -338,157 +333,154 @@ export function ChatComposer(props: ChatComposerProps) {
     // Fix at the single client-side seam (drop / paste / picker all flow
     // here per rule 9) so every downstream consumer gets a stable,
     // human-readable handle.
-    const mime = file.type || "application/octet-stream";
-    const filename = chooseAttachmentFilename(file.name, mime);
-    setAttachments((prev) => [
-      ...prev,
-      { mime, url, filename },
-    ]);
+    const mime = file.type || "application/octet-stream"
+    const filename = chooseAttachmentFilename(file.name, mime)
+    setAttachments((prev) => [...prev, { mime, url, filename }])
   }
 
   function removeAttachment(index: number) {
-    setAttachments((prev) => prev.filter((_, i) => i !== index));
+    setAttachments((prev) => prev.filter((_, i) => i !== index))
   }
 
- // ── Submit ──
+  // ── Submit ──
 
   function submitErrorMessage(error: unknown): string {
-    if (error instanceof Error && error.message) return error.message;
-    return String(error);
+    if (error instanceof Error && error.message) return error.message
+    return String(error)
   }
 
   async function handleSubmit(e: SubmitEvent) {
-    e.preventDefault();
-    if (props.busy) return;
-    if (submitting()) return;
-    if (!props.enabled) return;
-    const trimmed = text().trim();
-    if (!trimmed) return;
-    const sentAttachments = [...attachments()];
-    setSubmitting(true);
+    e.preventDefault()
+    if (props.busy) return
+    if (submitting()) return
+    if (!props.enabled) return
+    const trimmed = text().trim()
+    if (!trimmed) return
+    const sentAttachments = [...attachments()]
+    setSubmitting(true)
     try {
-      await props.onSubmit(trimmed, sentAttachments, false);
-      setText("");
-      clearComposerDraft(props.draftKey);
-      setAttachments([]);
+      await props.onSubmit(trimmed, sentAttachments, false)
+      setText("")
+      clearComposerDraft(props.draftKey)
+      setAttachments([])
       if (textareaRef) {
-        textareaRef.value = "";
+        textareaRef.value = ""
         try {
-          textareaRef.setSelectionRange(0, 0);
+          textareaRef.setSelectionRange(0, 0)
         } catch {
           /* selection APIs may throw if the element has been detached */
         }
       }
     } catch (error) {
-      console.error("[ChatComposer] submit failed", error);
+      console.error("[ChatComposer] submit failed", error)
       void nativeMessage(t("chat.send_failed", { error: submitErrorMessage(error) }), {
         title: t("chat.send_failed_title"),
         kind: "error",
-      });
+      })
     } finally {
-      setSubmitting(false);
+      setSubmitting(false)
     }
   }
 
- // ── Keyboard: Enter to send, Shift+Enter for newline ──
+  // ── Keyboard: Enter to send, Shift+Enter for newline ──
 
   function handleKeyDown(e: KeyboardEvent) {
-    if (e.isComposing) return;
-    if (props.busy) return;
+    if (e.isComposing) return
+    if (props.busy) return
     if (e.key === "Enter" && !e.shiftKey) {
-      e.preventDefault();
-      if (!props.enabled) return;
-      formRef?.requestSubmit();
+      e.preventDefault()
+      if (!props.enabled) return
+      formRef?.requestSubmit()
     }
   }
 
- // ── Drag-and-drop ──
+  // ── Drag-and-drop ──
 
   function handleDragOver(e: DragEvent) {
-    e.preventDefault();
-    setDragover(true);
+    e.preventDefault()
+    setDragover(true)
   }
 
   function handleDragLeave(e: DragEvent) {
     if (!(formRef as HTMLElement).contains(e.relatedTarget as Node)) {
-      setDragover(false);
+      setDragover(false)
     }
   }
 
   async function handleDrop(e: DragEvent) {
-    e.preventDefault();
-    setDragover(false);
-    const files = e.dataTransfer?.files;
-    if (!files) return;
-    for (const file of files) await addAttachment(file);
+    e.preventDefault()
+    setDragover(false)
+    const files = e.dataTransfer?.files
+    if (!files) return
+    for (const file of files) await addAttachment(file)
   }
 
- // ── Paste images ──
+  // ── Paste images ──
 
   async function handlePaste(e: ClipboardEvent) {
-    const files = e.clipboardData?.files;
-    if (!files || !files.length) return;
-    e.preventDefault();
-    for (const file of files) await addAttachment(file);
+    const files = e.clipboardData?.files
+    if (!files || !files.length) return
+    e.preventDefault()
+    for (const file of files) await addAttachment(file)
   }
 
- // ── Composer resize ──
+  // ── Composer resize ──
 
   function currentUIScale(): number {
-    const raw = getComputedStyle(document.documentElement).getPropertyValue("--ui-scale");
-    const value = Number.parseFloat(raw);
-    return Number.isFinite(value) && value > 0 ? value : 1;
+    const raw = getComputedStyle(document.documentElement).getPropertyValue("--ui-scale")
+    const value = Number.parseFloat(raw)
+    return Number.isFinite(value) && value > 0 ? value : 1
   }
 
   function handleResizePointerDown(e: PointerEvent) {
-    if (e.button !== 0 || !textareaRef) return;
-    const handle = e.currentTarget as HTMLElement;
+    if (e.button !== 0 || !textareaRef) return
+    const handle = e.currentTarget as HTMLElement
     resizeSession = {
       pointerID: e.pointerId,
       startY: e.clientY,
       startHeight: textareaRef.getBoundingClientRect().height,
-    };
-    handle.setPointerCapture(e.pointerId);
-    e.preventDefault();
+    }
+    handle.setPointerCapture(e.pointerId)
+    e.preventDefault()
   }
 
   function handleResizePointerMove(e: PointerEvent) {
-    if (!resizeSession || resizeSession.pointerID !== e.pointerId || !formRef) return;
-    const scale = currentUIScale();
-    const minHeight = 62 * scale;
-    const maxHeight = 260 * scale;
+    if (!resizeSession || resizeSession.pointerID !== e.pointerId || !formRef) return
+    const scale = currentUIScale()
+    const minHeight = 62 * scale
+    const maxHeight = 260 * scale
     const nextHeight = Math.min(
       maxHeight,
       Math.max(minHeight, resizeSession.startHeight + resizeSession.startY - e.clientY),
-    );
-    formRef.style.setProperty("--chat-textarea-height", `${Math.round(nextHeight)}px`);
+    )
+    formRef.style.setProperty("--chat-textarea-height", `${Math.round(nextHeight)}px`)
   }
 
   function handleResizePointerEnd(e: PointerEvent) {
-    if (!resizeSession || resizeSession.pointerID !== e.pointerId) return;
-    const handle = e.currentTarget as HTMLElement;
-    if (handle.hasPointerCapture(e.pointerId)) handle.releasePointerCapture(e.pointerId);
-    resizeSession = undefined;
+    if (!resizeSession || resizeSession.pointerID !== e.pointerId) return
+    const handle = e.currentTarget as HTMLElement
+    if (handle.hasPointerCapture(e.pointerId)) handle.releasePointerCapture(e.pointerId)
+    resizeSession = undefined
   }
 
- // ── Send/Stop button rendering (mirrors renderChatComposer SVG logic) ──
+  // ── Send/Stop button rendering (mirrors renderChatComposer SVG logic) ──
 
   const sendDisabled = createMemo(() => {
-    if (props.busy) return stopping();
-    return submitting() || !props.enabled || !hasText();
-  });
+    if (props.busy) return stopping()
+    return submitting() || !props.enabled || !hasText()
+  })
 
   // Surface WHY the send button is disabled in its title — operators
   // were left guessing whether grey meant "task busy", "no text yet", or
   // "permissions blocked". Order matches sendDisabled's predicate.
   const sendTitle = () => {
-    if (props.busy) return t("chat.stop_title");
-    if (!props.enabled) return t("chat.disabled_unavailable");
-    if (!hasText()) return t("chat.disabled_empty");
-    return t("chat.send_title");
-  };
-  const sendAriaLabel = () => (props.busy ? t("chat.stop_label") : t("chat.send_label"));
-  const sendLabel = () => (props.busy ? t("chat.stop_label") : t("chat.send_label"));
+    if (props.busy) return t("chat.stop_title")
+    if (!props.enabled) return t("chat.disabled_unavailable")
+    if (!hasText()) return t("chat.disabled_empty")
+    return t("chat.send_title")
+  }
+  const sendAriaLabel = () => (props.busy ? t("chat.stop_label") : t("chat.send_label"))
+  const sendLabel = () => (props.busy ? t("chat.stop_label") : t("chat.send_label"))
 
   return (
     <form
@@ -510,16 +502,10 @@ export function ChatComposer(props: ChatComposerProps) {
                 <Show
                   when={att.mime.startsWith("image/")}
                   fallback={
-                    <span class="chat-attachment-icon">
-                      {att.filename?.split(".").pop()?.toUpperCase() || "FILE"}
-                    </span>
+                    <span class="chat-attachment-icon">{att.filename?.split(".").pop()?.toUpperCase() || "FILE"}</span>
                   }
                 >
-                  <img
-                    class="chat-attachment-thumb"
-                    src={att.url}
-                    alt={att.filename}
-                  />
+                  <img class="chat-attachment-thumb" src={att.url} alt={att.filename} />
                 </Show>
                 <span class="chat-attachment-name">{att.filename || "file"}</span>
                 <button
@@ -554,7 +540,7 @@ export function ChatComposer(props: ChatComposerProps) {
         <div class="chat-textarea-wrap" title={t("chat.tip")}>
           <AutoGrowTextarea
             ref={(el) => {
-              textareaRef = el;
+              textareaRef = el
             }}
             id={props.textareaID ?? "chatTextarea"}
             class="chat-textarea"
@@ -565,7 +551,7 @@ export function ChatComposer(props: ChatComposerProps) {
             value={text()}
             data-ui={props.textareaDataUI}
             onInput={(e) => {
-              writeDraftText(e.currentTarget.value);
+              writeDraftText(e.currentTarget.value)
             }}
             onFocus={() => setFocused(true)}
             onBlur={() => setFocused(false)}
@@ -582,7 +568,7 @@ export function ChatComposer(props: ChatComposerProps) {
 
         {/* Send / Stop button */}
         <button
-          id={props.busy ? props.stopID ?? "btnTaskInterrupt" : props.sendID ?? "chatSend"}
+          id={props.busy ? (props.stopID ?? "btnTaskInterrupt") : (props.sendID ?? "chatSend")}
           class="chat-send"
           type={props.busy ? "button" : "submit"}
           data-ui={props.sendDataUI}
@@ -593,8 +579,8 @@ export function ChatComposer(props: ChatComposerProps) {
           aria-label={sendAriaLabel()}
           onClick={(e) => {
             if (props.busy) {
-              e.preventDefault();
-              props.onStop?.();
+              e.preventDefault()
+              props.onStop?.()
             }
           }}
         >
@@ -623,5 +609,5 @@ export function ChatComposer(props: ChatComposerProps) {
         </div>
       </div>
     </form>
-  );
+  )
 }

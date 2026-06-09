@@ -119,7 +119,9 @@ export namespace Agent {
       read: "allow",
     })
     const user = PermissionNext.fromConfig(cfg.permission ?? {})
-    const webpageEvidenceDenied = PermissionNext.fromConfig(Object.fromEntries(WEBPAGE_EVIDENCE_TOOL_IDS.map((id) => [id, "deny"])))
+    const webpageEvidenceDenied = PermissionNext.fromConfig(
+      Object.fromEntries(WEBPAGE_EVIDENCE_TOOL_IDS.map((id) => [id, "deny"])),
+    )
     const webpageEvidenceAnalysisDenied = PermissionNext.fromConfig(
       Object.fromEntries(WEBPAGE_EVIDENCE_ANALYSIS_TOOL_IDS.map((id) => [id, "deny"])),
     )
@@ -146,7 +148,8 @@ export namespace Agent {
       },
       "coding-assistant": {
         name: "coding-assistant",
-        description: "Right-sidebar coding assistant session. Uses the project conversation panel and executes tools based on configured permissions.",
+        description:
+          "Right-sidebar coding assistant session. Uses the project conversation panel and executes tools based on configured permissions.",
         tools: { exclude: ["task_report", "analytics", ...WEBPAGE_EVIDENCE_TOOL_IDS] },
         options: {},
         prompt: PROMPT_CODING,
@@ -210,7 +213,15 @@ export namespace Agent {
         name: "general",
         description: AgentRoleContract.description("general"),
         tools: {
-          exclude: ["planner", "panel", "task_report", "analytics", "todoread", "todowrite", ...WEBPAGE_EVIDENCE_TOOL_IDS],
+          exclude: [
+            "planner",
+            "panel",
+            "task_report",
+            "analytics",
+            "todoread",
+            "todowrite",
+            ...WEBPAGE_EVIDENCE_TOOL_IDS,
+          ],
         },
         prompt: PROMPT_GENERAL,
         permission: nonDesignPermissions(

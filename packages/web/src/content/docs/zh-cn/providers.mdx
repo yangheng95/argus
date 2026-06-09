@@ -9,26 +9,26 @@ OpenCorvus 的 LLM 抽象构建在 [Vercel AI SDK](https://sdk.vercel.ai/) 之�
 
 从 `packages/opencorvus/package.json:52-90` 实际声明的依赖：
 
-| Provider | 包 |
-|---|---|
-| Anthropic | `@ai-sdk/anthropic` + `@anthropic-ai/claude-agent-sdk` |
-| OpenAI / 兼容 | `@ai-sdk/openai` + `@ai-sdk/openai-compatible` |
-| Google | `@ai-sdk/google` + `@ai-sdk/google-vertex` |
-| Amazon Bedrock | `@ai-sdk/amazon-bedrock` |
-| Azure OpenAI | `@ai-sdk/azure` |
-| Cerebras / Cohere / DeepInfra / Groq / Mistral / Perplexity / TogetherAI / Vercel / xAI | 对应 `@ai-sdk/*` 包 |
-| GitLab AI | `@gitlab/gitlab-ai-provider` |
-| OpenRouter | `@openrouter/ai-sdk-provider` |
-| Vercel Gateway | `ai-gateway-provider` |
+| Provider                                                                                | 包                                                     |
+| --------------------------------------------------------------------------------------- | ------------------------------------------------------ |
+| Anthropic                                                                               | `@ai-sdk/anthropic` + `@anthropic-ai/claude-agent-sdk` |
+| OpenAI / 兼容                                                                           | `@ai-sdk/openai` + `@ai-sdk/openai-compatible`         |
+| Google                                                                                  | `@ai-sdk/google` + `@ai-sdk/google-vertex`             |
+| Amazon Bedrock                                                                          | `@ai-sdk/amazon-bedrock`                               |
+| Azure OpenAI                                                                            | `@ai-sdk/azure`                                        |
+| Cerebras / Cohere / DeepInfra / Groq / Mistral / Perplexity / TogetherAI / Vercel / xAI | 对应 `@ai-sdk/*` 包                                    |
+| GitLab AI                                                                               | `@gitlab/gitlab-ai-provider`                           |
+| OpenRouter                                                                              | `@openrouter/ai-sdk-provider`                          |
+| Vercel Gateway                                                                          | `ai-gateway-provider`                                  |
 
 国内常用别名（在 `channel-runtime/.env.example` 中声明）：
 
-| 别名 | 底层 |
-|---|---|
-| `alibaba-cn` | DashScope（阿里云） |
+| 别名                     | 底层                       |
+| ------------------------ | -------------------------- |
+| `alibaba-cn`             | DashScope（阿里云）        |
 | `alibaba-coding-plan-cn` | DashScope Coding Plan 专线 |
-| `moonshotai-cn` | Moonshot（月之暗面） |
-| `deepseek` | DeepSeek |
+| `moonshotai-cn`          | Moonshot（月之暗面）       |
+| `deepseek`               | DeepSeek                   |
 
 ## 配置方式
 
@@ -59,11 +59,11 @@ export DASHSCOPE_API_KEY=sk-...             # 标准 intl
       "api": "https://your-hexin-gateway/v1",
       "env": ["HEXIN_API_KEY"],
       "models": {
-        "gpt-5.4": { "name": "GPT-5.4", "tool_call": true }
-      }
-    }
+        "gpt-5.4": { "name": "GPT-5.4", "tool_call": true },
+      },
+    },
   },
-  "model": "hexin/gpt-5.4"
+  "model": "hexin/gpt-5.4",
 }
 ```
 
@@ -73,11 +73,11 @@ export DASHSCOPE_API_KEY=sk-...             # 标准 intl
 
 OpenCorvus 在三种场景选模型：
 
-| 场景 | 配置位置 |
-|---|---|
-| 默认执行模型 | `model` 字段 |
-| 按 agent 模型 | `agent.<name>.model`（独立设置，见 `packages/opencorvus/src/config/config.ts:1053-1067`） |
-| Vision / 截图理解 | `OPENCORVUS_VISION_MODEL` |
+| 场景              | 配置位置                                                                                  |
+| ----------------- | ----------------------------------------------------------------------------------------- |
+| 默认执行模型      | `model` 字段                                                                              |
+| 按 agent 模型     | `agent.<name>.model`（独立设置，见 `packages/opencorvus/src/config/config.ts:1053-1067`） |
+| Vision / 截图理解 | `OPENCORVUS_VISION_MODEL`                                                                 |
 
 计划阶段与执行阶段分离的目的：**用强但慢的模型规划，用快但够用的模型执行**。典型配置：
 
@@ -86,8 +86,8 @@ OpenCorvus 在三种场景选模型：
   "model": "alibaba-cn/qwen3.5-plus",
   "assistant": {
     "requirements": { "model": "anthropic/claude-sonnet-4-6" },
-    "planner":      { "model": "anthropic/claude-sonnet-4-6" }
-  }
+    "planner": { "model": "anthropic/claude-sonnet-4-6" },
+  },
 }
 ```
 

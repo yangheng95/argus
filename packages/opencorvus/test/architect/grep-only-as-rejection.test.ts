@@ -2,10 +2,7 @@ import { describe, expect, test } from "bun:test"
 import path from "node:path"
 
 const repoRoot = path.resolve(import.meta.dir, "../../../..")
-const architectPromptPath = path.join(
-  repoRoot,
-  "packages/opencorvus/src/prompt/core/architect-core.txt",
-)
+const architectPromptPath = path.join(repoRoot, "packages/opencorvus/src/prompt/core/architect-core.txt")
 
 async function readArchitectPrompt() {
   return await Bun.file(architectPromptPath).text()

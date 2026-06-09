@@ -2,6 +2,7 @@ import { describe, expect, test } from "bun:test"
 import { $ } from "bun"
 import fs from "fs/promises"
 import path from "path"
+import { InternalGitCommitSubject } from "../../src/engine/internal-git-commit-subject"
 import { Instance } from "../../src/project/instance"
 import { Worktree } from "../../src/worktree"
 import { tmpdir } from "../fixture/fixture"
@@ -60,10 +61,7 @@ describe("Worktree.mergeSafely", () => {
     expect(outcome.status).toBe("conflict")
     if (outcome.status !== "conflict") throw new Error(`unexpected outcome ${outcome.status}`)
     expect(outcome.conflictPaths).toEqual(["shared.txt"])
-    const mergeHead = await $`git rev-parse --verify --quiet MERGE_HEAD`
-      .quiet()
-      .nothrow()
-      .cwd(info.directory)
+    const mergeHead = await $`git rev-parse --verify --quiet MERGE_HEAD`.quiet().nothrow().cwd(info.directory)
     expect(mergeHead.exitCode).toBe(0)
   })
 
@@ -161,7 +159,9 @@ describe("Worktree.mergeSafely", () => {
     })
 
     expect(outcome.status).toBe("merged")
-    expect((await fs.readFile(path.join(tmp.path, "references", "screenshot.png"), "utf8")).replace(/\r\n/g, "\n")).toBe("must remain input\n")
+    expect(
+      (await fs.readFile(path.join(tmp.path, "references", "screenshot.png"), "utf8")).replace(/\r\n/g, "\n"),
+    ).toBe("must remain input\n")
   })
 
   test("preserves dirty primary worktree changes before publishing goal branch", async () => {
@@ -195,8 +195,10 @@ describe("Worktree.mergeSafely", () => {
     await expect(fs.stat(path.join(tmp.path, "removed.test.ts"))).rejects.toThrow()
     const status = (await $`git status --porcelain`.cwd(tmp.path).text()).trim()
     expect(status).toBe("")
-    const recoveryMessage = (await $`git log --format=%s -1 ${outcome.primaryRecoveryCommit}`.cwd(tmp.path).text()).trim()
-    expect(recoveryMessage).toBe("chore(opencorvus): preserve primary worktree changes before merge_back")
+    const recoveryMessage = (
+      await $`git log --format=%s -1 ${outcome.primaryRecoveryCommit}`.cwd(tmp.path).text()
+    ).trim()
+    expect(recoveryMessage).toBe(InternalGitCommitSubject.preservePrimaryWorktree)
   })
 
   test("preserves dirty primary worktree without staging ignored evidence directories", async () => {
@@ -229,7 +231,9 @@ describe("Worktree.mergeSafely", () => {
     if (outcome.status !== "merged") throw new Error(`unexpected outcome ${outcome.status}`)
     expect((await fs.readFile(path.join(tmp.path, "feature.ts"), "utf8")).replace(/\r\n/g, "\n")).toBe("feature\n")
     expect((await fs.readFile(path.join(tmp.path, "kept.txt"), "utf8")).replace(/\r\n/g, "\n")).toBe("primary dirty\n")
-    expect((await fs.readFile(path.join(tmp.path, "webpage-evidence", "source.html"), "utf8")).replace(/\r\n/g, "\n")).toBe("<html></html>\n")
+    expect(
+      (await fs.readFile(path.join(tmp.path, "webpage-evidence", "source.html"), "utf8")).replace(/\r\n/g, "\n"),
+    ).toBe("<html></html>\n")
     const tracked = await $`git ls-files webpage-evidence`.cwd(tmp.path).text()
     expect(tracked.trim()).toBe("")
   })
@@ -247,7 +251,10 @@ describe("Worktree.mergeSafely", () => {
       fn: () => Worktree.create({ name: `safe-missing-git-${Date.now().toString(36)}` }),
     })
     await fs.rm(path.join(info.directory, ".git"), { force: true })
-    await fs.rm(path.join(tmp.path, ".git", "worktrees", path.basename(info.directory)), { recursive: true, force: true })
+    await fs.rm(path.join(tmp.path, ".git", "worktrees", path.basename(info.directory)), {
+      recursive: true,
+      force: true,
+    })
     await fs.writeFile(path.join(info.directory, "ignored-by-primary.txt"), "must not affect primary\n")
 
     const outcome = await Instance.provide({

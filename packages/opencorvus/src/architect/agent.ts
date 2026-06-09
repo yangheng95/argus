@@ -256,12 +256,14 @@ function buildUserPrompt(input: ArchitectAgent.CoordinateInput): string {
   const sections: string[] = []
 
   sections.push("# Delegation\n\nOrchestrator is asking architect to decompose this task into executable goals.")
-  sections.push(renderUserRequestSection({
-    heading: "# Task",
-    title: input.taskTitle,
-    request: input.taskRequest,
-    taskID: input.taskID,
-  }))
+  sections.push(
+    renderUserRequestSection({
+      heading: "# Task",
+      title: input.taskTitle,
+      request: input.taskRequest,
+      taskID: input.taskID,
+    }),
+  )
   sections.push(
     [
       "# Input Contract",
@@ -300,13 +302,15 @@ function buildUserPrompt(input: ArchitectAgent.CoordinateInput): string {
   if (frontendResearchBrief) sections.push(frontendResearchBrief)
 
   if (input.requirements && input.requirements.length > 0) {
-    const reqText = input.requirements.map((r) => {
-      const lines = [`- **${r.id}** (${r.type}): ${r.description}`]
-      if (r.acceptance.trim().length > 0) lines.push(`  Acceptance: ${r.acceptance}`)
-      if (r.non_goals.trim().length > 0) lines.push(`  Non-goals: ${r.non_goals}`)
-      if (r.evidence_refs.length > 0) lines.push(`  Evidence refs: ${r.evidence_refs.join(", ")}`)
-      return lines.join("\n")
-    }).join("\n")
+    const reqText = input.requirements
+      .map((r) => {
+        const lines = [`- **${r.id}** (${r.type}): ${r.description}`]
+        if (r.acceptance.trim().length > 0) lines.push(`  Acceptance: ${r.acceptance}`)
+        if (r.non_goals.trim().length > 0) lines.push(`  Non-goals: ${r.non_goals}`)
+        if (r.evidence_refs.length > 0) lines.push(`  Evidence refs: ${r.evidence_refs.join(", ")}`)
+        return lines.join("\n")
+      })
+      .join("\n")
     sections.push(`# Requirements (${input.requirements.length})\n\n${reqText}`)
   }
 

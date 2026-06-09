@@ -20,13 +20,13 @@ Command:
 
 Relevant decisions:
 
-| Surface | Decision |
-| --- | --- |
-| `SessionCompaction.process` | Keep preserving the first dispatcher user message by `anchor_id`, but pass only anchor metadata and a bounded excerpt into the compact-agent prompt. |
-| `SessionCompaction.buildPrompt` | Stop embedding the full dispatch anchor in the final compact-agent user prompt. The anchor is already preserved in replay by `Message.filterCompacted`; duplicating it makes the provider request too large. |
-| `Message.filterCompacted` | Keep current anchor replay behavior. It is the durable source for the full dispatch anchor. |
-| `SessionCompaction.create` / `compaction_request` | Keep control-record creation unchanged. This fix is payload sizing, not a new route or fallback. |
-| Workflow `ContextOverflowError` rows | Keep typed context-overflow failures for workflow kinds. They should be diagnosed separately from compact-agent `agent=compaction` errors. |
+| Surface                                           | Decision                                                                                                                                                                                                     |
+| ------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `SessionCompaction.process`                       | Keep preserving the first dispatcher user message by `anchor_id`, but pass only anchor metadata and a bounded excerpt into the compact-agent prompt.                                                         |
+| `SessionCompaction.buildPrompt`                   | Stop embedding the full dispatch anchor in the final compact-agent user prompt. The anchor is already preserved in replay by `Message.filterCompacted`; duplicating it makes the provider request too large. |
+| `Message.filterCompacted`                         | Keep current anchor replay behavior. It is the durable source for the full dispatch anchor.                                                                                                                  |
+| `SessionCompaction.create` / `compaction_request` | Keep control-record creation unchanged. This fix is payload sizing, not a new route or fallback.                                                                                                             |
+| Workflow `ContextOverflowError` rows              | Keep typed context-overflow failures for workflow kinds. They should be diagnosed separately from compact-agent `agent=compaction` errors.                                                                   |
 
 ## Decision
 

@@ -38,11 +38,7 @@ const HEADER_RULES: HeaderRule[] = [
   },
 ]
 
-export function applyVendorHeaders(
-  headers: Record<string, string>,
-  model: Provider.Model,
-  stickyKey?: string,
-): void {
+export function applyVendorHeaders(headers: Record<string, string>, model: Provider.Model, stickyKey?: string): void {
   for (const rule of HEADER_RULES) {
     if (rule.match(model)) rule.apply(headers, model, stickyKey)
   }

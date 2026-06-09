@@ -11,10 +11,12 @@ export interface FrontendSkeletonProjectToolEvent {
   details?: Record<string, unknown>
 }
 
-export function createFrontendSkeletonProjectTool(options: {
-  taskID?: string
-  onToolEvent?: (event: FrontendSkeletonProjectToolEvent) => void
-} = {}) {
+export function createFrontendSkeletonProjectTool(
+  options: {
+    taskID?: string
+    onToolEvent?: (event: FrontendSkeletonProjectToolEvent) => void
+  } = {},
+) {
   return {
     create_frontend_skeleton_project: tool({
       description:
@@ -29,11 +31,15 @@ export function createFrontendSkeletonProjectTool(options: {
         outputDir: z
           .string()
           .optional()
-          .describe("Directory where the skeleton evidence project is written. Omit this when task runtime defaults exist, or pass the frontend-design-skeleton path only. Never pass web-clone-target or any target acceptance app root."),
+          .describe(
+            "Directory where the skeleton evidence project is written. Omit this when task runtime defaults exist, or pass the frontend-design-skeleton path only. Never pass web-clone-target or any target acceptance app root.",
+          ),
         singleFileHtmlPath: z
           .string()
           .optional()
-          .describe("Deprecated compatibility field. The source skeleton generator consumes web-clone-source/source-skeleton and ignores SingleFile HTML."),
+          .describe(
+            "Deprecated compatibility field. The source skeleton generator consumes web-clone-source/source-skeleton and ignores SingleFile HTML.",
+          ),
         packageName: z.string().optional(),
         overwrite: z.boolean().optional().describe("Replace existing outputDir. Defaults to false."),
       }),
@@ -46,9 +52,15 @@ export function createFrontendSkeletonProjectTool(options: {
             outputDir: params.outputDir,
           },
         })
-        const defaults = options.taskID ? ProjectRuntimePaths.frontendDesignPaths(Instance.directory, options.taskID) : undefined
-        const sourcePackageDir = resolveProjectPath(params.sourcePackageDir ?? requireTaskRuntimeDefault(defaults?.sourcePackageAbsolute, "sourcePackageDir"))
-        const outputDir = resolveProjectPath(params.outputDir ?? requireTaskRuntimeDefault(defaults?.skeletonProjectAbsolute, "outputDir"))
+        const defaults = options.taskID
+          ? ProjectRuntimePaths.frontendDesignPaths(Instance.directory, options.taskID)
+          : undefined
+        const sourcePackageDir = resolveProjectPath(
+          params.sourcePackageDir ?? requireTaskRuntimeDefault(defaults?.sourcePackageAbsolute, "sourcePackageDir"),
+        )
+        const outputDir = resolveProjectPath(
+          params.outputDir ?? requireTaskRuntimeDefault(defaults?.skeletonProjectAbsolute, "outputDir"),
+        )
         let result: Awaited<ReturnType<typeof generateWebCloneSourceProject>>
         try {
           result = await generateWebCloneSourceProject({

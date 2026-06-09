@@ -23,7 +23,9 @@ afterEach(() => {
   if (originalHome === undefined) delete process.env.OPENCORVUS_HOME
   else process.env.OPENCORVUS_HOME = originalHome
   for (const dir of tempDirs.splice(0)) {
-    try { fs.rmSync(dir, { recursive: true, force: true }) } catch {}
+    try {
+      fs.rmSync(dir, { recursive: true, force: true })
+    } catch {}
   }
 })
 

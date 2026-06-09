@@ -1,25 +1,25 @@
-import { createMemo, createSignal, Show } from "solid-js";
-import { reasoningPartHidden, reasoningRevision } from "../store/reasoning";
-import { t } from "../utils/i18n";
-import { renderMarkdown } from "../utils/markdown";
-import { Icon } from "./Icon";
-import { visibleStreamingText } from "./text-part-model";
+import { createMemo, createSignal, Show } from "solid-js"
+import { reasoningPartHidden, reasoningRevision } from "../store/reasoning"
+import { t } from "../utils/i18n"
+import { renderMarkdown } from "../utils/markdown"
+import { Icon } from "./Icon"
+import { visibleStreamingText } from "./text-part-model"
 
 export function isEmptyReasoning(s: string): boolean {
   // Filter out reasoning that is only brackets/whitespace (e.g. "[]", "[[]]", "[] []")
-  return !s.replace(/[\[\]\s]/g, "");
+  return !s.replace(/[\[\]\s]/g, "")
 }
 
 export function ReasoningPart(props: { part: any; streaming?: boolean }) {
-  const [expanded, setExpanded] = createSignal(true);
-  const text = () => String(props.part?.text || "");
-  const renderedHtml = createMemo(() => (props.streaming ? "" : renderMarkdown(text())));
+  const [expanded, setExpanded] = createSignal(true)
+  const text = () => String(props.part?.text || "")
+  const renderedHtml = createMemo(() => (props.streaming ? "" : renderMarkdown(text())))
   const hidden = createMemo(() => {
-    reasoningRevision();
-    return reasoningPartHidden(props.part);
-  });
+    reasoningRevision()
+    return reasoningPartHidden(props.part)
+  })
 
-  const label = () => t("transcript.reasoning");
+  const label = () => t("transcript.reasoning")
 
   return (
     <Show when={text().trim() && !isEmptyReasoning(text()) && !hidden()}>
@@ -29,8 +29,8 @@ export function ReasoningPart(props: { part: any; streaming?: boolean }) {
           class="reasoning-label"
           aria-expanded={expanded()}
           onClick={(event) => {
-            event.stopPropagation();
-            setExpanded(!expanded());
+            event.stopPropagation()
+            setExpanded(!expanded())
           }}
         >
           {label()} <Icon name={expanded() ? "caret-down" : "chevron"} />
@@ -40,5 +40,5 @@ export function ReasoningPart(props: { part: any; streaming?: boolean }) {
         </Show>
       </div>
     </Show>
-  );
+  )
 }

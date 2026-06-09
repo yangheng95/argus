@@ -3,11 +3,7 @@ import { JsonRpcLineTransport } from "./protocol/json-rpc"
 import type { CodexAppServerClient, CodexInbound } from "./codex-app-server"
 
 export namespace CodexAppServerClientProcess {
-  export function create(input: {
-    command: string[]
-    cwd?: string
-    env?: NodeJS.ProcessEnv
-  }): CodexAppServerClient {
+  export function create(input: { command: string[]; cwd?: string; env?: NodeJS.ProcessEnv }): CodexAppServerClient {
     const transport = JsonRpcLineTransport.create({
       command: input.command,
       cwd: input.cwd,

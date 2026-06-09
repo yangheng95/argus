@@ -8,13 +8,13 @@ Mission also needed a read-only Explore path that can inspect project/task state
 
 ## Call Points Checked
 
-| Surface | Decision |
-| --- | --- |
-| `packages/overlay/src/services/tree-writer.ts` `regroupTimelineSegments` | Split non-phase segments by `sessionID + stage`, preserving one card per semantic speaker in a shared standalone session. |
-| `packages/opencorvus/src/protocol/session-mirror.ts` mission transcript stamping | Kept as the single backend source for `channel=main` user turns and `channel=mission` assistant turns. |
-| `packages/opencorvus/src/tool/task.ts` subagent session creation | `explore` creates `kind="explore"` sessions; other task subagents keep `kind="assistant"`. |
-| `packages/opencorvus/src/agent/agent.ts` Mission tools | Mission includes `task` but permission allows only `task/explore`; other subagent targets are denied. |
-| `packages/opencorvus/src/panel/capability.ts` and `packages/opencorvus/src/tool/panel.ts` | Explore is a first-class panel actor with query-only panel actions. |
+| Surface                                                                                   | Decision                                                                                                                  |
+| ----------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------- |
+| `packages/overlay/src/services/tree-writer.ts` `regroupTimelineSegments`                  | Split non-phase segments by `sessionID + stage`, preserving one card per semantic speaker in a shared standalone session. |
+| `packages/opencorvus/src/protocol/session-mirror.ts` mission transcript stamping          | Kept as the single backend source for `channel=main` user turns and `channel=mission` assistant turns.                    |
+| `packages/opencorvus/src/tool/task.ts` subagent session creation                          | `explore` creates `kind="explore"` sessions; other task subagents keep `kind="assistant"`.                                |
+| `packages/opencorvus/src/agent/agent.ts` Mission tools                                    | Mission includes `task` but permission allows only `task/explore`; other subagent targets are denied.                     |
+| `packages/opencorvus/src/panel/capability.ts` and `packages/opencorvus/src/tool/panel.ts` | Explore is a first-class panel actor with query-only panel actions.                                                       |
 
 ## Verification
 

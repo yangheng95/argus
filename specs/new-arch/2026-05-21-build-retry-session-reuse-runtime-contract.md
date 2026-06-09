@@ -24,14 +24,14 @@ prompt can be reduced to prose, so retry continuation may lose exact upstream wo
 
 ## Current Evidence
 
-| Surface | Current behavior | Consequence |
-| --- | --- | --- |
-| `packages/opencorvus/src/build/agent.ts::runWithExternalProviderImpl` | Always calls `Session.createNext` and `provider.run` for external build sessions. | External build retry cannot reuse provider-native sessions even though provider `resume` exists. |
-| `packages/opencorvus/src/agent/runner.ts::runAgentSession` | Always creates a child session, then installs `setSessionRuntimeContract` once for that session. | Worker tools survive direct replies only for that session, but retry cannot target an existing session through this entry point. |
-| `packages/opencorvus/src/task-api/index.ts::appendDirectAgentSessionReply` | Appends a user message with copied prompt envelope and calls `SessionPrompt.loop`. | Good for manual steering, not enough for build retry lifecycle because it does not open/finalize a goal attempt or bind a fresh build collector. |
-| `packages/opencorvus/src/session/loop.ts::withExtraTools` | Sets ephemeral tools for a callback and clears them in `finally`. | Any resumed turn after the callback loses those tools. |
-| `packages/opencorvus/src/orchestrator/agent.ts` | Still uses `SessionPrompt.withExtraTools` for orchestrator tools. | Orchestrator itself is not safe for long-lived same-session continuation if resumed outside the original callback. |
-| `packages/opencorvus/src/session/compaction.ts` + `message.ts::filterCompacted` | Keeps a validated handoff summary and tail messages, not the original full prompt. | Build's upstream context can be summarized away instead of being re-injected from a canonical source. |
+| Surface                                                                         | Current behavior                                                                                 | Consequence                                                                                                                                      |
+| ------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `packages/opencorvus/src/build/agent.ts::runWithExternalProviderImpl`           | Always calls `Session.createNext` and `provider.run` for external build sessions.                | External build retry cannot reuse provider-native sessions even though provider `resume` exists.                                                 |
+| `packages/opencorvus/src/agent/runner.ts::runAgentSession`                      | Always creates a child session, then installs `setSessionRuntimeContract` once for that session. | Worker tools survive direct replies only for that session, but retry cannot target an existing session through this entry point.                 |
+| `packages/opencorvus/src/task-api/index.ts::appendDirectAgentSessionReply`      | Appends a user message with copied prompt envelope and calls `SessionPrompt.loop`.               | Good for manual steering, not enough for build retry lifecycle because it does not open/finalize a goal attempt or bind a fresh build collector. |
+| `packages/opencorvus/src/session/loop.ts::withExtraTools`                       | Sets ephemeral tools for a callback and clears them in `finally`.                                | Any resumed turn after the callback loses those tools.                                                                                           |
+| `packages/opencorvus/src/orchestrator/agent.ts`                                 | Still uses `SessionPrompt.withExtraTools` for orchestrator tools.                                | Orchestrator itself is not safe for long-lived same-session continuation if resumed outside the original callback.                               |
+| `packages/opencorvus/src/session/compaction.ts` + `message.ts::filterCompacted` | Keeps a validated handoff summary and tail messages, not the original full prompt.               | Build's upstream context can be summarized away instead of being re-injected from a canonical source.                                            |
 
 Historical plans confirm the split:
 
@@ -310,19 +310,19 @@ This aligns with the existing compaction hardening principle: durable rules and 
 
 ## API / Call-Site Inventory
 
-| Area | Required decision |
-| --- | --- |
-| `BuildAgent.run` | Split create-new-session from continue-existing-session. New retry path must accept an existing session id and install a fresh runtime contract. |
-| `runAgentSession` | Keep create-new-session behavior for first attempt/stage agents. Add a separate continue/resume entry point instead of overloading this function silently. It must install a contract with identity metadata. |
-| `orchestrator/tools.ts build` | Open new `goal_run_attempt` with reused `session_id` on retry, then call build continuation path. |
-| `engine/persist.ts beginBuildAttempt` | Require explicit `sessionID` for build attempts under the new path and preserve retry chain. Do not create session identity here and do not allow null-session build attempt writes. |
-| `task-api replyAgentSession` | Remains manual steering. It must reject stage sessions that require runtime contract when no fresh matching contract is installed/rebuildable. Build retry must not use this generic path. |
-| `session/loop.ts` | Remove exported ephemeral extra-tool APIs after migration. `resolveTools` reads registry/MCP/StructuredOutput plus session runtime contract only. |
-| `orchestrator/agent.ts` | Replace `withExtraTools` with a per-wake runtime contract carrying `contractKind="orchestrator-wake"`, then clear it at wake completion; or reject external continuation of orchestrator sessions. Do not persist stale per-wake closures indefinitely. |
-| `session/compaction.ts` / `session/compaction-handoff.ts` | Handoff schema must include durable instruction paths and active `build_session_contract` artifact ids. |
-| `engine/engine.sql.ts` / `storage/ddl.ts` | Add `build_session_contract` to the artifact kind union / schema source. |
-| Engine store/read models/export/archive | Treat `build_session_contract` as an append-only task/goal artifact and keep export/import projections coherent. |
-| Overlay board/files | Multiple attempts can share one session id. UI attempt labels must key attempt state by `goal_run_id`, and message cards by session/message turn. |
+| Area                                                      | Required decision                                                                                                                                                                                                                                       |
+| --------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `BuildAgent.run`                                          | Split create-new-session from continue-existing-session. New retry path must accept an existing session id and install a fresh runtime contract.                                                                                                        |
+| `runAgentSession`                                         | Keep create-new-session behavior for first attempt/stage agents. Add a separate continue/resume entry point instead of overloading this function silently. It must install a contract with identity metadata.                                           |
+| `orchestrator/tools.ts build`                             | Open new `goal_run_attempt` with reused `session_id` on retry, then call build continuation path.                                                                                                                                                       |
+| `engine/persist.ts beginBuildAttempt`                     | Require explicit `sessionID` for build attempts under the new path and preserve retry chain. Do not create session identity here and do not allow null-session build attempt writes.                                                                    |
+| `task-api replyAgentSession`                              | Remains manual steering. It must reject stage sessions that require runtime contract when no fresh matching contract is installed/rebuildable. Build retry must not use this generic path.                                                              |
+| `session/loop.ts`                                         | Remove exported ephemeral extra-tool APIs after migration. `resolveTools` reads registry/MCP/StructuredOutput plus session runtime contract only.                                                                                                       |
+| `orchestrator/agent.ts`                                   | Replace `withExtraTools` with a per-wake runtime contract carrying `contractKind="orchestrator-wake"`, then clear it at wake completion; or reject external continuation of orchestrator sessions. Do not persist stale per-wake closures indefinitely. |
+| `session/compaction.ts` / `session/compaction-handoff.ts` | Handoff schema must include durable instruction paths and active `build_session_contract` artifact ids.                                                                                                                                                 |
+| `engine/engine.sql.ts` / `storage/ddl.ts`                 | Add `build_session_contract` to the artifact kind union / schema source.                                                                                                                                                                                |
+| Engine store/read models/export/archive                   | Treat `build_session_contract` as an append-only task/goal artifact and keep export/import projections coherent.                                                                                                                                        |
+| Overlay board/files                                       | Multiple attempts can share one session id. UI attempt labels must key attempt state by `goal_run_id`, and message cards by session/message turn.                                                                                                       |
 
 ## Acceptance Criteria
 

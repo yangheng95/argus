@@ -12,33 +12,37 @@
 为单一 `engine_artifact`，按 `kind` 区分语义。
 
 ### 顶层与规格
-| 表 | 关键字段 / 状态 |
-|---|---|
-| `engine_task` | status ∈ {queued, active, completed, failed, cancelled}; priority ∈ {critical, high, normal, low}; kind ∈ {workflow, build}; `session_id` 指向 root session |
-| `engine_spec_snapshot` | 规格快照（requirements 输出） |
-| `engine_spec_item` | 规格明细项 |
+
+| 表                     | 关键字段 / 状态                                                                                                                                             |
+| ---------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `engine_task`          | status ∈ {queued, active, completed, failed, cancelled}; priority ∈ {critical, high, normal, low}; kind ∈ {workflow, build}; `session_id` 指向 root session |
+| `engine_spec_snapshot` | 规格快照（requirements 输出）                                                                                                                               |
+| `engine_spec_item`     | 规格明细项                                                                                                                                                  |
 
 ### 计划与目标
-| 表 | 关键字段 / 状态 |
-|---|---|
-| `engine_plan_version` | status ∈ {active, superseded} |
-| `engine_milestone` | status ∈ {pending, active, passed, failed} |
-| `engine_goal` | priority ∈ {blocking, advisory}；**无** `status` 列（live 派生自 `engine/describe.ts::goalStatusByID`，2026-05-05 Phase E 退役）；**无** `workspace_dir` / `workspace_branch` / `workspace_base_ref` / `retry_count` / `cascade_state`（Phase B+E 2026-05-05 退役，单一来源迁到 `engine_artifact[kind="goal_run_attempt"].payload`，通过 `engine/store.ts:findGoalLatestWorkspace` / `getGoalRetryCount` 读取） |
-| `engine_requirement` | 需求追溯记录（`requirements` agent 写入） |
-| `engine_plan_node` | 计划步骤 |
+
+| 表                    | 关键字段 / 状态                                                                                                                                                                                                                                                                                                                                                                                                 |
+| --------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `engine_plan_version` | status ∈ {active, superseded}                                                                                                                                                                                                                                                                                                                                                                                   |
+| `engine_milestone`    | status ∈ {pending, active, passed, failed}                                                                                                                                                                                                                                                                                                                                                                      |
+| `engine_goal`         | priority ∈ {blocking, advisory}；**无** `status` 列（live 派生自 `engine/describe.ts::goalStatusByID`，2026-05-05 Phase E 退役）；**无** `workspace_dir` / `workspace_branch` / `workspace_base_ref` / `retry_count` / `cascade_state`（Phase B+E 2026-05-05 退役，单一来源迁到 `engine_artifact[kind="goal_run_attempt"].payload`，通过 `engine/store.ts:findGoalLatestWorkspace` / `getGoalRetryCount` 读取） |
+| `engine_requirement`  | 需求追溯记录（`requirements` agent 写入）                                                                                                                                                                                                                                                                                                                                                                       |
+| `engine_plan_node`    | 计划步骤                                                                                                                                                                                                                                                                                                                                                                                                        |
 
 ### 执行与交付（artifact-centric）
-| 表 | 关键字段 / 状态 |
-|---|---|
-| `engine_artifact` | **统一过程表**，`kind` 决定语义；替代旧的 `engine_run` / `engine_goal_run` / `engine_acceptance` / `engine_evaluation` / `engine_goal_snapshot`。完整 `EngineArtifactKind` 取值（见 `engine.sql.ts:97`）：`run` · `goal_run_attempt` · `acceptance` · `verification-evidence` · `evaluation` · `verdict` · `patch` · `changed_file` · `diff` · `log` · `report` · `image` · `link` · `git_ref` · `pr` · `integrity_attempt` · `prosecutor_attempt` · `acceptance_evidence_manifest` · `acceptance_surface_manifest` · `acceptance_specialist_review` · `acceptance_review_threw` · `browser_preview_target` · `browser_preview_evidence` · `orchestrator-stream-error` |
-| `engine_progress_snapshot` | 进度快照（旧名 `orchestrator_progress_snapshot` 已重命名） |
-| `engine_executor_session` | 执行器会话绑定 |
+
+| 表                         | 关键字段 / 状态                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                        |
+| -------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `engine_artifact`          | **统一过程表**，`kind` 决定语义；替代旧的 `engine_run` / `engine_goal_run` / `engine_acceptance` / `engine_evaluation` / `engine_goal_snapshot`。完整 `EngineArtifactKind` 取值（见 `engine.sql.ts:97`）：`run` · `goal_run_attempt` · `acceptance` · `verification-evidence` · `evaluation` · `verdict` · `patch` · `changed_file` · `diff` · `log` · `report` · `image` · `link` · `git_ref` · `pr` · `integrity_attempt` · `prosecutor_attempt` · `acceptance_evidence_manifest` · `acceptance_surface_manifest` · `acceptance_specialist_review` · `acceptance_review_threw` · `browser_preview_target` · `browser_preview_evidence` · `orchestrator-stream-error` |
+| `engine_progress_snapshot` | 进度快照（旧名 `orchestrator_progress_snapshot` 已重命名）                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                             |
+| `engine_executor_session`  | 执行器会话绑定                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                         |
 
 ### 交互与绑定
-| 表 | 关键字段 / 状态 |
-|---|---|
-| `engine_interaction_request` | type ∈ {permission, question}; status ∈ {pending, …} |
-| `engine_channel_binding` | 外部 channel（platform/channel/thread） ↔ task 绑定；`ChannelIngress` 查询入口 |
+
+| 表                           | 关键字段 / 状态                                                                 |
+| ---------------------------- | ------------------------------------------------------------------------------- |
+| `engine_interaction_request` | type ∈ {permission, question}; status ∈ {pending, …}                            |
+| `engine_channel_binding`     | 外部 channel（platform/channel/thread） ↔ task 绑定；`ChannelIngress` 查询入口 |
 
 > 实际 `sqliteTable` 注册见 `engine.sql.ts`：EngineSpecSnapshotTable、EngineSpecItemTable、EngineTaskTable、EnginePlanVersionTable、EngineMilestoneTable、EngineGoalTable、EngineRequirementTable、EnginePlanNodeTable、EngineInteractionRequestTable、EngineArtifactTable、EngineProgressSnapshotTable、EngineExecutorSessionTable、EngineChannelBindingTable（共 13 个）。
 
@@ -48,13 +52,13 @@
 
 `src/session/session.sql.ts`：
 
-| 表 | 作用 |
-|---|---|
-| `session` | 会话树节点；关键列：`kind`、`goal_id`、`parent_id`、`directory`、`permission`、`metadata` |
-| `message` | 消息 |
-| `part` | 消息分片（tool call / text / reasoning / …） |
-| `todo` | session 内 todo |
-| `permission` | 权限请求（project 级全量规则集） |
+| 表           | 作用                                                                                      |
+| ------------ | ----------------------------------------------------------------------------------------- |
+| `session`    | 会话树节点；关键列：`kind`、`goal_id`、`parent_id`、`directory`、`permission`、`metadata` |
+| `message`    | 消息                                                                                      |
+| `part`       | 消息分片（tool call / text / reasoning / …）                                              |
+| `todo`       | session 内 todo                                                                           |
+| `permission` | 权限请求（project 级全量规则集）                                                          |
 
 **SessionKind**（固定在 creation time，见 `session.sql.ts:50-65`，按代码出现顺序）：
 `root` · `orchestrator` · `assistant` · `gateway` · `intent-analysis` · `requirements` ·
@@ -67,6 +71,7 @@
 > 与早于 `requirements` / `frontend-design` 拆分前的 catch-all。
 
 **去掉的字段 / 索引**（旧文档还在提，代码已清理）：
+
 - ~~`session.channel_key`~~ — Gateway 单例概念删除
 - ~~`session_gateway_singleton_idx`~~ — partial unique index 已删
 
@@ -76,37 +81,39 @@
 
 ## 控制 / 工作区
 
-| 表 | 文件 | 作用 |
-|---|---|---|
-| `workspace` | `workspace/workspace.sql.ts` | 多工作区代理元数据（路径、状态） |
-| `control_account` | `control/control.sql.ts` | 外部控制账号（email + url） |
-| `control_message` | `control/control.sql.ts` | 外部控制消息 timeline |
-| `project` | `project/project.sql.ts` | 项目根 |
+| 表                | 文件                         | 作用                             |
+| ----------------- | ---------------------------- | -------------------------------- |
+| `workspace`       | `workspace/workspace.sql.ts` | 多工作区代理元数据（路径、状态） |
+| `control_account` | `control/control.sql.ts`     | 外部控制账号（email + url）      |
+| `control_message` | `control/control.sql.ts`     | 外部控制消息 timeline            |
+| `project`         | `project/project.sql.ts`     | 项目根                           |
 
 ## 辅助域
 
-| 表 | 文件 | 作用 |
-|---|---|---|
-| `decision_log` | `decision-log/schema.ts` | **全局共享上下文**，append-only，所有 agent R/W |
-| `workbench_task_note` | `workbench/workbench.sql.ts` | 面板 per-task 备注 |
-| `workbench_brief_snapshot` | `workbench/workbench.sql.ts` | 面板简报快照 |
-| `scratchpad` | `memory/scratchpad.sql.ts` | 短期暂存 |
-| `memory_file` · `memory_chunk` · `memory_embedding` | `memory/memory.sql.ts` | 长期语义记忆 |
-| `task_plan` | `memory/task-plan.sql.ts` | 任务计划记忆 |
-| `quick_note` | `quicknote/quicknote.sql.ts` | quicknote |
-| `session_share` | `share/share.sql.ts` | 分享 |
-| `protocol_event` · `protocol_inbox` · `protocol_stream_chunk` | `protocol/protocol.sql.ts` | executor 协议事件 |
-| `task_queue` · `cron_job` · `event_job` | `scheduler/*.sql.ts` | 调度器 |
+| 表                                                            | 文件                         | 作用                                            |
+| ------------------------------------------------------------- | ---------------------------- | ----------------------------------------------- |
+| `decision_log`                                                | `decision-log/schema.ts`     | **全局共享上下文**，append-only，所有 agent R/W |
+| `workbench_task_note`                                         | `workbench/workbench.sql.ts` | 面板 per-task 备注                              |
+| `workbench_brief_snapshot`                                    | `workbench/workbench.sql.ts` | 面板简报快照                                    |
+| `scratchpad`                                                  | `memory/scratchpad.sql.ts`   | 短期暂存                                        |
+| `memory_file` · `memory_chunk` · `memory_embedding`           | `memory/memory.sql.ts`       | 长期语义记忆                                    |
+| `task_plan`                                                   | `memory/task-plan.sql.ts`    | 任务计划记忆                                    |
+| `quick_note`                                                  | `quicknote/quicknote.sql.ts` | quicknote                                       |
+| `session_share`                                               | `share/share.sql.ts`         | 分享                                            |
+| `protocol_event` · `protocol_inbox` · `protocol_stream_chunk` | `protocol/protocol.sql.ts`   | executor 协议事件                               |
+| `task_queue` · `cron_job` · `event_job`                       | `scheduler/*.sql.ts`         | 调度器                                          |
 
 ## Trace — 统一 workflow 追踪（横切）
 
 **代码**：`src/trace/index.ts`
 
 替代旧的：
+
 - `AgentTrace` — per-agent markdown dump
 - env-gated `LLMTrace` — session 级 JSONL
 
 **新设计**：
+
 ```
 每个 workflow 事件（task/agent 边界、llm.step deltas、tool.call/result、phase 变化）
   ↓ AgentTrace.recordLLMRequest / recordHelperLLMCall / recordAgentReport

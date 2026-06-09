@@ -27,7 +27,8 @@ describe("orchestrator cancel ordering for late child results", () => {
         seedTaskRun(taskID, runID, now)
         seedGoalRun(taskID, runID, `grun_cancel_late_child_${now}`, "completed", now + 1)
         Database.use((db) =>
-          db.update(EngineTaskTable)
+          db
+            .update(EngineTaskTable)
             .set({
               error: "user cancelled",
               metadata: { cancelled: true },
@@ -42,7 +43,11 @@ describe("orchestrator cancel ordering for late child results", () => {
         await new Promise((resolve) => setTimeout(resolve, 0))
 
         const goalRows = Database.use((db) =>
-          db.select().from(EngineArtifactTable).where(eq(EngineArtifactTable.goal_run_id, `grun_cancel_late_child_${now}`)).all(),
+          db
+            .select()
+            .from(EngineArtifactTable)
+            .where(eq(EngineArtifactTable.goal_run_id, `grun_cancel_late_child_${now}`))
+            .all(),
         )
         expect(goalRows).toHaveLength(1)
         expect(runTaskLoop).not.toHaveBeenCalled()
@@ -96,7 +101,8 @@ function seedTaskRun(taskID: string, runID: string, now: number) {
 
 function seedGoalRun(taskID: string, runID: string, goalRunID: string, status: string, now: number) {
   Database.use((db) =>
-    db.insert(EngineArtifactTable)
+    db
+      .insert(EngineArtifactTable)
       .values({
         id: `${goalRunID}_${now}`,
         task_id: taskID,

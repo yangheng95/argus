@@ -97,7 +97,10 @@ const workspaceExportAdapter: AcceptanceAdapter = {
     const baseRef = readBaselineCommit(ctx.task)
     const cwd = Instance.directory
     const { changedFiles, patch } = await collectMainWorktreeDiff(cwd, baseRef)
-    const out = path.join(ProjectRuntimePaths.acceptancePaths(Instance.directory, ctx.task.id).root, `${Identifier.shortPath(ctx.acceptance.id)}.patch`)
+    const out = path.join(
+      ProjectRuntimePaths.acceptancePaths(Instance.directory, ctx.task.id).root,
+      `${Identifier.shortPath(ctx.acceptance.id)}.patch`,
+    )
     await Filesystem.write(out, patch || "")
     const summary =
       changedFiles.length > 0
@@ -183,7 +186,10 @@ export namespace Publisher {
         const result = await Promise.race([
           adapter.execute(input),
           new Promise<never>((_, reject) =>
-            setTimeout(() => reject(new Error(`adapter ${adapter.id} timeout (${ADAPTER_TIMEOUT_MS}ms)`)), ADAPTER_TIMEOUT_MS),
+            setTimeout(
+              () => reject(new Error(`adapter ${adapter.id} timeout (${ADAPTER_TIMEOUT_MS}ms)`)),
+              ADAPTER_TIMEOUT_MS,
+            ),
           ),
         ])
         artifacts.push(...result.artifacts)

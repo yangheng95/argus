@@ -5,7 +5,13 @@ import { describeRoute, resolver, validator } from "hono-openapi"
 import z from "zod"
 import { requireTask } from "@/engine/store"
 import { findBrowserPreviewTargetByID, persistBrowserPreviewTarget } from "../../browser-preview/persist"
-import { BrowserPreviewTarget, failedBrowserPreviewTarget, normalizeBrowserPreviewUrl, resolveBrowserPreviewTarget, taskBrowserPreviewTarget } from "../../browser-preview/target"
+import {
+  BrowserPreviewTarget,
+  failedBrowserPreviewTarget,
+  normalizeBrowserPreviewUrl,
+  resolveBrowserPreviewTarget,
+  taskBrowserPreviewTarget,
+} from "../../browser-preview/target"
 import { BrowserPreviewVerification, verifyBrowserPreview } from "../../browser-preview/verification"
 import { BrowserPreviewViewportID } from "../../browser-preview/viewport"
 
@@ -71,20 +77,25 @@ export const BrowserPreviewRoutes = lazy(() =>
         requireTask(taskID)
         const url = normalizeBrowserPreviewUrl(rawUrl)
         if (!url) {
-          return c.json(failedBrowserPreviewTarget({
-            projectRoot: Instance.directory,
-            taskID,
-            diagnostics: [`Invalid preview URL: ${rawUrl}`],
-          }), 400)
+          return c.json(
+            failedBrowserPreviewTarget({
+              projectRoot: Instance.directory,
+              taskID,
+              diagnostics: [`Invalid preview URL: ${rawUrl}`],
+            }),
+            400,
+          )
         }
         const persisted = await persistBrowserPreviewTarget({ taskID, url })
-        return c.json(taskBrowserPreviewTarget({
-          id: persisted.id,
-          taskID,
-          projectRoot: Instance.directory,
-          url: persisted.url,
-          diagnostics: [`Saved task browser preview target ${persisted.id}.`],
-        }) satisfies BrowserPreviewTarget)
+        return c.json(
+          taskBrowserPreviewTarget({
+            id: persisted.id,
+            taskID,
+            projectRoot: Instance.directory,
+            url: persisted.url,
+            diagnostics: [`Saved task browser preview target ${persisted.id}.`],
+          }) satisfies BrowserPreviewTarget,
+        )
       },
     )
     .post(
@@ -120,17 +131,17 @@ export const BrowserPreviewRoutes = lazy(() =>
         const persisted = findBrowserPreviewTargetByID({ taskID, targetID: body.targetID })
         const target = persisted
           ? taskBrowserPreviewTarget({
-            id: persisted.id,
-            taskID,
-            projectRoot: Instance.directory,
-            url: persisted.url,
-            diagnostics: [`Using task browser preview target ${persisted.id}.`],
-          })
+              id: persisted.id,
+              taskID,
+              projectRoot: Instance.directory,
+              url: persisted.url,
+              diagnostics: [`Using task browser preview target ${persisted.id}.`],
+            })
           : failedBrowserPreviewTarget({
-            projectRoot: Instance.directory,
-            taskID,
-            diagnostics: [`Browser preview target not found: ${body.targetID}`],
-          })
+              projectRoot: Instance.directory,
+              taskID,
+              diagnostics: [`Browser preview target not found: ${body.targetID}`],
+            })
         const verification = await verifyBrowserPreview({
           projectRoot: Instance.directory,
           target,

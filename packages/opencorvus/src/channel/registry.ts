@@ -26,10 +26,7 @@ export namespace ChannelRegistry {
     const supervisor = await ChannelSupervisor.status()
     return Info.array().parse(
       ChannelCatalog.map((item) => {
-        const state = channelState(
-          item.id,
-          config.channel?.[item.id] as Record<string, unknown> | undefined,
-        )
+        const state = channelState(item.id, config.channel?.[item.id] as Record<string, unknown> | undefined)
         const runtime = channelRuntime(supervisor, item.id)
         return {
           id: item.id,
@@ -50,10 +47,7 @@ export namespace ChannelRegistry {
   }
 }
 
-function channelRuntime(
-  supervisor: Awaited<ReturnType<typeof ChannelSupervisor.status>>,
-  channel: string,
-) {
+function channelRuntime(supervisor: Awaited<ReturnType<typeof ChannelSupervisor.status>>, channel: string) {
   if (supervisor.channels.includes(channel)) {
     return {
       status: supervisor.status,

@@ -60,26 +60,26 @@ bun run script/benchmark/mission-benchmark.ts \
 
 权威源：`overlay-web-benchmark.ts` 中的 `KNOWN_FLAGS` 集合（约 18 个，下面是常用项）。
 
-| flag | 说明 |
-|---|---|
-| `--executor=opencorvus\|codex\|claude-code` | 执行器；**默认 `opencorvus`** |
-| `--request-file=PATH` | 任务描述文件（template）；不传则跑内置 case |
-| `--request-attachment=PATH` | 附件（图片 / 文件），不能与 `--request-file` 同时传 |
-| `--reference-images=GLOB` | 视觉对比参考图路径（含空格请加引号） |
-| `--figma-url=URL` | Figma 设计稿 URL |
-| `--title=TITLE` | 任务标题 |
-| `--report=PATH` | 输出报告 JSON |
-| `--project-dir=PATH` | 工作仓库（默认临时目录） |
-| `--model` | **不在 KNOWN_FLAGS**，请改用环境变量 / `cfg.model`；gateway 不读 `OPENCORVUS_BENCHMARK_MODEL` |
-| `--max-runs=N` | 最大 Run 次数，默认 20 |
-| `--max-fix-runs=N` | 最大回修次数，默认 8 |
-| `--max-executor-groups=N` | 并行 goal/build 上限 |
-| `--max-auto-resumes=N` | 失败后自动 resume 次数 |
-| `--acceptance-verify-cmd=CMD` | 自定义 acceptance 阶段的 verify 命令 |
-| `--resume-task-id=TID` / `--resume-home-dir=DIR` / `--resume-message=TEXT` | resume 模式（一般用 fresh bench，详见 [resume 注意](#resume-注意)） |
-| `--no-keep` | 任务结束删除临时目录 |
-| `--skip-local-verify` | 跳过本地二次验证 |
-| `--no-browser` | **不要用**——见下方 [headless 禁止](#-headless-overlay-benchmark) |
+| flag                                                                       | 说明                                                                                          |
+| -------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------- |
+| `--executor=opencorvus\|codex\|claude-code`                                | 执行器；**默认 `opencorvus`**                                                                 |
+| `--request-file=PATH`                                                      | 任务描述文件（template）；不传则跑内置 case                                                   |
+| `--request-attachment=PATH`                                                | 附件（图片 / 文件），不能与 `--request-file` 同时传                                           |
+| `--reference-images=GLOB`                                                  | 视觉对比参考图路径（含空格请加引号）                                                          |
+| `--figma-url=URL`                                                          | Figma 设计稿 URL                                                                              |
+| `--title=TITLE`                                                            | 任务标题                                                                                      |
+| `--report=PATH`                                                            | 输出报告 JSON                                                                                 |
+| `--project-dir=PATH`                                                       | 工作仓库（默认临时目录）                                                                      |
+| `--model`                                                                  | **不在 KNOWN_FLAGS**，请改用环境变量 / `cfg.model`；gateway 不读 `OPENCORVUS_BENCHMARK_MODEL` |
+| `--max-runs=N`                                                             | 最大 Run 次数，默认 20                                                                        |
+| `--max-fix-runs=N`                                                         | 最大回修次数，默认 8                                                                          |
+| `--max-executor-groups=N`                                                  | 并行 goal/build 上限                                                                          |
+| `--max-auto-resumes=N`                                                     | 失败后自动 resume 次数                                                                        |
+| `--acceptance-verify-cmd=CMD`                                              | 自定义 acceptance 阶段的 verify 命令                                                          |
+| `--resume-task-id=TID` / `--resume-home-dir=DIR` / `--resume-message=TEXT` | resume 模式（一般用 fresh bench，详见 [resume 注意](#resume-注意)）                           |
+| `--no-keep`                                                                | 任务结束删除临时目录                                                                          |
+| `--skip-local-verify`                                                      | 跳过本地二次验证                                                                              |
+| `--no-browser`                                                             | **不要用**——见下方 [headless 禁止](#-headless-overlay-benchmark)                              |
 
 > ~~`--stall-timeout-ms`~~ / ~~`--planning-stall-timeout-ms`~~ / ~~`--tool-timeout-ms`~~ —— 自 2026-04-30 起脚本不再接受这些 flag；现在由 engine 内部的 stream-activity 看门狗管理（180s idle abort）。运行 `bun run script/benchmark/overlay-web-benchmark.ts --help` 可查当前 flag 全集。
 
@@ -142,7 +142,6 @@ bun install && bun run build && bun run start
 - 每个 Goal 的 check 结果
 - `qualityVerdict` 与 `localVerify`
 - 失败样本：stderr / stdout 尾部 + 相关 artifact 路径
-
 
 ## 在 CI 中运行
 

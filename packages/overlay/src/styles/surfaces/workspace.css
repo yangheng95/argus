@@ -753,7 +753,8 @@ body[data-resizing="true"] .pane-resizer::after {
   border-bottom: 0;
 }
 
-@media (max-width: 1120px) { /* breakpoint: --ui-breakpoint-xl */
+@media (max-width: 1120px) {
+  /* breakpoint: --ui-breakpoint-xl */
   .panel-body {
     flex-direction: column;
   }

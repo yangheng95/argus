@@ -41,7 +41,9 @@ describe("OverlayUI path traversal (audit opencorvus F7 / V6)", () => {
   })
 
   afterEach(() => {
-    try { fs.rmSync(tempRoot, { recursive: true, force: true }) } catch {}
+    try {
+      fs.rmSync(tempRoot, { recursive: true, force: true })
+    } catch {}
   })
 
   test("validatePath rejects sibling-dir traversal (audit F7)", async () => {
@@ -66,9 +68,10 @@ describe("OverlayUI path traversal (audit opencorvus F7 / V6)", () => {
     fs.writeFileSync(path.join(tempRoot, "ui", "ok.js"), "// ok")
     const probes = ["/index.html", "/ok.js", "/"]
     for (const reqPath of probes) {
-      const expected = reqPath === "/"
-        ? path.resolve(dir, "./") // routes handler maps "/" → "/index.html" before calling validatePath
-        : path.resolve(dir, "." + reqPath)
+      const expected =
+        reqPath === "/"
+          ? path.resolve(dir, "./") // routes handler maps "/" → "/index.html" before calling validatePath
+          : path.resolve(dir, "." + reqPath)
       const result = await OverlayUI.validatePath(dir, reqPath)
       expect(result).toBe(expected)
     }
@@ -80,11 +83,7 @@ describe("OverlayUI path traversal (audit opencorvus F7 / V6)", () => {
     // paths truncate, ts-backed paths do not. Reject up-front so an
     // attacker can't pick the truncation behaviour they prefer.
     const dir = path.join(tempRoot, "ui")
-    const probes = [
-      "/index.html\0/../secret-outside",
-      "/\0/index.html",
-      "/index.html\0",
-    ]
+    const probes = ["/index.html\0/../secret-outside", "/\0/index.html", "/index.html\0"]
     for (const reqPath of probes) {
       const result = await OverlayUI.validatePath(dir, reqPath)
       expect(result).toBe(null)

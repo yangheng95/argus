@@ -121,9 +121,7 @@ export namespace ModelsDev {
    * UI button in ProvidersPanel, `opencorvus models --refresh`, and
    * `POST /provider/refresh` — there is no implicit invocation.
    */
-  export async function refresh(): Promise<
-    { ok: true; fetchedAt: number } | { ok: false; error: string }
-  > {
+  export async function refresh(): Promise<{ ok: true; fetchedAt: number } | { ok: false; error: string }> {
     try {
       const result = await fetch(`${url()}/api.json`, {
         headers: { "User-Agent": Installation.USER_AGENT },

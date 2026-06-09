@@ -3,32 +3,26 @@
 // affordance. File links now open in the selected IDE instead of rendering an
 // inline file preview surface.
 
-import { Show } from "solid-js";
-import { DiffPreviewPanel } from "./DiffPreviewPanel";
-import type { DiffTarget } from "../services/diff";
-import { t } from "../utils/i18n";
-import { Icon } from "./Icon";
+import { Show } from "solid-js"
+import { DiffPreviewPanel } from "./DiffPreviewPanel"
+import type { DiffTarget } from "../services/diff"
+import { t } from "../utils/i18n"
+import { Icon } from "./Icon"
 
 export interface WorkspacePanelProps {
   /** Current diff target to foreground. */
-  target: DiffTarget;
+  target: DiffTarget
   /** Called when the user clicks the close (×) button. */
-  onClose: () => void;
+  onClose: () => void
 }
 
 export function WorkspacePanel(props: WorkspacePanelProps) {
-  const diffFilePath = () => props.target?.filePath || null;
+  const diffFilePath = () => props.target?.filePath || null
   return (
     <section class="workspace" id="workspacePanel">
       <header class="workspace-header">
         <div class="workspace-tabs" role="tablist">
-          <button
-            type="button"
-            class="workspace-tab"
-            role="tab"
-            aria-selected="true"
-            data-active="true"
-          >
+          <button type="button" class="workspace-tab" role="tab" aria-selected="true" data-active="true">
             <span class="workspace-tab-label">
               {t("workspace.diff")}
               <Show when={diffFilePath()}>
@@ -51,22 +45,18 @@ export function WorkspacePanel(props: WorkspacePanelProps) {
         </button>
       </header>
       <div class="workspace-body">
-        <div
-          class="workspace-view"
-          data-kind="diff"
-          data-active="true"
-        >
+        <div class="workspace-view" data-kind="diff" data-active="true">
           <DiffPreviewPanel target={props.target} />
         </div>
       </div>
     </section>
-  );
+  )
 }
 
 /** Last two path segments — "src/foo/bar.ts" → "foo/bar.ts" — to keep the tab label short. */
 function shortFileName(path: string): string {
-  if (!path) return "";
-  const parts = path.split(/[\\/]/).filter(Boolean);
-  if (parts.length <= 2) return path;
-  return parts.slice(-2).join("/");
+  if (!path) return ""
+  const parts = path.split(/[\\/]/).filter(Boolean)
+  if (parts.length <= 2) return path
+  return parts.slice(-2).join("/")
 }

@@ -121,38 +121,43 @@ body:not([data-page-mode="mission"]) > .workbench-project-bar {
    class as a hook (no chrome declarations of its own). */
 
 .mission-ledger-search {
-  position: relative;
-  display: flex;
-  align-items: center;
-  gap: var(--ui-gap-xs);
-  padding: var(--ui-gap-sm) var(--ui-gap-lg);
+  margin: var(--ui-gap-sm) var(--ui-gap-md) var(--ui-gap-md);
 }
 
-.mission-ledger-search-icon {
-  position: absolute;
-  left: calc(var(--ui-gap-lg) + var(--ui-gap-md));
-  pointer-events: none;
-  opacity: var(--ui-opacity-dim);
+.mission-ledger-header-actions {
+  flex-wrap: nowrap;
+  justify-content: flex-end;
+  flex-shrink: 0;
 }
 
-.mission-ledger-search-input {
-  flex: 1;
-  padding: var(--ui-gap-sm) calc(var(--ui-gap-lg) + var(--ui-gap-md));
-  border-radius: var(--oc-radius-soft);
-  border: var(--oc-border-width) solid var(--border);
-  background: var(--surface-hover);
-  color: var(--text-strong);
-  font-size: var(--ui-font-small);
+.oc-button[data-ui="mission-new"][data-variant="solid"] {
+  --oc-button-height: calc(28px * var(--ui-scale));
+  --oc-button-padding-x: calc(10px * var(--ui-scale));
+  --oc-button-gap: calc(2px * var(--ui-scale));
+  --oc-button-bg: var(--accent);
+  --oc-button-border: 0 solid transparent;
+  --oc-button-color: var(--surface);
+  letter-spacing: var(--ui-letter-spacing-normal);
+  box-shadow: none;
 }
 
-.mission-ledger-search-clear {
-  position: absolute;
-  right: calc(var(--ui-gap-lg) + var(--ui-gap-md));
-  background: transparent;
-  border: 0;
-  cursor: pointer;
-  padding: var(--ui-gap-xs);
-  color: var(--text-muted);
+.oc-button[data-ui="mission-new"] .sidebar-btn-icon {
+  width: calc(16px * var(--ui-scale));
+  height: calc(16px * var(--ui-scale));
+  border-radius: var(--oc-radius-pill);
+  background: color-mix(in srgb, var(--accent) 16%, transparent);
+  border: var(--oc-border-width) solid color-mix(in srgb, var(--accent) 14%, transparent);
+}
+
+.oc-button[data-ui="mission-new"]:hover,
+.oc-button[data-ui="mission-new"]:focus-visible {
+  --oc-button-bg: var(--accent-hover);
+  --oc-button-border: 0 solid transparent;
+  --oc-button-color: var(--surface);
+}
+
+.oc-button[data-ui="mission-new"]:focus-visible {
+  box-shadow: 0 0 0 calc(2px * var(--ui-scale)) color-mix(in srgb, var(--accent) 28%, transparent);
 }
 
 .mission-ledger-list {
@@ -817,8 +822,6 @@ body:not([data-page-mode="mission"]) > .workbench-project-bar {
    other surface scaled. Both bugs landed in round-2 P0-2. */
 
 .ledger-row:focus-visible,
-.mission-ledger-search-input:focus-visible,
-.mission-ledger-search-clear:focus-visible,
 .mission-action-error-dismiss:focus-visible {
   outline: var(--oc-border-width) solid var(--accent);
   outline-offset: calc(1px * var(--ui-scale));

@@ -17,6 +17,9 @@ import { GlobalBus } from "@/bus/global"
 import { Shell } from "@/shell/shell"
 import { ProjectRuntimePaths } from "@/project/runtime-paths"
 import { TaskRuntimeMaterializer } from "@/project/task-runtime-materializer"
+import { isLiveGoalRunStatus } from "@/engine/catalog"
+import { InternalGitCommitSubject } from "@/engine/internal-git-commit-subject"
+import { listGoalWorkspacesForProject } from "@/engine/store"
 
 export namespace Worktree {
   const log = Log.create({ service: "worktree" })
@@ -489,6 +492,21 @@ export namespace Worktree {
 
   export type Info = z.infer<typeof Info>
 
+  export const ProjectWorktreeInfo = z
+    .object({
+      name: z.string(),
+      branch: z.string().optional(),
+      directory: z.string(),
+      goalID: z.string().optional(),
+      status: z.enum(["primary", "active", "expired"]),
+      removable: z.boolean(),
+    })
+    .meta({
+      ref: "ProjectWorktree",
+    })
+
+  export type ProjectWorktreeInfo = z.infer<typeof ProjectWorktreeInfo>
+
   export const CreateInput = z
     .object({
       name: z.string().optional(),
@@ -760,7 +778,7 @@ export namespace Worktree {
       [
         "-c", "user.name=opencorvus",
         "-c", "user.email=opencorvus@local",
-        "commit", "-m", "chore(opencorvus): preserve primary worktree changes before merge_back",
+        "commit", "-m", InternalGitCommitSubject.preservePrimaryWorktree,
       ],
       { cwd: input.primaryDir, timeoutProfile: "default" },
     )
@@ -862,6 +880,32 @@ export namespace Worktree {
   }
 
   type PrimaryWorktreeInfo = { directory: string; branch: string }
+  type WorktreeEntry = { path: string; branch?: string }
+
+  function parseWorktreeList(stdout: Uint8Array | Buffer | undefined): WorktreeEntry[] {
+    const entries: WorktreeEntry[] = []
+    for (const line of outputText(stdout).split("\n").map((item) => item.trim())) {
+      if (!line) continue
+      if (line.startsWith("worktree ")) {
+        const value = line.slice("worktree ".length).trim()
+        if (value) entries.push({ path: value })
+        continue
+      }
+      const current = entries[entries.length - 1]
+      if (!current) continue
+      if (line.startsWith("branch ")) {
+        current.branch = line.slice("branch ".length).trim().replace(/^refs\/heads\//, "")
+      }
+    }
+    return entries
+  }
+
+  async function findWorktreeEntry(stdout: Uint8Array | Buffer | undefined, directory: string) {
+    for (const entry of parseWorktreeList(stdout)) {
+      const key = await canonical(entry.path)
+      if (key === directory) return entry
+    }
+  }
 
   /**
    * Resolve the primary worktree and its currently checked-out branch.
@@ -878,19 +922,10 @@ export namespace Worktree {
       throw new Error(errorText(list) || "Failed to read git worktrees")
     }
 
-    const lines = outputText(list.stdout)
-      .split("\n")
-      .map((line) => line.trim())
-    const first: { directory?: string; branch?: string } = {}
-    for (const line of lines) {
-      if (!line) break
-      if (line.startsWith("worktree ")) {
-        first.directory = line.slice("worktree ".length).trim()
-        continue
-      }
-      if (line.startsWith("branch ")) {
-        first.branch = line.slice("branch ".length).trim().replace(/^refs\/heads\//, "")
-      }
+    const firstEntry = parseWorktreeList(list.stdout)[0]
+    const first: { directory?: string; branch?: string } = {
+      directory: firstEntry?.path,
+      branch: firstEntry?.branch,
     }
 
     if (!first.directory) {
@@ -900,6 +935,50 @@ export namespace Worktree {
       throw new Error(`Primary worktree is detached: ${first.directory}`)
     }
     return { directory: first.directory, branch: first.branch }
+  }
+
+  export async function listProjectWorktrees(projectID = Instance.project.id): Promise<ProjectWorktreeInfo[]> {
+    if (!Project.isGitRepo(Instance.directory)) {
+      throw new NotGitError({ message: "Worktrees are only supported for git projects" })
+    }
+
+    const list = await runGit(["worktree", "list", "--porcelain"], {
+      cwd: Instance.worktree, timeoutProfile: "default",
+    })
+    if (list.exitCode !== 0) {
+      throw new RemoveFailedError({ message: errorText(list) || "Failed to read git worktrees" })
+    }
+
+    const goalByDirectory = new Map<string, { goalID: string; active: boolean }>()
+    for (const entry of listGoalWorkspacesForProject(projectID)) {
+      const key = await canonical(entry.workspaceDir)
+      goalByDirectory.set(key, {
+        goalID: entry.goal.id,
+        active: isLiveGoalRunStatus(entry.status),
+      })
+    }
+
+    const parsed = parseWorktreeList(list.stdout)
+    const primaryEntry = parsed[0]
+    if (!primaryEntry?.path) {
+      throw new RemoveFailedError({ message: "Primary worktree not found" })
+    }
+    const primaryKey = await canonical(primaryEntry.path)
+    const out: ProjectWorktreeInfo[] = []
+    for (const entry of parsed) {
+      const key = await canonical(entry.path)
+      const binding = goalByDirectory.get(key)
+      const isPrimary = key === primaryKey
+      out.push(ProjectWorktreeInfo.parse({
+        name: path.basename(entry.path),
+        branch: entry.branch,
+        directory: entry.path,
+        goalID: binding?.active ? binding.goalID : undefined,
+        status: isPrimary ? "primary" : binding?.active ? "active" : "expired",
+        removable: !isPrimary,
+      }))
+    }
+    return out
   }
 
   async function isCaseInsensitiveFilesystem(target: string) {
@@ -1612,32 +1691,6 @@ export namespace Worktree {
     }
 
     const directory = await canonical(input.directory)
-    const locate = async (stdout: Uint8Array | undefined) => {
-      const lines = outputText(stdout)
-        .split("\n")
-        .map((line) => line.trim())
-      const entries = lines.reduce<{ path?: string; branch?: string }[]>((acc, line) => {
-        if (!line) return acc
-        if (line.startsWith("worktree ")) {
-          acc.push({ path: line.slice("worktree ".length).trim() })
-          return acc
-        }
-        const current = acc[acc.length - 1]
-        if (!current) return acc
-        if (line.startsWith("branch ")) {
-          current.branch = line.slice("branch ".length).trim()
-        }
-        return acc
-      }, [])
-
-      return (async () => {
-        for (const item of entries) {
-          if (!item.path) continue
-          const key = await canonical(item.path)
-          if (key === directory) return item
-        }
-      })()
-    }
 
     const clean = (target: string) =>
       fs
@@ -1666,7 +1719,13 @@ export namespace Worktree {
         throw new RemoveFailedError({ message: errorText(list) || "Failed to read git worktrees" })
       }
 
-      const entry = await locate(list.stdout)
+      const primaryEntry = parseWorktreeList(list.stdout)[0]
+      const primary = primaryEntry ? await canonical(primaryEntry.path) : undefined
+      if (primary && directory === primary) {
+        throw new RemoveFailedError({ message: "Cannot remove the primary workspace" })
+      }
+
+      const entry = await findWorktreeEntry(list.stdout, directory)
 
       if (!entry?.path) {
         const directoryExists = await exists(directory)
@@ -1691,7 +1750,7 @@ export namespace Worktree {
           })
         }
 
-        const stale = await locate(next.stdout)
+        const stale = await findWorktreeEntry(next.stdout, directory)
         if (stale?.path) {
           throw new RemoveFailedError({ message: errorText(removed) || "Failed to remove git worktree" })
         }

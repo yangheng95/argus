@@ -8,16 +8,16 @@
 
 ## Call-point inventory
 
-| Surface | File | Decision |
-| --- | --- | --- |
-| Task terminal writes | `packages/opencorvus/src/engine/state.ts` | Single notification trigger, because all completed/failed/cancelled task transitions pass through `updateTask`. |
-| Direct task creation | `packages/opencorvus/src/task-api/index.ts` | Serialize `EngineService.createTask` by mission session or parent task metadata. |
-| Mission task creation | `packages/opencorvus/src/tool/panel.ts` | Keep provenance owner as `metadata.mission.session_id`; no separate lock here. |
-| Orchestrator follow-up creation | `packages/opencorvus/src/orchestrator/tools.ts` | Keep parent owner as `metadata.parent_task_id`; no separate lock here. |
-| Parent task lineage read | `packages/opencorvus/src/engine/store.ts` | Keep `metadata.parent_task_id` as single source. |
-| Mission task lineage read | `packages/opencorvus/src/engine/store.ts` and `packages/opencorvus/src/mission/session.ts` | Keep `metadata.mission.{id,session_id}` as single source. |
-| Generic subagent tool prompt | `packages/opencorvus/src/tool/task.txt` | Replace parallel-agent guidance with one new task per parent turn. |
-| Mission prompt | `packages/opencorvus/src/prompt/core/mission-core.txt` | Replace split/parallel language with one `create_task` per wake. |
+| Surface                         | File                                                                                       | Decision                                                                                                        |
+| ------------------------------- | ------------------------------------------------------------------------------------------ | --------------------------------------------------------------------------------------------------------------- |
+| Task terminal writes            | `packages/opencorvus/src/engine/state.ts`                                                  | Single notification trigger, because all completed/failed/cancelled task transitions pass through `updateTask`. |
+| Direct task creation            | `packages/opencorvus/src/task-api/index.ts`                                                | Serialize `EngineService.createTask` by mission session or parent task metadata.                                |
+| Mission task creation           | `packages/opencorvus/src/tool/panel.ts`                                                    | Keep provenance owner as `metadata.mission.session_id`; no separate lock here.                                  |
+| Orchestrator follow-up creation | `packages/opencorvus/src/orchestrator/tools.ts`                                            | Keep parent owner as `metadata.parent_task_id`; no separate lock here.                                          |
+| Parent task lineage read        | `packages/opencorvus/src/engine/store.ts`                                                  | Keep `metadata.parent_task_id` as single source.                                                                |
+| Mission task lineage read       | `packages/opencorvus/src/engine/store.ts` and `packages/opencorvus/src/mission/session.ts` | Keep `metadata.mission.{id,session_id}` as single source.                                                       |
+| Generic subagent tool prompt    | `packages/opencorvus/src/tool/task.txt`                                                    | Replace parallel-agent guidance with one new task per parent turn.                                              |
+| Mission prompt                  | `packages/opencorvus/src/prompt/core/mission-core.txt`                                     | Replace split/parallel language with one `create_task` per wake.                                                |
 
 ## Implementation notes
 

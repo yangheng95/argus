@@ -21,15 +21,17 @@
 export function safeStringify(value: unknown): string {
   const seen = new WeakSet<object>()
   try {
-    return JSON.stringify(value, (_key, v) => {
-      if (typeof v === "object" && v !== null) {
-        if (seen.has(v)) return "[Circular]"
-        seen.add(v)
-      }
-      if (typeof v === "bigint") return `${v.toString()}n`
-      if (typeof v === "function") return `[Function: ${v.name || "anonymous"}]`
-      return v
-    }) ?? "undefined"
+    return (
+      JSON.stringify(value, (_key, v) => {
+        if (typeof v === "object" && v !== null) {
+          if (seen.has(v)) return "[Circular]"
+          seen.add(v)
+        }
+        if (typeof v === "bigint") return `${v.toString()}n`
+        if (typeof v === "function") return `[Function: ${v.name || "anonymous"}]`
+        return v
+      }) ?? "undefined"
+    )
   } catch (err) {
     return `[unstringifiable: ${err instanceof Error ? err.name : "unknown"}]`
   }

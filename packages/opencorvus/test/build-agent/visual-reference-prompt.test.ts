@@ -66,17 +66,14 @@ describe("renderVisualContractPreamble", () => {
   })
 
   test("falls back to sha when filename is missing", () => {
-    const out = renderVisualContractPreamble([
-      { mime: "image/png", size: 1, sha: "deadbeef0123" },
-    ])
+    const out = renderVisualContractPreamble([{ mime: "image/png", size: 1, sha: "deadbeef0123" }])
     expect(out).toContain("deadbeef0123")
   })
 
   test("inlined mode (default): tells the LLM file parts are inlined above", () => {
-    const out = renderVisualContractPreamble(
-      [{ mime: "image/png", filename: "ui.png", size: 1, sha: "v" }],
-      { mode: "inlined" },
-    )
+    const out = renderVisualContractPreamble([{ mime: "image/png", filename: "ui.png", size: 1, sha: "v" }], {
+      mode: "inlined",
+    })
     expect(out).toContain("inlined above as multimodal parts")
     // Inlined mode talks about "file part decode failure", not "missing on disk".
     expect(out).toContain("inlined file part")
@@ -84,10 +81,9 @@ describe("renderVisualContractPreamble", () => {
   })
 
   test("staged-only mode (external provider): tells the LLM to read from disk", () => {
-    const out = renderVisualContractPreamble(
-      [{ mime: "image/png", filename: "ui.png", size: 1, sha: "v" }],
-      { mode: "staged-only" },
-    )
+    const out = renderVisualContractPreamble([{ mime: "image/png", filename: "ui.png", size: 1, sha: "v" }], {
+      mode: "staged-only",
+    })
     expect(out).toContain("staged on disk")
     expect(out).toContain("references/")
     // The wording must NOT promise inlining — codex / claude-code don't
@@ -116,10 +112,9 @@ describe("renderVisualContractPreamble", () => {
     ]
     for (const { mode, label } of fixtures) {
       test(`${label}: forbids inlining staged assets as data:...;base64,... URLs`, () => {
-        const out = renderVisualContractPreamble(
-          [{ mime: "image/png", filename: "hero.png", size: 1, sha: "v" }],
-          { mode },
-        )
+        const out = renderVisualContractPreamble([{ mime: "image/png", filename: "hero.png", size: 1, sha: "v" }], {
+          mode,
+        })
         // Explicit ban on the regression shape.
         expect(out).toContain("data:")
         expect(out).toContain("base64")
@@ -130,10 +125,9 @@ describe("renderVisualContractPreamble", () => {
       })
 
       test(`${label}: instructs the LLM to reference files by relative path`, () => {
-        const out = renderVisualContractPreamble(
-          [{ mime: "image/png", filename: "hero.png", size: 1, sha: "v" }],
-          { mode },
-        )
+        const out = renderVisualContractPreamble([{ mime: "image/png", filename: "hero.png", size: 1, sha: "v" }], {
+          mode,
+        })
         // Positive guidance: use the staged relative path, not raw bytes.
         expect(out).toContain("references/<filename>")
         // Concrete reference example so the LLM has a shape to copy.

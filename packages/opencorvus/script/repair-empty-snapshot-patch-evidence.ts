@@ -24,7 +24,10 @@ function defaultDbPath() {
 
 function parseArgs(): Args {
   const taskID = argValue("--task-id")
-  if (!taskID) throw new Error("Usage: bun packages/opencorvus/script/repair-empty-snapshot-patch-evidence.ts --task-id <id> [--db <path>] [--threshold <n>] [--apply]")
+  if (!taskID)
+    throw new Error(
+      "Usage: bun packages/opencorvus/script/repair-empty-snapshot-patch-evidence.ts --task-id <id> [--db <path>] [--threshold <n>] [--apply]",
+    )
   return {
     db: argValue("--db") || process.env.OPENCORVUS_DB || defaultDbPath(),
     taskID,
@@ -54,14 +57,16 @@ const args = parseArgs()
 const db = args.apply ? new Database(args.db) : new Database(args.db, { readonly: true })
 
 const sessions = db
-  .query<{ id: string }, [string]>(`
+  .query<{ id: string }, [string]>(
+    `
     WITH RECURSIVE session_tree(id) AS (
       SELECT session_id FROM engine_task WHERE id = ?
       UNION ALL
       SELECT s.id FROM session s JOIN session_tree st ON s.parent_id = st.id
     )
     SELECT id FROM session_tree
-  `)
+  `,
+  )
   .all(args.taskID)
   .map((row) => row.id)
 
@@ -72,7 +77,8 @@ const patchRows = db
   .query<
     { id: string; message_id: string; session_id: string; file_count: number; data_length: number },
     [...string[], string, number]
-  >(`
+  >(
+    `
     SELECT id, message_id, session_id,
            json_array_length(json_extract(data, '$.files')) AS file_count,
            length(data) AS data_length
@@ -82,33 +88,42 @@ const patchRows = db
       AND json_extract(data, '$.hash') = ?
       AND json_array_length(json_extract(data, '$.files')) >= ?
     ORDER BY data_length DESC
-  `)
+  `,
+  )
   .all(...sessions, EMPTY_TREE_HASH, args.threshold)
 
 const affectedSessions = [...new Set(patchRows.map((row) => row.session_id))]
 const affectedMessages = [...new Set(patchRows.map((row) => row.message_id))]
 const stepStartRows = affectedMessages.length
   ? db
-      .query<{ id: string; message_id: string; session_id: string }, [...string[], string]>(`
+      .query<{ id: string; message_id: string; session_id: string }, [...string[], string]>(
+        `
         SELECT id, message_id, session_id
         FROM part
         WHERE message_id IN (${placeholders(affectedMessages)})
           AND json_extract(data, '$.type') = 'step-start'
           AND json_extract(data, '$.snapshot') = ?
-      `)
+      `,
+      )
       .all(...affectedMessages, EMPTY_TREE_HASH)
   : []
 
-console.log(JSON.stringify({
-  mode: args.apply ? "apply" : "dry-run",
-  db: args.db,
-  taskID: args.taskID,
-  threshold: args.threshold,
-  sessions: sessions.length,
-  invalidPatchParts: patchRows,
-  invalidStepStarts: stepStartRows,
-  affectedSessions,
-}, null, 2))
+console.log(
+  JSON.stringify(
+    {
+      mode: args.apply ? "apply" : "dry-run",
+      db: args.db,
+      taskID: args.taskID,
+      threshold: args.threshold,
+      sessions: sessions.length,
+      invalidPatchParts: patchRows,
+      invalidStepStarts: stepStartRows,
+      affectedSessions,
+    },
+    null,
+    2,
+  ),
+)
 
 if (!args.apply) {
   db.close()
@@ -129,14 +144,16 @@ const tx = db.transaction(() => {
     db.query(`DELETE FROM part WHERE id IN (${placeholders(stepStartRows)})`).run(...stepStartRows.map((row) => row.id))
   }
   if (affectedSessions.length) {
-    db.query(`
+    db.query(
+      `
       UPDATE session
       SET summary_additions = NULL,
           summary_deletions = NULL,
           summary_files = NULL,
           time_updated = ?
       WHERE id IN (${placeholders(affectedSessions)})
-    `).run(Date.now(), ...affectedSessions)
+    `,
+    ).run(Date.now(), ...affectedSessions)
   }
 })
 tx()
@@ -149,13 +166,19 @@ for (const sessionID of affectedSessions) {
   })
 }
 
-console.log(JSON.stringify({
-  repaired: true,
-  backup,
-  deletedPatchParts: patchRows.length,
-  deletedStepStarts: stepStartRows.length,
-  clearedSessionSummaries: affectedSessions.length,
-  removedSessionDiffFiles: affectedSessions,
-}, null, 2))
+console.log(
+  JSON.stringify(
+    {
+      repaired: true,
+      backup,
+      deletedPatchParts: patchRows.length,
+      deletedStepStarts: stepStartRows.length,
+      clearedSessionSummaries: affectedSessions.length,
+      removedSessionDiffFiles: affectedSessions,
+    },
+    null,
+    2,
+  ),
+)
 
 db.close()

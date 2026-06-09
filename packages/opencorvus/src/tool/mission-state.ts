@@ -199,9 +199,7 @@ export const MissionStateTool = Tool.define("mission_state", {
         const entries = await Promise.all(
           MISSION_FILES.map(async (file) => {
             const stat = await statIfExists(path.join(dir, file))
-            return stat
-              ? { file, size: stat.size, mtime: stat.mtimeMs }
-              : null
+            return stat ? { file, size: stat.size, mtime: stat.mtimeMs } : null
           }),
         )
         const present = entries.filter((entry): entry is { file: MissionFile; size: number; mtime: number } => !!entry)

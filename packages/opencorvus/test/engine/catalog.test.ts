@@ -18,25 +18,11 @@ describe("engine status catalog", () => {
     // class — merging completed into `live` deadlocked the orchestrator
     // when a successful goal finished. Dispatch-dedup call sites combine
     // `live ∪ satisfies` instead of relying on an over-inclusive `live`.
-    expect(LIVE_GOAL_RUN_STATUSES).toEqual([
-      "queued",
-      "accepted",
-      "planning",
-      "running",
-      "evaluating",
-      "blocked",
-    ])
+    expect(LIVE_GOAL_RUN_STATUSES).toEqual(["queued", "accepted", "planning", "running", "evaluating", "blocked"])
     // `completed` is intentionally NOT resettable: the success record +
     // verification evidence are preserved across contract changes; retry
     // proceeds by creating a new goal_run and supersede-annotating the old.
-    expect(GOAL_RUN_RESETTABLE_STATUSES).toEqual([
-      "queued",
-      "accepted",
-      "planning",
-      "running",
-      "evaluating",
-      "blocked",
-    ])
+    expect(GOAL_RUN_RESETTABLE_STATUSES).toEqual(["queued", "accepted", "planning", "running", "evaluating", "blocked"])
 
     expect(isLiveGoalRunStatus("planning")).toBe(true)
     expect(isLiveGoalRunStatus("completed")).toBe(false)

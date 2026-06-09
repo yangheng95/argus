@@ -6,14 +6,14 @@ Weak build models can understate task complexity at the end of a run even when t
 
 ## Grep Coverage
 
-| Surface | Evidence | Decision |
-| --- | --- | --- |
-| `BuildResultSchema` | `rg report_build_result BuildResultSchema packages/opencorvus/src packages/opencorvus/test` | Add optional typed report fields in the single BuildResult schema. |
-| `report_build_result` | `build/agent.ts` uses `inputSchema: BuildResultSchema` | Update tool description only; no parallel schema. |
-| External executors | `makeExternalPassedBuildResult` / `makeExternalFailedBuildResult` | Populate the new optional fields from the same external factories. |
-| Trace report | `buildBuildAgentReport` | Render the new fields so following agents see them in report evidence. |
-| Prompt | `buildUserPrompt` goal/request paths | Add terminal-report instructions near the final contract, where weak models are least likely to drop them. |
-| Goal report | `goal_report` schema | Add the same optional follow-up warning field for goal executor reports, without changing extraction flow. |
+| Surface               | Evidence                                                                                    | Decision                                                                                                   |
+| --------------------- | ------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------- |
+| `BuildResultSchema`   | `rg report_build_result BuildResultSchema packages/opencorvus/src packages/opencorvus/test` | Add optional typed report fields in the single BuildResult schema.                                         |
+| `report_build_result` | `build/agent.ts` uses `inputSchema: BuildResultSchema`                                      | Update tool description only; no parallel schema.                                                          |
+| External executors    | `makeExternalPassedBuildResult` / `makeExternalFailedBuildResult`                           | Populate the new optional fields from the same external factories.                                         |
+| Trace report          | `buildBuildAgentReport`                                                                     | Render the new fields so following agents see them in report evidence.                                     |
+| Prompt                | `buildUserPrompt` goal/request paths                                                        | Add terminal-report instructions near the final contract, where weak models are least likely to drop them. |
+| Goal report           | `goal_report` schema                                                                        | Add the same optional follow-up warning field for goal executor reports, without changing extraction flow. |
 
 ## Implementation
 

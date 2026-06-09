@@ -2,13 +2,7 @@ import { integer, sqliteTable, text, index } from "drizzle-orm/sqlite-core"
 import { EnginePlanVersionTable, EngineTaskTable } from "@/engine/engine.sql"
 import { Timestamps } from "@/storage/schema.sql"
 
-export type WorkbenchNoteKind =
-  | "user_request"
-  | "operator_note"
-  | "goal_update"
-  | "constraint"
-  | "decision"
-  | "summary"
+export type WorkbenchNoteKind = "user_request" | "operator_note" | "goal_update" | "constraint" | "decision" | "summary"
 
 export const WorkbenchTaskNoteTable = sqliteTable(
   "workbench_task_note",
@@ -45,8 +39,5 @@ export const WorkbenchBriefSnapshotTable = sqliteTable(
     inputs: text({ mode: "json" }).$type<Record<string, unknown>>(),
     ...Timestamps,
   },
-  (table) => [
-    index("workbench_brief_task_idx").on(table.task_id),
-    index("workbench_brief_run_idx").on(table.run_id),
-  ],
+  (table) => [index("workbench_brief_task_idx").on(table.task_id), index("workbench_brief_run_idx").on(table.run_id)],
 )

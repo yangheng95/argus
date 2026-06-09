@@ -167,7 +167,8 @@ const DIRECT: MiniWorkflow = {
 const PIPELINE: MiniWorkflow = {
   id: "pipeline",
   name: "Pipeline",
-  description: "(frontend_design / frontend_research 按证据需要) → analyze_intent → requirements → architect → per-goal[build] → integrity。多文件功能 / UI 复刻 / 跨模块重构。",
+  description:
+    "(frontend_design / frontend_research 按证据需要) → analyze_intent → requirements → architect → per-goal[build] → integrity。多文件功能 / UI 复刻 / 跨模块重构。",
   steps: [
     {
       id: "frontend_design",
@@ -229,15 +230,13 @@ const PIPELINE: MiniWorkflow = {
       scope: "goal",
       skippable: false,
       after: ["architect"],
-      phases: [
-        { id: "build", label: "Build", sessionKind: "build" },
-      ],
+      phases: [{ id: "build", label: "Build", sessionKind: "build" }],
     },
     {
       id: "visual_qa",
       tool: "visual_qa",
       label: "Visual QA",
-      hint: "前端 UI/UX 专职测试阶段。UI=User Interface，UX=User Experience。消费 frontend_design/build 的 task-scoped evidence，启动真实预览，使用 Node/Playwright 或 webpage_render/evaluate/vision_judge 生成桌面/移动/交互状态证据；发现当前任务内可修复的视觉/runtime 缺陷时直接修复并提交 structured visual QA report。它不是 host gate，最终验收仍由 integrity 决定。",
+      hint: "前端视觉 GUI 还原度与功能测试阶段。GUI=Graphical User Interface，图形用户界面。消费 frontend_design/build 的 task-scoped evidence，启动真实预览，使用 Node/Playwright 或 webpage_render/evaluate/vision_judge 生成桌面/移动/交互状态证据；发现当前任务内可修复的视觉/功能缺陷时直接修复并提交 structured visual QA report。它不是 host gate，最终验收仍由 integrity 决定。",
       scope: "task",
       skippable: true,
       after: ["build"],
@@ -260,8 +259,8 @@ const PIPELINE: MiniWorkflow = {
 // ═══════════════════════════════════════════════════════════════════
 
 const BUILT_IN: Record<string, MiniWorkflow> = {
-  "direct": DIRECT,
-  "pipeline": PIPELINE,
+  direct: DIRECT,
+  pipeline: PIPELINE,
 }
 
 // ═══════════════════════════════════════════════════════════════════
@@ -288,7 +287,7 @@ export namespace WorkflowRegistry {
     const cfg = await EngineConfig.get()
     const userWorkflows = cfg.workflows ?? []
     const userIDs = new Set(userWorkflows.map((w: MiniWorkflow) => w.id))
-    const builtInList = Object.values(BUILT_IN).filter(w => !userIDs.has(w.id))
+    const builtInList = Object.values(BUILT_IN).filter((w) => !userIDs.has(w.id))
     return [...builtInList, ...userWorkflows]
   }
 
@@ -321,7 +320,7 @@ export function createWorkflowState(workflow: MiniWorkflow): WorkflowState {
 
 /** 根据 tool 名查找 workflow 中对应的 step */
 export function findStepByTool(workflow: MiniWorkflow, toolName: string): MiniWorkflowStep | undefined {
-  return workflow.steps.find(s => s.tool === toolName)
+  return workflow.steps.find((s) => s.tool === toolName)
 }
 
 /**
@@ -335,10 +334,7 @@ export function findStepByTool(workflow: MiniWorkflow, toolName: string): MiniWo
  * for a step that is currently in-flight — that's a one-frame UI blink,
  * not a correctness regression: the next event rehydrates `running`.
  */
-export function projectTaskSteps(
-  taskID: string,
-  workflow: MiniWorkflow,
-): Record<string, GoalStepStatus> {
+export function projectTaskSteps(taskID: string, workflow: MiniWorkflow): Record<string, GoalStepStatus> {
   const task = findTask(taskID)
   if (!task) return {}
   const out: Record<string, GoalStepStatus> = {}
@@ -356,11 +352,17 @@ function taskStepStatusByTool(
 ): GoalStepStatus["status"] {
   switch (tool) {
     case "analyze_intent":
-      return createDecisionLog(taskID).read().some((e) => e.phase === "intent_analysis")
+      return createDecisionLog(taskID)
+        .read()
+        .some((e) => e.phase === "intent_analysis")
         ? "completed"
         : "pending"
     case "frontend_design": {
-      const keys = new Set(createDecisionLog(taskID).readByPhase("frontend_design").map((entry) => entry.key))
+      const keys = new Set(
+        createDecisionLog(taskID)
+          .readByPhase("frontend_design")
+          .map((entry) => entry.key),
+      )
       return [
         "public_report",
         "frontend_template",
@@ -371,7 +373,9 @@ function taskStepStatusByTool(
         "template_iteration_notes",
         "completeness_review",
         "evidence_source_manifest",
-      ].every((key) => keys.has(key)) ? "completed" : "pending"
+      ].every((key) => keys.has(key))
+        ? "completed"
+        : "pending"
     }
     case "frontend_research":
       return findLatestFrontendResearchBriefArtifact(taskID) ? "completed" : "pending"
@@ -419,10 +423,7 @@ function taskStepStatusByTool(
  * Returns the `goalSteps` shape (keyed by goalID) so callers (board.ts,
  * renderWorkflowPrompt) can consume it as if it had been persisted.
  */
-export function projectGoalSteps(
-  taskID: string,
-  workflow: MiniWorkflow,
-): Record<string, GoalWorkflowState> {
+export function projectGoalSteps(taskID: string, workflow: MiniWorkflow): Record<string, GoalWorkflowState> {
   const goalScopeSteps = workflow.steps.filter((s) => s.scope === "goal")
   if (goalScopeSteps.length === 0) return {}
   const goals = listGoals(taskID)
@@ -536,8 +537,7 @@ function projectPhases(
     case "failed":
       // Mark final phase failed, earlier phases completed. See block comment.
       for (let i = 0; i < phases.length; i++) {
-        const status: GoalStepStatus["status"] =
-          i < phases.length - 1 ? "completed" : "failed"
+        const status: GoalStepStatus["status"] = i < phases.length - 1 ? "completed" : "failed"
         out[phases[i].id] = { status, startedAt, completedAt }
       }
       break
@@ -547,9 +547,7 @@ function projectPhases(
   return out
 }
 
-function mapGoalRunToStepStatus(
-  runStatus: string | undefined,
-): GoalStepStatus["status"] {
+function mapGoalRunToStepStatus(runStatus: string | undefined): GoalStepStatus["status"] {
   switch (runStatus) {
     case undefined:
     case "queued":
@@ -602,11 +600,11 @@ export function renderWorkflowPrompt(workflow: MiniWorkflow, state: WorkflowStat
       // goal-scope: 任一 goal 在跑视为 running；全部 done 算 done
       const goalEntries = Object.values(derivedGoalSteps)
       if (goalEntries.length > 0) {
-        const statuses = goalEntries.map(g => g.steps[step.id]?.status ?? "pending")
-        if (statuses.some(s => s === "running")) statusTag = "[RUNNING]"
-        else if (statuses.every(s => s === "completed" || s === "skipped")) statusTag = "[DONE]"
-        else if (statuses.some(s => s === "failed")) statusTag = "[FAILED]"
-        else if (statuses.some(s => s === "completed")) statusTag = "[PARTIAL]"
+        const statuses = goalEntries.map((g) => g.steps[step.id]?.status ?? "pending")
+        if (statuses.some((s) => s === "running")) statusTag = "[RUNNING]"
+        else if (statuses.every((s) => s === "completed" || s === "skipped")) statusTag = "[DONE]"
+        else if (statuses.some((s) => s === "failed")) statusTag = "[FAILED]"
+        else if (statuses.some((s) => s === "completed")) statusTag = "[PARTIAL]"
       }
     }
 
@@ -615,7 +613,7 @@ export function renderWorkflowPrompt(workflow: MiniWorkflow, state: WorkflowStat
 
   if (workflow.goalLoopStepIDs.length > 0) {
     const loopLabels = workflow.goalLoopStepIDs
-      .map(id => workflow.steps.find(s => s.id === id)?.label ?? id)
+      .map((id) => workflow.steps.find((s) => s.id === id)?.label ?? id)
       .join(" → ")
     lines.push("")
     lines.push(`Per-goal 步骤 [${loopLabels}] 对每个 goal 重复执行。`)
@@ -624,8 +622,8 @@ export function renderWorkflowPrompt(workflow: MiniWorkflow, state: WorkflowStat
   lines.push("")
   lines.push(
     "NOTE: 上面是按需调用的可见进度，不是必须按序触发的状态机。每个 stage agent 是否调用由你 " +
-    "（编排器）按 request 形态决定 —— 跳过等同于显式选择，理由要在 reasoning 里讲清楚。Pipeline 的最后 gate 是 `integrity`；" +
-    "integrity pass 完成任务，非 pass 返回 session-bound review evidence，下一步由编排器基于证据决定。",
+      "（编排器）按 request 形态决定 —— 跳过等同于显式选择，理由要在 reasoning 里讲清楚。Pipeline 的最后 gate 是 `integrity`；" +
+      "integrity pass 完成任务，非 pass 返回 session-bound review evidence，下一步由编排器基于证据决定。",
   )
 
   return lines.join("\n")
@@ -633,10 +631,15 @@ export function renderWorkflowPrompt(workflow: MiniWorkflow, state: WorkflowStat
 
 function statusLabel(status: GoalStepStatus["status"]): string {
   switch (status) {
-    case "pending": return "[PENDING]"
-    case "running": return "[RUNNING]"
-    case "completed": return "[DONE]"
-    case "skipped": return "[SKIPPED]"
-    case "failed": return "[FAILED]"
+    case "pending":
+      return "[PENDING]"
+    case "running":
+      return "[RUNNING]"
+    case "completed":
+      return "[DONE]"
+    case "skipped":
+      return "[SKIPPED]"
+    case "failed":
+      return "[FAILED]"
   }
 }

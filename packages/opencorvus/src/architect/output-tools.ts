@@ -49,15 +49,21 @@ const RegisterContractToolInputSchema = ArchitectContractRefSchema.omit({
   route: true,
   component: true,
 }).extend({
-  ir_json: z.string().min(2)
+  ir_json: z
+    .string()
+    .min(2)
     .describe(
-      "For kind=type/function/enum only: JSON.stringify of the ContractIR object. Example: {\"kind\":\"type\",\"name\":\"WidgetProps\",\"fields\":[...]}",
+      'For kind=type/function/enum only: JSON.stringify of the ContractIR object. Example: {"kind":"type","name":"WidgetProps","fields":[...]}',
     )
     .optional(),
-  route_json: z.string().min(2)
+  route_json: z
+    .string()
+    .min(2)
     .describe("For kind=route only: JSON.stringify of {method,path,request?,response?}.")
     .optional(),
-  component_json: z.string().min(2)
+  component_json: z
+    .string()
+    .min(2)
     .describe(
       "For kind=component only: JSON.stringify of {props?: string, events?: string[], slots?: string[]}. props is a comma-separated string, not an array.",
     )
@@ -160,11 +166,7 @@ function normalizeSourceBaselineOwnedPaths(goal: RegisteredGoal): {
   const owned_paths: string[] = []
 
   for (const ownedPath of goal.owned_paths) {
-    const normalized = ownedPath
-      .trim()
-      .replaceAll("\\", "/")
-      .replace(/^\.\//, "")
-      .replace(/\/+/g, "/")
+    const normalized = ownedPath.trim().replaceAll("\\", "/").replace(/^\.\//, "").replace(/\/+/g, "/")
     let next = ownedPath
     if (normalized === "frontend-design-skeleton") {
       next = "."
@@ -550,12 +552,11 @@ export function architectValidationFindings(
     } else {
       const missingRegionOwnership = visualAcceptanceRegionOwnershipFindings(collector, visualAcceptanceOwners)
       for (const missing of missingRegionOwnership) {
-        concern(
-          "missing_visual_region_acceptance_ownership",
-          missing.message,
-          { goal_ids: missing.goalIDs },
-          ["register_goal", "modify_goal", "register_reference_coverage"],
-        )
+        concern("missing_visual_region_acceptance_ownership", missing.message, { goal_ids: missing.goalIDs }, [
+          "register_goal",
+          "modify_goal",
+          "register_reference_coverage",
+        ])
       }
     }
   }
@@ -642,7 +643,8 @@ function formatAcceptanceSpecCoverageText(spec: AcceptanceSpec): string {
   const scorerText = spec.scorers
     .map((scorer) => {
       if (scorer.type === "llm_judge") return `${scorer.name}\n${scorer.criteria}\n${scorer.inputs?.join(" ") ?? ""}`
-      if (scorer.type === "prebuilt") return `${scorer.name}\n${JSON.stringify(scorer.spec ?? {})}\n${JSON.stringify(scorer.expect ?? {})}`
+      if (scorer.type === "prebuilt")
+        return `${scorer.name}\n${JSON.stringify(scorer.spec ?? {})}\n${JSON.stringify(scorer.expect ?? {})}`
       if (scorer.type === "contract_audit") return `${scorer.name}\n${scorer.spec.contract_ids.join(" ")}`
       return scorer.name
     })

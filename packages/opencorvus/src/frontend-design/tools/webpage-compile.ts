@@ -39,7 +39,7 @@ Use this only when the canonical structure IR or asset graph is missing. Do not 
       if ((error as NodeJS.ErrnoException).code === "ENOENT") {
         throw new Error(
           `Missing ${extractedPath}. \`webpage_compile\` depends on \`webpage_extract\` output. ` +
-          `Create the URL evidence package first and retry only after \`extracted-page.json\` exists.`,
+            `Create the URL evidence package first and retry only after \`extracted-page.json\` exists.`,
         )
       }
       throw error
@@ -49,7 +49,7 @@ Use this only when the canonical structure IR or asset graph is missing. Do not 
     if (!archiveHtmlPath) {
       throw new Error(
         `Missing ${singleFileHtmlPath} and ${captureHtmlPath}. \`webpage_compile\` compiles canonical webpage evidence IR from ` +
-        `the HTML archive produced by \`webpage_extract\`. Re-run extraction for this evidence package first.`,
+          `the HTML archive produced by \`webpage_extract\`. Re-run extraction for this evidence package first.`,
       )
     }
     const archiveHtml = await fs.readFile(archiveHtmlPath, "utf8")
@@ -90,7 +90,10 @@ Use this only when the canonical structure IR or asset graph is missing. Do not 
   },
 })
 
-async function existingArchiveHtmlPath(singleFileHtmlPath: string, captureHtmlPath: string): Promise<string | undefined> {
+async function existingArchiveHtmlPath(
+  singleFileHtmlPath: string,
+  captureHtmlPath: string,
+): Promise<string | undefined> {
   if (await exists(singleFileHtmlPath)) return singleFileHtmlPath
   if (await exists(captureHtmlPath)) return captureHtmlPath
   return undefined

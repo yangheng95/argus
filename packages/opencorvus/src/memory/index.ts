@@ -1,11 +1,5 @@
 import { Database, and, desc, eq, isNull, sql } from "@/storage/db"
-import {
-  MemoryFileTable,
-  MemoryChunkTable,
-  type MemoryKind,
-  type MemoryScope,
-  type MemorySource,
-} from "./memory.sql"
+import { MemoryFileTable, MemoryChunkTable, type MemoryKind, type MemoryScope, type MemorySource } from "./memory.sql"
 import { Identifier } from "@/id/id"
 import { Log } from "@/util/log"
 import { MemorySearch } from "./search"
@@ -213,13 +207,7 @@ export namespace Memory {
     return [...new Set(variants.filter(Boolean))]
   }
 
-  function findByKey(input: {
-    projectId: string
-    scope: Scope
-    sessionID?: string
-    kind: Kind
-    key: string
-  }) {
+  function findByKey(input: { projectId: string; scope: Scope; sessionID?: string; kind: Kind; key: string }) {
     const row = Database.use((db) =>
       db
         .select()
@@ -277,12 +265,7 @@ export namespace Memory {
     return true
   }
 
-  function deriveAtomicMemories(input: {
-    title: string
-    content: string
-    promoteScope: Scope
-    sessionID?: string
-  }) {
+  function deriveAtomicMemories(input: { title: string; content: string; promoteScope: Scope; sessionID?: string }) {
     const seen = new Set<string>()
     const sections = parseSections(input.content)
     const kind: Exclude<Kind, "episode" | "note"> = "fact"
@@ -551,24 +534,26 @@ export namespace Memory {
         const key = normalizeKey(`${atom.kind}-${text}`)
         if (!key || seen.has(key)) return []
         seen.add(key)
-        const atomScope = atom.kind === "profile" ? "global" as Scope : promoteScope
-        return [writeFile({
-          title: buildAtomicTitle(atom.kind, text),
-          content: buildAtomicContent({
+        const atomScope = atom.kind === "profile" ? ("global" as Scope) : promoteScope
+        return [
+          writeFile({
+            title: buildAtomicTitle(atom.kind, text),
+            content: buildAtomicContent({
+              kind: atom.kind,
+              text,
+              episodeTitle: input.title,
+              section: atom.section,
+            }),
+            source: "reflection",
+            projectId: input.projectId,
+            scope: atomScope,
+            sessionID: atomScope === "session" ? input.sessionID : undefined,
             kind: atom.kind,
-            text,
-            episodeTitle: input.title,
-            section: atom.section,
+            key,
+            importance: atom.importance ?? DEFAULT_IMPORTANCE[atom.kind],
+            confidence: DEFAULT_CONFIDENCE[atom.kind],
           }),
-          source: "reflection",
-          projectId: input.projectId,
-          scope: atomScope,
-          sessionID: atomScope === "session" ? input.sessionID : undefined,
-          kind: atom.kind,
-          key,
-          importance: atom.importance ?? DEFAULT_IMPORTANCE[atom.kind],
-          confidence: DEFAULT_CONFIDENCE[atom.kind],
-        })]
+        ]
       })
       log.info("captured episode memory (structured atomics)", {
         fileId: episode.id,
@@ -647,18 +632,19 @@ export namespace Memory {
           minScore,
           kinds: ["profile", "lesson", "fact", "note"],
         })
-        const secondary = input.includeEpisodes === false
-          ? []
-          : search({
-              query,
-              projectId: input.projectId,
-              sessionID: input.sessionID,
-              scope: input.scope ?? "all",
-              limit,
-              minScore: Math.max(0.06, minScore - 0.04),
-              kinds: ["episode"],
-              temporalDecay: true,
-            })
+        const secondary =
+          input.includeEpisodes === false
+            ? []
+            : search({
+                query,
+                projectId: input.projectId,
+                sessionID: input.sessionID,
+                scope: input.scope ?? "all",
+                limit,
+                minScore: Math.max(0.06, minScore - 0.04),
+                kinds: ["episode"],
+                temporalDecay: true,
+              })
         return [...primary, ...secondary]
       })
       .filter((item) => {
@@ -716,20 +702,18 @@ export namespace Memory {
         .orderBy(desc(MemoryFileTable.time_updated), desc(MemoryFileTable.time_created))
         .all(),
     )
-    return rows
-      .map(fromFile)
-      .filter((row) => {
-        if (input.kinds && input.kinds.length > 0 && !input.kinds.includes(row.kind)) return false
-        if (scope === "global") return row.scope === "global"
-        if (sessionSet) {
-          if (scope === "session") return row.scope === "session" && !!row.sessionID && sessionSet.has(row.sessionID)
-          if (row.scope === "global") return true
-          return !!row.sessionID && sessionSet.has(row.sessionID)
-        }
-        if (scope === "session") return row.scope === "session" && row.sessionID === input.sessionID
+    return rows.map(fromFile).filter((row) => {
+      if (input.kinds && input.kinds.length > 0 && !input.kinds.includes(row.kind)) return false
+      if (scope === "global") return row.scope === "global"
+      if (sessionSet) {
+        if (scope === "session") return row.scope === "session" && !!row.sessionID && sessionSet.has(row.sessionID)
         if (row.scope === "global") return true
-        return row.sessionID === input.sessionID
-      })
+        return !!row.sessionID && sessionSet.has(row.sessionID)
+      }
+      if (scope === "session") return row.scope === "session" && row.sessionID === input.sessionID
+      if (row.scope === "global") return true
+      return row.sessionID === input.sessionID
+    })
   }
 
   export function getFile(fileId: string) {

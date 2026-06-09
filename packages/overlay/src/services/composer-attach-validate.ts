@@ -60,7 +60,8 @@ export function isComposerAttachPayload(x: unknown): x is ComposerAttachPayload 
     typeof o.mime !== "string" ||
     typeof o.dataUrl !== "string" ||
     typeof o.sourcePath !== "string"
-  ) return false
+  )
+    return false
   if (o.filename.length === 0 || FILENAME_BAD_CHAR_RE.test(o.filename)) return false
   if (!MIME_RE.test(o.mime)) return false
   if (!o.dataUrl.startsWith("data:") && !o.dataUrl.startsWith("blob:")) return false

@@ -18,9 +18,9 @@ Route handlers do not read `process.env`, open SQL tables directly, or use `z.an
 
 OpenCorvus has two built-in workflows in `packages/opencorvus/src/engine/workflow.ts`:
 
-| Workflow | Shape | Use case |
-|---|---|---|
-| `direct` | `analyze_intent` as needed, then `build` | Explicit `kind=build`, scoped edits, bug fixes, short debugging |
+| Workflow   | Shape                                                                                                                      | Use case                                                                                   |
+| ---------- | -------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------ |
+| `direct`   | `analyze_intent` as needed, then `build`                                                                                   | Explicit `kind=build`, scoped edits, bug fixes, short debugging                            |
 | `pipeline` | `(frontend_design / frontend_research as needed) → analyze_intent → requirements → architect → per-goal build → integrity` | Multi-file features, UI replication, refactors, tasks needing explicit acceptance evidence |
 
 The workflow definition is prompt context for the orchestrator. The orchestrator can skip optional steps or reroute based on evidence. `integrity` is the final session-bound review step for the pipeline.
@@ -47,14 +47,14 @@ Worker sessions
 
 ## Responsibilities
 
-| Component | Role | Current source |
-|---|---|---|
-| Channel / API | Converts external input into task creation, messages, and control operations | `packages/opencorvus/src/channel/ingress.ts`, `packages/opencorvus/src/server/routes/` |
-| Engine | Stores tasks, specs, requirements, goals, plan versions, artifacts, interactions, and projected status | `packages/opencorvus/src/engine/engine.sql.ts`, `packages/opencorvus/src/engine/store.ts` |
-| Orchestrator | Single task-level decision maker. Reads `describeTask`, dispatches typed tools, and decides recovery from evidence | `packages/opencorvus/src/orchestrator/agent.ts`, `packages/opencorvus/src/orchestrator/tools.ts` |
-| Workflow | Declares built-in `direct` and `pipeline` recommendations and renders progress from artifacts | `packages/opencorvus/src/engine/workflow.ts` |
-| Build agent | Implements direct tasks or one architect-authored goal in an isolated workspace | `packages/opencorvus/src/build/agent.ts` |
-| Integrity | Final system review for pipeline tasks; returns pass/non-pass evidence to the orchestrator | `packages/opencorvus/src/integrity/` |
+| Component     | Role                                                                                                               | Current source                                                                                   |
+| ------------- | ------------------------------------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------ |
+| Channel / API | Converts external input into task creation, messages, and control operations                                       | `packages/opencorvus/src/channel/ingress.ts`, `packages/opencorvus/src/server/routes/`           |
+| Engine        | Stores tasks, specs, requirements, goals, plan versions, artifacts, interactions, and projected status             | `packages/opencorvus/src/engine/engine.sql.ts`, `packages/opencorvus/src/engine/store.ts`        |
+| Orchestrator  | Single task-level decision maker. Reads `describeTask`, dispatches typed tools, and decides recovery from evidence | `packages/opencorvus/src/orchestrator/agent.ts`, `packages/opencorvus/src/orchestrator/tools.ts` |
+| Workflow      | Declares built-in `direct` and `pipeline` recommendations and renders progress from artifacts                      | `packages/opencorvus/src/engine/workflow.ts`                                                     |
+| Build agent   | Implements direct tasks or one architect-authored goal in an isolated workspace                                    | `packages/opencorvus/src/build/agent.ts`                                                         |
+| Integrity     | Final system review for pipeline tasks; returns pass/non-pass evidence to the orchestrator                         | `packages/opencorvus/src/integrity/`                                                             |
 
 ## Two Loops
 

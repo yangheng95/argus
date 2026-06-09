@@ -19,36 +19,36 @@ The implementation must stay focused on Mission panel behavior:
 
 ## Current state evidence
 
-| Area | Evidence | Current behavior |
-| --- | --- | --- |
-| Mission page left ledger | `packages/overlay/src/components/Mission.tsx` imports `TaskList`, computes `missionTasks = visibleTasks()`, filters those tasks, and renders `<TaskList ... />`. | Mission panel left side is a task projection. It is not a Mission record list. |
-| TaskList semantics | `packages/overlay/src/components/TaskList.tsx` owns `visibleTasks()`, queue reorder, active task selection, task status rows, task children, cancel/delete controls, and task-specific keyboard/drag behavior. | Overloading `TaskList` with Mission records would mix Mission and task semantics. |
-| Mission wake | `packages/opencorvus/src/server/routes/mission.ts` only exposes `POST /mission/wake`. | The server can start/resume a Mission but cannot list Missions for the panel. |
-| Mission session source | `packages/opencorvus/src/mission/session.ts` creates sessions with `kind: "mission"` and stores `metadata.mission.id` plus `metadata.mission.channelKey`. | The authoritative Mission record is already the session row plus Mission metadata. |
-| Session history | `packages/opencorvus/src/server/routes/session.ts` exposes `GET /session/:sessionID/conversation` and `GET /session/:sessionID/events`. | A selected Mission can already be hydrated and streamed by session ID. |
-| Overlay session source | `packages/overlay/src/services/conversation.ts` and `packages/overlay/src/services/sse.ts` accept `BoardSource = { kind: "session", id }`. | The frontend already has the correct history transport for Mission sessions. |
-| Existing tests | `packages/overlay/test/mission-session-source.test.ts` asserts Mission session hydration/submission. `packages/opencorvus/test/server/session-conversation-routes.test.ts` covers Mission session conversation and SSE. | Tests prove the history surface exists, but the left ledger still asserts task-list reuse. |
-| Route registration/docs | `packages/opencorvus/src/server/routes/app.ts` mounts `MissionRoutes` at `/mission`; `docs/product/*/reference/api.md`, `packages/sdk/openapi.json`, and generated SDK files currently list only `/mission/wake`. | Adding `GET /mission` changes the API surface and generated docs/SDK snapshots. |
-| Overlay directory injection | `packages/overlay/test/api-directory-injection.test.ts` enumerates project-scoped routes that must receive the active directory. | The new `mission` route must be added to this test because it is project-scoped. |
-| Mission visual fixture | `packages/overlay/test/mission-visual-loop.ts` mocks `/mission/wake` but has no `/mission` fixture. | Visual verification must show Mission rows, not task rows. |
+| Area                        | Evidence                                                                                                                                                                                                                | Current behavior                                                                           |
+| --------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------ |
+| Mission page left ledger    | `packages/overlay/src/components/Mission.tsx` imports `TaskList`, computes `missionTasks = visibleTasks()`, filters those tasks, and renders `<TaskList ... />`.                                                        | Mission panel left side is a task projection. It is not a Mission record list.             |
+| TaskList semantics          | `packages/overlay/src/components/TaskList.tsx` owns `visibleTasks()`, queue reorder, active task selection, task status rows, task children, cancel/delete controls, and task-specific keyboard/drag behavior.          | Overloading `TaskList` with Mission records would mix Mission and task semantics.          |
+| Mission wake                | `packages/opencorvus/src/server/routes/mission.ts` only exposes `POST /mission/wake`.                                                                                                                                   | The server can start/resume a Mission but cannot list Missions for the panel.              |
+| Mission session source      | `packages/opencorvus/src/mission/session.ts` creates sessions with `kind: "mission"` and stores `metadata.mission.id` plus `metadata.mission.channelKey`.                                                               | The authoritative Mission record is already the session row plus Mission metadata.         |
+| Session history             | `packages/opencorvus/src/server/routes/session.ts` exposes `GET /session/:sessionID/conversation` and `GET /session/:sessionID/events`.                                                                                 | A selected Mission can already be hydrated and streamed by session ID.                     |
+| Overlay session source      | `packages/overlay/src/services/conversation.ts` and `packages/overlay/src/services/sse.ts` accept `BoardSource = { kind: "session", id }`.                                                                              | The frontend already has the correct history transport for Mission sessions.               |
+| Existing tests              | `packages/overlay/test/mission-session-source.test.ts` asserts Mission session hydration/submission. `packages/opencorvus/test/server/session-conversation-routes.test.ts` covers Mission session conversation and SSE. | Tests prove the history surface exists, but the left ledger still asserts task-list reuse. |
+| Route registration/docs     | `packages/opencorvus/src/server/routes/app.ts` mounts `MissionRoutes` at `/mission`; `docs/product/*/reference/api.md`, `packages/sdk/openapi.json`, and generated SDK files currently list only `/mission/wake`.       | Adding `GET /mission` changes the API surface and generated docs/SDK snapshots.            |
+| Overlay directory injection | `packages/overlay/test/api-directory-injection.test.ts` enumerates project-scoped routes that must receive the active directory.                                                                                        | The new `mission` route must be added to this test because it is project-scoped.           |
+| Mission visual fixture      | `packages/overlay/test/mission-visual-loop.ts` mocks `/mission/wake` but has no `/mission` fixture.                                                                                                                     | Visual verification must show Mission rows, not task rows.                                 |
 
 ## Current callsite disposition
 
-| Callsite | Current role | Required disposition |
-| --- | --- | --- |
-| `Mission.tsx` imports `TaskList`, `loadTasks`, `taskByID`, `visibleTasks`, `activeTaskID`, `cancelTask`, `deleteTask`, `selectTask`, `filterMatches`, `pendingInteractions`, `LedgerFilter`. | Powers the Mission left task ledger and selected task actions. | Remove from the Mission ledger path. Keep only code that is still needed by explicit task secondary content, or delete the secondary task surface if it becomes unreachable. |
-| `Mission.tsx` `filter`, `scope`, `searchQuery` signals. | Task status filter, project/global task scope, task search. | Replace with Mission-list query/search state. Remove project/global scope for this implementation because `GET /mission` is current-project scoped. |
-| `missionTasks`, `filteredTasks`, `counts`. | Derives task rows and task status counters from `visibleTasks()`. | Replace with `missionRecords`, route-backed search result state, and Mission counters that do not use task status taxonomy. |
-| `refreshAll`. | Refreshes stats/runtime/channel/tasks. | Refresh Mission records as part of the same user refresh; do not call `loadTasks()` for the Mission ledger. |
-| `handleCancelTask`, `handleDeleteTask`, `selectTask` callbacks passed to `MissionTaskLedger`. | Task row actions in the Mission ledger. | Delete from Mission list. If task secondary content remains, actions must be scoped there and not wired to Mission rows. |
-| `MissionTaskLedger` and local `FILTERS`. | Renders search, task status filters, scope toggle, task load error, and `<TaskList>`. | Replace with `MissionLedger` or `MissionList` backed by `MissionRecord[]`; remove task status filters and the all-project scope toggle. |
-| `MissionHeader counts`. | Displays task status counts. | Replace with Mission counts such as total, active/idle from session status only if a single source exists; otherwise show total/recent update only. Do not derive Mission health from tasks. |
-| `mission.css` `.mission-ledger-list .task-list-panel` and `.project-group-heading`. | Adapts TaskList CSS inside Mission. | Remove and replace with domain-neutral `.ledger-list`/`.ledger-row` styles. Mission rows must not use `.task-row-mini`. |
-| `mission-session-source.test.ts`. | Asserts Mission reuses `TaskList`. | Invert this assertion: Mission imports `MissionList` and does not import `TaskList` or call `visibleTasks()` for the ledger. |
-| `mission-launcher-component.test.ts`. | Asserts launcher/wake wiring and MissionConversation presence. | Add wake success list refresh/select expectations or source checks. |
-| `mission-i18n.test.ts`. | Requires task status/filter wording under `mission.ledger.*`. | Replace task status/filter keys with Mission list wording and ensure zh-CN/en-US coverage matches. |
-| `api-directory-injection.test.ts`. | Enumerates project-scoped overlay API routes. | Add `mission` and keep `mission/wake` covered as project-scoped calls. |
-| `mission-visual-loop.ts`. | Visual fixture for launcher and wake. | Mock `GET /mission` and render Mission rows in the captured state. |
+| Callsite                                                                                                                                                                                     | Current role                                                                          | Required disposition                                                                                                                                                                         |
+| -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `Mission.tsx` imports `TaskList`, `loadTasks`, `taskByID`, `visibleTasks`, `activeTaskID`, `cancelTask`, `deleteTask`, `selectTask`, `filterMatches`, `pendingInteractions`, `LedgerFilter`. | Powers the Mission left task ledger and selected task actions.                        | Remove from the Mission ledger path. Keep only code that is still needed by explicit task secondary content, or delete the secondary task surface if it becomes unreachable.                 |
+| `Mission.tsx` `filter`, `scope`, `searchQuery` signals.                                                                                                                                      | Task status filter, project/global task scope, task search.                           | Replace with Mission-list query/search state. Remove project/global scope for this implementation because `GET /mission` is current-project scoped.                                          |
+| `missionTasks`, `filteredTasks`, `counts`.                                                                                                                                                   | Derives task rows and task status counters from `visibleTasks()`.                     | Replace with `missionRecords`, route-backed search result state, and Mission counters that do not use task status taxonomy.                                                                  |
+| `refreshAll`.                                                                                                                                                                                | Refreshes stats/runtime/channel/tasks.                                                | Refresh Mission records as part of the same user refresh; do not call `loadTasks()` for the Mission ledger.                                                                                  |
+| `handleCancelTask`, `handleDeleteTask`, `selectTask` callbacks passed to `MissionTaskLedger`.                                                                                                | Task row actions in the Mission ledger.                                               | Delete from Mission list. If task secondary content remains, actions must be scoped there and not wired to Mission rows.                                                                     |
+| `MissionTaskLedger` and local `FILTERS`.                                                                                                                                                     | Renders search, task status filters, scope toggle, task load error, and `<TaskList>`. | Replace with `MissionLedger` or `MissionList` backed by `MissionRecord[]`; remove task status filters and the all-project scope toggle.                                                      |
+| `MissionHeader counts`.                                                                                                                                                                      | Displays task status counts.                                                          | Replace with Mission counts such as total, active/idle from session status only if a single source exists; otherwise show total/recent update only. Do not derive Mission health from tasks. |
+| `mission.css` `.mission-ledger-list .task-list-panel` and `.project-group-heading`.                                                                                                          | Adapts TaskList CSS inside Mission.                                                   | Remove and replace with domain-neutral `.ledger-list`/`.ledger-row` styles. Mission rows must not use `.task-row-mini`.                                                                      |
+| `mission-session-source.test.ts`.                                                                                                                                                            | Asserts Mission reuses `TaskList`.                                                    | Invert this assertion: Mission imports `MissionList` and does not import `TaskList` or call `visibleTasks()` for the ledger.                                                                 |
+| `mission-launcher-component.test.ts`.                                                                                                                                                        | Asserts launcher/wake wiring and MissionConversation presence.                        | Add wake success list refresh/select expectations or source checks.                                                                                                                          |
+| `mission-i18n.test.ts`.                                                                                                                                                                      | Requires task status/filter wording under `mission.ledger.*`.                         | Replace task status/filter keys with Mission list wording and ensure zh-CN/en-US coverage matches.                                                                                           |
+| `api-directory-injection.test.ts`.                                                                                                                                                           | Enumerates project-scoped overlay API routes.                                         | Add `mission` and keep `mission/wake` covered as project-scoped calls.                                                                                                                       |
+| `mission-visual-loop.ts`.                                                                                                                                                                    | Visual fixture for launcher and wake.                                                 | Mock `GET /mission` and render Mission rows in the captured state.                                                                                                                           |
 
 ## Refined requirements
 
@@ -104,14 +104,14 @@ GET /mission
 
 Query parameters:
 
-| Name | Type | Behavior |
-| --- | --- | --- |
-| `directory` | string, optional | Filter Mission sessions by directory. |
-| `search` | string, optional | Search Mission title and mission ID. |
-| `limit` | number, optional | Maximum rows, default 100. |
-| `cursorUpdated` | number, optional | Compound cursor updated timestamp. Must be supplied with `cursorSessionID`. |
-| `cursorSessionID` | string, optional | Compound cursor session ID. Must be supplied with `cursorUpdated`. |
-| `archived` | boolean, optional | Include archived rows when true. Default false. |
+| Name              | Type              | Behavior                                                                    |
+| ----------------- | ----------------- | --------------------------------------------------------------------------- |
+| `directory`       | string, optional  | Filter Mission sessions by directory.                                       |
+| `search`          | string, optional  | Search Mission title and mission ID.                                        |
+| `limit`           | number, optional  | Maximum rows, default 100.                                                  |
+| `cursorUpdated`   | number, optional  | Compound cursor updated timestamp. Must be supplied with `cursorSessionID`. |
+| `cursorSessionID` | string, optional  | Compound cursor session ID. Must be supplied with `cursorUpdated`.          |
+| `archived`        | boolean, optional | Include archived rows when true. Default false.                             |
 
 Response schema:
 
@@ -375,12 +375,12 @@ Manual verification after implementation:
 
 ## Open questions resolved for this implementation
 
-| Question | Decision |
-| --- | --- |
+| Question                                                     | Decision                                                                                                                                                              |
+| ------------------------------------------------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | Should the first Mission list be global across all projects? | No. Use current project scope to match `ensureMissionSession` and avoid cross-project selection surprises. Add global scope only with a separate product requirement. |
-| Should Mission records duplicate message history? | No. Session messages are the only message history source. |
-| Should `TaskList` accept a union of task and Mission rows? | No. Extract shared ledger chrome and keep domain lists separate. |
-| Should task/channel bindings appear in the Mission list? | No. Bindings may stay in task-specific secondary content but cannot define Mission records. |
+| Should Mission records duplicate message history?            | No. Session messages are the only message history source.                                                                                                             |
+| Should `TaskList` accept a union of task and Mission rows?   | No. Extract shared ledger chrome and keep domain lists separate.                                                                                                      |
+| Should task/channel bindings appear in the Mission list?     | No. Bindings may stay in task-specific secondary content but cannot define Mission records.                                                                           |
 
 ## Independent review
 

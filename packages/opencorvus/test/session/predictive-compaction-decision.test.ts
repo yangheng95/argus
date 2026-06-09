@@ -218,11 +218,7 @@ describe("SessionLoop prompt final message selection", () => {
       structured: {},
     } as Partial<Message.Assistant>)
 
-    const selected = SessionLoop.selectPromptFinalMessageFromNewest([
-      current,
-      summary,
-      userMessage("user-root"),
-    ])
+    const selected = SessionLoop.selectPromptFinalMessageFromNewest([current, summary, userMessage("user-root")])
 
     expect(selected.type).toBe("message")
     if (selected.type === "message") expect(selected.message.info.id).toBe("assistant-current")

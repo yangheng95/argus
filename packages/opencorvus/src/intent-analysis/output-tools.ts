@@ -18,13 +18,7 @@
 import { tool } from "ai"
 import z from "zod"
 import { limitSummary, markdownJson, requireReportString, type AgentReportContext } from "@/agent/report"
-import type {
-  IntentAnalysisResult,
-  IntentClarification,
-  IntentClass,
-  IntentComplexity,
-  IntentSlot,
-} from "./types"
+import type { IntentAnalysisResult, IntentClarification, IntentClass, IntentComplexity, IntentSlot } from "./types"
 import { FactCheckItemListSchema } from "@/fact-check/schema"
 
 export const INTENT_CLASSES = [
@@ -57,23 +51,14 @@ const CLARIFICATION_PRIORITIES = ["blocker", "nice"] as const
 export const IntentFinalSchema = z.object({
   intent_class: z
     .enum(INTENT_CLASSES)
-    .describe(
-      "Primary intent class — pick 'unclear' only when no class fits better than random guessing.",
-    ),
+    .describe("Primary intent class — pick 'unclear' only when no class fits better than random guessing."),
   complexity: z
     .enum(COMPLEXITY_BANDS)
     .describe(
       "Rough work size: trivial (minutes), small (one file / one goal), medium (few files, coordinated), large (multi-subsystem), unknown (not enough info to judge).",
     ),
-  confidence: z
-    .number()
-    .min(0)
-    .max(1)
-    .describe("Overall confidence in this analysis, 0-1."),
-  summary: z
-    .string()
-    .min(1)
-    .describe("One-line statement of what the user wants."),
+  confidence: z.number().min(0).max(1).describe("Overall confidence in this analysis, 0-1."),
+  summary: z.string().min(1).describe("One-line statement of what the user wants."),
   // Optional fact-check registration: missing means no items registered.
   fact_check_items: FactCheckItemListSchema.default([]).describe(
     "Every factual claim (API behaviour, library version, file path you did not read this session) you have NOT verified via tool calls. Empty when only intent inference or in-session-verified statements.",
@@ -121,15 +106,8 @@ export function createIntentOutputTools() {
             "Slot name in snake_case, e.g. 'target_file', 'module', 'stack', " +
               "'action_verb', 'constraint', 'data_source'.",
           ),
-        value: z
-          .string()
-          .min(1)
-          .describe("Extracted value, verbatim or lightly normalized."),
-        confidence: z
-          .number()
-          .min(0)
-          .max(1)
-          .describe("Confidence in this extraction, 0-1."),
+        value: z.string().min(1).describe("Extracted value, verbatim or lightly normalized."),
+        confidence: z.number().min(0).max(1).describe("Confidence in this extraction, 0-1."),
       }),
       execute: async ({ key, value, confidence }) => {
         collector.slots.push({ key, value, confidence })
@@ -148,8 +126,7 @@ export function createIntentOutputTools() {
           .string()
           .min(1)
           .describe(
-            "Missing info key in snake_case, e.g. 'target_file', " +
-              "'acceptance_criteria', 'env_credentials'.",
+            "Missing info key in snake_case, e.g. 'target_file', " + "'acceptance_criteria', 'env_credentials'.",
           ),
       }),
       execute: async ({ key }) => {
@@ -166,19 +143,9 @@ export function createIntentOutputTools() {
         "when downstream cannot start without it, 'nice' when it is merely " +
         "helpful. Skip entirely when the request is already unambiguous.",
       inputSchema: z.object({
-        question: z
-          .string()
-          .min(1)
-          .describe("The clarifying question, phrased directly to the user."),
-        why_needed: z
-          .string()
-          .min(1)
-          .describe(
-            "Why answering is needed — which downstream decision it unblocks.",
-          ),
-        priority: z
-          .enum(CLARIFICATION_PRIORITIES)
-          .describe("'blocker' or 'nice'."),
+        question: z.string().min(1).describe("The clarifying question, phrased directly to the user."),
+        why_needed: z.string().min(1).describe("Why answering is needed — which downstream decision it unblocks."),
+        priority: z.enum(CLARIFICATION_PRIORITIES).describe("'blocker' or 'nice'."),
       }),
       execute: async ({ question, why_needed, priority }) => {
         collector.clarifications.push({ question, why_needed, priority })
@@ -206,10 +173,7 @@ export function createIntentOutputTools() {
       const summary = requireReportString(structured.summary, "intent summary")
       return {
         summary: limitSummary(summary),
-        detail: [
-          `## Summary\n${summary}`,
-          `## Structured Payload\n${markdownJson(structured)}`,
-        ].join("\n\n"),
+        detail: [`## Summary\n${summary}`, `## Structured Payload\n${markdownJson(structured)}`].join("\n\n"),
       }
     },
   }

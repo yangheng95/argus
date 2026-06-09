@@ -9,12 +9,12 @@ description: 按症状定位 OpenCorvus 问题——启动、Provider、orchestr
 
 ### `opencorvus serve` 起不来
 
-| 检查 | 说明 |
-|---|---|
-| `opencorvus doctor` | 先跑一次全面诊断 |
-| 端口占用 | 默认 7878，`netstat -ano \| findstr 7878` |
+| 检查                         | 说明                                                                |
+| ---------------------------- | ------------------------------------------------------------------- |
+| `opencorvus doctor`          | 先跑一次全面诊断                                                    |
+| 端口占用                     | 默认 7878，`netstat -ano \| findstr 7878`                           |
 | `OPENCORVUS_SERVER_PASSWORD` | 若对外监听，必须设；否则启动报 `refuses to expose without password` |
-| 权限：`ENOSPC` | `~/.opencorvus` 磁盘满 |
+| 权限：`ENOSPC`               | `~/.opencorvus` 磁盘满                                              |
 
 ### Overlay 启动后连不上后端
 
@@ -44,11 +44,11 @@ description: 按症状定位 OpenCorvus 问题——启动、Provider、orchestr
 
 ### 任务卡在 build 或 review 之前
 
-| 症状 | 检查 |
-|---|---|
-| 没有任何事件 | LLM provider 连通性 |
-| 有 reasoning tokens 但无 tool-call | 检查 `toolChoice`，reasoning 模型必须 `"auto"` |
-| worker session 长时间无动静 | 查看最新 orchestrator event 与当前 workflow tool（`requirements`、`architect`、`build` 或 `integrity`）。只有确认 provider 连通后，才调整 decision inactivity timeout。 |
+| 症状                               | 检查                                                                                                                                                                    |
+| ---------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 没有任何事件                       | LLM provider 连通性                                                                                                                                                     |
+| 有 reasoning tokens 但无 tool-call | 检查 `toolChoice`，reasoning 模型必须 `"auto"`                                                                                                                          |
+| worker session 长时间无动静        | 查看最新 orchestrator event 与当前 workflow tool（`requirements`、`architect`、`build` 或 `integrity`）。只有确认 provider 连通后，才调整 decision inactivity timeout。 |
 
 ### 任务反复进入修复循环
 
@@ -60,9 +60,9 @@ description: 按症状定位 OpenCorvus 问题——启动、Provider、orchestr
 
 ### 权限审批无限等待
 
-| 检查 | 说明 |
-|---|---|
-| config 是否显式写了 `ask` | 内置 agent 权限默认 `allow`；只有显式 `ask` 规则会等待操作员回复。 |
+| 检查                               | 说明                                                                                  |
+| ---------------------------------- | ------------------------------------------------------------------------------------- |
+| config 是否显式写了 `ask`          | 内置 agent 权限默认 `allow`；只有显式 `ask` 规则会等待操作员回复。                    |
 | `OPENCORVUS_PERMISSION_TIMEOUT_MS` | 未回复 ask 的拒绝超时，默认 `300000` ms（`src/permission/next.ts`）；最小值 `1000` ms |
 
 详见 [Permissions](/docs/zh-cn/permissions/)。

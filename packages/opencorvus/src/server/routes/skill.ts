@@ -94,18 +94,21 @@ export function SkillRoutes() {
       "/install",
       describeRoute({
         summary: "Install or import a skill source",
-        description: "Install a skill source from a local path, remote URL, or git repository into the global skill config.",
+        description:
+          "Install a skill source from a local path, remote URL, or git repository into the global skill config.",
         operationId: "skill.install",
         responses: {
           200: {
             description: "Installed skill source",
             content: {
               "application/json": {
-                schema: resolver(z.object({
-                  source: z.string(),
-                  path: z.string().optional(),
-                  kind: SkillManager.InstallInput.shape.kind,
-                })),
+                schema: resolver(
+                  z.object({
+                    source: z.string(),
+                    path: z.string().optional(),
+                    kind: SkillManager.InstallInput.shape.kind,
+                  }),
+                ),
               },
             },
           },
@@ -114,6 +117,37 @@ export function SkillRoutes() {
       validator("json", SkillManager.InstallInput),
       async (c) => {
         return c.json(await SkillManager.install(c.req.valid("json")))
+      },
+    )
+    .post(
+      "/import-file",
+      describeRoute({
+        summary: "Import a dropped skill source",
+        description:
+          "Write a dropped SKILL.md file, skill directory, or zip archive into the current project's .opencorvus skill directory.",
+        operationId: "skill.importFile",
+        responses: {
+          200: {
+            description: "Imported project skill file",
+            content: {
+              "application/json": {
+                schema: resolver(
+                  z.object({
+                    name: z.string(),
+                    source: z.string(),
+                    kind: z.literal("path"),
+                    names: z.string().array().optional(),
+                    sources: z.string().array().optional(),
+                  }),
+                ),
+              },
+            },
+          },
+        },
+      }),
+      validator("json", SkillManager.ImportFileInput),
+      async (c) => {
+        return c.json(await SkillManager.importFile(c.req.valid("json")))
       },
     )
     .post(

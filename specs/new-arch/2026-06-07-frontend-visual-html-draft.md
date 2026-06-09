@@ -12,13 +12,13 @@ The skeleton is allowed only as `frontend_project.role=visual_baseline_input`. I
 
 ## Call Points
 
-| File | Decision |
-| --- | --- |
-| `packages/opencorvus/src/prompt/core/frontend-design-core.txt` | Make the visual HTML skeleton the default webpage replica frontend-design output and move maintainable project source completion downstream. |
-| `packages/opencorvus/src/frontend-design/agent.ts` | Make dynamic task guidance prefer a source-derived static HTML/CSS skeleton over target app population during frontend_design. |
-| `packages/opencorvus/src/frontend-design/output-tools.ts` | Reuse existing `frontend_project.role=visual_baseline_input`; render explicit report guidance for static HTML skeletons. |
-| `packages/opencorvus/src/prompt/core/frontend-research-core.txt` | Keep research read-only/advisory; add work-packet coverage for visual HTML skeletons. |
-| `packages/opencorvus/src/research/output-tools.ts` / `schema.ts` | No change. Existing webpage contract and bundle sections already express coverage/risk packets. |
+| File                                                             | Decision                                                                                                                                     |
+| ---------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------- |
+| `packages/opencorvus/src/prompt/core/frontend-design-core.txt`   | Make the visual HTML skeleton the default webpage replica frontend-design output and move maintainable project source completion downstream. |
+| `packages/opencorvus/src/frontend-design/agent.ts`               | Make dynamic task guidance prefer a source-derived static HTML/CSS skeleton over target app population during frontend_design.               |
+| `packages/opencorvus/src/frontend-design/output-tools.ts`        | Reuse existing `frontend_project.role=visual_baseline_input`; render explicit report guidance for static HTML skeletons.                     |
+| `packages/opencorvus/src/prompt/core/frontend-research-core.txt` | Keep research read-only/advisory; add work-packet coverage for visual HTML skeletons.                                                        |
+| `packages/opencorvus/src/research/output-tools.ts` / `schema.ts` | No change. Existing webpage contract and bundle sections already express coverage/risk packets.                                              |
 
 ## Source Authority
 

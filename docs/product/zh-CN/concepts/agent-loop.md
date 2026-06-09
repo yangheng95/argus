@@ -6,11 +6,11 @@ Executor 内部是一个**标准的 agentic loop**：LLM 出 tool-call → 工�
 
 `SessionLoop`（`packages/opencorvus/src/session/loop.ts:62`，namespace）在任何时刻都处于以下三态之一：
 
-| 状态 | 含义 | 退出条件 |
-|---|---|---|
-| **standby** | assistant 已回 `finish`，等用户下一条消息 | 收到新 user message |
-| **tool-call** | LLM 要求调工具，正在执行 | 所有 tool 执行完毕 |
-| **subtask** | 当前消息发起了一个子任务（嵌套 SessionLoop） | 子任务完成 |
+| 状态          | 含义                                         | 退出条件            |
+| ------------- | -------------------------------------------- | ------------------- |
+| **standby**   | assistant 已回 `finish`，等用户下一条消息    | 收到新 user message |
+| **tool-call** | LLM 要求调工具，正在执行                     | 所有 tool 执行完毕  |
+| **subtask**   | 当前消息发起了一个子任务（嵌套 SessionLoop） | 子任务完成          |
 
 进入 standby 的判定：扫描最后一对 user/assistant 消息，assistant 的 `finishReason !== "tool-calls"` 且 user 无新消息 → standby。
 

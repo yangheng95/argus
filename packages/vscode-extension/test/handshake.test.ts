@@ -63,7 +63,9 @@ describe("startInactivityWatchdog", () => {
     const wd = startInactivityWatchdog({
       idleMs: 50,
       stderrTailRef: () => "stderr-tail-sample",
-      onTimeout: (e) => { fired = e as SidecarHandshakeTimeoutError },
+      onTimeout: (e) => {
+        fired = e as SidecarHandshakeTimeoutError
+      },
     })
     await new Promise((r) => setTimeout(r, 150))
     wd.cancel()
@@ -76,7 +78,9 @@ describe("startInactivityWatchdog", () => {
     const wd = startInactivityWatchdog({
       idleMs: 80,
       stderrTailRef: () => "",
-      onTimeout: () => { fired++ },
+      onTimeout: () => {
+        fired++
+      },
     })
     await new Promise((r) => setTimeout(r, 50))
     wd.touch()
@@ -92,7 +96,9 @@ describe("startInactivityWatchdog", () => {
     const wd = startInactivityWatchdog({
       idleMs: 30,
       stderrTailRef: () => "",
-      onTimeout: () => { fired++ },
+      onTimeout: () => {
+        fired++
+      },
     })
     wd.cancel()
     await new Promise((r) => setTimeout(r, 100))

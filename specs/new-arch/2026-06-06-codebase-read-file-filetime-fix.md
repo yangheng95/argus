@@ -12,9 +12,9 @@ The concrete failure was observed in `frontend-design`, but the defect is not ow
 
 There are two read tools:
 
-| Tool | Implementation | FileTime effect |
-| --- | --- | --- |
-| `read` | `packages/opencorvus/src/tool/read.ts` | Calls `FileTime.read(ctx.sessionID, filepath)` |
+| Tool        | Implementation                                     | FileTime effect                                  |
+| ----------- | -------------------------------------------------- | ------------------------------------------------ |
+| `read`      | `packages/opencorvus/src/tool/read.ts`             | Calls `FileTime.read(ctx.sessionID, filepath)`   |
 | `read_file` | `packages/opencorvus/src/engine/codebase-tools.ts` | Returns text only; does not call `FileTime.read` |
 
 `frontend-design` receives `read_file` from `createAgentContextTools()` and receives write tools from the registry/runtime surface. `write` and `edit` call `FileTime.assert(ctx.sessionID, filepath)` before overwriting existing files. Because `read_file` does not register the read, the host-side write protection cannot see that the same session already read the file.
@@ -25,15 +25,15 @@ Any session that reads a text file through `createCodebaseTools().read_file` and
 
 Current first-party surfaces checked:
 
-| Surface | `read_file` source | Project-write surface | Result |
-| --- | --- | --- | --- |
-| `frontend-design` | `createAgentContextTools()` | `write` / `edit` / `bash` / `apply_patch` | Affected for `write` and `edit` |
-| `requirements` | `createAgentContextTools()` | No project write tools in its toolkit | Not currently triggerable |
-| `architect` | `createAgentContextTools()` | No project write tools in its toolkit | Not currently triggerable |
-| `intent-analysis` | `createAgentContextTools()` | No project write tools in its toolkit | Not currently triggerable |
-| `fact-check` / `deep-research` / `goal-workload-analyst` | readonly retrieval/context tools | No project write tools in their toolkit | Not currently triggerable |
-| `integrity` acceptance tools | `createCodebaseTools()` | read-only `run_command` guard only | Not currently triggerable |
-| `build` | registry `read`, not codebase `read_file` | registry `write` / `edit` | Already uses `ReadTool`, which records `FileTime` |
+| Surface                                                  | `read_file` source                        | Project-write surface                     | Result                                            |
+| -------------------------------------------------------- | ----------------------------------------- | ----------------------------------------- | ------------------------------------------------- |
+| `frontend-design`                                        | `createAgentContextTools()`               | `write` / `edit` / `bash` / `apply_patch` | Affected for `write` and `edit`                   |
+| `requirements`                                           | `createAgentContextTools()`               | No project write tools in its toolkit     | Not currently triggerable                         |
+| `architect`                                              | `createAgentContextTools()`               | No project write tools in its toolkit     | Not currently triggerable                         |
+| `intent-analysis`                                        | `createAgentContextTools()`               | No project write tools in its toolkit     | Not currently triggerable                         |
+| `fact-check` / `deep-research` / `goal-workload-analyst` | readonly retrieval/context tools          | No project write tools in their toolkit   | Not currently triggerable                         |
+| `integrity` acceptance tools                             | `createCodebaseTools()`                   | read-only `run_command` guard only        | Not currently triggerable                         |
+| `build`                                                  | registry `read`, not codebase `read_file` | registry `write` / `edit`                 | Already uses `ReadTool`, which records `FileTime` |
 
 This is why the fix belongs in `createCodebaseTools().read_file`: it covers the current `frontend-design` failure and any future or configured surface that combines shared `read_file` with overwrite tools, without weakening `FileTime.assert`.
 

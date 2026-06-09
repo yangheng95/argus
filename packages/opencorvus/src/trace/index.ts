@@ -129,21 +129,25 @@ export namespace AgentTrace {
     return `domain:${bucket.domain}:${agentName}`
   }
 
-  function maybeWriteIndex(bucket: TraceBucket, event: {
-    parentSessionID?: string
-    taskID?: string
-    agentName: string
-    kind: string
-  }) {
+  function maybeWriteIndex(
+    bucket: TraceBucket,
+    event: {
+      parentSessionID?: string
+      taskID?: string
+      agentName: string
+      kind: string
+    },
+  ) {
     if (!event.taskID) return
     const key = bucketKey(bucket, event.agentName)
     if (seenBuckets.has(key)) return
     seenBuckets.add(key)
     try {
       ensureDir()
-      const bucketFields = "sessionID" in bucket
-        ? { kind: "session_open", sessionID: bucket.sessionID }
-        : { kind: "domain_open", domain: bucket.domain }
+      const bucketFields =
+        "sessionID" in bucket
+          ? { kind: "session_open", sessionID: bucket.sessionID }
+          : { kind: "domain_open", domain: bucket.domain }
       const line =
         safeStringify({
           ts: Date.now(),
@@ -236,10 +240,7 @@ export namespace AgentTrace {
     const taskRoot = path.join(traceDir(), "tasks")
     try {
       for (const taskSegment of fs.readdirSync(taskRoot)) {
-        const sessionSegments = [
-          Identifier.shortPath(sessionID),
-          sessionID,
-        ]
+        const sessionSegments = [Identifier.shortPath(sessionID), sessionID]
         for (const sessionSegment of [...new Set(sessionSegments)]) {
           const candidate = path.join(taskRoot, taskSegment, "sessions", sessionSegment, "trace.jsonl")
           if (fs.existsSync(candidate)) return candidate
@@ -328,20 +329,23 @@ export namespace AgentTrace {
   }): string {
     if (!ENABLED) return ""
     if (!input.taskID) return ""
-    append({ domain: NON_SESSION_DOMAIN }, {
-      ts: Date.now(),
-      kind: "helper_llm_call",
-      domain: NON_SESSION_DOMAIN,
-      taskID: input.taskID,
-      agentName: input.agentName,
-      payload: {
-        model: input.model,
-        messages: redactMessages(input.messages),
-        schema: input.schema,
-        output: input.output,
-        error: input.error,
+    append(
+      { domain: NON_SESSION_DOMAIN },
+      {
+        ts: Date.now(),
+        kind: "helper_llm_call",
+        domain: NON_SESSION_DOMAIN,
+        taskID: input.taskID,
+        agentName: input.agentName,
+        payload: {
+          model: input.model,
+          messages: redactMessages(input.messages),
+          schema: input.schema,
+          output: input.output,
+          error: input.error,
+        },
       },
-    })
+    )
     return NON_SESSION_DOMAIN
   }
 
@@ -376,8 +380,9 @@ export namespace AgentTrace {
    *  there at write time, including llm_request and terminal reports. */
   export function readTaskEvents(taskID: string): TraceEvent[] {
     if (!taskID) return []
-    const file = firstExisting(ProjectRuntimePaths.taskAbsoluteReadCandidatesFromRuntimeRoot(traceDir(), taskID, "trace.jsonl"))
-      ?? taskFile(taskID)
+    const file =
+      firstExisting(ProjectRuntimePaths.taskAbsoluteReadCandidatesFromRuntimeRoot(traceDir(), taskID, "trace.jsonl")) ??
+      taskFile(taskID)
     const all = readJsonlTail(file)
     all.sort((a, b) => (Number(a.ts) || 0) - (Number(b.ts) || 0))
     return all
@@ -386,8 +391,10 @@ export namespace AgentTrace {
   /** Read every event for a non-session domain bucket. */
   export function readDomainEvents(domain: string, taskID?: string): TraceEvent[] {
     if (!domain || !taskID) return []
-    const file = firstExisting(ProjectRuntimePaths.taskAbsoluteReadCandidatesFromRuntimeRoot(traceDir(), taskID, "trace", `_${domain}.jsonl`))
-      ?? domainFile(taskID, domain)
+    const file =
+      firstExisting(
+        ProjectRuntimePaths.taskAbsoluteReadCandidatesFromRuntimeRoot(traceDir(), taskID, "trace", `_${domain}.jsonl`),
+      ) ?? domainFile(taskID, domain)
     return readJsonlTail(file)
   }
 

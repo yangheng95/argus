@@ -57,7 +57,7 @@ WorktreeGC 必须复用**同一来源**(rule 8 / rule 35),否则两处路径定�
 - `init()` —— `Scheduler.register({ id:"worktree.gc", scope:"global", interval, run })`。
   模块级 `running` 布尔重入守卫(git 操作慢,周期 6h,幂等)。
 
-常量(镜像 ProjectGC 的硬编码 + 导出 DEFAULT_*,**不加用户 config 旋钮**,
+常量(镜像 ProjectGC 的硬编码 + 导出 DEFAULT\_\*,**不加用户 config 旋钮**,
 对齐 `10-worktree-lifecycle.md` §10 Q5 作者倾向 + rule 5/6 不过度工程):
 `GC_INTERVAL_MS = 6h`,`DEFAULT_RETENTION_DAYS = 3`。
 
@@ -71,14 +71,14 @@ WorktreeGC 必须复用**同一来源**(rule 8 / rule 35),否则两处路径定�
 
 `test/project/worktree-gc.test.ts`,真实 git + tmpdir,`fs.utimes` 造旧:
 
-| 场景 | 期望 |
-|---|---|
-| 老 + 干净 + 无引用 | 进计划,apply 后 dir + branch 均删 |
-| 最近 + 干净 | **不在计划**(负例:周期清理不误伤近期 worktree) |
-| 老 + untracked 文件 | 保留 |
-| 老 + 有未并入 primary 的 commit | 保留 |
-| 老 + 干净 + 被 live goal_run 引用 | 保留 |
-| zombie(删 .git)+ 老 + 无引用 | 删 |
+| 场景                              | 期望                                           |
+| --------------------------------- | ---------------------------------------------- |
+| 老 + 干净 + 无引用                | 进计划,apply 后 dir + branch 均删              |
+| 最近 + 干净                       | **不在计划**(负例:周期清理不误伤近期 worktree) |
+| 老 + untracked 文件               | 保留                                           |
+| 老 + 有未并入 primary 的 commit   | 保留                                           |
+| 老 + 干净 + 被 live goal_run 引用 | 保留                                           |
+| zombie(删 .git)+ 老 + 无引用      | 删                                             |
 
 ## 6 · 接入
 

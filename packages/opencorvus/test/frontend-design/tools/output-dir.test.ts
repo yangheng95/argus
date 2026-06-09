@@ -15,19 +15,22 @@ import { tmpdir } from "../../fixture/fixture"
 function seedTask(input: { projectID: string; taskID: string; sessionID: string }) {
   const now = Date.now()
   Database.use((db) =>
-    db.insert(EngineTaskTable).values({
-      id: input.taskID,
-      project_id: input.projectID,
-      session_id: input.sessionID,
-      source: "test",
-      title: "webpage evidence output dir",
-      request: "resolve task-scoped webpage evidence output",
-      priority: "normal",
-      budget: { max_executor_groups: 1 },
-      time_created: now,
-      time_updated: now,
-      time_started: now,
-    }).run(),
+    db
+      .insert(EngineTaskTable)
+      .values({
+        id: input.taskID,
+        project_id: input.projectID,
+        session_id: input.sessionID,
+        source: "test",
+        title: "webpage evidence output dir",
+        request: "resolve task-scoped webpage evidence output",
+        priority: "normal",
+        budget: { max_executor_groups: 1 },
+        time_created: now,
+        time_updated: now,
+        time_started: now,
+      })
+      .run(),
   )
 }
 
@@ -98,10 +101,12 @@ describe("webpage evidence output directory", () => {
         const taskID = `tsk_webpage_evidence_view_${Date.now().toString(36)}`
         seedTask({ projectID: Instance.project.id, taskID, sessionID: session.id })
 
-        await expect(resolveWebpageEvidenceOutputDir({ override: "mirror", sessionID: session.id }))
-          .rejects.toThrow("task sessions may only write webpage evidence artifacts")
-        await expect(resolveWebpageEvidenceOutputDir({ override: "mirror/nested", sessionID: session.id }))
-          .rejects.toThrow("task sessions may only write webpage evidence artifacts")
+        await expect(resolveWebpageEvidenceOutputDir({ override: "mirror", sessionID: session.id })).rejects.toThrow(
+          "task sessions may only write webpage evidence artifacts",
+        )
+        await expect(
+          resolveWebpageEvidenceOutputDir({ override: "mirror/nested", sessionID: session.id }),
+        ).rejects.toThrow("task sessions may only write webpage evidence artifacts")
         expect(await Filesystem.exists(path.join(tmp.path, "mirror"))).toBe(false)
 
         const status = await $`git status --porcelain=v1`.cwd(tmp.path).quiet()

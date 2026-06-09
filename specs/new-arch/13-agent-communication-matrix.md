@@ -23,19 +23,19 @@
 
 ## 节点缩写
 
-| 缩写  | 节点              | 说明                                                                |
-| ----- | ----------------- | ------------------------------------------------------------------- |
-| `SYS` | `system_entry`    | 未来协议里的虚拟外部入口                                            |
-| `O`   | `orchestrator`    | 任务唯一决策者                                                      |
-| `R`   | `requirements`    | 需求分解                                                            |
-| `X`   | `frontend-design` | 视觉分析；代码里的 tool 名是 `frontend_design`                      |
-| `A`   | `architect`       | 跨目标契约                                                          |
+| 缩写  | 节点              | 说明                                                                     |
+| ----- | ----------------- | ------------------------------------------------------------------------ |
+| `SYS` | `system_entry`    | 未来协议里的虚拟外部入口                                                 |
+| `O`   | `orchestrator`    | 任务唯一决策者                                                           |
+| `R`   | `requirements`    | 需求分解                                                                 |
+| `X`   | `frontend-design` | 视觉分析；代码里的 tool 名是 `frontend_design`                           |
+| `A`   | `architect`       | 跨目标契约                                                               |
 | `B`   | `build`           | 实际写代码的执行 agent（自己读 contract，不再有外置 planning tool role） |
-| `IT`  | `integrity`       | 多维 integrity review（orchestrator tool: `integrity`）             |
-| `PR`  | `prosecutor`      | 对抗性复核（orchestrator tool: `prosecute`）                        |
-| `G`   | `general`         | 通用 subagent                                                       |
-| `E`   | `explore`         | 只读探索 subagent                                                   |
-| `I`   | `intent-analysis` | 已接线（orchestrator tool: `analyze_intent`）                       |
+| `IT`  | `integrity`       | 多维 integrity review（orchestrator tool: `integrity`）                  |
+| `PR`  | `prosecutor`      | 对抗性复核（orchestrator tool: `prosecute`）                             |
+| `G`   | `general`         | 通用 subagent                                                            |
+| `E`   | `explore`         | 只读探索 subagent                                                        |
+| `I`   | `intent-analysis` | 已接线（orchestrator tool: `analyze_intent`）                            |
 
 > 历史草稿曾保留 `P = planner` 和 `D = acceptance` 节点；当前 runtime 已无独立 planner
 > agent 或 acceptance review，相关行被整列移除（不是"代码里没接"，是 agent 本身不存在）。

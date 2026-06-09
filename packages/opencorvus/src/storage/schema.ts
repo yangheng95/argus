@@ -32,10 +32,7 @@ export {
   EngineProgressSnapshotTable,
   EngineChannelBindingTable,
 } from "../engine/engine.sql"
-export {
-  ProtocolEventTable,
-  ProtocolInboxTable,
-} from "../protocol/protocol.sql"
+export { ProtocolEventTable, ProtocolInboxTable } from "../protocol/protocol.sql"
 export { DecisionLogTable } from "../decision-log/schema"
 export {
   EngineMetricSpecTable,

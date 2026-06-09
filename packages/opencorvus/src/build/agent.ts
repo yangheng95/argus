@@ -407,7 +407,7 @@ export namespace BuildAgent {
    */
   export async function run(input: RunInput): Promise<RunOutput> {
     return AgentSemaphore.withSlot(input.task, async () => {
-      const autoIteration = input.autoIteration ?? ((await EngineConfig.get()).auto_iteration === true)
+      const autoIteration = input.autoIteration ?? (await EngineConfig.get()).auto_iteration === true
       // ── Worktree acquisition ─────────────────────────────────────────────
       // Happens OUTSIDE runAgentSession because the worktree is the
       // session's working directory — the runner needs it resolved before
@@ -1064,6 +1064,7 @@ function externalBuildSystemContract(executor: Exclude<TaskRow["executor"], "ope
     "- Run the acceptance commands from the prompt before claiming success.",
     "- Write shell commands for the actual platform and shell; on Windows/PowerShell use PowerShell-native commands instead of unverified Unix-only helpers such as head, sed, or grep.",
     "- On Windows, start Playwright only through Node Package Manager (`npm`), never through `bun`; Bun-started Playwright has a severe connection-timeout bug on Windows.",
+    "- For any frontend project, each file-changing pass must open the task preview or task-scoped browser evidence route after edits and inspect the changed region plus surrounding layout context: parent container, adjacent components, spacing, typography, color, responsive framing, and local visual style.",
     "- Commit changes with a concrete commit message before finishing.",
     "- If the dependency contract is missing, verification fails, or you cannot commit, finish with a concise failure summary and the exact blocker.",
     "- Do not call OpenCorvus-only tools such as report_build_result or merge_back; the host will publish and synthesize the terminal BuildResult after your process exits.",
@@ -2565,7 +2566,9 @@ export function buildUserPrompt(target: BuildTarget, context?: BuildAgent.BuildC
       lines.push("")
     }
 
-    const overlays = renderBuildPromptOverlays(context ? { ...context, acceptanceFeedback: undefined, taskID } : undefined)
+    const overlays = renderBuildPromptOverlays(
+      context ? { ...context, acceptanceFeedback: undefined, taskID } : undefined,
+    )
     if (overlays.sections.length > 0) {
       lines.push("## Task-Specific Build Overlays")
       lines.push("")
@@ -2686,7 +2689,9 @@ export function buildUserPrompt(target: BuildTarget, context?: BuildAgent.BuildC
   if (reqs.length > 0) {
     contextLines.push(renderBuildRequirementsSection(reqs, { directRequest: true }))
   }
-  const overlays = renderBuildPromptOverlays(context ? { ...context, acceptanceFeedback: undefined, taskID } : undefined)
+  const overlays = renderBuildPromptOverlays(
+    context ? { ...context, acceptanceFeedback: undefined, taskID } : undefined,
+  )
   if (overlays.sections.length > 0) {
     contextLines.push("## Task-Specific Build Overlays")
     contextLines.push("")
@@ -2743,7 +2748,11 @@ export function buildUserPrompt(target: BuildTarget, context?: BuildAgent.BuildC
   ].join("\n")
 }
 
-export function buildRetryFeedbackPrompt(target: BuildTarget, context?: BuildAgent.BuildContext, taskID?: string): string {
+export function buildRetryFeedbackPrompt(
+  target: BuildTarget,
+  context?: BuildAgent.BuildContext,
+  taskID?: string,
+): string {
   const lines: string[] = [
     "# Build Retry Feedback",
     "",
@@ -2756,7 +2765,9 @@ export function buildRetryFeedbackPrompt(target: BuildTarget, context?: BuildAge
     lines.push("Target: direct build request")
   }
   lines.push("")
-  const overlays = renderBuildPromptOverlays(context ? { ...context, acceptanceFeedback: undefined, taskID } : undefined)
+  const overlays = renderBuildPromptOverlays(
+    context ? { ...context, acceptanceFeedback: undefined, taskID } : undefined,
+  )
   if (overlays.sections.length > 0) {
     lines.push("## Task-Specific Build Overlays")
     lines.push("")
@@ -2799,7 +2810,9 @@ export function buildRetryFeedbackPrompt(target: BuildTarget, context?: BuildAge
   lines.push("- Edit the existing worktree in place.")
   lines.push("- Preserve all prior upstream contracts already present in this conversation.")
   lines.push("- Run the relevant verification commands before reporting success.")
-  lines.push("- Restate the detailed req/goal contract and warn follow-up agents where workload may still be underestimated.")
+  lines.push(
+    "- Restate the detailed req/goal contract and warn follow-up agents where workload may still be underestimated.",
+  )
   lines.push("- Finish by calling report_build_result with the current attempt result.")
   return lines.join("\n")
 }

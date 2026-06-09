@@ -111,7 +111,10 @@ export namespace Bus {
 
   export function once<Definition extends BusEvent.Definition>(
     def: Definition,
-    callback: (event: { type: Definition["type"]; properties: z.infer<Definition["properties"]> }) => unknown | Promise<unknown>,
+    callback: (event: {
+      type: Definition["type"]
+      properties: z.infer<Definition["properties"]>
+    }) => unknown | Promise<unknown>,
   ) {
     const unsub = raw(def.type, async (event) => {
       const result = await callback(event)

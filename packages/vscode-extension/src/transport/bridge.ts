@@ -97,7 +97,9 @@ export class TransportBridge {
     // active stream is being closed so its store doesn't sit waiting
     // for events that never come.
     for (const [id, stream] of this.streams) {
-      try { stream.controller.abort() } catch {}
+      try {
+        stream.controller.abort()
+      } catch {}
       if (stream.flushTimer) clearTimeout(stream.flushTimer)
       try {
         // postMessage directly: bypassing `this.send` which now bails
@@ -115,7 +117,9 @@ export class TransportBridge {
     // an error envelope so the webview's pending Promise rejects (the
     // transport-protocol F3 / overlay F1 lessons).
     for (const [id, controller] of this.requests) {
-      try { controller.abort() } catch {}
+      try {
+        controller.abort()
+      } catch {}
       try {
         void this.webview.postMessage({
           protocol: PROTOCOL_VERSION,
@@ -131,7 +135,9 @@ export class TransportBridge {
     this.requests.clear()
     while (this.disposables.length) {
       const d = this.disposables.pop()
-      try { d?.dispose() } catch {}
+      try {
+        d?.dispose()
+      } catch {}
     }
   }
 
@@ -167,7 +173,9 @@ export class TransportBridge {
       case "request.abort": {
         const controller = this.requests.get(raw.id)
         if (controller) {
-          try { controller.abort() } catch {}
+          try {
+            controller.abort()
+          } catch {}
           this.requests.delete(raw.id)
         }
         return
@@ -351,7 +359,7 @@ export class TransportBridge {
     const consume = (chunk: string, flush = false) => {
       buf += chunk
       const blocks = buf.split(/\r?\n\r?\n/)
-      buf = flush ? "" : (blocks.pop() || "")
+      buf = flush ? "" : blocks.pop() || ""
       for (const block of blocks) {
         const data = block
           .split(/\r?\n/)
@@ -395,10 +403,7 @@ export class TransportBridge {
     // would otherwise sit in the buffer until the 16 ms timer fires
     // alongside up to 255 other events; that batch can balloon to
     // multi-MiB and stall the webview deserialiser.
-    if (
-      stream.buffer.length >= STREAM_BATCH_MAX ||
-      stream.bufferBytes >= STREAM_BATCH_MAX_BYTES
-    ) {
+    if (stream.buffer.length >= STREAM_BATCH_MAX || stream.bufferBytes >= STREAM_BATCH_MAX_BYTES) {
       this.flushStream(id)
       return
     }
@@ -443,7 +448,9 @@ export class TransportBridge {
         events,
       })
     }
-    try { stream.controller.abort() } catch {}
+    try {
+      stream.controller.abort()
+    } catch {}
     this.send({
       protocol: PROTOCOL_VERSION,
       type: "stream.close",
@@ -543,7 +550,10 @@ export function buildUrl(baseUrl: string, path: string, query: Record<string, st
   return u.toString()
 }
 
-async function readResponseBody(res: Response, kind: WebviewRequestMessage["responseKind"]): Promise<ResponseBodyEncoding> {
+async function readResponseBody(
+  res: Response,
+  kind: WebviewRequestMessage["responseKind"],
+): Promise<ResponseBodyEncoding> {
   if (!res.ok && kind !== "binary") {
     const text = await res.text().catch(() => "")
     return { kind: "text", value: text }
@@ -575,7 +585,9 @@ async function readResponseBody(res: Response, kind: WebviewRequestMessage["resp
 
 function headersToObject(h: Headers): Record<string, string> {
   const out: Record<string, string> = {}
-  h.forEach((v, k) => { out[k] = v })
+  h.forEach((v, k) => {
+    out[k] = v
+  })
   return out
 }
 

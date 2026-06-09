@@ -16,13 +16,13 @@ The reported event has a valid integrity review id derived from an integrity ses
 
 Call-site sweep:
 
-| Surface | Evidence | Decision |
-| --- | --- | --- |
-| `packages/opencorvus/src/review/stream.ts` | `reviewIDForIntegrity(sessionID)` is the single backend naming rule: `integrity:${sessionID}`. | Reuse this identity. Do not add a second id map. |
-| `packages/opencorvus/src/integrity/team-agent.ts` | Supervisor and each reviewer emit `review.stream.started`; reviewer streams use their own review id. | Backend shape is already correct for normal live order. |
-| `packages/overlay/src/services/tree-writer.ts` | `handleReviewStreamChunk` and `handleReviewStreamProgress` require a prior `runningReviews` entry. | Reconstruct the entry from the review id when the id is an integrity session id. |
-| `packages/overlay/src/services/conversation.ts` | Hydrate and paged event replay can load only the visible tail before selected-task SSE resumes. | A selected task can see a later chunk without the earlier started event in memory. |
-| `packages/opencorvus/src/server/routes/orchestrator.ts` | `/task/:id/conversation/events` pages protocol events by sequence. | The event log remains the source; no synthetic UI-only message is introduced. |
+| Surface                                                 | Evidence                                                                                             | Decision                                                                           |
+| ------------------------------------------------------- | ---------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------- |
+| `packages/opencorvus/src/review/stream.ts`              | `reviewIDForIntegrity(sessionID)` is the single backend naming rule: `integrity:${sessionID}`.       | Reuse this identity. Do not add a second id map.                                   |
+| `packages/opencorvus/src/integrity/team-agent.ts`       | Supervisor and each reviewer emit `review.stream.started`; reviewer streams use their own review id. | Backend shape is already correct for normal live order.                            |
+| `packages/overlay/src/services/tree-writer.ts`          | `handleReviewStreamChunk` and `handleReviewStreamProgress` require a prior `runningReviews` entry.   | Reconstruct the entry from the review id when the id is an integrity session id.   |
+| `packages/overlay/src/services/conversation.ts`         | Hydrate and paged event replay can load only the visible tail before selected-task SSE resumes.      | A selected task can see a later chunk without the earlier started event in memory. |
+| `packages/opencorvus/src/server/routes/orchestrator.ts` | `/task/:id/conversation/events` pages protocol events by sequence.                                   | The event log remains the source; no synthetic UI-only message is introduced.      |
 
 ## Root Cause
 

@@ -15,6 +15,7 @@
 测试：`begin-build-attempt-supersede.test.ts` 加"孤儿经 beginBuildAttempt 退役+重派、非孤儿 live tip 仍拒绝"；`goal-run-owner-orphan.test.ts` 加 `goalStatusByID` owner-aware 断言。8 套件 43 pass / 0 fail，typecheck 我的改动零错误（仅余用户在途 GoalWorkloadResult 的预存错误）。
 作者：HengYang + assistant
 相关前作：
+
 - `2026-05-21-build-orchestrator-interruption-stabilization.md`
 - `2026-04-30-llm-activity-first-byte-zombie-loop-fix.md`
 - `2026-04-30-llm-activity-redesign.md`
@@ -29,11 +30,11 @@
 
 ### goal 的三种"断流"死法与现状（证据）
 
-| 死法 | 进程 | 现状 | 自动退出？ |
-|---|---|---|---|
-| ① 流卡死（socket 静默、长时间不吐字节） | 活 | `build/agent.ts:1677` `withStreamActivity({ idleMs: orchCfg.activity.executor_events_idle_ms })` + `abortableIterable` 包住外部 executor 流；空闲超时→`AbortError`→build `failed`→`runtime.ts syncGoalRuns`→`batchComplete` 唤醒 orchestrator | ✅ 已有 |
-| ② 流硬错（429/500/ECONNRESET） | 活 | `agent/runner.ts:794` 订阅 `Session.Event.Error` 收 `streamErrors`，`buildHardErrorFromFinalMessage` 抛 `AgentRunError`；describe 呈现 `recent_stream_failures`/`recent_agent_failures` | ✅ 已有 |
-| ③ **进程中断+重启** | 死过 | goal_run 行停在 live 状态（running/planning/blocked），内存 stream + SessionPrompt loop 全没；重启**不 auto-wake**（`describe.ts:427`），orphan 仅作为 `run_orphan` 事实给 LLM（`orphan.ts` "no code gates"），无任何自动退出 | ❌ **缺口** |
+| 死法                                    | 进程 | 现状                                                                                                                                                                                                                                          | 自动退出？  |
+| --------------------------------------- | ---- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------- |
+| ① 流卡死（socket 静默、长时间不吐字节） | 活   | `build/agent.ts:1677` `withStreamActivity({ idleMs: orchCfg.activity.executor_events_idle_ms })` + `abortableIterable` 包住外部 executor 流；空闲超时→`AbortError`→build `failed`→`runtime.ts syncGoalRuns`→`batchComplete` 唤醒 orchestrator | ✅ 已有     |
+| ② 流硬错（429/500/ECONNRESET）          | 活   | `agent/runner.ts:794` 订阅 `Session.Event.Error` 收 `streamErrors`，`buildHardErrorFromFinalMessage` 抛 `AgentRunError`；describe 呈现 `recent_stream_failures`/`recent_agent_failures`                                                       | ✅ 已有     |
+| ③ **进程中断+重启**                     | 死过 | goal_run 行停在 live 状态（running/planning/blocked），内存 stream + SessionPrompt loop 全没；重启**不 auto-wake**（`describe.ts:427`），orphan 仅作为 `run_orphan` 事实给 LLM（`orphan.ts` "no code gates"），无任何自动退出                 | ❌ **缺口** |
 
 本 spec 只解决 ③。
 
@@ -70,13 +71,13 @@ executor_session 死表不复活；把活性信号挂到 goal_run——它是唯
 
 正确性矩阵（单 owner）：
 
-| 场景 | owner vs OWNER | status | 判定 | 正确性 |
-|---|---|---|---|---|
-| 本进程正跑 | == | live | live | ✓ |
-| 进程崩溃+重启 | != (旧) | live | **orphan** | ✓ 死且不可恢复 |
-| 崩前已终态 | * | terminal | 不命中（只看 live status） | ✓ |
-| 流死+在进程内已写 failed | == | terminal | 不命中 | ✓（①②负责） |
-| queued 从未派发 | owner 未设 | queued | 不命中（owner 空） | ✓ 与 orphan.ts 对 queued 的特殊处理一致 |
+| 场景                     | owner vs OWNER | status   | 判定                       | 正确性                                  |
+| ------------------------ | -------------- | -------- | -------------------------- | --------------------------------------- |
+| 本进程正跑               | ==             | live     | live                       | ✓                                       |
+| 进程崩溃+重启            | != (旧)        | live     | **orphan**                 | ✓ 死且不可恢复                          |
+| 崩前已终态               | \*             | terminal | 不命中（只看 live status） | ✓                                       |
+| 流死+在进程内已写 failed | ==             | terminal | 不命中                     | ✓（①②负责）                             |
+| queued 从未派发          | owner 未设     | queued   | 不命中（owner 空）         | ✓ 与 orphan.ts 对 queued 的特殊处理一致 |
 
 ### 2.3 为什么不需要 lease_until/心跳（拒绝过度工程，规则 5/6/26）
 
@@ -124,31 +125,33 @@ executor_session 死表不复活；把活性信号挂到 goal_run——它是唯
 
 全仓调用点（`grep` 已枚举）：
 
-| 符号 | 定义 | 调用点 | 处理 |
-|---|---|---|---|
-| `ensureExecutorSession` | persist.ts:1412 | 无 | 删 |
-| `EngineExecutorSessionTable` | engine.sql.ts:597 | store/persist/board/schema/ddl | 删表+DDL+schema 导出 |
-| `ExecutorSessionRow` | store.ts:123 | execution-abort:15, writer:48, task-api 间接 | 删 |
-| `listLiveExecutorSessionsForTask` | store.ts:1219 | runtime:118, writer:386, execution-abort:128 | 删函数+调用点 |
-| `listLiveExecutorSessionsForProject` | store.ts:1201 | writer:412 | 删函数+调用点 |
-| `updateExecutorSessionStatus` / `...ByID` | persist.ts:1502/1518 | writer:32/33/232/254, runtime:298/327 | 删函数+调用点 |
-| `updateGoalRunExecutorSessionStatus` | persist.ts:1537 | execution-abort:101, runtime:323 | 删函数+调用点 |
-| `viewExecutorSession` | store.ts:1723 | task-api:128/1239 | 删函数+端点字段（核查端点契约，必要时同步 OpenAPI/SDK） |
-| `abortExecutorSessions` | writer.ts:230 | 核查调用者 | 随之删/简化 |
-| `EngineExecutorSessionStatus` / `EXECUTOR_SESSION_STATUS_CATALOG` / `LIVE_EXECUTOR_SESSION_STATUSES` | engine.sql.ts:123 / catalog.ts:68/103 | store:52 | 删 |
-| `lease.ts` 的 `executorLeaseUntil/Available/HeldByOther`、`EXECUTOR_LEASE_MS`、`claimExecutorSessionLeaseWhere`/`executorLeaseConflict`/`leaseWindow`(persist) | lease.ts / persist.ts:1377-1410 | 仅死表 claim | 删；`processOwner()`(原 `executorLeaseOwner`) 保留供 §3.1 |
+| 符号                                                                                                                                                           | 定义                                  | 调用点                                       | 处理                                                      |
+| -------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------- | -------------------------------------------- | --------------------------------------------------------- |
+| `ensureExecutorSession`                                                                                                                                        | persist.ts:1412                       | 无                                           | 删                                                        |
+| `EngineExecutorSessionTable`                                                                                                                                   | engine.sql.ts:597                     | store/persist/board/schema/ddl               | 删表+DDL+schema 导出                                      |
+| `ExecutorSessionRow`                                                                                                                                           | store.ts:123                          | execution-abort:15, writer:48, task-api 间接 | 删                                                        |
+| `listLiveExecutorSessionsForTask`                                                                                                                              | store.ts:1219                         | runtime:118, writer:386, execution-abort:128 | 删函数+调用点                                             |
+| `listLiveExecutorSessionsForProject`                                                                                                                           | store.ts:1201                         | writer:412                                   | 删函数+调用点                                             |
+| `updateExecutorSessionStatus` / `...ByID`                                                                                                                      | persist.ts:1502/1518                  | writer:32/33/232/254, runtime:298/327        | 删函数+调用点                                             |
+| `updateGoalRunExecutorSessionStatus`                                                                                                                           | persist.ts:1537                       | execution-abort:101, runtime:323             | 删函数+调用点                                             |
+| `viewExecutorSession`                                                                                                                                          | store.ts:1723                         | task-api:128/1239                            | 删函数+端点字段（核查端点契约，必要时同步 OpenAPI/SDK）   |
+| `abortExecutorSessions`                                                                                                                                        | writer.ts:230                         | 核查调用者                                   | 随之删/简化                                               |
+| `EngineExecutorSessionStatus` / `EXECUTOR_SESSION_STATUS_CATALOG` / `LIVE_EXECUTOR_SESSION_STATUSES`                                                           | engine.sql.ts:123 / catalog.ts:68/103 | store:52                                     | 删                                                        |
+| `lease.ts` 的 `executorLeaseUntil/Available/HeldByOther`、`EXECUTOR_LEASE_MS`、`claimExecutorSessionLeaseWhere`/`executorLeaseConflict`/`leaseWindow`(persist) | lease.ts / persist.ts:1377-1410       | 仅死表 claim                                 | 删；`processOwner()`(原 `executorLeaseOwner`) 保留供 §3.1 |
 
 清理时逐函数核查 `execution-abort.ts` / `writer.ts` / `runtime.ts failRun` 的剩余职责：去掉 executor_session 空转后，其 prompt-cancel / `updateGoalRun(aborted/failed)` / event-bridge 停止职责**必须保留**（这些才是真正生效的部分）。
 
 DB：按规则 18 直接 reset，不迁移。
 
 ### 4.1 cleanup 测试
+
 - 断言 `runtime.failRun` / `execution-abort.abortGoalRunExecution` 去掉 executor_session 调用后仍把 goal_run 写 failed/aborted、仍 cancel prompt（行为保持）。
 - 若改 task-api 端点契约：正反例 + OpenAPI/SDK 同步（规则 36）。
 
 ---
 
 ## 5. 验收
+
 - 重启后曾 running 的 goal_run：describe/overlay 呈现为 orphaned 而非 running；orchestrator 下一次 wake 读到 orphan 可重派。
 - 长跑 goal（同进程）不被误判孤儿。
 - typecheck + 定向单测全绿；两个 commit 各自可独立 review/bisect。

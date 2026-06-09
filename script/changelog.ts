@@ -52,7 +52,8 @@ export async function getCommits(from: string, to: string): Promise<Commit[]> {
   }
 
   // Get commits that touch the relevant packages
-  const log = await $`git log ${fromRef}..${toRef} --oneline --format="%H" -- packages/opencorvus packages/sdk packages/plugin github`.text()
+  const log =
+    await $`git log ${fromRef}..${toRef} --oneline --format="%H" -- packages/opencorvus packages/sdk packages/plugin github`.text()
   const hashes = log.split("\n").filter(Boolean)
 
   const commits: Commit[] = []

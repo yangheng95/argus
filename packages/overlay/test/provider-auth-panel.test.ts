@@ -33,7 +33,6 @@ type HarnessData = {
 
 await ensureOverlayDist()
 
-
 function route(url: URL) {
   return url.pathname.replace(/\/+$/, "") || "/"
 }

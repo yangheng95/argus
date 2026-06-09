@@ -9,14 +9,14 @@ OpenCorvus's orchestration is built around **agents**. The agent registry — na
 
 The registry currently ships with the agents below. `mode` controls how the agent is invoked: `primary` runs as the top-of-stack agent in a session; `subagent` is dispatched by another agent via the `task` tool. Agents marked `hidden` are routing slots — not selectable from the picker, but their model / prompt can still be overridden in config.
 
-| Agent | Mode | Purpose |
-|---|---|---|
-| `build` | primary (hidden) | Implementation agent. Executes read / edit / bash-style implementation tools when dispatched by the orchestrator or direct workflow. |
-| `general` | subagent | General-purpose multi-step research / parallel-work agent. Dispatched via the `task` tool. |
-| `explore` | subagent | Codebase exploration — fast file / code search, read-only by default. |
-| `acceptance` | primary (hidden) | Acceptance-review slot used by review streams and arbitration paths. |
+| Agent          | Mode             | Purpose                                                                                                                                                                                                                                                |
+| -------------- | ---------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `build`        | primary (hidden) | Implementation agent. Executes read / edit / bash-style implementation tools when dispatched by the orchestrator or direct workflow.                                                                                                                   |
+| `general`      | subagent         | General-purpose multi-step research / parallel-work agent. Dispatched via the `task` tool.                                                                                                                                                             |
+| `explore`      | subagent         | Codebase exploration — fast file / code search, read-only by default.                                                                                                                                                                                  |
+| `acceptance`   | primary (hidden) | Acceptance-review slot used by review streams and arbitration paths.                                                                                                                                                                                   |
 | `orchestrator` | primary (hidden) | Orchestrator agent. Owns task lifecycle decisions and dispatches explicit workflow tools such as `frontend_design`, `frontend_research`, `analyze_intent`, `requirements`, `architect`, `build`, `integrity`, `modify_goal`, and `restart_from_stage`. |
-| `requirements` | primary (hidden) | Requirements stage. Extracts user requirements and foundational technical decisions. |
+| `requirements` | primary (hidden) | Requirements stage. Extracts user requirements and foundational technical decisions.                                                                                                                                                                   |
 
 Other registered agents (`architect`, `frontend-design`, `frontend-research`, `intent-analysis`, `integrity`, `visual-qa`, `prosecutor`, `summary`, `title`, `compaction`, `mission`, `control`) are stage / utility slots invoked internally by the orchestrator, mission runtime, or session loop. They surface in config (model + prompt overrides) but are not user-selectable unless a dedicated runtime exposes them.
 
@@ -35,9 +35,9 @@ Each agent's model is set under `agent.<name>.model` — see `packages/opencorvu
 ```jsonc
 {
   "agent": {
-    "build":        { "model": "anthropic/claude-sonnet-4-6" },
-    "frontend-design": { "model": "anthropic/claude-sonnet-4-6" }
-  }
+    "build": { "model": "anthropic/claude-sonnet-4-6" },
+    "frontend-design": { "model": "anthropic/claude-sonnet-4-6" },
+  },
 }
 ```
 
@@ -54,9 +54,9 @@ You can define agents inline in your config or as markdown under `~/.config/open
       "description": "Reviews code for best practices and potential issues",
       "model": "anthropic/claude-sonnet-4-6",
       "prompt": "You are a code reviewer. Focus on security, performance, maintainability.",
-      "tools": { "write": false, "edit": false }
-    }
-  }
+      "tools": { "write": false, "edit": false },
+    },
+  },
 }
 ```
 
@@ -73,13 +73,13 @@ Per-agent step budgets and skill paths live under `assistant.<name>` (config.ts:
 ```jsonc
 {
   "assistant": {
-    "requirements":   { "max_steps": 20 },
-    "architect":      { "max_steps": 40 },
-    "acceptance":       { "max_steps": 160, "max_retries": 3 },
+    "requirements": { "max_steps": 20 },
+    "architect": { "max_steps": 40 },
+    "acceptance": { "max_steps": 160, "max_retries": 3 },
     "frontend_design": { "max_steps": 30 },
     "intent_analysis": { "max_steps": 10 },
-    "build":          { "max_steps": 80 }
-  }
+    "build": { "max_steps": 80 },
+  },
 }
 ```
 

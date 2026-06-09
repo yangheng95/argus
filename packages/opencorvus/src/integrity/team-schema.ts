@@ -102,7 +102,10 @@ export const IntegrityReviewerReportSchema = z
         z
           .object({
             kind: z.string().min(1).describe("Evidence tool or inspection category."),
-            target: z.string().min(1).describe("Concrete file, directory, command, evidence section, or artifact inspected."),
+            target: z
+              .string()
+              .min(1)
+              .describe("Concrete file, directory, command, evidence section, or artifact inspected."),
             purpose: z.string().min(1).describe("Why this evidence was inspected for the reviewer scope."),
             result: z
               .string()

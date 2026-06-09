@@ -1,32 +1,30 @@
-import { For, Show, createMemo, onCleanup } from "solid-js";
-import type { JSX } from "solid-js";
-import PromptCatalog from "./settings/PromptCatalog";
-import ChannelsPanel from "./settings/ChannelsPanel";
-import { McpPanel, SkillMarketPanel, SkillsPanel } from "./settings/SkillMarketPanel";
-import ProvidersPanel from "./settings/ProvidersPanel";
-import GeneralPanel from "./settings/GeneralPanel";
-import AgentModelsPanel from "./settings/AgentModelsPanel";
-import { PermissionsPanel } from "./settings/PermissionsPanel";
-import { MemoryPanel } from "./MemoryPanel";
-import { Dialog } from "./primitives/Dialog";
-import { appStore } from "../store/app";
-import { boardStore,
-  activeTaskID,
-} from "../store/board";
-import { settingsStore } from "../store/settings";
-import { closeConfigDialog, setConfigSidebarWidth, switchConfigTab } from "../services/dialog";
-import { dialogStore, CONFIG_SECTIONS, type ConfigDialogTab } from "../store/dialog";
-import { getHostTransport } from "../services/host-transport";
-import { t } from "../utils/i18n";
-import { OVERLAY_VERSION } from "../utils/version";
-import { currentUIScale } from "../services/pane";
-import { Icon, type IconName } from "./Icon";
+import { For, Show, createMemo, onCleanup } from "solid-js"
+import type { JSX } from "solid-js"
+import PromptCatalog from "./settings/PromptCatalog"
+import ChannelsPanel from "./settings/ChannelsPanel"
+import { McpPanel, SkillMarketPanel, SkillsPanel } from "./settings/SkillMarketPanel"
+import ProvidersPanel from "./settings/ProvidersPanel"
+import GeneralPanel from "./settings/GeneralPanel"
+import AgentModelsPanel from "./settings/AgentModelsPanel"
+import { PermissionsPanel } from "./settings/PermissionsPanel"
+import { MemoryPanel } from "./MemoryPanel"
+import { Dialog } from "./primitives/Dialog"
+import { appStore } from "../store/app"
+import { boardStore, activeTaskID } from "../store/board"
+import { settingsStore } from "../store/settings"
+import { closeConfigDialog, setConfigSidebarWidth, switchConfigTab } from "../services/dialog"
+import { dialogStore, CONFIG_SECTIONS, type ConfigDialogTab } from "../store/dialog"
+import { getHostTransport } from "../services/host-transport"
+import { t } from "../utils/i18n"
+import { OVERLAY_VERSION } from "../utils/version"
+import { currentUIScale } from "../services/pane"
+import { Icon, type IconName } from "./Icon"
 
 interface ConfigTabDef {
-  id: ConfigDialogTab;
-  labelKey: string;
-  icon: IconName;
-  badgeID?: string;
+  id: ConfigDialogTab
+  labelKey: string
+  icon: IconName
+  badgeID?: string
 }
 
 // Per-section icons (and badge anchors) are dialog chrome and stay local;
@@ -44,110 +42,110 @@ const SECTION_ICONS: Record<ConfigDialogTab, IconName> = {
   providers: "config-providers",
   "agent-models": "config-agent-models",
   about: "config-about",
-};
+}
 
 const SECTION_BADGES: Partial<Record<ConfigDialogTab, string>> = {
   prompt: "promptBadge",
   memory: "memoryBadge",
-};
+}
 
 const CONFIG_TABS: ConfigTabDef[] = CONFIG_SECTIONS.map((section) => ({
   id: section.id,
   labelKey: section.labelKey,
   icon: SECTION_ICONS[section.id],
   badgeID: SECTION_BADGES[section.id],
-}));
+}))
 
-const MAIN_CONFIG_TABS = CONFIG_TABS.filter((tab) => tab.id !== "about");
-const ABOUT_CONFIG_TAB = CONFIG_TABS.find((tab) => tab.id === "about") as ConfigTabDef;
+const MAIN_CONFIG_TABS = CONFIG_TABS.filter((tab) => tab.id !== "about")
+const ABOUT_CONFIG_TAB = CONFIG_TABS.find((tab) => tab.id === "about") as ConfigTabDef
 
 function activePanelBodyID(tab: ConfigDialogTab): string {
   switch (tab) {
     case "general":
-      return "generalBody";
+      return "generalBody"
     case "permissions":
-      return "permissionsBody";
+      return "permissionsBody"
     case "prompt":
-      return "promptBody";
+      return "promptBody"
     case "channel":
-      return "channelConfigBody";
+      return "channelConfigBody"
     case "skill":
-      return "skillConfigBody";
+      return "skillConfigBody"
     case "skill-market":
-      return "skillMarketConfigBody";
+      return "skillMarketConfigBody"
     case "mcp":
-      return "mcpConfigBody";
+      return "mcpConfigBody"
     case "memory":
-      return "memoryBody";
+      return "memoryBody"
     case "providers":
-      return "providersConfigBody";
+      return "providersConfigBody"
     case "agent-models":
-      return "agentModelsBody";
+      return "agentModelsBody"
     case "about":
-      return "aboutBody";
+      return "aboutBody"
   }
 }
 
 function runtimeTypeLabel(): string {
-  const hostKind = getHostTransport().kind;
-  if (hostKind === "tauri") return "Tauri Desktop";
-  if (hostKind === "vscode") return "VS Code Webview";
-  return "Browser";
+  const hostKind = getHostTransport().kind
+  if (hostKind === "tauri") return "Tauri Desktop"
+  if (hostKind === "vscode") return "VS Code Webview"
+  return "Browser"
 }
 
 interface ResizableOptions {
-  onStart?: (event: PointerEvent) => boolean | void;
-  onMove: (dx: number, dy: number, event: PointerEvent) => void;
-  onEnd?: () => void;
+  onStart?: (event: PointerEvent) => boolean | void
+  onMove: (dx: number, dy: number, event: PointerEvent) => void
+  onEnd?: () => void
 }
 
 function useResizable(opts: ResizableOptions) {
-  let cleanupSession: (() => void) | undefined;
+  let cleanupSession: (() => void) | undefined
 
   const clearSession = () => {
-    if (!cleanupSession) return;
-    cleanupSession();
-    cleanupSession = undefined;
-    opts.onEnd?.();
-  };
+    if (!cleanupSession) return
+    cleanupSession()
+    cleanupSession = undefined
+    opts.onEnd?.()
+  }
 
   const startResize = (event: PointerEvent) => {
-    clearSession();
-    if (opts.onStart?.(event) === false) return;
-    const startX = event.clientX;
-    const startY = event.clientY;
+    clearSession()
+    if (opts.onStart?.(event) === false) return
+    const startX = event.clientX
+    const startY = event.clientY
     const onMove = (moveEvent: PointerEvent) => {
-      opts.onMove(moveEvent.clientX - startX, moveEvent.clientY - startY, moveEvent);
-    };
-    const onEnd = () => clearSession();
-    window.addEventListener("pointermove", onMove);
-    window.addEventListener("pointerup", onEnd);
-    window.addEventListener("pointercancel", onEnd);
+      opts.onMove(moveEvent.clientX - startX, moveEvent.clientY - startY, moveEvent)
+    }
+    const onEnd = () => clearSession()
+    window.addEventListener("pointermove", onMove)
+    window.addEventListener("pointerup", onEnd)
+    window.addEventListener("pointercancel", onEnd)
     cleanupSession = () => {
-      window.removeEventListener("pointermove", onMove);
-      window.removeEventListener("pointerup", onEnd);
-      window.removeEventListener("pointercancel", onEnd);
-    };
-  };
+      window.removeEventListener("pointermove", onMove)
+      window.removeEventListener("pointerup", onEnd)
+      window.removeEventListener("pointercancel", onEnd)
+    }
+  }
 
-  onCleanup(clearSession);
-  return startResize;
+  onCleanup(clearSession)
+  return startResize
 }
 
 export function ConfigDialogHost() {
   const sidebarStyle = createMemo<Record<string, string>>(() => {
-    const width = dialogStore.config.sidebarWidth;
+    const width = dialogStore.config.sidebarWidth
     if (typeof width !== "number" || !Number.isFinite(width) || width <= 0) {
-      return {};
+      return {}
     }
     return {
       width: `${width}px`,
       "min-width": `${width}px`,
-    };
-  });
+    }
+  })
 
   const aboutRows = createMemo(() => {
-    const config = appStore.config;
+    const config = appStore.config
     const rows: Array<[string, string]> = [
       [t("about.rt_overlay"), `v${OVERLAY_VERSION}`],
       [t("about.rt_core"), (config as any)?.version || t("about.rt_unavailable")],
@@ -157,40 +155,40 @@ export function ConfigDialogHost() {
       [t("about.rt_directory"), settingsStore.directory || "-"],
       [t("about.rt_executor"), settingsStore.executor || "-"],
       [t("about.rt_tasks"), String(boardStore.tasks?.length || 0)],
-    ];
-    if ((config as any)?.platform) rows.push([t("about.platform"), String((config as any).platform)]);
-    if ((config as any)?.goVersion) rows.push([t("about.go_version"), String((config as any).goVersion)]);
-    rows.push([t("about.runtime_type"), runtimeTypeLabel()]);
-    return rows;
-  });
+    ]
+    if ((config as any)?.platform) rows.push([t("about.platform"), String((config as any).platform)])
+    if ((config as any)?.goVersion) rows.push([t("about.go_version"), String((config as any).goVersion)])
+    rows.push([t("about.runtime_type"), runtimeTypeLabel()])
+    return rows
+  })
 
   const renderActivePanel = () => {
     switch (dialogStore.config.activeTab) {
       case "general":
-        return <GeneralPanel />;
+        return <GeneralPanel />
       case "permissions":
-        return <PermissionsPanel />;
+        return <PermissionsPanel />
       case "prompt":
-        return <PromptCatalog />;
+        return <PromptCatalog />
       case "channel":
-        return <ChannelsPanel />;
+        return <ChannelsPanel />
       case "skill":
-        return <SkillsPanel />;
+        return <SkillsPanel />
       case "skill-market":
-        return <SkillMarketPanel active={true} />;
+        return <SkillMarketPanel active={true} />
       case "mcp":
-        return <McpPanel />;
+        return <McpPanel />
       case "memory":
-        return <MemoryPanel taskID={activeTaskID() || undefined} />;
+        return <MemoryPanel taskID={activeTaskID() || undefined} />
       case "providers":
-        return <ProvidersPanel />;
+        return <ProvidersPanel />
       case "agent-models":
         return (
           <AgentModelsPanel
             scope={dialogStore.config.agentModelsScope}
             sessionID={dialogStore.config.agentModelsSessionID ?? undefined}
           />
-        );
+        )
       case "about":
         return (
           <>
@@ -238,49 +236,56 @@ export function ConfigDialogHost() {
             <div class="about-section">
               <h4 class="about-section-title">{t("about.shortcuts")}</h4>
               <div class="about-shortcut-grid">
-                <kbd>F12</kbd><span>{t("about.shortcut_devtools")}</span>
-                <kbd>Ctrl +</kbd><span>{t("about.shortcut_zoom_in")}</span>
-                <kbd>Ctrl -</kbd><span>{t("about.shortcut_zoom_out")}</span>
-                <kbd>Ctrl 0</kbd><span>{t("about.shortcut_zoom_reset")}</span>
-                <kbd>Enter</kbd><span>{t("about.shortcut_send")}</span>
-                <kbd>Shift+Enter</kbd><span>{t("about.shortcut_newline")}</span>
-                <kbd>Esc</kbd><span>{t("about.shortcut_close")}</span>
+                <kbd>F12</kbd>
+                <span>{t("about.shortcut_devtools")}</span>
+                <kbd>Ctrl +</kbd>
+                <span>{t("about.shortcut_zoom_in")}</span>
+                <kbd>Ctrl -</kbd>
+                <span>{t("about.shortcut_zoom_out")}</span>
+                <kbd>Ctrl 0</kbd>
+                <span>{t("about.shortcut_zoom_reset")}</span>
+                <kbd>Enter</kbd>
+                <span>{t("about.shortcut_send")}</span>
+                <kbd>Shift+Enter</kbd>
+                <span>{t("about.shortcut_newline")}</span>
+                <kbd>Esc</kbd>
+                <span>{t("about.shortcut_close")}</span>
               </div>
             </div>
           </>
-        );
+        )
     }
-  };
+  }
 
-  let resizeHandle: HTMLDivElement | undefined;
-  let resizeStartWidth = 0;
-  let resizeMin = 0;
-  let resizeMax = 0;
+  let resizeHandle: HTMLDivElement | undefined
+  let resizeStartWidth = 0
+  let resizeMin = 0
+  let resizeMax = 0
   const startResize = useResizable({
     onStart: (event) => {
-      if (event.button !== 0) return false;
-      const sidebar = document.getElementById("configSidebar");
-      if (!sidebar) return false;
-      resizeHandle = event.currentTarget as HTMLDivElement;
-      resizeHandle.dataset.active = "true";
-      document.body.dataset.resizing = "true";
-      event.preventDefault();
-      const scale = currentUIScale();
-      resizeStartWidth = sidebar.getBoundingClientRect().width;
-      resizeMin = 140 * scale;
-      resizeMax = 320 * scale;
-      return true;
+      if (event.button !== 0) return false
+      const sidebar = document.getElementById("configSidebar")
+      if (!sidebar) return false
+      resizeHandle = event.currentTarget as HTMLDivElement
+      resizeHandle.dataset.active = "true"
+      document.body.dataset.resizing = "true"
+      event.preventDefault()
+      const scale = currentUIScale()
+      resizeStartWidth = sidebar.getBoundingClientRect().width
+      resizeMin = 140 * scale
+      resizeMax = 320 * scale
+      return true
     },
     onMove: (dx) => {
-      const next = Math.round(Math.min(resizeMax, Math.max(resizeMin, resizeStartWidth + dx)));
-      setConfigSidebarWidth(next);
+      const next = Math.round(Math.min(resizeMax, Math.max(resizeMin, resizeStartWidth + dx)))
+      setConfigSidebarWidth(next)
     },
     onEnd: () => {
-      if (resizeHandle) delete resizeHandle.dataset.active;
-      resizeHandle = undefined;
-      delete document.body.dataset.resizing;
+      if (resizeHandle) delete resizeHandle.dataset.active
+      resizeHandle = undefined
+      delete document.body.dataset.resizing
     },
-  });
+  })
 
   return (
     <Dialog
@@ -355,5 +360,5 @@ export function ConfigDialogHost() {
         </div>
       </Show>
     </Dialog>
-  );
+  )
 }

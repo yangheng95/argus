@@ -58,19 +58,23 @@ describe("agent runner build tool scope", () => {
   })
 
   test("build visual reference contract is a hard gate when reference bytes are filtered", () => {
-    expect(shouldFailUnreadableBuildReference({
-      kind: "build",
-      userText: "## Visual Reference Contract (binding for this dispatch)\nref.png",
-      droppedFileParts: [{ mime: "image/png" }],
-    })).toBe(true)
+    expect(
+      shouldFailUnreadableBuildReference({
+        kind: "build",
+        userText: "## Visual Reference Contract (binding for this dispatch)\nref.png",
+        droppedFileParts: [{ mime: "image/png" }],
+      }),
+    ).toBe(true)
   })
 
   test("non-build filtered images keep the existing visible marker path", () => {
-    expect(shouldFailUnreadableBuildReference({
-      kind: "architect",
-      userText: "## Visual Reference Contract (binding for this dispatch)\nref.png",
-      droppedFileParts: [{ mime: "image/png" }],
-    })).toBe(false)
+    expect(
+      shouldFailUnreadableBuildReference({
+        kind: "architect",
+        userText: "## Visual Reference Contract (binding for this dispatch)\nref.png",
+        droppedFileParts: [{ mime: "image/png" }],
+      }),
+    ).toBe(false)
   })
 
   test("pre-terminal reflection applies to terminal tools", () => {

@@ -9,13 +9,13 @@ OpenCorvus 会按文件语言与项目配置自动格式化 agent 写入或修�
 
 OpenCorvus 通过项目工具配置识别 formatter：
 
-| Formatter | 触发条件 |
-|---|---|
-| `prettier` | `package.json` deps 含 prettier 或存在 `.prettierrc*` |
-| `gofmt` | 仓库含 `*.go` |
-| `rustfmt` | 存在 `Cargo.toml` |
-| `black` | `pyproject.toml` 含 `tool.black` 或 `requirements*.txt` 列出 black |
-| 项目脚本 | `package.json` 中的 `format` / `lint:fix` 脚本 |
+| Formatter  | 触发条件                                                           |
+| ---------- | ------------------------------------------------------------------ |
+| `prettier` | `package.json` deps 含 prettier 或存在 `.prettierrc*`              |
+| `gofmt`    | 仓库含 `*.go`                                                      |
+| `rustfmt`  | 存在 `Cargo.toml`                                                  |
+| `black`    | `pyproject.toml` 含 `tool.black` 或 `requirements*.txt` 列出 black |
+| 项目脚本   | `package.json` 中的 `format` / `lint:fix` 脚本                     |
 
 完整注册表见 `packages/opencorvus/src/format/formatter.ts`。
 
@@ -30,9 +30,9 @@ OpenCorvus 通过项目工具配置识别 formatter：
     "custom-prettier": {
       "command": ["npx", "prettier", "--write", "$FILE"],
       "environment": { "NODE_ENV": "development" },
-      "extensions": [".js", ".ts", ".jsx", ".tsx"]
-    }
-  }
+      "extensions": [".js", ".ts", ".jsx", ".tsx"],
+    },
+  },
 }
 ```
 

@@ -19,23 +19,27 @@ function spammerCmd(): string[] {
   ]
 }
 
-test("jsonLines kills the subprocess when consumer breaks early", async () => {
-  const it = jsonLines({ command: spammerCmd() })
-  let pid: number | undefined
-  // Drain a few items, then abandon the iterator. The generator's finally
-  // must kill the spammer subprocess — otherwise it would idle for 60s.
-  let count = 0
-  for await (const item of it) {
-    expect(typeof item.i).toBe("number")
-    count += 1
-    if (count >= 3) break
-  }
-  // No reliable cross-platform way to capture pid without changing the
-  // public API, so we instead assert the function returned promptly and
-  // didn't hang. If kill failed, the bun event loop would still be busy
-  // draining proc.exited for ~60s and this test would time out (1s).
-  expect(count).toBe(3)
-}, { timeout: 5_000 })
+test(
+  "jsonLines kills the subprocess when consumer breaks early",
+  async () => {
+    const it = jsonLines({ command: spammerCmd() })
+    let pid: number | undefined
+    // Drain a few items, then abandon the iterator. The generator's finally
+    // must kill the spammer subprocess — otherwise it would idle for 60s.
+    let count = 0
+    for await (const item of it) {
+      expect(typeof item.i).toBe("number")
+      count += 1
+      if (count >= 3) break
+    }
+    // No reliable cross-platform way to capture pid without changing the
+    // public API, so we instead assert the function returned promptly and
+    // didn't hang. If kill failed, the bun event loop would still be busy
+    // draining proc.exited for ~60s and this test would time out (1s).
+    expect(count).toBe(3)
+  },
+  { timeout: 5_000 },
+)
 
 test("jsonLines settles cleanly when subprocess exits naturally", async () => {
   // Subprocess exits in ~10ms. Generator should drain naturally, no error.
@@ -76,18 +80,22 @@ test("jsonLines does NOT throw the subprocess error when consumer aborted early"
   // No throw — break is the contract, generator finally cleaned up.
 })
 
-test("jsonLines respects external AbortSignal", async () => {
-  const ctrl = new AbortController()
-  const it = jsonLines({
-    command: sleepCmd(60_000),
-    signal: ctrl.signal,
-  })
-  setTimeout(() => ctrl.abort(), 50)
-  // Iterating an aborted-process generator should settle without blocking
-  // for 60s. Because the subprocess emits no JSON lines, the for-await
-  // loop never yields; it returns when the stdout stream closes after
-  // SIGTERM.
-  for await (const _ of it) {
-    void _
-  }
-}, { timeout: 5_000 })
+test(
+  "jsonLines respects external AbortSignal",
+  async () => {
+    const ctrl = new AbortController()
+    const it = jsonLines({
+      command: sleepCmd(60_000),
+      signal: ctrl.signal,
+    })
+    setTimeout(() => ctrl.abort(), 50)
+    // Iterating an aborted-process generator should settle without blocking
+    // for 60s. Because the subprocess emits no JSON lines, the for-await
+    // loop never yields; it returns when the stdout stream closes after
+    // SIGTERM.
+    for await (const _ of it) {
+      void _
+    }
+  },
+  { timeout: 5_000 },
+)

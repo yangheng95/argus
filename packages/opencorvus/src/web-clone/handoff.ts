@@ -72,7 +72,11 @@ export function buildWebCloneHandoff(pageIr: WebClonePageIr, assetGraph: WebClon
 export async function writeWebCloneHandoff(outputDir: string, handoff: WebCloneHandoff): Promise<void> {
   await fs.mkdir(outputDir, { recursive: true })
   await fs.writeFile(path.join(outputDir, "segments.json"), JSON.stringify(handoff.segments, null, 2), "utf8")
-  await fs.writeFile(path.join(outputDir, "codegen-context.json"), JSON.stringify(handoff.codegenContext, null, 2), "utf8")
+  await fs.writeFile(
+    path.join(outputDir, "codegen-context.json"),
+    JSON.stringify(handoff.codegenContext, null, 2),
+    "utf8",
+  )
 }
 
 function selectSegmentRoots(root: WebCloneNode): WebCloneNode[] {
@@ -224,7 +228,10 @@ function inferStrategy(
 
 function segmentName(node: WebCloneNode, index: number): string {
   const id = node.attrs?.find((attr) => attr.name === "id")?.value
-  const classes = node.attrs?.find((attr) => attr.name === "class")?.classTokens?.slice(0, 2).join("-")
+  const classes = node.attrs
+    ?.find((attr) => attr.name === "class")
+    ?.classTokens?.slice(0, 2)
+    .join("-")
   return [node.tag ?? node.type, id, classes, String(index)].filter(Boolean).join("-")
 }
 

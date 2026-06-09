@@ -1182,7 +1182,11 @@ export function listLiveGoalRunsForProject(projectID: string): GoalRunRow[] {
  * paths consume both: the goal id keys the cleanup invocation, the directory
  * is the path to delete on disk.
  */
-export function listGoalWorkspacesForProject(projectID: string): Array<{ goal: GoalRow; workspaceDir: string }> {
+export function listGoalWorkspacesForProject(projectID: string): Array<{
+  goal: GoalRow
+  workspaceDir: string
+  status: EngineGoalRunStatus
+}> {
   const artifactRows = Database.use((db) =>
     db
       .select({ artifact: EngineArtifactTable })
@@ -1194,7 +1198,7 @@ export function listGoalWorkspacesForProject(projectID: string): Array<{ goal: G
       .map((row) => row.artifact),
   )
   const seen = new Set<string>()
-  const out: Array<{ goal: GoalRow; workspaceDir: string }> = []
+  const out: Array<{ goal: GoalRow; workspaceDir: string; status: EngineGoalRunStatus }> = []
   for (const row of artifactRows) {
     const goalRun = artifactRowToGoalRunRow(row)
     if (seen.has(goalRun.goal_id)) continue
@@ -1202,7 +1206,7 @@ export function listGoalWorkspacesForProject(projectID: string): Array<{ goal: G
     if (!goalRun.workspace_dir) continue
     const goal = findGoal(goalRun.goal_id)
     if (!goal) continue
-    out.push({ goal, workspaceDir: goalRun.workspace_dir })
+    out.push({ goal, workspaceDir: goalRun.workspace_dir, status: goalRun.status })
   }
   return out
 }

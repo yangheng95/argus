@@ -47,20 +47,21 @@ import { EngineProtocol } from "@/engine/protocol"
 import { abortChildExecutionForSession, abortGoalRunExecution } from "@/engine/execution-abort"
 import { abortLiveOrchestratorToolOwnership } from "@/engine/writer"
 import { renderFrontendDesignHandoffReference, frontendDesignArtifactPaths } from "@/frontend-design/handoff"
-import { renderFrontendResearchBriefPromptSection } from "@/research/prompt-section"
+import { findNonStaleFrontendResearchBrief, renderFrontendResearchBriefPromptSection } from "@/research/prompt-section"
 import { ensureLiveWebpageEvidence, primaryWebpageEvidenceArtifacts } from "./webpage-evidence"
 import { VisualEvidenceBundleSchema, type VisualEvidenceBundle } from "@/acceptance/visual-evidence"
 import { renderUserRequestSection } from "@/intent/request-prompt"
-import { materializeMcpToolResult } from "@/mcp/materialize"
 import {
-  EngineArtifactTable,
-  EngineGoalTable,
-  EngineTaskTable,
-  type AcceptanceResult,
-  type EngineArtifactKind,
-} from "@/engine/engine.sql"
+  renderVisualQaBuildEvidenceContext,
+  renderVisualQaFrontendDesignContext,
+  renderVisualQaFrontendResearchContext,
+  renderVisualQaPriorReportContext,
+} from "@/visual-qa/context"
+import { materializeMcpToolResult } from "@/mcp/materialize"
+import { EngineArtifactTable, EngineGoalTable, EngineTaskTable, type EngineArtifactKind } from "@/engine/engine.sql"
 import {
   supersedePriorActivePlansForTask,
+  appendGoalToActiveGraph,
   ensureBuildRetryFeedbackForGoal,
   persistTaskFrontendResearchBrief,
   persistTaskResearchBrief,
@@ -100,7 +101,7 @@ import {
 } from "@/engine/store"
 import { describeTask, goalStatusByID, renderCollaborationClosure } from "@/engine/describe"
 import { isLiveGoalRunStatus } from "@/engine/catalog"
-import { GoalContractUpdateSchema } from "@/pipeline/goal-contract.schema"
+import { GoalContractFieldsSchema, GoalContractUpdateSchema } from "@/pipeline/goal-contract.schema"
 import { blockActiveRunForTask, updateRun, updateTask } from "@/engine/state"
 import { deriveTaskStatus, isTaskQueued, isTaskTerminal } from "@/engine/task-status"
 import {
@@ -562,6 +563,14 @@ const ModifyGoalInputSchema = z.object({
   reason: z.string().min(1).describe("Why you decided to modify this goal."),
 })
 
+const AddGoalInputSchema = z.object({
+  goal: GoalContractFieldsSchema.omit({ id: true }),
+  reason: z
+    .string()
+    .min(1)
+    .describe("Evidence that this new goal comes from the latest operator instruction or current task findings."),
+})
+
 const FrontendDesignReasonField = z.string().describe("Why frontend design is needed for this task")
 const FrontendDesignLegacyUrlField = z
   .string()
@@ -608,8 +617,13 @@ const FrontendResearchReasonField = z
 const FrontendResearchSourceUrlsField = z
   .array(z.string().min(1))
   .min(1)
-  .describe("Source page URLs the frontend-research agent must partition into investigation work packets from prepared evidence.")
-const FrontendResearchFocusField = z.string().optional().describe("Optional narrow focus for the frontend-research agent.")
+  .describe(
+    "Source page URLs the frontend-research agent must partition into investigation work packets from prepared evidence.",
+  )
+const FrontendResearchFocusField = z
+  .string()
+  .optional()
+  .describe("Optional narrow focus for the frontend-research agent.")
 
 const FrontendResearchInputSchema = z
   .object({})
@@ -618,13 +632,21 @@ const FrontendResearchInputSchema = z
   .extend({ focus: FrontendResearchFocusField })
 
 const VisualQaInputSchema = z.object({
-  reason: z.string().min(1).describe("Why dedicated frontend UI/UX testing is useful now."),
+  reason: z
+    .string()
+    .min(1)
+    .describe("Why dedicated frontend visual GUI fidelity and functional testing is useful now."),
   focus: z.string().optional().describe("Optional narrowed region/state/viewport focus for visual QA."),
-  app_url: z.string().optional().describe("Known preview URL to inspect. Omit when the agent should discover/start preview from scripts."),
+  app_url: z
+    .string()
+    .optional()
+    .describe("Known preview URL to inspect. Omit when the agent should discover/start preview from scripts."),
   preview_command: z
     .string()
     .optional()
-    .describe("Suggested project command to start the real preview target. Use Node for Playwright/browser automation on Windows."),
+    .describe(
+      "Suggested project command to start the real preview target. Use Node for Playwright/browser automation on Windows.",
+    ),
 })
 
 function resolveSteerTarget(input: { taskID: string; sessionID?: string; goalID?: string }): {
@@ -801,8 +823,11 @@ export async function composeLatestAcceptanceFeedbackForBuild(input: {
     ? rejectionDetails.filter((detail) => detail.goal_id === input.goalID)
     : rejectionDetails
 
-  const { acceptanceManifestFailureDetails, findLatestAcceptanceEvidenceManifest, formatAcceptanceManifestFailureDetails } =
-    await import("@/acceptance/manifest")
+  const {
+    acceptanceManifestFailureDetails,
+    findLatestAcceptanceEvidenceManifest,
+    formatAcceptanceManifestFailureDetails,
+  } = await import("@/acceptance/manifest")
   const acceptanceID = verdictArtifact.acceptance_id ?? undefined
   const manifest = acceptanceID ? findLatestAcceptanceEvidenceManifest({ acceptanceID }) : undefined
   const manifestFailureDetails = manifest ? formatAcceptanceManifestFailureDetails(manifest) : []
@@ -1565,8 +1590,7 @@ export function createOrchestratorTools(input: {
     let activatedRun = false
     if (isTaskTerminal(task)) {
       return {
-        error:
-          `Task ${task.id} is ${deriveTaskStatus(task)}. Terminal tasks cannot create build runs from a wake or tool-result continuation; use retry_task or restart_from_stage for an explicit restart.`,
+        error: `Task ${task.id} is ${deriveTaskStatus(task)}. Terminal tasks cannot create build runs from a wake or tool-result continuation; use retry_task or restart_from_stage for an explicit restart.`,
       } as const
     }
 
@@ -1618,8 +1642,7 @@ export function createOrchestratorTools(input: {
     const task = requireTask(taskID)
     if (isTaskTerminal(task)) {
       return {
-        error:
-          `Task ${task.id} is ${deriveTaskStatus(task)}. Terminal tasks cannot create build runs from a wake or tool-result continuation; use retry_task or restart_from_stage for an explicit restart.`,
+        error: `Task ${task.id} is ${deriveTaskStatus(task)}. Terminal tasks cannot create build runs from a wake or tool-result continuation; use retry_task or restart_from_stage for an explicit restart.`,
       } as const
     }
     const existing = findActiveRunForTask(task.id)
@@ -3677,14 +3700,14 @@ export function createOrchestratorTools(input: {
     }),
 
     // -----------------------------------------------------------------------
-    // Visual QA — dedicated frontend UI/UX runtime testing and repair
+    // Visual QA — dedicated frontend GUI fidelity and function testing and repair
     // -----------------------------------------------------------------------
 
     visual_qa: tool({
       description:
-        "Dedicated frontend UI/UX visual testing and in-scope repair agent. UI means User Interface; UX means User Experience. " +
+        "Dedicated frontend visual GUI fidelity and functional testing agent. GUI means Graphical User Interface. " +
         "Use after build or visual repair when a frontend/UI surface needs fresh real-preview evidence before integrity: desktop/mobile screenshots, " +
-        "interaction-state checks, visual comparison, console/network review, or direct repair of visual/runtime defects. " +
+        "interaction-state checks, visual comparison, console/network review, or direct repair of visual or functional defects. " +
         "It consumes task-scoped frontend_design/build evidence and may use skills, bash/edit/write/apply_patch, and webpage_render/evaluate/text_diff/vision_judge. " +
         "It does NOT acquire new webpage clone evidence and is NOT the final acceptance gate; integrity remains final.",
       inputSchema: VisualQaInputSchema,
@@ -3699,22 +3722,15 @@ export function createOrchestratorTools(input: {
         }
 
         const decisionLog = createDecisionLog(taskID)
-        const frontendDesign = decisionLog
-          .readByPhase("frontend_design")
-          .map((entry) => `## ${entry.key}\nreason: ${entry.reason}\n\n${entry.value}`)
-          .join("\n\n")
-        const frontendResearch = renderFrontendResearchBriefPromptSection({ taskID, request: task.request })
-        const buildEvidence = findDeliveriesForTask(taskID)
-          .map((delivery) => {
-            const result = delivery.result as AcceptanceResult | undefined
-            const changed = result?.changed_files?.length ? `\nchanged_files:\n${result.changed_files.map((file) => `- ${file}`).join("\n")}` : ""
-            return `## ${delivery.id}\nsummary: ${delivery.summary}${changed}`
-          })
-          .join("\n\n")
-        const priorVisualQa = decisionLog
-          .readByPhase("visual_qa")
-          .map((entry) => `## ${entry.key}\nreason: ${entry.reason}\n\n${entry.value}`)
-          .join("\n\n")
+        const frontendDesign = renderVisualQaFrontendDesignContext(decisionLog.readByPhase("frontend_design"))
+        const frontendResearch = renderVisualQaFrontendResearchContext(
+          findNonStaleFrontendResearchBrief({
+            taskID,
+            request: task.request,
+          }),
+        )
+        const buildEvidence = renderVisualQaBuildEvidenceContext(findDeliveriesForTask(taskID))
+        const priorVisualQa = renderVisualQaPriorReportContext(decisionLog.readByPhase("visual_qa"))
 
         try {
           const { VisualQaAgent } = await import("@/visual-qa")
@@ -3738,7 +3754,7 @@ export function createOrchestratorTools(input: {
             phase: "visual_qa",
             key: `report_${Date.now()}`,
             value: JSON.stringify(result.report, null, 2),
-            reason: `Dedicated frontend UI/UX QA report from session ${result.sessionID}`,
+            reason: `Dedicated frontend GUI and functional QA report from session ${result.sessionID}`,
           })
           decisionLog.append({
             phase: "visual_qa",
@@ -4514,6 +4530,106 @@ export function createOrchestratorTools(input: {
     // Per-goal tools — Orchestrator decides when to call each
     // -----------------------------------------------------------------------
 
+    add_goal: tool({
+      description:
+        "Append one new executable goal to the current workflow graph when the latest operator message " +
+        "or current task evidence adds a concrete in-scope surface that is not covered by any existing goal. " +
+        "Use this instead of `modify_goal` when the work is a new capability/surface, and instead of " +
+        "`architect` when the existing graph boundary is still valid and only one well-scoped goal is missing. " +
+        "Do not use for broad re-decomposition, vague scope expansion, or follow-up work outside the current " +
+        "task contract — use `architect`, `question`, or `propose_task` from evidence in those cases. " +
+        "After this returns, dispatch `build({ goalID })` when dependencies are satisfied.",
+      inputSchema: AddGoalInputSchema,
+      execute: async ({ goal, reason }) => {
+        const task = requireTask(taskID)
+        if (isTaskTerminal(task)) {
+          return (
+            `add_goal: rejected because task ${taskID} is ${deriveTaskStatus(task)}. ` +
+            `A terminal task must first be reactivated by a real operator message or explicit retry/restart.`
+          )
+        }
+        if (task.kind !== "workflow") {
+          return `add_goal: rejected because task ${taskID} is kind=${task.kind}; direct build tasks do not own a workflow goal graph.`
+        }
+        const activeSpec = findActiveSpecForTask(taskID)
+        if (!activeSpec) {
+          return "add_goal: no active requirements/architect spec snapshot. Run requirements and architect before appending goals."
+        }
+        const activePlan = findActivePlanForTask(taskID)
+        const knownGoalIDs = new Set(listGoals(taskID).map((row) => row.id))
+        const unknownDeps = (goal.depends_on ?? []).filter((dep) => !knownGoalIDs.has(dep))
+        if (unknownDeps.length > 0) {
+          return (
+            `add_goal: rejected because depends_on references unknown goal id(s): ${unknownDeps.join(", ")}. ` +
+            `Use durable engine_goal.id values from read_context scope=goals.`
+          )
+        }
+
+        const now = Date.now()
+        const durableGoalID = Identifier.ascending("goal")
+        const added = Database.transaction((db) =>
+          appendGoalToActiveGraph(db, {
+            taskID,
+            specSnapshotID: activeSpec.id,
+            planVersionID: activePlan?.id ?? null,
+            goal: {
+              goalID: durableGoalID,
+              title: goal.title,
+              objective: goal.objective,
+              acceptance_specs: (goal.acceptance_specs as AcceptanceSpec[]).map((spec) => ({
+                ...spec,
+                goal_id: durableGoalID,
+              })),
+              owned_paths: goal.owned_paths,
+              depends_on: goal.depends_on,
+              kind: goal.kind,
+              requirement_ids: goal.requirement_ids,
+              priority: goal.priority,
+              source: "system",
+              metadata: {
+                add_goal_reason: reason,
+                operator_instruction_goal: true,
+              },
+            },
+            now,
+          }),
+        )
+
+        createDecisionLog(taskID).append({
+          phase: "orchestrator",
+          key: `added_goal_${added.id}`,
+          value:
+            `Added goal ${added.id}: ${goal.title}\n\n` +
+            `Reason: ${reason}\n\n` +
+            `Objective: ${goal.objective}\n\n` +
+            `Dependencies: ${(goal.depends_on ?? []).join(", ") || "(none)"}`,
+          reason: "add_goal",
+        })
+        EngineProtocol.emit(
+          EngineEvent.TaskUpdated,
+          {
+            taskID,
+            status: deriveTaskStatus(requireTask(taskID)),
+            summary: `Goal ${added.id} added by Orchestrator`,
+          },
+          { source: "orchestrator.add_goal" },
+        )
+
+        return SubAgentProtocol.yieldResult({
+          headline: `Goal added: ${added.id} ${goal.title}`,
+          fields: [
+            ["goal_id", added.id],
+            ["order", `G${added.orderIndex + 1}`],
+            ["spec_snapshot_id", activeSpec.id],
+            ["plan_version_id", activePlan?.id ?? "(no active plan yet)"],
+            ["plan_node_id", added.planNodeID ?? "(no active plan node yet)"],
+            ["depends_on", (goal.depends_on ?? []).join(", ") || "(none)"],
+          ],
+          pointer: `read_context scope=goals; then build({ goalID: "${added.id}" }) when dependencies are passed`,
+        })
+      },
+    }),
+
     modify_goal: tool({
       description:
         "Modify an existing goal's contract only to clarify or tighten acceptance for a surface already owned " +
@@ -4668,7 +4784,8 @@ export function createOrchestratorTools(input: {
                   .slice(0, ACCEPTANCE_FILES_CAP)
                   .map((f) => f.file)
                   .join(", ")
-                const more = diffs.length > ACCEPTANCE_FILES_CAP ? ` (+${diffs.length - ACCEPTANCE_FILES_CAP} more)` : ""
+                const more =
+                  diffs.length > ACCEPTANCE_FILES_CAP ? ` (+${diffs.length - ACCEPTANCE_FILES_CAP} more)` : ""
                 sections.push(`- acceptance files: ${shown}${more}`)
               }
             } else {

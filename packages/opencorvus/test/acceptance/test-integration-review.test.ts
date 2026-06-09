@@ -109,13 +109,14 @@ describe("acceptance test integration specialist review", () => {
 
     const manifest = await Instance.provide({
       directory: dir,
-      fn: () => buildAcceptanceEvidenceManifest({
-        taskID: "tsk_default_omits_test_review",
-        runID: "run_default_omits_test_review",
-        acceptanceID: "dlv_default_omits_test_review",
-        changedFiles: ["src/app.ts"],
-        goals: [blockingGoal("gol_test_review", "REQ-chat")],
-      }),
+      fn: () =>
+        buildAcceptanceEvidenceManifest({
+          taskID: "tsk_default_omits_test_review",
+          runID: "run_default_omits_test_review",
+          acceptanceID: "dlv_default_omits_test_review",
+          changedFiles: ["src/app.ts"],
+          goals: [blockingGoal("gol_test_review", "REQ-chat")],
+        }),
     })
 
     expect(manifest.specialistReviews?.map((item) => item.reviewer) ?? []).not.toContain("test_integration")
@@ -123,17 +124,21 @@ describe("acceptance test integration specialist review", () => {
   })
 })
 
-async function packageFixture(input: {
-  scripts: Record<string, string>
-  files: Record<string, string>
-}) {
+async function packageFixture(input: { scripts: Record<string, string>; files: Record<string, string> }) {
   const dir = await mkdtemp(path.join(os.tmpdir(), "oc-test-integration-review-"))
   tempDirs.push(dir)
-  await fs.writeFile(path.join(dir, "package.json"), JSON.stringify({
-    type: "module",
-    packageManager: "bun@1.3.13",
-    scripts: input.scripts,
-  }, null, 2))
+  await fs.writeFile(
+    path.join(dir, "package.json"),
+    JSON.stringify(
+      {
+        type: "module",
+        packageManager: "bun@1.3.13",
+        scripts: input.scripts,
+      },
+      null,
+      2,
+    ),
+  )
   for (const [file, text] of Object.entries(input.files)) {
     const target = path.join(dir, file)
     await fs.mkdir(path.dirname(target), { recursive: true })
@@ -157,19 +162,18 @@ function testSurfaceManifest(projectRoot: string): AcceptanceSurfaceManifest {
     id: "artifact_test_integration_surface",
     projectRoot,
     surfaces: ["test_integration"],
-    evidence: [{
-      surface: "test_integration",
-      reason: "test specialist unit test",
-      refs: [{ kind: "command", ref: "package.json#scripts.test" }],
-    }],
+    evidence: [
+      {
+        surface: "test_integration",
+        reason: "test specialist unit test",
+        refs: [{ kind: "command", ref: "package.json#scripts.test" }],
+      },
+    ],
     timeCreated: Date.now(),
   }
 }
 
-async function runReview(
-  projectRoot: string,
-  goals: Array<ReturnType<typeof blockingGoal>>,
-) {
+async function runReview(projectRoot: string, goals: Array<ReturnType<typeof blockingGoal>>) {
   return await runTestIntegrationReview({
     taskID: "tsk_test_review",
     runID: "run_test_review",

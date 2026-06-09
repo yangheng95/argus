@@ -20,10 +20,7 @@ import { describe, expect, test } from "bun:test"
 import { readFileSync } from "node:fs"
 import path from "node:path"
 
-const HTML = readFileSync(
-  path.resolve(import.meta.dir, "..", "src", "index.html"),
-  "utf8",
-)
+const HTML = readFileSync(path.resolve(import.meta.dir, "..", "src", "index.html"), "utf8")
 
 describe("titlebar brand wordmark is gone", () => {
   test('no `<span class="brand-name">OpenCorvus</span>` survives in index.html', () => {
@@ -51,22 +48,18 @@ describe("sidebar version label", () => {
 })
 
 describe("connection badge anchor moves to titlebar-utility", () => {
-  test('#solidConnBadge does not live inside `.brand-heading`/`.titlebar-left`', () => {
+  test("#solidConnBadge does not live inside `.brand-heading`/`.titlebar-left`", () => {
     // Find the titlebar-left subtree and assert the badge anchor is
     // not inside it. The badge anchor must therefore live downstream
     // (i.e. inside titlebar-utility), which is what the next test
     // verifies.
-    const left = HTML.match(
-      /<div class=["']titlebar-left["'][\s\S]*?<\/div>\s*<div class=["']titlebar-spacer["']/,
-    )
+    const left = HTML.match(/<div class=["']titlebar-left["'][\s\S]*?<\/div>\s*<div class=["']titlebar-spacer["']/)
     expect(left).not.toBeNull()
     expect(left![0]).not.toContain('id="solidConnBadge"')
   })
 
   test("#solidConnBadge lives inside `.titlebar-utility`", () => {
-    const utility = HTML.match(
-      /<div class=["']titlebar-utility["'][\s\S]*?<\/header>/,
-    )
+    const utility = HTML.match(/<div class=["']titlebar-utility["'][\s\S]*?<\/header>/)
     expect(utility).not.toBeNull()
     expect(utility![0]).toContain('id="solidConnBadge"')
   })

@@ -1,14 +1,14 @@
-import { afterAll, afterEach, expect, test } from "bun:test";
-import { setBoardStore } from "../src/store/board";
-import { cardTreeStore } from "../src/store/card-tree";
-import { conversationAgentStore } from "../src/store/conversation-agents";
+import { afterAll, afterEach, expect, test } from "bun:test"
+import { setBoardStore } from "../src/store/board"
+import { cardTreeStore } from "../src/store/card-tree"
+import { conversationAgentStore } from "../src/store/conversation-agents"
 import {
   cancelConversationReplay,
   conversationCardContainsMessage,
   hydrateTaskConversation,
   loadConversationHistoryUntilCard,
-} from "../src/services/conversation";
-import { replayTaskEventToTree } from "../src/services/events";
+} from "../src/services/conversation"
+import { replayTaskEventToTree } from "../src/services/events"
 import {
   __setHostTransportForTest,
   type HostTransport,
@@ -16,17 +16,17 @@ import {
   type StreamOpenRequest,
   type TransportRequest,
   type TransportResponse,
-} from "../src/services/host-transport";
-import { flushBufferedPartDeltas, resetWriter } from "../src/services/tree-writer";
+} from "../src/services/host-transport"
+import { flushBufferedPartDeltas, resetWriter } from "../src/services/tree-writer"
 
-const originalRequestAnimationFrame = globalThis.requestAnimationFrame;
-const originalCancelAnimationFrame = globalThis.cancelAnimationFrame;
+const originalRequestAnimationFrame = globalThis.requestAnimationFrame
+const originalCancelAnimationFrame = globalThis.cancelAnimationFrame
 
 globalThis.requestAnimationFrame = ((callback: FrameRequestCallback) => {
-  callback(0);
-  return 1;
-}) as any;
-globalThis.cancelAnimationFrame = (() => {}) as any;
+  callback(0)
+  return 1
+}) as any
+globalThis.cancelAnimationFrame = (() => {}) as any
 
 function fakeTransport(
   responder: (req: TransportRequest) => Promise<TransportResponse<unknown>> | TransportResponse<unknown>,
@@ -34,35 +34,35 @@ function fakeTransport(
   return {
     kind: "tauri",
     async request<T>(req: TransportRequest): Promise<TransportResponse<T>> {
-      return responder(req) as Promise<TransportResponse<T>> | TransportResponse<T>;
+      return responder(req) as Promise<TransportResponse<T>> | TransportResponse<T>
     },
     openStream(_input: StreamOpenRequest, _handlers: StreamHandlers) {
-      throw new Error("openStream not used in conversation hydrate tests");
+      throw new Error("openStream not used in conversation hydrate tests")
     },
     async native() {
-      throw new Error("native not used in conversation hydrate tests");
+      throw new Error("native not used in conversation hydrate tests")
     },
     subscribeUiCommand() {
-      return { unsubscribe() {} };
+      return { unsubscribe() {} }
     },
-  } satisfies HostTransport;
+  } satisfies HostTransport
 }
 
 afterEach(() => {
-  cancelConversationReplay();
-  __setHostTransportForTest(undefined);
-  resetWriter();
-  setBoardStore("selectedTaskID", "");
-  setBoardStore("selectedSource", null);
-});
+  cancelConversationReplay()
+  __setHostTransportForTest(undefined)
+  resetWriter()
+  setBoardStore("selectedTaskID", "")
+  setBoardStore("selectedSource", null)
+})
 
 afterAll(() => {
-  globalThis.requestAnimationFrame = originalRequestAnimationFrame;
-  globalThis.cancelAnimationFrame = originalCancelAnimationFrame;
-});
+  globalThis.requestAnimationFrame = originalRequestAnimationFrame
+  globalThis.cancelAnimationFrame = originalCancelAnimationFrame
+})
 
 test("hydration replay projects persisted executor output into the card tree", () => {
-  resetWriter();
+  resetWriter()
   setBoardStore("board", {
     snapshotVersion: "board:hydrate",
     task: {
@@ -75,8 +75,8 @@ test("hydration replay projects persisted executor output into the card tree", (
     },
     goalWorkflows: [],
     interactions: [],
-  });
-  setBoardStore("selectedTaskID", "tsk_hydrate");
+  })
+  setBoardStore("selectedTaskID", "tsk_hydrate")
 
   replayTaskEventToTree({
     event_id: "pev_1",
@@ -91,31 +91,31 @@ test("hydration replay projects persisted executor output into the card tree", (
       type: "text_delta",
       text: "Recovered streamed output.",
     },
-  });
-  flushBufferedPartDeltas();
+  })
+  flushBufferedPartDeltas()
 
-  const cardID = "executor:session:ses_executor:message:executor:msg:run_1";
-  expect(cardTreeStore.cards[cardID]).toBeDefined();
+  const cardID = "executor:session:ses_executor:message:executor:msg:run_1"
+  expect(cardTreeStore.cards[cardID]).toBeDefined()
   expect(
     cardTreeStore.cards[cardID]?.parts.some(
       (part) => part.type === "text" && String(part.text || "").includes("Recovered streamed output."),
     ),
-  ).toBe(true);
-});
+  ).toBe(true)
+})
 
 test("hydrateTaskConversation waits for persisted event replay before returning resume sequence", async () => {
-  resetWriter();
-  setBoardStore("selectedTaskID", "tsk_replay");
-  setBoardStore("selectedSource", { kind: "task", id: "tsk_replay" });
+  resetWriter()
+  setBoardStore("selectedTaskID", "tsk_replay")
+  setBoardStore("selectedSource", { kind: "task", id: "tsk_replay" })
 
-  let resolveReplayPage!: (body: unknown) => void;
+  let resolveReplayPage!: (body: unknown) => void
   const replayPage = new Promise<unknown>((resolve) => {
-    resolveReplayPage = resolve;
-  });
-  let replayPageRequested!: () => void;
+    resolveReplayPage = resolve
+  })
+  let replayPageRequested!: () => void
   const replayPageStarted = new Promise<void>((resolve) => {
-    replayPageRequested = resolve;
-  });
+    replayPageRequested = resolve
+  })
 
   __setHostTransportForTest(
     fakeTransport(async (req) => {
@@ -145,30 +145,30 @@ test("hydrateTaskConversation waits for persisted event replay before returning 
             eventReplay: { cursor: 1, latestSequence: 2, complete: false, limit: 10 },
             lastSequence: 1,
           },
-        };
+        }
       }
       if (req.path === "task/tsk_replay/conversation/events") {
-        replayPageRequested();
+        replayPageRequested()
         return {
           status: 200,
           ok: true,
           headers: {},
           body: await replayPage,
-        };
+        }
       }
-      throw new Error(`unexpected request path: ${req.path}`);
+      throw new Error(`unexpected request path: ${req.path}`)
     }),
-  );
+  )
 
-  let settled = false;
+  let settled = false
   const hydration = hydrateTaskConversation("tsk_replay").then((sequence) => {
-    settled = true;
-    return sequence;
-  });
+    settled = true
+    return sequence
+  })
 
-  await replayPageStarted;
-  await Promise.resolve();
-  expect(settled).toBe(false);
+  await replayPageStarted
+  await Promise.resolve()
+  expect(settled).toBe(false)
 
   resolveReplayPage({
     events: [
@@ -188,17 +188,17 @@ test("hydrateTaskConversation waits for persisted event replay before returning 
       },
     ],
     eventReplay: { cursor: 2, latestSequence: 2, complete: true, limit: 10 },
-  });
+  })
 
-  await expect(hydration).resolves.toBe(2);
-  expect(cardTreeStore.cards["executor:session:ses_executor_replay:message:executor:msg:run_replay"]).toBeDefined();
-});
+  await expect(hydration).resolves.toBe(2)
+  expect(cardTreeStore.cards["executor:session:ses_executor_replay:message:executor:msg:run_replay"]).toBeDefined()
+})
 
 test("hydrateTaskConversation renders the live tail first and prepends older history on demand", async () => {
-  resetWriter();
-  setBoardStore("selectedTaskID", "tsk_lazy");
-  setBoardStore("selectedSource", { kind: "task", id: "tsk_lazy" });
-  const requests: TransportRequest[] = [];
+  resetWriter()
+  setBoardStore("selectedTaskID", "tsk_lazy")
+  setBoardStore("selectedSource", { kind: "task", id: "tsk_lazy" })
+  const requests: TransportRequest[] = []
 
   const board = {
     snapshotVersion: "board:lazy",
@@ -212,7 +212,7 @@ test("hydrateTaskConversation renders the live tail first and prepends older his
     },
     goalWorkflows: [],
     interactions: [],
-  };
+  }
   const oldMessage = {
     info: {
       id: "msg_old",
@@ -222,10 +222,8 @@ test("hydrateTaskConversation renders the live tail first and prepends older his
       channel: "integrity",
       time: { created: 1_776_000_000_100 },
     },
-    parts: [
-      { id: "part_old", sessionID: "ses_old", messageID: "msg_old", type: "text", text: "Older history." },
-    ],
-  };
+    parts: [{ id: "part_old", sessionID: "ses_old", messageID: "msg_old", type: "text", text: "Older history." }],
+  }
   const latestMessage = {
     info: {
       id: "msg_latest",
@@ -235,16 +233,14 @@ test("hydrateTaskConversation renders the live tail first and prepends older his
       channel: "assistant",
       time: { created: 1_776_000_000_900 },
     },
-    parts: [
-      { id: "part_latest", sessionID: "ses_root", messageID: "msg_latest", type: "text", text: "Latest tail." },
-    ],
-  };
+    parts: [{ id: "part_latest", sessionID: "ses_root", messageID: "msg_latest", type: "text", text: "Latest tail." }],
+  }
 
   __setHostTransportForTest(
     fakeTransport((req) => {
-      requests.push(req);
+      requests.push(req)
       if (req.path === "task/tsk_lazy/conversation") {
-        expect(req.query?.tail_limit).toBe("1");
+        expect(req.query?.tail_limit).toBe("1")
         return {
           status: 200,
           ok: true,
@@ -292,11 +288,11 @@ test("hydrateTaskConversation renders the live tail first and prepends older his
             history: { oldestTimestamp: 1_776_000_000_900, oldestMessageID: "msg_latest", hasMore: true, limit: 1 },
             lastSequence: 5,
           },
-        };
+        }
       }
       if (req.path === "task/tsk_lazy/conversation/history") {
-        expect(req.query?.before).toBe("1776000000900");
-        expect(req.query?.before_id).toBe("msg_latest");
+        expect(req.query?.before).toBe("1776000000900")
+        expect(req.query?.before_id).toBe("msg_latest")
         return {
           status: 200,
           ok: true,
@@ -320,40 +316,34 @@ test("hydrateTaskConversation renders the live tail first and prepends older his
             },
             history: { oldestTimestamp: 1_776_000_000_100, oldestMessageID: "msg_old", hasMore: false, limit: 160 },
           },
-        };
+        }
       }
-      throw new Error(`unexpected request path: ${req.path}`);
+      throw new Error(`unexpected request path: ${req.path}`)
     }),
-  );
+  )
 
-  await expect(hydrateTaskConversation("tsk_lazy", { tailLimit: 1 })).resolves.toBe(5);
+  await expect(hydrateTaskConversation("tsk_lazy", { tailLimit: 1 })).resolves.toBe(5)
   expect(cardTreeStore.order.filter((id) => id !== "ctx:user-request")).toEqual([
     "assistant:session:ses_root:message:msg_latest",
-  ]);
-  expect(conversationAgentStore.records.map((record) => record.sessionID)).toEqual([
-    "ses_old",
-    "ses_root",
-  ]);
-  expect(conversationAgentStore.records[0]?.renderedCardID).toBe("integrity:session:ses_old");
-  expect(cardTreeStore.cards["integrity:session:ses_old"]).toBeUndefined();
+  ])
+  expect(conversationAgentStore.records.map((record) => record.sessionID)).toEqual(["ses_old", "ses_root"])
+  expect(conversationAgentStore.records[0]?.renderedCardID).toBe("integrity:session:ses_old")
+  expect(cardTreeStore.cards["integrity:session:ses_old"]).toBeUndefined()
 
-  await expect(loadConversationHistoryUntilCard("integrity:session:ses_old", "tsk_lazy")).resolves.toBe(true);
+  await expect(loadConversationHistoryUntilCard("integrity:session:ses_old", "tsk_lazy")).resolves.toBe(true)
   expect(cardTreeStore.order.filter((id) => id !== "ctx:user-request")).toEqual([
     "integrity:session:ses_old",
     "assistant:session:ses_root:message:msg_latest",
-  ]);
-  expect(requests.map((req) => req.path)).toEqual([
-    "task/tsk_lazy/conversation",
-    "task/tsk_lazy/conversation/history",
-  ]);
-});
+  ])
+  expect(requests.map((req) => req.path)).toEqual(["task/tsk_lazy/conversation", "task/tsk_lazy/conversation/history"])
+})
 
 test("history paging replays lifecycle-only frontend agent cards", async () => {
-  resetWriter();
-  setBoardStore("selectedTaskID", "tsk_lifecycle_history");
-  setBoardStore("selectedSource", { kind: "task", id: "tsk_lifecycle_history" });
-  const requests: TransportRequest[] = [];
-  const cardID = "frontend-research:session:ses_frontend_lifecycle";
+  resetWriter()
+  setBoardStore("selectedTaskID", "tsk_lifecycle_history")
+  setBoardStore("selectedSource", { kind: "task", id: "tsk_lifecycle_history" })
+  const requests: TransportRequest[] = []
+  const cardID = "frontend-research:session:ses_frontend_lifecycle"
 
   const board = {
     snapshotVersion: "board:lifecycle-history",
@@ -367,7 +357,7 @@ test("history paging replays lifecycle-only frontend agent cards", async () => {
     },
     goalWorkflows: [],
     interactions: [],
-  };
+  }
   const latestMessage = {
     info: {
       id: "msg_lifecycle_latest",
@@ -386,7 +376,7 @@ test("history paging replays lifecycle-only frontend agent cards", async () => {
         text: "Latest tail.",
       },
     ],
-  };
+  }
   const lifecycleEvent = {
     event_id: "pev_lifecycle_history",
     task_id: "tsk_lifecycle_history",
@@ -403,11 +393,11 @@ test("history paging replays lifecycle-only frontend agent cards", async () => {
       parentSessionID: "ses_root",
       status: { type: "terminal", reason: "error", error: "prepared evidence missing" },
     },
-  };
+  }
 
   __setHostTransportForTest(
     fakeTransport((req) => {
-      requests.push(req);
+      requests.push(req)
       if (req.path === "task/tsk_lifecycle_history/conversation") {
         return {
           status: 200,
@@ -462,7 +452,7 @@ test("history paging replays lifecycle-only frontend agent cards", async () => {
             },
             lastSequence: 8,
           },
-        };
+        }
       }
       if (req.path === "task/tsk_lifecycle_history/conversation/history") {
         return {
@@ -494,31 +484,31 @@ test("history paging replays lifecycle-only frontend agent cards", async () => {
               limit: 160,
             },
           },
-        };
+        }
       }
-      throw new Error(`unexpected request path: ${req.path}`);
+      throw new Error(`unexpected request path: ${req.path}`)
     }),
-  );
+  )
 
-  await expect(hydrateTaskConversation("tsk_lifecycle_history", { tailLimit: 1 })).resolves.toBe(8);
-  expect(conversationAgentStore.records[0]?.renderedCardID).toBe(cardID);
-  expect(cardTreeStore.cards[cardID]).toBeUndefined();
+  await expect(hydrateTaskConversation("tsk_lifecycle_history", { tailLimit: 1 })).resolves.toBe(8)
+  expect(conversationAgentStore.records[0]?.renderedCardID).toBe(cardID)
+  expect(cardTreeStore.cards[cardID]).toBeUndefined()
 
-  await expect(loadConversationHistoryUntilCard(cardID, "tsk_lifecycle_history")).resolves.toBe(true);
-  expect(cardTreeStore.cards[cardID]).toBeDefined();
-  expect(cardTreeStore.cards[cardID]?.status).toBe("error");
+  await expect(loadConversationHistoryUntilCard(cardID, "tsk_lifecycle_history")).resolves.toBe(true)
+  expect(cardTreeStore.cards[cardID]).toBeDefined()
+  expect(cardTreeStore.cards[cardID]?.status).toBe("error")
   expect(requests.map((req) => req.path)).toEqual([
     "task/tsk_lifecycle_history/conversation",
     "task/tsk_lifecycle_history/conversation/history",
-  ]);
-});
+  ])
+})
 
 test("history paging continues when a goal phase card exists but its target message is not loaded", async () => {
-  resetWriter();
-  setBoardStore("selectedTaskID", "tsk_phase_history");
-  setBoardStore("selectedSource", { kind: "task", id: "tsk_phase_history" });
-  const requests: TransportRequest[] = [];
-  const phaseCardID = "step:gol_phase:build:phase:build";
+  resetWriter()
+  setBoardStore("selectedTaskID", "tsk_phase_history")
+  setBoardStore("selectedSource", { kind: "task", id: "tsk_phase_history" })
+  const requests: TransportRequest[] = []
+  const phaseCardID = "step:gol_phase:build:phase:build"
 
   const board = {
     snapshotVersion: "board:phase-history",
@@ -563,7 +553,7 @@ test("history paging continues when a goal phase card exists but its target mess
       },
     ],
     interactions: [],
-  };
+  }
 
   const latestMessage = {
     info: {
@@ -583,7 +573,7 @@ test("history paging continues when a goal phase card exists but its target mess
         text: "Latest tail.",
       },
     ],
-  };
+  }
   const oldBuildMessage = {
     info: {
       id: "msg_build_old",
@@ -604,11 +594,11 @@ test("history paging continues when a goal phase card exists but its target mess
         text: "Build output from older history.",
       },
     ],
-  };
+  }
 
   __setHostTransportForTest(
     fakeTransport((req) => {
-      requests.push(req);
+      requests.push(req)
       if (req.path === "task/tsk_phase_history/conversation") {
         return {
           status: 200,
@@ -665,7 +655,7 @@ test("history paging continues when a goal phase card exists but its target mess
             },
             lastSequence: 7,
           },
-        };
+        }
       }
       if (req.path === "task/tsk_phase_history/conversation/history") {
         return {
@@ -699,32 +689,32 @@ test("history paging continues when a goal phase card exists but its target mess
               limit: 160,
             },
           },
-        };
+        }
       }
-      throw new Error(`unexpected request path: ${req.path}`);
+      throw new Error(`unexpected request path: ${req.path}`)
     }),
-  );
+  )
 
-  await expect(hydrateTaskConversation("tsk_phase_history", { tailLimit: 1 })).resolves.toBe(7);
-  expect(cardTreeStore.cards[phaseCardID]).toBeDefined();
-  expect(conversationCardContainsMessage(phaseCardID, "msg_build_old")).toBe(false);
+  await expect(hydrateTaskConversation("tsk_phase_history", { tailLimit: 1 })).resolves.toBe(7)
+  expect(cardTreeStore.cards[phaseCardID]).toBeDefined()
+  expect(conversationCardContainsMessage(phaseCardID, "msg_build_old")).toBe(false)
 
   await expect(
     loadConversationHistoryUntilCard(phaseCardID, "tsk_phase_history", { messageID: "msg_build_old" }),
-  ).resolves.toBe(true);
-  expect(conversationCardContainsMessage(phaseCardID, "msg_build_old")).toBe(true);
+  ).resolves.toBe(true)
+  expect(conversationCardContainsMessage(phaseCardID, "msg_build_old")).toBe(true)
   expect(requests.map((req) => req.path)).toEqual([
     "task/tsk_phase_history/conversation",
     "task/tsk_phase_history/conversation/history",
-  ]);
-});
+  ])
+})
 
 test("goal phase history can hydrate a build session directly by session id", async () => {
-  resetWriter();
-  setBoardStore("selectedTaskID", "tsk_phase_session");
-  setBoardStore("selectedSource", { kind: "task", id: "tsk_phase_session" });
-  const requests: TransportRequest[] = [];
-  const phaseCardID = "step:gol_phase_session:build:phase:build";
+  resetWriter()
+  setBoardStore("selectedTaskID", "tsk_phase_session")
+  setBoardStore("selectedSource", { kind: "task", id: "tsk_phase_session" })
+  const requests: TransportRequest[] = []
+  const phaseCardID = "step:gol_phase_session:build:phase:build"
 
   const board = {
     snapshotVersion: "board:phase-session",
@@ -770,7 +760,7 @@ test("goal phase history can hydrate a build session directly by session id", as
       },
     ],
     interactions: [],
-  };
+  }
   const latestMessage = {
     info: {
       id: "msg_latest_session",
@@ -789,7 +779,7 @@ test("goal phase history can hydrate a build session directly by session id", as
         text: "Latest tail.",
       },
     ],
-  };
+  }
   const buildMessage = {
     info: {
       id: "msg_build_session",
@@ -810,11 +800,11 @@ test("goal phase history can hydrate a build session directly by session id", as
         text: "Build output loaded directly by session.",
       },
     ],
-  };
+  }
 
   __setHostTransportForTest(
     fakeTransport((req) => {
-      requests.push(req);
+      requests.push(req)
       if (req.path === "task/tsk_phase_session/conversation") {
         return {
           status: 200,
@@ -864,7 +854,7 @@ test("goal phase history can hydrate a build session directly by session id", as
             },
             lastSequence: 8,
           },
-        };
+        }
       }
       if (req.path === "task/tsk_phase_session/conversation/session/ses_build_session") {
         return {
@@ -899,35 +889,35 @@ test("goal phase history can hydrate a build session directly by session id", as
               limit: 1,
             },
           },
-        };
+        }
       }
-      throw new Error(`unexpected request path: ${req.path}`);
+      throw new Error(`unexpected request path: ${req.path}`)
     }),
-  );
+  )
 
-  await expect(hydrateTaskConversation("tsk_phase_session", { tailLimit: 1 })).resolves.toBe(8);
-  expect(cardTreeStore.cards[phaseCardID]?.phaseSessionID).toBe("ses_build_session");
-  expect(conversationCardContainsMessage(phaseCardID, "msg_build_session")).toBe(false);
+  await expect(hydrateTaskConversation("tsk_phase_session", { tailLimit: 1 })).resolves.toBe(8)
+  expect(cardTreeStore.cards[phaseCardID]?.phaseSessionID).toBe("ses_build_session")
+  expect(conversationCardContainsMessage(phaseCardID, "msg_build_session")).toBe(false)
 
   await expect(
     loadConversationHistoryUntilCard(phaseCardID, "tsk_phase_session", {
       messageID: "msg_build_session",
       sessionID: "ses_build_session",
     }),
-  ).resolves.toBe(true);
-  expect(conversationCardContainsMessage(phaseCardID, "msg_build_session")).toBe(true);
+  ).resolves.toBe(true)
+  expect(conversationCardContainsMessage(phaseCardID, "msg_build_session")).toBe(true)
   expect(requests.map((req) => req.path)).toEqual([
     "task/tsk_phase_session/conversation",
     "task/tsk_phase_session/conversation/session/ses_build_session",
-  ]);
-});
+  ])
+})
 
 test("session-scoped history replays lifecycle-only frontend agent cards", async () => {
-  resetWriter();
-  setBoardStore("selectedTaskID", "tsk_lifecycle_session");
-  setBoardStore("selectedSource", { kind: "task", id: "tsk_lifecycle_session" });
-  const requests: TransportRequest[] = [];
-  const cardID = "frontend-research:session:ses_frontend_session";
+  resetWriter()
+  setBoardStore("selectedTaskID", "tsk_lifecycle_session")
+  setBoardStore("selectedSource", { kind: "task", id: "tsk_lifecycle_session" })
+  const requests: TransportRequest[] = []
+  const cardID = "frontend-research:session:ses_frontend_session"
 
   const board = {
     snapshotVersion: "board:lifecycle-session",
@@ -941,7 +931,7 @@ test("session-scoped history replays lifecycle-only frontend agent cards", async
     },
     goalWorkflows: [],
     interactions: [],
-  };
+  }
   const latestMessage = {
     info: {
       id: "msg_lifecycle_session_latest",
@@ -960,7 +950,7 @@ test("session-scoped history replays lifecycle-only frontend agent cards", async
         text: "Latest tail.",
       },
     ],
-  };
+  }
   const lifecycleEvent = {
     event_id: "pev_lifecycle_session",
     task_id: "tsk_lifecycle_session",
@@ -977,11 +967,11 @@ test("session-scoped history replays lifecycle-only frontend agent cards", async
       parentSessionID: "ses_root",
       status: { type: "terminal", reason: "error", error: "browser evidence failed" },
     },
-  };
+  }
 
   __setHostTransportForTest(
     fakeTransport((req) => {
-      requests.push(req);
+      requests.push(req)
       if (req.path === "task/tsk_lifecycle_session/conversation") {
         return {
           status: 200,
@@ -1036,7 +1026,7 @@ test("session-scoped history replays lifecycle-only frontend agent cards", async
             },
             lastSequence: 7,
           },
-        };
+        }
       }
       if (req.path === "task/tsk_lifecycle_session/conversation/session/ses_frontend_session") {
         return {
@@ -1068,24 +1058,24 @@ test("session-scoped history replays lifecycle-only frontend agent cards", async
               limit: 1,
             },
           },
-        };
+        }
       }
-      throw new Error(`unexpected request path: ${req.path}`);
+      throw new Error(`unexpected request path: ${req.path}`)
     }),
-  );
+  )
 
-  await expect(hydrateTaskConversation("tsk_lifecycle_session", { tailLimit: 1 })).resolves.toBe(7);
-  expect(cardTreeStore.cards[cardID]).toBeUndefined();
+  await expect(hydrateTaskConversation("tsk_lifecycle_session", { tailLimit: 1 })).resolves.toBe(7)
+  expect(cardTreeStore.cards[cardID]).toBeUndefined()
 
   await expect(
     loadConversationHistoryUntilCard(cardID, "tsk_lifecycle_session", {
       sessionID: "ses_frontend_session",
     }),
-  ).resolves.toBe(true);
-  expect(cardTreeStore.cards[cardID]).toBeDefined();
-  expect(cardTreeStore.cards[cardID]?.status).toBe("error");
+  ).resolves.toBe(true)
+  expect(cardTreeStore.cards[cardID]).toBeDefined()
+  expect(cardTreeStore.cards[cardID]?.status).toBe("error")
   expect(requests.map((req) => req.path)).toEqual([
     "task/tsk_lifecycle_session/conversation",
     "task/tsk_lifecycle_session/conversation/session/ses_frontend_session",
-  ]);
-});
+  ])
+})

@@ -6,13 +6,13 @@
 
 ## Grep Coverage
 
-| Surface | File | Decision |
-| --- | --- | --- |
-| Shared composer implementation | `packages/overlay/src/components/ChatComposer.tsx` | Add a `draftKey` prop and route text reads/writes through one composer-draft service when present. |
-| Panel composer mount | `packages/overlay/src/main.tsx` | Bind draft key to `task:<taskID>` when a task is selected; bind new-task draft to active directory when no task is selected. |
-| Mission session composer | `packages/overlay/src/components/Mission.tsx` | Bind draft key to `mission:session:<sessionID>`. |
-| Mission launcher composer | `packages/overlay/src/components/Mission.tsx` | Bind draft key to active mission-launcher scope for the project directory; clear it on discard or successful wake. |
-| Existing task-list performance test | `packages/overlay/test/task-list-perf.test.ts` | Extend browser coverage from "component stayed mounted" to task/mission scoped draft restoration. |
+| Surface                             | File                                               | Decision                                                                                                                     |
+| ----------------------------------- | -------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------- |
+| Shared composer implementation      | `packages/overlay/src/components/ChatComposer.tsx` | Add a `draftKey` prop and route text reads/writes through one composer-draft service when present.                           |
+| Panel composer mount                | `packages/overlay/src/main.tsx`                    | Bind draft key to `task:<taskID>` when a task is selected; bind new-task draft to active directory when no task is selected. |
+| Mission session composer            | `packages/overlay/src/components/Mission.tsx`      | Bind draft key to `mission:session:<sessionID>`.                                                                             |
+| Mission launcher composer           | `packages/overlay/src/components/Mission.tsx`      | Bind draft key to active mission-launcher scope for the project directory; clear it on discard or successful wake.           |
+| Existing task-list performance test | `packages/overlay/test/task-list-perf.test.ts`     | Extend browser coverage from "component stayed mounted" to task/mission scoped draft restoration.                            |
 
 ## Design
 

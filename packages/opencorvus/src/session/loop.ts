@@ -329,14 +329,11 @@ export namespace SessionLoop {
     reason: AutomaticCompaction.Decision["reason"]
     error?: unknown
   }): string {
-    const cause =
-      input.error instanceof Error && input.error.message.length > 0 ? `: ${input.error.message}` : ""
+    const cause = input.error instanceof Error && input.error.message.length > 0 ? `: ${input.error.message}` : ""
     return `Automatic compaction is disabled for workflow session kind=${input.sessionKind} (reason=${input.reason})${cause}`
   }
 
-  function sourceWorkerTurnDescriptorReference(
-    source: Message.User,
-  ): { id: string; hash: string } | undefined {
+  function sourceWorkerTurnDescriptorReference(source: Message.User): { id: string; hash: string } | undefined {
     const value = source.extra?.workerTurnDescriptor
     if (!value || typeof value !== "object" || Array.isArray(value)) return undefined
     const item = value as { id?: unknown; hash?: unknown }
@@ -1900,8 +1897,7 @@ export namespace SessionLoop {
                   sessionKind: input.session.kind,
                   reason: autoCompaction.decision.reason,
                   error: autoCompaction.error,
-                })}; ` +
-                `the prompt is estimated at ${totalTokensEst} tokens over limit=${predictiveBudget.limit}.`,
+                })}; ` + `the prompt is estimated at ${totalTokensEst} tokens over limit=${predictiveBudget.limit}.`,
               systemTokensEst,
               messagePayloadChars,
               toolSchemaChars,
@@ -2014,8 +2010,7 @@ export namespace SessionLoop {
               sessionKind: input.session.kind,
               reason: autoCompaction.decision.reason,
               error: autoCompaction.error,
-            })}; ` +
-            `the provider reported context overflow for this turn.`,
+            })}; ` + `the provider reported context overflow for this turn.`,
         }).toObject()
         processor.message.finish = "error"
         processor.message.time.completed = Date.now()
@@ -2374,8 +2369,7 @@ export namespace SessionLoop {
                       sessionKind: session.kind,
                       reason: autoCompaction.decision.reason,
                       error: autoCompaction.error,
-                    })}; ` +
-                    `the previous turn exceeded the configured context budget.`,
+                    })}; ` + `the previous turn exceeded the configured context budget.`,
                 }).toObject(),
                 finish: "error",
                 time: {

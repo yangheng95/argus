@@ -39,8 +39,16 @@ export function resolvedChecks(
   discovered: Awaited<ReturnType<typeof discoverChecks>>,
 ) {
   const next = {
-    ...(config.build !== undefined ? { build: config.build } : discovered.build.length > 0 ? { build: discovered.build.map((item) => item.command) } : {}),
-    ...(config.test !== undefined ? { test: config.test } : discovered.test.length > 0 ? { test: discovered.test.map((item) => item.command) } : {}),
+    ...(config.build !== undefined
+      ? { build: config.build }
+      : discovered.build.length > 0
+        ? { build: discovered.build.map((item) => item.command) }
+        : {}),
+    ...(config.test !== undefined
+      ? { test: config.test }
+      : discovered.test.length > 0
+        ? { test: discovered.test.map((item) => item.command) }
+        : {}),
     ...(config.lint !== undefined ? { lint: config.lint } : {}),
     ...(config.verify_cmd !== undefined ? { verify_cmd: config.verify_cmd } : {}),
     ...(config.startup ? { startup: config.startup } : {}),
@@ -88,30 +96,36 @@ export async function discoverChecks(changedFiles?: unknown) {
         .map((item) => path.relative(cwd, item).replaceAll("\\", "/"))
     : []
   const named = {
-    ...(run && scripts.typecheck ? {
-      typecheck: {
-        name: "typecheck",
-        label: "Type Check",
-        family: "lint" as const,
-        commands: run("typecheck"),
-      },
-    } : {}),
-    ...(run && scripts.pycompile ? {
-      py_compile: {
-        name: "py_compile",
-        label: "Python Compile",
-        family: "build" as const,
-        commands: run("pycompile"),
-      },
-    } : {}),
-    ...(run && scripts.pytest ? {
-      pytest: {
-        name: "pytest",
-        label: "Pytest",
-        family: "test" as const,
-        commands: run("pytest"),
-      },
-    } : {}),
+    ...(run && scripts.typecheck
+      ? {
+          typecheck: {
+            name: "typecheck",
+            label: "Type Check",
+            family: "lint" as const,
+            commands: run("typecheck"),
+          },
+        }
+      : {}),
+    ...(run && scripts.pycompile
+      ? {
+          py_compile: {
+            name: "py_compile",
+            label: "Python Compile",
+            family: "build" as const,
+            commands: run("pycompile"),
+          },
+        }
+      : {}),
+    ...(run && scripts.pytest
+      ? {
+          pytest: {
+            name: "pytest",
+            label: "Pytest",
+            family: "test" as const,
+            commands: run("pytest"),
+          },
+        }
+      : {}),
   }
   return {
     build: run && scripts.build ? run("build") : [],
@@ -121,9 +135,14 @@ export async function discoverChecks(changedFiles?: unknown) {
   }
 }
 
-async function readPackageJson(pkgPath: string): Promise<{ scripts?: Record<string, string>; packageManager?: string } | undefined> {
+async function readPackageJson(
+  pkgPath: string,
+): Promise<{ scripts?: Record<string, string>; packageManager?: string } | undefined> {
   try {
-    return JSON.parse(await fs.readFile(pkgPath, "utf8")) as { scripts?: Record<string, string>; packageManager?: string }
+    return JSON.parse(await fs.readFile(pkgPath, "utf8")) as {
+      scripts?: Record<string, string>
+      packageManager?: string
+    }
   } catch (err) {
     const code = typeof err === "object" && err && "code" in err ? (err as { code?: unknown }).code : undefined
     if (code === "ENOENT") return undefined
@@ -152,12 +171,14 @@ export function commandGroups(
   discovered: Awaited<ReturnType<typeof discoverChecks>>,
 ) {
   return [
-    ...([
-      { name: "build", label: "Build", family: "build" },
-      { name: "test", label: "Unit Tests", family: "test" },
-      { name: "lint", label: "Lint", family: "lint" },
-      { name: "verify_cmd", label: "Verify Command", family: "verify_cmd" },
-    ] as const).map((item) =>
+    ...(
+      [
+        { name: "build", label: "Build", family: "build" },
+        { name: "test", label: "Unit Tests", family: "test" },
+        { name: "lint", label: "Lint", family: "lint" },
+        { name: "verify_cmd", label: "Verify Command", family: "verify_cmd" },
+      ] as const
+    ).map((item) =>
       group(
         item.name,
         config[item.name],
@@ -166,7 +187,9 @@ export function commandGroups(
           : item.name === "test"
             ? discovered.test
             : item.name === "lint"
-              ? config.lint === undefined ? [] : discovered.lint
+              ? config.lint === undefined
+                ? []
+                : discovered.lint
               : [],
         item.label,
         item.family,
@@ -205,30 +228,28 @@ function namedGroups(
   configured: Record<string, z.infer<typeof NamedCheckConfig>> | undefined,
   discovered: Record<string, CommandGroup>,
 ) {
-  const keys = new Set([
-    ...Object.keys(discovered),
-    ...Object.keys(configured ?? {}),
-  ])
+  const keys = new Set([...Object.keys(discovered), ...Object.keys(configured ?? {})])
   return [...keys].flatMap((key) => {
     const current = configured?.[key]
     if (current?.enabled === false) return []
     if (current) {
-      return [{
-        name: key,
-        label: current.label ?? discovered[key]?.label ?? checkLabel(key),
-        family: current.family ?? discovered[key]?.family ?? inferFamily(key),
-        commands: current.commands.map((command) => ({
-          command,
-          cwd: current.cwd,
-        })),
-      } satisfies CommandGroup]
+      return [
+        {
+          name: key,
+          label: current.label ?? discovered[key]?.label ?? checkLabel(key),
+          family: current.family ?? discovered[key]?.family ?? inferFamily(key),
+          commands: current.commands.map((command) => ({
+            command,
+            cwd: current.cwd,
+          })),
+        } satisfies CommandGroup,
+      ]
     }
     const discoveredGroup = discovered[key]
     if (!discoveredGroup) return []
     return [discoveredGroup]
   })
 }
-
 
 function checkLabel(key: string) {
   const known = {
@@ -247,7 +268,6 @@ function checkLabel(key: string) {
     .map((item) => item[0]?.toUpperCase() + item.slice(1))
     .join(" ")
 }
-
 
 export async function discoverPackageRoot(changedFiles?: unknown) {
   const root = Instance.directory
@@ -270,6 +290,5 @@ export async function discoverPackageRoot(changedFiles?: unknown) {
   }
 
   if (candidates.size === 0) return root
-  return [...candidates.entries()]
-    .sort((a, b) => b[1] - a[1] || b[0].length - a[0].length)[0]![0]
+  return [...candidates.entries()].sort((a, b) => b[1] - a[1] || b[0].length - a[0].length)[0]![0]
 }

@@ -8,7 +8,7 @@ import { beforeEach, expect, test } from "bun:test"
 import { clearEventQueue, enqueueEvent, messageStore, setMessages } from "../src/store/messages"
 
 if (typeof globalThis.requestAnimationFrame === "undefined") {
-  (globalThis as any).requestAnimationFrame = (cb: () => void) => {
+  ;(globalThis as any).requestAnimationFrame = (cb: () => void) => {
     cb()
     return 0
   }

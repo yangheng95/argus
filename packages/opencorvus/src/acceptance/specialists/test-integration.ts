@@ -6,10 +6,7 @@ import {
   type AcceptanceReviewFinding,
   type AcceptanceSpecialistReview,
 } from "../specialist-review"
-import type {
-  AcceptanceCheckResult,
-  AcceptanceRequiredCheck,
-} from "../manifest"
+import type { AcceptanceCheckResult, AcceptanceRequiredCheck } from "../manifest"
 import type { AcceptanceSurfaceManifest } from "../surface-detector"
 
 type GoalForTestReview = {
@@ -59,19 +56,19 @@ export async function runTestIntegrationReview(input: {
   if (testScript) evidenceRefs.add("package.json#scripts.test")
   for (const file of testFiles.slice(0, 12)) evidenceRefs.add(file)
 
-  const failedTestChecks = input.checkResults.filter(
-    (result) => result.name === "test" && result.status !== "passed",
-  )
+  const failedTestChecks = input.checkResults.filter((result) => result.name === "test" && result.status !== "passed")
   for (const result of failedTestChecks) {
     findings.push({
       proposedSeverity: "blocking",
       category: "test_quality",
       claim: `Required test command failed: ${result.command}`,
-      evidence: [{
-        kind: "command",
-        ref: result.command,
-        excerpt: result.outputExcerpt || result.failureReason || "test command failed",
-      }],
+      evidence: [
+        {
+          kind: "command",
+          ref: result.command,
+          excerpt: result.outputExcerpt || result.failureReason || "test command failed",
+        },
+      ],
       affectedRequirementIDs: requirementIDs(input.goals),
     })
   }
@@ -81,11 +78,13 @@ export async function runTestIntegrationReview(input: {
       proposedSeverity: "blocking",
       category: "test_quality",
       claim: "The package test script is a no-op success signal, not a real test run.",
-      evidence: [{
-        kind: "command",
-        ref: "package.json#scripts.test",
-        excerpt: testScript,
-      }],
+      evidence: [
+        {
+          kind: "command",
+          ref: "package.json#scripts.test",
+          excerpt: testScript,
+        },
+      ],
       affectedRequirementIDs: requirementIDs(input.goals),
     })
   }
@@ -95,11 +94,13 @@ export async function runTestIntegrationReview(input: {
       proposedSeverity: "blocking",
       category: "test_quality",
       claim: "The acceptance requires test integration evidence, but no test files were found.",
-      evidence: [{
-        kind: "file",
-        ref: input.projectRoot,
-        excerpt: "no test, tests, e2e, integration, regression, *.test.*, or *.spec.* files found",
-      }],
+      evidence: [
+        {
+          kind: "file",
+          ref: input.projectRoot,
+          excerpt: "no test, tests, e2e, integration, regression, *.test.*, or *.spec.* files found",
+        },
+      ],
       affectedRequirementIDs: requirementIDs(input.goals),
     })
   }
@@ -168,9 +169,10 @@ export async function runTestIntegrationReview(input: {
     acceptanceId: input.acceptanceID,
     reviewer: "test_integration",
     executionStatus: "completed",
-    summary: findings.length === 0
-      ? `Test integration review passed with ${testFiles.length} test file(s).`
-      : `Test integration review found ${findings.length} issue(s).`,
+    summary:
+      findings.length === 0
+        ? `Test integration review passed with ${testFiles.length} test file(s).`
+        : `Test integration review found ${findings.length} issue(s).`,
     findings,
     evidenceRefs: [...evidenceRefs].sort(),
     reviewedSurfaces: ["test_integration"],
@@ -209,8 +211,7 @@ async function listTestFiles(root: string): Promise<string[]> {
 }
 
 function isTestFile(file: string) {
-  return /(^|\/)(test|tests|e2e|integration|regression)\//.test(file)
-    || /\.(spec|test|e2e)\.[cm]?[jt]sx?$/.test(file)
+  return /(^|\/)(test|tests|e2e|integration|regression)\//.test(file) || /\.(spec|test|e2e)\.[cm]?[jt]sx?$/.test(file)
 }
 
 function isNoOpTestScript(script: string) {
@@ -236,7 +237,7 @@ function isNoOpTestScript(script: string) {
 function shellTokens(input: string) {
   const tokens: string[] = []
   let current = ""
-  let quote: "'" | "\"" | undefined
+  let quote: "'" | '"' | undefined
   for (let index = 0; index < input.length; index += 1) {
     const char = input[index]!
     if (quote) {
@@ -247,7 +248,7 @@ function shellTokens(input: string) {
       }
       continue
     }
-    if (char === "'" || char === "\"") {
+    if (char === "'" || char === '"') {
       quote = char
       continue
     }
@@ -339,10 +340,7 @@ function containsExpectCall(node: ts.Node): boolean {
   return found
 }
 
-function mentionsAnyRequirement(
-  tests: Array<{ text: string }>,
-  requirementIds: string[],
-) {
+function mentionsAnyRequirement(tests: Array<{ text: string }>, requirementIds: string[]) {
   const combined = tests.map((item) => item.text).join("\n")
   return requirementIds.some((id) => combined.includes(id))
 }

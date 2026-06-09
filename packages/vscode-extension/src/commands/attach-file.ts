@@ -31,7 +31,7 @@ export async function runAttachFileCommand(deps: AttachFileDeps): Promise<void> 
   const editor = vscode.window.activeTextEditor
   if (!editor) {
     void vscode.window.showInformationMessage(
-      "OpenCorvus: open a file in the editor first, then run \"OpenCorvus: Attach Current File\".",
+      'OpenCorvus: open a file in the editor first, then run "OpenCorvus: Attach Current File".',
     )
     return
   }
@@ -48,9 +48,7 @@ export async function runAttachFileCommand(deps: AttachFileDeps): Promise<void> 
   await deps.ensureSidecar()
   const panel = OpencorvusPanel.current
   if (!panel) {
-    void vscode.window.showErrorMessage(
-      "OpenCorvus: panel is not open — run \"OpenCorvus: Open Panel\" first.",
-    )
+    void vscode.window.showErrorMessage('OpenCorvus: panel is not open — run "OpenCorvus: Open Panel" first.')
     return
   }
 
@@ -92,4 +90,3 @@ export async function runAttachFileCommand(deps: AttachFileDeps): Promise<void> 
   panel.sendUiCommand("composer.attach", payload)
   panel.reveal()
 }
-

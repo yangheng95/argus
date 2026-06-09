@@ -84,14 +84,14 @@ wake.
 
 ## Callpoints
 
-| Area | Files / functions | Decision |
-| --- | --- | --- |
-| LLM activity timers | `packages/opencorvus/src/llm/activity.ts::withLLMActivity` | Replace single wall-clock total timer with pause-aware active-time accounting. |
-| Tool-call pause | `packages/opencorvus/src/session/processor.ts` | Existing `run.pause("tool-call")` / `run.resume("tool-call")` becomes sufficient after activity fix. |
-| Orchestrator tools | `packages/opencorvus/src/session/loop.ts::resolveTools` | Exact-contract mode for orchestrator wakes with runtime contract tools. |
-| Skill Policy | `packages/opencorvus/src/session/system.ts::skills` and `session/loop.ts::processTurn` | Gate policy on actual current-turn tool names. |
-| Per-turn tool switches | `packages/opencorvus/src/session/loop.ts::resolveTools` | Apply false switches before returning provider tools. |
-| Agent registry | `packages/opencorvus/src/agent/agent.ts` | Keep current orchestrator whitelist without `skill`; tests preserve this. |
+| Area                   | Files / functions                                                                      | Decision                                                                                             |
+| ---------------------- | -------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------- |
+| LLM activity timers    | `packages/opencorvus/src/llm/activity.ts::withLLMActivity`                             | Replace single wall-clock total timer with pause-aware active-time accounting.                       |
+| Tool-call pause        | `packages/opencorvus/src/session/processor.ts`                                         | Existing `run.pause("tool-call")` / `run.resume("tool-call")` becomes sufficient after activity fix. |
+| Orchestrator tools     | `packages/opencorvus/src/session/loop.ts::resolveTools`                                | Exact-contract mode for orchestrator wakes with runtime contract tools.                              |
+| Skill Policy           | `packages/opencorvus/src/session/system.ts::skills` and `session/loop.ts::processTurn` | Gate policy on actual current-turn tool names.                                                       |
+| Per-turn tool switches | `packages/opencorvus/src/session/loop.ts::resolveTools`                                | Apply false switches before returning provider tools.                                                |
+| Agent registry         | `packages/opencorvus/src/agent/agent.ts`                                               | Keep current orchestrator whitelist without `skill`; tests preserve this.                            |
 
 ## Acceptance
 

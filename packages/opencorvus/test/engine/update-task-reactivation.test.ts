@@ -39,24 +39,28 @@ describe("updateTask({ status: 'active' }) — reactivation invariant", () => {
     taskID = `tsk_react_${stamp}`
     const now = Date.now()
     Database.use((db) => {
-      db.insert(ProjectTable).values({
-        id: projectID,
-        worktree: process.cwd(),
-        name: "Reactivation Test",
-        sandboxes: "[]",
-        time_created: now,
-        time_updated: now,
-      }).run()
-      db.insert(EngineTaskTable).values({
-        id: taskID,
-        project_id: projectID,
-        source: "test",
-        title: "Reactivation task",
-        request: "Verify status='active' clears time_completed",
-        priority: "normal",
-        time_created: now,
-        time_updated: now,
-      }).run()
+      db.insert(ProjectTable)
+        .values({
+          id: projectID,
+          worktree: process.cwd(),
+          name: "Reactivation Test",
+          sandboxes: "[]",
+          time_created: now,
+          time_updated: now,
+        })
+        .run()
+      db.insert(EngineTaskTable)
+        .values({
+          id: taskID,
+          project_id: projectID,
+          source: "test",
+          title: "Reactivation task",
+          request: "Verify status='active' clears time_completed",
+          priority: "normal",
+          time_created: now,
+          time_updated: now,
+        })
+        .run()
     })
   })
 
@@ -67,7 +71,8 @@ describe("updateTask({ status: 'active' }) — reactivation invariant", () => {
   test("reactivating a failed task clears time_completed (derived status flips back to active)", async () => {
     const failNow = Date.now() - 60_000
     Database.use((db) =>
-      db.update(EngineTaskTable)
+      db
+        .update(EngineTaskTable)
         .set({
           time_started: failNow - 120_000,
           time_completed: failNow,
@@ -93,7 +98,8 @@ describe("updateTask({ status: 'active' }) — reactivation invariant", () => {
   test("reactivating a completed task (no error) also clears time_completed", async () => {
     const completeNow = Date.now() - 30_000
     Database.use((db) =>
-      db.update(EngineTaskTable)
+      db
+        .update(EngineTaskTable)
         .set({
           time_started: completeNow - 120_000,
           time_completed: completeNow,
@@ -116,7 +122,8 @@ describe("updateTask({ status: 'active' }) — reactivation invariant", () => {
   test("reactivating a still-running task is a no-op on time_completed (already null)", async () => {
     const startNow = Date.now() - 120_000
     Database.use((db) =>
-      db.update(EngineTaskTable)
+      db
+        .update(EngineTaskTable)
         .set({
           time_started: startNow,
           time_completed: null,
@@ -140,7 +147,8 @@ describe("updateTask({ status: 'active' }) — reactivation invariant", () => {
   test("explicit time_completed in the values payload still wins (caller override is honoured)", async () => {
     const failNow = Date.now() - 60_000
     Database.use((db) =>
-      db.update(EngineTaskTable)
+      db
+        .update(EngineTaskTable)
         .set({
           time_started: failNow - 120_000,
           time_completed: failNow,

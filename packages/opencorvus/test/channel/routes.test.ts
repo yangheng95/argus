@@ -24,7 +24,7 @@ describe("channel routes", () => {
         })
 
         expect(response.status).toBe(200)
-        const body = await response.json() as {
+        const body = (await response.json()) as {
           status: string
           detail: string
           channels: string[]
@@ -62,7 +62,7 @@ describe("channel routes", () => {
         })
 
         expect(response.status).toBe(200)
-        const body = await response.json() as { kind: string; message: string }
+        const body = (await response.json()) as { kind: string; message: string }
         expect(body.kind).toBe("panel_response")
         expect(body.message).toContain("No task is bound")
       },

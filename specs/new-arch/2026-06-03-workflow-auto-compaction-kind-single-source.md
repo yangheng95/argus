@@ -18,16 +18,16 @@ Command:
 
 Relevant decisions:
 
-| Surface | Decision |
-| --- | --- |
-| `packages/opencorvus/src/session/loop.ts::workflowAutoCompactionDisabledSessionKinds` | Delete local list; use one shared helper. |
-| `packages/opencorvus/src/session/compaction.ts::workflowAutoCompactionDisabledSessionKinds` | Delete local list; use one shared helper. |
-| `SessionLoop` predictive branch `decision.kind === "compact"` | Keep branch, but workflow kinds must produce a visible typed prompt-budget error instead of queuing compaction. |
-| `SessionLoop` reactive `result === "compact"` branch | Keep branch, but workflow kinds must produce visible `ContextOverflowError`. |
-| `SessionLoop` pending `compaction_request` handling | Keep manual summarize; reject automatic workflow compaction through the same helper. |
-| `SessionCompaction.create` | Keep control-record creation for allowed sessions and manual summarize; reject automatic workflow compaction through the same helper. |
-| `ContextBudget.predictiveLimit` / `predictiveCompactionDecision` | Keep math; this bug is kind-policy drift, not threshold arithmetic. |
-| `packages/opencorvus/test/session/compaction-continue-inherit.test.ts` | Replace stale "build auto compaction allowed" expectation with workflow rejection tests. |
+| Surface                                                                                     | Decision                                                                                                                              |
+| ------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------- |
+| `packages/opencorvus/src/session/loop.ts::workflowAutoCompactionDisabledSessionKinds`       | Delete local list; use one shared helper.                                                                                             |
+| `packages/opencorvus/src/session/compaction.ts::workflowAutoCompactionDisabledSessionKinds` | Delete local list; use one shared helper.                                                                                             |
+| `SessionLoop` predictive branch `decision.kind === "compact"`                               | Keep branch, but workflow kinds must produce a visible typed prompt-budget error instead of queuing compaction.                       |
+| `SessionLoop` reactive `result === "compact"` branch                                        | Keep branch, but workflow kinds must produce visible `ContextOverflowError`.                                                          |
+| `SessionLoop` pending `compaction_request` handling                                         | Keep manual summarize; reject automatic workflow compaction through the same helper.                                                  |
+| `SessionCompaction.create`                                                                  | Keep control-record creation for allowed sessions and manual summarize; reject automatic workflow compaction through the same helper. |
+| `ContextBudget.predictiveLimit` / `predictiveCompactionDecision`                            | Keep math; this bug is kind-policy drift, not threshold arithmetic.                                                                   |
+| `packages/opencorvus/test/session/compaction-continue-inherit.test.ts`                      | Replace stale "build auto compaction allowed" expectation with workflow rejection tests.                                              |
 
 ## Decision
 

@@ -87,4 +87,3 @@ describe("channel runtime session isolation", () => {
     expect(promptCalls[0]?.sessionID).not.toBe(promptCalls[1]?.sessionID)
   })
 })
-

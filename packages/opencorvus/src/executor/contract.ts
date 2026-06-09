@@ -160,12 +160,7 @@ export type ExecutorAdapter = {
     sessionID: string
     queueTaskID: string
   }>
-  events(input: {
-    goalID?: string
-    sessionID?: string
-    queueTaskID?: string
-    signal?: AbortSignal
-  }): AsyncIterable<{
+  events(input: { goalID?: string; sessionID?: string; queueTaskID?: string; signal?: AbortSignal }): AsyncIterable<{
     type: string
     summary?: string
     payload?: Record<string, unknown>

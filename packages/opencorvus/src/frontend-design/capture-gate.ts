@@ -13,12 +13,7 @@ import { createHash } from "node:crypto"
 import { BrowserRuntime } from "@/browser/runtime"
 import { runBrowserNodeSidecar } from "@/browser/runtime/node-executor"
 import { resolveBrowserNodeSidecarRuntime } from "@/browser/runtime/node-sidecar"
-import {
-  decodePNGBuffer,
-  nonWhiteDensity,
-  uniqueColorBucketCount,
-  topKPalette,
-} from "@/util/pixel-stats"
+import { decodePNGBuffer, nonWhiteDensity, uniqueColorBucketCount, topKPalette } from "@/util/pixel-stats"
 
 /** Chart / sidebar / toolbar 等关键区域的 bbox（CSS 像素）。 */
 export const CaptureBbox = z.object({
@@ -171,10 +166,7 @@ export async function captureReferenceManifest(input: {
   browserExecutable?: string
 }): Promise<CaptureResult> {
   if (!/^https?:\/\//i.test(input.url)) {
-    throw new CaptureReferenceError(
-      `capture url must start with http(s)://: ${input.url}`,
-      "navigate",
-    )
+    throw new CaptureReferenceError(`capture url must start with http(s)://: ${input.url}`, "navigate")
   }
 
   const viewport = input.viewport ?? { width: 1440, height: 900 }
@@ -281,7 +273,15 @@ async function captureBrowserEvidenceViaNode(input: {
   const hardTimeoutMs = launchTimeoutMs + input.timeoutMs + 30_000
   const runtime = await resolveBrowserNodeSidecarRuntime()
   const run = await runBrowserNodeSidecar<
-    | { ok: true; screenshotBase64: string; domOuter: string; innerText: string; layoutRaw: BrowserEvidence["layoutRaw"]; harByteSize: number; chromeVersion?: string }
+    | {
+        ok: true
+        screenshotBase64: string
+        domOuter: string
+        innerText: string
+        layoutRaw: BrowserEvidence["layoutRaw"]
+        harByteSize: number
+        chromeVersion?: string
+      }
     | { ok: false; message: string; stack?: string }
   >({
     runtime,
@@ -291,7 +291,11 @@ async function captureBrowserEvidenceViaNode(input: {
     hardTimeoutMs,
     label: "Node browser capture",
   }).catch((e) => {
-    throw new CaptureReferenceError(`browser runtime launch failed via Node sidecar: ${formatBrowserRuntimeError(e)}`, "browser", e)
+    throw new CaptureReferenceError(
+      `browser runtime launch failed via Node sidecar: ${formatBrowserRuntimeError(e)}`,
+      "browser",
+      e,
+    )
   })
 
   const result = run.result
@@ -450,9 +454,7 @@ async function readBrowserRuntimeVersion(): Promise<string | undefined> {
     const pkgUrl = await import.meta.resolve?.("playwright/package.json")
     if (!pkgUrl) return undefined
     const pkgPath = pkgUrl.startsWith("file:") ? new URL(pkgUrl).pathname : pkgUrl
-    const raw = await fs.readFile(pkgPath.replace(/^\//, ""), "utf8").catch(() =>
-      fs.readFile(pkgPath, "utf8"),
-    )
+    const raw = await fs.readFile(pkgPath.replace(/^\//, ""), "utf8").catch(() => fs.readFile(pkgPath, "utf8"))
     const parsed = JSON.parse(raw) as { version?: string }
     return parsed.version
   } catch {

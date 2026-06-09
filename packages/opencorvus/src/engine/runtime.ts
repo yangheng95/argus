@@ -13,10 +13,7 @@ import {
 import { Event } from "./model"
 import { EngineProtocol } from "./protocol"
 import { orchestratorState } from "./orchestrator-state"
-import {
-  persistFailedRunEvaluation,
-  updateGoalRun,
-} from "./persist"
+import { persistFailedRunEvaluation, updateGoalRun } from "./persist"
 
 import {
   findAcceptanceByRun,
@@ -40,21 +37,21 @@ import { isTaskCancelled } from "./task-status"
 
 const log = Log.create({ service: "engine-runtime" })
 const ACCEPTANCE_FETCH_TIMEOUT_MS = parseInt(process.env.OPENCORVUS_ACCEPTANCE_FETCH_TIMEOUT_MS || "300000", 10) // 5 min for executor.acceptance() (git operations can be slow on Windows with large repos)
-const SYNC_RUN_TIMEOUT_MS = parseInt(process.env.OPENCORVUS_SYNC_RUN_TIMEOUT_MS || String(ACCEPTANCE_FETCH_TIMEOUT_MS + 15 * 60 * 1000), 10) // must exceed fetch + Orchestrator eval/verify/publish time
+const SYNC_RUN_TIMEOUT_MS = parseInt(
+  process.env.OPENCORVUS_SYNC_RUN_TIMEOUT_MS || String(ACCEPTANCE_FETCH_TIMEOUT_MS + 15 * 60 * 1000),
+  10,
+) // must exceed fetch + Orchestrator eval/verify/publish time
 const EXECUTOR_STATUS_TIMEOUT_MS = 30_000 // 30s for executor.status()
 
 const eventBridgeAborts = new Map<string, AbortController>() // goalRunID or runID → AbortController
 
 const INTERACTION_STALE_MS = parseInt(process.env.OPENCORVUS_INTERACTION_TIMEOUT_MS || "300000", 10) // auto-reject stale interactions (5min default)
 
-
 /** Check if any executor session is active for the current project. Used as a guard before Instance.dispose(). */
 export function hasActiveSessions(): boolean {
   try {
     const runs = listLiveRunsForProject(Instance.project.id)
-    return runs.some((r) =>
-      (EXECUTOR_ACTIVE_RUN_STATUSES as readonly string[]).includes(r.status),
-    )
+    return runs.some((r) => (EXECUTOR_ACTIVE_RUN_STATUSES as readonly string[]).includes(r.status))
   } catch {
     return false
   }
@@ -83,7 +80,10 @@ export namespace EngineRuntime {
               setTimeout(() => reject(new Error(`syncRun timeout for run ${row.id}`)), SYNC_RUN_TIMEOUT_MS),
             ),
           ]).catch((err) => {
-            log.error("syncRun failed or timed out", { runID: row.id, error: err instanceof Error ? err.message : String(err) })
+            log.error("syncRun failed or timed out", {
+              runID: row.id,
+              error: err instanceof Error ? err.message : String(err),
+            })
           }),
         ),
       )
@@ -170,15 +170,20 @@ export namespace EngineRuntime {
       const cfg = await Config.get()
       const autoQuestion = cfg.experimental?.auto_question === true
       const stale = pending.filter((p) => {
-        if ((now - (p.time_created ?? 0)) <= INTERACTION_STALE_MS) return false
+        if (now - (p.time_created ?? 0) <= INTERACTION_STALE_MS) return false
         if (p.request_type === "question") return autoQuestion
         return false
       })
       if (stale.length > 0) {
         for (const interaction of stale) {
-          log.info("auto-rejecting stale interaction", { id: interaction.id, type: interaction.request_type, ageMs: now - (interaction.time_created ?? 0) })
+          log.info("auto-rejecting stale interaction", {
+            id: interaction.id,
+            type: interaction.request_type,
+            ageMs: now - (interaction.time_created ?? 0),
+          })
           Database.use((db) =>
-            db.update(EngineInteractionRequestTable)
+            db
+              .update(EngineInteractionRequestTable)
               .set({ status: "rejected", time_resolved: now, time_updated: now })
               .where(eq(EngineInteractionRequestTable.id, interaction.id))
               .run(),
@@ -189,11 +194,19 @@ export namespace EngineRuntime {
         const stillPending = findPendingInteractions(run.id)
         if (stillPending.length === 0) {
           if (run.status === "blocked") {
-            await hooks.updateRun(run, { status: "accepted", blocking_reason: null }, "Stale interactions auto-rejected")
+            await hooks.updateRun(
+              run,
+              { status: "accepted", blocking_reason: null },
+              "Stale interactions auto-rejected",
+            )
           }
         } else {
           if (run.status !== "blocked") {
-            await hooks.updateRun(run, { status: "blocked", blocking_reason: stillPending[0].request_type }, "Run blocked")
+            await hooks.updateRun(
+              run,
+              { status: "blocked", blocking_reason: stillPending[0].request_type },
+              "Run blocked",
+            )
           }
           return
         }
@@ -231,7 +244,10 @@ export namespace EngineRuntime {
     const queue = await Promise.race([
       executor.status(queueTaskID),
       new Promise<never>((_, reject) =>
-        setTimeout(() => reject(new Error(`executor.status() timeout (${EXECUTOR_STATUS_TIMEOUT_MS}ms)`)), EXECUTOR_STATUS_TIMEOUT_MS),
+        setTimeout(
+          () => reject(new Error(`executor.status() timeout (${EXECUTOR_STATUS_TIMEOUT_MS}ms)`)),
+          EXECUTOR_STATUS_TIMEOUT_MS,
+        ),
       ),
     ])
 
@@ -251,7 +267,9 @@ export namespace EngineRuntime {
       const inactiveMs = Date.now() - lastActivity
       if (inactiveMs > RUN_STALL_MS) {
         log.warn("run stalled — no activity", { runID: run.id, inactiveMs })
-        try { await executor.abort({ sessionID: run.session_id ?? undefined, queueTaskID }) } catch {}
+        try {
+          await executor.abort({ sessionID: run.session_id ?? undefined, queueTaskID })
+        } catch {}
         await failRun(run, `Run stalled — no activity for ${Math.round(inactiveMs / 60000)}min`, hooks)
         return
       }
@@ -277,7 +295,11 @@ export namespace EngineRuntime {
         stopEventBridge(run.id)
         // updateRun → engine/state.ts detects the terminal transition and
         // calls PerRunState.finalize(run.id), so no manual cleanup here.
-        await hooks.updateRun(run, { status: "completed", blocking_reason: null, error: null, time_completed: Date.now() }, "Run completed")
+        await hooks.updateRun(
+          run,
+          { status: "completed", blocking_reason: null, error: null, time_completed: Date.now() },
+          "Run completed",
+        )
         // No auto-restart of runTaskLoop here. If the task loop is already
         // in flight it is awaiting pool.drain and will continue naturally.
         // If it is not (rare race on crash recovery), the next user message
@@ -286,10 +308,7 @@ export namespace EngineRuntime {
       }
     }
   }
-
 }
-
-
 
 async function failRun(run: RunRow, error: string, hooks: RuntimeHooks) {
   stopEventBridge(run.id) // serial bridge
@@ -332,10 +351,7 @@ function terminalGoalBatchFingerprint(
   }>,
 ) {
   return goalRuns
-    .map((goalRun) => [
-      goalRun.id,
-      goalRun.status,
-    ].join(":"))
+    .map((goalRun) => [goalRun.id, goalRun.status].join(":"))
     .sort()
     .join("|")
 }
@@ -368,7 +384,8 @@ function recordGoalBatchNotification(input: {
 }) {
   const now = Date.now()
   Database.use((db) =>
-    db.insert(EngineArtifactTable)
+    db
+      .insert(EngineArtifactTable)
       .values({
         id: Identifier.ascending("artifact"),
         task_id: input.taskID,
@@ -391,7 +408,6 @@ function recordGoalBatchNotification(input: {
       .run(),
   )
 }
-
 
 function upsertExecutorInteraction(
   taskID: string,
@@ -416,7 +432,7 @@ function upsertExecutorInteraction(
   const title =
     event.type === "approval_request"
       ? `Executor approval: ${String(event.payload?.approval ?? "request")}`
-      : firstQuestionHeader(event.payload?.questions) ?? "Executor input required"
+      : (firstQuestionHeader(event.payload?.questions) ?? "Executor input required")
   const body =
     event.type === "approval_request"
       ? String(event.summary ?? event.payload?.approval ?? "Approval requested")
@@ -446,13 +462,17 @@ function upsertExecutorInteraction(
       })
       .run()
     Database.effect(() =>
-      EngineProtocol.emit(Event.InteractionRequested, {
-        taskID,
-        runID,
-        interactionID,
-        requestType: event.type === "approval_request" ? "permission" : "question",
-        summary: title,
-      }, { taskID, runID, interactionID, source: "runtime.interaction" }),
+      EngineProtocol.emit(
+        Event.InteractionRequested,
+        {
+          taskID,
+          runID,
+          interactionID,
+          requestType: event.type === "approval_request" ? "permission" : "question",
+          summary: title,
+        },
+        { taskID, runID, interactionID, source: "runtime.interaction" },
+      ),
     )
   })
 }
@@ -468,10 +488,12 @@ function firstQuestionHeader(input: unknown) {
 
 function questionBody(input: unknown) {
   if (!Array.isArray(input)) return ""
-  return input.flatMap((item) => {
-    if (!item || typeof item !== "object") return []
-    const next = item as Record<string, unknown>
-    if (typeof next.question !== "string" || !next.question) return []
-    return [next.question]
-  }).join("\n\n")
+  return input
+    .flatMap((item) => {
+      if (!item || typeof item !== "object") return []
+      const next = item as Record<string, unknown>
+      if (typeof next.question !== "string" || !next.question) return []
+      return [next.question]
+    })
+    .join("\n\n")
 }

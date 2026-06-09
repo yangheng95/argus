@@ -50,12 +50,14 @@ function evaluationGroups(checks: GroupCheck[]) {
   return EVALUATION_GROUP_DEFS.flatMap((group) => {
     const matches = checks.filter(group.include)
     if (matches.length === 0) return []
-    return [{
-      id: group.id,
-      label: group.label,
-      status: groupStatus(matches),
-      checks: matches.map((check) => check.name),
-    }]
+    return [
+      {
+        id: group.id,
+        label: group.label,
+        status: groupStatus(matches),
+        checks: matches.map((check) => check.name),
+      },
+    ]
   })
 }
 
@@ -81,7 +83,10 @@ function list(input: unknown) {
 
 function indent(block: string, spaces: number): string {
   const prefix = " ".repeat(spaces)
-  return block.split("\n").map((line) => (line ? prefix + line : line)).join("\n")
+  return block
+    .split("\n")
+    .map((line) => (line ? prefix + line : line))
+    .join("\n")
 }
 
 function obj(input: unknown) {
@@ -98,7 +103,13 @@ function iso(input: number) {
 }
 
 function slug(input: string) {
-  return input.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "").slice(0, 50) || "task"
+  return (
+    input
+      .toLowerCase()
+      .replace(/[^a-z0-9]+/g, "-")
+      .replace(/^-|-$/g, "")
+      .slice(0, 50) || "task"
+  )
 }
 
 function save(input: {
@@ -111,7 +122,10 @@ function save(input: {
 }) {
   try {
     const dir = ProjectRuntimePaths.docsPaths(Instance.worktree, input.taskID)[input.kind]
-    const file = path.join(dir, `${stamp(input.createdAt)}-${Identifier.shortPath(input.taskID)}-${input.ref}-${slug(input.title)}.md`)
+    const file = path.join(
+      dir,
+      `${stamp(input.createdAt)}-${Identifier.shortPath(input.taskID)}-${input.ref}-${slug(input.title)}.md`,
+    )
     mkdirSync(dir, { recursive: true })
     writeFileSync(file, input.content.trimEnd() + "\n", "utf-8")
     return {

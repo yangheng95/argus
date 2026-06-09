@@ -77,9 +77,7 @@ describe("EngineService.handleTaskMessage — follow-up attachment persistence",
         try {
           await EngineService.handleTaskMessage(taskID, {
             text: "Here's the new screenshot.",
-            attachments: [
-              { mime: "image/png", data: PNG_BASE64, filename: "follow-up.png" },
-            ],
+            attachments: [{ mime: "image/png", data: PNG_BASE64, filename: "follow-up.png" }],
           })
         } catch {
           // continueTaskMessage may still run the un-stubbed path and fail
@@ -90,9 +88,7 @@ describe("EngineService.handleTaskMessage — follow-up attachment persistence",
         expect(appendSpy).toHaveBeenCalled()
         const firstCall = appendSpy.mock.calls[0]
         expect(firstCall?.[0]).toBe(taskID)
-        const ref = firstCall?.[1] as
-          | { mime: string; intent?: string; source?: string; filename?: string }
-          | undefined
+        const ref = firstCall?.[1] as { mime: string; intent?: string; source?: string; filename?: string } | undefined
         expect(ref?.mime).toBe("image/png")
         expect(ref?.filename).toBe("follow-up.png")
         // Image MIMEs must carry visual_reference intent so acceptance
@@ -148,9 +144,7 @@ describe("EngineService.handleTaskMessage — follow-up attachment persistence",
         }
 
         expect(appendSpy).toHaveBeenCalled()
-        const ref = appendSpy.mock.calls[0]?.[1] as
-          | { mime: string; intent?: string }
-          | undefined
+        const ref = appendSpy.mock.calls[0]?.[1] as { mime: string; intent?: string } | undefined
         expect(ref?.mime).toBe("text/markdown")
         expect(ref?.intent).toBe("spec_artifact")
       },

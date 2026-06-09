@@ -15,16 +15,16 @@ The initial registry-only change was insufficient. Frontend agents must receive 
 
 ## Call-Site Inventory
 
-| Surface | Current state | Decision |
-| --- | --- | --- |
-| `src/agent/agent.ts` `frontend-design.tools.include` | Uses `FRONTEND_DESIGN_STATIC_TOOL_IDS` | Keep `skill` in that static list so the declared permission surface matches the runtime surface. |
-| `src/agent/agent.ts` `frontend-research.tools.include` | Empty list | Change to `["skill"]` so `SystemPrompt.skills()` permits frontend-research skill loading while keeping retrieval tools unavailable. |
-| `src/frontend-design/static-tools.ts` | Static IDs include `skill`; session IDs initially omitted `skill` | Add `skill` to `FRONTEND_DESIGN_SESSION_TOOL_IDS` and `FRONTEND_DESIGN_UTILITY_TOOL_IDS` because frontend-design sends exact runtime tools. |
-| `src/frontend-design/agent.ts` runtime toolKit | Builds implementation/context/webpage/output tools only | Initialize `SkillTool` with the `frontend-design` agent and include it in utility tools. |
-| `src/research/agent.ts` `frontend-research` runtime toolKit | With `retrievalTools: "none"`, only output tools are sent | Add `SkillTool` only for `frontend-research`; do not add retrieval tools or change deep-research. |
-| `SystemPrompt.skills()` | Requires available tool name `skill` | No code change; this becomes active once the resolved frontend tool surface contains `skill`. |
-| `SessionLoop.resolveTools()` | Exact stage contracts skip registry and MCP tools | No code change; add tests proving exact frontend stage contracts preserve runtime `skill` and do not inherit registry/MCP tools. |
-| Tests | Pin frontend-design and frontend-research surfaces without runtime skill coverage | Update tests to assert both frontend agents expose runtime `skill`, without reopening websearch/webfetch/read_file for frontend-research. |
+| Surface                                                     | Current state                                                                     | Decision                                                                                                                                    |
+| ----------------------------------------------------------- | --------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------- |
+| `src/agent/agent.ts` `frontend-design.tools.include`        | Uses `FRONTEND_DESIGN_STATIC_TOOL_IDS`                                            | Keep `skill` in that static list so the declared permission surface matches the runtime surface.                                            |
+| `src/agent/agent.ts` `frontend-research.tools.include`      | Empty list                                                                        | Change to `["skill"]` so `SystemPrompt.skills()` permits frontend-research skill loading while keeping retrieval tools unavailable.         |
+| `src/frontend-design/static-tools.ts`                       | Static IDs include `skill`; session IDs initially omitted `skill`                 | Add `skill` to `FRONTEND_DESIGN_SESSION_TOOL_IDS` and `FRONTEND_DESIGN_UTILITY_TOOL_IDS` because frontend-design sends exact runtime tools. |
+| `src/frontend-design/agent.ts` runtime toolKit              | Builds implementation/context/webpage/output tools only                           | Initialize `SkillTool` with the `frontend-design` agent and include it in utility tools.                                                    |
+| `src/research/agent.ts` `frontend-research` runtime toolKit | With `retrievalTools: "none"`, only output tools are sent                         | Add `SkillTool` only for `frontend-research`; do not add retrieval tools or change deep-research.                                           |
+| `SystemPrompt.skills()`                                     | Requires available tool name `skill`                                              | No code change; this becomes active once the resolved frontend tool surface contains `skill`.                                               |
+| `SessionLoop.resolveTools()`                                | Exact stage contracts skip registry and MCP tools                                 | No code change; add tests proving exact frontend stage contracts preserve runtime `skill` and do not inherit registry/MCP tools.            |
+| Tests                                                       | Pin frontend-design and frontend-research surfaces without runtime skill coverage | Update tests to assert both frontend agents expose runtime `skill`, without reopening websearch/webfetch/read_file for frontend-research.   |
 
 ## Non-Goals
 

@@ -40,7 +40,9 @@ function stripCssComments(input: string): string {
   return input.replace(/\/\*[\s\S]*?\*\//g, "")
 }
 const STYLES = stripCssComments(
-  walkCss(STYLES_ROOT).map((f) => readFileSync(f, "utf8")).join("\n"),
+  walkCss(STYLES_ROOT)
+    .map((f) => readFileSync(f, "utf8"))
+    .join("\n"),
 )
 
 function soloRuleBody(selector: string): string {
@@ -60,15 +62,11 @@ function soloRuleBody(selector: string): string {
 
 describe(".channel-doc-card + .detail-card canonicals match the rendered bg", () => {
   test(".channel-doc-card canonical declares transparent background", () => {
-    expect(soloRuleBody(".channel-doc-card")).toMatch(
-      /background:\s*transparent/,
-    )
+    expect(soloRuleBody(".channel-doc-card")).toMatch(/background:\s*transparent/)
   })
 
   test(".detail-card canonical declares transparent background", () => {
-    expect(soloRuleBody(".detail-card")).toMatch(
-      /background:\s*transparent/,
-    )
+    expect(soloRuleBody(".detail-card")).toMatch(/background:\s*transparent/)
   })
 
   test("both canonicals own borderless chrome directly", () => {

@@ -33,20 +33,22 @@ describe("integrity correction application", () => {
       acceptance: acceptedAcceptance(),
       dimensions: [],
       issues: [],
-      corrections: [{
-        action: "modify",
-        goalID: "goal_verify",
-        reason: "Docs are not a prerequisite for runtime verification",
-        updates: {
-          depends_on: ["goal_bootstrap"],
-          imports: ["test runtime"],
-          exports: ["verification report"],
-          owned_paths: ["tests/integration/app.test.ts", "tests/regression/app.test.ts"],
-          kind: "verification",
-          priority: "blocking",
-          requirement_ids: ["REQ-1"],
+      corrections: [
+        {
+          action: "modify",
+          goalID: "goal_verify",
+          reason: "Docs are not a prerequisite for runtime verification",
+          updates: {
+            depends_on: ["goal_bootstrap"],
+            imports: ["test runtime"],
+            exports: ["verification report"],
+            owned_paths: ["tests/integration/app.test.ts", "tests/regression/app.test.ts"],
+            kind: "verification",
+            priority: "blocking",
+            requirement_ids: ["REQ-1"],
+          },
         },
-      }],
+      ],
       missingGoals: [],
     }
 

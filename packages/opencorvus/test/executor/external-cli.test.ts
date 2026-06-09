@@ -26,14 +26,23 @@ describe("external cli executors", () => {
     }
 
     expect(out).toEqual([
-      { type: "progress", phase: "init", summary: "thread.started", meta: { type: "thread.started", thread_id: "thread_1" } },
+      {
+        type: "progress",
+        phase: "init",
+        summary: "thread.started",
+        meta: { type: "thread.started", thread_id: "thread_1" },
+      },
       { type: "progress", phase: "responding", summary: "turn.started", meta: { type: "turn.started" } },
       { type: "text_delta", text: "hi" },
-      { type: "progress", phase: "turn_completed", summary: "turn.completed", meta: { type: "turn.completed", usage: { output_tokens: 1 } } },
+      {
+        type: "progress",
+        phase: "turn_completed",
+        summary: "turn.completed",
+        meta: { type: "turn.completed", usage: { output_tokens: 1 } },
+      },
       { type: "done", sessionID: "thread_1", output: "hi" },
     ])
   })
-
 })
 
 function runner() {

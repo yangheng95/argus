@@ -8,24 +8,21 @@
 // place there). The sidebar Goals panel renders its own button next to
 // this component.
 
-import { For, Show } from "solid-js";
-import type { StepPayload } from "../utils/card-tree";
-import { statusIconName } from "../utils/status-mapping";
-import { Icon } from "./Icon";
-import { StaticTextPart } from "./TextPart";
+import { For, Show } from "solid-js"
+import type { StepPayload } from "../utils/card-tree"
+import { statusIconName } from "../utils/status-mapping"
+import { Icon } from "./Icon"
+import { StaticTextPart } from "./TextPart"
 
 function verdictClass(verdict: string): string {
-  if (verdict === "accepted") return "gwg-verdict--accepted";
-  if (verdict === "rejected") return "gwg-verdict--rejected";
-  return "gwg-verdict--inconclusive";
+  if (verdict === "accepted") return "gwg-verdict--accepted"
+  if (verdict === "rejected") return "gwg-verdict--rejected"
+  return "gwg-verdict--inconclusive"
 }
 
-export function StepPayloadBody(props: {
-  payload: StepPayload | undefined;
-  stepID: string;
-}) {
-  const hasPlanNodes = () => !!props.payload?.planNodes?.length;
-  const hasChecks = () => !!props.payload?.checks?.length;
+export function StepPayloadBody(props: { payload: StepPayload | undefined; stepID: string }) {
+  const hasPlanNodes = () => !!props.payload?.planNodes?.length
+  const hasChecks = () => !!props.payload?.checks?.length
 
   return (
     <Show when={props.payload}>
@@ -65,9 +62,7 @@ export function StepPayloadBody(props: {
         </Show>
         {/* Eval verdict + summary + checks */}
         <Show when={props.payload?.verdict}>
-          <div class={`gwg-verdict ${verdictClass(props.payload!.verdict!)}`}>
-            {props.payload!.verdict}
-          </div>
+          <div class={`gwg-verdict ${verdictClass(props.payload!.verdict!)}`}>{props.payload!.verdict}</div>
         </Show>
         <Show when={props.payload?.evalSummary}>
           <div class="gwg-eval-summary">
@@ -93,5 +88,5 @@ export function StepPayloadBody(props: {
         </Show>
       </div>
     </Show>
-  );
+  )
 }

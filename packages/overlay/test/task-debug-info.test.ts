@@ -12,7 +12,9 @@ test("task debug info includes the Files panel board projection fields", () => {
   const main = source("src/main.tsx")
 
   expect(main).toContain("files:     ${debugGoalBoardFiles(gw)}")
-  expect(main).toContain("changedFiles=${changedFiles}; changedFileDiffs=${changedFileDiffs}; commits=${commitRefs.size")
+  expect(main).toContain(
+    "changedFiles=${changedFiles}; changedFileDiffs=${changedFileDiffs}; commits=${commitRefs.size",
+  )
   expect(main).toContain("board.goalWorkflows[].steps[].payload.changedFiles / changedFileDiffs / commitRef")
 })
 

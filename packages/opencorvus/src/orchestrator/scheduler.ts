@@ -1,13 +1,23 @@
 import type { EngineRunStatus } from "@/engine/engine.sql"
-import { GOAL_RUN_RESETTABLE_STATUSES, LIVE_RUN_STATUSES, isDispatchableRunStatus, isLiveRunStatus } from "@/engine/catalog"
+import {
+  GOAL_RUN_RESETTABLE_STATUSES,
+  LIVE_RUN_STATUSES,
+  isDispatchableRunStatus,
+  isLiveRunStatus,
+} from "@/engine/catalog"
 
 export type RestartStage = "requirements" | "plan" | "executor"
 export { GOAL_RUN_RESETTABLE_STATUSES, LIVE_RUN_STATUSES, isLiveRunStatus }
 
-export function isRunReadyForGoalDispatch(input: {
-  planVersionID?: string | null
-  status?: EngineRunStatus | null
-} | null | undefined): boolean {
+export function isRunReadyForGoalDispatch(
+  input:
+    | {
+        planVersionID?: string | null
+        status?: EngineRunStatus | null
+      }
+    | null
+    | undefined,
+): boolean {
   if (!input?.planVersionID) return false
   return isDispatchableRunStatus(input.status)
 }
@@ -47,7 +57,7 @@ export function restartStagePlan(stage: RestartStage, hasActivePlan: boolean) {
         resetGoalStatuses: true,
         retireGoalRuns: true,
         queueFreshRun: hasActivePlan,
-        nextAction: hasActivePlan ? "submit_execution" as const : "create_run" as const,
+        nextAction: hasActivePlan ? ("submit_execution" as const) : ("create_run" as const),
       }
   }
 }

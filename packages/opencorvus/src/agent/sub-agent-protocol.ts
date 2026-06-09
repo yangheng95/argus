@@ -196,8 +196,8 @@ export namespace SubAgentProtocol {
     if (typeof console !== "undefined" && console.warn) {
       console.warn(
         `[SubAgentProtocol] ${label} yielded ${text.length} chars (>${HARD_CHAR_CAP} target). ` +
-        `Consider routing through yieldResult() / trimText() / trimList() with a real pointer ` +
-        `so callers see a conclusion, not a transcript.`,
+          `Consider routing through yieldResult() / trimText() / trimList() with a real pointer ` +
+          `so callers see a conclusion, not a transcript.`,
       )
     }
   }

@@ -59,10 +59,11 @@ const SUPPORTED_TARGETS = Object.keys(TARGET_TO_DIST)
 
 // ── Pure helpers (exported for tests) ──────────────────────────────
 
-export function resolveSourceDist(opts: {
-  target: string
-  monorepoRoot: string
-}): { sourceDir: string; binaryName: string; binaryPath: string } {
+export function resolveSourceDist(opts: { target: string; monorepoRoot: string }): {
+  sourceDir: string
+  binaryName: string
+  binaryPath: string
+} {
   const sourceTarget = TARGET_TO_DIST[opts.target]
   if (!sourceTarget) {
     throw new Error(
@@ -76,12 +77,7 @@ export function resolveSourceDist(opts: {
   return { sourceDir, binaryName, binaryPath }
 }
 
-export function vsixFilename(opts: {
-  target: string
-  version: string
-  publisher: string
-  name: string
-}): string {
+export function vsixFilename(opts: { target: string; version: string; publisher: string; name: string }): string {
   // vsce default name: <publisher>.<name>-<version>.vsix. Including the
   // target in the filename prevents accidental overwrite when packaging
   // multiple targets in a row.
@@ -115,7 +111,7 @@ export function readPackageMeta(extensionRoot: string): {
   // pkg.name is `@opencorvus-ai/vscode-extension` in this workspace; vsce
   // expects an unscoped name. Strip the scope so the .vsix filename is
   // marketplace-friendly.
-  const bareName = pkg.name.startsWith("@") ? pkg.name.split("/")[1] ?? pkg.name : pkg.name
+  const bareName = pkg.name.startsWith("@") ? (pkg.name.split("/")[1] ?? pkg.name) : pkg.name
   return { version: pkg.version, publisher: pkg.publisher, name: bareName }
 }
 
@@ -172,8 +168,7 @@ async function main(): Promise<void> {
   const meta = readPackageMeta(extensionRoot)
 
   console.log(
-    `[package-vsix] target=${args.target} version=${meta.version} ` +
-      `publisher=${meta.publisher} name=${meta.name}`,
+    `[package-vsix] target=${args.target} version=${meta.version} ` + `publisher=${meta.publisher} name=${meta.name}`,
   )
 
   // 1. Stage binary

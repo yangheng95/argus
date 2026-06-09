@@ -41,22 +41,25 @@ if (RUN_LIVE) {
   })
 }
 
-const HAS_LIVE = RUN_LIVE && !!liveModel && (await (async () => {
-  try {
-    const parsed = Provider.parseModel(liveModel!)
-    return await Instance.provide({
-      directory: path.resolve(import.meta.dir, "../.."),
-      fn: async () => {
-        const resolved = await Provider.getModel(parsed.providerID, parsed.modelID)
-        await Provider.getLanguage(resolved)
-        return true
-      },
-    })
-  } catch (err) {
-    console.warn(`[build-agent smoke] model unavailable for ${liveModel}: ${String(err)}`)
-    return false
-  }
-})())
+const HAS_LIVE =
+  RUN_LIVE &&
+  !!liveModel &&
+  (await (async () => {
+    try {
+      const parsed = Provider.parseModel(liveModel!)
+      return await Instance.provide({
+        directory: path.resolve(import.meta.dir, "../.."),
+        fn: async () => {
+          const resolved = await Provider.getModel(parsed.providerID, parsed.modelID)
+          await Provider.getLanguage(resolved)
+          return true
+        },
+      })
+    } catch (err) {
+      console.warn(`[build-agent smoke] model unavailable for ${liveModel}: ${String(err)}`)
+      return false
+    }
+  })())
 
 const liveTest = HAS_LIVE ? test : test.skip
 
@@ -76,18 +79,21 @@ describe("BuildAgent.run (real-LLM smoke)", () => {
           const taskID = `task_build_smoke_${Date.now()}`
           const now = Date.now()
           Database.use((db) =>
-            db.insert(EngineTaskTable).values({
-              id: taskID,
-              project_id: Instance.project.id,
-              source: "test",
-              title: "build smoke",
-              request: "add README",
-              priority: "normal",
-              budget: { max_executor_groups: 1 } as any,
-              time_created: now,
-              time_updated: now,
-              time_started: now,
-            }).run(),
+            db
+              .insert(EngineTaskTable)
+              .values({
+                id: taskID,
+                project_id: Instance.project.id,
+                source: "test",
+                title: "build smoke",
+                request: "add README",
+                priority: "normal",
+                budget: { max_executor_groups: 1 } as any,
+                time_created: now,
+                time_updated: now,
+                time_started: now,
+              })
+              .run(),
           )
           const task = findTask(taskID)
           expect(task).toBeTruthy()

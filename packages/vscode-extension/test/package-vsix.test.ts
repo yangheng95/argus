@@ -2,12 +2,7 @@ import { afterEach, beforeEach, describe, expect, test } from "bun:test"
 import * as fs from "node:fs"
 import * as os from "node:os"
 import * as path from "node:path"
-import {
-  checkVsixSize,
-  readPackageMeta,
-  resolveSourceDist,
-  vsixFilename,
-} from "../script/package-vsix"
+import { checkVsixSize, readPackageMeta, resolveSourceDist, vsixFilename } from "../script/package-vsix"
 
 describe("resolveSourceDist", () => {
   test("maps each supported VS Code target to the matching opencorvus dist directory", () => {
@@ -56,7 +51,9 @@ describe("checkVsixSize", () => {
   })
 
   afterEach(() => {
-    try { fs.rmSync(tmp, { recursive: true, force: true }) } catch {}
+    try {
+      fs.rmSync(tmp, { recursive: true, force: true })
+    } catch {}
   })
 
   test("passes for small VSIX", () => {
@@ -80,7 +77,9 @@ describe("readPackageMeta", () => {
   })
 
   afterEach(() => {
-    try { fs.rmSync(extensionRoot, { recursive: true, force: true }) } catch {}
+    try {
+      fs.rmSync(extensionRoot, { recursive: true, force: true })
+    } catch {}
   })
 
   test("strips workspace scope from name so VSIX filename matches marketplace shape", () => {

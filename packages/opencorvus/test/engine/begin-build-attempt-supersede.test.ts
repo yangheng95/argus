@@ -1,11 +1,7 @@
 import { afterEach, beforeEach, describe, expect, test } from "bun:test"
 import { Database } from "../../src/storage/db"
 import { ProjectTable } from "../../src/project/project.sql"
-import {
-  EngineArtifactTable,
-  EngineGoalTable,
-  EngineTaskTable,
-} from "../../src/engine/engine.sql"
+import { EngineArtifactTable, EngineGoalTable, EngineTaskTable } from "../../src/engine/engine.sql"
 import { beginBuildAttempt, createGoalRun, startNewAttempt } from "../../src/engine/persist"
 import { goalStatusByID } from "../../src/engine/describe"
 import { processOwner } from "../../src/engine/lease"
@@ -35,69 +31,77 @@ let goalID = ""
 function seedBaseline() {
   const now = Date.now()
   Database.transaction((db) => {
-    db.insert(ProjectTable).values({
-      id: projectID,
-      worktree: process.cwd(),
-      name: "begin-build-attempt-supersede test",
-      sandboxes: [],
-      time_created: now,
-      time_updated: now,
-    }).run()
-    db.insert(EngineTaskTable).values({
-      id: taskID,
-      project_id: projectID,
-      source: "test",
-      title: "t",
-      request: "t",
-      priority: "normal",
-      time_created: now,
-      time_updated: now,
-      time_started: now,
-    }).run()
-    // Phase-6-e: run rows live in engine_artifact (kind="run").
-    db.insert(EngineArtifactTable).values({
-      id: runID,
-      task_id: taskID,
-      run_id: runID,
-      kind: "run",
-      label: "run-running",
-      payload: {
-        plan_version_id: null,
-        session_id: null,
-        executor: "opencorvus",
-        status: "running",
-        phase: "execute",
-        blocking_reason: null,
-        error: null,
-        retry_count: 0,
-        executor_ref: null,
-        metadata: null,
+    db.insert(ProjectTable)
+      .values({
+        id: projectID,
+        worktree: process.cwd(),
+        name: "begin-build-attempt-supersede test",
+        sandboxes: [],
+        time_created: now,
+        time_updated: now,
+      })
+      .run()
+    db.insert(EngineTaskTable)
+      .values({
+        id: taskID,
+        project_id: projectID,
+        source: "test",
+        title: "t",
+        request: "t",
+        priority: "normal",
+        time_created: now,
+        time_updated: now,
         time_started: now,
-        time_completed: null,
-      },
-      time_created: now,
-      time_updated: now,
-    }).run()
-    db.insert(EngineGoalTable).values({
-      id: goalID,
-      task_id: taskID,
-      title: "g",
-      slug: "g",
-      objective: "obj",
-      acceptance_specs: [],
-      owned_paths: [],
-      depends_on: [],
-      exports: [],
-      imports: [],
-      kind: "feature",
-      requirement_ids: [],
-      priority: "blocking",
-      source: "test",
-      status: "pending",
-      order_index: 0,
-      time_created: now,
-      time_updated: now,
-    }).run()
+      })
+      .run()
+    // Phase-6-e: run rows live in engine_artifact (kind="run").
+    db.insert(EngineArtifactTable)
+      .values({
+        id: runID,
+        task_id: taskID,
+        run_id: runID,
+        kind: "run",
+        label: "run-running",
+        payload: {
+          plan_version_id: null,
+          session_id: null,
+          executor: "opencorvus",
+          status: "running",
+          phase: "execute",
+          blocking_reason: null,
+          error: null,
+          retry_count: 0,
+          executor_ref: null,
+          metadata: null,
+          time_started: now,
+          time_completed: null,
+        },
+        time_created: now,
+        time_updated: now,
+      })
+      .run()
+    db.insert(EngineGoalTable)
+      .values({
+        id: goalID,
+        task_id: taskID,
+        title: "g",
+        slug: "g",
+        objective: "obj",
+        acceptance_specs: [],
+        owned_paths: [],
+        depends_on: [],
+        exports: [],
+        imports: [],
+        kind: "feature",
+        requirement_ids: [],
+        priority: "blocking",
+        source: "test",
+        status: "pending",
+        order_index: 0,
+        time_created: now,
+        time_updated: now,
+      })
+      .run()
   })
 }
 
@@ -110,35 +114,38 @@ function insertGoalRun(input: {
   const now = Date.now()
   const terminal = input.status === "failed" || input.status === "completed" || input.status === "aborted"
   Database.use((db) =>
-    db.insert(EngineArtifactTable).values({
-      id: input.id,
-      task_id: taskID,
-      run_id: runID,
-      goal_run_id: input.id,
-      kind: "goal_run_attempt",
-      label: `attempt-${input.status}`,
-      payload: {
-        goal_id: goalID,
-        plan_node_id: null,
-        session_id: null,
-        status: input.status,
-        retry_count: 0,
-        blocking_reason: null,
-        error: null,
-        workspace_dir: null,
-        base_ref: null,
-        merge_ref: null,
-        supersede_of: input.supersedeOf ?? null,
-        superseded_reason: null,
-        superseded_at: null,
-        metadata: null,
-        owner: input.owner ?? null,
-        time_started: null,
-        time_completed: terminal ? now : null,
-      },
-      time_created: now,
-      time_updated: now,
-    }).run(),
+    db
+      .insert(EngineArtifactTable)
+      .values({
+        id: input.id,
+        task_id: taskID,
+        run_id: runID,
+        goal_run_id: input.id,
+        kind: "goal_run_attempt",
+        label: `attempt-${input.status}`,
+        payload: {
+          goal_id: goalID,
+          plan_node_id: null,
+          session_id: null,
+          status: input.status,
+          retry_count: 0,
+          blocking_reason: null,
+          error: null,
+          workspace_dir: null,
+          base_ref: null,
+          merge_ref: null,
+          supersede_of: input.supersedeOf ?? null,
+          superseded_reason: null,
+          superseded_at: null,
+          metadata: null,
+          owner: input.owner ?? null,
+          time_started: null,
+          time_completed: terminal ? now : null,
+        },
+        time_created: now,
+        time_updated: now,
+      })
+      .run(),
   )
 }
 

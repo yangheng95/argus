@@ -29,16 +29,16 @@ opencorvus serve --hostname 127.0.0.1 --port 7878
 
 路由分散在 `packages/opencorvus/src/server/routes/` 的多个聚焦模块中：
 
-| 模块 | 模块 | 模块 |
-|---|---|---|
-| `app.ts` | `attachment.ts` | `auth.ts` |
-| `channel.ts` | `coding.ts` | `config.ts` |
-| `control.ts` | `executor.ts` | `experimental.ts` |
-| `export.ts` | `file.ts` | `gateway.ts` |
-| `global.ts` | `mcp.ts` | `orchestrator.ts` |
-| `panel.ts` | `permission.ts` | `project.ts` |
-| `provider.ts` | `pty.ts` | `question.ts` |
-| `session.ts` | `skill.ts` | `tui.ts` |
+| 模块          | 模块            | 模块              |
+| ------------- | --------------- | ----------------- |
+| `app.ts`      | `attachment.ts` | `auth.ts`         |
+| `channel.ts`  | `coding.ts`     | `config.ts`       |
+| `control.ts`  | `executor.ts`   | `experimental.ts` |
+| `export.ts`   | `file.ts`       | `gateway.ts`      |
+| `global.ts`   | `mcp.ts`        | `orchestrator.ts` |
+| `panel.ts`    | `permission.ts` | `project.ts`      |
+| `provider.ts` | `pty.ts`        | `question.ts`     |
+| `session.ts`  | `skill.ts`      | `tui.ts`          |
 
 每个模块负责一段相关 API（例如 `permission.ts` 暴露 `/permission/*`，`mcp.ts` 暴露 `/mcp/*`）。
 

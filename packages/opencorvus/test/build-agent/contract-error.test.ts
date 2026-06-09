@@ -1,6 +1,10 @@
 import { describe, expect, test } from "bun:test"
 import { BuildAgentContractError, BuildResultSchema } from "../../src/build/types"
-import { convertMissingTerminalToolError, createMergeBackSingleFlight, evaluateBuildReportSubmission } from "../../src/build/agent"
+import {
+  convertMissingTerminalToolError,
+  createMergeBackSingleFlight,
+  evaluateBuildReportSubmission,
+} from "../../src/build/agent"
 import { AgentRunError } from "../../src/agent/runner"
 import { Message } from "../../src/session/message"
 
@@ -141,9 +145,13 @@ describe("convertMissingTerminalToolError", () => {
       toolName: "report_build_result",
       retries: 0,
     })
-    const wrapped = new AgentRunError("build", `LLM error during build: TerminalToolMissingError: ${innerErr.message}`, {
-      cause: innerErr,
-    })
+    const wrapped = new AgentRunError(
+      "build",
+      `LLM error during build: TerminalToolMissingError: ${innerErr.message}`,
+      {
+        cause: innerErr,
+      },
+    )
     const converted = convertMissingTerminalToolError(wrapped, {
       sessionID: "ses_abc123",
       lastMergeBackOutcome: null,

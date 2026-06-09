@@ -24,32 +24,41 @@ describe("session mirror", () => {
         })
         const ordinary = await Session.create({ kind: "assistant" })
         const mirrored: string[] = []
-        const stop = ProtocolStore.subscribeEvents((event) => {
-          mirrored.push(`${event.sessionID}:${event.type}`)
-        }, { aggregate: "session" })
+        const stop = ProtocolStore.subscribeEvents(
+          (event) => {
+            mirrored.push(`${event.sessionID}:${event.type}`)
+          },
+          { aggregate: "session" },
+        )
 
-        await mirrorSessionBusEvent({
-          type: Message.Event.Updated.type,
-          properties: {
-            info: {
-              id: "msg_sidebar",
-              sessionID: sidebar.id,
-              role: "assistant",
-              time: { created: Date.now() },
+        await mirrorSessionBusEvent(
+          {
+            type: Message.Event.Updated.type,
+            properties: {
+              info: {
+                id: "msg_sidebar",
+                sessionID: sidebar.id,
+                role: "assistant",
+                time: { created: Date.now() },
+              },
             },
           },
-        }, sidebar.id)
-        await mirrorSessionBusEvent({
-          type: Message.Event.Updated.type,
-          properties: {
-            info: {
-              id: "msg_ordinary",
-              sessionID: ordinary.id,
-              role: "assistant",
-              time: { created: Date.now() },
+          sidebar.id,
+        )
+        await mirrorSessionBusEvent(
+          {
+            type: Message.Event.Updated.type,
+            properties: {
+              info: {
+                id: "msg_ordinary",
+                sessionID: ordinary.id,
+                role: "assistant",
+                time: { created: Date.now() },
+              },
             },
           },
-        }, ordinary.id)
+          ordinary.id,
+        )
 
         await new Promise((resolve) => setTimeout(resolve, 50))
         stop()

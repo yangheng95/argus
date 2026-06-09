@@ -203,9 +203,13 @@ describe("built-in browser MCP stdio", () => {
       )
       expect((selected.structuredContent as { selectedValues?: string[] }).selectedValues).toEqual(["two"])
 
-      await mcp.callTool({ name: "type", arguments: { sessionId, selector: "#fixture-input", text: "shortcut target" } }, undefined, {
-        timeout: 30_000,
-      })
+      await mcp.callTool(
+        { name: "type", arguments: { sessionId, selector: "#fixture-input", text: "shortcut target" } },
+        undefined,
+        {
+          timeout: 30_000,
+        },
+      )
       await mcp.callTool({ name: "keyboard_shortcut", arguments: { sessionId, shortcut: "Control+A" } }, undefined, {
         timeout: 30_000,
       })
@@ -228,12 +232,15 @@ describe("built-in browser MCP stdio", () => {
       const dialogHistory = await mcp.callTool({ name: "dialog_history", arguments: { sessionId } }, undefined, {
         timeout: 30_000,
       })
-      expect((dialogHistory.structuredContent as { dialogs?: Array<{ message?: string; action?: string }> }).dialogs).toContainEqual(
-        expect.objectContaining({ message: "fixture dialog", action: "accept" }),
-      )
+      expect(
+        (dialogHistory.structuredContent as { dialogs?: Array<{ message?: string; action?: string }> }).dialogs,
+      ).toContainEqual(expect.objectContaining({ message: "fixture dialog", action: "accept" }))
 
       await mcp.callTool(
-        { name: "drag_and_drop", arguments: { sessionId, sourceSelector: "#drag-source", targetSelector: "#drop-target" } },
+        {
+          name: "drag_and_drop",
+          arguments: { sessionId, sourceSelector: "#drag-source", targetSelector: "#drop-target" },
+        },
         undefined,
         { timeout: 30_000 },
       )
@@ -247,7 +254,10 @@ describe("built-in browser MCP stdio", () => {
       const frameList = await mcp.callTool({ name: "frames", arguments: { sessionId } }, undefined, { timeout: 30_000 })
       expect((frameList.structuredContent as { frames?: unknown[] }).frames?.length ?? 0).toBeGreaterThanOrEqual(2)
       await mcp.callTool(
-        { name: "frame_type", arguments: { sessionId, frameSelector: "#fixture-frame", selector: "#frame-input", text: "inside frame" } },
+        {
+          name: "frame_type",
+          arguments: { sessionId, frameSelector: "#fixture-frame", selector: "#frame-input", text: "inside frame" },
+        },
         undefined,
         { timeout: 30_000 },
       )
@@ -257,7 +267,10 @@ describe("built-in browser MCP stdio", () => {
         { timeout: 30_000 },
       )
       const frameText = await mcp.callTool(
-        { name: "frame_get_text", arguments: { sessionId, frameSelector: "#fixture-frame", selector: "#frame-output" } },
+        {
+          name: "frame_get_text",
+          arguments: { sessionId, frameSelector: "#fixture-frame", selector: "#frame-output" },
+        },
         undefined,
         { timeout: 30_000 },
       )
@@ -269,13 +282,17 @@ describe("built-in browser MCP stdio", () => {
         { timeout: 30_000 },
       )
       const downloadPath = (downloaded.structuredContent as { path?: string; suggestedFilename?: string }).path
-      expect((downloaded.structuredContent as { suggestedFilename?: string }).suggestedFilename).toBe("fixture-download.txt")
+      expect((downloaded.structuredContent as { suggestedFilename?: string }).suggestedFilename).toBe(
+        "fixture-download.txt",
+      )
       if (!downloadPath) throw new Error("download did not return a saved path")
       expect(await fs.readFile(downloadPath, "utf8")).toBe("downloaded fixture")
       const downloadHistory = await mcp.callTool({ name: "download_history", arguments: { sessionId } }, undefined, {
         timeout: 30_000,
       })
-      expect((downloadHistory.structuredContent as { downloads?: unknown[] }).downloads?.length ?? 0).toBeGreaterThanOrEqual(1)
+      expect(
+        (downloadHistory.structuredContent as { downloads?: unknown[] }).downloads?.length ?? 0,
+      ).toBeGreaterThanOrEqual(1)
 
       const observed = await mcp.callTool(
         { name: "observe", arguments: { sessionId, includeScreenshot: true } },
@@ -326,13 +343,12 @@ describe("built-in browser MCP stdio", () => {
       const clippedBytes = Buffer.from(clippedData.data ?? "", "base64")
       expect([...clippedBytes.subarray(0, 8)]).toEqual([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a])
 
-      const exported = await mcp.callTool(
-        { name: "storage_state_export", arguments: { sessionId } },
-        undefined,
-        { timeout: 30_000 },
-      )
-      const storageState = (exported.structuredContent as { storageState?: { cookies?: unknown[]; origins?: unknown[] } })
-        .storageState
+      const exported = await mcp.callTool({ name: "storage_state_export", arguments: { sessionId } }, undefined, {
+        timeout: 30_000,
+      })
+      const storageState = (
+        exported.structuredContent as { storageState?: { cookies?: unknown[]; origins?: unknown[] } }
+      ).storageState
       expect(Array.isArray(storageState?.cookies)).toBe(true)
       expect(Array.isArray(storageState?.origins)).toBe(true)
 
@@ -352,18 +368,16 @@ describe("built-in browser MCP stdio", () => {
         })
       }
 
-      const diagnostics = await mcp.callTool(
-        { name: "diagnostics_get", arguments: { sessionId } },
-        undefined,
-        { timeout: 30_000 },
-      )
+      const diagnostics = await mcp.callTool({ name: "diagnostics_get", arguments: { sessionId } }, undefined, {
+        timeout: 30_000,
+      })
       const diagnosticData = diagnostics.structuredContent as { consoleErrors?: unknown[]; httpErrors?: unknown[] }
       expect(diagnosticData.consoleErrors?.length ?? 0).toBeGreaterThanOrEqual(1)
       expect(diagnosticData.httpErrors?.length ?? 0).toBeGreaterThanOrEqual(1)
     } finally {
-      await mcp.callTool({ name: "session_destroy", arguments: { sessionId } }, undefined, { timeout: 30_000 }).catch(
-        () => undefined,
-      )
+      await mcp
+        .callTool({ name: "session_destroy", arguments: { sessionId } }, undefined, { timeout: 30_000 })
+        .catch(() => undefined)
     }
   })
 })

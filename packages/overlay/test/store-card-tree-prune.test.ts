@@ -1,11 +1,6 @@
 import { expect, test } from "bun:test"
 
-import {
-  cardTreeStore,
-  pruneCardsAfterCursor,
-  setCardTreeStore,
-  type CardNode,
-} from "../src/store/card-tree"
+import { cardTreeStore, pruneCardsAfterCursor, setCardTreeStore, type CardNode } from "../src/store/card-tree"
 import { resetWriter } from "../src/services/tree-writer"
 
 function card(partial: Partial<CardNode> & Pick<CardNode, "id" | "kind" | "title" | "time">): CardNode {

@@ -25,30 +25,26 @@ const files = {
   overlayTauri: path.join(root, "packages/overlay/src-tauri/tauri.conf.json"),
 }
 
-const opencorvusPkg = await Bun.file(files.opencorvus).json() as { version: string }
+const opencorvusPkg = (await Bun.file(files.opencorvus).json()) as { version: string }
 const version = normalize(input || opencorvusPkg.version)
 
-const overlayPkg = await Bun.file(files.overlayPkg).json() as Record<string, unknown>
-const tauriJson = await Bun.file(files.overlayTauri).json() as Record<string, unknown>
+const overlayPkg = (await Bun.file(files.overlayPkg).json()) as Record<string, unknown>
+const tauriJson = (await Bun.file(files.overlayTauri).json()) as Record<string, unknown>
 const cargo = await Bun.file(files.overlayCargo).text()
 
 const drift = [
   ["packages/opencorvus/package.json", opencorvusPkg.version],
   ["packages/overlay/package.json", String(overlayPkg.version ?? "")],
   ["packages/overlay/src-tauri/tauri.conf.json", String(tauriJson.version ?? "")],
-  [
-    "packages/overlay/src-tauri/Cargo.toml",
-    cargo.match(/^version = "([^"]+)"/m)?.[1] ?? "",
-  ],
+  ["packages/overlay/src-tauri/Cargo.toml", cargo.match(/^version = "([^"]+)"/m)?.[1] ?? ""],
 ].filter(([, current]) => current !== version)
 
 if (check) {
   if (drift.length > 0) {
     throw new Error(
-      [
-        `Version drift detected. Expected ${version}.`,
-        ...drift.map(([file, current]) => `- ${file}: ${current}`),
-      ].join("\n"),
+      [`Version drift detected. Expected ${version}.`, ...drift.map(([file, current]) => `- ${file}: ${current}`)].join(
+        "\n",
+      ),
     )
   }
   console.log(`Versions aligned at ${version}`)

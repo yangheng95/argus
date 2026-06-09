@@ -16,14 +16,14 @@ session.
 
 ## Grep Evidence
 
-| Surface | Call points | Decision |
-| --- | --- | --- |
-| `submit_research_brief` | `src/research/output-tools.ts`, `src/research/agent.ts`, output-tool tests, prompt cores | Keep the terminal name but shrink it to `final: true` plus fact-check items. |
-| `ResearchSubmitSchema` | `output-tools.ts`, tests | Replace with small `ResearchFinalizeSchema`; assemble final draft from collector registrations. |
-| `ResearchBundleInputSchema` | `schema.ts`, `output-tools.ts` | Keep materialized shape, but fill it through `register_research_bundle_section`, `register_research_evidence_note`, and `register_research_citation`. |
-| `webpage_contract` | `schema.ts`, `output-tools.ts`, prompt section, downstream research prompt injection | Keep persisted shape, but register each contract item as a small tool call. |
-| `frontendResearchSessionConfig.prepareWebpageEvidence` | `src/frontend-research/agent.ts`, tests | Change to `always-for-source-url` so frontend-research materializes rendered webpage PRD evidence itself when called with a URL. |
-| Prompt text saying frontend-research does not investigate | `frontend-research-core.txt`, role-contract/context-tool tests | Replace with host-prepared evidence investigation wording. |
+| Surface                                                   | Call points                                                                              | Decision                                                                                                                                              |
+| --------------------------------------------------------- | ---------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `submit_research_brief`                                   | `src/research/output-tools.ts`, `src/research/agent.ts`, output-tool tests, prompt cores | Keep the terminal name but shrink it to `final: true` plus fact-check items.                                                                          |
+| `ResearchSubmitSchema`                                    | `output-tools.ts`, tests                                                                 | Replace with small `ResearchFinalizeSchema`; assemble final draft from collector registrations.                                                       |
+| `ResearchBundleInputSchema`                               | `schema.ts`, `output-tools.ts`                                                           | Keep materialized shape, but fill it through `register_research_bundle_section`, `register_research_evidence_note`, and `register_research_citation`. |
+| `webpage_contract`                                        | `schema.ts`, `output-tools.ts`, prompt section, downstream research prompt injection     | Keep persisted shape, but register each contract item as a small tool call.                                                                           |
+| `frontendResearchSessionConfig.prepareWebpageEvidence`    | `src/frontend-research/agent.ts`, tests                                                  | Change to `always-for-source-url` so frontend-research materializes rendered webpage PRD evidence itself when called with a URL.                      |
+| Prompt text saying frontend-research does not investigate | `frontend-research-core.txt`, role-contract/context-tool tests                           | Replace with host-prepared evidence investigation wording.                                                                                            |
 
 ## Design
 

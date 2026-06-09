@@ -45,7 +45,9 @@ describe("claude agent sdk options", () => {
   })
 
   test("unwraps quoted Claude executable paths before passing SDK options", async () => {
-    await collect(ClaudeAgentExecutor.createSdk(`'"C:\\Users\\hengu\\.local\\bin\\claude.exe"'`).run({ prompt: "test" }))
+    await collect(
+      ClaudeAgentExecutor.createSdk(`'"C:\\Users\\hengu\\.local\\bin\\claude.exe"'`).run({ prompt: "test" }),
+    )
 
     const options = calls[0]?.options as Record<string, unknown> | undefined
     expect(options?.pathToClaudeCodeExecutable).toBe("C:\\Users\\hengu\\.local\\bin\\claude.exe")
@@ -78,7 +80,9 @@ describe("claude agent sdk options", () => {
     await collect(ClaudeAgentExecutor.createSdk().run({ prompt: "build", cwd }))
 
     const options = calls[0]?.options as Record<string, unknown> | undefined
-    const servers = options?.mcpServers as Record<string, { type?: string; command?: string; args?: string[] }> | undefined
+    const servers = options?.mcpServers as
+      | Record<string, { type?: string; command?: string; args?: string[] }>
+      | undefined
     expect(servers?.opencorvus?.type).toBe("stdio")
     expect(servers?.opencorvus?.command).toBe(process.execPath)
     expect(servers?.opencorvus?.args?.[0]).toEndWith("stdio.ts")
@@ -88,14 +92,16 @@ describe("claude agent sdk options", () => {
   })
 
   test("passes OpenCorvus runtime env to MCP server when execution context exists", async () => {
-    await collect(ClaudeAgentExecutor.createSdk().run({
-      prompt: "build",
-      cwd: "D:\\repo\\worktree",
-      taskID: "tsk_123",
-      logicalSessionID: "ses_123",
-      runtimeDir: "D:\\repo\\.opencorvus\\runtime",
-      worktreeDir: "D:\\repo\\.opencorvus\\worktrees\\w1",
-    }))
+    await collect(
+      ClaudeAgentExecutor.createSdk().run({
+        prompt: "build",
+        cwd: "D:\\repo\\worktree",
+        taskID: "tsk_123",
+        logicalSessionID: "ses_123",
+        runtimeDir: "D:\\repo\\.opencorvus\\runtime",
+        worktreeDir: "D:\\repo\\.opencorvus\\worktrees\\w1",
+      }),
+    )
 
     const options = calls[0]?.options as Record<string, unknown> | undefined
     const servers = options?.mcpServers as Record<string, { env?: Record<string, string> }> | undefined
@@ -120,7 +126,9 @@ describe("claude agent sdk options", () => {
     expect(systemPrompt?.append).toContain("task_report => mcp__opencorvus__task_report")
     expect(systemPrompt?.append).not.toContain("webpage_extract => mcp__opencorvus__webpage_extract")
     expect(systemPrompt?.append).not.toContain("figma_extract => mcp__opencorvus__figma_extract")
-    expect(systemPrompt?.append).toContain("Webpage evidence artifacts are produced by the upstream frontend_design stage")
+    expect(systemPrompt?.append).toContain(
+      "Webpage evidence artifacts are produced by the upstream frontend_design stage",
+    )
   })
 
   test("omits options.resume on a fresh run so Claude starts a new session", async () => {
@@ -139,7 +147,6 @@ describe("claude agent sdk options", () => {
     expect(options).toBeDefined()
     expect("resume" in (options ?? {})).toBe(false)
   })
-
 })
 
 async function collect(input: AsyncIterable<unknown>) {

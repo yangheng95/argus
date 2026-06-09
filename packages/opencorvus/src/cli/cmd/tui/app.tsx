@@ -139,7 +139,9 @@ export function TuiRoot(input: TuiRootInput) {
   }
 
   return (
-    <ErrorBoundary fallback={(error, reset) => <ErrorComponent error={error} reset={reset} onExit={onExit} mode={mode} />}>
+    <ErrorBoundary
+      fallback={(error, reset) => <ErrorComponent error={error} reset={reset} onExit={onExit} mode={mode} />}
+    >
       <ArgsProvider {...input.args}>
         <ExitProvider onExit={onExit}>
           <KVProvider>
@@ -469,267 +471,267 @@ function App(props: { dimensions?: { width: number; height: number } }) {
           dialog.replace(() => <CommandPaletteDialog />)
         },
       },
-    {
-      title: "New session",
-      suggested: route.data.type === "session",
-      name: "session.new",
-      category: "Session",
-      slashName: "new",
-      slashAliases: ["clear"],
-      run: () => {
-        const current = promptRef.current
-        // Don't require focus - if there's any text, preserve it
-        const currentPrompt = current?.current?.input ? current.current : undefined
-        route.navigate({
-          type: "home",
-          initialPrompt: currentPrompt,
-        })
-        dialog.clear()
+      {
+        title: "New session",
+        suggested: route.data.type === "session",
+        name: "session.new",
+        category: "Session",
+        slashName: "new",
+        slashAliases: ["clear"],
+        run: () => {
+          const current = promptRef.current
+          // Don't require focus - if there's any text, preserve it
+          const currentPrompt = current?.current?.input ? current.current : undefined
+          route.navigate({
+            type: "home",
+            initialPrompt: currentPrompt,
+          })
+          dialog.clear()
+        },
       },
-    },
-    ...Array.from({ length: 9 }, (_, i) => ({
-      name: `session.quick_switch.${i + 1}`,
-      title: `Switch to session in quick slot ${i + 1}`,
-      category: "Session",
-      hidden: true,
-      run: () => {
-        local.session.quickSwitch(i + 1)
+      ...Array.from({ length: 9 }, (_, i) => ({
+        name: `session.quick_switch.${i + 1}`,
+        title: `Switch to session in quick slot ${i + 1}`,
+        category: "Session",
+        hidden: true,
+        run: () => {
+          local.session.quickSwitch(i + 1)
+        },
+      })),
+      {
+        title: "Switch model",
+        name: "model.list",
+        suggested: true,
+        category: "Agent",
+        slashName: "models",
+        run: () => {
+          dialog.replace(() => <DialogModel />)
+        },
       },
-    })),
-    {
-      title: "Switch model",
-      name: "model.list",
-      suggested: true,
-      category: "Agent",
-      slashName: "models",
-      run: () => {
-        dialog.replace(() => <DialogModel />)
+      {
+        title: "Model cycle",
+        name: "model.cycle_recent",
+        category: "Agent",
+        hidden: true,
+        run: () => {
+          local.model.cycle(1)
+        },
       },
-    },
-    {
-      title: "Model cycle",
-      name: "model.cycle_recent",
-      category: "Agent",
-      hidden: true,
-      run: () => {
-        local.model.cycle(1)
+      {
+        title: "Model cycle reverse",
+        name: "model.cycle_recent_reverse",
+        category: "Agent",
+        hidden: true,
+        run: () => {
+          local.model.cycle(-1)
+        },
       },
-    },
-    {
-      title: "Model cycle reverse",
-      name: "model.cycle_recent_reverse",
-      category: "Agent",
-      hidden: true,
-      run: () => {
-        local.model.cycle(-1)
+      {
+        title: "Favorite cycle",
+        name: "model.cycle_favorite",
+        category: "Agent",
+        hidden: true,
+        run: () => {
+          local.model.cycleFavorite(1)
+        },
       },
-    },
-    {
-      title: "Favorite cycle",
-      name: "model.cycle_favorite",
-      category: "Agent",
-      hidden: true,
-      run: () => {
-        local.model.cycleFavorite(1)
+      {
+        title: "Favorite cycle reverse",
+        name: "model.cycle_favorite_reverse",
+        category: "Agent",
+        hidden: true,
+        run: () => {
+          local.model.cycleFavorite(-1)
+        },
       },
-    },
-    {
-      title: "Favorite cycle reverse",
-      name: "model.cycle_favorite_reverse",
-      category: "Agent",
-      hidden: true,
-      run: () => {
-        local.model.cycleFavorite(-1)
+      {
+        title: "Switch agent",
+        name: "agent.list",
+        category: "Agent",
+        slashName: "agents",
+        run: () => {
+          dialog.replace(() => <DialogAgent />)
+        },
       },
-    },
-    {
-      title: "Switch agent",
-      name: "agent.list",
-      category: "Agent",
-      slashName: "agents",
-      run: () => {
-        dialog.replace(() => <DialogAgent />)
+      {
+        title: "Toggle MCPs",
+        name: "mcp.list",
+        category: "Agent",
+        slashName: "mcps",
+        run: () => {
+          dialog.replace(() => <DialogMcp />)
+        },
       },
-    },
-    {
-      title: "Toggle MCPs",
-      name: "mcp.list",
-      category: "Agent",
-      slashName: "mcps",
-      run: () => {
-        dialog.replace(() => <DialogMcp />)
+      {
+        title: "Agent cycle",
+        name: "agent.cycle",
+        category: "Agent",
+        hidden: true,
+        run: () => {
+          local.agent.move(1)
+        },
       },
-    },
-    {
-      title: "Agent cycle",
-      name: "agent.cycle",
-      category: "Agent",
-      hidden: true,
-      run: () => {
-        local.agent.move(1)
+      {
+        title: "Variant cycle",
+        name: "variant.cycle",
+        category: "Agent",
+        hidden: true,
+        run: () => {
+          local.model.variant.cycle()
+        },
       },
-    },
-    {
-      title: "Variant cycle",
-      name: "variant.cycle",
-      category: "Agent",
-      hidden: true,
-      run: () => {
-        local.model.variant.cycle()
+      {
+        title: "Agent cycle reverse",
+        name: "agent.cycle.reverse",
+        category: "Agent",
+        hidden: true,
+        run: () => {
+          local.agent.move(-1)
+        },
       },
-    },
-    {
-      title: "Agent cycle reverse",
-      name: "agent.cycle.reverse",
-      category: "Agent",
-      hidden: true,
-      run: () => {
-        local.agent.move(-1)
+      {
+        title: "Connect provider",
+        name: "provider.connect",
+        suggested: !connected(),
+        slashName: "connect",
+        run: () => {
+          dialog.replace(() => <DialogProviderList />)
+        },
+        category: "Provider",
       },
-    },
-    {
-      title: "Connect provider",
-      name: "provider.connect",
-      suggested: !connected(),
-      slashName: "connect",
-      run: () => {
-        dialog.replace(() => <DialogProviderList />)
+      {
+        title: "View status",
+        name: "opencorvus.status",
+        slashName: "status",
+        run: () => {
+          dialog.replace(() => <DialogStatus />)
+        },
+        category: "System",
       },
-      category: "Provider",
-    },
-    {
-      title: "View status",
-      name: "opencorvus.status",
-      slashName: "status",
-      run: () => {
-        dialog.replace(() => <DialogStatus />)
+      {
+        title: "Switch theme",
+        name: "theme.switch",
+        slashName: "themes",
+        run: () => {
+          dialog.replace(() => <DialogThemeList />)
+        },
+        category: "System",
       },
-      category: "System",
-    },
-    {
-      title: "Switch theme",
-      name: "theme.switch",
-      slashName: "themes",
-      run: () => {
-        dialog.replace(() => <DialogThemeList />)
+      {
+        title: "Toggle appearance",
+        name: "theme.switch_mode",
+        run: () => {
+          setMode(mode() === "dark" ? "light" : "dark")
+          dialog.clear()
+        },
+        category: "System",
       },
-      category: "System",
-    },
-    {
-      title: "Toggle appearance",
-      name: "theme.switch_mode",
-      run: () => {
-        setMode(mode() === "dark" ? "light" : "dark")
-        dialog.clear()
+      {
+        title: "Help",
+        name: "help.show",
+        slashName: "help",
+        run: () => {
+          dialog.replace(() => <DialogHelp />)
+        },
+        category: "System",
       },
-      category: "System",
-    },
-    {
-      title: "Help",
-      name: "help.show",
-      slashName: "help",
-      run: () => {
-        dialog.replace(() => <DialogHelp />)
+      {
+        title: "Open docs",
+        name: "docs.open",
+        run: () => {
+          open("https://opencorvus.ai/docs").catch(() => {})
+          dialog.clear()
+        },
+        category: "System",
       },
-      category: "System",
-    },
-    {
-      title: "Open docs",
-      name: "docs.open",
-      run: () => {
-        open("https://opencorvus.ai/docs").catch(() => {})
-        dialog.clear()
+      {
+        title: "Exit the app",
+        name: "app.exit",
+        slashName: "exit",
+        slashAliases: ["quit", "q"],
+        run: () => exit(),
+        category: "System",
       },
-      category: "System",
-    },
-    {
-      title: "Exit the app",
-      name: "app.exit",
-      slashName: "exit",
-      slashAliases: ["quit", "q"],
-      run: () => exit(),
-      category: "System",
-    },
-    {
-      title: "Toggle debug panel",
-      category: "System",
-      name: "app.debug",
-      run: () => {
-        renderer.toggleDebugOverlay()
-        dialog.clear()
+      {
+        title: "Toggle debug panel",
+        category: "System",
+        name: "app.debug",
+        run: () => {
+          renderer.toggleDebugOverlay()
+          dialog.clear()
+        },
       },
-    },
-    {
-      title: "Toggle console",
-      category: "System",
-      name: "app.console",
-      run: () => {
-        renderer.console.toggle()
-        dialog.clear()
+      {
+        title: "Toggle console",
+        category: "System",
+        name: "app.console",
+        run: () => {
+          renderer.console.toggle()
+          dialog.clear()
+        },
       },
-    },
-    {
-      title: "Write heap snapshot",
-      category: "System",
-      name: "app.heap_snapshot",
-      run: () => {
-        const path = writeHeapSnapshot()
-        toast.show({
-          variant: "info",
-          message: `Heap snapshot written to ${path}`,
-          duration: 5000,
-        })
-        dialog.clear()
+      {
+        title: "Write heap snapshot",
+        category: "System",
+        name: "app.heap_snapshot",
+        run: () => {
+          const path = writeHeapSnapshot()
+          toast.show({
+            variant: "info",
+            message: `Heap snapshot written to ${path}`,
+            duration: 5000,
+          })
+          dialog.clear()
+        },
       },
-    },
-    {
-      title: "Suspend terminal",
-      name: "terminal.suspend",
-      category: "System",
-      hidden: true,
-      run: () => {
-        process.once("SIGCONT", () => {
-          renderer.resume()
-        })
+      {
+        title: "Suspend terminal",
+        name: "terminal.suspend",
+        category: "System",
+        hidden: true,
+        run: () => {
+          process.once("SIGCONT", () => {
+            renderer.resume()
+          })
 
-        renderer.suspend()
-        // pid=0 means send the signal to all processes in the process group
-        process.kill(0, "SIGTSTP")
+          renderer.suspend()
+          // pid=0 means send the signal to all processes in the process group
+          process.kill(0, "SIGTSTP")
+        },
       },
-    },
-    {
-      title: terminalTitleEnabled() ? "Disable terminal title" : "Enable terminal title",
-      name: "terminal.title.toggle",
-      category: "System",
-      run: () => {
-        setTerminalTitleEnabled((prev) => {
-          const next = !prev
-          kv.set("terminal_title_enabled", next)
-          if (!next) renderer.setTerminalTitle("")
-          return next
-        })
-        dialog.clear()
+      {
+        title: terminalTitleEnabled() ? "Disable terminal title" : "Enable terminal title",
+        name: "terminal.title.toggle",
+        category: "System",
+        run: () => {
+          setTerminalTitleEnabled((prev) => {
+            const next = !prev
+            kv.set("terminal_title_enabled", next)
+            if (!next) renderer.setTerminalTitle("")
+            return next
+          })
+          dialog.clear()
+        },
       },
-    },
-    {
-      title: kv.get("animations_enabled", true) ? "Disable animations" : "Enable animations",
-      name: "app.toggle.animations",
-      category: "System",
-      run: () => {
-        kv.set("animations_enabled", !kv.get("animations_enabled", true))
-        dialog.clear()
+      {
+        title: kv.get("animations_enabled", true) ? "Disable animations" : "Enable animations",
+        name: "app.toggle.animations",
+        category: "System",
+        run: () => {
+          kv.set("animations_enabled", !kv.get("animations_enabled", true))
+          dialog.clear()
+        },
       },
-    },
-    {
-      title: kv.get("diff_wrap_mode", "word") === "word" ? "Disable diff wrapping" : "Enable diff wrapping",
-      name: "app.toggle.diffwrap",
-      category: "System",
-      run: () => {
-        const current = kv.get("diff_wrap_mode", "word")
-        kv.set("diff_wrap_mode", current === "word" ? "none" : "word")
-        dialog.clear()
+      {
+        title: kv.get("diff_wrap_mode", "word") === "word" ? "Disable diff wrapping" : "Enable diff wrapping",
+        name: "app.toggle.diffwrap",
+        category: "System",
+        run: () => {
+          const current = kv.get("diff_wrap_mode", "word")
+          kv.set("diff_wrap_mode", current === "word" ? "none" : "word")
+          dialog.clear()
+        },
       },
-    },
     ].map((command) => ({
       namespace: "palette",
       ...command,

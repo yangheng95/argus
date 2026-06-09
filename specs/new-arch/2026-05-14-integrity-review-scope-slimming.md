@@ -47,7 +47,6 @@ instruct the orchestrator to call standalone integrity after every build wave.
 - `integrity-core.txt` contains no `## Repository Baseline` section.
 - Evidence rules still mention existing tests, public behavior, design docs,
   historical plans, current source contracts, and repository evidence.
-- `orchestrator/tools.ts` does not contain `call \`integrity\` ONCE` or
-  `wave-level architecture review`.
+- `orchestrator/tools.ts` does not contain `call \`integrity\` ONCE`or`wave-level architecture review`.
 - `solution_quality` says it is not a second full Architect review.
 - Targeted prompt tests pass.

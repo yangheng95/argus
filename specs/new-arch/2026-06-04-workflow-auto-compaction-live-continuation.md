@@ -22,21 +22,21 @@ Command:
 
 `rg -n "SessionCompaction\.create|SessionCompaction\.process|SessionCompaction\.isOverflow|AutomaticCompaction|DISABLED_WORKFLOW_SESSION_KINDS|disablesAutomaticCompaction|compaction_request|manual_summarize|SessionControl\.Kind|SessionControl\.pending|SessionControl\.create|SessionControl\.consume|SessionControl\.fail|session_control_record|WorkerTurnDescriptor|workerTurnDescriptor|result_mode|maintenanceSummaryFailureMessage|selectPromptFinalMessageFromNewest|flushPromptFinalMessage|collectLoopState" packages/opencorvus/src packages/opencorvus/test specs -S`
 
-| Surface | Decision |
-| --- | --- |
-| `packages/opencorvus/src/session/auto-compaction.ts` | Replace the hard denylist-only helper with a typed decision helper. |
-| `packages/opencorvus/src/session/loop.ts::disablesAutomaticCompaction` | Replace with a helper that validates runtime continuation for runtime-gated workflow kinds. |
-| `SessionLoop` predictive branch | Queue automatic compaction for runtime-ready `build` / `frontend-design` / `integrity`; otherwise emit the existing visible budget error. |
-| `SessionLoop` reactive provider-overflow branch | Same policy as predictive; do not hide provider overflow behind an unsupported workflow compaction. |
-| `SessionLoop` pending `compaction_request` handling | Fail queued automatic workflow compaction if runtime validation is no longer live. |
-| `SessionLoop` legacy compaction-part handling | Use the compaction marker's owning user message as the source; remove orphaned markers. |
-| `SessionLoop` previous-turn overflow branch | Same policy as predictive before creating a new automatic request. |
-| `SessionCompaction.create` | Validate the source user message's worker descriptor reference against the live runtime contract before queuing automatic workflow compaction. |
-| `SessionCompaction.process` | Keep the current summary checkpoint behavior and continue the same loop; no synthetic user-message continuation. |
-| `WorkerTurnDescriptor` | Keep as the persisted identity for model/tool/result-mode validation. No schema change. |
-| `SessionControl.Kind` | No new control kind. The existing `compaction_request` remains the durable queued action. |
-| `compaction-continue-inherit.test.ts` | Replace hard workflow rejection expectations with runtime-ready allow and missing-runtime reject cases. |
-| `extra-tools.test.ts` | Strengthen continuation validation coverage for result mode, tool drift, and satisfied terminal collectors. |
+| Surface                                                                | Decision                                                                                                                                       |
+| ---------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------- |
+| `packages/opencorvus/src/session/auto-compaction.ts`                   | Replace the hard denylist-only helper with a typed decision helper.                                                                            |
+| `packages/opencorvus/src/session/loop.ts::disablesAutomaticCompaction` | Replace with a helper that validates runtime continuation for runtime-gated workflow kinds.                                                    |
+| `SessionLoop` predictive branch                                        | Queue automatic compaction for runtime-ready `build` / `frontend-design` / `integrity`; otherwise emit the existing visible budget error.      |
+| `SessionLoop` reactive provider-overflow branch                        | Same policy as predictive; do not hide provider overflow behind an unsupported workflow compaction.                                            |
+| `SessionLoop` pending `compaction_request` handling                    | Fail queued automatic workflow compaction if runtime validation is no longer live.                                                             |
+| `SessionLoop` legacy compaction-part handling                          | Use the compaction marker's owning user message as the source; remove orphaned markers.                                                        |
+| `SessionLoop` previous-turn overflow branch                            | Same policy as predictive before creating a new automatic request.                                                                             |
+| `SessionCompaction.create`                                             | Validate the source user message's worker descriptor reference against the live runtime contract before queuing automatic workflow compaction. |
+| `SessionCompaction.process`                                            | Keep the current summary checkpoint behavior and continue the same loop; no synthetic user-message continuation.                               |
+| `WorkerTurnDescriptor`                                                 | Keep as the persisted identity for model/tool/result-mode validation. No schema change.                                                        |
+| `SessionControl.Kind`                                                  | No new control kind. The existing `compaction_request` remains the durable queued action.                                                      |
+| `compaction-continue-inherit.test.ts`                                  | Replace hard workflow rejection expectations with runtime-ready allow and missing-runtime reject cases.                                        |
+| `extra-tools.test.ts`                                                  | Strengthen continuation validation coverage for result mode, tool drift, and satisfied terminal collectors.                                    |
 
 ## Decision
 

@@ -60,7 +60,10 @@ type QueuedTask = {
 }
 
 export class TaskQueueReorderError extends Error {
-  constructor(message: string, readonly code: "not_found" | "conflict" | "invalid_order") {
+  constructor(
+    message: string,
+    readonly code: "not_found" | "conflict" | "invalid_order",
+  ) {
     super(message)
     this.name = "TaskQueueReorderError"
   }
@@ -133,7 +136,10 @@ export function reorderQueuedTasksForCwd(input: {
     const currentIDs = queued.map((task) => task.id)
     const currentSet = new Set(currentIDs)
     if (orderedTaskIDs.length !== currentIDs.length || !orderedTaskIDs.every((id) => currentSet.has(id))) {
-      throw new TaskQueueReorderError("orderedTaskIDs must contain every queued task in the directory and no active/completed tasks", "invalid_order")
+      throw new TaskQueueReorderError(
+        "orderedTaskIDs must contain every queued task in the directory and no active/completed tasks",
+        "invalid_order",
+      )
     }
 
     for (const [index, taskID] of orderedTaskIDs.entries()) {
@@ -165,10 +171,9 @@ async function launchTaskLoop(taskID: string, event: OrchestratorEvent | undefin
   // attached by the caller fired before the loop had done anything, so the
   // queue-advance hook never fired on real task termination and sibling
   // queued tasks in the same cwd stayed stuck forever.
-  return runTaskLoop({ taskID, event, hooks: hooks() })
-    .catch((err) => {
-      log.error("task loop failed", { taskID, error: err instanceof Error ? err.message : String(err) })
-    })
+  return runTaskLoop({ taskID, event, hooks: hooks() }).catch((err) => {
+    log.error("task loop failed", { taskID, error: err instanceof Error ? err.message : String(err) })
+  })
 }
 
 /**
@@ -200,7 +205,10 @@ function attachLoopCompletion(taskID: string, cwd: string, loopPromise: Promise<
         return
       }
       advanceQueue(cwd).catch((err) => {
-        log.error("advanceQueue failed after loop exit", { cwd, error: err instanceof Error ? err.message : String(err) })
+        log.error("advanceQueue failed after loop exit", {
+          cwd,
+          error: err instanceof Error ? err.message : String(err),
+        })
       })
     })
   })
@@ -521,11 +529,7 @@ export async function dispatchTaskLoop(input: {
  * Dynamic import of task-loop avoids a circular dependency
  * (task-loop → queue → task-loop).
  */
-async function startLoopForTask(
-  task: TaskRow,
-  event: OrchestratorEvent | undefined,
-  cwd: string,
-): Promise<void> {
+async function startLoopForTask(task: TaskRow, event: OrchestratorEvent | undefined, cwd: string): Promise<void> {
   if (loopInFlightFor(task.id)) {
     log.info("loop already in flight, skipping", { taskID: task.id })
     return

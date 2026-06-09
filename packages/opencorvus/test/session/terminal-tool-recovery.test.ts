@@ -14,15 +14,11 @@ describe("SessionLoop terminal tool recovery", () => {
   })
 
   test("does not recover while the model is still executing tool calls", () => {
-    expect(
-      SessionLoop.shouldEnterTerminalToolRecovery({ ...base, finish: "tool-calls" }),
-    ).toBe(false)
+    expect(SessionLoop.shouldEnterTerminalToolRecovery({ ...base, finish: "tool-calls" })).toBe(false)
   })
 
   test("does not recover once the terminal collector contract is satisfied", () => {
-    expect(
-      SessionLoop.shouldEnterTerminalToolRecovery({ ...base, satisfied: true }),
-    ).toBe(false)
+    expect(SessionLoop.shouldEnterTerminalToolRecovery({ ...base, satisfied: true })).toBe(false)
   })
 
   test("stops immediately once the terminal collector contract is satisfied", () => {
@@ -90,5 +86,4 @@ describe("SessionLoop terminal tool recovery", () => {
     expect(prompt).toContain("Do NOT respond with plain text")
     expect(prompt).toContain("input matching its schema")
   })
-
 })

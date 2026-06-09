@@ -1,15 +1,9 @@
 import { describe, expect, test } from "bun:test"
 import { readFileSync } from "node:fs"
 import path from "node:path"
-import {
-  installNativeContextMenuSuppression,
-  suppressNativeContextMenu,
-} from "../src/utils/context-menu"
+import { installNativeContextMenuSuppression, suppressNativeContextMenu } from "../src/utils/context-menu"
 
-const MAIN_SOURCE = readFileSync(
-  path.resolve(import.meta.dir, "..", "src", "main.tsx"),
-  "utf8",
-)
+const MAIN_SOURCE = readFileSync(path.resolve(import.meta.dir, "..", "src", "main.tsx"), "utf8")
 
 describe("overlay context menu policy", () => {
   test("native context menu events are prevented at the policy source", () => {

@@ -129,12 +129,7 @@ export function listFactCheckAttempts(taskID: string): FactCheckAttemptRow[] {
     db
       .select()
       .from(EngineArtifactTable)
-      .where(
-        and(
-          eq(EngineArtifactTable.task_id, taskID),
-          eq(EngineArtifactTable.kind, "fact_check_attempt"),
-        ),
-      )
+      .where(and(eq(EngineArtifactTable.task_id, taskID), eq(EngineArtifactTable.kind, "fact_check_attempt")))
       .orderBy(desc(EngineArtifactTable.time_created), desc(EngineArtifactTable.id))
       .all()
       .map((row) => ({

@@ -10,7 +10,9 @@ type ProtocolPayload = Record<string, unknown>
 export const ProtocolEventTable = sqliteTable(
   "protocol_event",
   {
-    id: text().primaryKey().$default(() => Identifier.ascending("protocol_event")),
+    id: text()
+      .primaryKey()
+      .$default(() => Identifier.ascending("protocol_event")),
     kind: text().notNull().$type<ProtocolKind>(),
     type: text().notNull(),
     aggregate_type: text().notNull().$type<ProtocolAggregate>(),
@@ -48,7 +50,9 @@ export const ProtocolEventTable = sqliteTable(
 export const ProtocolInboxTable = sqliteTable(
   "protocol_inbox",
   {
-    id: text().primaryKey().$default(() => Identifier.ascending("protocol_inbox")),
+    id: text()
+      .primaryKey()
+      .$default(() => Identifier.ascending("protocol_inbox")),
     envelope_id: text()
       .notNull()
       .references(() => ProtocolEventTable.id, { onDelete: "cascade" }),

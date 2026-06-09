@@ -27,33 +27,59 @@ test("titlebar controls stay on the surface family", () => {
   expect(TITLEBAR_CSS).not.toContain("var(--guide-card-")
   expect(TITLEBAR_CSS).not.toContain("var(--hover-accent-shadow)")
   expect(bodyOf(TITLEBAR_CSS, ".titlebar-theme-option:hover")).toMatch(/background:\s*var\(--surface-hover\)/)
-  expect(bodyOf(TITLEBAR_CSS, ".titlebar-menubar-trigger:hover, .titlebar-menubar-trigger:focus-visible, .titlebar-menubar-trigger[data-active=\"true\"]")).toMatch(/background:\s*var\(--surface-hover\)/)
-  expect(bodyOf(TITLEBAR_CSS, ".brand-guide:hover, .brand-guide:focus-visible, .brand-guide:focus-within")).toMatch(/background:\s*var\(--surface-hover\)/)
+  expect(
+    bodyOf(
+      TITLEBAR_CSS,
+      '.titlebar-menubar-trigger:hover, .titlebar-menubar-trigger:focus-visible, .titlebar-menubar-trigger[data-active="true"]',
+    ),
+  ).toMatch(/background:\s*var\(--surface-hover\)/)
+  expect(bodyOf(TITLEBAR_CSS, ".brand-guide:hover, .brand-guide:focus-visible, .brand-guide:focus-within")).toMatch(
+    /background:\s*var\(--surface-hover\)/,
+  )
   expect(TITLEBAR_CSS).toContain("background: var(--menu-panel-bg)")
   expect(bodyOf(TITLEBAR_CSS, ".titlebar-menubar-note")).toMatch(/background:\s*var\(--surface-inset\)/)
-  expect(bodyOf(TITLEBAR_CSS, ".titlebar-status-chip, .titlebar-setup-cta, .titlebar-status-icon")).toContain("color-mix(in srgb, var(--surface-strong) 86%, transparent)")
-  expect(bodyOf(TITLEBAR_CSS, ".titlebar-status-chip:hover, .titlebar-setup-cta:hover, .titlebar-status-icon:hover")).toMatch(/background:\s*var\(--surface-hover\)/)
+  expect(bodyOf(TITLEBAR_CSS, ".titlebar-status-chip, .titlebar-setup-cta, .titlebar-status-icon")).toContain(
+    "color-mix(in srgb, var(--surface-strong) 86%, transparent)",
+  )
+  expect(
+    bodyOf(TITLEBAR_CSS, ".titlebar-status-chip:hover, .titlebar-setup-cta:hover, .titlebar-status-icon:hover"),
+  ).toMatch(/background:\s*var\(--surface-hover\)/)
 })
 
 test("task and file search share the field primitive", () => {
   expect(bodyOf(SIDEBAR_CSS, ".task-list-search")).not.toMatch(/background|border|border-radius/)
   expect(INSPECTOR_CSS).not.toContain(".file-explorer-search {")
-  expect(bodyOf(FIELD_CSS, ".search-field")).toMatch(/background:\s*color-mix\(in srgb, var\(--surface-inset\) 94%, transparent\)/)
+  expect(bodyOf(FIELD_CSS, ".search-field")).toMatch(
+    /background:\s*color-mix\(in srgb, var\(--surface-inset\) 94%, transparent\)/,
+  )
   expect(bodyOf(FIELD_CSS, ".search-field:focus-within")).toMatch(/background:\s*var\(--surface-inset\)/)
-  expect(bodyOf(FIELD_CSS, ".search-field .oc-button[data-ui$=\"-search-clear\"]:hover, .search-field .oc-button[data-ui$=\"-search-clear\"]:focus-visible")).toContain("--oc-button-bg: var(--surface-hover)")
+  expect(
+    bodyOf(
+      FIELD_CSS,
+      '.search-field .oc-button[data-ui$="-search-clear"]:hover, .search-field .oc-button[data-ui$="-search-clear"]:focus-visible',
+    ),
+  ).toContain("--oc-button-bg: var(--surface-hover)")
 })
 
 test("inspector list rows keep a neutral inset base", () => {
-  expect(bodyOf(INSPECTOR_CSS, ".goal-item, .knowledge-item, .pref-item, .criteria-check")).toMatch(/background:\s*transparent/)
+  expect(bodyOf(INSPECTOR_CSS, ".goal-item, .knowledge-item, .pref-item, .criteria-check")).toMatch(
+    /background:\s*transparent/,
+  )
   expect(bodyOf(INSPECTOR_CSS, ".req-spec-content")).toMatch(/background:\s*var\(--surface-inset\)/)
   expect(bodyOf(INSPECTOR_CSS, ".integrity__dimension")).toMatch(/background:\s*transparent/)
-  expect(bodyOf(INSPECTOR_CSS, ".integrity__issue, .integrity__correction, .integrity__missing")).toMatch(/background:\s*transparent/)
+  expect(bodyOf(INSPECTOR_CSS, ".integrity__issue, .integrity__correction, .integrity__missing")).toMatch(
+    /background:\s*transparent/,
+  )
   expect(bodyOf(INSPECTOR_CSS, ".gwg-objective")).toMatch(/border:\s*0 solid transparent/)
   expect(bodyOf(INSPECTOR_CSS, ".gwg-done-definition")).toMatch(/border:\s*0 solid transparent/)
   expect(bodyOf(INSPECTOR_CSS, ".arch-decision")).toMatch(/border:\s*0 solid transparent/)
   expect(bodyOf(INSPECTOR_CSS, ".criteria-check:hover")).toMatch(/background:\s*var\(--surface-hover\)/)
-  expect(bodyOf(INSPECTOR_CSS, ".goal-status-icon[data-status=\"pending\"]")).toMatch(/background:\s*var\(--surface-hover\)/)
-  expect(bodyOf(INSPECTOR_CSS, ".goal-priority[data-priority=\"advisory\"]")).toMatch(/background:\s*var\(--surface-hover\)/)
+  expect(bodyOf(INSPECTOR_CSS, '.goal-status-icon[data-status="pending"]')).toMatch(
+    /background:\s*var\(--surface-hover\)/,
+  )
+  expect(bodyOf(INSPECTOR_CSS, '.goal-priority[data-priority="advisory"]')).toMatch(
+    /background:\s*var\(--surface-hover\)/,
+  )
 })
 
 test("message content carriers keep a neutral surface base", () => {
@@ -72,16 +98,18 @@ test("message content carriers keep a neutral surface base", () => {
 })
 
 test("structured card body content does not create nested card chrome", () => {
-  expect(bodyOf(CARD_CSS, ".card:not([data-depth=\"0\"])[data-kind=\"tool\"]")).toMatch(/border-left:\s*0 solid transparent/)
+  expect(bodyOf(CARD_CSS, '.card:not([data-depth="0"])[data-kind="tool"]')).toMatch(
+    /border-left:\s*0 solid transparent/,
+  )
   expect(CARD_CSS).not.toMatch(/\[data-kind="tool"\][^{]*\{[^}]*border-left-color:\s*var\(--card-stage-info\)/)
   expect(bodyOf(CARD_CSS, ".card__body")).toMatch(/border-top:\s*0 solid transparent/)
   expect(bodyOf(CARD_CSS, ".card__collapsed-preview")).toMatch(/border-left:\s*0 solid transparent/)
   expect(bodyOf(CARD_CSS, ".card__goal-desc")).toMatch(/background:\s*transparent/)
   expect(bodyOf(CARD_CSS, ".card__goal-desc")).toMatch(/border:\s*0 solid transparent/)
   expect(bodyOf(CARD_CSS, ".card__goal-desc")).toMatch(/box-shadow:\s*none/)
-  expect(bodyOf(CARD_CSS, ".card[data-kind=\"step\"] > .card__body > .msg-text")).toMatch(/background:\s*transparent/)
-  expect(bodyOf(CARD_CSS, ".card[data-kind=\"step\"] > .card__body > .msg-text")).toMatch(/box-shadow:\s*none/)
-  expect(bodyOf(CARD_CSS, ".card[data-kind=\"step\"] > .card__body > .msg-text::before")).toMatch(/content:\s*none/)
+  expect(bodyOf(CARD_CSS, '.card[data-kind="step"] > .card__body > .msg-text')).toMatch(/background:\s*transparent/)
+  expect(bodyOf(CARD_CSS, '.card[data-kind="step"] > .card__body > .msg-text')).toMatch(/box-shadow:\s*none/)
+  expect(bodyOf(CARD_CSS, '.card[data-kind="step"] > .card__body > .msg-text::before')).toMatch(/content:\s*none/)
 })
 
 test("conversation agent rail and conversation owner surfaces stay flat", () => {
@@ -89,7 +117,9 @@ test("conversation agent rail and conversation owner surfaces stay flat", () => 
   expect(bodyOf(CONVERSATION_CSS, ".conversation-agent-rail__row")).toMatch(/display:\s*grid/)
   expect(CONVERSATION_CSS).not.toContain("conversation-agent-rail__run")
   expect(CONVERSATION_CSS).not.toContain("conversation-agent-rail__report")
-  expect(bodyOf(CONVERSATION_CSS, ".conversation-agent-rail__avatar-button:hover")).toMatch(/background:\s*var\(--subtle-2\)/)
+  expect(bodyOf(CONVERSATION_CSS, ".conversation-agent-rail__avatar-button:hover")).toMatch(
+    /background:\s*var\(--subtle-2\)/,
+  )
   expect(bodyOf(CONVERSATION_CSS, ".goal-chip")).toMatch(/border:\s*0 solid transparent/)
   expect(bodyOf(CONVERSATION_CSS, ".goal-chip")).toMatch(/background:\s*transparent/)
   expect(bodyOf(COMPOSER_CSS, ".chat-empty--task")).toMatch(/border:\s*0 solid transparent/)

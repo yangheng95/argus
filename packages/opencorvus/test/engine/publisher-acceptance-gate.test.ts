@@ -21,11 +21,12 @@ describe("Publisher acceptance export", () => {
 
       const result = await Instance.provide({
         directory: dir,
-        fn: () => Publisher.deliver({
-          task: taskRow({ baseline }),
-          run: runRow(),
-          acceptance: acceptanceRow(),
-        }),
+        fn: () =>
+          Publisher.deliver({
+            task: taskRow({ baseline }),
+            run: runRow(),
+            acceptance: acceptanceRow(),
+          }),
       })
 
       expect(result.status).toBe("delivered")
@@ -121,11 +122,12 @@ describe("Publisher acceptance export", () => {
 
       const result = await Instance.provide({
         directory: dir,
-        fn: () => Publisher.deliver({
-          task: taskRow({ baseline }),
-          run: runRow(),
-          acceptance: acceptanceRow({ changedFiles: ["app.ts", "web-clone-source/README.md"] }),
-        }),
+        fn: () =>
+          Publisher.deliver({
+            task: taskRow({ baseline }),
+            run: runRow(),
+            acceptance: acceptanceRow({ changedFiles: ["app.ts", "web-clone-source/README.md"] }),
+          }),
       })
 
       expect(result.status).toBe("delivered")
@@ -146,16 +148,18 @@ describe("Publisher acceptance export", () => {
       await $`git init`.cwd(dir).quiet()
       const result = await Instance.provide({
         directory: dir,
-        fn: () => Publisher.deliver({
-          task: taskRow({ baseline: "" }),
-          run: runRow(),
-          acceptance: acceptanceRow(),
-        }),
+        fn: () =>
+          Publisher.deliver({
+            task: taskRow({ baseline: "" }),
+            run: runRow(),
+            acceptance: acceptanceRow(),
+          }),
       })
 
       expect(result.status).toBe("failed")
-      expect(result.publish.adapters.find((item) => item.id === "workspace_export")?.detail)
-        .toContain("baseline.commit")
+      expect(result.publish.adapters.find((item) => item.id === "workspace_export")?.detail).toContain(
+        "baseline.commit",
+      )
     } finally {
       await fs.rm(dir, { recursive: true, force: true })
     }

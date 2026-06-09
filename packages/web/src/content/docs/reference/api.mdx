@@ -57,6 +57,8 @@ All endpoints are protected by `OPENCORVUS_SERVER_PASSWORD` when it is set. Clie
 | GET | `/project` | List all projects | `project.list` |
 | GET | `/project/current` | Get current project | `project.current` |
 | POST | `/project/current/init-git` | Initialize git in current directory | `project.current.initGit` |
+| DELETE | `/project/current/worktrees` | Delete a current project worktree | `project.current.worktrees.delete` |
+| GET | `/project/current/worktrees` | List current project worktrees | `project.current.worktrees` |
 | PATCH | `/project/{projectID}` | Update project | `project.update` |
 | GET | `/vcs` | Get VCS info | `vcs.get` |
 | GET | `/vcs/diff` | Get VCS diff | `vcs.diff` |
@@ -98,6 +100,7 @@ All endpoints are protected by `OPENCORVUS_SERVER_PASSWORD` when it is set. Clie
 | POST | `/task/{taskID}/inject` | Inject message into running task | `task.inject` |
 | GET | `/task/{taskID}/interactions` | List task interactions | `task.interactions` |
 | POST | `/task/{taskID}/message` | Handle task message | `task.message` |
+| GET | `/task/{taskID}/operator-model-context` | Get task operator model context | `task.operatorModelContext` |
 | GET | `/task/{taskID}/progress` | Get task progress | `task.progress` |
 | GET | `/task/{taskID}/project-archive` | Download task project archive | `task.projectArchive` |
 | POST | `/task/{taskID}/replan` | Replan task | `task.replan` |
@@ -212,6 +215,7 @@ All endpoints are protected by `OPENCORVUS_SERVER_PASSWORD` when it is set. Clie
 | GET | `/agent` | List agents | `app.agents` |
 | GET | `/skill` | List skills | `app.skills` |
 | GET | `/skill/directories` | Get skill directories | `skill.directories` |
+| POST | `/skill/import-file` | Import a dropped skill source | `skill.importFile` |
 | POST | `/skill/install` | Install or import a skill source | `skill.install` |
 | GET | `/skill/installed` | List installed skills | `skill.installed` |
 | GET | `/skill/market` | List skill markets | `skill.market` |

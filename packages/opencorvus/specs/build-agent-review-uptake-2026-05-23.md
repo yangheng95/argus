@@ -16,16 +16,16 @@ CLAUDE.md rules that govern this change:
 
 ## Abbreviations
 
-| Term | Meaning |
-| ---- | ------- |
-| BF | Blocking finding emitted by integrity reviewers. |
-| AF | Advisory finding. |
-| DB | OpenCorvus persistent SQLite store. |
-| LLM | Large Language Model. |
-| REQ | Requirement row. |
-| TRM | Integrity `team_report_markdown` — full reviewer/consensus output. |
-| `request` | Argument string on the `build` tool. |
-| `retryGuidance` | `BuildContext.retryGuidance` — renders as `## Retry Guidance From Orchestrator` in the build prompt. |
+| Term            | Meaning                                                                                                                                                                                          |
+| --------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| BF              | Blocking finding emitted by integrity reviewers.                                                                                                                                                 |
+| AF              | Advisory finding.                                                                                                                                                                                |
+| DB              | OpenCorvus persistent SQLite store.                                                                                                                                                              |
+| LLM             | Large Language Model.                                                                                                                                                                            |
+| REQ             | Requirement row.                                                                                                                                                                                 |
+| TRM             | Integrity `team_report_markdown` — full reviewer/consensus output.                                                                                                                               |
+| `request`       | Argument string on the `build` tool.                                                                                                                                                             |
+| `retryGuidance` | `BuildContext.retryGuidance` — renders as `## Retry Guidance From Orchestrator` in the build prompt.                                                                                             |
 | `retryFeedback` | `BuildContext.retryFeedback` — renders as `## Prior Attempt Failed`; pulled from `decision_log phase="retry"` entries by `latestBuildReportForGoal` / `composeLatestAcceptanceFeedbackForBuild`. |
 
 ## User Concern
@@ -74,16 +74,16 @@ This spec must not declare local caps or sanitizer rules.
 Probed `C:\Users\hengu\.local\share\opencorvus\opencorvus.db` (bun:sqlite,
 read-only). Findings:
 
-| Surface | Observation | Source |
-| ------- | ----------- | ------ |
-| Integrity attempts | 8 rows, all `verdict=needs_correction`, `phase=post_build`. Sequence: R1=11 findings (5 reviewers), R2=9, R3=10, R4=3, R5=10 (4 reviewers), R6=11 (4 reviewers), R7=8 (5 reviewers), R8=7 (4 reviewers). | `engine_artifact WHERE task_id=? AND kind='integrity_attempt' ORDER BY time_created`. |
-| Persistent blocker | "getSettings() does not validate model/temperature/maxTokens against allowed ranges" appears as BF in R2, R3, R4, R5 (as part of CONSENSUS-BF2/BF3), R6 (SV-1/SV-2/SV-3), R7 (BF-1-settings-validation). Confirmed fixed in R8 consensus summary. | Inspected each integrity_attempt payload's `findings[]` array. |
-| Reviewer consensus naming the persistence | R7 summary (`art_e5543094c001bg7z5POlCX6rBo`): "All 5 independent reviewers unanimously converge on one blocking finding that has persisted across 6 consecutive integrity review rounds (rounds 2–7): getSettings() in src/services/storage.ts does not validate ...". | `decision_log` phase=`review` row at 2026-05-23T14:35:17, key `review_needs_correction_ses_1aac7c132ffd...`. |
-| Build sessions for this task | 14 build sessions parented to the orchestrator session `ses_1ab3d291effeqT8ofY3QCaiglW`. 5 are goal builds (one per goal, all pre-R1). 9 are TASK-LEVEL DIRECT builds (`goal_id` NULL, titles "Build: ## Integrity Correction Round N"). All "correction" builds happened AFTER R1. | `SELECT id, goal_id, title FROM session WHERE kind='build' AND parent_id='ses_1ab3d291effeqT8ofY3QCaiglW' ORDER BY time_created`. |
-| Each build session has exactly one user message | Every build session in the task carries 1 user message — no in-session retry feedback prompts ever ran (no `existingSessionID` reuse on these builds). | `SELECT COUNT(*) FROM message WHERE session_id=? AND json_extract(data,'$.role')='user'` per session. |
-| Build tool calls in the orchestrator | 17 `tool=build` parts in `prt`. Each correction round's `input.request` contains the orchestrator LLM's hand-written summary of the integrity findings it thinks matter. Examples: R5 build input contains only "BF-1: TypeScript TS2345" + "BF-2: Review the full integrity report for any second blocking finding" (literal text — orchestrator told the build agent to guess). R6 build input does name the persistent finding explicitly. | `SELECT data FROM part WHERE json_extract(data,'$.tool')='build' ORDER BY time_created`. |
-| Build prompt actually delivered | The user message of every task-level correction build is the `# Delegation` block from `buildUserPrompt` (build/agent.ts:2423) with `# Request` rendered via `renderUserRequestSection`. `renderUserRequestSection` truncates the request at 500 words: e.g. R8 prompt ends with `... (781 word(s) omitted from prompt injection)`. The integrity team_report_markdown is NEVER present anywhere in the build prompt — searched all 9 correction-build user messages for "CONSENSUS-", "team_report", reviewer ids, etc. — zero matches. | Dumped each build session's user-message parts to text; pattern-searched. |
-| decision_log carrying integrity into build | `decision_log` rows for integrity verdicts use `phase="review"` (orchestrator/tools.ts:1782), value compressed to "verdict=… reviewers=… findings=… summary=… top: [first 5 findings]". `BuildContext.retryFeedback` is loaded from `decision_log phase="retry"` only (orchestrator/tools.ts:4950 `decisionLog.readByPhase("retry")`). The `phase="retry"` rows only contain build-attempt artifacts and `build_agent_contract_violation` events (engine/persist.ts:179 `ensureBuildRetryFeedbackForGoal`, orchestrator/tools.ts:5317). Integrity findings do not write into `phase="retry"` for any goal. | `SELECT phase, key, vlen FROM decision_log WHERE task_id=? AND phase IN ('retry','review','build') ORDER BY time_created`. |
+| Surface                                         | Observation                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                | Source                                                                                                                            |
+| ----------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------- |
+| Integrity attempts                              | 8 rows, all `verdict=needs_correction`, `phase=post_build`. Sequence: R1=11 findings (5 reviewers), R2=9, R3=10, R4=3, R5=10 (4 reviewers), R6=11 (4 reviewers), R7=8 (5 reviewers), R8=7 (4 reviewers).                                                                                                                                                                                                                                                                                                                                                                                                   | `engine_artifact WHERE task_id=? AND kind='integrity_attempt' ORDER BY time_created`.                                             |
+| Persistent blocker                              | "getSettings() does not validate model/temperature/maxTokens against allowed ranges" appears as BF in R2, R3, R4, R5 (as part of CONSENSUS-BF2/BF3), R6 (SV-1/SV-2/SV-3), R7 (BF-1-settings-validation). Confirmed fixed in R8 consensus summary.                                                                                                                                                                                                                                                                                                                                                          | Inspected each integrity_attempt payload's `findings[]` array.                                                                    |
+| Reviewer consensus naming the persistence       | R7 summary (`art_e5543094c001bg7z5POlCX6rBo`): "All 5 independent reviewers unanimously converge on one blocking finding that has persisted across 6 consecutive integrity review rounds (rounds 2–7): getSettings() in src/services/storage.ts does not validate ...".                                                                                                                                                                                                                                                                                                                                    | `decision_log` phase=`review` row at 2026-05-23T14:35:17, key `review_needs_correction_ses_1aac7c132ffd...`.                      |
+| Build sessions for this task                    | 14 build sessions parented to the orchestrator session `ses_1ab3d291effeqT8ofY3QCaiglW`. 5 are goal builds (one per goal, all pre-R1). 9 are TASK-LEVEL DIRECT builds (`goal_id` NULL, titles "Build: ## Integrity Correction Round N"). All "correction" builds happened AFTER R1.                                                                                                                                                                                                                                                                                                                        | `SELECT id, goal_id, title FROM session WHERE kind='build' AND parent_id='ses_1ab3d291effeqT8ofY3QCaiglW' ORDER BY time_created`. |
+| Each build session has exactly one user message | Every build session in the task carries 1 user message — no in-session retry feedback prompts ever ran (no `existingSessionID` reuse on these builds).                                                                                                                                                                                                                                                                                                                                                                                                                                                     | `SELECT COUNT(*) FROM message WHERE session_id=? AND json_extract(data,'$.role')='user'` per session.                             |
+| Build tool calls in the orchestrator            | 17 `tool=build` parts in `prt`. Each correction round's `input.request` contains the orchestrator LLM's hand-written summary of the integrity findings it thinks matter. Examples: R5 build input contains only "BF-1: TypeScript TS2345" + "BF-2: Review the full integrity report for any second blocking finding" (literal text — orchestrator told the build agent to guess). R6 build input does name the persistent finding explicitly.                                                                                                                                                              | `SELECT data FROM part WHERE json_extract(data,'$.tool')='build' ORDER BY time_created`.                                          |
+| Build prompt actually delivered                 | The user message of every task-level correction build is the `# Delegation` block from `buildUserPrompt` (build/agent.ts:2423) with `# Request` rendered via `renderUserRequestSection`. `renderUserRequestSection` truncates the request at 500 words: e.g. R8 prompt ends with `... (781 word(s) omitted from prompt injection)`. The integrity team_report_markdown is NEVER present anywhere in the build prompt — searched all 9 correction-build user messages for "CONSENSUS-", "team_report", reviewer ids, etc. — zero matches.                                                                   | Dumped each build session's user-message parts to text; pattern-searched.                                                         |
+| decision_log carrying integrity into build      | `decision_log` rows for integrity verdicts use `phase="review"` (orchestrator/tools.ts:1782), value compressed to "verdict=… reviewers=… findings=… summary=… top: [first 5 findings]". `BuildContext.retryFeedback` is loaded from `decision_log phase="retry"` only (orchestrator/tools.ts:4950 `decisionLog.readByPhase("retry")`). The `phase="retry"` rows only contain build-attempt artifacts and `build_agent_contract_violation` events (engine/persist.ts:179 `ensureBuildRetryFeedbackForGoal`, orchestrator/tools.ts:5317). Integrity findings do not write into `phase="retry"` for any goal. | `SELECT phase, key, vlen FROM decision_log WHERE task_id=? AND phase IN ('retry','review','build') ORDER BY time_created`.        |
 
 ### What actually happens R5 → R6
 
@@ -93,19 +93,19 @@ read-only). Findings:
    orchestrator/tools.ts:1545-1561) returns the FULL markdown to the
    orchestrator LLM in a `team_report_markdown` field.
 2. Orchestrator LLM at 13:55:35Z calls `build({ directBuildIntent: "modify_files",
-   request: "## Integrity Correction Round 5: Fix TypeScript Build Error and
-   Remaining Issues\n### BF-1: ... TS2345 ...\n### BF-2: Review the full
-   integrity report for any second blocking finding\nBased on the pattern of
-   the review, the second finding might be about: - MessageList not filtering
-   ..." })`. The persistent `getSettings()` blocker is **not** in the request.
+request: "## Integrity Correction Round 5: Fix TypeScript Build Error and
+Remaining Issues\n### BF-1: ... TS2345 ...\n### BF-2: Review the full
+integrity report for any second blocking finding\nBased on the pattern of
+the review, the second finding might be about: - MessageList not filtering
+..." })`. The persistent `getSettings()` blocker is **not** in the request.
 3. Build dispatched. `buildUserPrompt` (build/agent.ts:2423) renders `# Delegation`
-   + `# Request` (the orchestrator's request text, truncated to 500 words by
-   `renderUserRequestSection`). There is no `retryFeedback` section (no
-   decision_log `phase=retry` rows because integrity findings never write to
-   that phase). There is no `retryGuidance` section either, because for
-   task-level direct builds the orchestrator's `request` IS the target text
-   (orchestrator/tools.ts:5004 `target = { kind: "request", text: requestText }`)
-   — `retryGuidance` is only used on goal builds (orchestrator/tools.ts:4994).
+   - `# Request` (the orchestrator's request text, truncated to 500 words by
+     `renderUserRequestSection`). There is no `retryFeedback` section (no
+     decision_log `phase=retry` rows because integrity findings never write to
+     that phase). There is no `retryGuidance` section either, because for
+     task-level direct builds the orchestrator's `request` IS the target text
+     (orchestrator/tools.ts:5004 `target = { kind: "request", text: requestText }`)
+     — `retryGuidance` is only used on goal builds (orchestrator/tools.ts:4994).
 4. Build agent reads the prompt, sees only "fix TS2345 + something about
    MessageList filtering", writes the fix it was told to write, merges back,
    reports passed.
@@ -155,13 +155,13 @@ orchestrator's summary loses information across rounds.
 This is **not** a build-side absorption failure — the build agent never sees
 the review text. It is an orchestrator → build forwarding gap:
 
-| Hypothesis | Evidence | Verdict |
-| ---------- | -------- | ------- |
-| Build agent ignores review section it can see | No section exists in any inspected build prompt. | Refuted. |
-| Build prompt is truncated and review tail is cut | `renderUserRequestSection` truncates `request` text. R5 prompt shows `... (228 word(s) omitted)`. | Real, but secondary — orchestrator's hand-typed summary fits, the full TRM was never on this side anyway. |
-| `BuildContext` schema is missing the field | `BuildContext` (build/agent.ts:103-176) has `retryFeedback`, `retryGuidance`, `acceptanceFeedback`, no `integrityFeedback`. | Confirmed. |
-| Orchestrator LLM forgets / summarizes review | R5 `request` literally says "Review the full integrity report for any second blocking finding ... might be about ..." — the LLM told the build agent to guess. | Confirmed. Primary root cause. |
-| Build prompt doesn't tell build to treat persistence as must-fix | build-core.txt mentions "Integrity owns the final workflow gate inside its own review session" once; nothing about persistent rejection across rounds. | Confirmed contributing factor: even if the markdown reached build, the build prompt has no language framing "this is the Nth review attempt, prior rounds rejected X". |
+| Hypothesis                                                       | Evidence                                                                                                                                                       | Verdict                                                                                                                                                                |
+| ---------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Build agent ignores review section it can see                    | No section exists in any inspected build prompt.                                                                                                               | Refuted.                                                                                                                                                               |
+| Build prompt is truncated and review tail is cut                 | `renderUserRequestSection` truncates `request` text. R5 prompt shows `... (228 word(s) omitted)`.                                                              | Real, but secondary — orchestrator's hand-typed summary fits, the full TRM was never on this side anyway.                                                              |
+| `BuildContext` schema is missing the field                       | `BuildContext` (build/agent.ts:103-176) has `retryFeedback`, `retryGuidance`, `acceptanceFeedback`, no `integrityFeedback`.                                    | Confirmed.                                                                                                                                                             |
+| Orchestrator LLM forgets / summarizes review                     | R5 `request` literally says "Review the full integrity report for any second blocking finding ... might be about ..." — the LLM told the build agent to guess. | Confirmed. Primary root cause.                                                                                                                                         |
+| Build prompt doesn't tell build to treat persistence as must-fix | build-core.txt mentions "Integrity owns the final workflow gate inside its own review session" once; nothing about persistent rejection across rounds.         | Confirmed contributing factor: even if the markdown reached build, the build prompt has no language framing "this is the Nth review attempt, prior rounds rejected X". |
 
 ## Rule 35 Grep Inventory
 
@@ -178,24 +178,24 @@ rg -n "decisionLog.append|phase=\"retry\"|phase=\"review\"" packages\opencorvus\
 
 ### Active call sites that compose build input
 
-| Location | Current behavior | Required change |
-| -------- | ---------------- | --------------- |
-| `packages/opencorvus/src/build/agent.ts:103` `BuildContext` interface | Carries `requirements`, `frontendDesign`, `contractGraph`, `dependencies`, `retryGuidance`, `retryFeedback`, `acceptanceFeedback`, `fidelity`, `collaborationGoals`, `retryAttachments`. No integrity field. | Add `integrityFeedback?: string` typed as pre-rendered markdown. |
-| `packages/opencorvus/src/build/agent.ts:2206` `buildUserPrompt` (goal target) | Renders sections from context in order: requirements → contractGraph → collaborationGoals → dependencies → frontendDesign → designSpecs → fidelity → retryGuidance → retryFeedback → acceptanceFeedback → goal contract. | Add `integrityFeedback` rendering BEFORE `retryGuidance` so it ranks above the orchestrator's hand-typed request. Placement is deliberate: integrity is the workflow gate; its findings outrank the orchestrator's just-now turn. |
-| `packages/opencorvus/src/build/agent.ts:2388` `buildUserPrompt` (request target) | Renders `retryGuidance` (skipped on this branch), `retryFeedback`, `acceptanceFeedback`, `frontendDesign`, `designSpecs`, then `# Delegation` + `# Request` excerpt. | Add `integrityFeedback` rendering BEFORE the existing `retryFeedback` block on this branch as well. |
-| `packages/opencorvus/src/build/agent.ts:2440` `buildRetryFeedbackPrompt` (continue-session path) | Used when `existingSessionID` is set; renders `## Current Orchestrator Feedback`, `## Prior Attempt Failure Facts`, `## Acceptance Rejection Feedback`. | Add `## Persistent Integrity Findings` from `integrityFeedback`. |
-| `packages/opencorvus/src/orchestrator/tools.ts:4904-4998` (goal build context composition) | Builds `context.requirements`, `context.retryFeedback`, `context.acceptanceFeedback`, `context.retryGuidance`. | Compose `context.integrityFeedback` from `listIntegrityAttemptArtifacts` plus the shared root-history helper. Pass spec snapshot lineage and render every latest blocking finding as bounded complete text or a build-readable runtime markdown path. |
-| `packages/opencorvus/src/orchestrator/tools.ts:5000-5021` (task-level direct build context composition) | Builds `context.acceptanceFeedback` only. | Compose `context.integrityFeedback` the same way. This branch is the one all 9 correction-round builds in the bug case go through. |
-| `packages/opencorvus/src/integrity/replay-context.ts` (proposed in companion spec) | Builds replay context for integrity reviewers. | This spec REUSES the same `listIntegrityAttemptArtifacts` + `IntegrityPriorAttemptSummary` shape. Single source — do not duplicate the attempt parser. |
+| Location                                                                                                | Current behavior                                                                                                                                                                                                         | Required change                                                                                                                                                                                                                                       |
+| ------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `packages/opencorvus/src/build/agent.ts:103` `BuildContext` interface                                   | Carries `requirements`, `frontendDesign`, `contractGraph`, `dependencies`, `retryGuidance`, `retryFeedback`, `acceptanceFeedback`, `fidelity`, `collaborationGoals`, `retryAttachments`. No integrity field.             | Add `integrityFeedback?: string` typed as pre-rendered markdown.                                                                                                                                                                                      |
+| `packages/opencorvus/src/build/agent.ts:2206` `buildUserPrompt` (goal target)                           | Renders sections from context in order: requirements → contractGraph → collaborationGoals → dependencies → frontendDesign → designSpecs → fidelity → retryGuidance → retryFeedback → acceptanceFeedback → goal contract. | Add `integrityFeedback` rendering BEFORE `retryGuidance` so it ranks above the orchestrator's hand-typed request. Placement is deliberate: integrity is the workflow gate; its findings outrank the orchestrator's just-now turn.                     |
+| `packages/opencorvus/src/build/agent.ts:2388` `buildUserPrompt` (request target)                        | Renders `retryGuidance` (skipped on this branch), `retryFeedback`, `acceptanceFeedback`, `frontendDesign`, `designSpecs`, then `# Delegation` + `# Request` excerpt.                                                     | Add `integrityFeedback` rendering BEFORE the existing `retryFeedback` block on this branch as well.                                                                                                                                                   |
+| `packages/opencorvus/src/build/agent.ts:2440` `buildRetryFeedbackPrompt` (continue-session path)        | Used when `existingSessionID` is set; renders `## Current Orchestrator Feedback`, `## Prior Attempt Failure Facts`, `## Acceptance Rejection Feedback`.                                                                  | Add `## Persistent Integrity Findings` from `integrityFeedback`.                                                                                                                                                                                      |
+| `packages/opencorvus/src/orchestrator/tools.ts:4904-4998` (goal build context composition)              | Builds `context.requirements`, `context.retryFeedback`, `context.acceptanceFeedback`, `context.retryGuidance`.                                                                                                           | Compose `context.integrityFeedback` from `listIntegrityAttemptArtifacts` plus the shared root-history helper. Pass spec snapshot lineage and render every latest blocking finding as bounded complete text or a build-readable runtime markdown path. |
+| `packages/opencorvus/src/orchestrator/tools.ts:5000-5021` (task-level direct build context composition) | Builds `context.acceptanceFeedback` only.                                                                                                                                                                                | Compose `context.integrityFeedback` the same way. This branch is the one all 9 correction-round builds in the bug case go through.                                                                                                                    |
+| `packages/opencorvus/src/integrity/replay-context.ts` (proposed in companion spec)                      | Builds replay context for integrity reviewers.                                                                                                                                                                           | This spec REUSES the same `listIntegrityAttemptArtifacts` + `IntegrityPriorAttemptSummary` shape. Single source — do not duplicate the attempt parser.                                                                                                |
 
 ### Same-name / sibling functions that must not silently diverge
 
-| Location | Current behavior | Required change |
-| -------- | ---------------- | --------------- |
-| `packages/opencorvus/src/integrity/agent.ts` (legacy single-agent path) | Not exported by `integrity/index.ts`. | No change. Confirmed not on the live path during rule-35 grep. |
-| `packages/opencorvus/src/acceptance/tools.ts:144,156` (acceptance-triggered integrity) | Same `reviewIntegrity` entrypoint; persisted attempt rows are read by the same `listIntegrityAttemptArtifacts`. | No call-site change needed for acceptance — build context composition lives in orchestrator/tools.ts and runs irrespective of which actor invoked the prior integrity review. |
-| `packages/opencorvus/src/build/types.ts` `BuildContractGraphContext` | Unrelated context type. | No change. |
-| `packages/opencorvus/src/decision-log/index.ts` `readByPhase("retry")` | Used by `latestBuildReportForGoal` and the orchestrator `retryEntries` aggregator. | No change. Integrity does NOT write `phase="retry"`; rule 8 stays clean. We do not "smuggle" integrity into the retry channel because doing so collides with the goal-scoped semantics of retry feedback (goal_run terminal status, build_agent_contract_violation). |
+| Location                                                                               | Current behavior                                                                                                | Required change                                                                                                                                                                                                                                                      |
+| -------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `packages/opencorvus/src/integrity/agent.ts` (legacy single-agent path)                | Not exported by `integrity/index.ts`.                                                                           | No change. Confirmed not on the live path during rule-35 grep.                                                                                                                                                                                                       |
+| `packages/opencorvus/src/acceptance/tools.ts:144,156` (acceptance-triggered integrity) | Same `reviewIntegrity` entrypoint; persisted attempt rows are read by the same `listIntegrityAttemptArtifacts`. | No call-site change needed for acceptance — build context composition lives in orchestrator/tools.ts and runs irrespective of which actor invoked the prior integrity review.                                                                                        |
+| `packages/opencorvus/src/build/types.ts` `BuildContractGraphContext`                   | Unrelated context type.                                                                                         | No change.                                                                                                                                                                                                                                                           |
+| `packages/opencorvus/src/decision-log/index.ts` `readByPhase("retry")`                 | Used by `latestBuildReportForGoal` and the orchestrator `retryEntries` aggregator.                              | No change. Integrity does NOT write `phase="retry"`; rule 8 stays clean. We do not "smuggle" integrity into the retry channel because doing so collides with the goal-scoped semantics of retry feedback (goal_run terminal status, build_agent_contract_violation). |
 
 ### Existing decision_log phases (rule 8 audit)
 
@@ -240,10 +240,7 @@ finding ids locally.
 Recommended public shape:
 
 ```ts
-import type {
-  SharedPromptBudget,
-  SpecSnapshotLineage,
-} from "../integrity/replay-context"
+import type { SharedPromptBudget, SpecSnapshotLineage } from "../integrity/replay-context"
 
 export function composeIntegrityFeedbackForBuild(input: {
   taskID: string
@@ -280,7 +277,7 @@ render unchanged:
 ## Persistent Integrity Findings (Treat Blocking Items As Must-Fix)
 
 Integrity has reviewed this task 7 times for the current spec snapshot
-lineage (active: spec_..., inherited: spec_...).
+lineage (active: spec*..., inherited: spec*...).
 The latest verdict is `needs_correction` (R7 at 2026-05-23T14:35:17Z).
 This task is not accepted by the workflow gate until every blocking
 finding below is repaired and a post-build integrity pass verdict is
@@ -528,7 +525,7 @@ does not replace this inventory.
   lists the root-history helper's root under `### Persistent blocking roots`
   with first-seen attempt, symptom variations, and reviewer ids; the
   latest-only finding still lands under `### All blocking findings from the
-  latest review`.
+latest review`.
 - Multiple spec snapshots present → helper uses the supplied same-task spec
   snapshot lineage, not only the active snapshot. A corrective snapshot must
   inherit recent persistent history from its predecessor.
@@ -617,23 +614,23 @@ Do not run a broad `bun test` unless a later change expands blast radius.
 ## Implementation Checklist
 
 1. [ ] Add `composeIntegrityFeedbackForBuild` to
-   `packages/opencorvus/src/integrity/build-feedback.ts`, depending on the
-   shared `listIntegrityAttemptArtifacts` from the replay spec and the
-   root-history helper from the orchestrator-stuck spec.
+       `packages/opencorvus/src/integrity/build-feedback.ts`, depending on the
+       shared `listIntegrityAttemptArtifacts` from the replay spec and the
+       root-history helper from the orchestrator-stuck spec.
 2. [ ] Add `BuildContext.integrityFeedback` to
-   `packages/opencorvus/src/build/agent.ts:BuildContext`.
+       `packages/opencorvus/src/build/agent.ts:BuildContext`.
 3. [ ] Render `integrityFeedback` in
-   `buildUserPrompt` (both `goal` and `request` branches) and
-   `buildRetryFeedbackPrompt`, ahead of `retryGuidance` / `retryFeedback`.
+       `buildUserPrompt` (both `goal` and `request` branches) and
+       `buildRetryFeedbackPrompt`, ahead of `retryGuidance` / `retryFeedback`.
 4. [ ] Add the "Integrity-driven rework" section to
-   `packages/opencorvus/src/prompt/core/build-core.txt`.
+       `packages/opencorvus/src/prompt/core/build-core.txt`.
 5. [ ] Wire the composer into goal-build and task-level-direct branches in
-   `orchestrator/tools.ts` (the two `context = {...}` sites at 4986 and
-   5012-5019), passing spec snapshot lineage and shared prompt budget.
+       `orchestrator/tools.ts` (the two `context = {...}` sites at 4986 and
+       5012-5019), passing spec snapshot lineage and shared prompt budget.
 6. [ ] Add runtime markdown materialization when complete blocking text does
-   not fit the shared prompt budget.
+       not fit the shared prompt budget.
 7. [ ] Add the test files listed in "Test Plan", including the active-path
-   stub-LLM regression.
+       stub-LLM regression.
 8. [ ] Run targeted bun test commands; commit with a hook-clean pre-push.
 
 ## Plan Updates From Patched Review (2026-05-24)

@@ -44,8 +44,7 @@ describe("SessionLoop.estimateToolPayloadChars", () => {
     const estimated = SessionLoop.estimateToolPayloadChars({ deepTool: aiTool })
 
     // The wire payload contains the JSON Schema string + name + description.
-    const wireLength =
-      JSON.stringify(inputJsonSchema).length + "deepTool".length + "deep-nested".length
+    const wireLength = JSON.stringify(inputJsonSchema).length + "deepTool".length + "deep-nested".length
 
     // Allow a small ±5% drift for ai-sdk's internal normalisation, but the
     // estimator must NOT balloon to many times the true wire size (the old
@@ -62,9 +61,7 @@ describe("SessionLoop.estimateToolPayloadChars", () => {
     const make = () =>
       tool({
         description: "x",
-        inputSchema: aiJsonSchema(
-          z.toJSONSchema(z.object({ field: z.string() })) as never,
-        ),
+        inputSchema: aiJsonSchema(z.toJSONSchema(z.object({ field: z.string() })) as never),
         async execute() {
           return { output: "", title: "", metadata: {} }
         },
@@ -84,9 +81,7 @@ describe("SessionLoop.estimateToolPayloadChars", () => {
       // intentionally pass a value asSchema() cannot interpret as a wrapper
       inputSchema: undefined,
     }
-    expect(() =>
-      SessionLoop.estimateToolPayloadChars({ broken: broken as never }),
-    ).not.toThrow()
+    expect(() => SessionLoop.estimateToolPayloadChars({ broken: broken as never })).not.toThrow()
   })
 })
 
@@ -99,13 +94,11 @@ describe("SessionLoop.normalizeToolSchemaForProvider", () => {
   } as unknown as Parameters<typeof SessionLoop.normalizeToolSchemaForProvider>[0]
 
   test("returns a JSON Schema that round-trips through stringify (no Zod internals)", () => {
-    const schema = z.toJSONSchema(
-      z.object({ a: z.string(), b: z.number().optional() }),
-    ) as Record<string, unknown>
+    const schema = z.toJSONSchema(z.object({ a: z.string(), b: z.number().optional() })) as Record<string, unknown>
     const out = SessionLoop.normalizeToolSchemaForProvider(fakeModel, schema)
     const json = JSON.stringify(out)
     expect(json.length).toBeGreaterThan(0)
-    expect(json).toContain("\"type\":\"object\"")
+    expect(json).toContain('"type":"object"')
     // ProviderTransform.schema is identity for non-google providers, so the
     // shape must still describe the same fields.
     expect(json).toContain("a")

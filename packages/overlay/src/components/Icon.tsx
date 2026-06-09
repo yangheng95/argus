@@ -31,6 +31,7 @@ import {
   GripVertical,
   Info,
   Layers,
+  ListTodo,
   Logs,
   MessageSquare,
   Minus,
@@ -71,6 +72,7 @@ export type IconName =
   | "panel-left"
   | "panel-right"
   | "terminal"
+  | "tasks"
   | "message"
   | "workflow"
   | "notifications"
@@ -198,6 +200,7 @@ const LUCIDE_ICON_MAP: Partial<Record<IconName, LucideIconRecord>> = {
   "panel-left": { component: PanelLeft },
   "panel-right": { component: PanelRight },
   terminal: { component: Terminal },
+  tasks: { component: ListTodo },
   message: { component: MessageSquare },
   workflow: { component: Workflow },
   notifications: { component: Bell },

@@ -25,7 +25,7 @@ describe("right side activity toolbar replaces horizontal panel tabs", () => {
     const inspectorCss = readText("src/styles/surfaces/inspector.css")
 
     expect(html).not.toContain('id="solidRightPanelTabs"')
-    expect(html).not.toContain('data-panel-tab=')
+    expect(html).not.toContain("data-panel-tab=")
     expect(main).not.toContain("RightPanelTabs")
     expect(main).not.toContain("rightPanelTab")
     expect(inspectorCss).not.toContain(".sections-tabs")
@@ -39,8 +39,9 @@ describe("right side activity toolbar replaces horizontal panel tabs", () => {
     const buttonBody = ruleBody(css, '.side-activity-toolbar [data-ui="side-activity-button"]')
 
     expect(toolbar).toContain('data-ui="side-activity-button"')
-    expect(toolbar).toContain("title={label()}")
-    expect(toolbar).toContain("aria-label={label()}")
+    expect(toolbar).toContain("tooltipKey?: string")
+    expect(toolbar).toContain("title={tooltip()}")
+    expect(toolbar).toContain("aria-label={tooltip()}")
     expect(toolbar).toContain("<Icon name={activity.icon}")
     expect(buttonBody).toMatch(/border-radius:\s*0\b/)
     expect(buttonBody).toContain("width:")

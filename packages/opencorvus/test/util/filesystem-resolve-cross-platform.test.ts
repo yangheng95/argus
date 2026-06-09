@@ -58,9 +58,7 @@ describe("Filesystem.resolve cross-platform validation (W2-V33)", () => {
         thrown = e
       }
       expect(thrown).toBeInstanceOf(Filesystem.InvalidDirectoryError)
-      expect((thrown as Filesystem.InvalidDirectoryError).data.reason).toBe(
-        "windows-path-on-posix",
-      )
+      expect((thrown as Filesystem.InvalidDirectoryError).data.reason).toBe("windows-path-on-posix")
     })
 
     test("throws InvalidDirectoryError on a Windows-shaped path with forward slash", () => {
@@ -71,9 +69,7 @@ describe("Filesystem.resolve cross-platform validation (W2-V33)", () => {
         thrown = e
       }
       expect(thrown).toBeInstanceOf(Filesystem.InvalidDirectoryError)
-      expect((thrown as Filesystem.InvalidDirectoryError).data.reason).toBe(
-        "windows-path-on-posix",
-      )
+      expect((thrown as Filesystem.InvalidDirectoryError).data.reason).toBe("windows-path-on-posix")
     })
 
     test("accepts a normal POSIX absolute path without throwing", () => {
@@ -135,9 +131,7 @@ describe("Filesystem.resolve cross-platform validation (W2-V33)", () => {
         thrown = e
       }
       expect(thrown).toBeInstanceOf(Filesystem.InvalidDirectoryError)
-      expect((thrown as Filesystem.InvalidDirectoryError).data.reason).toBe(
-        "posix-path-on-windows",
-      )
+      expect((thrown as Filesystem.InvalidDirectoryError).data.reason).toBe("posix-path-on-windows")
     })
 
     test("UNC paths starting with // are not rejected (passed through to windowsPath)", () => {

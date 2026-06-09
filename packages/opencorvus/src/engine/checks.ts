@@ -23,9 +23,7 @@ export function writeTaskChecks(task: TaskRow, checks: Record<string, unknown> |
 
 export function mergeTaskChecks(raw: unknown, selection: Record<string, boolean>) {
   const checks =
-    raw && typeof raw === "object" && !Array.isArray(raw)
-      ? structuredClone(raw as Record<string, unknown>)
-      : {}
+    raw && typeof raw === "object" && !Array.isArray(raw) ? structuredClone(raw as Record<string, unknown>) : {}
 
   const named =
     checks.named && typeof checks.named === "object" && !Array.isArray(checks.named)

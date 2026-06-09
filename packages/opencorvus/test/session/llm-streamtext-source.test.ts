@@ -23,14 +23,7 @@ import path from "node:path"
  * Rule 8 — single source. Rule 36 — every fix carries a test.
  */
 
-const LLM_SRC = path.join(
-  import.meta.dir,
-  "..",
-  "..",
-  "src",
-  "session",
-  "llm.ts",
-)
+const LLM_SRC = path.join(import.meta.dir, "..", "..", "src", "session", "llm.ts")
 
 const src = await fs.readFile(LLM_SRC, "utf8")
 

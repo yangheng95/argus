@@ -68,11 +68,12 @@ await Instance.provide({
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
-        request: 'Create a file src/count.ts that exports a function count(n: number): number that returns n+1. Then create src/count.test.ts using bun:test that tests count(1)===2.',
+        request:
+          "Create a file src/count.ts that exports a function count(n: number): number that returns n+1. Then create src/count.test.ts using bun:test that tests count(1)===2.",
         executor: "opencorvus",
       }),
     })
-    const createData = await createRes.json() as any
+    const createData = (await createRes.json()) as any
     const taskID = createData.task_id
     if (!taskID) {
       console.error("[doctor] Failed to create task:", JSON.stringify(createData).slice(0, 300))
@@ -94,10 +95,10 @@ await Instance.provide({
     // 定时 transcript diff
     const snapTimer = setInterval(async () => {
       try {
-        const tr = await (await fetch(`${SERVER}/task/${taskID}/transcript`)).json() as any[]
+        const tr = (await (await fetch(`${SERVER}/task/${taskID}/transcript`)).json()) as any[]
         const tParts = new Map<string, string>()
-        for (const msg of (Array.isArray(tr) ? tr : [])) {
-          for (const p of (msg.parts || [])) {
+        for (const msg of Array.isArray(tr) ? tr : []) {
+          for (const p of msg.parts || []) {
             if (typeof p.text === "string" && p.id) tParts.set(`${msg.info.id}:${p.id}`, p.text)
           }
         }
@@ -107,7 +108,9 @@ await Instance.provide({
         for (const [key, tText] of tParts) {
           if (tText === "") emptyInTranscript++
         }
-        console.log(`[diff] transcript=${tr.length}msgs/${tParts.size}parts sse=${store.size}msgs deltas=${deltaCount}(${deltaChars}c) empty_transcript_parts=${emptyInTranscript}`)
+        console.log(
+          `[diff] transcript=${tr.length}msgs/${tParts.size}parts sse=${store.size}msgs deltas=${deltaCount}(${deltaChars}c) empty_transcript_parts=${emptyInTranscript}`,
+        )
         if (emptyInTranscript > 0) {
           console.log(`  ⚠️ ${emptyInTranscript} parts have text="" in transcript — syncTask would wipe streamed text`)
         }
@@ -135,7 +138,10 @@ await Instance.provide({
 
       while (true) {
         const { done, value } = await reader.read()
-        if (done) { console.log("\n[SSE] Stream ended"); break }
+        if (done) {
+          console.log("\n[SSE] Stream ended")
+          break
+        }
         buffer += decoder.decode(value, { stream: true })
         const lines = buffer.split("\n")
         buffer = lines.pop() || ""
@@ -158,16 +164,23 @@ await Instance.provide({
               if (info?.id) {
                 if (!store.has(info.id)) store.set(info.id, { info, parts: new Map() })
                 else store.get(info.id)!.info = info
-                console.log(`[evt] message.updated id=${info.id.slice(-8)} role=${info.role} agent=${info.agent || "-"}`)
+                console.log(
+                  `[evt] message.updated id=${info.id.slice(-8)} role=${info.role} agent=${info.agent || "-"}`,
+                )
               }
             } else if (type === "message.part.updated") {
               msgEventCount++
               const part = p.part
               if (part?.id && part?.messageID) {
                 let msg = store.get(part.messageID)
-                if (!msg) { msg = { info: { id: part.messageID }, parts: new Map() }; store.set(part.messageID, msg) }
+                if (!msg) {
+                  msg = { info: { id: part.messageID }, parts: new Map() }
+                  store.set(part.messageID, msg)
+                }
                 msg.parts.set(part.id, { ...part })
-                console.log(`[evt] part.updated msg=${part.messageID.slice(-8)} part=${part.id.slice(-8)} type=${part.type} text=${(part.text || "").length}c`)
+                console.log(
+                  `[evt] part.updated msg=${part.messageID.slice(-8)} part=${part.id.slice(-8)} type=${part.type} text=${(part.text || "").length}c`,
+                )
               }
             } else if (type === "message.part.delta") {
               msgEventCount++
@@ -176,9 +189,15 @@ await Instance.provide({
               deltaChars += delta.length
               if (p.messageID && p.partID) {
                 let msg = store.get(p.messageID)
-                if (!msg) { msg = { info: { id: p.messageID }, parts: new Map() }; store.set(p.messageID, msg) }
+                if (!msg) {
+                  msg = { info: { id: p.messageID }, parts: new Map() }
+                  store.set(p.messageID, msg)
+                }
                 let part = msg.parts.get(p.partID)
-                if (!part) { part = { id: p.partID, type: "text", text: "" }; msg.parts.set(p.partID, part) }
+                if (!part) {
+                  part = { id: p.partID, type: "text", text: "" }
+                  msg.parts.set(p.partID, part)
+                }
                 if (p.field === "text") part.text = (part.text || "") + delta
               }
               if (deltaCount % 20 === 0) console.log(`[delta] ${deltaCount} deltas ${deltaChars}c`)
@@ -229,11 +248,11 @@ await Instance.provide({
 
     // 最终 transcript
     try {
-      const tr = await (await fetch(`${SERVER}/task/${taskID}/transcript`)).json() as any[]
+      const tr = (await (await fetch(`${SERVER}/task/${taskID}/transcript`)).json()) as any[]
       let emptyParts = 0
       let totalParts = 0
-      for (const msg of (Array.isArray(tr) ? tr : [])) {
-        for (const p of (msg.parts || [])) {
+      for (const msg of Array.isArray(tr) ? tr : []) {
+        for (const p of msg.parts || []) {
           if (typeof p.text === "string") {
             totalParts++
             if (p.text === "") emptyParts++

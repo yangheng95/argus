@@ -16,22 +16,22 @@
 // arbiter of conflicting actions; this layer guarantees we don't generate the
 // conflict ourselves.
 
-import { apiJson } from "./api";
+import { apiJson } from "./api"
 
-const REPLY_TIMEOUT_MS = 30_000;
+const REPLY_TIMEOUT_MS = 30_000
 
-const inflight = new Map<string, Promise<void>>();
+const inflight = new Map<string, Promise<void>>()
 
-export type InteractionReplyEndpoint = "interaction" | "question";
+export type InteractionReplyEndpoint = "interaction" | "question"
 
 function lockedRequest(id: string, fn: () => Promise<void>): Promise<void> {
-  const prev = inflight.get(id);
-  if (prev) return prev;
+  const prev = inflight.get(id)
+  if (prev) return prev
   const p = fn().finally(() => {
-    if (inflight.get(id) === p) inflight.delete(id);
-  });
-  inflight.set(id, p);
-  return p;
+    if (inflight.get(id) === p) inflight.delete(id)
+  })
+  inflight.set(id, p)
+  return p
 }
 
 export async function replyInteraction(
@@ -43,15 +43,15 @@ export async function replyInteraction(
 ): Promise<void> {
   return lockedRequest(id, async () => {
     if (endpoint === "question") {
-      if (action !== "answer") throw new Error(`question reply endpoint does not support ${action}`);
-      const answers = Array.isArray(input.answers) ? input.answers : [];
+      if (action !== "answer") throw new Error(`question reply endpoint does not support ${action}`)
+      const answers = Array.isArray(input.answers) ? input.answers : []
       await apiJson(`question/${id}/reply`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ answers }),
         signal: AbortSignal.timeout(REPLY_TIMEOUT_MS),
-      });
-      return;
+      })
+      return
     }
 
     if (action === "once" || action === "always") {
@@ -60,15 +60,12 @@ export async function replyInteraction(
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ reply: action, autoReply }),
         signal: AbortSignal.timeout(REPLY_TIMEOUT_MS),
-      });
-      return;
+      })
+      return
     }
 
-    const answers = Array.isArray(input.answers) ? input.answers : undefined;
-    const message =
-      typeof input.message === "string" && input.message.trim()
-        ? input.message.trim()
-        : undefined;
+    const answers = Array.isArray(input.answers) ? input.answers : undefined
+    const message = typeof input.message === "string" && input.message.trim() ? input.message.trim() : undefined
 
     await apiJson(`interaction/${id}/reply`, {
       method: "POST",
@@ -79,8 +76,8 @@ export async function replyInteraction(
         ...(message ? { message } : {}),
       }),
       signal: AbortSignal.timeout(REPLY_TIMEOUT_MS),
-    });
-  });
+    })
+  })
 }
 
 export async function rejectInteraction(
@@ -93,8 +90,8 @@ export async function rejectInteraction(
       await apiJson(`question/${id}/reject`, {
         method: "POST",
         signal: AbortSignal.timeout(REPLY_TIMEOUT_MS),
-      });
-      return;
+      })
+      return
     }
 
     await apiJson(`interaction/${id}/reject`, {
@@ -102,6 +99,6 @@ export async function rejectInteraction(
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ autoReply }),
       signal: AbortSignal.timeout(REPLY_TIMEOUT_MS),
-    });
-  });
+    })
+  })
 }

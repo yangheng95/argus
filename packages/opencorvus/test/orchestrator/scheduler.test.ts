@@ -1,5 +1,10 @@
 import { describe, expect, test } from "bun:test"
-import { GOAL_RUN_RESETTABLE_STATUSES, LIVE_RUN_STATUSES, isRunReadyForGoalDispatch, restartStagePlan } from "../../src/orchestrator/scheduler"
+import {
+  GOAL_RUN_RESETTABLE_STATUSES,
+  LIVE_RUN_STATUSES,
+  isRunReadyForGoalDispatch,
+  restartStagePlan,
+} from "../../src/orchestrator/scheduler"
 
 describe("orchestrator scheduler invariants", () => {
   test("run dispatch requires both a plan and an activated run status", () => {
@@ -26,14 +31,7 @@ describe("orchestrator scheduler invariants", () => {
     // fresh goal_run under the new contract transitions. Rework routes
     // through Goal.startNewAttempt (sets `superseded_reason` column on
     // the old terminal row), not an FSM flip.
-    expect(GOAL_RUN_RESETTABLE_STATUSES).toEqual([
-      "queued",
-      "accepted",
-      "planning",
-      "running",
-      "evaluating",
-      "blocked",
-    ])
+    expect(GOAL_RUN_RESETTABLE_STATUSES).toEqual(["queued", "accepted", "planning", "running", "evaluating", "blocked"])
   })
 
   test("requirements restart clears spec/plan and deletes goals", () => {

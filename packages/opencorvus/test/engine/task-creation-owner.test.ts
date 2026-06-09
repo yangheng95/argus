@@ -27,12 +27,20 @@ describe("task creation owner serialization", () => {
   })
 
   test("derives mission and parent-task owner keys from creation metadata", () => {
-    expect(taskCreationOwnerKey(parsed({
-      metadata: { mission: { id: "m1", session_id: "ses_m1" } },
-    }))).toBe("mission:ses_m1")
-    expect(taskCreationOwnerKey(parsed({
-      metadata: { parent_task_id: "tsk_parent" },
-    }))).toBe("task:tsk_parent")
+    expect(
+      taskCreationOwnerKey(
+        parsed({
+          metadata: { mission: { id: "m1", session_id: "ses_m1" } },
+        }),
+      ),
+    ).toBe("mission:ses_m1")
+    expect(
+      taskCreationOwnerKey(
+        parsed({
+          metadata: { parent_task_id: "tsk_parent" },
+        }),
+      ),
+    ).toBe("task:tsk_parent")
     expect(taskCreationOwnerKey(parsed({ metadata: { actor: "panel_ui" } }))).toBeUndefined()
   })
 

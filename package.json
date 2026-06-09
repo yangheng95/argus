@@ -10,6 +10,8 @@
     "dev:overlay": "cd packages/overlay/src-tauri && cargo run --release",
     "build:overlay": "bun run --cwd packages/overlay build:overlay",
     "package:local": "bun run script/package-local.ts",
+    "package:binary-matrix": "bun run script/package-binary-matrix.ts",
+    "package:linux-binary": "bun run script/package-linux-binary.ts",
     "clean:nul": "bun run script/clean-nul-files.ts",
     "check:dead-code": "bunx knip --config knip.config.js --no-progress --production --include files,dependencies,unlisted,binaries --workspace packages/channel-config --workspace packages/channel-runtime --workspace packages/opencorvus --workspace packages/overlay --workspace packages/plugin --workspace packages/script --workspace packages/sdk/js --workspace packages/util",
     "check:sdk-imports": "bun run ./script/check-sdk-imports.ts",

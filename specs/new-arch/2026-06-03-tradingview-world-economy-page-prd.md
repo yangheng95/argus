@@ -50,17 +50,17 @@
 
 ## 3. 证据来源
 
-| 类型 | 证据 | 用途 |
-| --- | --- | --- |
-| Live page | `https://www.tradingview.com/markets/world-economy/` | 确认页面标题、可见模块、可见文案和链接语义。 |
-| Rendered evidence | `.opencorvus/runtime/tasks/tsk_e8b012d9e001/frontend-design/webpage-evidence/reference.png` | 确认桌面视口视觉结构。 |
-| Evidence summary | `.opencorvus/runtime/tasks/tsk_e8b012d9e001/frontend-design/webpage-evidence/prd-evidence-summary.md` | 确认页面 surface、颜色、字体、组件模式。 |
-| Source IR | `.opencorvus/runtime/tasks/tsk_e8b012d9e001/frontend-design/webpage-evidence/source-ir/*` | 确认布局、内容模型、样式 token 和交互 hint。 |
-| Target package | `packages/tradingview-world-economy` | 确认已有实现包、抽取数据和测试基线。 |
-| Extracted data | `packages/tradingview-world-economy/src/data/economicTrendsExtracted.ts` | 确认地图路径、GDP 行、国家入口、指标卡、新闻、日历、FAQ 信号。 |
-| Extracted table | `packages/tradingview-world-economy/src/data/sourceData.ts` | 确认 heatmap 表格和可见文本信号。 |
-| Existing spec | `specs/new-arch/2026-06-03-tradingview-world-economy-extracted-clone.md` | 确认项目策略是 extracted-material project，不是手写近似页面。 |
-| QA test | `packages/tradingview-world-economy/qa/extracted-materials.test.ts` | 确认当前抽取材料的可测试基线。 |
+| 类型              | 证据                                                                                                  | 用途                                                           |
+| ----------------- | ----------------------------------------------------------------------------------------------------- | -------------------------------------------------------------- |
+| Live page         | `https://www.tradingview.com/markets/world-economy/`                                                  | 确认页面标题、可见模块、可见文案和链接语义。                   |
+| Rendered evidence | `.opencorvus/runtime/tasks/tsk_e8b012d9e001/frontend-design/webpage-evidence/reference.png`           | 确认桌面视口视觉结构。                                         |
+| Evidence summary  | `.opencorvus/runtime/tasks/tsk_e8b012d9e001/frontend-design/webpage-evidence/prd-evidence-summary.md` | 确认页面 surface、颜色、字体、组件模式。                       |
+| Source IR         | `.opencorvus/runtime/tasks/tsk_e8b012d9e001/frontend-design/webpage-evidence/source-ir/*`             | 确认布局、内容模型、样式 token 和交互 hint。                   |
+| Target package    | `packages/tradingview-world-economy`                                                                  | 确认已有实现包、抽取数据和测试基线。                           |
+| Extracted data    | `packages/tradingview-world-economy/src/data/economicTrendsExtracted.ts`                              | 确认地图路径、GDP 行、国家入口、指标卡、新闻、日历、FAQ 信号。 |
+| Extracted table   | `packages/tradingview-world-economy/src/data/sourceData.ts`                                           | 确认 heatmap 表格和可见文本信号。                              |
+| Existing spec     | `specs/new-arch/2026-06-03-tradingview-world-economy-extracted-clone.md`                              | 确认项目策略是 extracted-material project，不是手写近似页面。  |
+| QA test           | `packages/tradingview-world-economy/qa/extracted-materials.test.ts`                                   | 确认当前抽取材料的可测试基线。                                 |
 
 ## 4. 缩写和术语
 
@@ -142,6 +142,7 @@
 ## 9. 页面信息架构
 
 页面从上到下的结构必须保持如下顺序：
+
 1. Global header: 品牌、导航、搜索、语言、Get started。
 2. Breadcrumb: Markets / Economy。
 3. Page title: Economy。
@@ -156,29 +157,29 @@
 12. Economic Calendar: 当日经济事件卡片。
 13. FAQ: 概念解释和公式。
 14. Footer: TradingView 全站导航、版权和数据提供商声明。
-设计和研发不得把 FAQ、News 或 Footer 提前到经济趋势核心区之前。
-移动端可以改变布局列数，但不可以改变模块的语义顺序。
+    设计和研发不得把 FAQ、News 或 Footer 提前到经济趋势核心区之前。
+    移动端可以改变布局列数，但不可以改变模块的语义顺序。
 
 ## 10. 模块级需求总览
 
-| ID | 模块 | 产品目的 |
-| --- | --- | --- |
-| M01 | Global Header | 提供 TradingView 全站导航、搜索、语言切换和账号转化入口。 |
-| M02 | Breadcrumb And Page Title | 让用户知道当前位置是 Markets 下的 Economy 页面。 |
-| M03 | Page Tabs | 在 Overview 和 Economic trends 之间提供清晰导航。 |
-| M04 | Economic Trends Summary | 把全球宏观趋势的核心信号集中在页面最前。 |
-| M05 | Inflation Map | 用全球地图表达各国家或地区通胀水平差异。 |
-| M06 | GDP Growth YoY Ranking | 展示同比 GDP 增长靠前的国家，并提供国家钻取入口。 |
-| M07 | Macro Metric Cards | 展示美国关键宏观指标的当前值、预测值和下次发布时间。 |
-| M08 | Countries | 提供主要国家和地区的直接入口。 |
-| M09 | Ideas | 展示社区对宏观经济数据的观点，连接数据和交易想法。 |
-| M10 | Economic Indicators Heatmap | 用国家 x 指标矩阵支持横向比较。 |
-| M11 | Main Indicators | 提供常用宏观指标的目录入口。 |
-| M12 | Global Industrial Map | 提供全球工业趋势的地图视角。 |
-| M13 | News | 提供与宏观经济相关的即时新闻入口。 |
-| M14 | Economic Calendar | 展示今日或近期宏观经济事件，支持事件驱动观察。 |
-| M15 | FAQ | 解释核心经济概念，兼顾新手理解和 SEO。 |
-| M16 | Footer | 承载全站导航、产品入口、社区入口、公司信息、政策和数据版权。 |
+| ID  | 模块                        | 产品目的                                                     |
+| --- | --------------------------- | ------------------------------------------------------------ |
+| M01 | Global Header               | 提供 TradingView 全站导航、搜索、语言切换和账号转化入口。    |
+| M02 | Breadcrumb And Page Title   | 让用户知道当前位置是 Markets 下的 Economy 页面。             |
+| M03 | Page Tabs                   | 在 Overview 和 Economic trends 之间提供清晰导航。            |
+| M04 | Economic Trends Summary     | 把全球宏观趋势的核心信号集中在页面最前。                     |
+| M05 | Inflation Map               | 用全球地图表达各国家或地区通胀水平差异。                     |
+| M06 | GDP Growth YoY Ranking      | 展示同比 GDP 增长靠前的国家，并提供国家钻取入口。            |
+| M07 | Macro Metric Cards          | 展示美国关键宏观指标的当前值、预测值和下次发布时间。         |
+| M08 | Countries                   | 提供主要国家和地区的直接入口。                               |
+| M09 | Ideas                       | 展示社区对宏观经济数据的观点，连接数据和交易想法。           |
+| M10 | Economic Indicators Heatmap | 用国家 x 指标矩阵支持横向比较。                              |
+| M11 | Main Indicators             | 提供常用宏观指标的目录入口。                                 |
+| M12 | Global Industrial Map       | 提供全球工业趋势的地图视角。                                 |
+| M13 | News                        | 提供与宏观经济相关的即时新闻入口。                           |
+| M14 | Economic Calendar           | 展示今日或近期宏观经济事件，支持事件驱动观察。               |
+| M15 | FAQ                         | 解释核心经济概念，兼顾新手理解和 SEO。                       |
+| M16 | Footer                      | 承载全站导航、产品入口、社区入口、公司信息、政策和数据版权。 |
 
 ## 11.01 Global Header
 
@@ -957,25 +958,25 @@
 
 ## 12. 数据模型
 
-| 模型 | 字段 |
-| --- | --- |
-| PageMeta | title、description、canonicalUrl、locale、lastUpdatedAt。 |
-| NavigationItem | label、href、menuGroups、isExternal、trackingId。 |
-| BreadcrumbItem | label、href、position。 |
-| TabItem | label、href、active、panelId。 |
+| 模型             | 字段                                                                                                 |
+| ---------------- | ---------------------------------------------------------------------------------------------------- |
+| PageMeta         | title、description、canonicalUrl、locale、lastUpdatedAt。                                            |
+| NavigationItem   | label、href、menuGroups、isExternal、trackingId。                                                    |
+| BreadcrumbItem   | label、href、position。                                                                              |
+| TabItem          | label、href、active、panelId。                                                                       |
 | MapMetricCountry | countryCode、countryName、value、formattedValue、unit、bucket、geometryAssetPath、href、dataStatus。 |
-| GdpGrowthRow | rank、countryName、countryHref、logoSrc、growthPercent、nominalGdp、currency。 |
-| MetricCard | title、ticker、href、timeframe、actual、forecast、nextRelease、chartImages、sourceTimestamp。 |
-| CountryLink | label、href、slug、displayOrder。 |
-| IdeaCard | title、href、summary、thumbnail、authorName、authorHref、category、symbol、updatedAt。 |
-| HeatmapTable | metrics、countries、cells、legend、sourceTimestamp。 |
-| HeatmapCell | countryCode、metricKey、rawValue、formattedValue、unit、bucket、href。 |
-| IndicatorLink | label、href、category、displayOrder。 |
-| NewsItem | headline、href、provider、publishedAt、summary、thumbnail。 |
-| CalendarEvent | dateLabel、timeLabel、country、eventName、actual、forecast、prior、unit、href。 |
-| FaqItem | question、answerMarkdown、formulaText、relatedLinks、displayOrder。 |
-| FooterGroup | title、links、displayOrder。 |
-| LegalAttribution | providerName、text、href、requiredLocales。 |
+| GdpGrowthRow     | rank、countryName、countryHref、logoSrc、growthPercent、nominalGdp、currency。                       |
+| MetricCard       | title、ticker、href、timeframe、actual、forecast、nextRelease、chartImages、sourceTimestamp。        |
+| CountryLink      | label、href、slug、displayOrder。                                                                    |
+| IdeaCard         | title、href、summary、thumbnail、authorName、authorHref、category、symbol、updatedAt。               |
+| HeatmapTable     | metrics、countries、cells、legend、sourceTimestamp。                                                 |
+| HeatmapCell      | countryCode、metricKey、rawValue、formattedValue、unit、bucket、href。                               |
+| IndicatorLink    | label、href、category、displayOrder。                                                                |
+| NewsItem         | headline、href、provider、publishedAt、summary、thumbnail。                                          |
+| CalendarEvent    | dateLabel、timeLabel、country、eventName、actual、forecast、prior、unit、href。                      |
+| FaqItem          | question、answerMarkdown、formulaText、relatedLinks、displayOrder。                                  |
+| FooterGroup      | title、links、displayOrder。                                                                         |
+| LegalAttribution | providerName、text、href、requiredLocales。                                                          |
 
 ## 13. 数据格式规则
 
@@ -1017,15 +1018,16 @@
 
 ## 16. 响应式要求
 
-| 视口 | 验收重点 |
-| --- | --- |
-| 1440x900 | 桌面参考视口，必须用于主视觉对比。 |
-| 1280x800 | 常规笔记本，经济趋势网格应保持多列。 |
-| 1024x768 | 平板横屏，可减少列数但保留卡片顺序。 |
-| 768x1024 | 平板竖屏，heatmap 可横向滚动。 |
-| 430x932 | 移动大屏，卡片单列或两列混排，但不重叠。 |
-| 390x844 | 移动常见宽度，国家 chip 和 FAQ 必须可读。 |
-| 360x740 | 窄屏，header、tabs、地图图例必须不溢出。 |
+| 视口     | 验收重点                                  |
+| -------- | ----------------------------------------- |
+| 1440x900 | 桌面参考视口，必须用于主视觉对比。        |
+| 1280x800 | 常规笔记本，经济趋势网格应保持多列。      |
+| 1024x768 | 平板横屏，可减少列数但保留卡片顺序。      |
+| 768x1024 | 平板竖屏，heatmap 可横向滚动。            |
+| 430x932  | 移动大屏，卡片单列或两列混排，但不重叠。  |
+| 390x844  | 移动常见宽度，国家 chip 和 FAQ 必须可读。 |
+| 360x740  | 窄屏，header、tabs、地图图例必须不溢出。  |
+
 - 移动端 header 可以折叠，但搜索、语言和账号入口仍应可达。
 - tabs 可横向滚动，但 active 状态不能消失。
 - 地图图例在窄屏上可以换行，但不能盖住地图。
@@ -1104,7 +1106,6 @@
 
 ## 22. 测试计划
 
-
 ### 单元测试
 
 - 验证 inflationMapPaths fixture 数量为 205，除非源证据更新。
@@ -1155,16 +1156,16 @@
 
 ## 24. 里程碑
 
-| 阶段 | 交付物 | 验收 |
-| --- | --- | --- |
-| M1 PRD | 本文档 | 产品、设计、研发、QA 可读；行数超过 1000；模块完整。 |
-| M2 数据模型 | typed data contracts | 覆盖 map、ranking、metric cards、heatmap、ideas、news、calendar、FAQ、footer。 |
-| M3 页面骨架 | Header 到 Footer 完整结构 | 无 placeholder；模块顺序正确。 |
-| M4 数据渲染 | 所有核心数据区域渲染 | fixture 测试通过。 |
-| M5 交互 | tabs、FAQ、links、scroll tables | 键盘和鼠标可用。 |
-| M6 响应式 | desktop/tablet/mobile | 无重叠、无页面级横向滚动。 |
-| M7 视觉验收 | reference screenshot parity | 主要区域比例、密度、颜色、字体接近目标。 |
-| M8 发布准备 | tests、legal、SEO、analytics | 所有 release checklist 通过。 |
+| 阶段        | 交付物                          | 验收                                                                           |
+| ----------- | ------------------------------- | ------------------------------------------------------------------------------ |
+| M1 PRD      | 本文档                          | 产品、设计、研发、QA 可读；行数超过 1000；模块完整。                           |
+| M2 数据模型 | typed data contracts            | 覆盖 map、ranking、metric cards、heatmap、ideas、news、calendar、FAQ、footer。 |
+| M3 页面骨架 | Header 到 Footer 完整结构       | 无 placeholder；模块顺序正确。                                                 |
+| M4 数据渲染 | 所有核心数据区域渲染            | fixture 测试通过。                                                             |
+| M5 交互     | tabs、FAQ、links、scroll tables | 键盘和鼠标可用。                                                               |
+| M6 响应式   | desktop/tablet/mobile           | 无重叠、无页面级横向滚动。                                                     |
+| M7 视觉验收 | reference screenshot parity     | 主要区域比例、密度、颜色、字体接近目标。                                       |
+| M8 发布准备 | tests、legal、SEO、analytics    | 所有 release checklist 通过。                                                  |
 
 ## 25. 风险和待确认问题
 
@@ -1177,7 +1178,6 @@
 - 如果后续要求独立产品而非 TradingView replica，需要重写品牌、法务和导航范围。
 
 ## 26. 页面内容清单
-
 
 ### GDP Growth Rows
 
@@ -1286,6 +1286,7 @@
 ## 27. 详细验收矩阵
 
 ### M01 Global Header
+
 - M01-AC-01: 桌面高度接近参考页 64px
 - M01-AC-02: 所有导航项是 link 或 disclosure button
 - M01-AC-03: 搜索入口可通过键盘触发
@@ -1309,7 +1310,9 @@
 - M01-INTERACTION-05: 必须支持「触发搜索」。
 - M01-INTERACTION-06: 必须支持「打开语言选择」。
 - M01-INTERACTION-07: 必须支持「点击 Get started」。
+
 ### M02 Breadcrumb And Page Title
+
 - M02-AC-01: H1 只能有一个
 - M02-AC-02: 面包屑位于 tabs 之前
 - M02-AC-03: H1 不被 header 遮挡
@@ -1320,7 +1323,9 @@
 - M02-CONTENT-04: 必须覆盖可见内容「H1 Economy」。
 - M02-INTERACTION-01: 必须支持「点击 Markets 返回市场总入口」。
 - M02-INTERACTION-02: 必须支持「点击 Economy 保持当前页面或刷新当前分类」。
+
 ### M03 Page Tabs
+
 - M03-AC-01: 两个 tab 的顺序稳定
 - M03-AC-02: active 状态不能只靠颜色表达
 - M03-AC-03: tab 不应变成静态文本
@@ -1331,7 +1336,9 @@
 - M03-INTERACTION-01: 必须支持「点击 Overview」。
 - M03-INTERACTION-02: 必须支持「点击 Economic trends」。
 - M03-INTERACTION-03: 必须支持「键盘左右切换或 Tab 访问」。
+
 ### M04 Economic Trends Summary
+
 - M04-AC-01: 第一屏或首个滚动段必须看到核心经济趋势
 - M04-AC-02: 卡片之间不重叠
 - M04-AC-03: 不能用空白块代替地图或图表
@@ -1346,7 +1353,9 @@
 - M04-INTERACTION-02: 必须支持「GDP 国家点击」。
 - M04-INTERACTION-03: 必须支持「指标卡 ticker 点击」。
 - M04-INTERACTION-04: 必须支持「图表缩略图查看或跳转」。
+
 ### M05 Inflation Map
+
 - M05-AC-01: 图例值必须是 0、3、7、12、25
 - M05-AC-02: 地图比例接近 745x372
 - M05-AC-03: 颜色使用 tan/orange heatmap 语义
@@ -1364,7 +1373,9 @@
 - M05-INTERACTION-02: 必须支持「focus 地图摘要」。
 - M05-INTERACTION-03: 必须支持「点击国家进入国家页，如果源页面支持」。
 - M05-INTERACTION-04: 必须支持「触屏设备显示可点击摘要或 tooltip」。
+
 ### M06 GDP Growth YoY Ranking
+
 - M06-AC-01: 六个捕获国家和数值在 fixture 中必须准确
 - M06-AC-02: 数值单位不可丢失
 - M06-AC-03: 国家链接不可为空
@@ -1383,7 +1394,9 @@
 - M06-INTERACTION-01: 必须支持「点击国家名称进入国家页」。
 - M06-INTERACTION-02: 必须支持「hover 行显示可点击反馈」。
 - M06-INTERACTION-03: 必须支持「长国家名显示 overflow tooltip」。
+
 ### M07 Macro Metric Cards
+
 - M07-AC-01: USUR、USINTR、USBOT 三张卡都必须存在
 - M07-AC-02: Actual、Forecast、Next release 标签不能省略
 - M07-AC-03: Forecast 缺失必须显式显示 dash
@@ -1402,7 +1415,9 @@
 - M07-INTERACTION-01: 必须支持「点击 ticker 进入经济符号页」。
 - M07-INTERACTION-02: 必须支持「hover 图表缩略图」。
 - M07-INTERACTION-03: 必须支持「键盘访问卡片链接」。
+
 ### M08 Countries
+
 - M08-AC-01: 所有捕获国家名称准确
 - M08-AC-02: 国家 chip 是 anchor，不是 span
 - M08-AC-03: chip 间距紧凑但触控可点
@@ -1433,7 +1448,9 @@
 - M08-INTERACTION-02: 必须支持「hover chip」。
 - M08-INTERACTION-03: 必须支持「focus chip」。
 - M08-INTERACTION-04: 必须支持「点击 See all 展示完整列表或跳转」。
+
 ### M09 Ideas
+
 - M09-AC-01: 不能用编造观点填充
 - M09-AC-02: tab 必须可交互
 - M09-AC-03: 卡片标题和摘要不能互相覆盖
@@ -1455,7 +1472,9 @@
 - M09-INTERACTION-03: 必须支持「点击观点卡片」。
 - M09-INTERACTION-04: 必须支持「点击作者」。
 - M09-INTERACTION-05: 必须支持「点击 See all」。
+
 ### M10 Economic Indicators Heatmap
+
 - M10-AC-01: 表头和行头必须清晰
 - M10-AC-02: 单位如 % of GDP 不得丢失
 - M10-AC-03: 颜色不能替代数值文本
@@ -1485,7 +1504,9 @@
 - M10-INTERACTION-02: 必须支持「hover cell 查看完整值」。
 - M10-INTERACTION-03: 必须支持「点击指标进入指标页」。
 - M10-INTERACTION-04: 必须支持「点击国家进入国家页」。
+
 ### M11 Main Indicators
+
 - M11-AC-01: 主要指标名称准确
 - M11-AC-02: 指标必须是可点击链接
 - M11-AC-03: 布局不能像随机标签云
@@ -1512,7 +1533,9 @@
 - M11-INTERACTION-01: 必须支持「点击指标进入指标页」。
 - M11-INTERACTION-02: 必须支持「hover 或 focus 显示可点击反馈」。
 - M11-INTERACTION-03: 必须支持「See all 展开或跳转」。
+
 ### M12 Global Industrial Map
+
 - M12-AC-01: 不能直接复用通胀数据冒充工业数据
 - M12-AC-02: 地图视觉语言和 Inflation map 保持一致
 - M12-AC-03: CTA 可点击
@@ -1524,7 +1547,9 @@
 - M12-INTERACTION-01: 必须支持「hover 或 focus 地图」。
 - M12-INTERACTION-02: 必须支持「点击国家或 CTA」。
 - M12-INTERACTION-03: 必须支持「点击 See more global trends」。
+
 ### M13 News
+
 - M13-AC-01: 新闻来源必须可见
 - M13-AC-02: 不能用无关通用新闻填充
 - M13-AC-03: 标题优先展示
@@ -1539,7 +1564,9 @@
 - M13-INTERACTION-01: 必须支持「点击新闻」。
 - M13-INTERACTION-02: 必须支持「点击来源或 provider」。
 - M13-INTERACTION-03: 必须支持「点击 Keep reading」。
+
 ### M14 Economic Calendar
+
 - M14-AC-01: Actual/Forecast/Prior 三列语义清楚
 - M14-AC-02: 事件时间不和标题混在一起
 - M14-AC-03: See all market events 可点击
@@ -1561,7 +1588,9 @@
 - M14-INTERACTION-01: 必须支持「横向浏览事件卡」。
 - M14-INTERACTION-02: 必须支持「点击事件」。
 - M14-INTERACTION-03: 必须支持「点击 See all market events」。
+
 ### M15 FAQ
+
 - M15-AC-01: 问题文本必须可索引
 - M15-AC-02: 公式必须是文本
 - M15-AC-03: accordion 状态有 ARIA 表达
@@ -1582,7 +1611,9 @@
 - M15-INTERACTION-02: 必须支持「收起 FAQ」。
 - M15-INTERACTION-03: 必须支持「点击相关链接」。
 - M15-INTERACTION-04: 必须支持「键盘切换 accordion」。
+
 ### M16 Footer
+
 - M16-AC-01: 法务链接不能省略
 - M16-AC-02: 数据供应商声明不能省略
 - M16-AC-03: footer 不应比主体内容更早出现
@@ -1647,96 +1678,127 @@
 ## 30. 可拆分研发任务 Backlog
 
 ### E01 Header
+
 - 目标：实现全站 header 结构、桌面导航、移动导航、搜索入口、语言入口、Get started。
 - 输入：本 PRD 对应模块需求、source IR、extracted data fixture、reference screenshot。
 - 输出：可渲染组件、typed data、必要样式、测试。
 - 验收：模块内容准确、无 placeholder、响应式通过、键盘可达。
 - 风险：数据源缺失时必须暴露真实状态，不能编造内容。
+
 ### E02 Page shell
+
 - 目标：实现 breadcrumb、H1、tabs 和 main/footer landmarks。
 - 输入：本 PRD 对应模块需求、source IR、extracted data fixture、reference screenshot。
 - 输出：可渲染组件、typed data、必要样式、测试。
 - 验收：模块内容准确、无 placeholder、响应式通过、键盘可达。
 - 风险：数据源缺失时必须暴露真实状态，不能编造内容。
+
 ### E03 Economic summary layout
+
 - 目标：实现 Economic trends grid、card shell、responsive grid。
 - 输入：本 PRD 对应模块需求、source IR、extracted data fixture、reference screenshot。
 - 输出：可渲染组件、typed data、必要样式、测试。
 - 验收：模块内容准确、无 placeholder、响应式通过、键盘可达。
 - 风险：数据源缺失时必须暴露真实状态，不能编造内容。
+
 ### E04 Inflation map
+
 - 目标：接入 SVG geometry、legend、bucket colors、tooltip/accessibility summary。
 - 输入：本 PRD 对应模块需求、source IR、extracted data fixture、reference screenshot。
 - 输出：可渲染组件、typed data、必要样式、测试。
 - 验收：模块内容准确、无 placeholder、响应式通过、键盘可达。
 - 风险：数据源缺失时必须暴露真实状态，不能编造内容。
+
 ### E05 GDP ranking
+
 - 目标：实现 GDP growth row component、country logo、link、numeric formatting。
 - 输入：本 PRD 对应模块需求、source IR、extracted data fixture、reference screenshot。
 - 输出：可渲染组件、typed data、必要样式、测试。
 - 验收：模块内容准确、无 placeholder、响应式通过、键盘可达。
 - 风险：数据源缺失时必须暴露真实状态，不能编造内容。
+
 ### E06 Metric cards
+
 - 目标：实现 USUR、USINTR、USBOT 卡片、chart thumbnails、Actual/Forecast/Next release。
 - 输入：本 PRD 对应模块需求、source IR、extracted data fixture、reference screenshot。
 - 输出：可渲染组件、typed data、必要样式、测试。
 - 验收：模块内容准确、无 placeholder、响应式通过、键盘可达。
 - 风险：数据源缺失时必须暴露真实状态，不能编造内容。
+
 ### E07 Countries
+
 - 目标：实现 country chip list、See all、mobile wrapping。
 - 输入：本 PRD 对应模块需求、source IR、extracted data fixture、reference screenshot。
 - 输出：可渲染组件、typed data、必要样式、测试。
 - 验收：模块内容准确、无 placeholder、响应式通过、键盘可达。
 - 风险：数据源缺失时必须暴露真实状态，不能编造内容。
+
 ### E08 Ideas
+
 - 目标：实现 ideas tabs、cards、author、thumbnail、empty/error states。
 - 输入：本 PRD 对应模块需求、source IR、extracted data fixture、reference screenshot。
 - 输出：可渲染组件、typed data、必要样式、测试。
 - 验收：模块内容准确、无 placeholder、响应式通过、键盘可达。
 - 风险：数据源缺失时必须暴露真实状态，不能编造内容。
+
 ### E09 Heatmap
+
 - 目标：实现 table model、horizontal scroll、cell color/value rendering。
 - 输入：本 PRD 对应模块需求、source IR、extracted data fixture、reference screenshot。
 - 输出：可渲染组件、typed data、必要样式、测试。
 - 验收：模块内容准确、无 placeholder、响应式通过、键盘可达。
 - 风险：数据源缺失时必须暴露真实状态，不能编造内容。
+
 ### E10 Main indicators
+
 - 目标：实现 indicator link catalog 和 responsive layout。
 - 输入：本 PRD 对应模块需求、source IR、extracted data fixture、reference screenshot。
 - 输出：可渲染组件、typed data、必要样式、测试。
 - 验收：模块内容准确、无 placeholder、响应式通过、键盘可达。
 - 风险：数据源缺失时必须暴露真实状态，不能编造内容。
+
 ### E11 Industrial map
+
 - 目标：实现第二张 map、metric data、CTA。
 - 输入：本 PRD 对应模块需求、source IR、extracted data fixture、reference screenshot。
 - 输出：可渲染组件、typed data、必要样式、测试。
 - 验收：模块内容准确、无 placeholder、响应式通过、键盘可达。
 - 风险：数据源缺失时必须暴露真实状态，不能编造内容。
+
 ### E12 News
+
 - 目标：实现 news cards、provider label、Keep reading。
 - 输入：本 PRD 对应模块需求、source IR、extracted data fixture、reference screenshot。
 - 输出：可渲染组件、typed data、必要样式、测试。
 - 验收：模块内容准确、无 placeholder、响应式通过、键盘可达。
 - 风险：数据源缺失时必须暴露真实状态，不能编造内容。
+
 ### E13 Calendar
+
 - 目标：实现 calendar events、Actual/Forecast/Prior、See all market events。
 - 输入：本 PRD 对应模块需求、source IR、extracted data fixture、reference screenshot。
 - 输出：可渲染组件、typed data、必要样式、测试。
 - 验收：模块内容准确、无 placeholder、响应式通过、键盘可达。
 - 风险：数据源缺失时必须暴露真实状态，不能编造内容。
+
 ### E14 FAQ
+
 - 目标：实现 accordion、formula text、SEO-visible answers。
 - 输入：本 PRD 对应模块需求、source IR、extracted data fixture、reference screenshot。
 - 输出：可渲染组件、typed data、必要样式、测试。
 - 验收：模块内容准确、无 placeholder、响应式通过、键盘可达。
 - 风险：数据源缺失时必须暴露真实状态，不能编造内容。
+
 ### E15 Footer
+
 - 目标：实现 footer groups、legal links、attribution。
 - 输入：本 PRD 对应模块需求、source IR、extracted data fixture、reference screenshot。
 - 输出：可渲染组件、typed data、必要样式、测试。
 - 验收：模块内容准确、无 placeholder、响应式通过、键盘可达。
 - 风险：数据源缺失时必须暴露真实状态，不能编造内容。
+
 ### E16 QA
+
 - 目标：实现 unit、integration、visual、a11y、performance checks。
 - 输入：本 PRD 对应模块需求、source IR、extracted data fixture、reference screenshot。
 - 输出：可渲染组件、typed data、必要样式、测试。

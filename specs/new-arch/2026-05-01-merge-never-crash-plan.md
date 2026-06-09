@@ -36,8 +36,22 @@ Add a canonical type near `Worktree.mergeWithMerge`:
 ```ts
 type MergeOutcome =
   | { status: "merged"; primaryBranch: string; primaryHead: string }
-  | { status: "conflict"; branch: string; primaryBranch: string; primaryTip: string; conflictPaths: string[]; worktreeDir: string }
-  | { status: "blocked"; branch: string; reason: string; worktreeDir: string; dirtyPaths?: string[]; mergeHead?: boolean }
+  | {
+      status: "conflict"
+      branch: string
+      primaryBranch: string
+      primaryTip: string
+      conflictPaths: string[]
+      worktreeDir: string
+    }
+  | {
+      status: "blocked"
+      branch: string
+      reason: string
+      worktreeDir: string
+      dirtyPaths?: string[]
+      mergeHead?: boolean
+    }
   | { status: "infra_error"; branch: string; reason: string; stderr?: string; worktreeDir?: string }
 ```
 

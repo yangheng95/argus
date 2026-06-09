@@ -13,9 +13,18 @@ export const VisualQaViewportSchema = z.object({
 export const VisualQaCoverageSchema = z.object({
   region: z.string().min(1).describe("Visible region, route, component family, or interaction surface checked."),
   viewports: z.array(VisualQaViewportSchema).default([]),
-  states: z.array(z.string().min(1)).default([]).describe("Runtime states checked: default, narrow, hover, modal open, loading, error, etc."),
-  source_refs: z.array(z.string().min(1)).default([]).describe("Frontend-design/build/source artifact refs used as the source of truth."),
-  evidence_refs: z.array(z.string().min(1)).default([]).describe("Fresh screenshot, visual comparison, console/network, or command evidence refs."),
+  states: z
+    .array(z.string().min(1))
+    .default([])
+    .describe("Runtime states checked: default, narrow, hover, modal open, loading, error, etc."),
+  source_refs: z
+    .array(z.string().min(1))
+    .default([])
+    .describe("Frontend-design/build/source artifact refs used as the source of truth."),
+  evidence_refs: z
+    .array(z.string().min(1))
+    .default([])
+    .describe("Fresh screenshot, visual comparison, console/network, or command evidence refs."),
   notes: z.string().min(1),
 })
 
@@ -28,7 +37,10 @@ export const VisualQaFindingSchema = z.object({
   region: z.string().min(1),
   source_refs: z.array(z.string().min(1)).default([]),
   evidence_refs: z.array(z.string().min(1)).default([]),
-  repair_refs: z.array(z.string().min(1)).default([]).describe("Changed files, commits, or verification refs when repaired."),
+  repair_refs: z
+    .array(z.string().min(1))
+    .default([])
+    .describe("Changed files, commits, or verification refs when repaired."),
 })
 
 export const VisualQaRepairSchema = z.object({
@@ -39,7 +51,17 @@ export const VisualQaRepairSchema = z.object({
 })
 
 export const VisualQaEvidenceSchema = z.object({
-  type: z.enum(["screenshot", "visual_diff", "vision_judge", "text_diff", "console", "network", "command", "source_artifact", "other"]),
+  type: z.enum([
+    "screenshot",
+    "visual_diff",
+    "vision_judge",
+    "text_diff",
+    "console",
+    "network",
+    "command",
+    "source_artifact",
+    "other",
+  ]),
   ref: z.string().min(1).describe("Path, URL, command id, or artifact ref."),
   viewport: VisualQaViewportSchema.optional(),
   state: z.string().optional(),

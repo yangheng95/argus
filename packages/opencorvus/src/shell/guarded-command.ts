@@ -13,13 +13,12 @@ export type GuardedCommandInput = {
 
 export async function runGuardedCommand(input: GuardedCommandInput): Promise<string> {
   const beforeStatus = input.readOnlyGuard ? await gitShortStatus(input) : undefined
-  const parts = input.background
-    ? await runBackgroundCommand(input)
-    : await runForegroundCommand(input)
+  const parts = input.background ? await runBackgroundCommand(input) : await runForegroundCommand(input)
   const afterStatus = input.readOnlyGuard ? await gitShortStatus(input) : undefined
-  const warning = beforeStatus !== undefined && afterStatus !== undefined
-    ? formatReadOnlyGuardWarning(beforeStatus, afterStatus)
-    : undefined
+  const warning =
+    beforeStatus !== undefined && afterStatus !== undefined
+      ? formatReadOnlyGuardWarning(beforeStatus, afterStatus)
+      : undefined
   if (warning) parts.push(warning)
   return parts.join("\n") || "exit_code: 0 (no output)"
 }
@@ -91,7 +90,10 @@ export function normalizeReadOnlyGitStatus(stdout: string): string {
 
 function statusLineTouchesOnlyEvidenceInput(line: string): boolean {
   const payload = line.length > 3 ? line.slice(3).trim() : line.trim()
-  const paths = payload.split(" -> ").map(unquoteGitPath).filter((item) => item.length > 0)
+  const paths = payload
+    .split(" -> ")
+    .map(unquoteGitPath)
+    .filter((item) => item.length > 0)
   return paths.length > 0 && paths.every((item) => ProjectRuntimePaths.isEvidenceInputRelativePath(item))
 }
 

@@ -193,7 +193,8 @@ describe("memory multi-stage lifecycle", () => {
           },
           acceptance: {
             id: "del_test_1",
-            summary: "Added /api/auth/login and /api/auth/register endpoints with bcrypt password hashing and JWT token generation",
+            summary:
+              "Added /api/auth/login and /api/auth/register endpoints with bcrypt password hashing and JWT token generation",
             result: { changed_files: ["src/routes/auth.ts", "src/middleware/jwt.ts", "test/auth.test.ts"] },
           },
           evaluation: {
@@ -253,7 +254,8 @@ describe("memory multi-stage lifecycle", () => {
         // Stage 1: Research writes a fact
         Memory.writeFile({
           title: "Fact: Target users prefer dark mode by 3:1 ratio",
-          content: "## User Research\nSurvey of 500 target users shows 75% prefer dark mode. Mobile users show even stronger preference (80%).",
+          content:
+            "## User Research\nSurvey of 500 target users shows 75% prefer dark mode. Mobile users show even stronger preference (80%).",
           source: "agent",
           projectId,
           kind: "fact",
@@ -263,7 +265,8 @@ describe("memory multi-stage lifecycle", () => {
         // Stage 2: Scaffolding writes setup info
         Memory.writeFile({
           title: "Fact: Theme system uses CSS custom properties",
-          content: "## Theme Setup\nImplemented theme switcher using CSS custom properties. Default theme is dark. Theme preference stored in localStorage key 'theme'.",
+          content:
+            "## Theme Setup\nImplemented theme switcher using CSS custom properties. Default theme is dark. Theme preference stored in localStorage key 'theme'.",
           source: "agent",
           projectId,
           kind: "fact",
@@ -273,7 +276,8 @@ describe("memory multi-stage lifecycle", () => {
         // Stage 3: A lesson from a failed attempt
         Memory.writeFile({
           title: "Lesson: CSS custom properties must be declared on :root for theme switching",
-          content: "## Lesson\nDeclaring CSS custom properties on body instead of :root causes theme-switching flicker on Safari. Always use :root selector.",
+          content:
+            "## Lesson\nDeclaring CSS custom properties on body instead of :root causes theme-switching flicker on Safari. Always use :root selector.",
           source: "agent",
           projectId,
           kind: "lesson",
@@ -395,7 +399,8 @@ describe("memory multi-stage lifecycle", () => {
 
         Memory.writeFile({
           title: "Lesson: Redis connection must use TLS in production",
-          content: "## Lesson\nRedis caching connections fail silently without TLS in production. Always enable TLS for Redis in non-local environments.",
+          content:
+            "## Lesson\nRedis caching connections fail silently without TLS in production. Always enable TLS for Redis in non-local environments.",
           source: "agent",
           projectId,
           kind: "lesson",

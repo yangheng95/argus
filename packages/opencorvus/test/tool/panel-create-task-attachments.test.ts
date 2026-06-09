@@ -66,9 +66,7 @@ describe("panel.create_task attachment forwarding", () => {
             async ask() {},
             extra: {
               surface: "panel",
-              attachments: [
-                { mime: "image/png", url: dataUrl, filename: "target.png" },
-              ],
+              attachments: [{ mime: "image/png", url: dataUrl, filename: "target.png" }],
             },
           },
         )
@@ -227,9 +225,7 @@ describe("panel.create_task attachment forwarding", () => {
                 // server-relative URL — this is the AttachmentStore-served form,
                 // NOT a base64 data URL. Pre-fix this got cast to "the user's
                 // reference image" with corrupted bytes.
-                attachments: [
-                  { mime: "image/png", url: "/attachment/proj/abc.png", filename: "bad.png" },
-                ],
+                attachments: [{ mime: "image/png", url: "/attachment/proj/abc.png", filename: "bad.png" }],
               },
             },
           )
@@ -278,9 +274,7 @@ describe("panel.create_task attachment forwarding", () => {
             async ask() {},
             extra: {
               surface: "panel",
-              attachments: [
-                { mime: "text/plain", url: prdUrl, filename: "spec.txt" },
-              ],
+              attachments: [{ mime: "text/plain", url: prdUrl, filename: "spec.txt" }],
             },
           },
         )

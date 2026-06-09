@@ -7,30 +7,30 @@ OpenCorvus 内置一组工具供 agent 调用。工具实现位于 `packages/ope
 
 ## 内置工具
 
-| 工具 | 用途 |
-|---|---|
-| `bash` | 通过配置的 shell 执行命令 |
-| `read` | 读取文件（带行号、范围） |
-| `write` | 创建或覆盖文件 |
-| `edit` | 精确字符串替换 |
-| `apply_patch` | 应用 unified diff |
-| `glob` | 按 glob 查找文件 |
-| `grep` | 文件内容搜索（ripgrep） |
-| `codesearch` | 更高阶的代码搜索 |
-| `ls` | 目录列表 |
-| `webfetch` | 抓取 URL |
-| `websearch` | 网络搜索 |
-| `lsp` | 查询语言服务器 |
-| `memory` | 持久化记忆存储 |
-| `todo` / `todowrite` | 管理 agent 的 plan / todo |
-| `task` / `task-report` | 子 agent 派发（`dispatch_goal` / `retry_goal`） |
-| `goal-report` | 向 orchestrator 上报目标完成 |
-| `panel` | 操作 OpenCorvus 控制面板 |
-| `question` | 向用户提问（需 `OPENCORVUS_ENABLE_QUESTION_TOOL=1`） |
-| `schedule` | 安排后续动作 |
-| `batch` | 一轮内批量执行多个工具 |
-| `external-directory` | 引用仓库外数据 |
-| `analytics` | 上报遥测事件 |
+| 工具                   | 用途                                                 |
+| ---------------------- | ---------------------------------------------------- |
+| `bash`                 | 通过配置的 shell 执行命令                            |
+| `read`                 | 读取文件（带行号、范围）                             |
+| `write`                | 创建或覆盖文件                                       |
+| `edit`                 | 精确字符串替换                                       |
+| `apply_patch`          | 应用 unified diff                                    |
+| `glob`                 | 按 glob 查找文件                                     |
+| `grep`                 | 文件内容搜索（ripgrep）                              |
+| `codesearch`           | 更高阶的代码搜索                                     |
+| `ls`                   | 目录列表                                             |
+| `webfetch`             | 抓取 URL                                             |
+| `websearch`            | 网络搜索                                             |
+| `lsp`                  | 查询语言服务器                                       |
+| `memory`               | 持久化记忆存储                                       |
+| `todo` / `todowrite`   | 管理 agent 的 plan / todo                            |
+| `task` / `task-report` | 子 agent 派发（`dispatch_goal` / `retry_goal`）      |
+| `goal-report`          | 向 orchestrator 上报目标完成                         |
+| `panel`                | 操作 OpenCorvus 控制面板                             |
+| `question`             | 向用户提问（需 `OPENCORVUS_ENABLE_QUESTION_TOOL=1`） |
+| `schedule`             | 安排后续动作                                         |
+| `batch`                | 一轮内批量执行多个工具                               |
+| `external-directory`   | 引用仓库外数据                                       |
+| `analytics`            | 上报遥测事件                                         |
 
 ## 禁用某个工具
 
@@ -38,8 +38,8 @@ OpenCorvus 内置一组工具供 agent 调用。工具实现位于 `packages/ope
 {
   "tools": {
     "write": false,
-    "bash": false
-  }
+    "bash": false,
+  },
 }
 ```
 

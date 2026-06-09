@@ -57,10 +57,10 @@ describe("Worktree.isValid", () => {
     // rm step. `git worktree prune` is the cheapest way to drop a dangling
     // registration where the worktree path is still present on disk but
     // the .git link is gone — git sees the mismatch and unregisters it.
-    await fs.rm(
-      path.join(tmp.path, ".git", "worktrees", path.basename(info.directory)),
-      { recursive: true, force: true },
-    )
+    await fs.rm(path.join(tmp.path, ".git", "worktrees", path.basename(info.directory)), {
+      recursive: true,
+      force: true,
+    })
 
     expect(await Filesystem.exists(info.directory)).toBe(true)
 
@@ -91,7 +91,10 @@ describe("Worktree.isValid", () => {
     })
 
     await fs.rm(path.join(info.directory, ".git"), { force: true })
-    await fs.rm(path.join(tmp.path, ".git", "worktrees", path.basename(info.directory)), { recursive: true, force: true })
+    await fs.rm(path.join(tmp.path, ".git", "worktrees", path.basename(info.directory)), {
+      recursive: true,
+      force: true,
+    })
     await fs.rm(info.directory, { recursive: true, force: true })
     await fs.mkdir(info.directory, { recursive: true })
 
@@ -115,7 +118,10 @@ describe("Worktree.isValid", () => {
       fn: () => Worktree.create({ name: `preserve-zombie-${Date.now().toString(36)}` }),
     })
     await fs.rm(path.join(info.directory, ".git"), { force: true })
-    await fs.rm(path.join(tmp.path, ".git", "worktrees", path.basename(info.directory)), { recursive: true, force: true })
+    await fs.rm(path.join(tmp.path, ".git", "worktrees", path.basename(info.directory)), {
+      recursive: true,
+      force: true,
+    })
     await fs.writeFile(path.join(info.directory, "uncommitted-progress.txt"), "keep me\n")
 
     const recovered = await Instance.provide({

@@ -20,178 +20,178 @@
  */
 
 interface DevEntry {
-  level: "warn" | "error";
-  message: string;
-  location: string;
-  timestamp: number;
-  count: number;
-  el: HTMLElement | null;
+  level: "warn" | "error"
+  message: string
+  location: string
+  timestamp: number
+  count: number
+  el: HTMLElement | null
 }
 
-const MAX_DEV_ENTRIES = 200;
-const isDev: boolean = !!(import.meta as any).env?.DEV;
+const MAX_DEV_ENTRIES = 200
+const isDev: boolean = !!(import.meta as any).env?.DEV
 
 // Dedup map keyed by `${level}:${location}:${message}` → entry
 // + ordered list for ring-buffer eviction (oldest at index 0)
-const entriesByKey = new Map<string, DevEntry>();
-const orderedKeys: string[] = [];
+const entriesByKey = new Map<string, DevEntry>()
+const orderedKeys: string[] = []
 
-let errorCount = 0;
-let warnCount = 0;
-let collapsed = false;
+let errorCount = 0
+let warnCount = 0
+let collapsed = false
 
-let containerEl: HTMLElement | null = null;
-let listEl: HTMLElement | null = null;
-let badgeEl: HTMLElement | null = null;
+let containerEl: HTMLElement | null = null
+let listEl: HTMLElement | null = null
+let badgeEl: HTMLElement | null = null
 
 // ── Container setup (lazy, only in dev) ──
 
 function ensureContainer(): { container: HTMLElement; list: HTMLElement; badge: HTMLElement } {
   if (containerEl && listEl && badgeEl) {
-    return { container: containerEl, list: listEl, badge: badgeEl };
+    return { container: containerEl, list: listEl, badge: badgeEl }
   }
 
-  containerEl = document.createElement("div");
-  containerEl.id = "devErrorOverlay";
+  containerEl = document.createElement("div")
+  containerEl.id = "devErrorOverlay"
 
   // Build header DOM via API (no innerHTML)
-  const header = document.createElement("div");
-  header.className = "dev-error-header";
-  const title = document.createElement("span");
-  title.className = "dev-error-title";
-  title.textContent = "Dev Errors";
-  badgeEl = document.createElement("span");
-  badgeEl.className = "dev-error-badge";
-  badgeEl.textContent = "0";
-  const clearBtn = document.createElement("button");
-  clearBtn.className = "dev-error-clear";
-  clearBtn.title = "Clear all";
-  clearBtn.textContent = "\u2715";
-  header.append(title, badgeEl, clearBtn);
+  const header = document.createElement("div")
+  header.className = "dev-error-header"
+  const title = document.createElement("span")
+  title.className = "dev-error-title"
+  title.textContent = "Dev Errors"
+  badgeEl = document.createElement("span")
+  badgeEl.className = "dev-error-badge"
+  badgeEl.textContent = "0"
+  const clearBtn = document.createElement("button")
+  clearBtn.className = "dev-error-clear"
+  clearBtn.title = "Clear all"
+  clearBtn.textContent = "\u2715"
+  header.append(title, badgeEl, clearBtn)
 
-  listEl = document.createElement("div");
-  listEl.className = "dev-error-list";
+  listEl = document.createElement("div")
+  listEl.className = "dev-error-list"
 
-  containerEl.append(header, listEl);
+  containerEl.append(header, listEl)
 
   // Inject styles once
   if (!document.getElementById("devErrorStyles")) {
-    const style = document.createElement("style");
-    style.id = "devErrorStyles";
-    style.textContent = DEV_ERROR_CSS;
-    document.head.appendChild(style);
+    const style = document.createElement("style")
+    style.id = "devErrorStyles"
+    style.textContent = DEV_ERROR_CSS
+    document.head.appendChild(style)
   }
 
-  document.body.appendChild(containerEl);
+  document.body.appendChild(containerEl)
 
   // Header click → toggle collapse (skip when target is the clear button)
   header.addEventListener("click", (e) => {
-    if ((e.target as HTMLElement).closest(".dev-error-clear")) return;
-    collapsed = !collapsed;
-    containerEl!.classList.toggle("dev-error--collapsed", collapsed);
-  });
+    if ((e.target as HTMLElement).closest(".dev-error-clear")) return
+    collapsed = !collapsed
+    containerEl!.classList.toggle("dev-error--collapsed", collapsed)
+  })
 
   // Clear all
   clearBtn.addEventListener("click", () => {
-    entriesByKey.clear();
-    orderedKeys.length = 0;
-    errorCount = 0;
-    warnCount = 0;
-    listEl!.replaceChildren();
-    updateBadge();
-  });
+    entriesByKey.clear()
+    orderedKeys.length = 0
+    errorCount = 0
+    warnCount = 0
+    listEl!.replaceChildren()
+    updateBadge()
+  })
 
   // Event delegation: a single click handler for all dismiss buttons.
   // Avoids attaching one closure per entry, which previously leaked.
   listEl.addEventListener("click", (e) => {
-    const dismissBtn = (e.target as HTMLElement).closest(".dev-error-dismiss");
-    if (!dismissBtn) return;
-    const entryEl = dismissBtn.closest(".dev-error-entry") as HTMLElement | null;
-    if (!entryEl) return;
-    const key = entryEl.dataset.key;
-    if (key) removeEntry(key);
-  });
+    const dismissBtn = (e.target as HTMLElement).closest(".dev-error-dismiss")
+    if (!dismissBtn) return
+    const entryEl = dismissBtn.closest(".dev-error-entry") as HTMLElement | null
+    if (!entryEl) return
+    const key = entryEl.dataset.key
+    if (key) removeEntry(key)
+  })
 
-  return { container: containerEl, list: listEl, badge: badgeEl };
+  return { container: containerEl, list: listEl, badge: badgeEl }
 }
 
 // ── Entry creation (DOM API, no innerHTML) ──
 
 function createEntryDom(entry: DevEntry, key: string): HTMLElement {
-  const el = document.createElement("div");
-  el.className = `dev-error-entry dev-error-entry--${entry.level}`;
-  el.dataset.key = key;
+  const el = document.createElement("div")
+  el.className = `dev-error-entry dev-error-entry--${entry.level}`
+  el.dataset.key = key
 
-  const levelSpan = document.createElement("span");
-  levelSpan.className = "dev-error-level";
-  levelSpan.textContent = entry.level.toUpperCase();
+  const levelSpan = document.createElement("span")
+  levelSpan.className = "dev-error-level"
+  levelSpan.textContent = entry.level.toUpperCase()
 
-  const timeSpan = document.createElement("span");
-  timeSpan.className = "dev-error-time";
-  timeSpan.textContent = new Date(entry.timestamp).toLocaleTimeString();
+  const timeSpan = document.createElement("span")
+  timeSpan.className = "dev-error-time"
+  timeSpan.textContent = new Date(entry.timestamp).toLocaleTimeString()
 
-  const locSpan = document.createElement("span");
-  locSpan.className = "dev-error-loc";
-  locSpan.textContent = entry.location;
+  const locSpan = document.createElement("span")
+  locSpan.className = "dev-error-loc"
+  locSpan.textContent = entry.location
 
-  const countSpan = document.createElement("span");
-  countSpan.className = "dev-error-count";
-  countSpan.textContent = entry.count > 1 ? `\u00d7${entry.count}` : "";
+  const countSpan = document.createElement("span")
+  countSpan.className = "dev-error-count"
+  countSpan.textContent = entry.count > 1 ? `\u00d7${entry.count}` : ""
 
-  const msgDiv = document.createElement("div");
-  msgDiv.className = "dev-error-msg";
-  msgDiv.textContent = entry.message;
+  const msgDiv = document.createElement("div")
+  msgDiv.className = "dev-error-msg"
+  msgDiv.textContent = entry.message
 
-  const dismissBtn = document.createElement("button");
-  dismissBtn.className = "dev-error-dismiss";
-  dismissBtn.title = "Dismiss";
-  dismissBtn.textContent = "\u00d7";
+  const dismissBtn = document.createElement("button")
+  dismissBtn.className = "dev-error-dismiss"
+  dismissBtn.title = "Dismiss"
+  dismissBtn.textContent = "\u00d7"
 
-  el.append(levelSpan, timeSpan, locSpan, countSpan, msgDiv, dismissBtn);
-  return el;
+  el.append(levelSpan, timeSpan, locSpan, countSpan, msgDiv, dismissBtn)
+  return el
 }
 
 function updateEntryDom(entry: DevEntry): void {
-  const el = entry.el;
-  if (!el) return;
-  const countEl = el.querySelector(".dev-error-count") as HTMLElement | null;
-  if (countEl) countEl.textContent = entry.count > 1 ? `\u00d7${entry.count}` : "";
-  const timeEl = el.querySelector(".dev-error-time") as HTMLElement | null;
-  if (timeEl) timeEl.textContent = new Date(entry.timestamp).toLocaleTimeString();
+  const el = entry.el
+  if (!el) return
+  const countEl = el.querySelector(".dev-error-count") as HTMLElement | null
+  if (countEl) countEl.textContent = entry.count > 1 ? `\u00d7${entry.count}` : ""
+  const timeEl = el.querySelector(".dev-error-time") as HTMLElement | null
+  if (timeEl) timeEl.textContent = new Date(entry.timestamp).toLocaleTimeString()
 }
 
 function removeEntry(key: string): void {
-  const entry = entriesByKey.get(key);
-  if (!entry) return;
-  if (entry.level === "error") errorCount = Math.max(0, errorCount - 1);
-  else warnCount = Math.max(0, warnCount - 1);
-  entry.el?.remove();
-  entriesByKey.delete(key);
-  const idx = orderedKeys.indexOf(key);
-  if (idx >= 0) orderedKeys.splice(idx, 1);
-  updateBadge();
+  const entry = entriesByKey.get(key)
+  if (!entry) return
+  if (entry.level === "error") errorCount = Math.max(0, errorCount - 1)
+  else warnCount = Math.max(0, warnCount - 1)
+  entry.el?.remove()
+  entriesByKey.delete(key)
+  const idx = orderedKeys.indexOf(key)
+  if (idx >= 0) orderedKeys.splice(idx, 1)
+  updateBadge()
 }
 
 function updateBadge(): void {
-  if (!badgeEl || !containerEl) return;
-  const total = errorCount + warnCount;
-  badgeEl.textContent = errorCount > 0 ? String(errorCount) : String(warnCount);
-  badgeEl.className = `dev-error-badge ${errorCount > 0 ? "dev-error-badge--error" : "dev-error-badge--warn"}`;
-  containerEl.classList.toggle("dev-error--empty", total === 0);
+  if (!badgeEl || !containerEl) return
+  const total = errorCount + warnCount
+  badgeEl.textContent = errorCount > 0 ? String(errorCount) : String(warnCount)
+  badgeEl.className = `dev-error-badge ${errorCount > 0 ? "dev-error-badge--error" : "dev-error-badge--warn"}`
+  containerEl.classList.toggle("dev-error--empty", total === 0)
 }
 
 // ── Push entry with dedup + ring-buffer eviction ──
 
 function pushEntry(level: "warn" | "error", location: string, message: string): void {
-  const key = `${level}:${location}:${message}`;
-  const existing = entriesByKey.get(key);
+  const key = `${level}:${location}:${message}`
+  const existing = entriesByKey.get(key)
 
   if (existing) {
     // Dedup hit: bump count + timestamp, refresh DOM in place. No new node.
-    existing.count += 1;
-    existing.timestamp = Date.now();
-    updateEntryDom(existing);
-    return;
+    existing.count += 1
+    existing.timestamp = Date.now()
+    updateEntryDom(existing)
+    return
   }
 
   // New entry
@@ -202,50 +202,50 @@ function pushEntry(level: "warn" | "error", location: string, message: string): 
     timestamp: Date.now(),
     count: 1,
     el: null,
-  };
-  entriesByKey.set(key, entry);
-  orderedKeys.push(key);
-  if (level === "error") errorCount += 1;
-  else warnCount += 1;
+  }
+  entriesByKey.set(key, entry)
+  orderedKeys.push(key)
+  if (level === "error") errorCount += 1
+  else warnCount += 1
 
   // Ring-buffer eviction — drop oldest when over the cap
   while (orderedKeys.length > MAX_DEV_ENTRIES) {
-    const oldKey = orderedKeys.shift();
-    if (!oldKey) break;
-    const oldEntry = entriesByKey.get(oldKey);
+    const oldKey = orderedKeys.shift()
+    if (!oldKey) break
+    const oldEntry = entriesByKey.get(oldKey)
     if (oldEntry) {
-      if (oldEntry.level === "error") errorCount = Math.max(0, errorCount - 1);
-      else warnCount = Math.max(0, warnCount - 1);
-      oldEntry.el?.remove();
-      entriesByKey.delete(oldKey);
+      if (oldEntry.level === "error") errorCount = Math.max(0, errorCount - 1)
+      else warnCount = Math.max(0, warnCount - 1)
+      oldEntry.el?.remove()
+      entriesByKey.delete(oldKey)
     }
   }
 
   // Create DOM lazily — only attach if container exists or we're going to create one
-  const { list } = ensureContainer();
-  entry.el = createEntryDom(entry, key);
-  list.appendChild(entry.el);
-  updateBadge();
+  const { list } = ensureContainer()
+  entry.el = createEntryDom(entry, key)
+  list.appendChild(entry.el)
+  updateBadge()
 }
 
 // ── Public API ──
 
 export function devWarn(location: string, message: string): void {
   // Always log to console (works in both dev and prod, gives stack traces)
-  console.warn(`[${location}] ${message}`);
+  console.warn(`[${location}] ${message}`)
   // Skip DOM in production builds
-  if (!isDev) return;
-  pushEntry("warn", location, message);
+  if (!isDev) return
+  pushEntry("warn", location, message)
 }
 
 export function devError(location: string, message: string): void {
-  console.error(`[${location}] ${message}`);
-  if (!isDev) return;
-  pushEntry("error", location, message);
+  console.error(`[${location}] ${message}`)
+  if (!isDev) return
+  pushEntry("error", location, message)
   // Auto-uncollapse on error so it surfaces immediately
   if (collapsed && containerEl) {
-    collapsed = false;
-    containerEl.classList.remove("dev-error--collapsed");
+    collapsed = false
+    containerEl.classList.remove("dev-error--collapsed")
   }
 }
 
@@ -365,4 +365,4 @@ const DEV_ERROR_CSS = `
   padding: 0;
 }
 .dev-error-dismiss:hover { color: #fff; }
-`;
+`

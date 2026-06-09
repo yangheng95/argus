@@ -1,14 +1,6 @@
 export default {
-  entry: [
-    "github/index.ts",
-    "nix/scripts/**/*.ts",
-    "script/**/*.ts",
-  ],
-  project: [
-    "github/**/*.ts",
-    "nix/scripts/**/*.ts",
-    "script/**/*.ts",
-  ],
+  entry: ["github/index.ts", "nix/scripts/**/*.ts", "script/**/*.ts"],
+  project: ["github/**/*.ts", "nix/scripts/**/*.ts", "script/**/*.ts"],
   ignore: [
     "backups/**",
     "packages/overlay/src-tauri/**",
@@ -54,10 +46,7 @@ export default {
       entry: ["src/index.ts", "bin/opencorvus"],
       project: ["src/**/*.ts", "src/**/*.tsx"],
       ignore: ["script/**", "test/**"],
-      ignoreDependencies: [
-        "@solid-primitives/event-bus",
-        "strip-ansi",
-      ],
+      ignoreDependencies: ["@solid-primitives/event-bus", "strip-ansi"],
     },
     "packages/overlay": {
       entry: [
@@ -71,11 +60,7 @@ export default {
         "src/index.html",
         "src/main.tsx",
       ],
-      project: [
-        "script/**/*.ts",
-        "src/**/*.{ts,tsx,js,html}",
-        "vite.config.ts",
-      ],
+      project: ["script/**/*.ts", "src/**/*.{ts,tsx,js,html}", "vite.config.ts"],
       ignore: ["src-tauri/**", "test/**", "node_modules/**", "dist/**", "dist-vite/**"],
     },
     "packages/plugin": {

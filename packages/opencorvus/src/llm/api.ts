@@ -84,10 +84,7 @@ export function streamText<
   const restInput = rest as StreamTextInputWithRepair
   const repairToolCall =
     restInput.experimental_repairToolCall ??
-    createToolCallRepair(
-      (restInput.tools ?? {}) as Parameters<typeof createToolCallRepair>[0],
-      repairLog,
-    )
+    createToolCallRepair((restInput.tools ?? {}) as Parameters<typeof createToolCallRepair>[0], repairLog)
   const result = streamTextBase({
     ...restInput,
     abortSignal: composed,

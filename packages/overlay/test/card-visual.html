@@ -1,281 +1,372 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="en" data-theme="dark">
-<head>
-  <meta charset="UTF-8">
-  <title>Card Primitive Visual Fixture</title>
-  <link rel="stylesheet" href="../src/styles.css">
-  <link rel="stylesheet" href="../src/styles/surfaces/card.css">
-  <style>
-    body { padding: 20px; max-width: 760px; margin: 0 auto; }
-    h2 { color: var(--text-soft); font-size: 11px; text-transform: uppercase; letter-spacing: .08em; margin: 24px 0 8px; border-bottom: 1px solid var(--card-border); padding-bottom: 4px; }
-    .hint { color: var(--text-muted); font-size: 10px; margin: 4px 0 12px; }
-    .theme-toggle { position: fixed; top: 12px; right: 16px; background: var(--card-bg-1); border: 1px solid var(--card-border); color: var(--text-strong); padding: 4px 10px; border-radius: 4px; cursor: pointer; font-size: 10px; }
-  </style>
-</head>
-<body data-theme="dark">
-  <button class="theme-toggle" onclick="document.body.dataset.theme = document.body.dataset.theme === 'dark' ? 'light' : 'dark'; document.documentElement.dataset.theme = document.body.dataset.theme;">toggle theme</button>
+  <head>
+    <meta charset="UTF-8" />
+    <title>Card Primitive Visual Fixture</title>
+    <link rel="stylesheet" href="../src/styles.css" />
+    <link rel="stylesheet" href="../src/styles/surfaces/card.css" />
+    <style>
+      body {
+        padding: 20px;
+        max-width: 760px;
+        margin: 0 auto;
+      }
+      h2 {
+        color: var(--text-soft);
+        font-size: 11px;
+        text-transform: uppercase;
+        letter-spacing: 0.08em;
+        margin: 24px 0 8px;
+        border-bottom: 1px solid var(--card-border);
+        padding-bottom: 4px;
+      }
+      .hint {
+        color: var(--text-muted);
+        font-size: 10px;
+        margin: 4px 0 12px;
+      }
+      .theme-toggle {
+        position: fixed;
+        top: 12px;
+        right: 16px;
+        background: var(--card-bg-1);
+        border: 1px solid var(--card-border);
+        color: var(--text-strong);
+        padding: 4px 10px;
+        border-radius: 4px;
+        cursor: pointer;
+        font-size: 10px;
+      }
+    </style>
+  </head>
+  <body data-theme="dark">
+    <button
+      class="theme-toggle"
+      onclick="document.body.dataset.theme = document.body.dataset.theme === 'dark' ? 'light' : 'dark'; document.documentElement.dataset.theme = document.body.dataset.theme;"
+    >
+      toggle theme
+    </button>
 
-  <h2>1. Top-level agent cards — per-stage accent & title tint</h2>
-  <p class="hint">depth=0, each stage pulls its own colour from --card-stage-*.</p>
+    <h2>1. Top-level agent cards — per-stage accent & title tint</h2>
+    <p class="hint">depth=0, each stage pulls its own colour from --card-stage-*.</p>
 
-  <article class="card card--expanded" data-kind="agent" data-stage="spec" data-status="completed" data-depth="0">
-    <div class="card__head" role="button" tabindex="0" aria-expanded="true">
-      <span class="card__badge card__badge--done">✓</span>
-      <span class="card__title">Spec</span>
-      <span class="card__round">#1</span>
-      <span class="card__subtitle">drafted 2 requirements</span>
-      <span class="card__chevron">▼</span>
-    </div>
-    <div class="card__body">
-      <div class="card-boundary"><span class="card-boundary-role">Spec</span><span class="card-boundary-time">14:22:01</span></div>
-      <div class="msg-text">User authentication with JWT tokens.</div>
-    </div>
-  </article>
-
-  <article class="card card--expanded" data-kind="agent" data-stage="architect" data-status="running" data-depth="0">
-    <div class="card__head" role="button" tabindex="0" aria-expanded="true">
-      <span class="card__badge card__badge--running"><span class="card__spinner"></span></span>
-      <span class="card__title">Architect</span>
-      <span class="card__subtitle">defining contracts</span>
-      <span class="card__chevron">▼</span>
-    </div>
-    <div class="card__body">
-      <div class="card-boundary"><span class="card-boundary-role">Architect</span></div>
-      <div class="msg-text">Drafting contracts between auth and API layers…</div>
-    </div>
-  </article>
-
-  <article class="card card--expanded" data-kind="agent" data-stage="planner" data-status="completed" data-depth="0">
-    <div class="card__head" role="button" tabindex="0" aria-expanded="true">
-      <span class="card__badge card__badge--done">✓</span>
-      <span class="card__title">Planner</span>
-      <span class="card__subtitle">4 steps</span>
-      <span class="card__chevron">▼</span>
-    </div>
-    <div class="card__body">
-      <div class="msg-text">Three-phase implementation: auth module, API layer, access control.</div>
-    </div>
-  </article>
-
-  <article class="card card--collapsed" data-kind="agent" data-stage="evaluator" data-status="completed" data-depth="0">
-    <div class="card__head" role="button" tabindex="0" aria-expanded="false">
-      <span class="card__badge card__badge--done">✓</span>
-      <span class="card__title">Evaluator</span>
-      <span class="card__subtitle">all goals passed</span>
-      <span class="card__chevron">▼</span>
-    </div>
-  </article>
-
-  <article class="card card--expanded" data-kind="agent" data-stage="acceptance" data-status="completed" data-depth="0">
-    <div class="card__head" role="button" tabindex="0" aria-expanded="true">
-      <span class="card__badge card__badge--done">✓</span>
-      <span class="card__title">Acceptance</span>
-      <span class="card__subtitle">5 files</span>
-      <span class="card__chevron">▼</span>
-    </div>
-    <div class="card__body">
-      <div class="msg-text">Packaged 5 files into the release.</div>
-    </div>
-  </article>
-
-  <h2>2. Goal card with nested step children (depth 0 → 1)</h2>
-  <p class="hint">Goal holds description + contracts + planner/executor/evaluator step children. Steps carry their own stage accent on the left rail.</p>
-
-  <article class="card card--expanded" data-kind="goal" data-stage="goal" data-status="running" data-depth="0">
-    <div class="card__head" role="button" tabindex="0" aria-expanded="true">
-      <span class="card__badge card__badge--running"><span class="card__spinner"></span></span>
-      <span class="card__title">Implement JWT authentication module</span>
-      <span class="card__round">#1</span>
-      <span class="card__subtitle">goal-001</span>
-      <span class="card__chevron">▼</span>
-    </div>
-    <div class="card__body">
-      <div class="card__goal-desc">
-        <div class="msg-text">Create auth middleware with login / logout / refresh-token endpoints, enforce JWT validation on protected routes.</div>
+    <article class="card card--expanded" data-kind="agent" data-stage="spec" data-status="completed" data-depth="0">
+      <div class="card__head" role="button" tabindex="0" aria-expanded="true">
+        <span class="card__badge card__badge--done">✓</span>
+        <span class="card__title">Spec</span>
+        <span class="card__round">#1</span>
+        <span class="card__subtitle">drafted 2 requirements</span>
+        <span class="card__chevron">▼</span>
       </div>
-      <div class="card__children">
+      <div class="card__body">
+        <div class="card-boundary">
+          <span class="card-boundary-role">Spec</span><span class="card-boundary-time">14:22:01</span>
+        </div>
+        <div class="msg-text">User authentication with JWT tokens.</div>
+      </div>
+    </article>
 
-        <article class="card card--collapsed" data-kind="step" data-stage="planner" data-status="completed" data-depth="1">
-          <div class="card__head" role="button" tabindex="0" aria-expanded="false">
-            <span class="card__badge card__badge--done">✓</span>
-            <span class="card__title">Plan</span>
-            <span class="card__subtitle">4 steps drafted</span>
-            <span class="card__chevron">▼</span>
-          </div>
-        </article>
+    <article class="card card--expanded" data-kind="agent" data-stage="architect" data-status="running" data-depth="0">
+      <div class="card__head" role="button" tabindex="0" aria-expanded="true">
+        <span class="card__badge card__badge--running"><span class="card__spinner"></span></span>
+        <span class="card__title">Architect</span>
+        <span class="card__subtitle">defining contracts</span>
+        <span class="card__chevron">▼</span>
+      </div>
+      <div class="card__body">
+        <div class="card-boundary"><span class="card-boundary-role">Architect</span></div>
+        <div class="msg-text">Drafting contracts between auth and API layers…</div>
+      </div>
+    </article>
 
-        <article class="card card--expanded" data-kind="step" data-stage="executor" data-status="running" data-depth="1">
-          <div class="card__head" role="button" tabindex="0" aria-expanded="true">
-            <span class="card__badge card__badge--running"><span class="card__spinner"></span></span>
-            <span class="card__title">Execute</span>
-            <span class="card__subtitle">writing routes/auth.ts</span>
-            <span class="card__chevron">▼</span>
+    <article class="card card--expanded" data-kind="agent" data-stage="planner" data-status="completed" data-depth="0">
+      <div class="card__head" role="button" tabindex="0" aria-expanded="true">
+        <span class="card__badge card__badge--done">✓</span>
+        <span class="card__title">Planner</span>
+        <span class="card__subtitle">4 steps</span>
+        <span class="card__chevron">▼</span>
+      </div>
+      <div class="card__body">
+        <div class="msg-text">Three-phase implementation: auth module, API layer, access control.</div>
+      </div>
+    </article>
+
+    <article
+      class="card card--collapsed"
+      data-kind="agent"
+      data-stage="evaluator"
+      data-status="completed"
+      data-depth="0"
+    >
+      <div class="card__head" role="button" tabindex="0" aria-expanded="false">
+        <span class="card__badge card__badge--done">✓</span>
+        <span class="card__title">Evaluator</span>
+        <span class="card__subtitle">all goals passed</span>
+        <span class="card__chevron">▼</span>
+      </div>
+    </article>
+
+    <article
+      class="card card--expanded"
+      data-kind="agent"
+      data-stage="acceptance"
+      data-status="completed"
+      data-depth="0"
+    >
+      <div class="card__head" role="button" tabindex="0" aria-expanded="true">
+        <span class="card__badge card__badge--done">✓</span>
+        <span class="card__title">Acceptance</span>
+        <span class="card__subtitle">5 files</span>
+        <span class="card__chevron">▼</span>
+      </div>
+      <div class="card__body">
+        <div class="msg-text">Packaged 5 files into the release.</div>
+      </div>
+    </article>
+
+    <h2>2. Goal card with nested step children (depth 0 → 1)</h2>
+    <p class="hint">
+      Goal holds description + contracts + planner/executor/evaluator step children. Steps carry their own stage accent
+      on the left rail.
+    </p>
+
+    <article class="card card--expanded" data-kind="goal" data-stage="goal" data-status="running" data-depth="0">
+      <div class="card__head" role="button" tabindex="0" aria-expanded="true">
+        <span class="card__badge card__badge--running"><span class="card__spinner"></span></span>
+        <span class="card__title">Implement JWT authentication module</span>
+        <span class="card__round">#1</span>
+        <span class="card__subtitle">goal-001</span>
+        <span class="card__chevron">▼</span>
+      </div>
+      <div class="card__body">
+        <div class="card__goal-desc">
+          <div class="msg-text">
+            Create auth middleware with login / logout / refresh-token endpoints, enforce JWT validation on protected
+            routes.
           </div>
-          <div class="card__body">
-            <div class="card-boundary"><span class="card-boundary-role">Executor</span><span class="card-boundary-time">14:23:10</span></div>
-            <div class="msg-text">Implementing login and refresh token endpoints…</div>
-            <div class="msg-tool" data-status="completed">
-              <span class="tool-icon">📄</span>
-              <span class="tool-name">read_file</span>
-              <span class="tool-detail">src/auth/index.ts</span>
-              <span class="tool-status" data-status="completed">Completed</span>
+        </div>
+        <div class="card__children">
+          <article
+            class="card card--collapsed"
+            data-kind="step"
+            data-stage="planner"
+            data-status="completed"
+            data-depth="1"
+          >
+            <div class="card__head" role="button" tabindex="0" aria-expanded="false">
+              <span class="card__badge card__badge--done">✓</span>
+              <span class="card__title">Plan</span>
+              <span class="card__subtitle">4 steps drafted</span>
+              <span class="card__chevron">▼</span>
             </div>
-            <div class="msg-text">Found existing middleware scaffold.</div>
+          </article>
 
-            <!-- Promoted tool child (depth=2) -->
-            <div class="card__children">
-              <article class="card card--expanded" data-kind="tool" data-stage="write" data-status="completed" data-depth="2">
-                <div class="card__head" role="button" tabindex="0" aria-expanded="true">
-                  <span class="card__badge card__badge--done">✓</span>
-                  <span class="card__icon">📝</span>
-                  <span class="card__title">write_file</span>
-                  <span class="card__subtitle">src/routes/auth.ts</span>
-                  <span class="card__chevron">▼</span>
-                </div>
-                <div class="card__body">
-                  <div class="msg-tool-code md-content"><pre><code>export const authRouter = Router();
+          <article
+            class="card card--expanded"
+            data-kind="step"
+            data-stage="executor"
+            data-status="running"
+            data-depth="1"
+          >
+            <div class="card__head" role="button" tabindex="0" aria-expanded="true">
+              <span class="card__badge card__badge--running"><span class="card__spinner"></span></span>
+              <span class="card__title">Execute</span>
+              <span class="card__subtitle">writing routes/auth.ts</span>
+              <span class="card__chevron">▼</span>
+            </div>
+            <div class="card__body">
+              <div class="card-boundary">
+                <span class="card-boundary-role">Executor</span><span class="card-boundary-time">14:23:10</span>
+              </div>
+              <div class="msg-text">Implementing login and refresh token endpoints…</div>
+              <div class="msg-tool" data-status="completed">
+                <span class="tool-icon">📄</span>
+                <span class="tool-name">read_file</span>
+                <span class="tool-detail">src/auth/index.ts</span>
+                <span class="tool-status" data-status="completed">Completed</span>
+              </div>
+              <div class="msg-text">Found existing middleware scaffold.</div>
+
+              <!-- Promoted tool child (depth=2) -->
+              <div class="card__children">
+                <article
+                  class="card card--expanded"
+                  data-kind="tool"
+                  data-stage="write"
+                  data-status="completed"
+                  data-depth="2"
+                >
+                  <div class="card__head" role="button" tabindex="0" aria-expanded="true">
+                    <span class="card__badge card__badge--done">✓</span>
+                    <span class="card__icon">📝</span>
+                    <span class="card__title">write_file</span>
+                    <span class="card__subtitle">src/routes/auth.ts</span>
+                    <span class="card__chevron">▼</span>
+                  </div>
+                  <div class="card__body">
+                    <div class="msg-tool-code md-content">
+                      <pre><code>export const authRouter = Router();
 authRouter.post("/login", handleLogin);
 authRouter.post("/refresh", handleRefresh);
-authRouter.post("/logout", handleLogout);</code></pre></div>
-                </div>
-              </article>
-            </div>
-          </div>
-        </article>
-
-        <article class="card card--collapsed" data-kind="step" data-stage="evaluator" data-status="pending" data-depth="1">
-          <div class="card__head" role="button" tabindex="0" aria-expanded="false">
-            <span class="card__badge card__badge--pending">·</span>
-            <span class="card__title">Eval</span>
-            <span class="card__subtitle">waiting for executor</span>
-            <span class="card__chevron">▼</span>
-          </div>
-        </article>
-
-      </div>
-    </div>
-  </article>
-
-  <h2>3. Deep nesting (depth 0 → 1 → 2 → 3) — subagent chain</h2>
-  <p class="hint">Rail colour fades as depth grows; arbitrary nesting remains legible.</p>
-
-  <article class="card card--expanded" data-kind="agent" data-stage="executor" data-status="running" data-depth="0">
-    <div class="card__head" role="button" tabindex="0" aria-expanded="true">
-      <span class="card__badge card__badge--running"><span class="card__spinner"></span></span>
-      <span class="card__title">Executor</span>
-      <span class="card__subtitle">orchestrating subagents</span>
-      <span class="card__chevron">▼</span>
-    </div>
-    <div class="card__body">
-      <div class="msg-text">Dispatching 2 parallel subagents.</div>
-      <div class="card__children">
-        <article class="card card--expanded" data-kind="tool" data-stage="task" data-status="running" data-depth="1">
-          <div class="card__head" role="button" tabindex="0" aria-expanded="true">
-            <span class="card__badge card__badge--running"><span class="card__spinner"></span></span>
-            <span class="card__icon">🤖</span>
-            <span class="card__title">task</span>
-            <span class="card__subtitle">Explore: map auth surface</span>
-            <span class="card__chevron">▼</span>
-          </div>
-          <div class="card__body">
-            <div class="msg-text">Subagent spawned…</div>
-            <div class="card__children">
-              <article class="card card--expanded" data-kind="agent" data-stage="executor" data-status="running" data-depth="2">
-                <div class="card__head" role="button" tabindex="0" aria-expanded="true">
-                  <span class="card__badge card__badge--running"><span class="card__spinner"></span></span>
-                  <span class="card__title">Explore Subagent</span>
-                  <span class="card__chevron">▼</span>
-                </div>
-                <div class="card__body">
-                  <div class="msg-text">Reading files…</div>
-                  <div class="card__children">
-                    <article class="card card--expanded" data-kind="tool" data-stage="read" data-status="completed" data-depth="3">
-                      <div class="card__head" role="button" tabindex="0" aria-expanded="true">
-                        <span class="card__badge card__badge--done">✓</span>
-                        <span class="card__icon">📄</span>
-                        <span class="card__title">read_file</span>
-                        <span class="card__subtitle">src/middleware/auth.ts (145 lines)</span>
-                        <span class="card__chevron">▼</span>
-                      </div>
-                      <div class="card__body">
-                        <div class="msg-tool-output msg-tool-output--expanded">import { Request, Response, NextFunction } from "express";
-import { verifyToken } from "../jwt";
-
-export function authMiddleware(req: Request, res: Response, next: NextFunction) {
-  // ... 142 more lines</div>
-                      </div>
-                    </article>
+authRouter.post("/logout", handleLogout);</code></pre>
+                    </div>
                   </div>
-                </div>
-              </article>
+                </article>
+              </div>
             </div>
-          </div>
-        </article>
+          </article>
+
+          <article
+            class="card card--collapsed"
+            data-kind="step"
+            data-stage="evaluator"
+            data-status="pending"
+            data-depth="1"
+          >
+            <div class="card__head" role="button" tabindex="0" aria-expanded="false">
+              <span class="card__badge card__badge--pending">·</span>
+              <span class="card__title">Eval</span>
+              <span class="card__subtitle">waiting for executor</span>
+              <span class="card__chevron">▼</span>
+            </div>
+          </article>
+        </div>
       </div>
-    </div>
-  </article>
+    </article>
 
-  <h2>4. Status matrix</h2>
-  <p class="hint">Every badge type and state.</p>
+    <h2>3. Deep nesting (depth 0 → 1 → 2 → 3) — subagent chain</h2>
+    <p class="hint">Rail colour fades as depth grows; arbitrary nesting remains legible.</p>
 
-  <article class="card card--expanded" data-kind="agent" data-stage="planner" data-status="pending" data-depth="0">
-    <div class="card__head" role="button" tabindex="0" aria-expanded="true">
-      <span class="card__badge card__badge--pending">·</span>
-      <span class="card__title">Pending</span>
-      <span class="card__subtitle">queued</span>
-      <span class="card__chevron">▼</span>
-    </div>
-  </article>
-  <article class="card card--expanded" data-kind="agent" data-stage="planner" data-status="running" data-depth="0">
-    <div class="card__head" role="button" tabindex="0" aria-expanded="true">
-      <span class="card__badge card__badge--running"><span class="card__spinner"></span></span>
-      <span class="card__title">Running</span>
-      <span class="card__chevron">▼</span>
-    </div>
-  </article>
-  <article class="card card--expanded" data-kind="agent" data-stage="planner" data-status="completed" data-depth="0">
-    <div class="card__head" role="button" tabindex="0" aria-expanded="true">
-      <span class="card__badge card__badge--done">✓</span>
-      <span class="card__title">Completed</span>
-      <span class="card__chevron">▼</span>
-    </div>
-  </article>
-  <article class="card card--expanded" data-kind="agent" data-stage="planner" data-status="error" data-depth="0">
-    <div class="card__head" role="button" tabindex="0" aria-expanded="true">
-      <span class="card__badge card__badge--error">✗</span>
-      <span class="card__title">Error</span>
-      <span class="card__subtitle">compilation failed</span>
-      <span class="card__chevron">▼</span>
-    </div>
-  </article>
-  <article class="card card--expanded" data-kind="agent" data-stage="planner" data-status="skipped" data-depth="0">
-    <div class="card__head" role="button" tabindex="0" aria-expanded="true">
-      <span class="card__badge card__badge--skipped">—</span>
-      <span class="card__title">Skipped</span>
-      <span class="card__chevron">▼</span>
-    </div>
-  </article>
+    <article class="card card--expanded" data-kind="agent" data-stage="executor" data-status="running" data-depth="0">
+      <div class="card__head" role="button" tabindex="0" aria-expanded="true">
+        <span class="card__badge card__badge--running"><span class="card__spinner"></span></span>
+        <span class="card__title">Executor</span>
+        <span class="card__subtitle">orchestrating subagents</span>
+        <span class="card__chevron">▼</span>
+      </div>
+      <div class="card__body">
+        <div class="msg-text">Dispatching 2 parallel subagents.</div>
+        <div class="card__children">
+          <article class="card card--expanded" data-kind="tool" data-stage="task" data-status="running" data-depth="1">
+            <div class="card__head" role="button" tabindex="0" aria-expanded="true">
+              <span class="card__badge card__badge--running"><span class="card__spinner"></span></span>
+              <span class="card__icon">🤖</span>
+              <span class="card__title">task</span>
+              <span class="card__subtitle">Explore: map auth surface</span>
+              <span class="card__chevron">▼</span>
+            </div>
+            <div class="card__body">
+              <div class="msg-text">Subagent spawned…</div>
+              <div class="card__children">
+                <article
+                  class="card card--expanded"
+                  data-kind="agent"
+                  data-stage="executor"
+                  data-status="running"
+                  data-depth="2"
+                >
+                  <div class="card__head" role="button" tabindex="0" aria-expanded="true">
+                    <span class="card__badge card__badge--running"><span class="card__spinner"></span></span>
+                    <span class="card__title">Explore Subagent</span>
+                    <span class="card__chevron">▼</span>
+                  </div>
+                  <div class="card__body">
+                    <div class="msg-text">Reading files…</div>
+                    <div class="card__children">
+                      <article
+                        class="card card--expanded"
+                        data-kind="tool"
+                        data-stage="read"
+                        data-status="completed"
+                        data-depth="3"
+                      >
+                        <div class="card__head" role="button" tabindex="0" aria-expanded="true">
+                          <span class="card__badge card__badge--done">✓</span>
+                          <span class="card__icon">📄</span>
+                          <span class="card__title">read_file</span>
+                          <span class="card__subtitle">src/middleware/auth.ts (145 lines)</span>
+                          <span class="card__chevron">▼</span>
+                        </div>
+                        <div class="card__body">
+                          <div class="msg-tool-output msg-tool-output--expanded">
+                            import { Request, Response, NextFunction } from "express"; import { verifyToken } from
+                            "../jwt"; export function authMiddleware(req: Request, res: Response, next: NextFunction) {
+                            // ... 142 more lines
+                          </div>
+                        </div>
+                      </article>
+                    </div>
+                  </div>
+                </article>
+              </div>
+            </div>
+          </article>
+        </div>
+      </div>
+    </article>
 
-  <h2>5. Message bubbles (user / system)</h2>
-  <p class="hint">role=user renders as a distinct bubble (no fold chevron, accent tint). system is the plain variant.</p>
+    <h2>4. Status matrix</h2>
+    <p class="hint">Every badge type and state.</p>
 
-  <article class="card card--expanded" data-kind="message" data-role="user" data-depth="0">
-    <div class="card__head">
-      <span class="card__title">User</span>
-    </div>
-    <div class="card__body">
-      <div class="msg-text">Implement user authentication and add API endpoints for the new dashboard.</div>
-    </div>
-  </article>
+    <article class="card card--expanded" data-kind="agent" data-stage="planner" data-status="pending" data-depth="0">
+      <div class="card__head" role="button" tabindex="0" aria-expanded="true">
+        <span class="card__badge card__badge--pending">·</span>
+        <span class="card__title">Pending</span>
+        <span class="card__subtitle">queued</span>
+        <span class="card__chevron">▼</span>
+      </div>
+    </article>
+    <article class="card card--expanded" data-kind="agent" data-stage="planner" data-status="running" data-depth="0">
+      <div class="card__head" role="button" tabindex="0" aria-expanded="true">
+        <span class="card__badge card__badge--running"><span class="card__spinner"></span></span>
+        <span class="card__title">Running</span>
+        <span class="card__chevron">▼</span>
+      </div>
+    </article>
+    <article class="card card--expanded" data-kind="agent" data-stage="planner" data-status="completed" data-depth="0">
+      <div class="card__head" role="button" tabindex="0" aria-expanded="true">
+        <span class="card__badge card__badge--done">✓</span>
+        <span class="card__title">Completed</span>
+        <span class="card__chevron">▼</span>
+      </div>
+    </article>
+    <article class="card card--expanded" data-kind="agent" data-stage="planner" data-status="error" data-depth="0">
+      <div class="card__head" role="button" tabindex="0" aria-expanded="true">
+        <span class="card__badge card__badge--error">✗</span>
+        <span class="card__title">Error</span>
+        <span class="card__subtitle">compilation failed</span>
+        <span class="card__chevron">▼</span>
+      </div>
+    </article>
+    <article class="card card--expanded" data-kind="agent" data-stage="planner" data-status="skipped" data-depth="0">
+      <div class="card__head" role="button" tabindex="0" aria-expanded="true">
+        <span class="card__badge card__badge--skipped">—</span>
+        <span class="card__title">Skipped</span>
+        <span class="card__chevron">▼</span>
+      </div>
+    </article>
 
-  <article class="card card--expanded" data-kind="message" data-role="system" data-depth="0">
-    <div class="card__head">
-      <span class="card__title">System</span>
-    </div>
-    <div class="card__body">
-      <div class="msg-text">Permission granted: bash execute.</div>
-    </div>
-  </article>
+    <h2>5. Message bubbles (user / system)</h2>
+    <p class="hint">
+      role=user renders as a distinct bubble (no fold chevron, accent tint). system is the plain variant.
+    </p>
 
-</body>
+    <article class="card card--expanded" data-kind="message" data-role="user" data-depth="0">
+      <div class="card__head">
+        <span class="card__title">User</span>
+      </div>
+      <div class="card__body">
+        <div class="msg-text">Implement user authentication and add API endpoints for the new dashboard.</div>
+      </div>
+    </article>
+
+    <article class="card card--expanded" data-kind="message" data-role="system" data-depth="0">
+      <div class="card__head">
+        <span class="card__title">System</span>
+      </div>
+      <div class="card__body">
+        <div class="msg-text">Permission granted: bash execute.</div>
+      </div>
+    </article>
+  </body>
 </html>

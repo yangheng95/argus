@@ -45,9 +45,7 @@ const PACKAGE_MANAGER_LOCKFILES: Record<SupportedPackageManager, string> = {
 
 const ALL_LOCKFILES = new Set(Object.values(PACKAGE_MANAGER_LOCKFILES))
 
-export async function ensureProjectReadyForRuntime(input: {
-  projectRoot: string
-}): Promise<ProjectRuntimeReadiness> {
+export async function ensureProjectReadyForRuntime(input: { projectRoot: string }): Promise<ProjectRuntimeReadiness> {
   const projectRoot = path.resolve(input.projectRoot)
   const checks: RuntimeReadinessCheck[] = []
   const timeCreated = Date.now()
@@ -133,11 +131,23 @@ export function runtimeReadinessInstallCommand(manager: SupportedPackageManager)
     case "npm":
       return { executable: packageManagerExecutable(manager), args: ["ci"], command: "npm ci" }
     case "bun":
-      return { executable: packageManagerExecutable(manager), args: ["install", "--frozen-lockfile"], command: "bun install --frozen-lockfile" }
+      return {
+        executable: packageManagerExecutable(manager),
+        args: ["install", "--frozen-lockfile"],
+        command: "bun install --frozen-lockfile",
+      }
     case "pnpm":
-      return { executable: packageManagerExecutable(manager), args: ["install", "--frozen-lockfile"], command: "pnpm install --frozen-lockfile" }
+      return {
+        executable: packageManagerExecutable(manager),
+        args: ["install", "--frozen-lockfile"],
+        command: "pnpm install --frozen-lockfile",
+      }
     case "yarn":
-      return { executable: packageManagerExecutable(manager), args: ["install", "--immutable"], command: "yarn install --immutable" }
+      return {
+        executable: packageManagerExecutable(manager),
+        args: ["install", "--immutable"],
+        command: "yarn install --immutable",
+      }
   }
 }
 
@@ -149,15 +159,9 @@ function readinessResult(input: {
   packageManagerName?: SupportedPackageManager
   lockfile?: string
 }): ProjectRuntimeReadiness {
-  const failedReadinessIds = input.checks
-    .filter((check) => check.status === "failed")
-    .map((check) => check.id)
+  const failedReadinessIds = input.checks.filter((check) => check.status === "failed").map((check) => check.id)
   const effectiveChecks = input.checks.filter((check) => check.status !== "skipped")
-  const status = failedReadinessIds.length > 0
-    ? "failed"
-    : effectiveChecks.length === 0
-      ? "skipped"
-      : "passed"
+  const status = failedReadinessIds.length > 0 ? "failed" : effectiveChecks.length === 0 ? "skipped" : "passed"
   return {
     id: "runtime-readiness:project",
     projectRoot: input.projectRoot,
@@ -167,9 +171,7 @@ function readinessResult(input: {
     lockfile: input.lockfile,
     checks: input.checks,
     failedReadinessIds,
-    evidence: input.checks.flatMap((check) =>
-      check.evidence.map((item) => `${check.id}: ${item}`),
-    ),
+    evidence: input.checks.flatMap((check) => check.evidence.map((item) => `${check.id}: ${item}`)),
     timeCreated: input.timeCreated,
   }
 }
@@ -191,9 +193,7 @@ async function readRuntimePackage(projectRoot: string): Promise<RuntimePackage |
 }
 
 function declaresRuntimeContract(pkg: RuntimePackage) {
-  return objectHasEntries(pkg.scripts)
-    || objectHasEntries(pkg.dependencies)
-    || objectHasEntries(pkg.devDependencies)
+  return objectHasEntries(pkg.scripts) || objectHasEntries(pkg.dependencies) || objectHasEntries(pkg.devDependencies)
 }
 
 function objectHasEntries(value: Record<string, string> | undefined) {
@@ -228,10 +228,7 @@ async function validateLockfile(input: {
   }
 }
 
-async function findLockfileOwner(input: {
-  projectRoot: string
-  expected: string
-}): Promise<string | undefined> {
+async function findLockfileOwner(input: { projectRoot: string; expected: string }): Promise<string | undefined> {
   let current = path.resolve(input.projectRoot)
   while (true) {
     const present = await presentLockfiles(current)
@@ -301,14 +298,18 @@ async function ensureDependenciesInstalled(input: {
     status: result.exitCode === 0 ? "passed" : "failed",
     command: command.command,
     exitCode: result.exitCode,
-    evidence: result.exitCode === 0
-      ? [`${command.command} completed successfully.`]
-      : [`${command.command} failed with exit_code=${result.exitCode ?? "unknown"}`, output],
+    evidence:
+      result.exitCode === 0
+        ? [`${command.command} completed successfully.`]
+        : [`${command.command} failed with exit_code=${result.exitCode ?? "unknown"}`, output],
   }
 }
 
 async function pathExists(target: string) {
-  return fs.access(target).then(() => true, () => false)
+  return fs.access(target).then(
+    () => true,
+    () => false,
+  )
 }
 
 async function runInstallCommand(input: {
@@ -347,8 +348,6 @@ async function runInstallCommand(input: {
   return {
     exitCode,
     stdout,
-    stderr: timedOut
-      ? `${stderr}\nCommand timed out after ${input.timeoutMs}ms.`
-      : stderr,
+    stderr: timedOut ? `${stderr}\nCommand timed out after ${input.timeoutMs}ms.` : stderr,
   }
 }

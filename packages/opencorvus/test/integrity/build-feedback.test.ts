@@ -56,7 +56,11 @@ function seedTask(input: { projectID: string; taskID: string; specIDs: string[];
   })
 }
 
-function lineage(taskID: string, activeSpecSnapshotID: string, inheritedSpecSnapshotIDs: string[] = []): SpecSnapshotLineage {
+function lineage(
+  taskID: string,
+  activeSpecSnapshotID: string,
+  inheritedSpecSnapshotIDs: string[] = [],
+): SpecSnapshotLineage {
   return {
     taskID,
     activeSpecSnapshotID,
@@ -150,7 +154,8 @@ describe("composeIntegrityFeedbackForBuild", () => {
           canonicalLabel: "Validate persisted settings",
           severity: "blocking",
           title: "getSettings does not validate model, temperature, or maxTokens",
-          description: "getSettings() lets invalid model/temperature/maxTokens values from localStorage reach the API settings.",
+          description:
+            "getSettings() lets invalid model/temperature/maxTokens values from localStorage reach the API settings.",
           evidence: ["src/services/storage.ts getSettings still returns unchecked values"],
           repair: "Validate model against ALLOWED_MODELS, clamp temperature to [0,2], clamp maxTokens to [1,8192].",
           reviewers: ["rev_settings", "rev_storage"],
@@ -175,7 +180,8 @@ describe("composeIntegrityFeedbackForBuild", () => {
           canonicalLabel: "Validate persisted settings",
           severity: "blocking",
           title: "getSettings still does not validate model, temperature, or maxTokens",
-          description: "getSettings() still lets invalid model/temperature/maxTokens values from localStorage reach the API settings.",
+          description:
+            "getSettings() still lets invalid model/temperature/maxTokens values from localStorage reach the API settings.",
           evidence: ["src/services/storage.ts getSettings still returns unchecked values"],
           repair: "Validate model against ALLOWED_MODELS, clamp temperature to [0,2], clamp maxTokens to [1,8192].",
           reviewers: ["rev_settings", "rev_storage"],

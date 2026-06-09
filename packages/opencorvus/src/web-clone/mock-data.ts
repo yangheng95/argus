@@ -82,7 +82,13 @@ export function buildWebCloneMockDataContract(pageIr: WebClonePageIr): WebCloneM
       if (href) links.push({ id: `link_${links.length}`, nodeId: node.id, text: text || href, href })
     }
     if ((tag && CONTROL_TAGS.has(tag)) || role === "button" || role === "tab" || role === "menuitem") {
-      controls.push({ id: `control_${controls.length}`, nodeId: node.id, tag, role, label: text || attr(node.attrs, "aria-label") || tag || "control" })
+      controls.push({
+        id: `control_${controls.length}`,
+        nodeId: node.id,
+        tag,
+        role,
+        label: text || attr(node.attrs, "aria-label") || tag || "control",
+      })
     }
     if (tag === "img" || node.layout?.imageSrc) {
       images.push({

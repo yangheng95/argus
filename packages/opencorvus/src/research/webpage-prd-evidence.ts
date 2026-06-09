@@ -122,11 +122,11 @@ export async function readPreparedWebpagePrdEvidence(input: {
     hasCompleteSourcePackage(paths.sourcePackageAbsolute),
   ])
   if (!hasWebpageEvidence || !hasSourcePackage) {
-    throw new Error(
-      "prepared webpage PRD evidence requires a complete runtime webpage evidence package",
-    )
+    throw new Error("prepared webpage PRD evidence requires a complete runtime webpage evidence package")
   }
-  const excerpts = await Promise.all(PROMPT_ARTIFACTS.map((artifact) => readPromptArtifact(paths.relativeDir, paths, artifact)))
+  const excerpts = await Promise.all(
+    PROMPT_ARTIFACTS.map((artifact) => readPromptArtifact(paths.relativeDir, paths, artifact)),
+  )
   return {
     url: input.url,
     status: input.status ?? "reused",
@@ -145,12 +145,13 @@ export async function readPreparedWebpagePrdEvidence(input: {
 export function renderWebpagePrdEvidencePromptSection(evidence: WebpagePrdEvidence | undefined): string | undefined {
   if (!evidence) return undefined
   const artifactList = evidence.artifacts
-    .filter((artifact) =>
-      artifact.endsWith("prd-evidence-summary.md") ||
-      artifact.includes("/source-ir/") ||
-      artifact.endsWith("web-clone-context.md") ||
-      artifact.endsWith("implementation-blueprint.md") ||
-      artifact.endsWith("reference.png"),
+    .filter(
+      (artifact) =>
+        artifact.endsWith("prd-evidence-summary.md") ||
+        artifact.includes("/source-ir/") ||
+        artifact.endsWith("web-clone-context.md") ||
+        artifact.endsWith("implementation-blueprint.md") ||
+        artifact.endsWith("reference.png"),
     )
     .map((artifact) => `- ${artifact}`)
     .join("\n")
@@ -159,7 +160,9 @@ export function renderWebpagePrdEvidencePromptSection(evidence: WebpagePrdEviden
       [
         `## ${item.label}`,
         `Path: ${item.relativePath}`,
-        item.clipped ? `Excerpt: clipped to ${EXCERPT_MAX_CHARS} of ${item.originalChars} chars.` : "Excerpt: complete.",
+        item.clipped
+          ? `Excerpt: clipped to ${EXCERPT_MAX_CHARS} of ${item.originalChars} chars.`
+          : "Excerpt: complete.",
         "",
         "```",
         item.excerpt,
@@ -199,7 +202,7 @@ export function renderWebpagePrdEvidencePromptSection(evidence: WebpagePrdEviden
 async function readPromptArtifact(
   taskRelativeRoot: string,
   paths: ReturnType<typeof ProjectRuntimePaths.frontendDesignPaths>,
-  artifact: typeof PROMPT_ARTIFACTS[number],
+  artifact: (typeof PROMPT_ARTIFACTS)[number],
 ): Promise<WebpagePrdEvidenceExcerpt> {
   const [root, ...rest] = artifact.relative
   const absoluteRoot = root === "webpage-evidence" ? paths.webpageEvidenceAbsolute : paths.sourcePackageAbsolute
@@ -211,9 +214,10 @@ async function readPromptArtifact(
   }
   const rawText = await fs.readFile(absolutePath, "utf8")
   const text = sanitizeResearchPromptArtifactText(rawText)
-  const excerpt = text.length > EXCERPT_MAX_CHARS
-    ? `${text.slice(0, EXCERPT_MAX_CHARS).trimEnd()}\n[artifact excerpt clipped: ${text.length - EXCERPT_MAX_CHARS} chars omitted]`
-    : text.trim()
+  const excerpt =
+    text.length > EXCERPT_MAX_CHARS
+      ? `${text.slice(0, EXCERPT_MAX_CHARS).trimEnd()}\n[artifact excerpt clipped: ${text.length - EXCERPT_MAX_CHARS} chars omitted]`
+      : text.trim()
   return {
     label: artifact.label,
     relativePath,

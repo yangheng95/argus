@@ -27,19 +27,19 @@ bun run script/benchmark/overlay-web-benchmark.ts \
 
 ## Key flags
 
-| flag | purpose |
-|---|---|
-| `--request-file=PATH` | task description file (PRD) |
-| `--model=MODEL` | model (auto-detect default) |
-| `--executor=opencorvus\|codex\|claude-code` | executor: OpenCorvus / Codex / Claude Code |
-| `--title=TITLE` | task title |
-| `--report=PATH` | output JSON report |
-| `--max-runs=N` | maximum runs |
-| `--stall-timeout-ms=MS` | execution/evaluation **inactivity timeout** |
-| `--planning-stall-timeout-ms=MS` | planning **inactivity timeout** (planning agents may go quiet for long) |
-| `--tool-timeout-ms=MS` | per tool-call **inactivity timeout** |
-| `--no-keep` | delete tmp directory on finish |
-| `--skip-local-verify` | skip local re-verification |
+| flag                                        | purpose                                                                 |
+| ------------------------------------------- | ----------------------------------------------------------------------- |
+| `--request-file=PATH`                       | task description file (PRD)                                             |
+| `--model=MODEL`                             | model (auto-detect default)                                             |
+| `--executor=opencorvus\|codex\|claude-code` | executor: OpenCorvus / Codex / Claude Code                              |
+| `--title=TITLE`                             | task title                                                              |
+| `--report=PATH`                             | output JSON report                                                      |
+| `--max-runs=N`                              | maximum runs                                                            |
+| `--stall-timeout-ms=MS`                     | execution/evaluation **inactivity timeout**                             |
+| `--planning-stall-timeout-ms=MS`            | planning **inactivity timeout** (planning agents may go quiet for long) |
+| `--tool-timeout-ms=MS`                      | per tool-call **inactivity timeout**                                    |
+| `--no-keep`                                 | delete tmp directory on finish                                          |
+| `--skip-local-verify`                       | skip local re-verification                                              |
 
 ## Env injection upfront
 
@@ -48,6 +48,7 @@ bun run script/benchmark/overlay-web-benchmark.ts \
 ## Pass criteria
 
 Report JSON:
+
 ```json
 {
   "qualityVerdict": "accepted",
@@ -72,6 +73,7 @@ Historical baseline:
 ## Report structure
 
 `--report` JSON contains:
+
 - Task metadata (title, model, executor)
 - Per-stage/tool duration for orchestrator workflow steps, goal runs, review, local verification, and quality gates
 - Per-goal check results

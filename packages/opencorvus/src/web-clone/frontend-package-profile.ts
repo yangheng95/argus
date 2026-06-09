@@ -7,4 +7,3 @@ export const GENERATED_FRONTEND_PACKAGE_PROFILE = {
     typecheck: "tsc --noEmit",
   },
 } as const
-

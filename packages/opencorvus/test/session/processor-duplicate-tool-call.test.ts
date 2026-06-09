@@ -76,10 +76,8 @@ test("session processor reuses one part when the same tool callID is delivered t
     store.set(part.id, part as Message.Part)
     return part as never
   })
-  spyOn(Message, "parts").mockImplementation(
-    (async (messageID: string) =>
-      [...store.values()].filter((p) => p.messageID === messageID)) as typeof Message.parts,
-  )
+  spyOn(Message, "parts").mockImplementation((async (messageID: string) =>
+    [...store.values()].filter((p) => p.messageID === messageID)) as typeof Message.parts)
 
   const messageID = "msg_dup_tool_call"
   const register = (callID: string, goalID: string) => [
@@ -146,10 +144,8 @@ test("session processor closes duplicate same-callID tool-call deltas with one r
     store.set(part.id, part as Message.Part)
     return part as never
   })
-  spyOn(Message, "parts").mockImplementation(
-    (async (messageID: string) =>
-      [...store.values()].filter((p) => p.messageID === messageID)) as typeof Message.parts,
-  )
+  spyOn(Message, "parts").mockImplementation((async (messageID: string) =>
+    [...store.values()].filter((p) => p.messageID === messageID)) as typeof Message.parts)
 
   const input = { path: "packages/opencorvus/src/session/processor.ts" }
   spyOn(LLM, "stream").mockResolvedValue({
@@ -212,10 +208,8 @@ test("session processor preserves invalid tool-call input and paired tool-error 
     store.set(part.id, part as Message.Part)
     return part as never
   })
-  spyOn(Message, "parts").mockImplementation(
-    (async (messageID: string) =>
-      [...store.values()].filter((p) => p.messageID === messageID)) as typeof Message.parts,
-  )
+  spyOn(Message, "parts").mockImplementation((async (messageID: string) =>
+    [...store.values()].filter((p) => p.messageID === messageID)) as typeof Message.parts)
 
   const messageID = "msg_invalid_tool_call"
   const parseError = "Invalid tool input for register_goal: expected object, received array"
@@ -306,10 +300,8 @@ test("session processor pauses terminal payload generation at tool-input-start f
     return part as never
   })
   spyOn(Session, "updatePartDelta").mockImplementation(async () => undefined as never)
-  spyOn(Message, "parts").mockImplementation(
-    (async (messageID: string) =>
-      [...store.values()].filter((p) => p.messageID === messageID)) as typeof Message.parts,
-  )
+  spyOn(Message, "parts").mockImplementation((async (messageID: string) =>
+    [...store.values()].filter((p) => p.messageID === messageID)) as typeof Message.parts)
 
   let payloadConsumed = false
   let streamClosed = false
@@ -337,7 +329,7 @@ test("session processor pauses terminal payload generation at tool-input-start f
               type: "tool-input-delta",
               toolCallId: "call_terminal",
               toolName: "report_build_result",
-              inputTextDelta: "{\"summary\":\"large terminal payload\"}",
+              inputTextDelta: '{"summary":"large terminal payload"}',
             },
           }
         },
@@ -373,10 +365,10 @@ test("session processor pauses terminal payload generation at tool-input-start f
     preTerminalToolInputStart: ({ toolName }) =>
       toolName === "report_build_result"
         ? {
-          title: "Pre-terminal Reflection Required",
-          output: "reflect first",
-          metadata: { preTerminalReflection: true },
-        }
+            title: "Pre-terminal Reflection Required",
+            output: "reflect first",
+            metadata: { preTerminalReflection: true },
+          }
         : undefined,
   } as LLM.StreamInput)
 
@@ -407,10 +399,8 @@ test("session processor stops after execute-fallback pre-submit reflection tool 
     return part as never
   })
   spyOn(Session, "updatePartDelta").mockImplementation(async () => undefined as never)
-  spyOn(Message, "parts").mockImplementation(
-    (async (messageID: string) =>
-      [...store.values()].filter((p) => p.messageID === messageID)) as typeof Message.parts,
-  )
+  spyOn(Message, "parts").mockImplementation((async (messageID: string) =>
+    [...store.values()].filter((p) => p.messageID === messageID)) as typeof Message.parts)
 
   let secondTerminalConsumed = false
   let streamClosed = false
@@ -514,10 +504,8 @@ test("session processor closes same-tool open parts when pre-submit reflection i
     store.set(part.id, part as Message.Part)
     return part as never
   })
-  spyOn(Message, "parts").mockImplementation(
-    (async (messageID: string) =>
-      [...store.values()].filter((p) => p.messageID === messageID)) as typeof Message.parts,
-  )
+  spyOn(Message, "parts").mockImplementation((async (messageID: string) =>
+    [...store.values()].filter((p) => p.messageID === messageID)) as typeof Message.parts)
 
   spyOn(LLM, "stream").mockResolvedValue({
     fullStream: streamOf([
@@ -582,11 +570,7 @@ test("session processor closes same-tool open parts when pre-submit reflection i
   expect(toolParts).toHaveLength(2)
   expect(toolParts.every((p) => p.state.status === "completed")).toBe(true)
   expect(toolParts.map((p) => p.callID).sort()).toEqual(["call_reflect", "call_second"])
-  expect(
-    toolParts.every(
-      (p) => p.state.status === "completed" && p.state.output === "reflect first",
-    ),
-  ).toBe(true)
+  expect(toolParts.every((p) => p.state.status === "completed" && p.state.output === "reflect first")).toBe(true)
 })
 
 test("session processor closes a persisted running tool part when only the result event is in memory", async () => {
@@ -620,10 +604,8 @@ test("session processor closes a persisted running tool part when only the resul
     store.set(part.id, part as Message.Part)
     return part as never
   })
-  spyOn(Message, "parts").mockImplementation(
-    (async (id: string) =>
-      [...store.values()].filter((p) => p.messageID === id)) as typeof Message.parts,
-  )
+  spyOn(Message, "parts").mockImplementation((async (id: string) =>
+    [...store.values()].filter((p) => p.messageID === id)) as typeof Message.parts)
   spyOn(LLM, "stream").mockResolvedValue({
     fullStream: streamOf([
       {
@@ -631,7 +613,7 @@ test("session processor closes a persisted running tool part when only the resul
         toolCallId: "call_persisted_merge",
         toolName: "merge_back",
         input: {},
-        output: { output: "{\"status\":\"merged\"}" },
+        output: { output: '{"status":"merged"}' },
       },
       {
         type: "finish-step",
@@ -672,7 +654,7 @@ test("session processor closes a persisted running tool part when only the resul
 
   const part = store.get("prt_persisted_merge") as Message.ToolPart
   expect(part.state.status).toBe("completed")
-  expect(part.state.status === "completed" ? part.state.output : undefined).toBe("{\"status\":\"merged\"}")
+  expect(part.state.status === "completed" ? part.state.output : undefined).toBe('{"status":"merged"}')
 })
 
 test("session processor closes a persisted running tool part when only the error event is in memory", async () => {
@@ -706,10 +688,8 @@ test("session processor closes a persisted running tool part when only the error
     store.set(part.id, part as Message.Part)
     return part as never
   })
-  spyOn(Message, "parts").mockImplementation(
-    (async (id: string) =>
-      [...store.values()].filter((p) => p.messageID === id)) as typeof Message.parts,
-  )
+  spyOn(Message, "parts").mockImplementation((async (id: string) =>
+    [...store.values()].filter((p) => p.messageID === id)) as typeof Message.parts)
   spyOn(LLM, "stream").mockResolvedValue({
     fullStream: streamOf([
       {
@@ -779,10 +759,8 @@ test("session processor does not supersede different-callID duplicate merge_back
     store.set(part.id, part as Message.Part)
     return part as never
   })
-  spyOn(Message, "parts").mockImplementation(
-    (async (id: string) =>
-      [...store.values()].filter((p) => p.messageID === id)) as typeof Message.parts,
-  )
+  spyOn(Message, "parts").mockImplementation((async (id: string) =>
+    [...store.values()].filter((p) => p.messageID === id)) as typeof Message.parts)
   spyOn(LLM, "stream").mockResolvedValue({
     fullStream: streamOf([
       { type: "tool-call", toolCallId: "call_merge_first", toolName: "merge_back", input: {} },
@@ -792,7 +770,7 @@ test("session processor does not supersede different-callID duplicate merge_back
         toolCallId: "call_merge_second",
         toolName: "merge_back",
         input: {},
-        output: { output: "{\"status\":\"merged\",\"primary_head\":\"abc\"}" },
+        output: { output: '{"status":"merged","primary_head":"abc"}' },
       },
       {
         type: "finish-step",
@@ -859,10 +837,8 @@ test("session processor throws when a clean finish leaves an open tool part", as
     store.set(part.id, part as Message.Part)
     return part as never
   })
-  spyOn(Message, "parts").mockImplementation(
-    (async (messageID: string) =>
-      [...store.values()].filter((p) => p.messageID === messageID)) as typeof Message.parts,
-  )
+  spyOn(Message, "parts").mockImplementation((async (messageID: string) =>
+    [...store.values()].filter((p) => p.messageID === messageID)) as typeof Message.parts)
   spyOn(LLM, "stream").mockResolvedValue({
     fullStream: streamOf([
       { type: "tool-input-start", toolCallId: "call_lost", toolName: "register_goal" },
@@ -923,14 +899,10 @@ test("session processor stamps open tool parts with the real activity abort caus
     store.set(part.id, part as Message.Part)
     return part as never
   })
-  spyOn(Message, "parts").mockImplementation(
-    (async (messageID: string) =>
-      [...store.values()].filter((p) => p.messageID === messageID)) as typeof Message.parts,
-  )
+  spyOn(Message, "parts").mockImplementation((async (messageID: string) =>
+    [...store.values()].filter((p) => p.messageID === messageID)) as typeof Message.parts)
   spyOn(LLM, "stream").mockResolvedValue({
-    fullStream: stalledAfter([
-      { type: "tool-input-start", toolCallId: "call_abort", toolName: "register_goal" },
-    ]),
+    fullStream: stalledAfter([{ type: "tool-input-start", toolCallId: "call_abort", toolName: "register_goal" }]),
   } as Awaited<ReturnType<typeof LLM.stream>>)
 
   const abort = new AbortController()

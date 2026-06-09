@@ -37,14 +37,14 @@ describe("card expand and collapse contract", () => {
       '"textarea"',
       '"select"',
       '"summary"',
-      '"[contenteditable=\'true\']"',
-      '"[role=\'button\']"',
-      '"[role=\'menuitem\']"',
-      '"[role=\'checkbox\']"',
-      '"[role=\'tab\']"',
-      '"[role=\'textbox\']"',
-      '"[data-card-click-ignore=\'true\']"',
-      '"[data-card-dblclick-ignore=\'true\']"',
+      "\"[contenteditable='true']\"",
+      "\"[role='button']\"",
+      "\"[role='menuitem']\"",
+      "\"[role='checkbox']\"",
+      "\"[role='tab']\"",
+      "\"[role='textbox']\"",
+      "\"[data-card-click-ignore='true']\"",
+      "\"[data-card-dblclick-ignore='true']\"",
     ]) {
       expect(src).toContain(selector)
     }

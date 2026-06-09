@@ -61,34 +61,40 @@ describe("codex app server executor", () => {
   })
 
   test("maps structured Codex plan updates to update_plan todo tool events", async () => {
-    const provider = CodexAppServerExecutor.create(client([
-      {
-        type: "notification",
-        method: "turn/plan/updated",
-        params: {
-          threadId: "thr_1",
-          turnId: "turn_1",
-          explanation: "working plan",
-          plan: [
-            { step: "Inspect executor plan payload", status: "completed" },
-            { step: "Normalize Codex plan into checklist state", status: "inProgress" },
-            { step: "Verify overlay summary", status: "pending" },
-          ],
+    const provider = CodexAppServerExecutor.create(
+      client([
+        {
+          type: "notification",
+          method: "turn/plan/updated",
+          params: {
+            threadId: "thr_1",
+            turnId: "turn_1",
+            explanation: "working plan",
+            plan: [
+              { step: "Inspect executor plan payload", status: "completed" },
+              { step: "Normalize Codex plan into checklist state", status: "inProgress" },
+              { step: "Verify overlay summary", status: "pending" },
+            ],
+          },
         },
-      },
-      {
-        type: "notification",
-        method: "turn/completed",
-        params: {
-          threadId: "thr_1",
-          turn: { id: "turn_1", items: [], status: "completed", error: null },
+        {
+          type: "notification",
+          method: "turn/completed",
+          params: {
+            threadId: "thr_1",
+            turn: { id: "turn_1", items: [], status: "completed", error: null },
+          },
         },
-      },
-    ]))
+      ]),
+    )
 
     const result = await collect(provider.run({ prompt: "test" }))
-    const toolCall = result.find((item): item is Extract<CodingEventInfo, { type: "tool_call" }> => item.type === "tool_call")
-    const toolResult = result.find((item): item is Extract<CodingEventInfo, { type: "tool_result" }> => item.type === "tool_result")
+    const toolCall = result.find(
+      (item): item is Extract<CodingEventInfo, { type: "tool_call" }> => item.type === "tool_call",
+    )
+    const toolResult = result.find(
+      (item): item is Extract<CodingEventInfo, { type: "tool_result" }> => item.type === "tool_result",
+    )
 
     expect(result.find((item) => item.type === "plan_delta")).toBeUndefined()
     expect(toolCall?.name).toBe("update_plan")
@@ -166,59 +172,61 @@ describe("codex app server executor", () => {
   })
 
   test("maps server requests to approval and input events", async () => {
-    const provider = CodexAppServerExecutor.create(client([
-      {
-        type: "request",
-        id: 7,
-        method: "item/commandExecution/requestApproval",
-        params: {
-          threadId: "thr_1",
-          turnId: "turn_1",
-          itemId: "item_cmd",
-          command: "git status",
-        },
-      },
-      {
-        type: "request",
-        id: 8,
-        method: "item/tool/requestUserInput",
-        params: {
-          threadId: "thr_1",
-          turnId: "turn_1",
-          itemId: "item_input",
-          questions: [
-            {
-              header: "Choice",
-              question: "Pick one",
-            },
-          ],
-        },
-      },
-      {
-        type: "request",
-        id: 10,
-        method: "mcpServer/elicitation/request",
-        params: {
-          serverName: "github",
-          message: "Authorize access",
-          mode: "url",
-          url: "https://example.com/auth",
-        },
-      },
-      {
-        type: "notification",
-        method: "turn/completed",
-        params: {
-          threadId: "thr_1",
-          turn: {
-            id: "turn_1",
-            items: [],
-            status: "completed",
-            error: null,
+    const provider = CodexAppServerExecutor.create(
+      client([
+        {
+          type: "request",
+          id: 7,
+          method: "item/commandExecution/requestApproval",
+          params: {
+            threadId: "thr_1",
+            turnId: "turn_1",
+            itemId: "item_cmd",
+            command: "git status",
           },
         },
-      },
-    ]))
+        {
+          type: "request",
+          id: 8,
+          method: "item/tool/requestUserInput",
+          params: {
+            threadId: "thr_1",
+            turnId: "turn_1",
+            itemId: "item_input",
+            questions: [
+              {
+                header: "Choice",
+                question: "Pick one",
+              },
+            ],
+          },
+        },
+        {
+          type: "request",
+          id: 10,
+          method: "mcpServer/elicitation/request",
+          params: {
+            serverName: "github",
+            message: "Authorize access",
+            mode: "url",
+            url: "https://example.com/auth",
+          },
+        },
+        {
+          type: "notification",
+          method: "turn/completed",
+          params: {
+            threadId: "thr_1",
+            turn: {
+              id: "turn_1",
+              items: [],
+              status: "completed",
+              error: null,
+            },
+          },
+        },
+      ]),
+    )
 
     const result = await collect(provider.run({ prompt: "test" }))
     expect(result.some((item) => item.type === "approval_request")).toBe(true)
@@ -226,7 +234,8 @@ describe("codex app server executor", () => {
   })
 
   test("leaves server requests pending until the owner responds", async () => {
-    const responses: Array<{ id: string | number; result?: Record<string, unknown>; error?: Record<string, unknown> }> = []
+    const responses: Array<{ id: string | number; result?: Record<string, unknown>; error?: Record<string, unknown> }> =
+      []
     let release: (() => void) | undefined
     const provider = CodexAppServerExecutor.create({
       async initialize() {
@@ -305,13 +314,15 @@ describe("codex app server executor", () => {
         decision: "accept",
       },
     })
-    expect(responses).toEqual([{
-      id: 7,
-      result: {
-        decision: "accept",
+    expect(responses).toEqual([
+      {
+        id: 7,
+        result: {
+          decision: "accept",
+        },
+        error: undefined,
       },
-      error: undefined,
-    }])
+    ])
     const done = iterator.next()
     await Bun.sleep(0)
     release?.()
@@ -319,60 +330,66 @@ describe("codex app server executor", () => {
   })
 
   test("keeps dynamic tool call and result IDs aligned", async () => {
-    const provider = CodexAppServerExecutor.create(client([
-      {
-        type: "request",
-        id: 11,
-        method: "item/tool/call",
-        params: {
-          threadId: "thr_1",
-          turnId: "turn_1",
-          itemId: "item_write",
-          callId: "call_write",
-          tool: "write",
-          arguments: {
-            file: "src/note-store.ts",
-          },
-        },
-      },
-      {
-        type: "notification",
-        method: "item/completed",
-        params: {
-          threadId: "thr_1",
-          turnId: "turn_1",
-          item: {
-            id: "item_write",
+    const provider = CodexAppServerExecutor.create(
+      client([
+        {
+          type: "request",
+          id: 11,
+          method: "item/tool/call",
+          params: {
+            threadId: "thr_1",
+            turnId: "turn_1",
+            itemId: "item_write",
             callId: "call_write",
-            type: "dynamicToolCall",
             tool: "write",
-            contentItems: [
-              {
-                type: "output_text",
-                text: "Wrote file successfully.",
-              },
-            ],
+            arguments: {
+              file: "src/note-store.ts",
+            },
           },
         },
-      },
-      {
-        type: "notification",
-        method: "turn/completed",
-        params: {
-          threadId: "thr_1",
-          turn: {
-            id: "turn_1",
-            items: [],
-            status: "completed",
-            error: null,
+        {
+          type: "notification",
+          method: "item/completed",
+          params: {
+            threadId: "thr_1",
+            turnId: "turn_1",
+            item: {
+              id: "item_write",
+              callId: "call_write",
+              type: "dynamicToolCall",
+              tool: "write",
+              contentItems: [
+                {
+                  type: "output_text",
+                  text: "Wrote file successfully.",
+                },
+              ],
+            },
           },
         },
-      },
-    ]))
+        {
+          type: "notification",
+          method: "turn/completed",
+          params: {
+            threadId: "thr_1",
+            turn: {
+              id: "turn_1",
+              items: [],
+              status: "completed",
+              error: null,
+            },
+          },
+        },
+      ]),
+    )
 
     const result = await collect(provider.run({ prompt: "test" }))
-    const toolCall = result.find((item): item is Extract<CodingEventInfo, { type: "tool_call" }> => item.type === "tool_call")
-    const toolResult = result.find((item): item is Extract<CodingEventInfo, { type: "tool_result" }> => item.type === "tool_result")
+    const toolCall = result.find(
+      (item): item is Extract<CodingEventInfo, { type: "tool_call" }> => item.type === "tool_call",
+    )
+    const toolResult = result.find(
+      (item): item is Extract<CodingEventInfo, { type: "tool_result" }> => item.type === "tool_result",
+    )
 
     expect(toolCall?.id).toBe("call_write")
     expect(toolCall?.meta?.["call_id"]).toBe("call_write")
@@ -382,39 +399,43 @@ describe("codex app server executor", () => {
   })
 
   test("keeps completed command execution details on tool results", async () => {
-    const provider = CodexAppServerExecutor.create(client([
-      {
-        type: "notification",
-        method: "item/completed",
-        params: {
-          threadId: "thr_1",
-          turnId: "turn_1",
-          item: {
-            id: "cmd_1",
-            type: "commandExecution",
-            command: "bun test test/executor/codex-app-server.test.ts",
-            output: "ok",
-            status: "completed",
+    const provider = CodexAppServerExecutor.create(
+      client([
+        {
+          type: "notification",
+          method: "item/completed",
+          params: {
+            threadId: "thr_1",
+            turnId: "turn_1",
+            item: {
+              id: "cmd_1",
+              type: "commandExecution",
+              command: "bun test test/executor/codex-app-server.test.ts",
+              output: "ok",
+              status: "completed",
+            },
           },
         },
-      },
-      {
-        type: "notification",
-        method: "turn/completed",
-        params: {
-          threadId: "thr_1",
-          turn: {
-            id: "turn_1",
-            items: [],
-            status: "completed",
-            error: null,
+        {
+          type: "notification",
+          method: "turn/completed",
+          params: {
+            threadId: "thr_1",
+            turn: {
+              id: "turn_1",
+              items: [],
+              status: "completed",
+              error: null,
+            },
           },
         },
-      },
-    ]))
+      ]),
+    )
 
     const result = await collect(provider.run({ prompt: "test" }))
-    const toolResult = result.find((item): item is Extract<CodingEventInfo, { type: "tool_result" }> => item.type === "tool_result")
+    const toolResult = result.find(
+      (item): item is Extract<CodingEventInfo, { type: "tool_result" }> => item.type === "tool_result",
+    )
 
     expect(toolResult?.id).toBe("cmd_1")
     expect(toolResult?.name).toBe("Bash")
@@ -431,86 +452,94 @@ describe("codex app server executor", () => {
     // `tool_result ... arrived without a prior tool_call` and refused to
     // run host merge_back. The pair must share the item id so the tools map
     // in build/agent.ts correlates them.
-    const provider = CodexAppServerExecutor.create(client([
-      {
-        type: "notification",
-        method: "item/started",
-        params: {
-          threadId: "thr_1",
-          turnId: "turn_1",
-          item: {
-            id: "call_xyz",
-            type: "commandExecution",
-            command: "ls",
+    const provider = CodexAppServerExecutor.create(
+      client([
+        {
+          type: "notification",
+          method: "item/started",
+          params: {
+            threadId: "thr_1",
+            turnId: "turn_1",
+            item: {
+              id: "call_xyz",
+              type: "commandExecution",
+              command: "ls",
+            },
           },
         },
-      },
-      {
-        type: "notification",
-        method: "item/completed",
-        params: {
-          threadId: "thr_1",
-          turnId: "turn_1",
-          item: {
-            id: "call_xyz",
-            type: "commandExecution",
-            command: "ls",
-            output: "README.md",
-            status: "completed",
+        {
+          type: "notification",
+          method: "item/completed",
+          params: {
+            threadId: "thr_1",
+            turnId: "turn_1",
+            item: {
+              id: "call_xyz",
+              type: "commandExecution",
+              command: "ls",
+              output: "README.md",
+              status: "completed",
+            },
           },
         },
-      },
-      {
-        type: "notification",
-        method: "turn/completed",
-        params: {
-          threadId: "thr_1",
-          turn: { id: "turn_1", items: [], status: "completed", error: null },
+        {
+          type: "notification",
+          method: "turn/completed",
+          params: {
+            threadId: "thr_1",
+            turn: { id: "turn_1", items: [], status: "completed", error: null },
+          },
         },
-      },
-    ]))
+      ]),
+    )
 
     const result = await collect(provider.run({ prompt: "test" }))
-    const toolCall = result.find((item): item is Extract<CodingEventInfo, { type: "tool_call" }> => item.type === "tool_call")
-    const toolResult = result.find((item): item is Extract<CodingEventInfo, { type: "tool_result" }> => item.type === "tool_result")
+    const toolCall = result.find(
+      (item): item is Extract<CodingEventInfo, { type: "tool_call" }> => item.type === "tool_call",
+    )
+    const toolResult = result.find(
+      (item): item is Extract<CodingEventInfo, { type: "tool_result" }> => item.type === "tool_result",
+    )
 
     expect(toolCall?.id).toBe("call_xyz")
     expect(toolCall?.name).toBe("Bash")
     expect(toolCall?.input).toBe("ls")
-    expect(toolResult?.id).toBe("call_xyz")  // same id ⇒ paired
+    expect(toolResult?.id).toBe("call_xyz") // same id ⇒ paired
     expect(toolResult?.name).toBe("Bash")
     expect(toolResult?.output).toBe("README.md")
   })
 
   test("suppresses empty turn/diff/updated notifications (no Diff updated placeholder)", async () => {
-    const provider = CodexAppServerExecutor.create(client([
-      {
-        type: "notification",
-        method: "turn/diff/updated",
-        params: {
-          threadId: "thr_1",
-          turnId: "turn_1",
-          // No delta and no summary — codex emits this on every diff write.
+    const provider = CodexAppServerExecutor.create(
+      client([
+        {
+          type: "notification",
+          method: "turn/diff/updated",
+          params: {
+            threadId: "thr_1",
+            turnId: "turn_1",
+            // No delta and no summary — codex emits this on every diff write.
+          },
         },
-      },
-      {
-        type: "notification",
-        method: "turn/diff/updated",
-        params: {
-          threadId: "thr_1",
-          turnId: "turn_1",
-          summary: "Success. Updated the following files: M package.json",
+        {
+          type: "notification",
+          method: "turn/diff/updated",
+          params: {
+            threadId: "thr_1",
+            turnId: "turn_1",
+            summary: "Success. Updated the following files: M package.json",
+          },
         },
-      },
-      {
-        type: "notification",
-        method: "turn/completed",
-        params: {
-          threadId: "thr_1",
-          turn: { id: "turn_1", items: [], status: "completed", error: null },
+        {
+          type: "notification",
+          method: "turn/completed",
+          params: {
+            threadId: "thr_1",
+            turn: { id: "turn_1", items: [], status: "completed", error: null },
+          },
         },
-      },
-    ]))
+      ]),
+    )
 
     const result = await collect(provider.run({ prompt: "test" }))
     const diffEvents = result.filter(
@@ -568,10 +597,7 @@ describe("codex app server executor", () => {
       },
     })
 
-    const result = await Promise.race([
-      collect(provider.run({ prompt: "test" })),
-      Bun.sleep(100).then(() => "timeout"),
-    ])
+    const result = await Promise.race([collect(provider.run({ prompt: "test" })), Bun.sleep(100).then(() => "timeout")])
 
     expect(result).not.toBe("timeout")
     expect(Array.isArray(result)).toBe(true)
@@ -581,12 +607,14 @@ describe("codex app server executor", () => {
   })
 })
 
-function client(events: Array<{
-  type: "notification" | "request"
-  method: string
-  params?: Record<string, unknown>
-  id?: string | number
-}>): CodexAppServerClient {
+function client(
+  events: Array<{
+    type: "notification" | "request"
+    method: string
+    params?: Record<string, unknown>
+    id?: string | number
+  }>,
+): CodexAppServerClient {
   return {
     async initialize() {
       return {
@@ -619,20 +647,22 @@ function client(events: Array<{
     },
     async respond() {},
     events() {
-      return feed(events.map((item) =>
-        item.type === "request"
-          ? {
-              type: "request" as const,
-              id: item.id ?? 1,
-              method: item.method,
-              params: item.params,
-            }
-          : {
-              type: "notification" as const,
-              method: item.method,
-              params: item.params,
-            }
-      ))
+      return feed(
+        events.map((item) =>
+          item.type === "request"
+            ? {
+                type: "request" as const,
+                id: item.id ?? 1,
+                method: item.method,
+                params: item.params,
+              }
+            : {
+                type: "notification" as const,
+                method: item.method,
+                params: item.params,
+              },
+        ),
+      )
     },
   }
 }

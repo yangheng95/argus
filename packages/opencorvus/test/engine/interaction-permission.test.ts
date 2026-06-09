@@ -41,43 +41,49 @@ describe("engine permission interactions", () => {
         const now = Date.now()
 
         Database.use((db) =>
-          db.insert(EngineTaskTable).values({
-            id: taskID,
-            project_id: Instance.project.id,
-            session_id: root.id,
-            source: "test",
-            title: "permission interaction",
-            request: "permission interaction",
-            priority: "normal",
-            time_created: now,
-            time_updated: now,
-            time_started: now,
-          }).run(),
+          db
+            .insert(EngineTaskTable)
+            .values({
+              id: taskID,
+              project_id: Instance.project.id,
+              session_id: root.id,
+              source: "test",
+              title: "permission interaction",
+              request: "permission interaction",
+              priority: "normal",
+              time_created: now,
+              time_updated: now,
+              time_started: now,
+            })
+            .run(),
         )
         Database.use((db) =>
-          db.insert(EngineArtifactTable).values({
-            id: runID,
-            task_id: taskID,
-            run_id: runID,
-            kind: "run",
-            label: "run-running",
-            payload: {
-              plan_version_id: null,
-              session_id: root.id,
-              executor: "opencorvus",
-              status: "running",
-              phase: "execute",
-              blocking_reason: null,
-              error: null,
-              retry_count: 0,
-              executor_ref: null,
-              metadata: null,
-              time_started: now,
-              time_completed: null,
-            },
-            time_created: now,
-            time_updated: now,
-          }).run(),
+          db
+            .insert(EngineArtifactTable)
+            .values({
+              id: runID,
+              task_id: taskID,
+              run_id: runID,
+              kind: "run",
+              label: "run-running",
+              payload: {
+                plan_version_id: null,
+                session_id: root.id,
+                executor: "opencorvus",
+                status: "running",
+                phase: "execute",
+                blocking_reason: null,
+                error: null,
+                retry_count: 0,
+                executor_ref: null,
+                metadata: null,
+                time_started: now,
+                time_completed: null,
+              },
+              time_created: now,
+              time_updated: now,
+            })
+            .run(),
         )
 
         const ask = PermissionNext.ask({

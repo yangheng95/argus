@@ -10,54 +10,60 @@ export const ShellToolAdapter: ToolAdapter = {
     return true
   },
   declare() {
-    return [{
-      name: "shell_command",
-      description: "Execute a shell command in the active workspace and return stdout/stderr and exit status.",
-      inputSchema: {
-        type: "object",
-        properties: {
-          command: { type: "string" },
-          cwd: { type: "string" },
+    return [
+      {
+        name: "shell_command",
+        description: "Execute a shell command in the active workspace and return stdout/stderr and exit status.",
+        inputSchema: {
+          type: "object",
+          properties: {
+            command: { type: "string" },
+            cwd: { type: "string" },
+          },
+          required: ["command"],
+          additionalProperties: false,
         },
-        required: ["command"],
-        additionalProperties: false,
+        metadata: {
+          tool_kind: "shell",
+        },
       },
-      metadata: {
-        tool_kind: "shell",
-      },
-    }] satisfies ToolDefinitionInfo[]
+    ] satisfies ToolDefinitionInfo[]
   },
   accept(call) {
     return matches(call.name, this.aliases || [])
   },
   projectCall(call) {
-    return [{
-      provider: call.metadata?.provider as "opencorvus" | "codex" | "claude-code",
-      kind: "tool_call",
-      summary: `Shell command: ${call.name}`,
-      refs: call.refs,
-      payload: {
-        adapter: this.id,
-        tool_kind: this.kind,
-        name: call.name,
-        input: call.input,
+    return [
+      {
+        provider: call.metadata?.provider as "opencorvus" | "codex" | "claude-code",
+        kind: "tool_call",
+        summary: `Shell command: ${call.name}`,
+        refs: call.refs,
+        payload: {
+          adapter: this.id,
+          tool_kind: this.kind,
+          name: call.name,
+          input: call.input,
+        },
+        raw: call.raw,
       },
-      raw: call.raw,
-    }]
+    ]
   },
   projectResult(result) {
-    return [{
-      provider: result.metadata?.provider as "opencorvus" | "codex" | "claude-code",
-      kind: "tool_result",
-      summary: result.summary ?? "Shell command completed",
-      refs: result.refs,
-      payload: {
-        adapter: this.id,
-        tool_kind: this.kind,
-        output: result.output,
+    return [
+      {
+        provider: result.metadata?.provider as "opencorvus" | "codex" | "claude-code",
+        kind: "tool_result",
+        summary: result.summary ?? "Shell command completed",
+        refs: result.refs,
+        payload: {
+          adapter: this.id,
+          tool_kind: this.kind,
+          output: result.output,
+        },
+        raw: result.raw,
       },
-      raw: result.raw,
-    }]
+    ]
   },
 }
 

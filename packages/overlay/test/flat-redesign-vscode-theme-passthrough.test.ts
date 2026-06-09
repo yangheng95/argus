@@ -14,10 +14,7 @@ import { join } from "node:path"
 const CASCADE_DIR = join(import.meta.dir, "..", "src", "styles", "cascade")
 
 function readCascade(name: string): string {
-  return readFileSync(join(CASCADE_DIR, name), "utf8").replace(
-    /\/\*[\s\S]*?\*\//g,
-    "",
-  )
+  return readFileSync(join(CASCADE_DIR, name), "utf8").replace(/\/\*[\s\S]*?\*\//g, "")
 }
 
 function themeToken(css: string, token: string): string {

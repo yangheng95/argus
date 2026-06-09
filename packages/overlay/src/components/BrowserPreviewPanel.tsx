@@ -1,5 +1,11 @@
-import { createEffect, createMemo, createResource, createSignal, For, Match, Switch } from "solid-js"
-import { captureTaskBrowserPreviewEvidence, loadTaskBrowserPreviewTarget, saveTaskBrowserPreviewTarget, type BrowserPreviewTarget, type BrowserPreviewViewportID } from "../services/browser-preview"
+import { createEffect, createMemo, createResource, createSignal, For, Match, onCleanup, Switch } from "solid-js"
+import {
+  captureTaskBrowserPreviewEvidence,
+  loadTaskBrowserPreviewTarget,
+  saveTaskBrowserPreviewTarget,
+  type BrowserPreviewTarget,
+  type BrowserPreviewViewportID,
+} from "../services/browser-preview"
 import { t } from "../utils/i18n"
 import { Icon } from "./Icon"
 import { Button } from "./ui/Button"
@@ -14,13 +20,20 @@ export interface BrowserPreviewPanelProps {
 }
 
 export function BrowserPreviewPanel(props: BrowserPreviewPanelProps) {
-  let frameElement: HTMLIFrameElement | undefined
+  const frameElements: Partial<Record<BrowserPreviewViewportID, HTMLIFrameElement>> = {}
   const [draftUrl, setDraftUrl] = createSignal("")
   const [viewportID, setViewportID] = createSignal<BrowserPreviewViewportID>("desktop")
+  const [visibleViewportIDs, setVisibleViewportIDs] = createSignal<BrowserPreviewViewportID[]>([])
+  const [viewportScopeKey, setViewportScopeKey] = createSignal("")
   const [refreshToken, setRefreshToken] = createSignal(0)
   const [frameToken, setFrameToken] = createSignal(0)
   const [lastAutoFocusedPreviewKey, setLastAutoFocusedPreviewKey] = createSignal("")
-  const [verificationRequest, setVerificationRequest] = createSignal<{ taskID: string; targetID?: string; viewportID: BrowserPreviewViewportID; token: number }>()
+  const [verificationRequest, setVerificationRequest] = createSignal<{
+    taskID: string
+    targetID: string
+    viewportID: BrowserPreviewViewportID
+    token: number
+  }>()
   const [target] = createResource(
     () => {
       const taskID = props.taskID()
@@ -30,16 +43,26 @@ export function BrowserPreviewPanel(props: BrowserPreviewPanelProps) {
     },
     (scope) => loadTaskBrowserPreviewTarget(scope.taskID),
   )
-  const [verification] = createResource(
-    verificationRequest,
-    (request) => captureTaskBrowserPreviewEvidence({ taskID: request.taskID, targetID: request.targetID, viewportID: request.viewportID }),
+  const [verification] = createResource(verificationRequest, (request) =>
+    captureTaskBrowserPreviewEvidence({
+      taskID: request.taskID,
+      targetID: request.targetID,
+      viewportID: request.viewportID,
+    }),
   )
 
   const panelActive = createMemo(() => props.active())
   const currentTarget = createMemo(() => (props.taskID() && props.directory() ? target() : undefined))
   const currentTargetError = createMemo(() => (props.taskID() && props.directory() ? target.error : undefined))
+  const candidates = createMemo(() => currentTarget()?.candidates ?? [])
+  const selectedCandidateID = createMemo(
+    () => candidates().find((item) => item.selected)?.id ?? currentTarget()?.id ?? "",
+  )
   const viewports = createMemo(() => currentTarget()?.viewports ?? [])
-  const viewport = createMemo(() => viewports().find((item) => item.id === viewportID()) ?? viewports()[0])
+  const visibleViewports = createMemo(() => {
+    const visible = new Set(visibleViewportIDs())
+    return viewports().filter((item) => visible.has(item.id))
+  })
   const frameUrl = createMemo(() => currentTarget()?.url)
 
   createEffect(() => {
@@ -58,6 +81,26 @@ export function BrowserPreviewPanel(props: BrowserPreviewPanelProps) {
     props.onReady?.(resolved)
   })
 
+  createEffect(() => {
+    if (!panelActive() || !props.taskID() || !props.directory()) return
+    const timer = window.setInterval(() => {
+      setRefreshToken((value) => value + 1)
+    }, 4_000)
+    onCleanup(() => window.clearInterval(timer))
+  })
+
+  createEffect(() => {
+    const taskID = props.taskID()
+    const resolved = currentTarget()
+    const ids = viewports().map((item) => item.id)
+    if (!taskID || ids.length === 0) return
+    const key = `${taskID}:${resolved?.id ?? resolved?.url ?? "missing"}:${ids.join(",")}`
+    if (viewportScopeKey() === key) return
+    setViewportScopeKey(key)
+    setVisibleViewportIDs(ids)
+    setViewportID(ids.includes(viewportID()) ? viewportID() : ids[0])
+  })
+
   const submitUrl = (event: Event) => {
     event.preventDefault()
     const taskID = props.taskID()
@@ -66,18 +109,34 @@ export function BrowserPreviewPanel(props: BrowserPreviewPanelProps) {
     void saveTaskBrowserPreviewTarget({ taskID, url }).then(() => setRefreshToken((value) => value + 1))
   }
 
+  const selectCandidate = (event: Event) => {
+    const taskID = props.taskID()
+    const candidateID = (event.currentTarget as HTMLSelectElement).value
+    const candidate = candidates().find((item) => item.id === candidateID)
+    if (!taskID || !candidate || candidate.selected) return
+    void saveTaskBrowserPreviewTarget({ taskID, url: candidate.url }).then(() => setRefreshToken((value) => value + 1))
+  }
+
   const reloadFrame = () => {
     setFrameToken((value) => value + 1)
-    const frameSrc = frameElement?.src
-    if (frameElement && frameSrc) {
-      frameElement.src = frameSrc
+    for (const frame of Object.values(frameElements)) {
+      const frameSrc = frame?.src
+      if (frame && frameSrc) {
+        frame.src = frameSrc
+      }
     }
+  }
+
+  const closeViewport = (id: BrowserPreviewViewportID) => {
+    const next = visibleViewportIDs().filter((item) => item !== id)
+    setVisibleViewportIDs(next)
+    if (viewportID() === id && next[0]) setViewportID(next[0])
   }
 
   const captureEvidence = () => {
     const taskID = props.taskID()
     const resolved = currentTarget()
-    if (!taskID || !resolved?.url) return
+    if (!taskID || !resolved?.url || !resolved.id) return
     setVerificationRequest({ taskID, targetID: resolved.id, viewportID: viewportID(), token: Date.now() })
   }
 
@@ -94,105 +153,201 @@ export function BrowserPreviewPanel(props: BrowserPreviewPanelProps) {
             disabled={!props.taskID()}
           />
         </label>
-        <Button type="submit" variant="solid" size="icon" tone="accent" title={t("browser_preview.load")} aria-label={t("browser_preview.load")} disabled={!props.taskID()}>
+        <Button
+          type="submit"
+          variant="solid"
+          size="icon"
+          tone="accent"
+          title={t("browser_preview.load_title")}
+          aria-label={t("browser_preview.load_title")}
+          disabled={!props.taskID()}
+        >
           <Icon name="external-link" size={13} />
         </Button>
-        <Button type="button" variant="outline" size="icon" tone="neutral" title={t("browser_preview.refresh")} aria-label={t("browser_preview.refresh")} disabled={!frameUrl()} onClick={reloadFrame}>
+        <Button
+          type="button"
+          variant="outline"
+          size="icon"
+          tone="neutral"
+          title={t("browser_preview.refresh_title")}
+          aria-label={t("browser_preview.refresh_title")}
+          disabled={!frameUrl()}
+          onClick={reloadFrame}
+        >
           <Icon name="refresh" size={13} />
         </Button>
       </form>
 
-      <div class="browser-preview-viewport-tabs">
+      <label class="browser-preview-candidate-select">
+        <Icon name="external-link" size={13} />
+        <select
+          value={selectedCandidateID()}
+          onChange={selectCandidate}
+          disabled={candidates().length <= 1}
+          aria-label={t("browser_preview.candidates.label")}
+        >
+          <For each={candidates()}>{(candidate) => <option value={candidate.id}>{candidate.url}</option>}</For>
+        </select>
+      </label>
+
+      <div class="browser-preview-viewport-layout">
         <Switch>
           <Match when={viewports().length > 0}>
-            <Tabs size="sm" tone="neutral" value={viewportID()} onValueChange={(value) => setViewportID(value as BrowserPreviewViewportID)} aria-label={t("browser_preview.viewport.label")} data-ui="browser-preview-viewports">
+            <Tabs
+              size="sm"
+              tone="neutral"
+              value={viewportID()}
+              onValueChange={(value) => setViewportID(value as BrowserPreviewViewportID)}
+              aria-label={t("browser_preview.viewport.label")}
+              data-ui="browser-preview-viewports"
+              data-orientation="vertical"
+            >
               <For each={viewports()}>
                 {(item) => (
-                  <Tab value={item.id} active={viewportID() === item.id} size="sm" tone="neutral" data-ui="browser-preview-viewport" onClick={() => setViewportID(item.id)}>
-                    {viewportLabel(item.id)}
-                  </Tab>
+                  <div class="browser-preview-viewport-tab-row" data-visible={visibleViewportIDs().includes(item.id) ? "true" : "false"}>
+                    <Tab
+                      value={item.id}
+                      active={viewportID() === item.id}
+                      size="sm"
+                      tone="neutral"
+                      data-ui="browser-preview-viewport"
+                      onClick={() => setViewportID(item.id)}
+                    >
+                      {viewportLabel(item.id)}
+                    </Tab>
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="icon"
+                      tone="neutral"
+                      title={t("browser_preview.viewport.close", { viewport: viewportLabel(item.id) })}
+                      aria-label={t("browser_preview.viewport.close", { viewport: viewportLabel(item.id) })}
+                      disabled={!visibleViewportIDs().includes(item.id) || visibleViewportIDs().length <= 1}
+                      onClick={(event) => {
+                        event.stopPropagation()
+                        closeViewport(item.id)
+                      }}
+                    >
+                      <Icon name="close" size={12} />
+                    </Button>
+                  </div>
                 )}
               </For>
             </Tabs>
           </Match>
         </Switch>
-      </div>
 
-      <div class="browser-preview-status" data-status={currentTarget()?.status ?? "loading"}>
-        <Switch>
-          <Match when={target.loading}>
-            <span class="card__spinner" />
-            <span>{t("browser_preview.loading")}</span>
-          </Match>
-          <Match when={currentTargetError()}>
-            <Icon name="status-failed" size={14} />
-            <span>{String(currentTargetError())}</span>
-          </Match>
-          <Match when={currentTarget()}>
-            {(resolved) => (
-              <>
-                <Icon name={resolved().status === "ready" ? "status-completed" : resolved().status === "failed" ? "status-failed" : "info-circle"} size={14} />
-                <span>{statusLabel(resolved().status)}</span>
-              </>
-            )}
-          </Match>
-        </Switch>
-      </div>
+        <div class="browser-preview-main">
+          <div class="browser-preview-status" data-status={currentTarget()?.status ?? "loading"}>
+            <Switch>
+              <Match when={target.loading}>
+                <span class="card__spinner" />
+                <span>{t("browser_preview.loading")}</span>
+              </Match>
+              <Match when={currentTargetError()}>
+                <Icon name="status-failed" size={14} />
+                <span>{String(currentTargetError())}</span>
+              </Match>
+              <Match when={currentTarget()}>
+                {(resolved) => (
+                  <>
+                    <Icon
+                      name={
+                        resolved().status === "ready"
+                          ? "status-completed"
+                          : resolved().status === "failed"
+                            ? "status-failed"
+                            : "info-circle"
+                      }
+                      size={14}
+                    />
+                    <span>{statusLabel(resolved().status)}</span>
+                  </>
+                )}
+              </Match>
+            </Switch>
+          </div>
 
-      <div class="browser-preview-stage">
-        <Switch>
-          <Match when={frameUrl()}>
-            {(url) => (
-              <Switch>
-                <Match when={viewport()}>
-                  {(currentViewport) => (
-                    <div class="browser-preview-frame-shell" style={{ "--browser-preview-width": `${currentViewport().width}px`, "--browser-preview-height": `${currentViewport().height}px` }}>
-                      <iframe
-                        data-frame-token={`${frameToken()}:${viewportID()}`}
-                        class="browser-preview-frame"
-                        src={url()}
-                        title={t("browser_preview.frame_title")}
-                        sandbox="allow-forms allow-modals allow-popups allow-scripts"
-                        referrerPolicy="no-referrer"
-                        ref={(element) => {
-                          frameElement = element
-                        }}
-                      />
-                    </div>
-                  )}
-                </Match>
-              </Switch>
-            )}
-          </Match>
-          <Match when={currentTargetError()}>
-            {(error) => (
-              <div class="browser-preview-empty" data-status="failed">
-                <Icon name="status-failed" size={18} />
-                <p>{t("browser_preview.empty.failed")}</p>
-                <code>{String(error())}</code>
-              </div>
-            )}
-          </Match>
-          <Match when={currentTarget()}>
-            {(resolved) => (
-              <div class="browser-preview-empty" data-status={resolved().status}>
-                <Icon name={resolved().status === "failed" ? "status-failed" : "info-circle"} size={18} />
-                <p>{emptyMessage(resolved().status)}</p>
-                <For each={resolved().diagnostics}>
-                  {(item) => <code>{item}</code>}
-                </For>
-              </div>
-            )}
-          </Match>
-        </Switch>
+          <div class="browser-preview-stage">
+            <Switch>
+              <Match when={frameUrl()}>
+                {(url) => (
+                  <div class="browser-preview-frame-stack">
+                    <For each={visibleViewports()}>
+                      {(currentViewport) => (
+                        <section
+                          class="browser-preview-frame-shell"
+                          data-viewport={currentViewport.id}
+                          data-active={viewportID() === currentViewport.id ? "true" : "false"}
+                          style={{
+                            "--browser-preview-width": `${currentViewport.width}px`,
+                            "--browser-preview-height": `${currentViewport.height}px`,
+                          }}
+                        >
+                          <div class="browser-preview-frame-header">
+                            <span>{viewportLabel(currentViewport.id)}</span>
+                            <span>{currentViewport.width} × {currentViewport.height}</span>
+                          </div>
+                          <iframe
+                            data-frame-token={`${frameToken()}:${currentViewport.id}`}
+                            class="browser-preview-frame"
+                            src={url()}
+                            title={`${t("browser_preview.frame_title")} - ${viewportLabel(currentViewport.id)}`}
+                            sandbox="allow-forms allow-modals allow-popups allow-scripts"
+                            referrerPolicy="no-referrer"
+                            ref={(element) => {
+                              frameElements[currentViewport.id] = element
+                            }}
+                          />
+                        </section>
+                      )}
+                    </For>
+                  </div>
+                )}
+              </Match>
+              <Match when={currentTargetError()}>
+                {(error) => (
+                  <div class="browser-preview-empty" data-status="failed">
+                    <Icon name="status-failed" size={18} />
+                    <p>{t("browser_preview.empty.failed")}</p>
+                    <code>{String(error())}</code>
+                  </div>
+                )}
+              </Match>
+              <Match when={currentTarget()}>
+                {(resolved) => (
+                  <div class="browser-preview-empty" data-status={resolved().status}>
+                    <Icon name={resolved().status === "failed" ? "status-failed" : "info-circle"} size={18} />
+                    <p>{emptyMessage(resolved().status)}</p>
+                    <For each={resolved().diagnostics}>{(item) => <code>{item}</code>}</For>
+                  </div>
+                )}
+              </Match>
+            </Switch>
+          </div>
+        </div>
       </div>
 
       <div class="browser-preview-evidence">
-        <Button type="button" variant="outline" size="sm" tone="neutral" title={t("browser_preview.capture")} aria-label={t("browser_preview.capture")} disabled={!props.taskID() || !frameUrl() || verification.loading} onClick={captureEvidence}>
+        <Button
+          type="button"
+          variant="outline"
+          size="sm"
+          tone="neutral"
+          title={t("browser_preview.capture_title")}
+          aria-label={t("browser_preview.capture_title")}
+          disabled={!props.taskID() || !frameUrl() || !currentTarget()?.id || verification.loading}
+          onClick={captureEvidence}
+        >
           <Icon name="inspect" size={13} />
           <span>{t("browser_preview.capture")}</span>
         </Button>
-        <div class="browser-preview-evidence-status" data-status={verification.error ? "failed" : verification()?.status ?? (verification.loading ? "loading" : "idle")}>
+        <div
+          class="browser-preview-evidence-status"
+          data-status={
+            verification.error ? "failed" : (verification()?.status ?? (verification.loading ? "loading" : "idle"))
+          }
+        >
           <Switch>
             <Match when={verification.error}>
               {(error) => (

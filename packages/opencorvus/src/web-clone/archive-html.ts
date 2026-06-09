@@ -89,12 +89,14 @@ export function extractArchiveHtml(input: ExtractArchiveHtmlInput): WebCloneArch
       mime: inputAsset.mime,
       semanticRole: inputAsset.role ?? inputAsset.kind,
       preview: inputAsset.value.replace(/\s+/g, " ").slice(0, 160),
-      usedBy: [{
-        nodeId: inputAsset.nodeId,
-        tag: inputAsset.tag,
-        attribute: inputAsset.attribute,
-        role: inputAsset.role,
-      }],
+      usedBy: [
+        {
+          nodeId: inputAsset.nodeId,
+          tag: inputAsset.tag,
+          attribute: inputAsset.attribute,
+          role: inputAsset.role,
+        },
+      ],
     }
     assets.push(asset)
     assetContents[id] = inputAsset.value
@@ -264,7 +266,11 @@ export function extractArchiveHtml(input: ExtractArchiveHtmlInput): WebCloneArch
     }
   }
 
-  function encodeChildren(nodes: DomNode[] | undefined, parentTag: string | undefined, parentPath: string): WebCloneNode[] {
+  function encodeChildren(
+    nodes: DomNode[] | undefined,
+    parentTag: string | undefined,
+    parentPath: string,
+  ): WebCloneNode[] {
     return (nodes ?? [])
       .map((child, index) => encodeNode(child, parentTag, `${parentPath}/${sourcePathToken(child, index)}`))
       .filter((child): child is WebCloneNode => Boolean(child))
@@ -304,7 +310,10 @@ export function extractArchiveHtml(input: ExtractArchiveHtmlInput): WebCloneArch
   return { pageIr, assetGraph, assetContents }
 }
 
-export async function writeWebCloneArchiveExtraction(outputDir: string, extraction: WebCloneArchiveExtraction): Promise<void> {
+export async function writeWebCloneArchiveExtraction(
+  outputDir: string,
+  extraction: WebCloneArchiveExtraction,
+): Promise<void> {
   await fs.mkdir(path.join(outputDir, "assets"), { recursive: true })
   await fs.writeFile(path.join(outputDir, "page.ir.json"), JSON.stringify(extraction.pageIr, null, 2), "utf8")
   await fs.writeFile(

@@ -58,4 +58,3 @@ Add provider contract tests for:
 - Hexin Claude OpenAI-compatible messages with `assistant tool-call -> tool result -> assistant text` normalize to end at the tool result.
 - Earlier assistant text history is preserved when it is not the invalid tail.
 - Non-Claude OpenAI-compatible providers keep the same tail.
-

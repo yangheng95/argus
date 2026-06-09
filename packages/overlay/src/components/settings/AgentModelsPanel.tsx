@@ -75,7 +75,10 @@ export default function AgentModelsPanel(props: { scope?: "project" | "session";
   const [refreshToken, setRefreshToken] = createSignal(0)
 
   const [sessionConfig, { mutate: mutateSessionConfig }] = createResource(
-    () => scope() === "session" && sessionID() ? `${sessionID()}:${sessionRefreshToken()}:${sessionConfigRefreshToken()}` : null,
+    () =>
+      scope() === "session" && sessionID()
+        ? `${sessionID()}:${sessionRefreshToken()}:${sessionConfigRefreshToken()}`
+        : null,
     async (key): Promise<SessionConfigResponse> => {
       const sid = String(key).split(":")[0]
       return await getSessionConfig(sid)
@@ -308,7 +311,9 @@ export default function AgentModelsPanel(props: { scope?: "project" | "session";
         <Show when={scope() === "session" && sessionConfig.error}>
           <div class="agent-models-error" role="alert">
             <div class="agent-models-error-msg">
-              {t("agent_models.load_failed", { error: String((sessionConfig.error as any)?.message ?? sessionConfig.error) })}
+              {t("agent_models.load_failed", {
+                error: String((sessionConfig.error as any)?.message ?? sessionConfig.error),
+              })}
             </div>
             <Button
               type="button"

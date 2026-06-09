@@ -29,23 +29,9 @@ import path from "node:path"
  * doesn't silently delete the call again.
  */
 
-const LOOP_SRC = path.join(
-  import.meta.dir,
-  "..",
-  "..",
-  "src",
-  "orchestrator",
-  "loop.ts",
-)
+const LOOP_SRC = path.join(import.meta.dir, "..", "..", "src", "orchestrator", "loop.ts")
 
-const EXPORT_SRC = path.join(
-  import.meta.dir,
-  "..",
-  "..",
-  "src",
-  "engine",
-  "workspace-export.ts",
-)
+const EXPORT_SRC = path.join(import.meta.dir, "..", "..", "src", "engine", "workspace-export.ts")
 
 const loopSrc = await fs.readFile(LOOP_SRC, "utf8")
 const exportSrc = await fs.readFile(EXPORT_SRC, "utf8")
@@ -71,7 +57,5 @@ test("workspace-export still requires baseline (no silent-fallback regression)",
   // Pin the throw so a future "fix" cannot make workspace_export silently
   // accept missing baselines. The fix must wire prepare() at task entry,
   // not paper over the contract violation here.
-  expect(exportSrc).toMatch(
-    /throw new Error\("workspace_export requires task\.metadata\.git\.baseline\.commit"\)/,
-  )
+  expect(exportSrc).toMatch(/throw new Error\("workspace_export requires task\.metadata\.git\.baseline\.commit"\)/)
 })

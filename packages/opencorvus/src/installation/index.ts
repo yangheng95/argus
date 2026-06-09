@@ -189,8 +189,10 @@ export namespace Installation {
     await $`${process.execPath} --version`.nothrow().quiet().text()
   }
 
-  export const VERSION = process.env.OPENCORVUS_VERSION?.trim() || (typeof OPENCORVUS_VERSION === "string" ? OPENCORVUS_VERSION : "local")
-  export const CHANNEL = process.env.OPENCORVUS_CHANNEL?.trim() || (typeof OPENCORVUS_CHANNEL === "string" ? OPENCORVUS_CHANNEL : "local")
+  export const VERSION =
+    process.env.OPENCORVUS_VERSION?.trim() || (typeof OPENCORVUS_VERSION === "string" ? OPENCORVUS_VERSION : "local")
+  export const CHANNEL =
+    process.env.OPENCORVUS_CHANNEL?.trim() || (typeof OPENCORVUS_CHANNEL === "string" ? OPENCORVUS_CHANNEL : "local")
   export const USER_AGENT = `opencorvus/${CHANNEL}/${VERSION}/${Flag.OPENCORVUS_CLIENT}`
 
   export async function latest(installMethod?: Method) {
