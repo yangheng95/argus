@@ -108,6 +108,12 @@ test("overlay browser tests have a Node-owned Playwright runner", () => {
   expect(providerOauth).toContain("startBrowserFixture")
   expect(providerOauth).toContain('typeof globalThis.Bun, "undefined"')
 
+  const paneCollapseLayout = readText("test/browser/pane-collapse-layout.test.ts")
+  expect(paneCollapseLayout).toContain('import test from "node:test"')
+  expect(paneCollapseLayout).toContain('from "../launch.ts"')
+  expect(paneCollapseLayout).toContain("startBrowserFixture")
+  expect(paneCollapseLayout).toContain('typeof globalThis.Bun, "undefined"')
+
   const dist = readText("test/overlay-dist.ts")
   expect(dist).toContain('from "node:child_process"')
   expect(dist).toContain("readFile(file)")
