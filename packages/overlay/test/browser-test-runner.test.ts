@@ -1,5 +1,5 @@
 import { expect, test } from "bun:test"
-import { readFileSync } from "node:fs"
+import { readdirSync, readFileSync } from "node:fs"
 import path from "node:path"
 
 const ROOT = path.resolve(import.meta.dir, "..")
@@ -8,10 +8,22 @@ function readText(rel: string): string {
   return readFileSync(path.join(ROOT, rel), "utf8")
 }
 
+function filesIn(rel: string, predicate: (name: string) => boolean): string[] {
+  return readdirSync(path.join(ROOT, rel))
+    .filter(predicate)
+    .map((name) => path.posix.join(rel.replaceAll("\\", "/"), name))
+    .sort()
+}
+
 test("overlay browser tests have a Node-owned Playwright runner", () => {
   const pkg = JSON.parse(readText("package.json")) as { scripts: Record<string, string> }
   const runner = readText("test/browser-runner.mjs")
   const smoke = readText("test/browser/node-playwright-smoke.test.mjs")
+  const topLevelUnitTests = filesIn(
+    "test",
+    (name) => name.endsWith(".test.ts") && name !== "browser-test-runner.test.ts",
+  )
+  const browserTests = filesIn("test/browser", (name) => name.endsWith(".test.ts") || name.endsWith(".test.mjs"))
 
   expect(pkg).toMatchObject({ type: "module" })
   expect(pkg.scripts["test"]).toBe("bun run test:unit")
@@ -33,134 +45,29 @@ test("overlay browser tests have a Node-owned Playwright runner", () => {
   expect(smoke).toContain('typeof globalThis.Bun, "undefined"')
   expect(smoke).toContain("chromium.launch")
 
-  const migrated = readText("test/browser/icon-affordance-computed.test.ts")
-  expect(migrated).toContain('import test from "node:test"')
-  expect(migrated).toContain('from "../launch.ts"')
-  expect(migrated).toContain('typeof globalThis.Bun, "undefined"')
+  for (const file of topLevelUnitTests) {
+    const source = readText(file)
+    expect(source, `${file} must not launch overlay browser automation from bun test`).not.toContain("launchBrowser(")
+    expect(source, `${file} must not launch Playwright from bun test`).not.toContain("chromium.launch")
+    expect(source, `${file} must not require Playwright from bun test`).not.toContain('require("playwright")')
+    expect(source, `${file} must not import Playwright from bun test`).not.toContain('from "playwright"')
+    expect(source, `${file} must not import Playwright from bun test`).not.toContain("from 'playwright'")
+  }
 
-  const hoverGeometry = readText("test/browser/hover-action-geometry.test.ts")
-  expect(hoverGeometry).toContain('import test from "node:test"')
-  expect(hoverGeometry).toContain('from "../launch.ts"')
-  expect(hoverGeometry).toContain('typeof globalThis.Bun, "undefined"')
-
-  const longTranscript = readText("test/browser/long-transcript-scroll.test.ts")
-  expect(longTranscript).toContain('import test from "node:test"')
-  expect(longTranscript).toContain('from "../launch.ts"')
-  expect(longTranscript).toContain('typeof globalThis.Bun, "undefined"')
-
-  const toolbarDiff = readText("test/browser/toolbar-diff-navigation.test.ts")
-  expect(toolbarDiff).toContain('import test from "node:test"')
-  expect(toolbarDiff).toContain('from "../launch.ts"')
-  expect(toolbarDiff).toContain("startBrowserFixture")
-  expect(toolbarDiff).toContain('typeof globalThis.Bun, "undefined"')
-
-  const workspaceOnboarding = readText("test/browser/workspace-onboarding-browser.test.ts")
-  expect(workspaceOnboarding).toContain('import test from "node:test"')
-  expect(workspaceOnboarding).toContain('from "../launch.ts"')
-  expect(workspaceOnboarding).toContain("startBrowserFixture")
-  expect(workspaceOnboarding).toContain('typeof globalThis.Bun, "undefined"')
-
-  const menuCollapse = readText("test/browser/menu-collapse.test.ts")
-  expect(menuCollapse).toContain('import test from "node:test"')
-  expect(menuCollapse).toContain('from "../launch.ts"')
-  expect(menuCollapse).toContain("startBrowserFixture")
-  expect(menuCollapse).toContain('typeof globalThis.Bun, "undefined"')
-
-  const taskListTreeClick = readText("test/browser/task-list-tree-click.test.ts")
-  expect(taskListTreeClick).toContain('import test from "node:test"')
-  expect(taskListTreeClick).toContain('from "../launch.ts"')
-  expect(taskListTreeClick).toContain("startBrowserFixture")
-  expect(taskListTreeClick).toContain('typeof globalThis.Bun, "undefined"')
-
-  const agentModelsPanel = readText("test/browser/agent-models-panel.test.ts")
-  expect(agentModelsPanel).toContain('import test from "node:test"')
-  expect(agentModelsPanel).toContain('from "../launch.ts"')
-  expect(agentModelsPanel).toContain("startBrowserFixture")
-  expect(agentModelsPanel).toContain('typeof globalThis.Bun, "undefined"')
-
-  const copyActions = readText("test/browser/copy-actions.test.ts")
-  expect(copyActions).toContain('import test from "node:test"')
-  expect(copyActions).toContain('from "../launch.ts"')
-  expect(copyActions).toContain("startBrowserFixture")
-  expect(copyActions).toContain('typeof globalThis.Bun, "undefined"')
-
-  const paneCollapseRail = readText("test/browser/pane-collapse-rail.test.ts")
-  expect(paneCollapseRail).toContain('import test from "node:test"')
-  expect(paneCollapseRail).toContain('from "../launch.ts"')
-  expect(paneCollapseRail).toContain("startBrowserFixture")
-  expect(paneCollapseRail).toContain('typeof globalThis.Bun, "undefined"')
-
-  const workspaceTerminalOpen = readText("test/browser/workspace-terminal-open.test.ts")
-  expect(workspaceTerminalOpen).toContain('import test from "node:test"')
-  expect(workspaceTerminalOpen).toContain('from "../launch.ts"')
-  expect(workspaceTerminalOpen).toContain("startBrowserFixture")
-  expect(workspaceTerminalOpen).toContain('typeof globalThis.Bun, "undefined"')
-
-  const providerAgentModelSync = readText("test/browser/provider-agent-model-sync.test.ts")
-  expect(providerAgentModelSync).toContain('import test from "node:test"')
-  expect(providerAgentModelSync).toContain('from "../launch.ts"')
-  expect(providerAgentModelSync).toContain("startBrowserFixture")
-  expect(providerAgentModelSync).toContain('typeof globalThis.Bun, "undefined"')
-
-  const providerOauth = readText("test/browser/provider-oauth.test.ts")
-  expect(providerOauth).toContain('import test from "node:test"')
-  expect(providerOauth).toContain('from "../launch.ts"')
-  expect(providerOauth).toContain("startBrowserFixture")
-  expect(providerOauth).toContain('typeof globalThis.Bun, "undefined"')
-
-  const paneCollapseLayout = readText("test/browser/pane-collapse-layout.test.ts")
-  expect(paneCollapseLayout).toContain('import test from "node:test"')
-  expect(paneCollapseLayout).toContain('from "../launch.ts"')
-  expect(paneCollapseLayout).toContain("startBrowserFixture")
-  expect(paneCollapseLayout).toContain('typeof globalThis.Bun, "undefined"')
-
-  const executorSelectorRedesign = readText("test/browser/executor-selector-redesign.test.ts")
-  expect(executorSelectorRedesign).toContain('import test from "node:test"')
-  expect(executorSelectorRedesign).toContain('from "../launch.ts"')
-  expect(executorSelectorRedesign).toContain("startBrowserFixture")
-  expect(executorSelectorRedesign).toContain('typeof globalThis.Bun, "undefined"')
-
-  const providerAuthPanel = readText("test/browser/provider-auth-panel.test.ts")
-  expect(providerAuthPanel).toContain('import test from "node:test"')
-  expect(providerAuthPanel).toContain('from "../launch.ts"')
-  expect(providerAuthPanel).toContain("startBrowserFixture")
-  expect(providerAuthPanel).toContain('typeof globalThis.Bun, "undefined"')
-
-  const executorTaskModelContext = readText("test/browser/executor-selector-task-model-context.test.ts")
-  expect(executorTaskModelContext).toContain('import test from "node:test"')
-  expect(executorTaskModelContext).toContain('from "../launch.ts"')
-  expect(executorTaskModelContext).toContain("startBrowserFixture")
-  expect(executorTaskModelContext).toContain('typeof globalThis.Bun, "undefined"')
-
-  const controls = readText("test/browser/controls.test.ts")
-  expect(controls).toContain('import test from "node:test"')
-  expect(controls).toContain('from "../launch.ts"')
-  expect(controls).toContain("startBrowserFixture")
-  expect(controls).toContain('typeof globalThis.Bun, "undefined"')
-
-  const configPanelSizing = readText("test/browser/config-panel-sizing.test.ts")
-  expect(configPanelSizing).toContain('import test from "node:test"')
-  expect(configPanelSizing).toContain('from "../launch.ts"')
-  expect(configPanelSizing).toContain("startBrowserFixture")
-  expect(configPanelSizing).toContain('typeof globalThis.Bun, "undefined"')
-
-  const sideActivityToolbar = readText("test/browser/side-activity-toolbar-browser.test.ts")
-  expect(sideActivityToolbar).toContain('import test from "node:test"')
-  expect(sideActivityToolbar).toContain('from "../launch.ts"')
-  expect(sideActivityToolbar).toContain("startBrowserFixture")
-  expect(sideActivityToolbar).toContain('typeof globalThis.Bun, "undefined"')
-
-  const taskListPerf = readText("test/browser/task-list-perf.test.ts")
-  expect(taskListPerf).toContain('import test from "node:test"')
-  expect(taskListPerf).toContain('from "../launch.ts"')
-  expect(taskListPerf).toContain("startBrowserFixture")
-  expect(taskListPerf).toContain('typeof globalThis.Bun, "undefined"')
-
-  const titlebarMenubar = readText("test/browser/titlebar-menubar.test.ts")
-  expect(titlebarMenubar).toContain('import test from "node:test"')
-  expect(titlebarMenubar).toContain('from "../launch.ts"')
-  expect(titlebarMenubar).toContain("startBrowserFixture")
-  expect(titlebarMenubar).toContain('typeof globalThis.Bun, "undefined"')
+  for (const file of browserTests) {
+    const source = readText(file)
+    expect(source, `${file} must run under node:test`).toContain('import test from "node:test"')
+    expect(source, `${file} must assert the Node runner marker`).toContain(
+      "OPENCORVUS_OVERLAY_BROWSER_TEST_NODE_RUNNER",
+    )
+    expect(source, `${file} must assert Bun is absent`).toContain('typeof globalThis.Bun, "undefined"')
+    if (file === "test/browser/node-playwright-smoke.test.mjs") continue
+    expect(source, `${file} must use the shared Node sidecar launcher`).toContain('from "../launch.ts"')
+    expect(source, `${file} must not launch Playwright directly`).not.toContain("chromium.launch")
+    expect(source, `${file} must not require Playwright directly`).not.toContain('require("playwright")')
+    expect(source, `${file} must not import Playwright directly`).not.toContain('from "playwright"')
+    expect(source, `${file} must not import Playwright directly`).not.toContain("from 'playwright'")
+  }
 
   const dist = readText("test/overlay-dist.ts")
   expect(dist).toContain('from "node:child_process"')
