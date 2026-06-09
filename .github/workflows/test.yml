@@ -109,6 +109,47 @@ jobs:
       - name: Run channel runtime tests
         run: bun run --cwd packages/channel-runtime test
 
+  overlay-unit:
+    name: overlay-unit
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Bun
+        uses: ./.github/actions/setup-bun
+
+      - name: Run overlay unit tests
+        working-directory: packages/overlay
+        run: bun run test
+
+  overlay-browser:
+    name: overlay-browser
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Install Chromium
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y chromium
+
+      - name: Setup Bun
+        uses: ./.github/actions/setup-bun
+
+      - name: Run Node-owned overlay browser tests
+        working-directory: packages/overlay
+        env:
+          OPENCORVUS_BROWSER_EXECUTABLE: /usr/bin/chromium
+        run: bun run test:browser
+
   overlay-check:
     name: overlay-check (${{ matrix.settings.name }})
     strategy:
@@ -158,6 +199,8 @@ jobs:
       - build-critical
       - gui-coordinate-smoke
       - channel-runtime-unit
+      - overlay-unit
+      - overlay-browser
       - overlay-check
     if: always()
     steps:
@@ -168,10 +211,14 @@ jobs:
           echo "build-critical=${{ needs['build-critical'].result }}"
           echo "gui-coordinate-smoke=${{ needs['gui-coordinate-smoke'].result }}"
           echo "channel-runtime-unit=${{ needs['channel-runtime-unit'].result }}"
+          echo "overlay-unit=${{ needs['overlay-unit'].result }}"
+          echo "overlay-browser=${{ needs['overlay-browser'].result }}"
           echo "overlay-check=${{ needs['overlay-check'].result }}"
           test "${{ needs['version-sync'].result }}" = "success"
           test "${{ needs.unit.result }}" = "success"
           test "${{ needs['build-critical'].result }}" = "success"
           test "${{ needs['gui-coordinate-smoke'].result }}" = "success"
           test "${{ needs['channel-runtime-unit'].result }}" = "success"
+          test "${{ needs['overlay-unit'].result }}" = "success"
+          test "${{ needs['overlay-browser'].result }}" = "success"
           test "${{ needs['overlay-check'].result }}" = "success"
