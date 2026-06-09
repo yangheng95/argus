@@ -43,4 +43,16 @@ test("overlay browser tests have a Node-owned Playwright runner", () => {
   expect(longTranscript).toContain('import test from "node:test"')
   expect(longTranscript).toContain('from "../launch.ts"')
   expect(longTranscript).toContain('typeof globalThis.Bun, "undefined"')
+
+  const toolbarDiff = readText("test/browser/toolbar-diff-navigation.test.ts")
+  expect(toolbarDiff).toContain('import test from "node:test"')
+  expect(toolbarDiff).toContain('from "../launch.ts"')
+  expect(toolbarDiff).toContain("startBrowserFixture")
+  expect(toolbarDiff).toContain('typeof globalThis.Bun, "undefined"')
+
+  const dist = readText("test/overlay-dist.ts")
+  expect(dist).toContain('from "node:child_process"')
+  expect(dist).toContain("readFile(file)")
+  expect(dist).not.toContain("Bun.spawn")
+  expect(dist).not.toContain("Bun.file")
 })
