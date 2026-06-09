@@ -254,6 +254,52 @@ describe("orchestrator protocol", () => {
     })
   })
 
+  test("live replay compaction releases idle task payloads without another task event", () => {
+    ProtocolStore.compactLiveReplay(Date.now() + 1_000_000)
+    const before = ProtocolStore.liveReplayStats()
+    expect(before).toMatchObject({ tasks: 0, events: 0 })
+    ProtocolStore.dispatchEphemeral({
+      type: "message.part.updated",
+      aggregate: "task",
+      taskID,
+      sessionID: "ses_idle_release",
+      source: "test.protocol",
+      payload: {
+        part: {
+          id: "part_idle_release",
+          messageID: "msg_idle_release",
+          sessionID: "ses_idle_release",
+          type: "text",
+          text: "x".repeat(1_000_000),
+        },
+      },
+    })
+
+    const active = ProtocolStore.listTaskLiveEventsAfter(taskID, 0)
+    expect(active.expired).toBe(false)
+    if (active.expired) throw new Error("unexpected expired replay")
+    expect(active.events).toHaveLength(1)
+    const emitted = active.events[0]!.time.emitted
+    expect(ProtocolStore.liveReplayStats().events).toBeGreaterThan(before.events)
+
+    ProtocolStore.compactLiveReplay(emitted + 30_001)
+
+    expect(ProtocolStore.liveReplayStats()).toMatchObject({
+      tasks: 0,
+      events: 0,
+    })
+    const replay = ProtocolStore.listTaskLiveEventsAfter(taskID, 0)
+    expect(replay.expired).toBe(true)
+    if (!replay.expired) throw new Error("expected expired replay")
+    expect(protocolTaskEvent(replay.event as any)).toMatchObject({
+      type: "task.live_replay_expired",
+      payload: {
+        taskID,
+        reason: "selected task live replay retention expired",
+      },
+    })
+  })
+
   test("live replay epoch mismatch fails loudly", () => {
     const replay = ProtocolStore.listTaskLiveEventsAfter(taskID, 0, {
       liveEpoch: ProtocolStore.currentTaskLiveEpoch() + 1,
