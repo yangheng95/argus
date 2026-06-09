@@ -54,18 +54,12 @@ const BOARD_VISIBLE_PROTOCOL_EVENT_TYPES = [
   "workflow.step.updated",
 ] as const
 
-const boardCache = new Map<string, { tag: string; board: ReturnType<typeof buildBoard> }>()
-
 export function compileBoard(input: { taskID: string }) {
   const task = Database.use((db) => db.select().from(EngineTaskTable).where(eq(EngineTaskTable.id, input.taskID)).get())
   if (!task) throw new Error(`Task not found: ${input.taskID}`)
   const tag = boardTagForTask(task)
   const lastSequence = latestTaskProtocolSequence(task.id)
-  const cached = boardCache.get(task.id)
-  if (cached?.tag === tag) return { ...cached.board, lastSequence }
-  const board = buildBoard(task, tag, lastSequence)
-  boardCache.set(task.id, { tag, board })
-  return board
+  return buildBoard(task, tag, lastSequence)
 }
 
 export function boardTag(input: { taskID: string }) {

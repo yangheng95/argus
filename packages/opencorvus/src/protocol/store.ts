@@ -65,10 +65,12 @@ type EventSubscription = {
 const globalSubscriptions = new Set<EventSubscription>()
 const TASK_LIVE_REPLAY_MAX_EVENTS = 4096
 const TASK_LIVE_REPLAY_MAX_AGE_MS = 30_000
+const TASK_LIVE_REPLAY_SWEEP_MS = 10_000
 const TASK_LIVE_EPOCH = Date.now()
 const taskLiveSequences = new Map<string, number>()
 const taskLiveReplayEvents = new Map<string, EventView[]>()
 const taskLiveRetentionFloors = new Map<string, number>()
+let taskLiveReplaySweepStarted = false
 
 function eventKey(input: { aggregate: ProtocolAggregate; aggregate_id: string }) {
   return `${input.aggregate}:${input.aggregate_id}`
@@ -173,6 +175,20 @@ function trimTaskLiveReplay(taskID: string, now: number) {
     markLiveReplayFloor(taskID, events.shift()!.liveSequence ?? 0)
   }
   if (events.length === 0) taskLiveReplayEvents.delete(taskID)
+}
+
+function compactTaskLiveReplay(now: number) {
+  for (const taskID of [...taskLiveReplayEvents.keys()]) {
+    trimTaskLiveReplay(taskID, now)
+  }
+}
+
+function ensureTaskLiveReplaySweep() {
+  if (taskLiveReplaySweepStarted) return
+  taskLiveReplaySweepStarted = true
+  const timer = setInterval(() => compactTaskLiveReplay(Date.now()), TASK_LIVE_REPLAY_SWEEP_MS)
+  const unrefTimer = timer as { unref?: () => void }
+  unrefTimer.unref?.()
 }
 
 function partUpdatedClosed(payload: Payload | undefined): boolean {
@@ -382,6 +398,7 @@ export namespace ProtocolStore {
     liveSequence: number,
     opts?: { liveEpoch?: number },
   ): TaskLiveReplayResult {
+    compactTaskLiveReplay(Date.now())
     const after = Math.max(0, Math.floor(Number(liveSequence) || 0))
     if (typeof opts?.liveEpoch === "number" && opts.liveEpoch !== TASK_LIVE_EPOCH) {
       return {
@@ -485,13 +502,28 @@ export namespace ProtocolStore {
       time: { emitted: now, created: now, updated: now },
     }
     if (taskID) {
+      ensureTaskLiveReplaySweep()
       pruneClosedLiveDeltas(taskID, event)
       const events = taskLiveReplayEvents.get(taskID) ?? []
       events.push(event)
       taskLiveReplayEvents.set(taskID, events)
-      trimTaskLiveReplay(taskID, now)
+      compactTaskLiveReplay(now)
     }
     dispatchEvent(event)
+  }
+
+  export function compactLiveReplay(now = Date.now()) {
+    compactTaskLiveReplay(now)
+  }
+
+  export function liveReplayStats() {
+    let events = 0
+    for (const list of taskLiveReplayEvents.values()) events += list.length
+    return {
+      tasks: taskLiveReplayEvents.size,
+      events,
+      subscriptions: globalSubscriptions.size,
+    }
   }
 
 }

@@ -70,7 +70,53 @@ test("latestDeliveredGoalRunFromRows prefers a newer delivered run over an older
   )
 })
 
-test("compileBoard cache and task-scope status include workflow step protocol events", async () => {
+test("compileBoard does not retain a mutable process board between hydrations", async () => {
+  await resetDatabase()
+  await using tmp = await tmpdir()
+  const now = Date.now()
+  const projectID = `project_board_no_cache_${now}`
+  const taskID = `tsk_${now.toString(16)}BoardNoCache`
+
+  Database.use((db) => {
+    db.insert(ProjectTable).values({
+      id: projectID,
+      worktree: tmp.path,
+      name: "Board no process cache",
+      sandboxes: "[]",
+      time_created: now,
+      time_updated: now,
+    }).run()
+    db.insert(EngineTaskTable).values({
+      id: taskID,
+      project_id: projectID,
+      source: "test",
+      title: "Board no process cache",
+      request: "initial request",
+      priority: "normal",
+      time_created: now,
+      time_updated: now,
+    }).run()
+  })
+
+  await Instance.provide({
+    directory: tmp.path,
+    fn: async () => {
+      const before = compileBoard({ taskID }) as any
+      const tag = boardTag({ taskID })
+      expect(before.task.request).toBe("initial request")
+
+      before.task.request = "mutated in memory"
+
+      expect(boardTag({ taskID })).toBe(tag)
+      const after = compileBoard({ taskID }) as any
+      expect(after.snapshotVersion).toBe(tag)
+      expect(after.task).not.toBe(before.task)
+      expect(after.task.request).toBe("initial request")
+    },
+  })
+})
+
+test("board snapshot tag and task-scope status include workflow step protocol events", async () => {
   await resetDatabase()
   await using tmp = await tmpdir()
   const now = Date.now()
