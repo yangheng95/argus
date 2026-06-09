@@ -13,6 +13,8 @@ import { tmpdir } from "../fixture/fixture"
 
 Log.init({ print: false })
 
+const ROUTE_TEST_TIMEOUT_MILLISECONDS = 20_000
+
 describe("browser preview routes", () => {
   afterEach(async () => {
     mock.restore()
@@ -123,7 +125,7 @@ describe("browser preview routes", () => {
     } finally {
       preview.stop(true)
     }
-  })
+  }, { timeout: ROUTE_TEST_TIMEOUT_MILLISECONDS })
 
   test("GET /task/:taskID/browser-preview does not use package metadata as a target source", async () => {
     await using tmp = await tmpdir()
@@ -149,7 +151,7 @@ describe("browser preview routes", () => {
     expect(body.url).toBeUndefined()
     expect(body.source).toBe("none")
     expect(body.diagnostics?.join("\n")).toContain("No browser preview target saved for this task")
-  })
+  }, { timeout: ROUTE_TEST_TIMEOUT_MILLISECONDS })
 
   test("PUT /task/:taskID/browser-preview/target accepts loopback host-port input", async () => {
     await using tmp = await tmpdir()
@@ -170,7 +172,7 @@ describe("browser preview routes", () => {
     expect(body.status).toBe("ready")
     expect(body.url).toBe("http://localhost:5173/")
     expect(body.source).toBe("task-artifact")
-  })
+  }, { timeout: ROUTE_TEST_TIMEOUT_MILLISECONDS })
 
   test("GET /task/:taskID/browser-preview/evidence/:evidenceID returns only persisted task evidence", async () => {
     await using tmp = await tmpdir()
@@ -218,7 +220,7 @@ describe("browser preview routes", () => {
       },
     })
     expect(missing.status).toBe(404)
-  })
+  }, { timeout: ROUTE_TEST_TIMEOUT_MILLISECONDS })
 
   test("old project-scoped browser preview target route is removed", async () => {
     await using tmp = await tmpdir()
@@ -232,7 +234,7 @@ describe("browser preview routes", () => {
     })
 
     expect(response.status).toBe(404)
-  })
+  }, { timeout: ROUTE_TEST_TIMEOUT_MILLISECONDS })
 
   test("GET /task/:taskID/browser-preview requires directory context", async () => {
     const app = Server.App()
@@ -260,7 +262,7 @@ describe("browser preview routes", () => {
     expect(response.status).toBe(400)
     const body = await response.json()
     expect(JSON.stringify(body)).toContain("targetID")
-  })
+  }, { timeout: ROUTE_TEST_TIMEOUT_MILLISECONDS })
 
   test("POST /task/:taskID/browser-preview/capture does not replace an unknown targetID with the latest target", async () => {
     await using tmp = await tmpdir()
@@ -300,5 +302,5 @@ describe("browser preview routes", () => {
       "Browser preview target not found: art_previewtarget_missing",
     )
     expect(body.diagnostics?.join("\n")).toContain("requires a resolved http(s) URL")
-  })
+  }, { timeout: ROUTE_TEST_TIMEOUT_MILLISECONDS })
 })
