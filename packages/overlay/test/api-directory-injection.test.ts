@@ -115,6 +115,8 @@ describe("apiUrl directory injection (W2-V31)", () => {
     test("mcp", () => expectInjects("mcp"))
     test("browser preview target", () => expectInjects("task/tsk_browserpreview0001/browser-preview"))
     test("browser preview capture", () => expectInjects("task/tsk_browserpreview0001/browser-preview/capture"))
+    test("browser preview evidence", () =>
+      expectInjects("task/tsk_browserpreview0001/browser-preview/evidence/art_previewevidence00000001"))
     test("coding assistant session list", () => expectInjects("coding/sessions"))
     test("coding assistant session create", () => expectInjects("coding/session"))
     test("coding assistant session claim", () => expectInjects("coding/session/ses_123"))

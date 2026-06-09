@@ -2,8 +2,10 @@ import { afterEach, beforeEach, expect, test } from "bun:test"
 import { configure } from "../src/services/api"
 import {
   captureTaskBrowserPreviewEvidence,
+  loadTaskBrowserPreviewEvidence,
   loadTaskBrowserPreviewTarget,
   saveTaskBrowserPreviewTarget,
+  type BrowserPreviewEvidence,
   type BrowserPreviewTarget,
 } from "../src/services/browser-preview"
 import { __setHostTransportForTest } from "../src/services/host-transport"
@@ -170,4 +172,48 @@ test("browser preview service asks the backend to persist Playwright evidence", 
       viewportID: "mobile",
     },
   })
+})
+
+test("browser preview service loads persisted evidence through the task-scoped artifact endpoint", async () => {
+  let captured: TransportRequest | undefined
+  __setHostTransportForTest({
+    ...fakePreviewTransport((req) => {
+      captured = req
+    }),
+    async request<T>(req: TransportRequest): Promise<TransportResponse<T>> {
+      captured = req
+      return {
+        status: 200,
+        ok: true,
+        headers: {},
+        body: {
+          id: "art_previewevidence00000001",
+          taskID: TASK_ID,
+          targetID: "art_previewtarget000000000001",
+          viewportID: "desktop",
+          status: "passed",
+          summary: "all runtime capture layers passed",
+          capture: {
+            captured: true,
+            passed: true,
+            url: "http://127.0.0.1:5173/",
+            path: "D:/workspace/app/.opencorvus/browser-preview/desktop.png",
+          },
+          diagnostics: ["all runtime capture layers passed"],
+          timeCompleted: 100,
+          timeCreated: 90,
+        } satisfies BrowserPreviewEvidence as T,
+      }
+    },
+  })
+
+  const evidence = await loadTaskBrowserPreviewEvidence({
+    taskID: TASK_ID,
+    evidenceID: "art_previewevidence00000001",
+  })
+
+  expect(evidence.status).toBe("passed")
+  expect(evidence.capture?.path).toContain("desktop.png")
+  expect(captured?.path).toBe(`task/${TASK_ID}/browser-preview/evidence/art_previewevidence00000001`)
+  expect(captured?.query?.directory).toBe(SAVED_DIRECTORY)
 })

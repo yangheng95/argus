@@ -21,6 +21,20 @@ export const PersistedBrowserPreviewTarget = z.object({
 })
 export type PersistedBrowserPreviewTarget = z.infer<typeof PersistedBrowserPreviewTarget>
 
+export const PersistedBrowserPreviewEvidence = z.object({
+  id: z.string(),
+  taskID: z.string(),
+  targetID: z.string(),
+  viewportID: z.string(),
+  status: z.enum(["passed", "failed"]),
+  summary: z.string(),
+  capture: z.unknown().optional(),
+  diagnostics: z.string().array(),
+  timeCompleted: z.number(),
+  timeCreated: z.number(),
+})
+export type PersistedBrowserPreviewEvidence = z.infer<typeof PersistedBrowserPreviewEvidence>
+
 const PersistedBrowserPreviewTargetPayload = z.object({
   url: z.string(),
   source: z.literal("task-artifact"),
@@ -202,6 +216,49 @@ function findBrowserPreviewTargetByUrl(input: {
     }
   }
   return undefined
+}
+
+export function findBrowserPreviewEvidenceByID(input: {
+  taskID: string
+  evidenceID: string
+}): PersistedBrowserPreviewEvidence | undefined {
+  const row = Database.use((db) =>
+    db
+      .select()
+      .from(EngineArtifactTable)
+      .where(
+        and(
+          eq(EngineArtifactTable.task_id, input.taskID),
+          eq(EngineArtifactTable.id, input.evidenceID),
+          eq(EngineArtifactTable.kind, BROWSER_PREVIEW_EVIDENCE_KIND),
+        ),
+      )
+      .limit(1)
+      .get(),
+  )
+  if (!row || !row.payload || typeof row.payload !== "object") return undefined
+  const payload = row.payload as Record<string, unknown>
+  const targetID = typeof payload.target_id === "string" ? payload.target_id : undefined
+  const viewportID = typeof payload.viewport_id === "string" ? payload.viewport_id : undefined
+  const status = payload.status === "passed" || payload.status === "failed" ? payload.status : undefined
+  const summary = typeof payload.summary === "string" ? payload.summary : undefined
+  const diagnostics = Array.isArray(payload.diagnostics)
+    ? payload.diagnostics.filter((item): item is string => typeof item === "string")
+    : []
+  const timeCompleted = typeof payload.time_completed === "number" ? payload.time_completed : row.time_updated
+  if (!targetID || !viewportID || !status || !summary) return undefined
+  return {
+    id: row.id,
+    taskID: row.task_id,
+    targetID,
+    viewportID,
+    status,
+    summary,
+    capture: payload.capture === null ? undefined : payload.capture,
+    diagnostics,
+    timeCompleted,
+    timeCreated: row.time_created,
+  }
 }
 
 export function persistBrowserPreviewEvidence(input: {

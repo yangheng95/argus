@@ -4,7 +4,12 @@ import { Hono } from "hono"
 import { describeRoute, resolver, validator } from "hono-openapi"
 import z from "zod"
 import { requireTask } from "@/engine/store"
-import { findBrowserPreviewTargetByID, persistBrowserPreviewTarget } from "../../browser-preview/persist"
+import {
+  findBrowserPreviewEvidenceByID,
+  findBrowserPreviewTargetByID,
+  persistBrowserPreviewTarget,
+  PersistedBrowserPreviewEvidence,
+} from "../../browser-preview/persist"
 import {
   BrowserPreviewTarget,
   failedBrowserPreviewTarget,
@@ -49,6 +54,33 @@ export const BrowserPreviewRoutes = lazy(() =>
           taskID,
         })
         return c.json(target)
+      },
+    )
+    .get(
+      "/task/:taskID/browser-preview/evidence/:evidenceID",
+      describeRoute({
+        summary: "Read browser preview verification evidence",
+        description:
+          "Return the persisted Playwright evidence artifact for a task-scoped browser preview target.",
+        operationId: "browserPreview.readTaskEvidence",
+        responses: {
+          200: {
+            description: "Persisted browser preview evidence",
+            content: {
+              "application/json": {
+                schema: resolver(PersistedBrowserPreviewEvidence),
+              },
+            },
+          },
+        },
+      }),
+      validator("param", z.object({ taskID: z.string().min(1), evidenceID: z.string().min(1) })),
+      async (c) => {
+        const { taskID, evidenceID } = c.req.valid("param")
+        requireTask(taskID)
+        const evidence = findBrowserPreviewEvidenceByID({ taskID, evidenceID })
+        if (!evidence) return c.json({ message: `Browser preview evidence not found: ${evidenceID}` }, 404)
+        return c.json(evidence)
       },
     )
     .put(
