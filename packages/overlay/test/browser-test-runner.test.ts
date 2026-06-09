@@ -72,6 +72,12 @@ test("overlay browser tests have a Node-owned Playwright runner", () => {
   expect(taskListTreeClick).toContain("startBrowserFixture")
   expect(taskListTreeClick).toContain('typeof globalThis.Bun, "undefined"')
 
+  const agentModelsPanel = readText("test/browser/agent-models-panel.test.ts")
+  expect(agentModelsPanel).toContain('import test from "node:test"')
+  expect(agentModelsPanel).toContain('from "../launch.ts"')
+  expect(agentModelsPanel).toContain("startBrowserFixture")
+  expect(agentModelsPanel).toContain('typeof globalThis.Bun, "undefined"')
+
   const dist = readText("test/overlay-dist.ts")
   expect(dist).toContain('from "node:child_process"')
   expect(dist).toContain("readFile(file)")
