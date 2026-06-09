@@ -1,10 +1,14 @@
-import { expect, test } from "bun:test"
-import { launchBrowser } from "./launch"
-import { ensureOverlayDist, overlayStaticResponse } from "./overlay-dist"
+import assert from "node:assert/strict"
+import test from "node:test"
+
+import { launchBrowser } from "../launch.ts"
+import { ensureOverlayDist, overlayStaticResponse } from "../overlay-dist.ts"
+import { startBrowserFixture } from "./http-fixture.ts"
 
 await ensureOverlayDist()
 
 const TASK_COUNT = 300
+const PAGE_SIZE = 10
 const LARGE_TEXT = "large task payload ".repeat(120)
 const PERF_LIMITS = {
   panelRowsMs: 2500,
@@ -79,114 +83,178 @@ function missionForTask(item: any): any {
   }
 }
 
-test(`overlay task surfaces stay responsive with ${TASK_COUNT} queued tasks`, async () => {
+function pageByCursor<T>(
+  items: T[],
+  limit: number,
+  cursorUpdated: number | null,
+  cursorID: string | null,
+  read: (item: T) => { id: string; updated: number },
+): T[] {
+  const sorted = [...items].sort((a, b) => {
+    const left = read(a)
+    const right = read(b)
+    return right.updated - left.updated || right.id.localeCompare(left.id)
+  })
+  const filtered =
+    cursorUpdated === null || !cursorID
+      ? sorted
+      : sorted.filter((item) => {
+          const value = read(item)
+          return value.updated < cursorUpdated || (value.updated === cursorUpdated && value.id < cursorID)
+        })
+  return filtered.slice(0, limit)
+}
+
+test(`overlay task surfaces stay responsive with ${TASK_COUNT} queued tasks`, { timeout: 120_000 }, async () => {
+  assert.equal(process.env.OPENCORVUS_OVERLAY_BROWSER_TEST_NODE_RUNNER, "1")
+  assert.equal(typeof globalThis.Bun, "undefined")
+
   const tasks = Array.from({ length: TASK_COUNT }, (_, index) => taskItem(index))
   const missions = tasks.map(missionForTask)
   const tasksByID = new Map(tasks.map((item) => [item.task.id, item]))
-  const server = Bun.serve({
-    idleTimeout: 255,
-    port: 0,
-    async fetch(req) {
-      const url = new URL(req.url)
-      const path = route(url)
-      if (path === "/favicon.ico" || path === "/ui/favicon.ico") return new Response(null, { status: 204 })
-      if (path === "/ui" || path === "/ui/") return Response.redirect(`${url.origin}/ui/index.html`, 302)
-      const staticResponse = await overlayStaticResponse(path)
-      if (staticResponse) return staticResponse
-      if (path === "/global/health") return send({ version: "perf-test" })
-      if (path === "/log") return send({})
-      if (path === "/log/tail") return send({ lines: [] })
-      if (path === "/global/tasks" || path === "/tasks") return send({ tasks })
-      if (path === "/executor") return send([])
-      if (path === "/terminal/profiles" || path === "/coding/cli/profiles") return send({ profiles: [] })
-      if (path === "/path") return send({ directory: "D:/perf/workspace", exists: true, git: true })
-      if (path === "/vcs") return send({ branch: "main", dirty: false })
-      if (path === "/provider") return send({ all: [], connected: [], default: {} })
-      if (path === "/provider/auth") return send({})
-      if (path === "/config/providers") return send({ providers: [], default: {} })
-      if (path === "/config") {
-        return send({
-          server: {},
-          provider: {},
-          channel: {},
-          mcp: {},
-          model: "",
-          directory: "D:/perf/workspace",
-        })
-      }
-      if (path === "/config/prompt") return send({})
-      if (/^\/session\/[^/]+\/config$/.test(path)) return send({ config: {} })
-      if (path === "/channel") return send([])
-      if (path === "/channel/runtime") return send({ status: "disabled", channels: [] })
-      if (path === "/gateway/stats") return send({ active: 0, queued: TASK_COUNT, completed: 0, failed: 0 })
-      if (path === "/mission") {
-        const search = (url.searchParams.get("search") || "").trim().toLowerCase()
-        return send(
-          search
-            ? missions.filter((mission) =>
-                [mission.title, mission.missionID, mission.sessionID, mission.directory]
-                  .join(" ")
-                  .toLowerCase()
-                  .includes(search),
-              )
-            : missions,
-        )
-      }
-      if (path === "/task/events") {
-        return new Response(new ReadableStream(), {
-          headers: { "content-type": "text/event-stream", "cache-control": "no-cache" },
-        })
-      }
-      if (path === "/skill/installed" || path === "/skill") return send([])
-      if (path === "/skill/directories") return send([])
-      if (path === "/skill/market") return send({ items: [] })
-      if (path === "/mcp") return send({})
-      if (path === "/agent") return send([])
-      if (path === "/file") return send([])
-      const boardMatch = /^\/task\/([^/]+)\/board$/.exec(path)
-      if (boardMatch) {
-        const item = tasksByID.get(decodeURIComponent(boardMatch[1]))
-        return item ? send(boardForTask(item)) : send({ error: "not found" }, 404)
-      }
-      if (/^\/task\/[^/]+\/conversation$/.test(path)) {
-        const id = decodeURIComponent(path.split("/")[2] || "")
-        const item = tasksByID.get(id)
-        return send({
-          board: item ? boardForTask(item) : boardForTask(tasks[0]),
-          transcript: [],
-          timeline: [],
-          events: [],
-          view: { sessions: [] },
-          eventReplay: { cursor: 0, latestSequence: 0, complete: true, limit: 100 },
-          lastSequence: 0,
-        })
-      }
-      if (/^\/session\/[^/]+\/conversation$/.test(path)) {
-        return send({
-          transcript: [],
-          timeline: [],
-          events: [],
-          view: { sessions: [] },
-          eventReplay: { cursor: 0, latestSequence: 0, complete: true, limit: 100, sinceTimestamp: null },
-          history: { oldestTimestamp: null, oldestMessageID: null, hasMore: false, limit: 160 },
-          messageWatermark: 0,
-          lastSequence: 0,
-        })
-      }
-      if (/^\/session\/[^/]+\/events$/.test(path)) {
-        return new Response(new ReadableStream(), {
-          headers: { "content-type": "text/event-stream", "cache-control": "no-cache" },
-        })
-      }
-      if (/^\/task\/[^/]+\/bindings$/.test(path)) return send([])
-      if (/^\/task\/[^/]+\/followup$/.test(path)) return send({ followup: null })
-      if (/^\/task\/[^/]+\/events$/.test(path)) {
-        return new Response(new ReadableStream(), {
-          headers: { "content-type": "text/event-stream", "cache-control": "no-cache" },
-        })
-      }
-      return send({ error: `unhandled ${path}` }, 404)
-    },
+  const server = await startBrowserFixture(async (req) => {
+    const url = new URL(req.url)
+    const path = route(url)
+    if (path === "/favicon.ico" || path === "/ui/favicon.ico") return new Response(null, { status: 204 })
+    if (path === "/ui" || path === "/ui/") return Response.redirect(`${url.origin}/ui/index.html`, 302)
+    const staticResponse = await overlayStaticResponse(path)
+    if (staticResponse) return staticResponse
+    if (path === "/global/health") return send({ version: "perf-test" })
+    if (path === "/log") return send({})
+    if (path === "/log/tail") return send({ lines: [] })
+    if (path === "/global/tasks" || path === "/tasks") {
+      const limit = Number(url.searchParams.get("limit") || tasks.length)
+      const cursorUpdated = url.searchParams.has("cursor") ? Number(url.searchParams.get("cursor")) : null
+      const cursorID = url.searchParams.get("cursorTaskID")
+      return send({
+        tasks: pageByCursor(tasks, limit, cursorUpdated, cursorID, (item) => ({
+          id: item.task.id,
+          updated: item.task.time.updated,
+        })),
+      })
+    }
+    if (path === "/executor") return send([])
+    if (path === "/terminal/profiles" || path === "/coding/cli/profiles") return send({ profiles: [] })
+    if (path === "/path") return send({ directory: "D:/perf/workspace", exists: true, git: true })
+    if (path === "/project/current/worktrees") return send({ worktrees: [] })
+    if (path === "/vcs") return send({ branch: "main", dirty: false })
+    if (path === "/provider") return send({ all: [], connected: [], default: {} })
+    if (path === "/provider/auth") return send({})
+    if (path === "/config/providers") return send({ providers: [], default: {} })
+    if (path === "/config") {
+      return send({
+        server: {},
+        provider: {},
+        channel: {},
+        mcp: {},
+        model: "",
+        directory: "D:/perf/workspace",
+      })
+    }
+    if (path === "/config/prompt") return send({})
+    if (/^\/session\/[^/]+\/config$/.test(path)) return send({ config: {} })
+    if (path === "/channel") return send([])
+    if (path === "/channel/runtime") return send({ status: "disabled", channels: [] })
+    if (path === "/gateway/stats") return send({ active: 0, queued: TASK_COUNT, completed: 0, failed: 0 })
+    if (path === "/mission") {
+      const search = (url.searchParams.get("search") || "").trim().toLowerCase()
+      const source = search
+        ? missions.filter((mission) =>
+            [mission.title, mission.missionID, mission.sessionID, mission.directory]
+              .join(" ")
+              .toLowerCase()
+              .includes(search),
+          )
+        : missions
+      const limit = Number(url.searchParams.get("limit") || source.length)
+      const cursorUpdated = url.searchParams.has("cursorUpdated") ? Number(url.searchParams.get("cursorUpdated")) : null
+      const cursorID = url.searchParams.get("cursorSessionID")
+      return send(
+        pageByCursor(source, limit, cursorUpdated, cursorID, (mission) => ({
+          id: mission.sessionID,
+          updated: mission.updated,
+        })),
+      )
+    }
+    if (path === "/task/events") {
+      return new Response(new ReadableStream(), {
+        headers: { "content-type": "text/event-stream", "cache-control": "no-cache" },
+      })
+    }
+    if (path === "/skill/installed" || path === "/skill") return send([])
+    if (path === "/skill/directories") return send([])
+    if (path === "/skill/market") return send({ items: [] })
+    if (path === "/mcp") return send({})
+    if (path === "/agent") return send([])
+    if (path === "/file") return send([])
+    if (path === "/panel/knowledge/memory") return send([])
+    if (path === "/panel/knowledge/preference") return send([])
+    if (/^\/task\/[^/]+\/operator-model-context$/.test(path)) {
+      const taskID = decodeURIComponent(path.slice("/task/".length, -"/operator-model-context".length))
+      const sessionID = tasksByID.get(taskID)?.task.sessionID || `session-${taskID}`
+      return send({
+        taskID,
+        sessionID,
+        agent: "orchestrator",
+        model: { providerID: "openai", modelID: "gpt-4o-mini" },
+      })
+    }
+    if (/^\/task\/[^/]+\/browser-preview$/.test(path)) {
+      const taskID = decodeURIComponent(path.slice("/task/".length, -"/browser-preview".length))
+      return send({
+        taskID,
+        kind: "missing",
+        status: "missing",
+        projectRoot: "D:/perf/workspace",
+        viewports: [],
+        diagnostics: [],
+        candidates: [],
+        source: "none",
+      })
+    }
+    const boardMatch = /^\/task\/([^/]+)\/board$/.exec(path)
+    if (boardMatch) {
+      const item = tasksByID.get(decodeURIComponent(boardMatch[1]))
+      return item ? send(boardForTask(item)) : send({ error: "not found" }, 404)
+    }
+    if (/^\/task\/[^/]+\/conversation$/.test(path)) {
+      const id = decodeURIComponent(path.split("/")[2] || "")
+      const item = tasksByID.get(id)
+      return send({
+        board: item ? boardForTask(item) : boardForTask(tasks[0]),
+        transcript: [],
+        timeline: [],
+        events: [],
+        view: { sessions: [] },
+        eventReplay: { cursor: 0, latestSequence: 0, complete: true, limit: 100 },
+        lastSequence: 0,
+      })
+    }
+    if (/^\/session\/[^/]+\/conversation$/.test(path)) {
+      return send({
+        transcript: [],
+        timeline: [],
+        events: [],
+        view: { sessions: [] },
+        eventReplay: { cursor: 0, latestSequence: 0, complete: true, limit: 100, sinceTimestamp: null },
+        history: { oldestTimestamp: null, oldestMessageID: null, hasMore: false, limit: 160 },
+        messageWatermark: 0,
+        lastSequence: 0,
+      })
+    }
+    if (/^\/session\/[^/]+\/events$/.test(path)) {
+      return new Response(new ReadableStream(), {
+        headers: { "content-type": "text/event-stream", "cache-control": "no-cache" },
+      })
+    }
+    if (/^\/task\/[^/]+\/bindings$/.test(path)) return send([])
+    if (/^\/task\/[^/]+\/followup$/.test(path)) return send({ followup: null })
+    if (/^\/task\/[^/]+\/events$/.test(path)) {
+      return new Response(new ReadableStream(), {
+        headers: { "content-type": "text/event-stream", "cache-control": "no-cache" },
+      })
+    }
+    return send({ error: `unhandled ${path}` }, 404)
   })
 
   const browser = await launchBrowser()
@@ -218,7 +286,7 @@ test(`overlay task surfaces stay responsive with ${TASK_COUNT} queued tasks`, as
   })
 
   try {
-    const app = `http://127.0.0.1:${server.port}`
+    const app = server.origin
     await page.evaluateOnNewDocument((origin) => {
       localStorage.setItem("oc_server_url", origin)
       localStorage.setItem("oc_auto_server", "true")
@@ -242,7 +310,7 @@ test(`overlay task surfaces stay responsive with ${TASK_COUNT} queued tasks`, as
         if (performance.now() - start > 10_000) throw new Error("task project count did not render")
         await new Promise((resolve) => setTimeout(resolve, 16))
       }
-    }, TASK_COUNT)
+    }, PAGE_SIZE)
 
     const panelRowsMs = await page.evaluate(async (count) => {
       const expand = document.querySelector<HTMLButtonElement>(".project-group-show-more button")
@@ -256,13 +324,23 @@ test(`overlay task surfaces stay responsive with ${TASK_COUNT} queued tasks`, as
         }
         await new Promise((resolve) => setTimeout(resolve, 16))
       }
+      const loadMore = document.querySelector<HTMLButtonElement>('[data-ui="task-list-load-more"]')
+      if (!loadMore) throw new Error("missing task list load-more button")
+      loadMore.click()
+      while (document.querySelectorAll(".task-row-main[data-task-id]").length < count * 2) {
+        if (performance.now() - start > 10_000) {
+          const rows = document.querySelectorAll(".task-row-main[data-task-id]").length
+          throw new Error(`paginated task rows did not render; rows=${rows}`)
+        }
+        await new Promise((resolve) => setTimeout(resolve, 16))
+      }
       return performance.now() - start
-    }, TASK_COUNT)
+    }, PAGE_SIZE)
 
     const hiddenMissionRows = await page.evaluate(
       () => document.querySelectorAll('.mission-ledger [data-ui="mission-row"]').length,
     )
-    expect(hiddenMissionRows).toBe(0)
+    assert.equal(hiddenMissionRows, 0)
 
     const selectLastMs = await page.evaluate(async () => {
       const rows = Array.from(document.querySelectorAll<HTMLButtonElement>(".task-row-main[data-task-id]"))
@@ -336,7 +414,7 @@ test(`overlay task surfaces stay responsive with ${TASK_COUNT} queued tasks`, as
       if (!firstMission) throw new Error("missing first Mission row")
       firstMission.click()
       return performance.now() - start
-    }, TASK_COUNT)
+    }, PAGE_SIZE)
 
     await page.evaluate(async () => {
       const waitForMissionConversationInput = async () => {
@@ -461,16 +539,16 @@ test(`overlay task surfaces stay responsive with ${TASK_COUNT} queued tasks`, as
         }`,
     )
 
-    expect(panelRowsMs).toBeLessThan(PERF_LIMITS.panelRowsMs)
-    expect(selectLastMs).toBeLessThan(PERF_LIMITS.selectLastMs)
-    expect(missionRowsMs).toBeLessThan(PERF_LIMITS.missionRowsMs)
-    expect(missionSearchMs).toBeLessThan(PERF_LIMITS.missionSearchMs)
-    expect(consoleErrors).toEqual([])
-    expect(failedRequests).toEqual([])
-    expect(badResponses).toEqual([])
+    assert.ok(panelRowsMs < PERF_LIMITS.panelRowsMs, `panelRows=${panelRowsMs}`)
+    assert.ok(selectLastMs < PERF_LIMITS.selectLastMs, `selectLast=${selectLastMs}`)
+    assert.ok(missionRowsMs < PERF_LIMITS.missionRowsMs, `missionRows=${missionRowsMs}`)
+    assert.ok(missionSearchMs < PERF_LIMITS.missionSearchMs, `missionSearch=${missionSearchMs}`)
+    assert.deepEqual(consoleErrors, [])
+    assert.deepEqual(failedRequests, [])
+    assert.deepEqual(badResponses, [])
   } finally {
     await page.close().catch(() => undefined)
     await browser.close().catch(() => undefined)
-    server.stop(true)
+    await server.close()
   }
-}, 120_000)
+})

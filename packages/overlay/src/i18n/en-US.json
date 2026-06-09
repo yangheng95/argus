@@ -931,6 +931,7 @@
   "mission.error.action.retry": "Retry task",
   "mission.error.action.replan": "Replan task",
   "mission.error.action.delete": "Delete mission",
+  "mission.error.action.mission": "Open mission",
   "mission.error.action.reorder": "Reorder queue",
   "mission.error.action.start": "Start queued task",
   "mission.error.action.restart": "Restart channel runtime",

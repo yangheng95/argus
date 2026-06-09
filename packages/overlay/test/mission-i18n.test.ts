@@ -51,6 +51,7 @@ const REQUIRED_KEYS = [
   "mission.error.channels_failed",
   "mission.error.restart_failed",
   "mission.error.action.delete",
+  "mission.error.action.mission",
 ] as const
 
 for (const key of REQUIRED_KEYS) {
@@ -90,4 +91,9 @@ test("no legacy gateway.* product control keys leak through", () => {
 test("mission delete action label does not use task wording", () => {
   expect(EN["mission.error.action.delete"]).toBe("Delete mission")
   expect(ZH["mission.error.action.delete"]).toBe("删除 Mission")
+})
+
+test("mission select action label is localized", () => {
+  expect(EN["mission.error.action.mission"]).toBe("Open mission")
+  expect(ZH["mission.error.action.mission"]).toBe("打开 Mission")
 })
