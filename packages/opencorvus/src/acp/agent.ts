@@ -40,7 +40,7 @@ import { Config } from "@/config/config"
 import { Instance } from "@/project/instance"
 import { z } from "zod"
 import { LoadAPIKeyError } from "ai"
-import type { AssistantMessage, Event, OpencodeClient, SessionMessageResponse, ToolPart } from "@opencorvus-ai/sdk"
+import type { AssistantMessage, Event, OpenCorvusClient, SessionMessageResponse, ToolPart } from "@opencorvus-ai/sdk"
 import { applyPatch } from "diff"
 import { renderToolFailureCause } from "@/session/tool-failure-cause"
 
@@ -53,7 +53,7 @@ export namespace ACP {
   const log = Log.create({ service: "acp-agent" })
 
   async function getContextLimit(
-    sdk: OpencodeClient,
+    sdk: OpenCorvusClient,
     providerID: string,
     modelID: string,
     directory: string,
@@ -73,7 +73,7 @@ export namespace ACP {
 
   async function sendUsageUpdate(
     connection: AgentSideConnection,
-    sdk: OpencodeClient,
+    sdk: OpenCorvusClient,
     sessionID: string,
     directory: string,
   ): Promise<void> {
@@ -120,7 +120,7 @@ export namespace ACP {
       })
   }
 
-  export async function init({ sdk: _sdk }: { sdk: OpencodeClient }) {
+  export async function init({ sdk: _sdk }: { sdk: OpenCorvusClient }) {
     return {
       create: (connection: AgentSideConnection, fullConfig: ACPConfig) => {
         return new Agent(connection, fullConfig)
@@ -131,7 +131,7 @@ export namespace ACP {
   export class Agent implements ACPAgent {
     private connection: AgentSideConnection
     private config: ACPConfig
-    private sdk: OpencodeClient
+    private sdk: OpenCorvusClient
     private sessionManager: ACPSessionManager
     private eventAbort = new AbortController()
     private eventStarted = false

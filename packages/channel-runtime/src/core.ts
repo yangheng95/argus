@@ -1,5 +1,5 @@
 import path from "node:path"
-import { createOpencode, createOpencodeClient, type Event, type OpencodeClient } from "@opencorvus-ai/sdk"
+import { createOpenCorvus, createOpenCorvusClient, type Event, type OpenCorvusClient } from "@opencorvus-ai/sdk"
 import { mkdir } from "node:fs/promises"
 import type { ChannelAdapter, IncomingMessage } from "./adapter"
 import type { STTPipeline } from "./stt/pipeline"
@@ -103,7 +103,7 @@ export interface ChannelRuntimeOptions {
 export class ChannelRuntime {
   private session = new SessionCoordinator<SessionEntry, IncomingMessage>()
   private adapters: ChannelAdapter[] = []
-  private client!: OpencodeClient
+  private client!: OpenCorvusClient
   private server?: { url: string; close(): void }
   /** Buffer assistant text per messageID until message.updated signals completion */
   private textBuffers = new Map<string, string>()
@@ -165,12 +165,12 @@ export class ChannelRuntime {
    * audit-2026-04-29 W2-V14 — concurrent-start race. Pre-fix
    * `start()` had no idempotency guard. Two near-simultaneous
    * callers both saw `this.running === false` (only set on entry,
-   * not before the await on `createOpencode`), and BOTH proceeded
+   * not before the await on `createOpenCorvus`), and BOTH proceeded
    * to spawn an OpenCorvus server, register adapter handlers
    * twice, and call `subscribeEvents` twice — leaving a duplicate
    * SSE reconnect loop, double event dispatch, and (in the
    * non-baseUrl branch) port collision on the second
-   * `createOpencode`.
+   * `createOpenCorvus`.
    *
    * Hold an in-flight Promise so concurrent callers share the
    * single startup; subsequent calls after a successful start are
@@ -185,7 +185,7 @@ export class ChannelRuntime {
     if (this.startPromise) return this.startPromise
     this.startPromise = this._doStart()
       .catch((err) => {
-        // Roll back the running flag so a failure (createOpencode
+        // Roll back the running flag so a failure (createOpenCorvus
         // throwing, adapter rejection, etc.) doesn't block a
         // legitimate retry. The throw still propagates to the
         // caller so the failure is loud (CLAUDE.md §一-7).
@@ -202,11 +202,11 @@ export class ChannelRuntime {
     this.running = true
     const baseUrl = this.options?.baseUrl?.trim()
     if (baseUrl) {
-      this.client = createOpencodeClient({ baseUrl })
+      this.client = createOpenCorvusClient({ baseUrl })
       this.server = undefined
       this.serverUrl = baseUrl
     } else {
-      const opencorvus = await createOpencode({ port: this.options?.port ?? 0 })
+      const opencorvus = await createOpenCorvus({ port: this.options?.port ?? 0 })
       this.client = opencorvus.client
       this.server = opencorvus.server
       this.serverUrl = opencorvus.server.url

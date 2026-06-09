@@ -67,7 +67,7 @@ async function waitForGeneratedClient() {
     },
     {
       file: path.join(dir, "src", "gen", "sdk.gen.ts"),
-      text: "export class OpencodeClient",
+      text: "export class OpenCorvusClient",
     },
   ]
 
@@ -103,7 +103,7 @@ await writeFileWithRetry(
 await writeFileWithRetry(path.join(dir, "src", "gen", "types.gen.ts"), "export {}\n")
 await writeFileWithRetry(
   path.join(dir, "src", "gen", "sdk.gen.ts"),
-  "export class OpencodeClient { constructor(_?: unknown) {} }\n",
+  "export class OpenCorvusClient { constructor(_?: unknown) {} }\n",
 )
 await writeFileWithRetry(path.join(dir, "src", "gen", "client", "types.gen.ts"), "export interface Config {}\n")
 await writeFileWithRetry(
@@ -137,7 +137,7 @@ const generate = async (output: string) =>
         paramsStructure: "flat",
         operations: {
           strategy: "single",
-          containerName: "OpencodeClient",
+          containerName: "OpenCorvusClient",
           methods: "instance",
         },
       },
