@@ -5,6 +5,8 @@ import { join } from "node:path"
 const TABS_SOURCE = join(import.meta.dir, "../src/components/ui/Tabs.tsx")
 const TABS_CSS = join(import.meta.dir, "../src/styles/primitives/tabs.css")
 const WORKSPACE_PANEL_SOURCE = join(import.meta.dir, "../src/components/WorkspacePanel.tsx")
+const EXECUTOR_SELECTOR_SOURCE = join(import.meta.dir, "../src/components/ExecutorSelector.tsx")
+const PROMPT_CATALOG_SOURCE = join(import.meta.dir, "../src/components/settings/PromptCatalog.tsx")
 // 2026-05-04: `src/styles.css` was decomposed into `src/styles/...`. The
 // "only one chrome owner" check walks the new tree to confirm no rule
 // for the retired `.right-panel-tab*` class survives anywhere.
@@ -72,6 +74,18 @@ test("Workspace panel current view label does not claim tab behavior", () => {
   expect(source).not.toContain('role="tablist"')
   expect(source).not.toContain('role="tab"')
   expect(source).not.toContain("aria-selected")
+})
+
+test("Feature tab surfaces use the Tabs primitive instead of hand-written ARIA", () => {
+  for (const sourcePath of [EXECUTOR_SELECTOR_SOURCE, PROMPT_CATALOG_SOURCE]) {
+    const source = readFileSync(sourcePath, "utf8")
+
+    expect(source).toContain("<Tabs")
+    expect(source).toContain("<Tab")
+    expect(source).not.toContain('role="tablist"')
+    expect(source).not.toContain('role="tab"')
+    expect(source).not.toContain("aria-selected")
+  }
 })
 
 test("Tabs primitive TypeScript API and CSS data variants stay in lockstep", () => {

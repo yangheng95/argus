@@ -251,14 +251,14 @@ test(
       // Switching the focused tab to Claude Code should list anthropic models
       // without inheriting overlay provider-auth wording.
       const claudeTab = await page.$$eval(
-        '[data-section="external"] .executor-popover-tab',
+        '[data-section="external"] [data-ui="executor-popover-tab"]',
         (nodes) =>
           nodes
             .map((node, index) => ({ index, text: (node as HTMLElement).innerText.trim() }))
             .find((row) => row.text === "Claude Code")?.index ?? -1,
       )
       assert.ok(claudeTab >= 0)
-      const tabHandles = await page.$$('[data-section="external"] .executor-popover-tab')
+      const tabHandles = await page.$$('[data-section="external"] [data-ui="executor-popover-tab"]')
       await tabHandles[claudeTab]!.click()
       await page.waitForFunction(() => {
         const body = document.querySelector('[data-section="external"]') as HTMLElement | null
