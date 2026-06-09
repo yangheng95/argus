@@ -22,7 +22,6 @@ import { FileExplorerPanel } from "./components/FileExplorerPanel"
 import { FileEditorPane } from "./components/FileEditorPane"
 import { FileChangesPanel, type FileChangesActiveView } from "./components/FileChangesPanel"
 import { BrowserPreviewPanel } from "./components/BrowserPreviewPanel"
-import { saveTaskBrowserPreviewTarget } from "./services/browser-preview"
 import { SideActivityToolbar, type SideActivity } from "./components/SideActivityToolbar"
 import { McpPanel, SkillsPanel } from "./components/settings/SkillMarketPanel"
 import { MemoryPanel } from "./components/MemoryPanel"
@@ -281,11 +280,10 @@ function openRightActivity(activity: RightActivity): void {
   openCenterWorkbenchPanel(activity)
 }
 
-async function openBrowserPreviewUrl(url: string): Promise<boolean> {
+function openBrowserPreviewFromMessage(): boolean {
   const taskID = activeTaskID()
   if (!taskID) return false
   openRightActivity("browser")
-  await saveTaskBrowserPreviewTarget({ taskID, url })
   setBrowserPreviewLinkRefresh((value) => value + 1)
   return true
 }
@@ -741,7 +739,7 @@ document.addEventListener(
     ev.preventDefault()
     void (async () => {
       try {
-        if (previewUrl && (await openBrowserPreviewUrl(previewUrl))) return
+        if (previewUrl && openBrowserPreviewFromMessage()) return
         await nativeOpen(href)
       } catch (error) {
         console.error("[ui] Failed to open external link", error)

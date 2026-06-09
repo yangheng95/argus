@@ -17,7 +17,7 @@ import type {
   AuthSetResponses,
   BrowserPreviewCaptureTaskTargetResponses,
   BrowserPreviewReadTaskEvidenceResponses,
-  BrowserPreviewSaveTaskTargetResponses,
+  BrowserPreviewSelectTaskTargetResponses,
   BrowserPreviewTaskTargetResponses,
   ChannelAttachmentCreateErrors,
   ChannelAttachmentCreateResponses,
@@ -5043,15 +5043,15 @@ export class BrowserPreview extends HeyApiClient {
   }
 
   /**
-   * Save task browser preview target
+   * Select task browser preview target
    *
-   * Persist the explicit browser preview URL as the task's preview target artifact. The overlay must use this route instead of local storage or query overrides.
+   * Promote an existing task browser preview target artifact. Arbitrary operator URLs are not accepted as preview targets.
    */
-  public saveTaskTarget<ThrowOnError extends boolean = false>(
+  public selectTaskTarget<ThrowOnError extends boolean = false>(
     parameters: {
       taskID: string
       directory?: string
-      url?: string
+      targetID?: string
     },
     options?: Options<never, ThrowOnError>,
   ) {
@@ -5062,12 +5062,12 @@ export class BrowserPreview extends HeyApiClient {
           args: [
             { in: "path", key: "taskID" },
             { in: "query", key: "directory" },
-            { in: "body", key: "url" },
+            { in: "body", key: "targetID" },
           ],
         },
       ],
     )
-    return (options?.client ?? this.client).put<BrowserPreviewSaveTaskTargetResponses, unknown, ThrowOnError>({
+    return (options?.client ?? this.client).put<BrowserPreviewSelectTaskTargetResponses, unknown, ThrowOnError>({
       url: "/task/{taskID}/browser-preview/target",
       ...options,
       ...params,

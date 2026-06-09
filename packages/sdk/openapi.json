@@ -11604,9 +11604,9 @@
     },
     "/task/{taskID}/browser-preview/target": {
       "put": {
-        "operationId": "browserPreview.saveTaskTarget",
-        "summary": "Save task browser preview target",
-        "description": "Persist the explicit browser preview URL as the task's preview target artifact. The overlay must use this route instead of local storage or query overrides.",
+        "operationId": "browserPreview.selectTaskTarget",
+        "summary": "Select task browser preview target",
+        "description": "Promote an existing task browser preview target artifact. Arbitrary operator URLs are not accepted as preview targets.",
         "responses": {
           "200": {
             "description": "Persisted browser preview target",
@@ -11732,12 +11732,12 @@
               "schema": {
                 "type": "object",
                 "properties": {
-                  "url": {
+                  "targetID": {
                     "type": "string",
                     "minLength": 1
                   }
                 },
-                "required": ["url"]
+                "required": ["targetID"]
               }
             }
           }
@@ -11745,7 +11745,7 @@
         "x-codeSamples": [
           {
             "lang": "js",
-            "source": "import { createOpenCorvusClient } from \"@opencorvus-ai/sdk\"\n\nconst client = createOpenCorvusClient()\nawait client.browserPreview.saveTaskTarget({\n  ...\n})"
+            "source": "import { createOpenCorvusClient } from \"@opencorvus-ai/sdk\"\n\nconst client = createOpenCorvusClient()\nawait client.browserPreview.selectTaskTarget({\n  ...\n})"
           }
         ]
       }

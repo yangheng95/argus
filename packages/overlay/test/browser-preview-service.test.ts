@@ -4,7 +4,7 @@ import {
   captureTaskBrowserPreviewEvidence,
   loadTaskBrowserPreviewEvidence,
   loadTaskBrowserPreviewTarget,
-  saveTaskBrowserPreviewTarget,
+  selectTaskBrowserPreviewTarget,
   type BrowserPreviewEvidence,
   type BrowserPreviewTarget,
 } from "../src/services/browser-preview"
@@ -85,7 +85,7 @@ test("browser preview service loads the task-scoped target through HostTransport
   expect(captured?.query?.directory).toBe(SAVED_DIRECTORY)
 })
 
-test("browser preview service saves explicit URL as task target instead of query override", async () => {
+test("browser preview service selects an existing backend target by ID", async () => {
   let captured: TransportRequest | undefined
   __setHostTransportForTest(
     fakePreviewTransport((req) => {
@@ -93,7 +93,7 @@ test("browser preview service saves explicit URL as task target instead of query
     }),
   )
 
-  await saveTaskBrowserPreviewTarget({ taskID: TASK_ID, url: "  http://127.0.0.1:5173/dashboard  " })
+  await selectTaskBrowserPreviewTarget({ taskID: TASK_ID, targetID: "art_previewtarget000000000001" })
 
   expect(captured?.path).toBe(`task/${TASK_ID}/browser-preview/target`)
   expect(captured?.method).toBe("PUT")
@@ -102,7 +102,7 @@ test("browser preview service saves explicit URL as task target instead of query
   expect(captured?.body).toEqual({
     kind: "json",
     value: {
-      url: "  http://127.0.0.1:5173/dashboard  ",
+      targetID: "art_previewtarget000000000001",
     },
   })
 })

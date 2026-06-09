@@ -8394,9 +8394,9 @@ export type BrowserPreviewReadTaskEvidenceResponses = {
 export type BrowserPreviewReadTaskEvidenceResponse =
   BrowserPreviewReadTaskEvidenceResponses[keyof BrowserPreviewReadTaskEvidenceResponses]
 
-export type BrowserPreviewSaveTaskTargetData = {
+export type BrowserPreviewSelectTaskTargetData = {
   body?: {
-    url: string
+    targetID: string
   }
   path: {
     taskID: string
@@ -8410,7 +8410,7 @@ export type BrowserPreviewSaveTaskTargetData = {
   url: "/task/{taskID}/browser-preview/target"
 }
 
-export type BrowserPreviewSaveTaskTargetResponses = {
+export type BrowserPreviewSelectTaskTargetResponses = {
   /**
    * Persisted browser preview target
    */
@@ -8440,8 +8440,8 @@ export type BrowserPreviewSaveTaskTargetResponses = {
   }
 }
 
-export type BrowserPreviewSaveTaskTargetResponse =
-  BrowserPreviewSaveTaskTargetResponses[keyof BrowserPreviewSaveTaskTargetResponses]
+export type BrowserPreviewSelectTaskTargetResponse =
+  BrowserPreviewSelectTaskTargetResponses[keyof BrowserPreviewSelectTaskTargetResponses]
 
 export type BrowserPreviewCaptureTaskTargetData = {
   body?: {

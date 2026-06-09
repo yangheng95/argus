@@ -113,6 +113,39 @@ export function persistBrowserPreviewTarget(input: {
   ).then(() => persisted)
 }
 
+export function promoteBrowserPreviewTarget(input: {
+  taskID: string
+  targetID: string
+  now?: number
+}): Promise<PersistedBrowserPreviewTarget | undefined> {
+  const existing = findBrowserPreviewTargetByID(input)
+  if (!existing) return Promise.resolve(undefined)
+  const now = Math.max(input.now ?? Date.now(), existing.timeUpdated + 1)
+  Database.use((db) =>
+    db
+      .update(EngineArtifactTable)
+      .set({
+        time_updated: now,
+        label: "active",
+      })
+      .where(eq(EngineArtifactTable.id, existing.id))
+      .run(),
+  )
+  const persisted: PersistedBrowserPreviewTarget = {
+    ...existing,
+    timeUpdated: now,
+  }
+  return EngineProtocol.emit(
+    Event.TaskUpdated,
+    {
+      taskID: input.taskID,
+      status: deriveTaskStatus(requireTask(input.taskID)),
+      summary: "Browser preview target updated",
+    },
+    { source: "browser-preview.target" },
+  ).then(() => persisted)
+}
+
 export function findLatestBrowserPreviewTarget(taskID: string): PersistedBrowserPreviewTarget | undefined {
   return findRecentBrowserPreviewTargets(taskID, 1)[0]
 }
