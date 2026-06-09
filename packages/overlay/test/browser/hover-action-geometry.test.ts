@@ -1,10 +1,12 @@
-import { expect, test } from "bun:test"
+import assert from "node:assert/strict"
 import { readFileSync } from "node:fs"
 import path from "node:path"
+import test from "node:test"
+import { fileURLToPath } from "node:url"
 
-import { launchBrowser } from "./launch"
+import { launchBrowser } from "../launch.ts"
 
-const OVERLAY_ROOT = path.resolve(import.meta.dir, "..")
+const OVERLAY_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..")
 const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms))
 
 function css(relativePath: string): string {
@@ -27,6 +29,9 @@ function styleSheet(): string {
 test(
   "hover-only action rails do not overlap row text",
   async () => {
+    assert.equal(process.env.OPENCORVUS_OVERLAY_BROWSER_TEST_NODE_RUNNER, "1")
+    assert.equal(typeof globalThis.Bun, "undefined")
+
     const browser = await launchBrowser()
     try {
       const page = await browser.newPage()
@@ -87,7 +92,7 @@ test(
           recentPointerEvents: getComputedStyle(recentRemove).pointerEvents,
         }
       })
-      expect(rest).toEqual({
+      assert.deepEqual(rest, {
         taskOpacity: "0",
         taskPointerEvents: "none",
         recentOpacity: "0",
@@ -106,8 +111,11 @@ test(
           stampOpacity: getComputedStyle(stamp).opacity,
         }
       })
-      expect(taskHover.mainRight).toBeLessThanOrEqual(taskHover.actionsLeft)
-      expect(taskHover.stampOpacity).toBe("0")
+      assert.ok(
+        taskHover.mainRight <= taskHover.actionsLeft,
+        `expected task row text to end before actions: ${taskHover.mainRight} <= ${taskHover.actionsLeft}`,
+      )
+      assert.equal(taskHover.stampOpacity, "0")
 
       await page.hover(".recent-dir-row")
       await sleep(260)
@@ -117,12 +125,14 @@ test(
         return {
           itemRight: item.right,
           removeLeft: remove.left,
-          removePointerEvents: getComputedStyle(document.querySelector<HTMLElement>(".recent-dir-remove")!)
-            .pointerEvents,
+          removePointerEvents: getComputedStyle(document.querySelector<HTMLElement>(".recent-dir-remove")!).pointerEvents,
         }
       })
-      expect(recentHover.itemRight).toBeLessThanOrEqual(recentHover.removeLeft)
-      expect(recentHover.removePointerEvents).toBe("auto")
+      assert.ok(
+        recentHover.itemRight <= recentHover.removeLeft,
+        `expected recent directory text to end before remove action: ${recentHover.itemRight} <= ${recentHover.removeLeft}`,
+      )
+      assert.equal(recentHover.removePointerEvents, "auto")
     } finally {
       await browser.close()
     }
