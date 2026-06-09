@@ -383,7 +383,7 @@ function browserPreviewCaptureArtifacts(capture: unknown): Array<{ path: string;
   return artifacts
 }
 
-export function latestBrowserPreviewEvidenceID(input: { taskID: string; targetID?: string }): string | undefined {
+export function latestBrowserPreviewEvidenceID(input: { taskID: string; targetID: string }): string | undefined {
   const rows = Database.use((db) =>
     db
       .select({ id: EngineArtifactTable.id, payload: EngineArtifactTable.payload })
@@ -395,7 +395,6 @@ export function latestBrowserPreviewEvidenceID(input: { taskID: string; targetID
       .limit(20)
       .all(),
   )
-  if (!input.targetID) return rows[0]?.id
   return rows.find((row) => sqlTargetID(row.payload) === input.targetID)?.id
 }
 
