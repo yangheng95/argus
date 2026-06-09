@@ -31,11 +31,21 @@ test("Project directory bar is page-level chrome, not hidden inside panel or Mis
 test("main.tsx wires the Mission button and mounts the Mission component", () => {
   expect(MAIN).toContain('document.getElementById("btnMission")?.addEventListener("click"')
   expect(MAIN).toContain('setPageMode(pageMode() === "mission" ? "panel" : "mission")')
+  expect(MAIN).toContain("function bindSidebarStaticControls()")
+  expect(MAIN).toContain("onDocumentReady(bindSidebarStaticControls)")
   expect(MAIN).toContain('document.getElementById("solidMissionMount")')
   expect(MAIN).toContain("<Mission")
   expect(MAIN).toContain("workspaceTarget={workspaceTarget}")
   expect(MAIN).toContain("workspaceOpen={workspaceOpen}")
   expect(MAIN).toContain("closeWorkspace={closeWorkspace}")
+})
+
+test("main.tsx binds static sidebar controls even when async startup misses DOMContentLoaded", () => {
+  const readyHelper = MAIN.match(/function onDocumentReady[\s\S]*?\n}\n\nfunction bindSidebarStaticControls/)?.[0] ?? ""
+  expect(readyHelper).toContain('document.readyState === "loading"')
+  expect(readyHelper).toContain('document.addEventListener("DOMContentLoaded", callback, { once: true })')
+  expect(readyHelper).toContain("callback()")
+  expect(MAIN).not.toContain('document.addEventListener("DOMContentLoaded", () =>')
 })
 
 test("Mission page exposes an in-page Back to Panel action", () => {
@@ -56,5 +66,8 @@ test("main.tsx reflects pageMode onto body[data-page-mode] (drives mission.css v
 test("New chat button switches back to panel mode before focusing the composer (template §6.3)", () => {
   // Operator clicking +New Chat from inside Mission should not get stuck on
   // an invisible composer — the page must flip back to panel first.
-  expect(MAIN).toMatch(/btnCreateTask[\s\S]*setPageMode\("panel"\)[\s\S]*selectTask\(""\)/)
+  const sidebarBinding =
+    MAIN.match(/function bindSidebarStaticControls\(\): void \{[\s\S]*?\n}\n\nonDocumentReady/)?.[0] ?? ""
+  expect(sidebarBinding).toMatch(/btnCreateTask[\s\S]*setPageMode\("panel"\)[\s\S]*selectTask\(""\)/)
+  expect(sidebarBinding).toMatch(/btnMission[\s\S]*setPageMode\(pageMode\(\) === "mission" \? "panel" : "mission"\)/)
 })
