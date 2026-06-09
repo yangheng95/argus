@@ -33,4 +33,9 @@ test("overlay browser tests have a Node-owned Playwright runner", () => {
   expect(migrated).toContain('import test from "node:test"')
   expect(migrated).toContain('from "../launch.ts"')
   expect(migrated).toContain('typeof globalThis.Bun, "undefined"')
+
+  const hoverGeometry = readText("test/browser/hover-action-geometry.test.ts")
+  expect(hoverGeometry).toContain('import test from "node:test"')
+  expect(hoverGeometry).toContain('from "../launch.ts"')
+  expect(hoverGeometry).toContain('typeof globalThis.Bun, "undefined"')
 })
