@@ -419,6 +419,8 @@ CREATE TABLE IF NOT EXISTS engine_task (
   FOREIGN KEY (session_id) REFERENCES session(id) ON DELETE SET NULL
 );
 CREATE INDEX IF NOT EXISTS engine_task_project_idx ON engine_task (project_id);
+CREATE INDEX IF NOT EXISTS engine_task_time_updated_idx ON engine_task (time_updated, id);
+CREATE INDEX IF NOT EXISTS engine_task_project_time_updated_idx ON engine_task (project_id, time_updated, id);
 CREATE INDEX IF NOT EXISTS engine_task_time_completed_idx ON engine_task (time_completed);
 CREATE INDEX IF NOT EXISTS engine_task_kind_idx    ON engine_task (kind);
 CREATE INDEX IF NOT EXISTS engine_task_queue_order_idx ON engine_task (queue_order);
@@ -895,6 +897,10 @@ CREATE INDEX IF NOT EXISTS protocol_event_session_idx     ON protocol_event (ses
 CREATE INDEX IF NOT EXISTS protocol_event_interaction_idx ON protocol_event (interaction_id, seq);
 CREATE INDEX IF NOT EXISTS protocol_event_stream_idx      ON protocol_event (stream_id, seq);
 CREATE INDEX IF NOT EXISTS protocol_event_type_idx        ON protocol_event (type);
+CREATE INDEX IF NOT EXISTS protocol_event_task_type_session_status_idx
+  ON protocol_event (task_id, type, session_id, emitted_at, seq);
+CREATE INDEX IF NOT EXISTS protocol_event_session_type_status_order_idx
+  ON protocol_event (session_id, type, emitted_at, seq);
 
 CREATE TABLE IF NOT EXISTS protocol_inbox (
   id           text PRIMARY KEY,

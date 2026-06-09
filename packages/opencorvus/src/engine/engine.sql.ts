@@ -290,6 +290,8 @@ export const EngineTaskTable = sqliteTable(
   },
   (table) => [
     index("engine_task_project_idx").on(table.project_id),
+    index("engine_task_time_updated_idx").on(table.time_updated, table.id),
+    index("engine_task_project_time_updated_idx").on(table.project_id, table.time_updated, table.id),
     index("engine_task_time_completed_idx").on(table.time_completed),
     index("engine_task_kind_idx").on(table.kind),
     index("engine_task_queue_order_idx").on(table.queue_order),
