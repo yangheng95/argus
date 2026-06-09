@@ -34,7 +34,7 @@ import { appStore } from "./store/app"
 import { selectTask, retryTask, replanTask, cancelTask, createTask, deleteTask, renameTask } from "./services/task"
 import { canComposeChat, stopChatRequest } from "./services/chat"
 import { isTaskInterruptable } from "./store/board"
-import { setLocale } from "./utils/i18n"
+import { loadAllLocales, localeTag, setLocale } from "./utils/i18n"
 import { apiJson, apiRequest, configure as configureApi, getServerUrl } from "./services/api"
 import { t } from "./utils/i18n"
 import { renderMarkdown } from "./utils/markdown"
@@ -838,6 +838,12 @@ function installGlobalBridges(): void {
 
 installGlobalBridges()
 setupDialogBackdropClose()
+
+// Components call strict `t()` at render time. Load the locale bundles before
+// mounting any Solid surface so early hosts do not render against an empty
+// translation dictionary.
+await loadAllLocales()
+await setLocale(localeTag())
 
 // ── Mount: NotificationCenter ──
 // Keep the in-app notification layer alive before any async boot work, so

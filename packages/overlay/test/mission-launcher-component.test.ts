@@ -59,6 +59,14 @@ test("Mission.tsx uses wakeMission from the mission service", () => {
   expect(MISSION_TSX).toContain("wakeMission")
 })
 
+test("Mission waits for i18n readiness before rendering translated content", () => {
+  expect(MISSION_TSX).toContain('import { appStore } from "../store/app"')
+  expect(MISSION_TSX).toContain("when={appStore.i18nReady}")
+  expect(MISSION_TSX).toContain('fallback={<div class="mission-page" data-i18n-ready="false" />}')
+  expect(MISSION_TSX).toContain("function MissionContent(props: MissionProps)")
+  expect(MISSION_TSX.indexOf("when={appStore.i18nReady}")).toBeLessThan(MISSION_TSX.indexOf("function MissionContent"))
+})
+
 test("Mission wake result opens the shared mission conversation surface", () => {
   expect(MISSION_TSX).toContain("handleMissionAwake")
   expect(MISSION_TSX).toContain("missionRecordsCtl.refetch()")

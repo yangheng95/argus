@@ -8,7 +8,7 @@ const MAIN = readFileSync(join(import.meta.dir, "../src/main.tsx"), "utf8")
 const NOTIFY = readFileSync(join(import.meta.dir, "../src/services/notify.ts"), "utf8")
 
 test("NotificationCenter routes dismiss control through the Button primitive", () => {
-  expect(SOURCE).toContain('import { Button } from "./ui/Button";')
+  expect(SOURCE).toContain('import { Button } from "./ui/Button"')
   expect(SOURCE).toContain('data-ui="app-notification-close"')
   expect(SOURCE).not.toContain('class="app-notification__close"')
   expect(STYLES).toContain('.app-notification .oc-button[data-ui="app-notification-close"]')
@@ -53,11 +53,26 @@ test("NotificationCenter separates toast visibility from task-grouped panel hist
   expect(NOTIFY).toContain("centerHistoryNotificationItems")
 })
 
+test("NotificationCenter waits for the loaded i18n bundle before translating", () => {
+  expect(SOURCE).toContain('import { appStore } from "../store/app"')
+  expect(SOURCE).toContain("when={appStore.i18nReady}")
+  expect(SOURCE).toContain('fallback={<div class="app-notifications"')
+  expect(SOURCE.indexOf("when={appStore.i18nReady}")).toBeLessThan(SOURCE.indexOf('aria-label={t("notify.center_label")}'))
+})
+
+test("main preloads i18n before mounting translated Solid surfaces", () => {
+  expect(MAIN).toContain('import { loadAllLocales, localeTag, setLocale } from "./utils/i18n"')
+  expect(MAIN.indexOf("await loadAllLocales()")).toBeLessThan(MAIN.indexOf('render(() => <NotificationCenter surface="toast" />'))
+  expect(MAIN.indexOf("await setLocale(localeTag())")).toBeLessThan(MAIN.indexOf('document.getElementById("solidMissionMount")'))
+})
+
 test("main mounts toast and workbench notification center from the same component", () => {
   expect(MAIN).toContain('<NotificationCenter surface="toast" />')
   expect(MAIN).toContain('document.getElementById("solidNotificationCenterMount")')
   expect(MAIN).toContain('<NotificationCenter surface="panel" />')
-  expect(MAIN).toContain('id: "notifications", icon: "notifications", labelKey: "notify.center_label"')
+  expect(MAIN).toContain('id: "notifications"')
+  expect(MAIN).toContain('icon: "notifications"')
+  expect(MAIN).toContain('labelKey: "notify.center_label"')
   expect(MAIN).toContain('notifications: document.getElementById("centerWorkbenchNotifications")')
 })
 

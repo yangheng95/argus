@@ -1,4 +1,5 @@
 import { For, Show, createMemo, createSignal } from "solid-js"
+import { appStore } from "../store/app"
 import { loadTasks } from "../store/board"
 import {
   centerHistoryNotificationItems,
@@ -171,43 +172,48 @@ export function NotificationCenter(props: NotificationCenterProps) {
   const groups = createMemo(() => groupByTask(items()))
 
   return (
-    <div
-      class="app-notifications"
-      data-surface={surface()}
-      role="region"
-      aria-label={t("notify.center_label")}
-      data-testid="notification-center"
+    <Show
+      when={appStore.i18nReady}
+      fallback={<div class="app-notifications" data-surface={surface()} data-testid="notification-center" />}
     >
-      <Show
-        when={items().length > 0}
-        fallback={
-          <Show when={surface() === "panel"}>
-            <div class="app-notification-empty">
-              <div class="app-notification-empty__title">{t("notify.empty_title")}</div>
-              <div class="app-notification-empty__body">{t("notify.empty_body")}</div>
-            </div>
-          </Show>
-        }
+      <div
+        class="app-notifications"
+        data-surface={surface()}
+        role="region"
+        aria-label={t("notify.center_label")}
+        data-testid="notification-center"
       >
         <Show
-          when={surface() === "panel"}
-          fallback={<For each={items()}>{(item) => <NotificationItem item={item} surface={surface()} />}</For>}
+          when={items().length > 0}
+          fallback={
+            <Show when={surface() === "panel"}>
+              <div class="app-notification-empty">
+                <div class="app-notification-empty__title">{t("notify.empty_title")}</div>
+                <div class="app-notification-empty__body">{t("notify.empty_body")}</div>
+              </div>
+            </Show>
+          }
         >
-          <For each={groups()}>
-            {(group) => (
-              <section class="app-notification-group" data-task-id={group.key === "system" ? undefined : group.key}>
-                <header class="app-notification-group__header">
-                  <span class="app-notification-group__title">{group.title}</span>
-                  <span class="app-notification-group__count">{group.items.length}</span>
-                </header>
-                <div class="app-notification-group__items">
-                  <For each={group.items}>{(item) => <NotificationItem item={item} surface={surface()} />}</For>
-                </div>
-              </section>
-            )}
-          </For>
+          <Show
+            when={surface() === "panel"}
+            fallback={<For each={items()}>{(item) => <NotificationItem item={item} surface={surface()} />}</For>}
+          >
+            <For each={groups()}>
+              {(group) => (
+                <section class="app-notification-group" data-task-id={group.key === "system" ? undefined : group.key}>
+                  <header class="app-notification-group__header">
+                    <span class="app-notification-group__title">{group.title}</span>
+                    <span class="app-notification-group__count">{group.items.length}</span>
+                  </header>
+                  <div class="app-notification-group__items">
+                    <For each={group.items}>{(item) => <NotificationItem item={item} surface={surface()} />}</For>
+                  </div>
+                </section>
+              )}
+            </For>
+          </Show>
         </Show>
-      </Show>
-    </div>
+      </div>
+    </Show>
   )
 }

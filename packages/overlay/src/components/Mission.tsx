@@ -23,6 +23,7 @@
 // message and offers a retry where retrying is meaningful.
 
 import { For, Show, createEffect, createMemo, createResource, createSignal, onCleanup, onMount } from "solid-js"
+import { appStore } from "../store/app"
 import { boardStore, setBoardStore } from "../store/board"
 import { clearMessages, setChatAttachments } from "../store/messages"
 import { settingsStore, setSettingsStore, saveSettings } from "../store/settings"
@@ -129,11 +130,21 @@ function aggregateMissionTaskStats(missions: MissionRecord[]): MissionTaskStats 
 
 // ── Top-level Mission component ──
 
-export function Mission(props: {
+type MissionProps = {
   workspaceTarget: () => DiffTarget
   workspaceOpen: () => boolean
   closeWorkspace: () => void
-}) {
+}
+
+export function Mission(props: MissionProps) {
+  return (
+    <Show when={appStore.i18nReady} fallback={<div class="mission-page" data-i18n-ready="false" />}>
+      <MissionContent {...props} />
+    </Show>
+  )
+}
+
+function MissionContent(props: MissionProps) {
   // ── Per-page state ─────────────────────────────────────────────────
   const [searchQuery, setSearchQuery] = createSignal("")
   const [missionRefreshToken, setMissionRefreshToken] = createSignal(0)
