@@ -44,32 +44,58 @@ export namespace Project {
     return value
   }
 
-  async function roots(cwd: string) {
-    const result = await git(["rev-list", "--max-parents=0", "--all"], { cwd }).catch(() => undefined)
-    if (!result || result.exitCode !== 0) return []
-    return result
-      .text()
-      .split("\n")
-      .map((x) => x.trim())
-      .filter(Boolean)
-      .toSorted()
-  }
-
   async function initRepo(directory: string) {
     const result = await git(["init"], { cwd: directory }).catch(() => undefined)
     if (!result || result.exitCode !== 0) return false
     return Filesystem.exists(path.join(directory, ".git"))
   }
 
-  async function identify(cwd: string, common: string) {
+  function comparePath(value: string) {
+    const normalized = path.normalize(Filesystem.windowsPath(value)).replace(/[\\/]+$/, "")
+    return process.platform === "win32" ? normalized.toLowerCase() : normalized
+  }
+
+  function samePath(a: string, b: string) {
+    return comparePath(a) === comparePath(b)
+  }
+
+  function standaloneCommon(worktree: string, common: string) {
+    return samePath(common, path.join(worktree, ".git"))
+  }
+
+  async function identify(common: string, worktree: string) {
+    const markerPath = marker(common)
+    const localID = generated(common)
     const cached = await Filesystem.readText(marker(common))
       .then((x) => x.trim())
       .catch(() => undefined)
-    if (cached) return cached
+    if (!cached) {
+      await Filesystem.write(markerPath, localID).catch(() => undefined)
+      return localID
+    }
 
-    const next = (await roots(cwd))[0] || generated(common)
-    await Filesystem.write(marker(common), next).catch(() => undefined)
-    return next
+    const row = Database.use((db) => db.select().from(ProjectTable).where(eq(ProjectTable.id, cached)).get())
+    if (!row) return cached
+    if (samePath(row.worktree, worktree)) return cached
+
+    // A standalone repository must never reuse another local project's ID.
+    // Copied starter repos can share both the root commit and a stale marker;
+    // rewrite only this repo's marker to its local .git identity.
+    if (standaloneCommon(worktree, common)) {
+      await Filesystem.write(markerPath, localID).catch(() => undefined)
+      return localID
+    }
+
+    return cached
+  }
+
+  export class WorktreeIdentityConflictError extends Error {
+    constructor(input: { projectID: string; existingWorktree: string; nextWorktree: string }) {
+      super(
+        `Project identity conflict for ${input.projectID}: existing worktree ${input.existingWorktree}, next worktree ${input.nextWorktree}`,
+      )
+      this.name = "ProjectWorktreeIdentityConflictError"
+    }
   }
 
   /**
@@ -196,8 +222,9 @@ export namespace Project {
 
         const commonText = await text(["rev-parse", "--git-common-dir"], sandbox)
         const common = commonText ? gitpath(sandbox, commonText) : undefined
-        const id = await identify(sandbox, common || path.join(sandbox, ".git"))
+        const resolvedCommon = common || path.join(sandbox, ".git")
         const worktree = !common || common === sandbox ? sandbox : path.dirname(common)
+        const id = await identify(resolvedCommon, worktree)
 
         return {
           id,
@@ -214,6 +241,13 @@ export namespace Project {
     })
 
     const row = Database.use((db) => db.select().from(ProjectTable).where(eq(ProjectTable.id, data.id)).get())
+    if (row && !samePath(row.worktree, data.worktree)) {
+      throw new WorktreeIdentityConflictError({
+        projectID: data.id,
+        existingWorktree: row.worktree,
+        nextWorktree: data.worktree,
+      })
+    }
     const existing = await iife(async () => {
       if (row) return fromRow(row)
       const fresh: Info = {
