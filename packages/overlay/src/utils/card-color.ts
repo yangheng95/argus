@@ -15,6 +15,7 @@ const KNOWN_STAGES = new Set([
   "requirements",
   "frontend-design",
   "frontend-research",
+  "visual-qa",
   "architect",
   "planner",
   "goal",

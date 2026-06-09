@@ -322,6 +322,7 @@
   "chat.role.acceptance": "Acceptance",
   "chat.role.frontend-design": "Frontend Design",
   "chat.role.frontend-research": "Frontend Research",
+  "chat.role.visual-qa": "Visual QA",
   "chat.role.evaluator": "Evaluator",
   "chat.role.executor": "Executor",
   "chat.role.explore": "Explore",

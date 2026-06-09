@@ -6,7 +6,7 @@ const MESSAGE_TS = readFileSync(join(import.meta.dir, "..", "src", "utils", "mes
 const AVATAR_TSX = readFileSync(join(import.meta.dir, "..", "src", "components", "Avatar.tsx"), "utf8")
 
 function agentRolesFromSource(): string[] {
-  const match = MESSAGE_TS.match(/export type AgentRole\s*=\s*([\s\S]*?);/)
+  const match = MESSAGE_TS.match(/export type AgentRole\s*=\s*([\s\S]*?)\n\n\/\*\* Stages/)
   if (!match) throw new Error("AgentRole union not found in message.ts")
   return [...match[1]!.matchAll(/"([^"]+)"/g)].map((entry) => entry[1]!)
 }

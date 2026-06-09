@@ -322,6 +322,7 @@
   "chat.role.acceptance": "交付",
   "chat.role.frontend-design": "前端设计",
   "chat.role.frontend-research": "前端研究",
+  "chat.role.visual-qa": "视觉验收",
   "chat.role.evaluator": "评审",
   "chat.role.executor": "执行器",
   "chat.role.explore": "探索",
