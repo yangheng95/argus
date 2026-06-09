@@ -379,7 +379,7 @@ export const RunCommand = cmd({
       if (baseID) return baseID
 
       const name = title()
-      const result = await sdk.session.create({ title: name, permission: rules })
+      const result = await sdk.session.create({ kind: "assistant", title: name, permission: rules })
       return result.data?.id
     }
 

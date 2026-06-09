@@ -3634,7 +3634,7 @@ export type TerminalProfilesResponses = {
 export type TerminalProfilesResponse = TerminalProfilesResponses[keyof TerminalProfilesResponses]
 
 export type TerminalOpenData = {
-  body?: {
+  body: {
     cwd: string
     profileID?: string
   }
@@ -3801,7 +3801,7 @@ export type ChannelListResponses = {
 export type ChannelListResponse = ChannelListResponses[keyof ChannelListResponses]
 
 export type ChannelAttachmentCreateData = {
-  body?: {
+  body: {
     filename: string
     mime: string
     data: string
@@ -3873,7 +3873,7 @@ export type ChannelAttachmentGetResponses = {
 export type ChannelAttachmentGetResponse = ChannelAttachmentGetResponses[keyof ChannelAttachmentGetResponses]
 
 export type ChannelMessageData = {
-  body?: {
+  body: {
     platform:
       | "slack"
       | "telegram"
@@ -4292,7 +4292,7 @@ export type ExperimentalWorkspaceRemoveResponse =
   ExperimentalWorkspaceRemoveResponses[keyof ExperimentalWorkspaceRemoveResponses]
 
 export type ExperimentalWorkspaceCreateData = {
-  body?: {
+  body: {
     branch: string | null
     config: {
       directory: string
@@ -4418,7 +4418,7 @@ export type ExperimentalScheduleListResponse =
   ExperimentalScheduleListResponses[keyof ExperimentalScheduleListResponses]
 
 export type ExperimentalScheduleCreateData = {
-  body?: {
+  body: {
     name: string
     expression: string
     prompt: string
@@ -4514,7 +4514,7 @@ export type ExperimentalEventscheduleListResponse =
   ExperimentalEventscheduleListResponses[keyof ExperimentalEventscheduleListResponses]
 
 export type ExperimentalEventscheduleCreateData = {
-  body?: {
+  body: {
     name: string
     eventType: string
     match?: {
@@ -4693,7 +4693,7 @@ export type SessionListResponses = {
 export type SessionListResponse = SessionListResponses[keyof SessionListResponses]
 
 export type SessionCreateData = {
-  body?: {
+  body: {
     kind:
       | "root"
       | "orchestrator"
@@ -5256,7 +5256,7 @@ export type SessionTodoResponses = {
 export type SessionTodoResponse = SessionTodoResponses[keyof SessionTodoResponses]
 
 export type SessionInitData = {
-  body?: {
+  body: {
     modelID: string
     providerID: string
     messageID: string
@@ -5384,7 +5384,7 @@ export type SessionDiffResponses = {
 export type SessionDiffResponse = SessionDiffResponses[keyof SessionDiffResponses]
 
 export type SessionSummarizeData = {
-  body?: {
+  body: {
     providerID: string
     modelID: string
     auto?: boolean
@@ -5471,7 +5471,7 @@ export type SessionMessagesResponses = {
 export type SessionMessagesResponse = SessionMessagesResponses[keyof SessionMessagesResponses]
 
 export type SessionPromptData = {
-  body?: {
+  body: {
     messageID?: string
     model?: {
       providerID: string
@@ -5715,7 +5715,7 @@ export type PartUpdateResponses = {
 export type PartUpdateResponse = PartUpdateResponses[keyof PartUpdateResponses]
 
 export type SessionPromptAsyncData = {
-  body?: {
+  body: {
     messageID?: string
     model?: {
       providerID: string
@@ -5831,7 +5831,7 @@ export type SessionPromptAsyncStatusResponse =
   SessionPromptAsyncStatusResponses[keyof SessionPromptAsyncStatusResponses]
 
 export type SessionCommandData = {
-  body?: {
+  body: {
     messageID?: string
     agent?: string
     model?: string
@@ -5888,7 +5888,7 @@ export type SessionCommandResponses = {
 export type SessionCommandResponse = SessionCommandResponses[keyof SessionCommandResponses]
 
 export type SessionShellData = {
-  body?: {
+  body: {
     agent: string
     model?: {
       providerID: string
@@ -5934,7 +5934,7 @@ export type SessionShellResponses = {
 export type SessionShellResponse = SessionShellResponses[keyof SessionShellResponses]
 
 export type PermissionReplyData = {
-  body?: {
+  body: {
     reply: "once" | "always" | "reject"
     autoReply: boolean
     message?: string
@@ -6016,7 +6016,7 @@ export type QuestionListResponses = {
 export type QuestionListResponse = QuestionListResponses[keyof QuestionListResponses]
 
 export type QuestionReplyData = {
-  body?: {
+  body: {
     /**
      * User answers in order of questions (each answer is an array of selected labels)
      */
@@ -6255,7 +6255,7 @@ export type ProviderHexinRefreshResponses = {
 export type ProviderHexinRefreshResponse = ProviderHexinRefreshResponses[keyof ProviderHexinRefreshResponses]
 
 export type ProviderDiscoverModelsData = {
-  body?: {
+  body: {
     /**
      * OpenAI-compatible base URL, usually ending in /v1
      */
@@ -6346,7 +6346,7 @@ export type ProviderTestResponses = {
 export type ProviderTestResponse = ProviderTestResponses[keyof ProviderTestResponses]
 
 export type ProviderAuthPromptsData = {
-  body?: {
+  body: {
     /**
      * Auth method index
      */
@@ -6392,7 +6392,7 @@ export type ProviderAuthPromptsResponses = {
 export type ProviderAuthPromptsResponse = ProviderAuthPromptsResponses[keyof ProviderAuthPromptsResponses]
 
 export type ProviderAuthExecuteData = {
-  body?: {
+  body: {
     /**
      * Auth method index
      */
@@ -6438,7 +6438,7 @@ export type ProviderAuthExecuteResponses = {
 export type ProviderAuthExecuteResponse = ProviderAuthExecuteResponses[keyof ProviderAuthExecuteResponses]
 
 export type ProviderOauthAuthorizeData = {
-  body?: {
+  body: {
     /**
      * Auth method index
      */
@@ -6484,7 +6484,7 @@ export type ProviderOauthAuthorizeResponses = {
 export type ProviderOauthAuthorizeResponse = ProviderOauthAuthorizeResponses[keyof ProviderOauthAuthorizeResponses]
 
 export type ProviderOauthCallbackData = {
-  body?: {
+  body: {
     /**
      * Auth method index
      */
@@ -6696,7 +6696,7 @@ export type SkillDirectoriesResponses = {
 export type SkillDirectoriesResponse = SkillDirectoriesResponses[keyof SkillDirectoriesResponses]
 
 export type SkillInstallData = {
-  body?: {
+  body: {
     kind: "path" | "url" | "git"
     value: string
     policy?: PermissionAction
@@ -6763,7 +6763,7 @@ export type SkillImportFileResponses = {
 export type SkillImportFileResponse = SkillImportFileResponses[keyof SkillImportFileResponses]
 
 export type SkillRemoveData = {
-  body?: {
+  body: {
     source: string
     kind?: "path" | "url" | "git"
   }
@@ -6787,7 +6787,7 @@ export type SkillRemoveResponses = {
 export type SkillRemoveResponse = SkillRemoveResponses[keyof SkillRemoveResponses]
 
 export type SkillPolicyData = {
-  body?: {
+  body: {
     name: string
     action: PermissionAction
   }
@@ -6917,7 +6917,7 @@ export type PanelCapabilitiesResponses = {
 export type PanelCapabilitiesResponse = PanelCapabilitiesResponses[keyof PanelCapabilitiesResponses]
 
 export type PanelMessageData = {
-  body?: {
+  body: {
     surface:
       | "panel"
       | "gateway"
@@ -7002,7 +7002,7 @@ export type PanelMessageResponses = {
 export type PanelMessageResponse = PanelMessageResponses[keyof PanelMessageResponses]
 
 export type PanelMessageStreamData = {
-  body?: {
+  body: {
     surface:
       | "panel"
       | "gateway"
@@ -7185,7 +7185,7 @@ export type PanelKnowledgeMemoryGetResponses = {
 export type PanelKnowledgeMemoryGetResponse = PanelKnowledgeMemoryGetResponses[keyof PanelKnowledgeMemoryGetResponses]
 
 export type PanelKnowledgeMemorySearchData = {
-  body?: {
+  body: {
     query: string
     sessionID?: string
     taskID?: string
@@ -7312,7 +7312,7 @@ export type CodingCliProfilesResponses = {
 export type CodingCliProfilesResponse = CodingCliProfilesResponses[keyof CodingCliProfilesResponses]
 
 export type CodingCliOpenData = {
-  body?: {
+  body: {
     cliID: string
     terminalProfileID: string
     cwd: string
@@ -7406,7 +7406,7 @@ export type CodingSessionGetResponses = {
 export type CodingSessionGetResponse = CodingSessionGetResponses[keyof CodingSessionGetResponses]
 
 export type CodingSessionSelectionUpdateData = {
-  body?: {
+  body: {
     taskID: string | null
   }
   path: {
@@ -7575,7 +7575,7 @@ export type GatewayStatsResponses = {
 export type GatewayStatsResponse = GatewayStatsResponses[keyof GatewayStatsResponses]
 
 export type GatewayControlMessageData = {
-  body?: {
+  body: {
     text: string
     taskID?: string
     sessionID?: string
@@ -7992,7 +7992,7 @@ export type GatewayControlActionResponses = {
 export type GatewayControlActionResponse = GatewayControlActionResponses[keyof GatewayControlActionResponses]
 
 export type GatewayChannelMessageData = {
-  body?: {
+  body: {
     channel: string
     thread: string
     text: string
@@ -8130,7 +8130,7 @@ export type MissionListResponses = {
 export type MissionListResponse = MissionListResponses[keyof MissionListResponses]
 
 export type MissionRenameData = {
-  body?: {
+  body: {
     title: string
   }
   path: {
@@ -8229,7 +8229,7 @@ export type MissionDeleteResponses = {
 export type MissionDeleteResponse = MissionDeleteResponses[keyof MissionDeleteResponses]
 
 export type MissionWakeData = {
-  body?: {
+  body: {
     missionID?: string
     text: string
     title?: string
@@ -8341,7 +8341,7 @@ export type BrowserPreviewReadTaskEvidenceResponse =
   BrowserPreviewReadTaskEvidenceResponses[keyof BrowserPreviewReadTaskEvidenceResponses]
 
 export type BrowserPreviewSelectTaskTargetData = {
-  body?: {
+  body: {
     targetID: string
   }
   path: {
@@ -8390,7 +8390,7 @@ export type BrowserPreviewSelectTaskTargetResponse =
   BrowserPreviewSelectTaskTargetResponses[keyof BrowserPreviewSelectTaskTargetResponses]
 
 export type BrowserPreviewCaptureTaskTargetData = {
-  body?: {
+  body: {
     targetID: string
     viewportID?: "desktop" | "tablet" | "mobile"
   }
@@ -8509,7 +8509,7 @@ export type ServerRestartResponses = {
 export type ServerRestartResponse = ServerRestartResponses[keyof ServerRestartResponses]
 
 export type TaskCreateData = {
-  body?: {
+  body: {
     project?: string
     requestID?: string
     source?: string
@@ -9361,7 +9361,7 @@ export type TaskGlobalListResponses = {
 export type TaskGlobalListResponse = TaskGlobalListResponses[keyof TaskGlobalListResponses]
 
 export type TaskQueueReorderData = {
-  body?: {
+  body: {
     directory: string
     orderedTaskIDs?: Array<string>
     revision?: string
@@ -11357,7 +11357,7 @@ export type TaskInteractionsResponses = {
 export type TaskInteractionsResponse = TaskInteractionsResponses[keyof TaskInteractionsResponses]
 
 export type TaskMessageData = {
-  body?: {
+  body: {
     text: string
     source?: string
     user_id?: string
@@ -11412,7 +11412,7 @@ export type TaskMessageResponses = {
 export type TaskMessageResponse = TaskMessageResponses[keyof TaskMessageResponses]
 
 export type TaskInjectData = {
-  body?: {
+  body: {
     message: string
   }
   path: {
@@ -11456,7 +11456,7 @@ export type TaskInjectResponses = {
 export type TaskInjectResponse = TaskInjectResponses[keyof TaskInjectResponses]
 
 export type TaskSessionReplyData = {
-  body?: {
+  body: {
     message: string
     attachments?: Array<{
       mime: string
@@ -11615,7 +11615,7 @@ export type TaskCancelResponses = {
 export type TaskCancelResponse = TaskCancelResponses[keyof TaskCancelResponses]
 
 export type TaskRewindData = {
-  body?: {
+  body: {
     anchor:
       | {
           kind: "cursorTime"
@@ -12275,7 +12275,7 @@ export type RunEvaluationsResponses = {
 export type RunEvaluationsResponse = RunEvaluationsResponses[keyof RunEvaluationsResponses]
 
 export type InteractionReplyData = {
-  body?: {
+  body: {
     reply?: "once" | "always" | "reject"
     autoReply: boolean
     message?: string
@@ -12337,7 +12337,7 @@ export type InteractionReplyResponses = {
 export type InteractionReplyResponse = InteractionReplyResponses[keyof InteractionReplyResponses]
 
 export type InteractionRejectData = {
-  body?: {
+  body: {
     autoReply: boolean
     message?: string
   }
@@ -12429,7 +12429,7 @@ export type GoalDeleteResponses = {
 export type GoalDeleteResponse = GoalDeleteResponses[keyof GoalDeleteResponses]
 
 export type GoalUpdateData = {
-  body?: {
+  body: {
     description: string
     acceptance_specs: Array<{
       /**
@@ -12609,7 +12609,7 @@ export type GoalUpdateResponses = {
 export type GoalUpdateResponse = GoalUpdateResponses[keyof GoalUpdateResponses]
 
 export type TaskUpdateBudgetData = {
-  body?: {
+  body: {
     budget: {
       maxExecutorGroups?: number
     } | null
@@ -12643,7 +12643,7 @@ export type TaskUpdateBudgetResponses = {
 }
 
 export type TaskUpdateTitleData = {
-  body?: {
+  body: {
     title: string
   }
   path: {
@@ -12843,7 +12843,7 @@ export type FileReadResponses = {
 export type FileReadResponse = FileReadResponses[keyof FileReadResponses]
 
 export type FileWriteData = {
-  body?: {
+  body: {
     path: string
     content: string
   }
@@ -12940,7 +12940,7 @@ export type McpStatusResponses = {
 export type McpStatusResponse = McpStatusResponses[keyof McpStatusResponses]
 
 export type McpAddData = {
-  body?: {
+  body: {
     name: string
     config: McpLocalConfig | McpRemoteConfig
   }
@@ -13050,7 +13050,7 @@ export type McpAuthStartResponses = {
 export type McpAuthStartResponse = McpAuthStartResponses[keyof McpAuthStartResponses]
 
 export type McpAuthCallbackData = {
-  body?: {
+  body: {
     /**
      * Authorization code from OAuth callback
      */
@@ -13194,7 +13194,7 @@ export type PtyListResponses = {
 export type PtyListResponse = PtyListResponses[keyof PtyListResponses]
 
 export type PtyCreateData = {
-  body?: {
+  body: {
     command: string
     args?: Array<string>
     cwd?: string
@@ -13507,7 +13507,7 @@ export type LogReadResponses = {
 export type LogReadResponse = LogReadResponses[keyof LogReadResponses]
 
 export type AppLogData = {
-  body?: {
+  body: {
     /**
      * Service name for the log entry
      */
@@ -13782,7 +13782,7 @@ export type GlobalDisposeResponses = {
 export type GlobalDisposeResponse = GlobalDisposeResponses[keyof GlobalDisposeResponses]
 
 export type GlobalDbResetData = {
-  body?: {
+  body: {
     /**
      * Absolute filesystem path of the project whose .opencorvus scratch directories should be wiped alongside the shared DB.
      */

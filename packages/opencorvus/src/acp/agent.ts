@@ -212,6 +212,7 @@ export namespace ACP {
                   await this.sdk.permission.reply({
                     requestID: permission.id,
                     reply: "reject",
+                    autoReply: false,
                     directory,
                   })
                   return undefined
@@ -222,6 +223,7 @@ export namespace ACP {
                 await this.sdk.permission.reply({
                   requestID: permission.id,
                   reply: "reject",
+                  autoReply: false,
                   directory,
                 })
                 return
@@ -246,6 +248,7 @@ export namespace ACP {
               await this.sdk.permission.reply({
                 requestID: permission.id,
                 reply: res.outcome.optionId as "once" | "always" | "reject",
+                autoReply: false,
                 directory,
               })
             })

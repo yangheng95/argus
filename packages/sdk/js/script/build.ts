@@ -85,6 +85,74 @@ async function waitForGeneratedClient() {
   throw new Error("SDK generation did not materialize the expected client exports")
 }
 
+type OpenApiOperation = {
+  operationId?: string
+  requestBody?: {
+    required?: boolean
+    content?: Record<string, { schema?: { required?: unknown } }>
+  }
+}
+
+type OpenApiSpec = {
+  paths?: Record<string, Record<string, OpenApiOperation>>
+}
+
+function methodNameFromOperationID(operationID: string): string {
+  const parts = operationID.split(".")
+  return parts[parts.length - 1] || operationID
+}
+
+function escapeRegex(value: string): string {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")
+}
+
+async function requireFlatSdkBodyFieldsFromOpenApi() {
+  const spec = (await Bun.file(rootOpenapi).json()) as OpenApiSpec
+  const sdkPath = path.join(dir, "src", "gen", "sdk.gen.ts")
+  let source = await Bun.file(sdkPath).text()
+
+  for (const [routePath, pathItem] of Object.entries(spec.paths ?? {})) {
+    for (const operation of Object.values(pathItem)) {
+      const operationID = operation.operationId
+      const schema = operation.requestBody?.content?.["application/json"]?.schema
+      const requiredFields = Array.isArray(schema?.required)
+        ? schema.required.filter((field): field is string => typeof field === "string")
+        : []
+      if (!operationID || operation.requestBody?.required !== true || requiredFields.length === 0) continue
+
+      const methodName = methodNameFromOperationID(operationID)
+      const methodPattern = new RegExp(`\\n  public ${escapeRegex(methodName)}<`, "g")
+      let match: RegExpExecArray | null
+      while ((match = methodPattern.exec(source))) {
+        const start = match.index
+        const rest = source.slice(start + 1)
+        const nextMethod = rest.search(/\n  public \w+</)
+        const nextClass = rest.search(/\n}\n\nexport class /)
+        const endCandidates = [nextMethod, nextClass].filter((value) => value > 0)
+        const end = endCandidates.length ? start + 1 + Math.min(...endCandidates) : source.length
+        let block = source.slice(start, end)
+        if (!block.includes(`url: "${routePath}"`)) continue
+
+        let changed = false
+        for (const field of requiredFields) {
+          if (!block.includes(`{ in: "body", key: "${field}" }`)) continue
+          const fieldPattern = new RegExp(`(\\n\\s*)(${escapeRegex(field)})(\\?:)`, "g")
+          block = block.replace(fieldPattern, (_match, indent: string, key: string) => {
+            changed = true
+            return `${indent}${key}:`
+          })
+        }
+        if (changed) {
+          source = `${source.slice(0, start)}${block}${source.slice(end)}`
+        }
+        break
+      }
+    }
+  }
+
+  await writeFileWithRetry(sdkPath, source)
+}
+
 await writeFileWithRetry(
   path.join(dir, "src", "defaults.ts"),
   `// Auto-generated from packages/opencorvus/server-defaults.json by script/build.ts.\n` +
@@ -162,5 +230,6 @@ for (let attempt = 1; attempt <= 5; attempt++) {
     await Bun.sleep(500 * attempt)
   }
 }
+await requireFlatSdkBodyFieldsFromOpenApi()
 await $`bun tsc`
 await rmWithinPackage("openapi.json")

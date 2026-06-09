@@ -76,6 +76,11 @@ export namespace Server {
 
   type OpenAPIOperation = {
     parameters?: OpenAPIParameter[]
+    requestBody?: {
+      required?: boolean
+      content?: Record<string, { schema?: unknown }>
+      [key: string]: unknown
+    }
     [key: string]: unknown
   }
 
@@ -109,6 +114,29 @@ export namespace Server {
         const existing = operation.parameters ?? []
         if (existing.some((parameter) => parameter.in === "query" && parameter.name === "directory")) continue
         operation.parameters = [DIRECTORY_QUERY_PARAMETER satisfies OpenAPIParameter, ...existing]
+      }
+    }
+    return spec
+  }
+
+  function hasRequiredSchemaFields(schema: unknown): boolean {
+    if (!schema || typeof schema !== "object") return false
+    const required = (schema as { required?: unknown }).required
+    return Array.isArray(required) && required.length > 0
+  }
+
+  function markRequiredJsonRequestBodies<T extends OpenAPISpecWithPaths>(spec: T) {
+    for (const pathItem of Object.values(spec.paths ?? {})) {
+      if (!pathItem || typeof pathItem !== "object") continue
+      const operations = pathItem as Record<string, unknown>
+      for (const method of OPENAPI_OPERATION_METHODS) {
+        const rawOperation = operations[method]
+        if (!rawOperation || typeof rawOperation !== "object") continue
+        const operation = rawOperation as OpenAPIOperation
+        const requestBody = operation.requestBody
+        const jsonSchema = requestBody?.content?.["application/json"]?.schema
+        if (!requestBody || !hasRequiredSchemaFields(jsonSchema)) continue
+        requestBody.required = true
       }
     }
     return spec
@@ -220,7 +248,7 @@ export namespace Server {
     const result = await generateSpecs(await routeInventoryApp(), {
       documentation: AppDocumentation,
     })
-    return addDirectoryQueryParameter(result)
+    return markRequiredJsonRequestBodies(addDirectoryQueryParameter(result))
   }
 
   export function listen(opts: {
