@@ -667,6 +667,7 @@
   "browser_preview.viewport.close": "隐藏 {{viewport}} 预览",
   "browser_preview.viewport.mobile": "手机",
   "browser_preview.viewport.tablet": "平板",
+  "browser_preview.viewport.toggle": "显示或隐藏 {{viewport}} 预览",
   "explorer.search_placeholder": "搜索文件",
   "explorer.empty": "当前目录没有文件",
   "explorer.load_failed": "无法加载文件",

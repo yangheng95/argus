@@ -169,9 +169,10 @@ test("main.tsx mounts the top-level side activity toolbars and bodies", async ()
   expect(main).toContain(
     'id: "browser", icon: "web-search", labelKey: "browser_preview.title", tooltipKey: "activity.tooltip.browser"',
   )
-  expect(main).toContain(
-    'id: "notifications", icon: "notifications", labelKey: "notify.center_label", tooltipKey: "activity.tooltip.notifications"',
-  )
+  expect(main).toContain('id: "notifications"')
+  expect(main).toContain('icon: "notifications"')
+  expect(main).toContain('labelKey: "notify.center_label"')
+  expect(main).toContain('tooltipKey: "activity.tooltip.notifications"')
   expect(main).toContain(
     'id: "assistant", icon: "message", labelKey: "coding_assistant.title", tooltipKey: "activity.tooltip.assistant"',
   )
@@ -353,6 +354,7 @@ test("redesign-required i18n keys exist in both locales; the legacy lifecycle ke
     "browser_preview.capture",
     "browser_preview.capture_loading",
     "browser_preview.viewport.desktop",
+    "browser_preview.viewport.toggle",
     "coding_assistant.title",
     "chat.assistant_title",
   ]

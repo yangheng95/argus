@@ -1,4 +1,4 @@
-import { createEffect, createMemo, createResource, createSignal, For, Match, onCleanup, Switch } from "solid-js"
+import { createEffect, createMemo, createResource, createSignal, For, Match, Show, Switch } from "solid-js"
 import {
   captureTaskBrowserPreviewEvidence,
   loadTaskBrowserPreviewTarget,
@@ -59,10 +59,13 @@ export function BrowserPreviewPanel(props: BrowserPreviewPanelProps) {
     () => candidates().find((item) => item.selected)?.id ?? currentTarget()?.id ?? "",
   )
   const viewports = createMemo(() => currentTarget()?.viewports ?? [])
-  const visibleViewports = createMemo(() => {
-    const visible = new Set(visibleViewportIDs())
-    return viewports().filter((item) => visible.has(item.id))
-  })
+  const viewportByID = createMemo(
+    () =>
+      Object.fromEntries(viewports().map((item) => [item.id, item])) as Partial<
+        Record<BrowserPreviewViewportID, BrowserPreviewTarget["viewports"][number]>
+      >,
+  )
+  const visibleViewportCount = createMemo(() => visibleViewportIDs().length)
   const frameUrl = createMemo(() => currentTarget()?.url)
 
   createEffect(() => {
@@ -79,14 +82,6 @@ export function BrowserPreviewPanel(props: BrowserPreviewPanelProps) {
     if (lastAutoFocusedPreviewKey() === previewKey) return
     setLastAutoFocusedPreviewKey(previewKey)
     props.onReady?.(resolved)
-  })
-
-  createEffect(() => {
-    if (!panelActive() || !props.taskID() || !props.directory()) return
-    const timer = window.setInterval(() => {
-      setRefreshToken((value) => value + 1)
-    }, 4_000)
-    onCleanup(() => window.clearInterval(timer))
   })
 
   createEffect(() => {
@@ -131,6 +126,15 @@ export function BrowserPreviewPanel(props: BrowserPreviewPanelProps) {
     const next = visibleViewportIDs().filter((item) => item !== id)
     setVisibleViewportIDs(next)
     if (viewportID() === id && next[0]) setViewportID(next[0])
+  }
+
+  const setViewportVisible = (id: BrowserPreviewViewportID, visible: boolean) => {
+    if (visible) {
+      setVisibleViewportIDs((current) => (current.includes(id) ? current : [...current, id]))
+      setViewportID(id)
+      return
+    }
+    closeViewport(id)
   }
 
   const captureEvidence = () => {
@@ -215,21 +219,19 @@ export function BrowserPreviewPanel(props: BrowserPreviewPanelProps) {
                     >
                       {viewportLabel(item.id)}
                     </Tab>
-                    <Button
-                      type="button"
-                      variant="ghost"
-                      size="icon"
-                      tone="neutral"
-                      title={t("browser_preview.viewport.close", { viewport: viewportLabel(item.id) })}
-                      aria-label={t("browser_preview.viewport.close", { viewport: viewportLabel(item.id) })}
-                      disabled={!visibleViewportIDs().includes(item.id) || visibleViewportIDs().length <= 1}
-                      onClick={(event) => {
-                        event.stopPropagation()
-                        closeViewport(item.id)
-                      }}
+                    <label
+                      class="browser-preview-viewport-toggle"
+                      title={t("browser_preview.viewport.toggle", { viewport: viewportLabel(item.id) })}
+                      onClick={(event) => event.stopPropagation()}
                     >
-                      <Icon name="close" size={12} />
-                    </Button>
+                      <input
+                        type="checkbox"
+                        checked={visibleViewportIDs().includes(item.id)}
+                        disabled={visibleViewportIDs().includes(item.id) && visibleViewportCount() <= 1}
+                        aria-label={t("browser_preview.viewport.toggle", { viewport: viewportLabel(item.id) })}
+                        onChange={(event) => setViewportVisible(item.id, event.currentTarget.checked)}
+                      />
+                    </label>
                   </div>
                 )}
               </For>
@@ -272,35 +274,63 @@ export function BrowserPreviewPanel(props: BrowserPreviewPanelProps) {
             <Switch>
               <Match when={frameUrl()}>
                 {(url) => (
-                  <div class="browser-preview-frame-stack">
-                    <For each={visibleViewports()}>
-                      {(currentViewport) => (
-                        <section
-                          class="browser-preview-frame-shell"
-                          data-viewport={currentViewport.id}
-                          data-active={viewportID() === currentViewport.id ? "true" : "false"}
-                          style={{
-                            "--browser-preview-width": `${currentViewport.width}px`,
-                            "--browser-preview-height": `${currentViewport.height}px`,
-                          }}
-                        >
-                          <div class="browser-preview-frame-header">
-                            <span>{viewportLabel(currentViewport.id)}</span>
-                            <span>{currentViewport.width} × {currentViewport.height}</span>
-                          </div>
-                          <iframe
-                            data-frame-token={`${frameToken()}:${currentViewport.id}`}
-                            class="browser-preview-frame"
-                            src={url()}
-                            title={`${t("browser_preview.frame_title")} - ${viewportLabel(currentViewport.id)}`}
-                            sandbox="allow-forms allow-modals allow-popups allow-scripts"
-                            referrerPolicy="no-referrer"
-                            ref={(element) => {
-                              frameElements[currentViewport.id] = element
-                            }}
-                          />
-                        </section>
-                      )}
+                  <div class="browser-preview-frame-grid">
+                    <For each={visibleViewportIDs()}>
+                      {(currentViewportID) => {
+                        const currentViewport = createMemo(() => viewportByID()[currentViewportID])
+                        return (
+                          <Show when={currentViewport()}>
+                            {(currentViewport) => (
+                              <section
+                                class="browser-preview-frame-shell"
+                                data-viewport={currentViewport().id}
+                                data-active={viewportID() === currentViewport().id ? "true" : "false"}
+                                style={{
+                                  "--browser-preview-width": `${currentViewport().width}px`,
+                                  "--browser-preview-height": `${currentViewport().height}px`,
+                                }}
+                              >
+                                <div class="browser-preview-frame-header">
+                                  <span class="browser-preview-frame-title">{viewportLabel(currentViewport().id)}</span>
+                                  <div class="browser-preview-frame-actions">
+                                    <span>
+                                      {currentViewport().width} × {currentViewport().height}
+                                    </span>
+                                    <Button
+                                      type="button"
+                                      variant="ghost"
+                                      size="icon"
+                                      tone="neutral"
+                                      data-ui="browser-preview-frame-close"
+                                      title={t("browser_preview.viewport.close", {
+                                        viewport: viewportLabel(currentViewport().id),
+                                      })}
+                                      aria-label={t("browser_preview.viewport.close", {
+                                        viewport: viewportLabel(currentViewport().id),
+                                      })}
+                                      disabled={visibleViewportCount() <= 1}
+                                      onClick={() => closeViewport(currentViewport().id)}
+                                    >
+                                      <Icon name="close" size={12} />
+                                    </Button>
+                                  </div>
+                                </div>
+                                <iframe
+                                  data-frame-token={`${frameToken()}:${currentViewport().id}`}
+                                  class="browser-preview-frame"
+                                  src={url()}
+                                  title={`${t("browser_preview.frame_title")} - ${viewportLabel(currentViewport().id)}`}
+                                  sandbox="allow-forms allow-modals allow-popups allow-scripts"
+                                  referrerPolicy="no-referrer"
+                                  ref={(element) => {
+                                    frameElements[currentViewport().id] = element
+                                  }}
+                                />
+                              </section>
+                            )}
+                          </Show>
+                        )
+                      }}
                     </For>
                   </div>
                 )}
