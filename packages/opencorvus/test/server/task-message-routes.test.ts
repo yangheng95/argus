@@ -121,6 +121,68 @@ describe("task message routes", () => {
     })
   })
 
+  test("GET /task/:taskID/operator-model-context uses orchestrator for empty task root sessions", async () => {
+    await using tmp = await tmpdir({
+      git: true,
+      config: {
+        model: "test/base",
+        agent: {
+          orchestrator: {
+            model: "test/orchestrator",
+          },
+          coding: {
+            model: "test/coding",
+          },
+        },
+      },
+    })
+
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const app = Server.App()
+        const taskID = Identifier.ascending("task")
+        const now = Date.now()
+        const root = await Session.create({ kind: "root", title: "empty model context" })
+
+        Database.use((db) =>
+          db
+            .insert(EngineTaskTable)
+            .values({
+              id: taskID,
+              project_id: Instance.project.id,
+              session_id: root.id,
+              source: "panel",
+              title: "empty model context",
+              request: "empty model context",
+              priority: "normal",
+              time_created: now,
+              time_updated: now,
+              time_started: now,
+            })
+            .run(),
+        )
+
+        const response = await app.request(`/task/${taskID}/operator-model-context`, {
+          headers: {
+            "x-opencorvus-directory": tmp.path,
+          },
+        })
+
+        expect(response.status).toBe(200)
+        await expect(response.json()).resolves.toMatchObject({
+          taskID,
+          sessionID: root.id,
+          agent: "orchestrator",
+          model: {
+            providerID: "test",
+            modelID: "orchestrator",
+          },
+        })
+      },
+    })
+  })
+
   test("POST /task/:taskID/message triggers scheduler with natural language", async () => {
     await using tmp = await tmpdir({ git: true, config: routeTestConfig })
 
@@ -222,6 +284,79 @@ describe("task message routes", () => {
         expect(latest?.parts[0]).toMatchObject({
           type: "text",
           text: "把当前任务停下来，重新评估策略后继续。",
+        })
+      },
+    })
+  })
+
+  test("POST /task/:taskID/message persists orchestrator agent on empty task root sessions", async () => {
+    await using tmp = await tmpdir({
+      git: true,
+      config: {
+        model: "test/base",
+        agent: {
+          orchestrator: {
+            model: "test/orchestrator",
+          },
+          coding: {
+            model: "test/coding",
+          },
+        },
+      },
+    })
+
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const app = Server.App()
+        const dispatchTaskLoop = spyOn(Queue, "dispatchTaskLoop").mockResolvedValue(undefined)
+        const taskID = Identifier.ascending("task")
+        const now = Date.now()
+        const root = await Session.create({ kind: "root", title: "empty task message" })
+
+        Database.use((db) =>
+          db
+            .insert(EngineTaskTable)
+            .values({
+              id: taskID,
+              project_id: Instance.project.id,
+              session_id: root.id,
+              source: "panel",
+              title: "empty task message",
+              request: "empty task message",
+              priority: "normal",
+              time_created: now,
+              time_updated: now,
+              time_started: now,
+            })
+            .run(),
+        )
+
+        const response = await app.request(`/task/${taskID}/message`, {
+          method: "POST",
+          headers: {
+            "content-type": "application/json",
+            "x-opencorvus-directory": tmp.path,
+          },
+          body: JSON.stringify({
+            text: "继续推进当前任务。",
+            source: "panel",
+          }),
+        })
+
+        expect(response.status).toBe(200)
+        await new Promise((resolve) => setTimeout(resolve, 0))
+        expect(dispatchTaskLoop).toHaveBeenCalledTimes(1)
+
+        const messages = await Session.messages({ sessionID: root.id })
+        expect(messages).toHaveLength(1)
+        expect(messages[0]?.info).toMatchObject({
+          role: "user",
+          agent: "orchestrator",
+          model: {
+            providerID: "test",
+            modelID: "orchestrator",
+          },
         })
       },
     })
