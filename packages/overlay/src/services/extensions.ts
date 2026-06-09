@@ -52,14 +52,22 @@ export function skillRemovable(item: SkillDescriptor): boolean {
  * react to store updates via Solid reactivity.
  */
 export async function loadExtensions(): Promise<void> {
-  const [skills, mcp] = await Promise.all([apiJson("skill/installed"), apiJson("mcp")])
+  await Promise.all([loadInstalledSkills(), loadMcpStatus()])
+}
+
+export async function loadInstalledSkills(): Promise<void> {
+  const skills = await apiJson("skill/installed")
   if (!Array.isArray(skills)) {
     throw new Error("skill/installed returned a non-array payload")
   }
+  setSkills(skills)
+}
+
+export async function loadMcpStatus(): Promise<void> {
+  const mcp = await apiJson("mcp")
   if (!mcp || typeof mcp !== "object" || Array.isArray(mcp)) {
     throw new Error("mcp returned a non-object payload")
   }
-  setSkills(skills)
   setMcp(mcp)
 }
 
