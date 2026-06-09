@@ -72,7 +72,7 @@ async function decodePNG(filePath: string): Promise<PNG> {
   })
 }
 
-function pngLuminanceVariance(png: PNG): number {
+export function pngLuminanceVariance(png: PNG): number {
   const data = png.data
   const stride = 64 * 4
   let sum = 0

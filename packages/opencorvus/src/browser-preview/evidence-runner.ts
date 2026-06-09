@@ -1,16 +1,19 @@
 import crypto from "node:crypto"
 import fs from "node:fs/promises"
 import path from "node:path"
+import { PNG } from "pngjs"
 import { BrowserNodeSidecarError, runBrowserNodeSidecar } from "@/browser/runtime/node-executor"
 import { resolveBrowserNodeSidecarRuntime } from "@/browser/runtime/node-sidecar"
 import { BrowserRuntime } from "@/browser/runtime"
 import {
   normalizeRuntimeCaptureViewport,
   RUNTIME_CAPTURE_DEFAULTS,
+  runtimeCaptureFailedLayers,
   type RuntimeCaptureFailure,
   type RuntimeCaptureResult,
   type RuntimeCaptureSuccess,
 } from "@/runtime/page-capture"
+import { pngLuminanceVariance } from "@/runtime/visual-page"
 import { browserPreviewViewportByID, type BrowserPreviewViewportID } from "./viewport"
 
 export type BrowserEvidenceManifestSummary = {
@@ -48,7 +51,7 @@ type SidecarViewportInput = {
   screenshotPath: string
 }
 
-type SidecarCaptureResult = {
+export type SidecarCaptureResult = {
   id: BrowserPreviewViewportID
   captured: boolean
   passed: boolean
@@ -61,6 +64,12 @@ type SidecarCaptureResult = {
   dom?: RuntimeCaptureSuccess["dom"]
   capture_error?: RuntimeCaptureFailure["capture_error"]
   summary: string
+}
+
+export type BrowserPreviewFinalizedSidecarCapture = {
+  capture: RuntimeCaptureResult
+  artifactPath?: string
+  diagnostic: string
 }
 
 export async function runBrowserPreviewEvidenceJob(
@@ -122,45 +131,10 @@ export async function runBrowserPreviewEvidenceJob(
   const artifactPaths: string[] = []
   const diagnostics: string[] = []
   for (const capture of sidecar.result.captures) {
-    if (!capture.captured || !capture.path) {
-      captures[capture.id] = {
-        captured: false,
-        passed: false,
-        url: input.url,
-        requested_viewport: capture.requested_viewport,
-        viewport: capture.viewport,
-        capture_error: capture.capture_error ?? { kind: "capture_failed", message: capture.summary },
-        summary: capture.summary,
-      }
-      diagnostics.push(capture.summary)
-      continue
-    }
-    const bytes = await fs.readFile(capture.path)
-    const sha = crypto.createHash("sha256").update(bytes).digest("hex").slice(0, 16)
-    const finalPath = path.join(input.outDir, `${capture.id}-${sha}.png`)
-    if (finalPath !== capture.path) {
-      await fs.rename(capture.path, finalPath).catch(async () => {
-        await fs.copyFile(capture.path!, finalPath)
-      })
-    }
-    if (capture.layers) capture.layers.pixel.screenshot_path = finalPath
-    artifactPaths.push(finalPath)
-    captures[capture.id] = {
-      captured: true,
-      passed: capture.passed,
-      url: input.url,
-      target_url: capture.target_url ?? input.url,
-      path: finalPath,
-      sha,
-      bytes: bytes.length,
-      size: capture.size ?? { width: capture.viewport.width, height: capture.viewport.height },
-      requested_viewport: capture.requested_viewport,
-      viewport: capture.viewport,
-      layers: capture.layers ?? emptyPassedLayers(finalPath),
-      dom: capture.dom ?? emptyDom(),
-      summary: capture.summary,
-    }
-    diagnostics.push(capture.summary)
+    const finalized = await finalizeBrowserPreviewSidecarCapture({ capture, url: input.url, outDir: input.outDir })
+    captures[capture.id] = finalized.capture
+    if (finalized.artifactPath) artifactPaths.push(finalized.artifactPath)
+    diagnostics.push(finalized.diagnostic)
   }
 
   const manifest: BrowserEvidenceManifestSummary = {
@@ -192,24 +166,82 @@ export async function runBrowserPreviewEvidenceJob(
   return { manifest, captures }
 }
 
-function emptyDom(): RuntimeCaptureSuccess["dom"] {
-  return {
-    textLength: 0,
-    nodeCount: 0,
-    bodyDescendantCount: 0,
-    hasBodyChildren: false,
-    isEmptyRootShell: true,
+export async function finalizeBrowserPreviewSidecarCapture(input: {
+  capture: SidecarCaptureResult
+  url: string
+  outDir: string
+}): Promise<BrowserPreviewFinalizedSidecarCapture> {
+  const { capture } = input
+  if (!capture.captured || !capture.path) {
+    return {
+      capture: {
+        captured: false,
+        passed: false,
+        url: input.url,
+        requested_viewport: capture.requested_viewport,
+        viewport: capture.viewport,
+        capture_error: capture.capture_error ?? { kind: "capture_failed", message: capture.summary },
+        summary: capture.summary,
+      },
+      diagnostic: capture.summary,
+    }
   }
-}
-
-function emptyPassedLayers(screenshotPath: string): RuntimeCaptureSuccess["layers"] {
+  if (!capture.layers || !capture.dom) {
+    const missing = [
+      !capture.layers ? "layers" : undefined,
+      !capture.dom ? "dom" : undefined,
+    ].filter((item): item is string => !!item)
+    const summary = `browser preview capture failed: sidecar did not return structured ${missing.join(" and ")} evidence`
+    return {
+      capture: {
+        captured: false,
+        passed: false,
+        url: input.url,
+        requested_viewport: capture.requested_viewport,
+        viewport: capture.viewport,
+        capture_error: { kind: "capture_failed", message: summary },
+        summary,
+      },
+      diagnostic: summary,
+    }
+  }
+  const bytes = await fs.readFile(capture.path)
+  const sha = crypto.createHash("sha256").update(bytes).digest("hex").slice(0, 16)
+  const finalPath = path.join(input.outDir, `${capture.id}-${sha}.png`)
+  if (finalPath !== capture.path) {
+    await fs.rename(capture.path, finalPath).catch(async () => {
+      await fs.copyFile(capture.path!, finalPath)
+    })
+  }
+  const png = PNG.sync.read(bytes)
+  const variance = pngLuminanceVariance(png)
+  capture.layers.pixel = {
+    passed: variance >= 25,
+    variance: Number(variance.toFixed(2)),
+    floor: 25,
+    screenshot_path: finalPath,
+  }
+  const failedLayers = runtimeCaptureFailedLayers(capture.layers)
+  const passed = failedLayers.length === 0
+  const summary = passed ? `all runtime capture layers passed on ${input.url}` : `failed layers: ${failedLayers.join(", ")}`
   return {
-    http: { passed: true, status: 200, content_type: "text/html", body_length: 0, reason: "" },
-    asset: { passed: true, total: 0, failed: [] },
-    dom: { passed: true, body_descendants: 0, required: 0 },
-    js: { passed: true, console_errors: [], page_errors: [] },
-    pixel: { passed: true, variance: 100, floor: 1, screenshot_path: screenshotPath },
-    expected: { passed: true, missing_selectors: [], missing_texts: [] },
+    capture: {
+      captured: true,
+      passed,
+      url: input.url,
+      target_url: capture.target_url ?? input.url,
+      path: finalPath,
+      sha,
+      bytes: bytes.length,
+      size: capture.size ?? { width: capture.viewport.width, height: capture.viewport.height },
+      requested_viewport: capture.requested_viewport,
+      viewport: capture.viewport,
+      layers: capture.layers,
+      dom: capture.dom,
+      summary,
+    },
+    artifactPath: finalPath,
+    diagnostic: summary,
   }
 }
 
@@ -332,7 +364,7 @@ async function captureViewport(browser, input, viewport) {
         asset: { passed: failedRequests.length === 0, total: totalResponses, failed: failedRequests },
         dom: { passed: dom.bodyDescendantCount >= input.minDomDescendants, body_descendants: dom.bodyDescendantCount, required: input.minDomDescendants },
         js: { passed: consoleErrors.length === 0 && pageErrors.length === 0, console_errors: consoleErrors, page_errors: pageErrors },
-        pixel: { passed: true, variance: 100, floor: 1, screenshot_path: viewport.screenshotPath },
+        pixel: { passed: false, variance: 0, floor: 25, screenshot_path: viewport.screenshotPath },
         expected: { passed: true, missing_selectors: [], missing_texts: [] },
       },
       dom,
