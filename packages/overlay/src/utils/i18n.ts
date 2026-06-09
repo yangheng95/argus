@@ -45,6 +45,23 @@ function localeValue(key: string, locale: string = currentLocale): any {
     .reduce((acc: any, part: string) => (record(acc) ? (acc as Record<string, any>)[part] : undefined), source)
 }
 
+export class MissingI18nKeyError extends Error {
+  constructor(
+    readonly locale: string,
+    readonly key: string,
+    readonly expected: string,
+  ) {
+    super(`Missing i18n ${expected} for locale ${locale}: ${key}`)
+    this.name = "MissingI18nKeyError"
+  }
+}
+
+function requiredLocaleValue(key: string, expected: string): any {
+  const value = localeValue(key)
+  if (value === undefined) throw new MissingI18nKeyError(currentLocale, key, expected)
+  return value
+}
+
 export function fillTemplate(text: string, vars: Record<string, any> = {}): string {
   return String(text).replace(/\{\{\s*([\w.]+)\s*\}\}/g, (_, key: string) => {
     const value = key
@@ -55,27 +72,26 @@ export function fillTemplate(text: string, vars: Record<string, any> = {}): stri
 }
 
 export function t(key: string, vars?: Record<string, any>): string {
-  const value = localeValue(key) ?? localeValue(key, "en-US")
-  if (typeof value !== "string") return key
+  const value = requiredLocaleValue(key, "string")
+  if (typeof value !== "string") throw new MissingI18nKeyError(currentLocale, key, "string")
   return fillTemplate(value, vars)
 }
 
 export function tArray(key: string): string[] {
-  const value = localeValue(key) ?? localeValue(key, "en-US")
-  if (Array.isArray(value)) return value.filter((v): v is string => typeof v === "string")
-  return []
+  const value = requiredLocaleValue(key, "string array")
+  if (!Array.isArray(value) || value.some((item) => typeof item !== "string")) {
+    throw new MissingI18nKeyError(currentLocale, key, "string array")
+  }
+  return value
 }
 
 export function tc(key: string, count: number, vars?: Record<string, any>): string {
-  const value = localeValue(key) ?? localeValue(key, "en-US")
+  const value = requiredLocaleValue(key, "plural object")
   if (record(value)) {
-    const text =
-      (value as Record<string, any>)[count === 1 ? "one" : "other"] ??
-      (value as Record<string, any>).other ??
-      (value as Record<string, any>).one
+    const text = (value as Record<string, any>)[count === 1 ? "one" : "other"]
     if (typeof text === "string") return fillTemplate(text, { count, ...vars })
   }
-  return t(key, { count, ...vars })
+  throw new MissingI18nKeyError(currentLocale, key, "plural object")
 }
 
 export function localeTag(): string {
