@@ -27,7 +27,7 @@ import type {
   TransportRequest,
   TransportResponse,
 } from "./host-transport"
-import { DEFAULT_REQUEST_TIMEOUT_MILLISECONDS, nativeUnsupported } from "./host-transport"
+import { DEFAULT_REQUEST_TIMEOUT_MILLISECONDS, HOST_CAPABILITIES, nativeUnsupported } from "./host-transport"
 import type { HostKind } from "./host-transport"
 import { loadBrowserOverlaySettings, saveBrowserOverlaySettings } from "./overlay-settings-storage"
 
@@ -345,6 +345,7 @@ export function createTauriTransport(kind: Extract<HostKind, "tauri" | "browser"
   ensureAuthChangeSubscribed()
   return {
     kind,
+    capabilities: HOST_CAPABILITIES[kind],
     async request<T = unknown>(input: TransportRequest): Promise<TransportResponse<T>> {
       const url = buildUrl(input.path, input.query)
       const signal = input.signal ?? AbortSignal.timeout(DEFAULT_REQUEST_TIMEOUT_MILLISECONDS)

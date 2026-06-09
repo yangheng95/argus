@@ -15,7 +15,12 @@ import { afterEach, beforeEach, describe, expect, test } from "bun:test"
  * called from the Settings toggle user gesture is allowed to.
  */
 
-import { __setHostTransportForTest, type HostTransport, type NativeCommand } from "../src/services/host-transport"
+import {
+  HOST_CAPABILITIES,
+  __setHostTransportForTest,
+  type HostTransport,
+  type NativeCommand,
+} from "../src/services/host-transport"
 
 interface CallLog {
   permissionProbes: number
@@ -31,6 +36,7 @@ function installFakeTransport(initialPermission: "granted" | "denied" | "default
   let permission = initialPermission
   const transport: HostTransport = {
     kind: "tauri",
+    capabilities: HOST_CAPABILITIES.tauri,
     async request() {
       throw new Error("not used in this test")
     },

@@ -4,6 +4,7 @@
 
 import { createSignal, onCleanup, onMount, Show } from "solid-js"
 import { t } from "../utils/i18n"
+import { getHostTransport } from "../services/host-transport"
 import { getTauriWindowHandle } from "../services/tauri-transport"
 import { quitOverlay } from "../services/window"
 import { nativeConfirm } from "../utils/native"
@@ -32,6 +33,7 @@ function maximizeLabel(isMaximized: boolean): string {
 export function WindowControls() {
   const [isMaximized, setIsMaximized] = createSignal(false)
   const [tauriWin, setTauriWin] = createSignal<any | null>(null)
+  const hostCapabilities = getHostTransport().capabilities
 
   // ── Sync maximize state ──
   const syncMaximize = async (win: any): Promise<boolean> => {
@@ -81,6 +83,7 @@ export function WindowControls() {
 
   // ── Lifecycle: init Tauri and attach resize listener ──
   onMount(async () => {
+    if (!hostCapabilities.ui.windowControls) return
     const win = await currentTauriWindow()
     if (!win) return
     setTauriWin(win)
@@ -98,7 +101,7 @@ export function WindowControls() {
       if (typeof unlisten === "function") cleanupResized = unlisten
     }
 
-    const titlebar = document.getElementById("titlebar")
+    const titlebar = hostCapabilities.ui.windowDrag ? document.getElementById("titlebar") : null
     const handleTitlebarPointerDown = (event: PointerEvent) => {
       if (event.button !== 0) return
       if (!(event.target instanceof Element)) return
@@ -123,7 +126,7 @@ export function WindowControls() {
   return (
     <div class="titlebar-window-controls" data-no-drag="true">
       {/* Minimize */}
-      <Show when={tauriWin() !== null}>
+      <Show when={hostCapabilities.ui.windowControls && tauriWin() !== null}>
         <Button
           type="button"
           id="btnMinimize"
@@ -140,7 +143,7 @@ export function WindowControls() {
       </Show>
 
       {/* Maximize / Restore */}
-      <Show when={tauriWin() !== null}>
+      <Show when={hostCapabilities.ui.windowControls && tauriWin() !== null}>
         <Button
           type="button"
           id="btnMaximize"
@@ -158,7 +161,7 @@ export function WindowControls() {
       </Show>
 
       {/* Close / hide */}
-      <Show when={tauriWin() !== null}>
+      <Show when={hostCapabilities.ui.windowControls && tauriWin() !== null}>
         <Button
           type="button"
           id="btnClose"

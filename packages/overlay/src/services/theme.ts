@@ -153,8 +153,8 @@ export function handleZoomHotkey(event: KeyboardEvent): void {
   // Only intercept Ctrl/Cmd +/−/0 inside the Tauri overlay window —
   // browser preview and the VS Code webview rely on the host's native
   // zoom, so we must not steal the keystroke there.
-  const isTauri = getHostTransport().kind === "tauri"
-  if (!isTauri || event.isComposing || !(event.ctrlKey || event.metaKey) || event.altKey) return
+  const ownsZoomHotkeys = getHostTransport().capabilities.ui.overlayZoomHotkeys
+  if (!ownsZoomHotkeys || event.isComposing || !(event.ctrlKey || event.metaKey) || event.altKey) return
 
   const plus = event.code === "Equal" || event.code === "NumpadAdd" || event.key === "+" || event.key === "="
   if (plus) {
@@ -186,11 +186,9 @@ export function installSystemThemeListener(onchange: () => void): () => void {
   return () => systemThemeMedia!.removeEventListener("change", onchange)
 }
 
-/** Toggle Tauri devtools (F12 handler). No-op outside Tauri. */
+/** Toggle host devtools when the active transport exposes that native command. */
 export async function toggleDevtools(): Promise<void> {
-  try {
-    await getHostTransport().native({ kind: "devtools.toggle" })
-  } catch {
-    // No-op for hosts without devtools (vscode webview).
-  }
+  const transport = getHostTransport()
+  if (!transport.capabilities.nativeCommands["devtools.toggle"]) return
+  await transport.native({ kind: "devtools.toggle" })
 }

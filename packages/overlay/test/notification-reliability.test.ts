@@ -9,11 +9,15 @@ import {
   routeNotification,
   taskHasUnreadNotification,
 } from "../src/services/notify"
-import { __setHostTransportForTest, type HostTransport, type NativeCommand } from "../src/services/host-transport"
+import {
+  HOST_CAPABILITIES,
+  __setHostTransportForTest,
+  type HostTransport,
+  type NativeCommand,
+} from "../src/services/host-transport"
 import { setBoardStore } from "../src/store/board"
 import { setPageMode } from "../src/store/page-mode"
 import { setSettingsStore } from "../src/store/settings"
-
 ;(globalThis as any).__OPENCORVUS_OVERLAY_VERSION__ = "test"
 
 let events: typeof import("../src/services/events")
@@ -39,6 +43,7 @@ function installTransport() {
   }
   const transport: HostTransport = {
     kind: "tauri",
+    capabilities: HOST_CAPABILITIES.tauri,
     async request() {
       throw new Error("not used")
     },

@@ -150,6 +150,121 @@ export type NativeCommand =
   | { kind: "notification.requestPermission" }
   | { kind: "notification.send"; title: string; body?: string; tag?: string }
 
+export type NativeCommandKind = NativeCommand["kind"]
+
+export type NativeCommandCapabilities = Readonly<Record<NativeCommandKind, boolean>>
+
+export interface HostUiCapabilities {
+  /** Whether the host exposes native window chrome controls to the overlay. */
+  readonly windowControls: boolean
+  /** Whether the overlay titlebar can initiate a native host-window drag. */
+  readonly windowDrag: boolean
+  /** Whether Ctrl/Cmd zoom shortcuts should be owned by the overlay. */
+  readonly overlayZoomHotkeys: boolean
+  /** Whether a missing workspace should be entered manually instead of through a host picker. */
+  readonly manualWorkspacePathEntry: boolean
+  /** Whether task-event desktop notifications must read host permission before sending. */
+  readonly desktopNotificationsRequirePermission: boolean
+}
+
+export interface HostCapabilities {
+  readonly nativeCommands: NativeCommandCapabilities
+  readonly ui: HostUiCapabilities
+}
+
+const TAURI_NATIVE_COMMANDS: NativeCommandCapabilities = {
+  "open-url": true,
+  "open-path": true,
+  "settings.load": true,
+  "settings.save": true,
+  "config.write-file": true,
+  "server.info": true,
+  "server.restart": true,
+  "devtools.toggle": true,
+  "window.quit": true,
+  "tray.attention.set": true,
+  "badge.set": true,
+  "workspace.pickDir": true,
+  "workspace.pickFiles": true,
+  "workspace.openProjectEditor": true,
+  "notification.permission": true,
+  "notification.requestPermission": true,
+  "notification.send": true,
+}
+
+const BROWSER_NATIVE_COMMANDS: NativeCommandCapabilities = {
+  "open-url": false,
+  "open-path": false,
+  "settings.load": true,
+  "settings.save": true,
+  "config.write-file": false,
+  "server.info": false,
+  "server.restart": false,
+  "devtools.toggle": false,
+  "window.quit": false,
+  "tray.attention.set": false,
+  "badge.set": false,
+  "workspace.pickDir": false,
+  "workspace.pickFiles": false,
+  "workspace.openProjectEditor": false,
+  "notification.permission": true,
+  "notification.requestPermission": true,
+  "notification.send": true,
+}
+
+const VSCODE_NATIVE_COMMANDS: NativeCommandCapabilities = {
+  "open-url": false,
+  "open-path": false,
+  "settings.load": true,
+  "settings.save": true,
+  "config.write-file": false,
+  "server.info": false,
+  "server.restart": false,
+  "devtools.toggle": false,
+  "window.quit": false,
+  "tray.attention.set": false,
+  "badge.set": false,
+  "workspace.pickDir": false,
+  "workspace.pickFiles": false,
+  "workspace.openProjectEditor": false,
+  "notification.permission": false,
+  "notification.requestPermission": false,
+  "notification.send": false,
+}
+
+export const HOST_CAPABILITIES: Readonly<Record<HostKind, HostCapabilities>> = {
+  tauri: {
+    nativeCommands: TAURI_NATIVE_COMMANDS,
+    ui: {
+      windowControls: true,
+      windowDrag: true,
+      overlayZoomHotkeys: true,
+      manualWorkspacePathEntry: false,
+      desktopNotificationsRequirePermission: false,
+    },
+  },
+  browser: {
+    nativeCommands: BROWSER_NATIVE_COMMANDS,
+    ui: {
+      windowControls: false,
+      windowDrag: false,
+      overlayZoomHotkeys: false,
+      manualWorkspacePathEntry: true,
+      desktopNotificationsRequirePermission: true,
+    },
+  },
+  vscode: {
+    nativeCommands: VSCODE_NATIVE_COMMANDS,
+    ui: {
+      windowControls: false,
+      windowDrag: false,
+      overlayZoomHotkeys: false,
+      manualWorkspacePathEntry: true,
+      desktopNotificationsRequirePermission: false,
+    },
+  },
+} as const
+
 export class UnsupportedNativeCommandError extends Error {
   override readonly name: string = "UnsupportedNativeCommandError"
   constructor(
@@ -182,6 +297,7 @@ export interface UiCommandSubscription {
 
 export interface HostTransport {
   readonly kind: HostKind
+  readonly capabilities: HostCapabilities
   /**
    * Issue a single HTTP request. The transport handles Authorization
    * header injection, base-URL resolution, and (in vscode mode) the

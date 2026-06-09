@@ -15,14 +15,18 @@ let _trayAttentionEnabled: boolean | undefined
 let _dockBadgeCount: number | undefined
 
 export async function quitOverlay(): Promise<boolean> {
-  const result = await getHostTransport().native({ kind: "window.quit" })
+  const transport = getHostTransport()
+  if (!transport.capabilities.nativeCommands["window.quit"]) return false
+  const result = await transport.native({ kind: "window.quit" })
   return result === true
 }
 
 export async function setTrayAttention(active: boolean): Promise<boolean> {
   if (_trayAttentionEnabled === !!active) return true
+  const transport = getHostTransport()
+  if (!transport.capabilities.nativeCommands["tray.attention.set"]) return false
   try {
-    const result = await getHostTransport().native({
+    const result = await transport.native({
       kind: "tray.attention.set",
       active: !!active,
     })
@@ -36,8 +40,10 @@ export async function setTrayAttention(active: boolean): Promise<boolean> {
 export async function setDockBadge(count: number): Promise<boolean> {
   const next = Math.max(0, Math.trunc(Number(count) || 0))
   if (_dockBadgeCount === next) return true
+  const transport = getHostTransport()
+  if (!transport.capabilities.nativeCommands["badge.set"]) return false
   try {
-    const result = await getHostTransport().native({
+    const result = await transport.native({
       kind: "badge.set",
       count: next,
     })

@@ -24,6 +24,7 @@ import {
   openDirectory,
   setDirectory,
 } from "../../services/workspace"
+import { getHostTransport } from "../../services/host-transport"
 import { t } from "../../utils/i18n"
 
 type MenuID = "workspace" | "provider" | "run" | "tools" | "settings" | "view" | "help"
@@ -368,6 +369,8 @@ export function TitlebarMenubar() {
   const opacityPercent = createMemo(() => Math.round(settingsStore.opacity * 100))
   const zoomPercent = createMemo(() => Math.round(settingsStore.zoom * 100))
   const themeOptions = themeOptionsForCurrentHost()
+  const hostCapabilities = getHostTransport().capabilities
+  const nativeCommands = hostCapabilities.nativeCommands
 
   return (
     /* OpenCorvus is the product brand name, so this menubar landmark keeps the literal brand label. */
@@ -419,13 +422,17 @@ export function TitlebarMenubar() {
                     <div class="titlebar-menubar-note" title={settingsStore.directory}>
                       {settingsStore.directory || t("workspace.no_directory")}
                     </div>
-                    <MenuItem onClick={() => void browseDirectory().finally(closeMenu)}>{t("cwd.browse")}</MenuItem>
-                    <MenuItem
-                      onClick={() => void openDirectory().finally(closeMenu)}
-                      disabled={!settingsStore.directory}
-                    >
-                      {t("cwd.open")}
-                    </MenuItem>
+                    <Show when={nativeCommands["workspace.pickDir"]}>
+                      <MenuItem onClick={() => void browseDirectory().finally(closeMenu)}>{t("cwd.browse")}</MenuItem>
+                    </Show>
+                    <Show when={nativeCommands["open-path"]}>
+                      <MenuItem
+                        onClick={() => void openDirectory().finally(closeMenu)}
+                        disabled={!settingsStore.directory}
+                      >
+                        {t("cwd.open")}
+                      </MenuItem>
+                    </Show>
                     <MenuItem
                       onClick={() => {
                         closeProject()
@@ -605,30 +612,34 @@ export function TitlebarMenubar() {
 
                 <Show when={menu.id === "help"}>
                   <MenuGroup title={t("titlebar.menu.help")}>
-                    <MenuItem
-                      onClick={() => openDocumentation("quickstart")}
-                      meta={t("titlebar.docs_hint")}
-                      testid="titlebar-help-docs"
-                    >
-                      {t("titlebar.docs")}
-                    </MenuItem>
-                    <MenuItem
-                      onClick={() => openDocumentation("sdk")}
-                      meta={t("titlebar.sdk_hint")}
-                      testid="titlebar-help-sdk"
-                    >
-                      {t("titlebar.sdk")}
-                    </MenuItem>
-                    <MenuItem
-                      onClick={() => {
-                        toggleDevtools()
-                        closeMenu()
-                      }}
-                      meta={t("titlebar.devtools_hint")}
-                      testid="titlebar-help-devtools"
-                    >
-                      {t("titlebar.devtools")}
-                    </MenuItem>
+                    <Show when={nativeCommands["open-url"]}>
+                      <MenuItem
+                        onClick={() => openDocumentation("quickstart")}
+                        meta={t("titlebar.docs_hint")}
+                        testid="titlebar-help-docs"
+                      >
+                        {t("titlebar.docs")}
+                      </MenuItem>
+                      <MenuItem
+                        onClick={() => openDocumentation("sdk")}
+                        meta={t("titlebar.sdk_hint")}
+                        testid="titlebar-help-sdk"
+                      >
+                        {t("titlebar.sdk")}
+                      </MenuItem>
+                    </Show>
+                    <Show when={nativeCommands["devtools.toggle"]}>
+                      <MenuItem
+                        onClick={() => {
+                          toggleDevtools()
+                          closeMenu()
+                        }}
+                        meta={t("titlebar.devtools_hint")}
+                        testid="titlebar-help-devtools"
+                      >
+                        {t("titlebar.devtools")}
+                      </MenuItem>
+                    </Show>
                     <MenuItem
                       onClick={() => openConfig("about")}
                       meta={t("titlebar.about_hint")}

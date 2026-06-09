@@ -88,8 +88,10 @@ export const [notificationStore, setNotificationStore] = createStore<{ items: Ap
 })
 
 async function readHostPermission(): Promise<HostPermission> {
+  const transport = getHostTransport()
+  if (!transport.capabilities.nativeCommands["notification.permission"]) return "unsupported"
   try {
-    const result = (await getHostTransport().native({ kind: "notification.permission" })) as HostPermission
+    const result = (await transport.native({ kind: "notification.permission" })) as HostPermission
     return result
   } catch (err) {
     console.warn("[notify] permission probe failed", err)
@@ -98,8 +100,10 @@ async function readHostPermission(): Promise<HostPermission> {
 }
 
 async function requestHostPermission(): Promise<HostPermission> {
+  const transport = getHostTransport()
+  if (!transport.capabilities.nativeCommands["notification.requestPermission"]) return "unsupported"
   try {
-    const result = (await getHostTransport().native({ kind: "notification.requestPermission" })) as HostPermission
+    const result = (await transport.native({ kind: "notification.requestPermission" })) as HostPermission
     return result
   } catch (err) {
     console.warn("[notify] permission request failed", err)
@@ -108,8 +112,10 @@ async function requestHostPermission(): Promise<HostPermission> {
 }
 
 async function sendHostNotification(title: string, body: string, tag: string): Promise<void> {
+  const transport = getHostTransport()
+  if (!transport.capabilities.nativeCommands["notification.send"]) return
   try {
-    await getHostTransport().native({ kind: "notification.send", title, body, tag })
+    await transport.native({ kind: "notification.send", title, body, tag })
   } catch (err) {
     console.warn("[notify] failed to dispatch notification", err)
   }
@@ -380,7 +386,9 @@ async function sendDesktopIfAllowed(
   body: string,
 ): Promise<void> {
   if (!shouldSendDesktop(event, taskID)) return
-  if (getHostTransport().kind === "tauri") {
+  const transport = getHostTransport()
+  if (!transport.capabilities.nativeCommands["notification.send"]) return
+  if (!transport.capabilities.ui.desktopNotificationsRequirePermission) {
     await sendHostNotification(title, body, `oc:${taskID || "global"}:${event.type}`)
     return
   }

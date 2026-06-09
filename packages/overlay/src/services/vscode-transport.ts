@@ -36,7 +36,7 @@ import type {
   TransportRequest,
   TransportResponse,
 } from "./host-transport"
-import { DEFAULT_REQUEST_TIMEOUT_MILLISECONDS, nativeUnsupported } from "./host-transport"
+import { DEFAULT_REQUEST_TIMEOUT_MILLISECONDS, HOST_CAPABILITIES, nativeUnsupported } from "./host-transport"
 import { publishHostTheme } from "./host-theme"
 import { loadBrowserOverlaySettings, saveBrowserOverlaySettings } from "./overlay-settings-storage"
 
@@ -379,6 +379,7 @@ export function createVsCodeTransport(): HostTransport {
 
   return {
     kind: "vscode",
+    capabilities: HOST_CAPABILITIES.vscode,
     async request<T = unknown>(input: TransportRequest): Promise<TransportResponse<T>> {
       const id = newId()
       const method: RequestMethod = (input.method ?? "GET") as RequestMethod
