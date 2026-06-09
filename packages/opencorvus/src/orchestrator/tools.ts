@@ -2663,7 +2663,7 @@ export function createOrchestratorTools(input: {
             })()
             const slug = hostname.replace(/[^a-zA-Z0-9]/g, "_").slice(0, 60) || "url"
             const ref = await AttachmentStore.write(
-              Instance.project.id,
+              task.project_id,
               capture.screenshotPng,
               "image/png",
               `url-${slug}-${Date.now()}.png`,
@@ -2728,7 +2728,7 @@ export function createOrchestratorTools(input: {
             const bytes = await fsMod.readFile(abs)
             const filename = pathMod.basename(abs)
             const mime = guessMimeFromFilename(filename)
-            const ref = await AttachmentStore.write(Instance.project.id, bytes, mime, filename)
+            const ref = await AttachmentStore.write(task.project_id, bytes, mime, filename)
             await EngineService.appendTaskSystemArtifact(taskID, {
               ...ref,
               intent: "visual_reference",

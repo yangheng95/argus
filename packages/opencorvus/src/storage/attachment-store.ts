@@ -451,6 +451,11 @@ export namespace AttachmentStore {
           `AttachmentStore.stageToWorktree: attachment ${a.filename ?? a.sha ?? `#${i}`} has no resolvable url`,
         )
       }
+      if (located.projectID !== projectID) {
+        throw new Error(
+          `AttachmentStore.stageToWorktree: attachment ${a.filename ?? a.sha ?? `#${i}`} belongs to project ${located.projectID}, expected ${projectID}`,
+        )
+      }
       const sourceAbs = resolveAbsolute(located.projectID, located.name)
       if (!sourceAbs) {
         throw new Error(

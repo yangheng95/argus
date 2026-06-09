@@ -3,6 +3,7 @@ import { Project } from "../../src/project/project"
 import { Log } from "../../src/util/log"
 import { $ } from "bun"
 import path from "path"
+import fs from "node:fs/promises"
 import { tmpdir } from "../fixture/fixture"
 import { Filesystem } from "../../src/util/filesystem"
 import { GlobalBus } from "../../src/bus/global"
@@ -162,6 +163,38 @@ describe("Project.fromDirectory", () => {
       expect(project.worktree).toBe(tmp.path)
       expect(sandbox).toBe(tmp.path)
     })
+  })
+
+  test("gives copied standalone repositories different project identities", async () => {
+    const p = await loadProject()
+    await using source = await tmpdir({ git: true })
+    const copy = path.join(path.dirname(source.path), `${path.basename(source.path)}-copy`)
+    await fs.cp(source.path, copy, { recursive: true })
+
+    const sourceProject = await p.fromDirectory(source.path)
+    const copyProject = await p.fromDirectory(copy)
+
+    expect(sourceProject.project.id).not.toBe(copyProject.project.id)
+    expect(Project.get(sourceProject.project.id)?.worktree).toBe(source.path)
+    expect(Project.get(copyProject.project.id)?.worktree).toBe(copy)
+  })
+
+  test("rewrites a copied standalone marker instead of overwriting the original worktree", async () => {
+    const p = await loadProject()
+    await using source = await tmpdir({ git: true })
+    const sourceProject = await p.fromDirectory(source.path)
+    const sourceMarker = await Filesystem.readText(path.join(source.path, ".git", "opencorvus"))
+
+    const copy = path.join(path.dirname(source.path), `${path.basename(source.path)}-legacy-copy`)
+    await fs.cp(source.path, copy, { recursive: true })
+    expect((await Filesystem.readText(path.join(copy, ".git", "opencorvus"))).trim()).toBe(sourceMarker.trim())
+
+    const copyProject = await p.fromDirectory(copy)
+
+    expect(copyProject.project.id).not.toBe(sourceProject.project.id)
+    expect(Project.get(sourceProject.project.id)?.worktree).toBe(source.path)
+    expect(Project.get(copyProject.project.id)?.worktree).toBe(copy)
+    expect((await Filesystem.readText(path.join(copy, ".git", "opencorvus"))).trim()).toBe(copyProject.project.id)
   })
 })
 

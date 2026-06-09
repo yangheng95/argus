@@ -1013,6 +1013,11 @@ export namespace EngineService {
     if (!located) {
       throw new Error(`${column}: file.url is not a valid /attachment/<projectID>/<name> reference: ${file.url}`)
     }
+    if (located.projectID !== task.project_id) {
+      throw new Error(
+        `${column}: file.url belongs to project ${located.projectID}, expected task project ${task.project_id}: ${file.url}`,
+      )
+    }
     const abs = AttachmentStore.resolveAbsolute(located.projectID, located.name)
     if (!abs) {
       throw new Error(`${column}: cannot resolve attachment path for project ${located.projectID}/${located.name}`)
