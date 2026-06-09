@@ -1,6 +1,9 @@
-import { expect, test } from "bun:test"
-import { launchBrowser, type OverlayPage } from "./launch"
-import { ensureOverlayDist, overlayStaticResponse } from "./overlay-dist"
+import assert from "node:assert/strict"
+import test from "node:test"
+
+import { launchBrowser, type OverlayPage } from "../launch.ts"
+import { ensureOverlayDist, overlayStaticResponse } from "../overlay-dist.ts"
+import { startBrowserFixture } from "./http-fixture.ts"
 
 await ensureOverlayDist()
 
@@ -12,6 +15,9 @@ async function clickVisible(tab: OverlayPage, selector: string) {
 test(
   "selecting an oauth-capable provider starts oauth before provider test",
   async () => {
+    assert.equal(process.env.OPENCORVUS_OVERLAY_BROWSER_TEST_NODE_RUNNER, "1")
+    assert.equal(typeof globalThis.Bun, "undefined")
+
     const data = {
       config: {
         model: "anthropic/claude-3-7-sonnet",
@@ -90,90 +96,89 @@ test(
       })
     let callbackCalls = 0
 
-    const server = Bun.serve({
-      port: 0,
-      async fetch(req) {
-        const url = new URL(req.url)
-        const path = route(url)
-        if (path === "/favicon.ico" || path === "/ui/favicon.ico") {
-          return new Response(null, { status: 204 })
+    const server = await startBrowserFixture(async (req) => {
+      const url = new URL(req.url)
+      const path = route(url)
+      if (path === "/favicon.ico" || path === "/ui/favicon.ico") {
+        return new Response(null, { status: 204 })
+      }
+      if (path === "/ui" || path === "/ui/") {
+        return Response.redirect(`${url.origin}/ui/index.html`, 302)
+      }
+      const staticResponse = await overlayStaticResponse(path)
+      if (staticResponse) return staticResponse
+      if (path === "/global/health") return send({ version: "1.2.3" })
+      if (path === "/tasks") return send({ tasks: [] })
+      if (path === "/global/tasks") return send({ tasks: [] })
+      if (path === "/session") return send([])
+      if (path === "/path") return send(data.path)
+      if (path === "/vcs") return send(data.vcs)
+      if (path === "/provider") return send(data.provider)
+      if (path === "/provider/auth") return send(data.providerAuth)
+      if (path === "/agent") return send([])
+      if (path === "/config/providers") {
+        return send({
+          providers: data.provider.all.map((item: any) => ({
+            id: item.id,
+            name: item.name || item.id,
+            models: item.models || {},
+          })),
+          default: data.provider.default || {},
+        })
+      }
+      if (path === "/config/prompt") return send([])
+      if (path.startsWith("/provider/") && path.endsWith("/auth/prompts")) return send([])
+      if (path === "/config" && req.method === "GET") return send(data.config)
+      if (path === "/config" && req.method === "PATCH") {
+        data.config = (await req.json()) as typeof data.config
+        return send(data.config)
+      }
+      if (path === "/channel") return send(data.channels)
+      if (path === "/skill/installed" || path === "/skill") return send(data.skills)
+      if (path === "/mcp") return send(data.mcp)
+      if (path === "/executor") return send(data.executors)
+      if (path === "/panel/knowledge/memory") return send(data.memory)
+      if (path === "/panel/knowledge/preference") return send(data.preference)
+      if (path === "/log" && req.method === "POST") return send({ ok: true })
+      if (path.startsWith("/provider/") && path.endsWith("/oauth/authorize")) {
+        return send({
+          url: "https://auth.example.com/openai",
+          method: "auto",
+          instructions: "Complete authorization in your browser.",
+        })
+      }
+      if (path.startsWith("/provider/") && path.endsWith("/oauth/callback")) {
+        callbackCalls += 1
+        if (!data.provider.connected.includes("openai")) data.provider.connected.push("openai")
+        return send(true)
+      }
+      if (path.startsWith("/provider/") && path.endsWith("/test")) {
+        const providerID = decodeURIComponent(path.slice(10, -5))
+        if (providerID === "openai" && !data.provider.connected.includes("openai")) {
+          return send(
+            {
+              ok: false,
+              message: "OAuth missing",
+            },
+            { status: 400 },
+          )
         }
-        if (path === "/ui" || path === "/ui/") {
-          return Response.redirect(`${url.origin}/ui/index.html`, 302)
-        }
-        const staticResponse = await overlayStaticResponse(path)
-        if (staticResponse) return staticResponse
-        if (path === "/global/health") return send({ version: "1.2.3" })
-        if (path === "/tasks") return send({ tasks: [] })
-        if (path === "/global/tasks") return send({ tasks: [] })
-        if (path === "/session") return send([])
-        if (path === "/path") return send(data.path)
-        if (path === "/vcs") return send(data.vcs)
-        if (path === "/provider") return send(data.provider)
-        if (path === "/provider/auth") return send(data.providerAuth)
-        if (path === "/agent") return send([])
-        if (path === "/config/providers") {
-          return send({
-            providers: data.provider.all.map((item: any) => ({
-              id: item.id,
-              name: item.name || item.id,
-              models: item.models || {},
-            })),
-            default: data.provider.default || {},
-          })
-        }
-        if (path === "/config/prompt") return send([])
-        if (path.startsWith("/provider/") && path.endsWith("/auth/prompts")) return send([])
-        if (path === "/config" && req.method === "GET") return send(data.config)
-        if (path === "/config" && req.method === "PATCH") {
-          data.config = await req.json()
-          return send(data.config)
-        }
-        if (path === "/channel") return send(data.channels)
-        if (path === "/skill/installed" || path === "/skill") return send(data.skills)
-        if (path === "/mcp") return send(data.mcp)
-        if (path === "/executor") return send(data.executors)
-        if (path === "/panel/knowledge/memory") return send(data.memory)
-        if (path === "/panel/knowledge/preference") return send(data.preference)
-        if (path === "/log" && req.method === "POST") return send({ ok: true })
-        if (path.startsWith("/provider/") && path.endsWith("/oauth/authorize")) {
-          return send({
-            url: "https://auth.example.com/openai",
-            method: "auto",
-            instructions: "Complete authorization in your browser.",
-          })
-        }
-        if (path.startsWith("/provider/") && path.endsWith("/oauth/callback")) {
-          callbackCalls += 1
-          if (!data.provider.connected.includes("openai")) data.provider.connected.push("openai")
-          return send(true)
-        }
-        if (path.startsWith("/provider/") && path.endsWith("/test")) {
-          const providerID = decodeURIComponent(path.slice(10, -5))
-          if (providerID === "openai" && !data.provider.connected.includes("openai")) {
-            return send(
-              {
-                ok: false,
-                message: "OAuth missing",
-              },
-              { status: 400 },
-            )
-          }
-          return send({
-            ok: true,
-            message: "Provider connected",
-          })
-        }
-        return new Response(`unhandled ${req.method} ${url.pathname}`, { status: 404 })
-      },
+        return send({
+          ok: true,
+          message: "Provider connected",
+        })
+      }
+      return new Response(`unhandled ${req.method} ${url.pathname}`, { status: 404 })
     })
 
-    const page = await launchBrowser()
+    const browser = await launchBrowser()
 
     try {
-      const tab = await page.newPage()
-      const base = `http://127.0.0.1:${server.port}`
+      const tab = await browser.newPage()
+      const base = server.origin
       await tab.evaluateOnNewDocument((serverUrl) => {
+        ;(window as any).__OPENCORVUS_LOCALE__ = "en-US"
+        localStorage.setItem("oc_locale", "en-US")
         const state = {
           open: [] as string[],
           settings: {},
@@ -190,6 +195,7 @@ test(
                   serverUrl,
                   autoServer: false,
                   directory: "D:/overlay/workspace/app",
+                  locale: "en-US",
                 }
               }
               if (command === "overlay_settings_save") {
@@ -235,8 +241,8 @@ test(
       for (let i = 0; i < 50 && callbackCalls === 0; i += 1) {
         await new Promise((resolve) => setTimeout(resolve, 100))
       }
-      expect(callbackCalls).toBe(1)
-      expect(data.provider.connected).toContain("openai")
+      assert.equal(callbackCalls, 1)
+      assert.ok(data.provider.connected.includes("openai"))
 
       const result = await tab.evaluate(() => {
         const state = (window as typeof window & { __overlayTest: { open: string[] } }).__overlayTest
@@ -246,10 +252,10 @@ test(
         }
       })
 
-      expect(result.opened).toContain("https://auth.example.com/openai")
+      assert.ok(result.opened.includes("https://auth.example.com/openai"))
     } finally {
-      await page.close()
-      server.stop(true)
+      await browser.close().catch(() => undefined)
+      await server.close()
     }
   },
   { timeout: 60_000 },

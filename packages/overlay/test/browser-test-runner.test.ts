@@ -102,6 +102,12 @@ test("overlay browser tests have a Node-owned Playwright runner", () => {
   expect(providerAgentModelSync).toContain("startBrowserFixture")
   expect(providerAgentModelSync).toContain('typeof globalThis.Bun, "undefined"')
 
+  const providerOauth = readText("test/browser/provider-oauth.test.ts")
+  expect(providerOauth).toContain('import test from "node:test"')
+  expect(providerOauth).toContain('from "../launch.ts"')
+  expect(providerOauth).toContain("startBrowserFixture")
+  expect(providerOauth).toContain('typeof globalThis.Bun, "undefined"')
+
   const dist = readText("test/overlay-dist.ts")
   expect(dist).toContain('from "node:child_process"')
   expect(dist).toContain("readFile(file)")
