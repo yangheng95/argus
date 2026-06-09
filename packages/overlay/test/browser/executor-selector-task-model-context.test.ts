@@ -1,6 +1,9 @@
-import { expect, test } from "bun:test"
-import { launchBrowser } from "./launch"
-import { ensureOverlayDist, overlayStaticResponse } from "./overlay-dist"
+import assert from "node:assert/strict"
+import test from "node:test"
+
+import { launchBrowser } from "../launch.ts"
+import { ensureOverlayDist, overlayStaticResponse } from "../overlay-dist.ts"
+import { startBrowserFixture } from "./http-fixture.ts"
 
 await ensureOverlayDist()
 
@@ -32,6 +35,9 @@ function mergePatch(target: unknown, patch: unknown): unknown {
 test(
   "OpenCorvus composer chip follows per-task agent model context",
   async () => {
+    assert.equal(process.env.OPENCORVUS_OVERLAY_BROWSER_TEST_NODE_RUNNER, "1")
+    assert.equal(typeof globalThis.Bun, "undefined")
+
     const now = Date.now()
     const taskA = {
       id: "task_a",
@@ -123,12 +129,9 @@ test(
       }
     }
 
-    const server = Bun.serve({
-      idleTimeout: 255,
-      port: 0,
-      async fetch(req) {
-        const url = new URL(req.url)
-        const path = route(url)
+    const server = await startBrowserFixture(async (req) => {
+      const url = new URL(req.url)
+      const path = route(url)
         if (path === "/favicon.ico" || path === "/ui/favicon.ico") return new Response(null, { status: 204 })
         if (path === "/" || path === "/ui" || path === "/ui/")
           return Response.redirect(`${url.origin}/ui/index.html`, 302)
@@ -223,8 +226,7 @@ test(
           })
         }
         if (path === "/log" && req.method === "POST") return send({ ok: true })
-        return new Response(`unhandled ${req.method} ${url.pathname}`, { status: 404 })
-      },
+      return new Response(`unhandled ${req.method} ${url.pathname}`, { status: 404 })
     })
 
     const browser = await launchBrowser(["--disable-dev-shm-usage"])
@@ -232,6 +234,7 @@ test(
       const page = await browser.newPage()
       await page.setViewport({ width: 960, height: 720 })
       await page.evaluateOnNewDocument((serverUrl) => {
+        ;(window as any).__OPENCORVUS_LOCALE__ = "en-US"
         localStorage.setItem("oc_locale", "en-US")
         window.__TAURI__ = {
           core: {
@@ -262,9 +265,9 @@ test(
             },
           },
         }
-      }, `http://127.0.0.1:${server.port}`)
+      }, server.origin)
 
-      await page.goto(`http://127.0.0.1:${server.port}/ui/index.html`, { waitUntil: "domcontentloaded" })
+      await page.goto(`${server.origin}/ui/index.html`, { waitUntil: "domcontentloaded" })
       await page.waitForSelector('[data-ui="executor-chip-mirror"]')
       await page.waitForFunction(() => (window as any).__overlayInitSettled === true)
 
@@ -280,8 +283,8 @@ test(
         '[data-ui="executor-chip-mirror"]',
         (element) => (element as HTMLElement).innerText,
       )
-      expect(loadingChipText).not.toContain("project-model")
-      expect(loadingChipText).not.toContain("not set")
+      assert.equal(loadingChipText.includes("project-model"), false)
+      assert.equal(loadingChipText.includes("not set"), false)
 
       releaseTaskAContext()
       await page.waitForFunction(() =>
@@ -308,7 +311,7 @@ test(
         ),
       )
 
-      expect(patches).toEqual([
+      assert.deepEqual(patches, [
         {
           sessionID: "session_b",
           body: {
@@ -320,17 +323,17 @@ test(
           },
         },
       ])
-      expect(effectiveConfig("session_a")).toMatchObject({
-        agent: { orchestrator: { model: "openai/task-a-model" } },
+      assert.deepEqual((effectiveConfig("session_a") as { agent?: unknown }).agent, {
+        orchestrator: { model: "openai/task-a-model" },
       })
-      expect(effectiveConfig("session_b")).toMatchObject({
-        agent: { orchestrator: { model: "openai/task-b-new" } },
+      assert.deepEqual((effectiveConfig("session_b") as { agent?: unknown }).agent, {
+        orchestrator: { model: "openai/task-b-new" },
       })
 
       await page.close()
     } finally {
       await browser.close().catch(() => undefined)
-      server.stop(true)
+      await server.close()
     }
   },
   { timeout: 60_000 },
@@ -339,6 +342,9 @@ test(
 test(
   "OpenCorvus composer chip surfaces task model context errors and retries",
   async () => {
+    assert.equal(process.env.OPENCORVUS_OVERLAY_BROWSER_TEST_NODE_RUNNER, "1")
+    assert.equal(typeof globalThis.Bun, "undefined")
+
     const now = Date.now()
     const task = {
       id: "task_context_error",
@@ -395,12 +401,9 @@ test(
       }
     }
 
-    const server = Bun.serve({
-      idleTimeout: 255,
-      port: 0,
-      async fetch(req) {
-        const url = new URL(req.url)
-        const path = route(url)
+    const server = await startBrowserFixture(async (req) => {
+      const url = new URL(req.url)
+      const path = route(url)
         if (path === "/favicon.ico" || path === "/ui/favicon.ico") return new Response(null, { status: 204 })
         if (path === "/" || path === "/ui" || path === "/ui/")
           return Response.redirect(`${url.origin}/ui/index.html`, 302)
@@ -475,8 +478,7 @@ test(
           })
         }
         if (path === "/log" && req.method === "POST") return send({ ok: true })
-        return new Response(`unhandled ${req.method} ${url.pathname}`, { status: 404 })
-      },
+      return new Response(`unhandled ${req.method} ${url.pathname}`, { status: 404 })
     })
 
     const browser = await launchBrowser(["--disable-dev-shm-usage"])
@@ -484,6 +486,7 @@ test(
       const page = await browser.newPage()
       await page.setViewport({ width: 960, height: 720 })
       await page.evaluateOnNewDocument((serverUrl) => {
+        ;(window as any).__OPENCORVUS_LOCALE__ = "en-US"
         localStorage.setItem("oc_locale", "en-US")
         window.__TAURI__ = {
           core: {
@@ -514,9 +517,9 @@ test(
             },
           },
         }
-      }, `http://127.0.0.1:${server.port}`)
+      }, server.origin)
 
-      await page.goto(`http://127.0.0.1:${server.port}/ui/index.html`, { waitUntil: "domcontentloaded" })
+      await page.goto(`${server.origin}/ui/index.html`, { waitUntil: "domcontentloaded" })
       await page.waitForSelector('[data-ui="executor-chip-mirror"]')
       await page.waitForFunction(() => (window as any).__overlayInitSettled === true)
 
@@ -530,8 +533,8 @@ test(
         '[data-ui="executor-chip-mirror"]',
         (element) => (element as HTMLElement).innerText,
       )
-      expect(chipText).not.toContain("Loading")
-      expect(chipText).not.toContain("project-model")
+      assert.equal(chipText.includes("Loading"), false)
+      assert.equal(chipText.includes("project-model"), false)
 
       await page.click('[data-ui="executor-chip-mirror"]')
       await page.waitForSelector('[data-ui="executor-mirror-context-error"]')
@@ -539,7 +542,7 @@ test(
         '[data-ui="executor-mirror-context-error"]',
         (element) => (element as HTMLElement).innerText,
       )
-      expect(errorText).toContain("context exploded")
+      assert.ok(errorText.includes("context exploded"))
 
       await page.click('[data-ui="executor-mirror-context-error"] button')
       await page.waitForFunction(() =>
@@ -547,12 +550,12 @@ test(
           "task-context-model",
         ),
       )
-      expect(contextCalls).toBe(2)
+      assert.equal(contextCalls, 2)
 
       await page.close()
     } finally {
       await browser.close().catch(() => undefined)
-      server.stop(true)
+      await server.close()
     }
   },
   { timeout: 60_000 },
