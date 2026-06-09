@@ -8,6 +8,7 @@
 // signatures (apiUrl, apiHeaders, apiJson, fetchResourceAsObjectUrl) are
 // unchanged so existing callers keep working without edits.
 
+import { routeRequiresProjectDirectory } from "@opencorvus-ai/transport-protocol"
 import { DEFAULT_SERVER } from "./default-server"
 import { getHostTransport } from "./host-transport"
 import type { ResponseKind, TransportResponse } from "./host-transport"
@@ -66,45 +67,6 @@ export function getServerUrl(): string {
   return serverUrl
 }
 
-/**
- * Server-side routes that do NOT need an Instance context. These are
- * mounted before the project-scope middleware on the server (control
- * plane, GlobalRoutes router) and must NOT receive `?directory=`,
- * which would either be ignored noise or worse, change semantics on
- * routes that happen to read a `directory` query for other reasons.
- *
- * Keep this list aligned with `packages/opencorvus/src/server/server.ts`
- * (the bypass list at the middleware) and `routes/global.ts` (the
- * GlobalRoutes mount). Adding a new /global route there means deciding
- * here whether overlay should inject directory: routes that go through
- * Instance.provide need it; GlobalRoutes and explicit middleware bypasses do not.
- *
- * Rule 36 test coverage: api-directory-injection.test.ts enumerates
- * every route in this set so any drift trips a unit test.
- */
-const NO_DIRECTORY_PATHS = new Set<string>([
-  "log",
-  "log/files",
-  "log/tail",
-  "shutdown",
-  "restart",
-  "global/health",
-  "global/event",
-  "global/config",
-  "global/dispose",
-  "global/db/reset",
-  "global/tasks",
-  "mission",
-])
-const NO_DIRECTORY_PREFIXES = ["auth/"]
-
-function needsDirectory(path: string): boolean {
-  if (NO_DIRECTORY_PATHS.has(path)) return false
-  if (path === "auth") return false
-  if (NO_DIRECTORY_PREFIXES.some((p) => path.startsWith(p))) return false
-  return true
-}
-
 type QueryMap = Record<string, string | number | boolean | undefined | null>
 
 function splitPathQuery(path: string): { pathOnly: string; query: Record<string, string> | undefined } {
@@ -131,7 +93,7 @@ export function queryWithDirectory(
       next[k] = v
     }
   }
-  if (needsDirectory(pathOnly) && directoryContext && next.directory === undefined) {
+  if (routeRequiresProjectDirectory(pathOnly) && directoryContext && next.directory === undefined) {
     next.directory = directoryContext
   }
   return Object.keys(next).length > 0 ? next : undefined

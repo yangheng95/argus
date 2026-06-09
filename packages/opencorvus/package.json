@@ -80,6 +80,7 @@
     "@opencorvus-ai/channel-config": "workspace:*",
     "@opencorvus-ai/plugin": "workspace:*",
     "@opencorvus-ai/sdk": "workspace:*",
+    "@opencorvus-ai/transport-protocol": "workspace:*",
     "@opencorvus-ai/util": "workspace:*",
     "@openrouter/ai-sdk-provider": "2.9.0",
     "@lydell/node-pty": "catalog:",

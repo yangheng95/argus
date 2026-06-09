@@ -12,6 +12,37 @@
 
 export const PROTOCOL_VERSION = 1 as const
 
+// ── Server route directory policy ──
+
+/**
+ * Routes listed here are served before the project-directory middleware
+ * or are intentionally global. They must not receive `?directory=`.
+ */
+export const PROJECT_DIRECTORY_BYPASS_PATHS = [
+  "/doc",
+  "/shutdown",
+  "/restart",
+  "/log",
+  "/favicon.ico",
+  "/global/tasks",
+  "/mission",
+] as const
+
+export const PROJECT_DIRECTORY_BYPASS_PREFIXES = ["/global/", "/auth/", "/ui/", "/log/"] as const
+
+export function normalizedServerRoutePath(routePath: string): string {
+  const withoutQuery = String(routePath || "").split("?", 1)[0] || "/"
+  const withSlash = withoutQuery.startsWith("/") ? withoutQuery : `/${withoutQuery}`
+  return withSlash.replace(/\/+$/, "") || "/"
+}
+
+export function routeRequiresProjectDirectory(routePath: string): boolean {
+  const pathOnly = normalizedServerRoutePath(routePath)
+  if ((PROJECT_DIRECTORY_BYPASS_PATHS as readonly string[]).includes(pathOnly)) return false
+  if (pathOnly === "/global" || pathOnly === "/auth" || pathOnly === "/ui") return false
+  return !(PROJECT_DIRECTORY_BYPASS_PREFIXES as readonly string[]).some((prefix) => pathOnly.startsWith(prefix))
+}
+
 // ── Webview → Extension ──
 
 export const REQUEST_METHODS = ["GET", "POST", "PUT", "PATCH", "DELETE"] as const
