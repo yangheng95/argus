@@ -126,12 +126,19 @@
 }
 
 .msg-browser-evidence__image {
-  width: 100%;
+  width: auto;
+  height: auto;
+  max-width: 100%;
   max-height: calc(160px * var(--ui-scale));
   object-fit: contain;
   border-radius: var(--oc-radius-soft);
   border: var(--oc-border-width) solid color-mix(in srgb, var(--text-muted) 18%, transparent);
   background: var(--surface-inset);
+}
+
+.msg-browser-evidence__trigger {
+  justify-self: start;
+  align-self: start;
 }
 
 .msg-browser-evidence__meta {
