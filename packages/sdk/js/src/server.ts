@@ -95,5 +95,3 @@ export async function createOpenCorvusServer(options?: ServerOptions) {
     },
   }
 }
-
-export const createOpencodeServer = createOpenCorvusServer

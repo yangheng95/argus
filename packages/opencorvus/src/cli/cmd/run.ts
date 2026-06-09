@@ -7,7 +7,7 @@ import { Flag } from "../../flag/flag"
 import { bootstrap } from "../bootstrap"
 import { EOL } from "os"
 import { Filesystem } from "../../util/filesystem"
-import { createOpencodeClient, type OpencodeClient, type ToolPart } from "@opencorvus-ai/sdk"
+import { createOpenCorvusClient, type OpenCorvusClient, type ToolPart } from "@opencorvus-ai/sdk"
 import { Provider } from "../../provider/provider"
 import { Agent } from "../../agent/agent"
 import { PermissionNext } from "../../permission/next"
@@ -368,7 +368,7 @@ export const RunCommand = cmd({
       return message.slice(0, 50) + (message.length > 50 ? "..." : "")
     }
 
-    async function session(sdk: OpencodeClient) {
+    async function session(sdk: OpenCorvusClient) {
       const baseID = args.continue ? (await sdk.session.list()).data?.find((s) => !s.parentID)?.id : args.session
 
       if (baseID && args.fork) {
@@ -383,7 +383,7 @@ export const RunCommand = cmd({
       return result.data?.id
     }
 
-    async function execute(sdk: OpencodeClient) {
+    async function execute(sdk: OpenCorvusClient) {
       const eventAbort = new AbortController()
       const stallMs = (() => {
         const raw = Number(process.env.OPENCORVUS_RUN_STALL_TIMEOUT_MS ?? "")
@@ -670,12 +670,12 @@ export const RunCommand = cmd({
     }
 
     if (args.attach) {
-      const sdk = createOpencodeClient({ baseUrl: args.attach, directory })
+      const sdk = createOpenCorvusClient({ baseUrl: args.attach, directory })
       return await execute(sdk)
     }
 
     await bootstrap(process.cwd(), async () => {
-      const sdk = createOpencodeClient({ baseUrl: IN_PROCESS_BASE_URL, fetch: createInProcessFetch() })
+      const sdk = createOpenCorvusClient({ baseUrl: IN_PROCESS_BASE_URL, fetch: createInProcessFetch() })
       await execute(sdk)
     })
   },
